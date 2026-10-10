@@ -1,5 +1,6 @@
 id: 01a1278a-0193-7253-a302-51c6dbe54750
 spec_id: FAQ-1-263
+agreed_id: FAQ-32
 title: What's the difference between 'aida queue work --auto-complete' and 'aida drain start'?
 description: |
   **Both run the same lifecycle engine. `aida drain start` is a thin launcher that calls `aida queue work … --auto-complete` for you, with unattended defaults, a "one drain at a time" guard, and a clean way to stop.**
