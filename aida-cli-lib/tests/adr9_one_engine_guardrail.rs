@@ -73,6 +73,11 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
+        let rel = if rel.starts_with("src/lib_part") {
+            "src/lib.rs".to_string()
+        } else {
+            rel
+        };
         if ENGINE_CALLER_ALLOWLIST.contains(&rel.as_str()) {
             continue;
         }
@@ -102,7 +107,12 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
 #[test]
 fn the_queue_work_handler_still_routes_through_the_engine() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).unwrap();
+    let mut lib_rs = fs::read_to_string(root.join("src/lib.rs")).unwrap();
+    for i in 1..=6 {
+        if let Ok(s) = fs::read_to_string(root.join(format!("src/lib_part{i}.rs"))) {
+            lib_rs.push_str(&s);
+        }
+    }
     assert!(
         production_engine_calls(&lib_rs) >= 1,
         "ADR-9: `lib.rs` no longer calls `orchestrate_with_resume` — the \
