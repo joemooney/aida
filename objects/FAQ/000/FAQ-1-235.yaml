@@ -23,8 +23,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:13.923767659Z
-modified_at: 2026-10-10T14:56:00.218613174Z
+modified_at: 2026-10-10T15:37:35.433559370Z
 req_type: Faq
+tags:
+- topic:drain
+- topic:review-gate
 history:
 - id: 01a12650-50da-7202-98f0-e2cb5f2907d5
   author: joe
