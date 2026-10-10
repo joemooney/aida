@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-10T19:08:19.258987443Z
+modified_at: 2026-10-10T19:08:20.280577712Z
 req_type: Bug
 tags:
 - atomicity
@@ -4109,6 +4109,12 @@ comments:
   created_at: 2026-10-08T22:18:57.700144582Z
   modified_at: 2026-10-08T22:18:57.700144582Z
   relayed_from: bug1808-a2-v3-cold-continuation
+- id: 01a12737-55b8-7051-8080-188ddabc4ce9
+  author: joe
+  content: 'Re-scoped 2026-10-10 (operator + advisor): back to the narrow preflight fix in the description. The publication/CAS/launch/pane architecture, TASK-1612 and the groundwork branch moved to EPIC-76. Status in-progress → approved: no one was working on it; the last activity was a dead review gate on 2026-10-08. Next step: a one-page narrow sketch, then advisor signoff.'
+  created_at: 2026-10-10T19:08:20.280577712Z
+  modified_at: 2026-10-10T19:08:20.280577712Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
