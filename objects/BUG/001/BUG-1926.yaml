@@ -25,12 +25,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:06:37.521657356Z
-modified_at: 2026-10-10T21:06:37.521657356Z
+modified_at: 2026-10-10T21:06:55.550982086Z
 req_type: Bug
 tags:
 - identity
 - security
 - store
+relationships:
+- rel_type: References
+  target_id: 01a10fa4-f5e8-7cf3-a456-76a11ea8ec51
+  created_at: 2026-10-10T21:06:55.550980358Z
+  created_by: joe
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
