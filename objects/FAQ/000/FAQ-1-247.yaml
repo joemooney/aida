@@ -1,0 +1,40 @@
+id: 01a12656-d655-7ad3-b473-eb8c50bc2e93
+spec_id: FAQ-1-247
+title: Which spec types count as work, and which as knowledge?
+description: |
+  **Work types become things someone builds. Knowledge types record what's true or decided. Knowledge types are never offered as work, and (once STORY-1642 lands) stay out of the default `aida list`.**
+
+  ## The split
+  | Class | Types |
+  |---|---|
+  | Knowledge | Decision, Vision, Term, Principle, **FAQ** (FAQ pending STORY-1642) |
+  | Work | Everything else: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, constraint, **doc** |
+
+  One function decides this, `is_work_item_type` in `aida-core/src/lifecycle.rs`, and the burndown and backlog pickers read it. STORY-1642 makes the default `aida list` read it too, and makes its test cover every type, so a new type can't skip the choice.
+
+  ## Why Doc is work
+  Docs get written, reviewed and kept current like code, so they belong in the work views.
+
+  ## Seeing knowledge rows
+  `aida decision list`, `aida faq list`, `--type <t>`, `--include-knowledge` (STORY-1642), or `aida search`.
+
+  ## Caveat
+  Until STORY-1642 lands, FAQ is still classed as work. File FAQs as `completed` so the pickers skip them (FAQ-11).
+
+  ## See also
+  STORY-1642, FAQ-11
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:03:07.605826020Z
+modified_at: 2026-10-10T15:03:07.605826020Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
