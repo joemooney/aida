@@ -26,6 +26,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
     cmd.env("AIDA_TEST_GH_BINARY", "/bin/false");
     cmd.env("GIT_ALLOW_PROTOCOL", "file");
     cmd.env("GIT_CONFIG_NOSYSTEM", "1");
+    // Pin git's global config to the fixture's private file so an ambient
+    // GIT_CONFIG_GLOBAL cannot override (or suppress) it. trace:TASK-1321 | ai:claude
+    cmd.env("GIT_CONFIG_GLOBAL", home.join(".gitconfig"));
     for k in [
         "AIDA_SESSION_ROLE",
         "AIDA_SESSION_GRANT",
@@ -39,6 +42,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
         "AIDA_OUTPUT_FORMAT",
         "GIT_DIR",
         "GIT_WORK_TREE",
+        "GIT_CONFIG",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
     ] {
         cmd.env_remove(k);
     }
@@ -49,10 +55,16 @@ fn git_out(dir: &Path, home: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .current_dir(dir)
         .env("HOME", home)
+        // Private global config, independent of any inherited
+        // GIT_CONFIG_GLOBAL / injected -c parameters. trace:TASK-1321 | ai:claude
+        .env("GIT_CONFIG_GLOBAL", home.join(".gitconfig"))
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_ALLOW_PROTOCOL", "file")
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_CONFIG")
+        .env_remove("GIT_CONFIG_COUNT")
+        .env_remove("GIT_CONFIG_PARAMETERS")
         .args(args)
         .output()
         .expect("run git");
