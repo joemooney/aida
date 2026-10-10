@@ -1,0 +1,65 @@
+id: 01a12797-ea80-7bc2-8e1f-711b7f047743
+spec_id: TASK-1722
+agreed_id: TASK-1722
+title: 'Committed pure-move stack checker for the lib.rs split: verify a whole slice stack against the pipelined protocol in one command'
+description: |
+  ## Why
+  The lib.rs split (TASK-1538) has about 37 modules left, and advisor review is the bottleneck: a 5-slice stack waited about 4 hours for review on 2026-10-10. Every rule in the pipelined slice protocol (TASK-1538 comments, 2026-10-10) can be checked by machine. Today the advisor checks them by hand plus an uncommitted scratch script (verify_move.py). Make one committed command that checks a whole stack, so review becomes "read the checker report, then look only at non-move commits".
+
+  ## Deliverable
+  `scripts/split-lib/verify_stack.py <base> <head>` (python3 stdlib only), plus a one-line Makefile target `make verify-slice-stack BASE=origin/main HEAD=slice1-stack`. It ends with a PASS/FAIL summary block, written so it can be pasted as-is into a TASK-1538 comment.
+
+  Checks, per commit in base..head (oldest first):
+  1. **Commit class from the subject.** `refactor(cli-lib): extract <module>.rs` is a MOVE commit. A subject starting `retarget:` or `tooling:` is the other class. Anything else fails.
+  2. **No spec IDs in subjects.** Fail if a subject contains a SPEC-ID pattern (e.g. `(TASK-1538)`, `STORY-1488`). The one exception is a commit that deletes all lib_part*.rs (the final slice).
+  3. **MOVE purity** (port the logic of the scratch verify_move.py; the advisor attaches it to the spec):
+     - The multiset of removed lines equals the multiset of added lines, after dropping the allowed wiring: the `//!` header, `// trace:` line, `use crate::*;`, `mod X;` / `use X::*;` (with optional `pub(crate)`), and blank lines.
+     - Only these files may change: aida-cli-lib/src/{lib.rs, lib_part*.rs, <module>.rs} and the incremental manifest TOML.
+     - A residue that is whitespace-only is reported separately (a reindent), and still fails.
+     - The new module must be wired exactly once in lib.rs (`mod <module>;` and `use <module>::*;`).
+  4. **retarget:/tooling: commits** must not change any `.rs` code line under aida-cli-lib/src/lib*.rs or the moved module. List the files they touch for the reviewer.
+  5. **Pairing.** Every retarget: commit directly follows a MOVE commit. Report any MOVE without a retarget as a note, not a failure.
+  6. **Tags.** Every `slice-NN-rR` tag pointing into the range is annotated. Its message contains a V3 warnings record, a V4 test count, and a V7 size for each module it adds. Report which commits are tagged.
+  7. **Size cap (V7).** The new module is ≤ 6000 lines.
+  8. **Linearity.** base..head has no merge commits, and head descends from base.
+  9. **Optional `--build`:** run `cargo check -p aida-cli-lib` at each MOVE commit, in a temporary worktree with its own target dir. This is the "every commit builds on its own" rule. Off by default, because it's slow.
+
+  Output: one line per commit (PASS/FAIL, class, subject, +/- counts, and why), then the summary. Exit status is 0 only if everything passes.
+
+  ## Constraints
+  - Read-only. It never edits, tags, pushes or merges.
+  - No dependence on the main checkout's working tree. It works from refs only, so it can run from any worktree.
+  - Keep it under scripts/split-lib/ next to verify_pr.sh, and cross-reference the two in each one's header. verify_pr.sh stays the per-slice build/test/golden gate.
+  - Add `// trace:` / `# trace:TASK-<id> | ai:<tool>` headers.
+
+  ## Acceptance
+  - Against the approved stack fe6723558e..fcc61390e1 (round 2, 2026-10-10) it reports 9/9 PASS. Use the annotated tags slice-00-r6, slice-01-r2, slice-02-r1, slice-03-r1 and slice-04-r1, or a fixture copy if they've been deleted.
+  - Fixture tests (a tiny temp git repo, run with python3 -m unittest under scripts/split-lib/tests/) show each check failing on purpose:
+    - a move that also edits one line
+    - a spec ID in a subject
+    - a retarget: commit that edits lib_part code
+    - a lightweight (unannotated) tag
+    - a tag missing its V4 record
+    - a merge commit in the range
+    - a module wired twice
+  - The fixture tests run in `make check-ci-fast`. They need no cargo build.
+  - The advisor's review comment format in TASK-1538 references the checker's summary instead of hand-listed checks.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:53:49.824465012Z
+modified_at: 2026-10-10T20:53:49.824465012Z
+req_type: Task
+tags:
+- refactor
+- review
+- tooling
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
