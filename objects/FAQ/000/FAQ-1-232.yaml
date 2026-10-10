@@ -23,8 +23,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:44:57.988540360Z
-modified_at: 2026-10-10T14:56:53.487873576Z
+modified_at: 2026-10-10T15:37:57.445378449Z
 req_type: Faq
+tags:
+- topic:review-gate
+- topic:roles
 history:
 - id: 01a12651-20ef-70a1-a251-14c104e16fed
   author: joe
