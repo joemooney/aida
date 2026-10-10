@@ -29,10 +29,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:15:10.341474628Z
-modified_at: 2026-10-10T15:15:10.341474628Z
+modified_at: 2026-10-10T15:20:43.057342541Z
 req_type: Story
 tags:
 - agent-output
+- batch:relay-2026-10-10
 - config
 - list
 filed_at:
