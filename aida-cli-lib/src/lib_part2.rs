@@ -1,4 +1,3 @@
-
 pub(crate) fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
     // Load requirements first (needed for SPEC-ID lookup)
     let store_for_lookup = storage.load()?;

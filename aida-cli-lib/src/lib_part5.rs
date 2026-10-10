@@ -1,4 +1,3 @@
-
 /// SPIKE-30 helper: render a compact status chip from a Claude agent entry.
 /// Uses `status` when set; falls back to `kind` (e.g. "interactive") when
 /// not — the live JSON for a freshly-spawned session typically omits status
@@ -655,8 +654,8 @@ pub(crate) fn required_status_checks_uncached(
 // trace:BUG-1481 | ai:claude
 pub(crate) fn required_status_checks_outcome_from_stderr(stderr: &str) -> Option<Vec<String>> {
     let stderr = stderr.to_ascii_lowercase();
-    // prose-ok: moved
-            if stderr.contains("branch not protected") {
+    // prose-ok: matches gh's literal 'Branch not protected' answer (BUG-1481)
+    if stderr.contains("branch not protected") {
         return Some(Vec::new());
     }
     None
@@ -14908,7 +14907,8 @@ mod story_1436_gate_held_tests {
 
     #[test]
     fn merge_hold_clear_floor_refusal_is_recorded_before_the_bail() {
-        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
