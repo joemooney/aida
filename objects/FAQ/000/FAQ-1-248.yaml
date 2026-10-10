@@ -1,0 +1,36 @@
+id: 01a12675-32f2-72e0-97bd-c7cf3f231ab7
+spec_id: FAQ-1-248
+title: What's the difference between a role seat and a handoff seat?
+description: |
+  **A role seat is who you're allowed to act as, and it's enforced. A handoff "seat" is just a folder name under `.aida/handoff/` and grants nothing.**
+
+  | | Role / authority seat | Handoff "seat" |
+  |---|---|---|
+  | What it is | Who this session may act as | Where a session's handoff note is stored: `.aida/handoff/<name>/latest.md` |
+  | Examples | advisor, implementer, integrator, product, reviewer | the role names plus anything: `orchestrator`, `bug1806`, `fix-day-2026-10-07`, `relay` |
+  | Enforced by | team roster (`registry/team.toml`) + session grant from `aida role enter` | nothing; any name works |
+  | Set with | `eval "$(aida role enter <role>)"` | `aida session handoff --seat <name> --write -` / `--show` |
+  | Default | none | your role (`$AIDA_SESSION_ROLE`) when `--seat` is omitted |
+
+  ## Why it matters
+  - `orchestrator` is **not** a role (`aida role list` doesn't have it). It's the handoff folder `/aida-orchestrate` uses. An orchestrator run actually works under a role such as `integrator`.
+  - So a tool that defaults its handoff file to "the active role" watches the wrong folder: role `integrator`, handoff written to `orchestrator/`. Pass the handoff name explicitly.
+  - Naming a handoff folder `advisor` doesn't give a session advisor authority, and naming it `relay` doesn't create a relay role.
+
+  ## See also
+  `aida session handoff --help`, `aida role list`, `aida team my-role`; aida-relay BUG-77 (the relay's default handoff seat)
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:36:17.394930861Z
+modified_at: 2026-10-10T15:36:17.394930861Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
