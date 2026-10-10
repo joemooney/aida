@@ -157,7 +157,7 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
-        run: cargo test --workspace --no-fail-fast
+        run: cargo test --workspace --no-fail-fast < /dev/null
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
       # exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex

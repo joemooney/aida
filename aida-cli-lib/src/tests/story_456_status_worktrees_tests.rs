@@ -34,6 +34,7 @@ fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
 
 fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
     status_cleanup::OpenPrItem {
+        is_draft: false,
         number,
         title: format!("PR {number}"),
         head_branch: branch.to_string(),

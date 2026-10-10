@@ -115,7 +115,7 @@ impl Fixture {
             "--type",
             "task",
             "--status",
-            "approved",
+            "Approved",
             "--title",
             "bounded fixture",
             "--tags",
@@ -276,7 +276,14 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
                 .1;
         }
     }
-    let lib = include_str!("../../aida-cli-lib/src/lib.rs");
+    let mut lib = include_str!("../../aida-cli-lib/src/lib.rs").to_string();
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part1.rs"));
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part2.rs"));
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part3.rs"));
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part4.rs"));
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part5.rs"));
+    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part6.rs"));
+    let lib = &lib;
     let queue = include_str!("../../aida-cli-lib/src/queue_cmd.rs");
     let drain = include_str!("../../aida-cli-lib/src/drain_cmd.rs");
     let auto = include_str!("../../aida-cli-lib/src/autoprogress.rs");
