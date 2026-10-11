@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T07:53:59.054946222Z
+modified_at: 2026-10-11T13:02:46.951453818Z
 req_type: Bug
 tags:
 - factory:night
@@ -88,6 +88,19 @@ comments:
   created_at: 2026-10-11T07:53:57.302480691Z
   modified_at: 2026-10-11T07:53:57.302480691Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12b0f-04a7-7620-93d2-450bdb2d54eb
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 997a333737 (fresh reviewer)
+
+    1. MEDIUM, aida-core/templates/skills-portable/aida-orchestrate.md, "Model." paragraph (~316). It says to pass `--model` on `aida agent new <vendor>`, but `aida agent new antigravity` has no `--model` (only claude and codex do). Name the vendors that support it and note that the antigravity lane has none.
+    2. MEDIUM, both masters (skills/aida-orchestrate.md:217 and the portable copy). "Children inherit the orchestrator's model unless you set one" is false for AIDA-launched children: an unset model means the `[agents.<vendor>] model` config or the vendor default. It also contradicts the next sentence. Reword to "unset means the config/vendor default; pass the parent's model explicitly to inherit". The inherit claim holds only for Claude's Agent tool.
+    3. LOW, commands/aida-orchestrate.md:33-36. The added cap/budget sentence has no test coverage and no trace comment.
+    4. LOW. "The child's own usage report is the meter": children report tokens only when they finish, so state that the time budget is the one enforced live.
+    The factory relay is down, so the night orchestrator is applying these fixes.
+  created_at: 2026-10-11T13:02:46.951453818Z
+  modified_at: 2026-10-11T13:02:46.951453818Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a129e9-a32a-7eb0-9168-23f36f14ddab
   author: joe
