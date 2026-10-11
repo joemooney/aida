@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:07:51.313331759Z
-modified_at: 2026-10-11T13:35:31.819348049Z
+modified_at: 2026-10-11T13:36:48.296912325Z
 req_type: Story
 tags:
 - faq
@@ -47,6 +47,12 @@ comments:
   created_at: 2026-10-11T07:48:37.648485585Z
   modified_at: 2026-10-11T07:48:37.648485585Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b2e-2aa8-7b90-b83e-8e65fcdba1fd
+  author: joe
+  content: 'FACTORY PLAN (night): Surface decision: `aida faq topics` is a type-word verb rewritten (rewrite_type_alias, lib_part1.rs) to `aida list --type faq --topics`; new hidden-from-nothing `--topics` flag on List (cli.rs). The List arm (git_backend_cmd.rs) short-circuits right after the positional type-word resolution when --topics is set: it bails unless the type filter is faq, then runs its own ListFilter{req_type: faq, default archive/defer axes, no role scope/focus/status lens} and hands rows to a new focused module aida-cli-lib/src/faq_topics.rs. Module: faq_topic_counts(&[RequirementSummary]) keeps live FAQs only (faq type, not archived, not superseded — same predicate as hide_superseded_faqs), counts each distinct trimmed tag once per FAQ, sorts count desc then tag asc; render_agent -> TOON table topics[N]{tag,count} (no ids); render_human -> aligned tag/count table + hint `aida faq list --tags <topic>`; json -> [{tag,count}]; empty -> one-line ''no FAQ topics'' notice, exit 0. Tests: unit faq_topics_counts_live_faqs_only (one superseded + one archived FAQ, their tags absent), faq_topics_sort_count_desc_then_name, faq_topics_agent_output_has_no_ids, faq_topics_empty_notice, rewrite test for `aida faq topics`; black-box aida-cli/tests/story_1645_faq_topics.rs drives the binary: counts + exclusion, no ''FAQ-'' substring in agent output, empty store notice exit 0, and round-trip every printed tag through `aida list faq --tags <tag> --format json` returning exactly count rows. Risks: cannot compile locally (CI builds); a new List field must be destructured only where used (arm uses ..).'
+  created_at: 2026-10-11T13:36:48.296912325Z
+  modified_at: 2026-10-11T13:36:48.296912325Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-63e0-7f22-b3a2-632db456439c
   author: joe
