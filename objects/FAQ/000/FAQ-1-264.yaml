@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:20:33.514292336Z
-modified_at: 2026-10-11T01:20:33.514292336Z
+modified_at: 2026-10-11T01:20:43.450066750Z
 req_type: Faq
+archived: true
+archived_at: 2026-10-11T01:20:43.450066750Z
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
