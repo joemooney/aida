@@ -13,12 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:32:21.773236209Z
-modified_at: 2026-10-11T18:44:15.030897198Z
+modified_at: 2026-10-11T19:10:59.122998616Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - roles
 - statusline
+comments:
+- id: 01a12c60-1e33-71d2-b672-23e5d6931027
+  author: joe
+  content: 'REVIEW (night): PR #2539. Round 1 at 12d627f: APPROVE with minors (case-insensitive labels, cd-failure false tag, duplicate note, routing). Round 2 at afc56c3d (fresh reviewer): APPROVE with minors (a timeout read as no-grant; routing untested). The fix at faa4f1cf was verified by the orchestrator: the rc is captured separately, a genuine no-grant (exit 0, empty) still tags, and routing_role is extracted and tested. APPROVE at faa4f1cf pending CI. OPERATOR ACTION: ~/.claude/settings.json''s custom statusline still prints $AIDA_SESSION_ROLE and strips aida statusline''s role segment; drop that prefix and sed so the grant-derived role shows. Possible follow-up: the PS1 (role:NAME) prefix set by aida role enter persists after the grant expires.'
+  created_at: 2026-10-11T19:10:59.122998616Z
+  modified_at: 2026-10-11T19:10:59.122998616Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a12787-36f4-7ab1-b554-d4942f892e3f
   author: joe
