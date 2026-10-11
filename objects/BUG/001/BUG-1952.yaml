@@ -27,12 +27,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T13:22:03.360338950Z
+modified_at: 2026-10-11T13:22:03.984828229Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - session-end
 - worktree
+comments:
+- id: 01a12b20-ac50-7c92-a029-6561d5c204f8
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-10-11: APPROVED, high. Verified on main: session_end (lib_part3.rs:3283) takes project_root from find_project_root() at :3299, which is the worktree when cwd is inside it. The pool check (:3628), mcp-claim (:3698), release_claim (:3722), remaining-leases/BUG-483 peer guard (:3809) and :3841 all run after unlink_worktree_aida_runtime (:3601). Relationship to BUG-1947: RELATED, but probably NOT its cause. The 18:44 sweep left its scratch files (ps_all.txt, stale_sessions.txt) in the MAIN checkout, so it most likely ran from there, where project_root resolves correctly. 1947''s missing live-process check is a separate defect. SEQUENCING: (1) wait for lib-split run 7 (#2511), which moves session_end into session_end.rs, to merge, so the fix doesn''t conflict with the split; (2) land this before BUG-1947, so 1947''s live-process check is evaluated against the resolved main root, per the acceptance here. One implementer doing 1952 then 1947 back to back is ideal. Lane: drain or attended. It''s a destructive-path fix, so the review must run the cwd-inside-worktree test, not just read it.'
+  created_at: 2026-10-11T13:22:03.984828229Z
+  modified_at: 2026-10-11T13:22:03.984828229Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a12b20-a9e0-73b3-b17d-594a14e60951
   author: joe
