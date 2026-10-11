@@ -29,6 +29,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `git_ops::push` |
 | `git_ops::push_exact` |
 | `git_ops::restore_stranded_autostash` |
+| `gitlab_project_create::is_push_to_create_refusal` |
 | `network_retry::classify_transient` |
 | `overlay::ci_style` |
 | `pr_cmd::pr_fetch_failure_message` |

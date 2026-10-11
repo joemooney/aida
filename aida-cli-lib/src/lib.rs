@@ -233,6 +233,8 @@ mod focus_cmd;
 mod forge;
 mod forge_profiles;
 mod gate_cmd;
+// trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.
+mod gitlab_project_create;
 mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;

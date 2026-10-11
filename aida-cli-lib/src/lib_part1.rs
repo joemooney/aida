@@ -3423,6 +3423,7 @@ pub(crate) fn run() -> Result<()> {
         public,
         remote,
         forge,
+        gitlab,
     } = &cli.command
     {
         // STORY-757: the markdown-only first run — scaffold just a `specs/`
@@ -3452,6 +3453,11 @@ pub(crate) fn run() -> Result<()> {
                     remote: remote.clone(),
                     forge: forge.clone(),
                     github_repo: None,
+                    // trace:STORY-1656 | ai:claude
+                    gitlab: gitlab
+                        .as_deref()
+                        .map(gitlab_project_create::GitLabHub::parse)
+                        .transpose()?,
                 };
                 init_bootstrap::resolve_forge_profile(&mut plan)?;
                 init_bootstrap::preflight(&plan)?;
