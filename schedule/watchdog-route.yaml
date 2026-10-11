@@ -1,10 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-01T00:21:53.841338120Z
+last_run: 2026-10-11T02:20:36.762243298Z
 last_by:
   seat: advisor
-  session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
   vendor: antigravity
 result: done
-note: 'Re-measured with ''aida doctor check runaway-seats'': verdict ok, EXIT=0, 22 sessions, 2 files with new bytes, 973979 bytes read, 0 sessions with unknown timing (11 ms). No seat is being woken by a runaway tick or loop, so there is nothing to stop and no seat to hand off. Refusing the prompt''s own anti-pattern explicitly: no additional poll was added. COVERAGE GAPS, restated from the check''s own evidence block and now with a trend: ''claude-transcripts (worktree slugs)'' reports 80 worktrees with no transcript directory, up from 73 on 2026-09-29 — the blind spot is GROWING as worktrees accumulate, and 11 stale worktrees had their target/ caches reclaimed on 2026-09-30 without the worktrees themselves being removed, which is consistent with that growth. ''~/.codex/sessions'' is still not-read because it is not project-scoped, so Codex seats remain invisible to this check; ''~/.aida/usage.jsonl'' is still not-read because it carries no session id and cannot attribute a rate to a seat. EVIDENCE NOTE for the next advisor: watchdog.yaml records last_run 2026-10-01T00:06:28Z result ok and has NO failure_trips array at all, yet this seat job was marked due with due_reason ''on CronJobFailed'' back on 2026-09-29T15:35:23Z. I verified in code that trips are append-with-ring-cap (MAX_FAILURE_TRIPS=20, maintenance_schedule.rs:3101-3109) and are NOT cleared by a later successful run, and that failure_trip() returns Some(..) for any non-zero status (maintenance_schedule.rs:3118) — so neither ''cleared on success'' nor ''None on failure'' explains the absence. The trip that routed this job is unaccounted for. Not filed as a bug this session because the mechanism is not yet identified; it is a real lead, not a diagnosis.'
-due_since: 2026-10-11T01:54:32.697938975Z
-due_reason: on CronJobFailed:watchdog
+note: 'No live trip: the watchdog ran ok at 2026-10-11 02:14Z, its schedule record has no failure_trips, and the route came from a trip 10 days ago. No seat is running away now (aida ps: every implementer seat is dormant, with no wake loops). Nothing to stop.'
