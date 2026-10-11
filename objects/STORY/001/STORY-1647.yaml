@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:16.006176829Z
-modified_at: 2026-10-11T15:21:01.266752213Z
+modified_at: 2026-10-11T15:21:02.538241332Z
 req_type: Story
 tags:
 - dev-tooling
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-10-11T07:45:39.333292405Z
   modified_at: 2026-10-11T07:45:39.333292405Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-994a-7a03-93a0-7144c6e77057
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. Operator accepts the workflow change: commits on main in the primary checkout are refused unless AIDA_ALLOW_PRIMARY_COMMIT=1. Merges, rebase replays and .aida-store stay exempt. Opt-in for other projects via [hooks] block_primary_commits; AIDA''s config turns it on. Edit the template master, then make sync-templates.'
+  created_at: 2026-10-11T15:21:02.538241332Z
+  modified_at: 2026-10-11T15:21:02.538241332Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-9452-7c42-bbf7-8075ff6da32f
   author: joe
