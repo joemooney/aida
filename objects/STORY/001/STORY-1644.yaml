@@ -29,13 +29,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:15:10.341474628Z
-modified_at: 2026-10-11T01:36:12.131415721Z
+modified_at: 2026-10-11T01:50:17.590743820Z
 req_type: Story
 tags:
 - agent-output
 - batch:relay-2026-10-10
 - config
 - list
+comments:
+- id: 01a128a7-55f6-7ca3-86b4-691b509a531d
+  author: joe
+  content: 'Item 9 audit (implementer, follow-up — not changed in this story). Remaining hardcoded default row limits: (1) aida search --limit default 200 (cli.rs Search) — recommend [search] limit + AIDA_SEARCH_LIMIT with the same flag>env>config>default precedence as [list] agent_limit, and the same ''count: N of M — showing first N'' notice when it cuts; 200 already avoids most silent truncation, so low priority. (2) awaiting_you::DEFAULT_CAP = 5 (status ''awaiting you'' / notice blocks, lifted by --verbose) — recommend leaving hardcoded: it''s a glanceable summary, already says ''+N more'' and has --verbose. (3) AGENT_BARE_QUEUE_TOPN = 5 (bare ''aida'' in agent mode) — same: leave, it''s a teaser pointing at ''aida queue list''. (4) field-study scan --limit 200 commits — an inspection budget, not a row cap; leave. Done here: [history] limit + AIDA_HISTORY_LIMIT (flag > env > config > 20).'
+  created_at: 2026-10-11T01:50:17.590743820Z
+  modified_at: 2026-10-11T01:50:17.590743820Z
+  session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
 history:
 - id: 01a1289a-6f63-7d21-bd55-b13ca39234a4
   author: aida-session-start
