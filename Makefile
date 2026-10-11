@@ -693,3 +693,6 @@ serve: ## Start aida-server for multi-user access (PostgreSQL backend)
 	@echo "  aida --file '$(DEV_PG_URL)' list"
 	@echo ""
 	./target/debug/aida-server --host 0.0.0.0 --port 50051 --rest-port $(REST_PORT) --database "$(DEV_PG_URL)"
+
+verify-slice-stack: ## Verify the pure-move slice stack
+	@python3 scripts/split-lib/verify_stack.py $(BASE) $(HEAD)
