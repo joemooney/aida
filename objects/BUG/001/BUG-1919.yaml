@@ -19,10 +19,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:51.794153285Z
-modified_at: 2026-10-11T06:53:38.118412195Z
+modified_at: 2026-10-11T07:07:00.917588506Z
 req_type: Bug
 tags:
 - completion
+- factory:night
 - pr-ship
 comments:
 - id: 01a129bd-0dc6-7f92-b49c-ad550c2ad0da
