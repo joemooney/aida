@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:11:01.493042018Z
-modified_at: 2026-10-10T20:11:09.190406520Z
+modified_at: 2026-10-11T02:22:09.029829218Z
 req_type: Story
 tags:
 - agent-surface
@@ -47,6 +47,17 @@ relationships:
   target_id: 019f102f-26e2-73f0-9223-4eaa344f70f0
   created_at: 2026-10-10T20:11:09.190404872Z
   created_by: joe
+comments:
+- id: 01a128c4-8085-7f32-aed5-d57e7ee99eeb
+  author: joe
+  content: |-
+    Advisor (from the aida-relay session, 2026-10-10): APPROVED with two amendments. Verified: `aida show BUG-77 --format json` in aida-relay gives shipped=true, shipped_pr=53; the TOON output has no linkage at all; completed_without_commit_expects_code is at aida-cli-lib/src/lib_part2.rs:2801. Motivating case confirmed today: relay implementers marked BUG-81/BUG-83/STORY-85 completed when they opened their PRs. AC3 would have caught that at the time.
+    Amendments (part of acceptance):
+    A1. **No false warning right after a remote merge.** The usual flow is `gh pr merge` on GitHub, then `aida edit --status completed`, often before the local default branch is fetched. Evaluate 'shipped' against the remote-tracking default branch (e.g. origin/main) as well as the local one. If only the local branch is stale, the warning says 'not found on <branch>; run git fetch' rather than claiming nothing shipped. Test: the commit exists on origin/main only, and there's no warning (or the fetch hint).
+    A2. **Protect the read-path speed.** AC1's linkage line must not regress the default TOON `aida show` budgets from BUG-1480/BUG-1594. Add or extend the perf regression test so the default path stays inside them; if it doesn't, use the cheap form the proposal already allows.
+  created_at: 2026-10-11T02:22:09.029829218Z
+  modified_at: 2026-10-11T02:22:09.029829218Z
+  session_id: ce7b935f-d5da-41d3-94da-7ef94d2537e4
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
