@@ -85,6 +85,7 @@ mod merge_hold_cmd;
 mod output_format;
 mod plan_followups;
 mod plan_intent;
+mod pr_merge_gate;
 mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -157,6 +158,7 @@ use plan_followups::*;
 use plan_intent::*;
 use pr_cmd::*;
 use pr_list::*;
+use pr_merge_gate::*;
 use punt_done::*;
 use queue_cmd::*;
 use role::*;
