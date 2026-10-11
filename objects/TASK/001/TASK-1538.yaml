@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T08:08:27.348238817Z
+modified_at: 2026-10-11T09:00:21.213800944Z
 req_type: Task
 tags:
 - closure:pending
@@ -462,6 +462,23 @@ comments:
   created_at: 2026-10-11T08:08:27.348238817Z
   modified_at: 2026-10-11T08:08:27.348238817Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12a31-115d-7360-90c9-c8ff7136f1d6
+  author: joe
+  content: |-
+    Run 5 ready for advisor review: PR #2507 (branch slice-16, head 8f60e13cdc). It's based on origin/main c70c4b1cfa, after run 4 merged. The cleanup worktree for the Q5 PR (aida-libsplit-tlvis) has been removed.
+    - slice-16-r1 @ b002805ce1 (move 19bffac4b5 + retarget: the completion-seam scan also sees the mark_completed stamp in db_reconcile.rs): warnings 0/0, tests 9952/9952 (8 ignored), db_reconcile.rs=3764
+    - slice-17-r1 @ ec162bd2d5 (move 8851f479cb + retarget: status_awaiting.rs added to the scan corpus in merge_hold explicit_reconciliation and bug_1737 disclosure_helper_never_queries_the_backend): warnings 0/0, tests 9952/9952, status_awaiting.rs=3408
+    - slice-18-r1 @ 8f60e13cdc (move 72700d413a + retarget: config-trust session_start.rs resolve_worktree_pool_enabled, worktree channel, 1 site; lib.rs 36->35): warnings 0/0, tests 9952/9952, session_start.rs=2445
+    verify_stack origin/main..slice-16: 6 commits (3 MOVE, 3 RETARGET), checks 1–8 PASS. make check-ci-fast is green. The count changed from run 4's 9921/7 because the base moved; it's identical at all three tags.
+
+    QUESTIONS (none of them block run 6):
+    Q6 session_end retarget placement. The session_end range includes the cfg(test) `mod shell_wrapper_harness` and both of its users, bug_779_wrapper_eval_tests and task_1171_eval_channel_tests. The users reach the harness as `crate::shell_wrapper_harness`, so a pure move doesn't build: crate:: no longer resolves, and the harness is a private mod, so the glob doesn't re-export it. The fix is 2 lines, `crate::` -> `super::`. It resolves both at the crate root today and inside session_end.rs, and changes no visibility. It has to land BEFORE the move for every commit to build, which fails verify_stack check 5 (a retarget must directly follow a MOVE). It's ready on local branch slice-19-hold: retarget d78a2252ab, then move 20853fc965 (session_end.rs=1760, warnings 0/0, tests 9952/9952). Options: (a) allow a pre-move retarget and add a checker allowance; (b) fold the 2-line change into the retarget after the previous move; (c) use pub(crate) mod shell_wrapper_harness in a standalone pre-run PR like Q5, with crate:: paths unchanged and the glob re-export resolving them. I recommend (c) or (a). (c) keeps verify_stack unchanged.
+    Q7 phase_driver vs orchestrator_leases. There are 4 inherent `impl RealPhaseDriver` blocks. Their old spans were 102791-103839 (phase_driver), 103864-104189 (the advisor second range, so phase_driver under Q3), and 104500-104699, which is inside orchestrator_leases' range L104191–105171. The 4th is a 14-line post-signoff block between the orchestrator tests and `impl PhaseDriver for RealPhaseDriver`. Does the 104500 block (now lib_part6 L9325-9524) go by range to orchestrator_leases, or with its struct to phase_driver? The extractor's `impl impl:RealPhaseDriver` selector takes every block, so going by range needs a `tooling:` change (an @L disambiguator for impls, like macro:). Where does the 14-line block go?
+    Q8 straddlers. These old items span a boundary between two map modules, so I left them in place: pr_head_sha_best_effort 9045-9057 (questions/pr_merge_gate); handle_advisor_command 10440-10495 (findings_gate/advisor_cmd_root); add_aida_gitignore_entries 13051-13253 (memory_doc/scaffold_init); aida_subcmd_rel_add_implements 45645-45654 (plan_followups/review_gates); install_burndown_order_override 56234-56255 (autopilot_intake/burndown_run); detect_obe_aida_scaffold_files 91898-91960 and grep_requirements 92035-92246 (scaffold_init boundaries). Earlier residue: queue_promoted_finding, apply_agent_default_flags, write_global_agents_posture, ResolvedClaudeLaunch, gate_agent_bypass, and pull_skip_warning/pull_code_start_line/pull_store_start_line. Proposed rule: the side holding the item's fn line owns it, which is how handle_autopilot_command went under Q4. Approve or rule otherwise; I'll sweep these into later runs.
+    NEXT: run 6, stacked on slice-16: plan_followups, advisor_cmd_root (first range + AdvisorPass/effective_calibration_mode per Q3), autopilot_intake (with handle_autopilot_command per Q4), pr_merge_gate (with verified_from_pr_ci_head and bug_1819 per Q1), scaffold_init (with USER_AIDA_INSTRUCTIONS_* per Q2) and agent_launch. That's about 8.6k lines.
+  created_at: 2026-10-11T09:00:21.213800944Z
+  modified_at: 2026-10-11T09:00:21.213800944Z
+  session_id: 74729565-cb48-4858-8a37-d58740f64a38
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
