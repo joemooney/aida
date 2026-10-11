@@ -1,0 +1,36 @@
+id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
+spec_id: EPIC-77
+agreed_id: EPIC-77
+title: 'Regenerability: make the store sufficient to regenerate a system, and measure it (evidence from the aida-host pilot)'
+description: |
+  Help a project's AIDA store hold enough of a system's meaning that an agent with no code, tests, docs or git history could regenerate an equivalent system, and let projects measure how close they are.
+
+  Origin: the aida-host pilot (EPIC-20 in /home/joe/ai/aida-host), started 2026-10-11 at Joe's direction. It ran pre-registered regeneration trials against a held-out oracle (13 conditions x 3 scoring runs, all agents claude-opus-5-5 on Claude Code 2.1.296).
+
+  What the pilot found (docs/regeneration/results-2026-10-11.md, commit f2b8d2d):
+  - From the curated store, a blind agent rebuilt the system to 93.9-95.5% of discriminating checks (3 replicates).
+  - Interface contracts carry most of the meaning: without the 3 contract rows the score drops to 22.7%. The store as it was before regenerability work scored 11.4%.
+  - A spec distilled from the transcript with AfterVibe's Prompt A.1 (Meta, arXiv 2607.09900) scored 97.7% at a third of the size and about a fifth of the agent cost. So capture-from-trajectory complements curation.
+  - Raw pass rates mislead: 36% of the oracle passes on a do-nothing stub.
+  - Every new rebuild independently fixed the same latent bug in the original (aida-host BUG-45), so trials double as design review.
+
+  Children cover 26 of the pilot's 27 feedback items (F1-F27). F22, the filed_at harness mislabel, was already fixed as BUG-1920.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:12:00.630404907Z
+modified_at: 2026-10-11T20:12:00.630404907Z
+req_type: Epic
+tags:
+- from:aida-host
+- regenerability
+- research
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
