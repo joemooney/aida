@@ -24,10 +24,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:25:26.854357322Z
-modified_at: 2026-10-11T06:27:06.043594451Z
+modified_at: 2026-10-11T06:28:00.364279429Z
 req_type: Story
 tags:
 - batch:history-2026-10-10
+- batch:night-2026-10-10
 relationships:
 - rel_type: BlockedBy
   target_id: 01a1277c-172e-76c2-956e-25a85ea8ea0e
