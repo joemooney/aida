@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:59:40.157380366Z
-modified_at: 2026-10-11T17:13:16.785189278Z
+modified_at: 2026-10-11T17:16:08.059958173Z
 req_type: Story
 tags:
 - factory:2026-10-11
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-10-11T15:21:04.621358264Z
   modified_at: 2026-10-11T15:21:04.621358264Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12bf6-f7fb-7922-9057-2cfbb1d44984
+  author: joe
+  content: 'FACTORY PLAN (day): New focused module aida-cli-lib/src/gitlab_project_create.rs (GitLabHub parse of --gitlab HOST[/GROUP], is_push_to_create_refusal, glab namespace-lookup + POST projects argv builders, token gate reusing remote_create''s env/glab-config token readers, push_with_create_fallback, ensure_gitlab_project_exists (ls-remote probe for mirror), hub_disagreements via ls-remote). init_bootstrap: BootstrapPlan.gitlab, finish_remote split into publish_remotes(plan, dir) -> creates GitHub (gh) then GitLab hub (remote ''gitlab'' or origin when GitHub absent), pushes main to every hub then aida-store to every hub (TASK-844 order), wires the GitLab hub via run_remote_mirror (CommitMode::Never; init refresh owns the commit), verifies every hub''s main+aida-store equals local (bail non-zero otherwise); finish_remote then shows aida remote status. cli.rs: init --gitlab <HOST[/GROUP]> (requires DIR, conflicts --remote, counts as visibility target). forges.toml: optional mirrors=[...] on a profile. remote mirror --url: GitLab URLs probed with ls-remote; refusal -> glab create; no token -> attach_fallback_hint + non-zero. Tests (src/tests/story_1656_multi_forge_init_tests.rs): fake gh + fake glab on PATH (AIDA_TEST_GLAB_BINARY), fake ssh via GIT_SSH_COMMAND/GIT_SSH_VARIANT=simple serving a local fake forge root that refuses unknown projects with GitLab''s ''project could not be found'' text. Named tests: init_github_plus_gitlab_creates_both_and_publishes_in_order (AC1), refusal_classifier_only_matches_project_not_found + create_project_args_private_by_default_with_namespace + non_refusal_push_error_never_creates_project (AC2), mirror_url_creates_missing_gitlab_project (AC3), hub_disagreement_is_reported_and_fails (AC4), no_token_prints_manual_recipe_and_keeps_github_repo (AC5), forge_profile_mirrors_select_gitlab_hub. Risks: cannot compile locally; glab api --hostname flag shape; mirror config left uncommitted inside init (BUG-1938 out of scope). Nothing touches real forges.'
+  created_at: 2026-10-11T17:16:08.059958173Z
+  modified_at: 2026-10-11T17:16:08.059958173Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8d-9dd8-7e31-8c50-e5141e12341b
   author: joe
