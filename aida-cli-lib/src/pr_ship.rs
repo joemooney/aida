@@ -1548,6 +1548,136 @@ pub(crate) fn approved_match_head(
     })
 }
 
+// ── BUG-1918: approval-authority gate ──────────────────────────────────────
+
+/// BUG-1918: one session bound to authoring the specs a PR ships — an
+/// authoring lease scoped to one of them or working on the PR's branch, live
+/// or durably recorded when it was taken. Identity is a set of tokens (see
+/// `review_authority`), never a label.
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct AuthorSession {
+    /// Human-readable origin, for diagnostics only.
+    pub label: String,
+    pub tokens: Vec<String>,
+}
+
+impl AuthorSession {
+    /// Does `attestation` name this session as its recorder?
+    // trace:BUG-1918 | ai:claude
+    pub(crate) fn recorded(
+        &self,
+        attestation: &crate::review_verdict::RecorderAttestation,
+    ) -> bool {
+        crate::review_authority::identities_overlap(&self.tokens, &attestation.identity)
+    }
+}
+
+/// BUG-1918: what `aida pr ship` requires of the approval it merges on, beyond
+/// covering the head (TASK-1448).
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ShipApprovalPolicy {
+    /// Sessions bound to authoring the shipped specs.
+    pub author_sessions: Vec<AuthorSession>,
+    /// Every shipped spec explicitly opted out of review (the fasttrack
+    /// lane's `lifecycle:no-review`). Only this lets a PR with NO approval
+    /// merge; it never excuses an unauthorized approval.
+    pub review_opt_out: bool,
+    /// Authority keys (`RecorderAttestation::authority_key`) whose seat grant
+    /// or human-review receipt re-validated against its durable store. An
+    /// attestation whose key is absent is treated as unattested, whatever
+    /// its stored booleans say.
+    pub verified_authority: std::collections::BTreeSet<String>,
+}
+
+/// BUG-1918: why `aida pr ship` refuses on approval AUTHORITY. Distinct from
+/// [`ApprovalHeadRefusal`]: `--override-stale-approval` overrides only a
+/// head-coverage refusal, never one of these.
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ApprovalAuthorityRefusal {
+    /// No open approval at all, and the PR's specs did not opt out of review.
+    NoApproval,
+    /// The newest approval carries no bound recorder identity (hand-written,
+    /// an older binary, or a writer other than `aida review record`) — or one
+    /// that does not authorize it (no non-implementer seat and no human at a
+    /// TTY, made for a different commit, the author check never ran, or its
+    /// seat grant / human-review receipt did not re-validate at ship time).
+    Unattested { recorded_by: String },
+    /// The newest approval was recorded by a session bound to authoring the
+    /// shipped specs — a self-approval.
+    AuthorSession { recorded_by: String },
+}
+
+/// BUG-1918: does the newest open approval among `candidates` carry the
+/// authority of a non-author seat? `None` = proceed on this gate. Fails
+/// closed: no approval refuses unless the PR's specs opted out of review, and
+/// an approval whose recorder cannot be bound to an authorized, non-author
+/// identity refuses whatever its `recorded_by` text says.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn approval_authority_refusal(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    policy: &ShipApprovalPolicy,
+) -> Option<ApprovalAuthorityRefusal> {
+    let approvals = open_approvals(candidates);
+    let Some(newest) = approvals.iter().max_by_key(|a| a.recorded_at.clone()) else {
+        return (!policy.review_opt_out).then_some(ApprovalAuthorityRefusal::NoApproval);
+    };
+    let recorded_by = newest.recorded_by.clone().unwrap_or_default();
+    let Some(attestation) = newest.attestation.as_ref() else {
+        return Some(ApprovalAuthorityRefusal::Unattested { recorded_by });
+    };
+    if policy
+        .author_sessions
+        .iter()
+        .any(|s| s.recorded(attestation))
+    {
+        return Some(ApprovalAuthorityRefusal::AuthorSession { recorded_by });
+    }
+    let verified = attestation
+        .authority_key(newest.recorded_at.as_deref())
+        .is_some_and(|k| policy.verified_authority.contains(&k));
+    if !verified || !attestation.authorizes(newest.reviewed_sha.as_deref()) {
+        return Some(ApprovalAuthorityRefusal::Unattested { recorded_by });
+    }
+    None
+}
+
+/// BUG-1918: the refusal text for an [`ApprovalAuthorityRefusal`].
+// trace:BUG-1918 | ai:claude
+pub(crate) fn approval_authority_refusal_message(
+    pr: u64,
+    refusal: &ApprovalAuthorityRefusal,
+) -> String {
+    let who = |r: &str| {
+        if r.trim().is_empty() {
+            "an unknown recorder".to_string()
+        } else {
+            format!("`{r}`")
+        }
+    };
+    match refusal {
+        ApprovalAuthorityRefusal::NoApproval => format!(
+            "PR-{pr} has no approval recorded at its head. An independent reviewer or a human \
+             at a terminal must record one (`aida review record <SPEC> --pr {pr} --verdict \
+             approved`) from a session other than the one that implemented it."
+        ),
+        ApprovalAuthorityRefusal::Unattested { recorded_by } => format!(
+            "PR-{pr}'s approval (recorded by {}) carries no verified reviewer identity for this \
+             commit. Re-record it with `aida review record` from a reviewer seat, or as a human at \
+             a terminal, from a session other than the one that implemented it.",
+            who(recorded_by)
+        ),
+        ApprovalAuthorityRefusal::AuthorSession { recorded_by } => format!(
+            "PR-{pr}'s approval (recorded by {}) came from the session that implemented it — an \
+             implementer cannot approve its own work. An independent reviewer must record the \
+             approval.",
+            who(recorded_by)
+        ),
+    }
+}
+
 /// TASK-1458: the reviewed and head shas a refusal names, for the durable
 /// `--override-stale-approval` record. Empty string = that sha was missing.
 // trace:TASK-1458 | ai:claude
@@ -3480,5 +3610,266 @@ mod tests {
         let twice = squash_subject_with_spec_ids(&once, &members);
         assert_eq!(once, title);
         assert_eq!(twice, title);
+    }
+}
+
+/// BUG-1918: `aida pr ship` merges only on an approval whose recorder is bound
+/// to an authorized, non-author identity — never on the `recorded_by` label.
+// trace:BUG-1918 | ai:claude
+#[cfg(test)]
+mod bug_1918_approval_authority_tests {
+    use super::*;
+    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+
+    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const OPERATOR: &str = "aida review record (operator)";
+    const AT: &str = "2026-10-10T05:30:00Z";
+    const AUTHOR_SESSION: &str = "session:cb4777a7-author";
+    const AUTHOR_PROC: &str = "proc:4242@t0";
+
+    fn approval(sha: &str, by: &str, attestation: Option<RecorderAttestation>) -> RecordedVerdict {
+        RecordedVerdict {
+            kind: VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: Some(sha.into()),
+            recorded_at: Some(AT.into()),
+            recorded_by: Some(by.into()),
+            attestation,
+            ..Default::default()
+        }
+    }
+
+    fn human(sha: &str, identity: &[&str]) -> RecorderAttestation {
+        RecorderAttestation {
+            sha: sha.into(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt-1".into()),
+            identity: identity.iter().map(|s| s.to_string()).collect(),
+            author_check_passed: true,
+            ..Default::default()
+        }
+    }
+
+    /// `policy` with every attestation in `verdicts` marked as re-validated —
+    /// so a test isolates the identity/authorization logic from the stores.
+    fn verified(
+        mut policy: ShipApprovalPolicy,
+        verdicts: &[RecordedVerdict],
+    ) -> ShipApprovalPolicy {
+        for v in verdicts {
+            if let Some(k) = v
+                .attestation
+                .as_ref()
+                .and_then(|a| a.authority_key(v.recorded_at.as_deref()))
+            {
+                policy.verified_authority.insert(k);
+            }
+        }
+        policy
+    }
+
+    fn author_policy() -> ShipApprovalPolicy {
+        ShipApprovalPolicy {
+            author_sessions: vec![AuthorSession {
+                label: "lease lease-author on TASK-1538".into(),
+                tokens: vec![
+                    "lease:lease-author".into(),
+                    AUTHOR_SESSION.into(),
+                    AUTHOR_PROC.into(),
+                ],
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// The BUG-1918 regression: the implementing session records its own
+    /// approval at the PR head under the operator label, then ships.
+    #[test]
+    fn self_recorded_operator_approval_at_head_from_the_author_session_refuses() {
+        // As the 2026-10-10 incident recorded it: no bound identity at all.
+        let v = [approval(HEAD, OPERATOR, None)];
+        assert_eq!(approval_head_refusal(&v, Some(HEAD)), None, "covers head");
+        assert_eq!(
+            approval_authority_refusal(&v, &author_policy()),
+            Some(ApprovalAuthorityRefusal::Unattested {
+                recorded_by: OPERATOR.into()
+            })
+        );
+        // Even carrying a verified human-at-TTY attestation, the author
+        // session's own approval refuses: identity, not the label, decides.
+        for token in [AUTHOR_SESSION, AUTHOR_PROC, "lease:lease-author"] {
+            let v = [approval(HEAD, OPERATOR, Some(human(HEAD, &[token])))];
+            let refusal = approval_authority_refusal(&v, &verified(author_policy(), &v))
+                .expect("must refuse");
+            assert_eq!(
+                refusal,
+                ApprovalAuthorityRefusal::AuthorSession {
+                    recorded_by: OPERATOR.into()
+                },
+                "{token}"
+            );
+            let msg = approval_authority_refusal_message(2477, &refusal);
+            assert!(msg.contains("PR-2477"), "{msg}");
+            assert!(msg.contains("cannot approve its own work"), "{msg}");
+        }
+    }
+
+    /// A forged reviewer label does not launder the author's identity.
+    #[test]
+    fn forged_reviewer_label_from_the_author_session_still_refuses() {
+        let seat = RecorderAttestation {
+            sha: HEAD.into(),
+            seat: Some("reviewer".into()),
+            grant_id: Some("g".into()),
+            identity: vec![AUTHOR_SESSION.into()],
+            author_check_passed: true,
+            ..Default::default()
+        };
+        let v = [approval(
+            HEAD,
+            "review-pr-9 (claude reviewer seat)",
+            Some(seat),
+        )];
+        assert!(matches!(
+            approval_authority_refusal(&v, &verified(author_policy(), &v)),
+            Some(ApprovalAuthorityRefusal::AuthorSession { .. })
+        ));
+    }
+
+    #[test]
+    fn no_approval_refuses_unless_every_spec_opted_out_of_review() {
+        assert_eq!(
+            approval_authority_refusal(&[], &ShipApprovalPolicy::default()),
+            Some(ApprovalAuthorityRefusal::NoApproval)
+        );
+        let fasttrack = ShipApprovalPolicy {
+            review_opt_out: true,
+            ..Default::default()
+        };
+        assert_eq!(approval_authority_refusal(&[], &fasttrack), None);
+        // The opt-out excuses a MISSING review, never an unauthorized one.
+        let v = [approval(HEAD, OPERATOR, None)];
+        assert!(approval_authority_refusal(&v, &fasttrack).is_some());
+        // A refusal is not an approval: it does not count as one.
+        let refusal = RecordedVerdict {
+            kind: VerdictKind::RequestChanges,
+            raw: "request-changes".into(),
+            reviewed_sha: Some(HEAD.into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            approval_authority_refusal(&[refusal], &ShipApprovalPolicy::default()),
+            Some(ApprovalAuthorityRefusal::NoApproval)
+        );
+    }
+
+    #[test]
+    fn independent_human_or_reviewer_seat_approval_proceeds() {
+        let v = [approval(
+            HEAD,
+            OPERATOR,
+            Some(human(HEAD, &["session:other"])),
+        )];
+        assert_eq!(
+            approval_authority_refusal(&v, &verified(author_policy(), &v)),
+            None
+        );
+        let seat = RecorderAttestation {
+            sha: HEAD.into(),
+            seat: Some("reviewer".into()),
+            grant_id: Some("g".into()),
+            identity: vec!["proc:8@t9".into()],
+            author_check_passed: true,
+            ..Default::default()
+        };
+        let v = [approval(
+            HEAD,
+            "review-pr-9 (claude reviewer seat)",
+            Some(seat),
+        )];
+        assert_eq!(
+            approval_authority_refusal(&v, &verified(author_policy(), &v)),
+            None
+        );
+    }
+
+    /// The stored booleans alone are not authority: an attestation whose
+    /// grant / receipt did not re-validate refuses.
+    #[test]
+    fn unverified_authority_refuses_whatever_the_stored_booleans_say() {
+        let v = [approval(
+            HEAD,
+            OPERATOR,
+            Some(human(HEAD, &["session:other"])),
+        )];
+        assert!(matches!(
+            approval_authority_refusal(&v, &author_policy()),
+            Some(ApprovalAuthorityRefusal::Unattested { .. })
+        ));
+        // A human-at-TTY claim with no receipt has no authority key at all.
+        let mut no_receipt = human(HEAD, &["session:other"]);
+        no_receipt.receipt_id = None;
+        let v = [approval(HEAD, OPERATOR, Some(no_receipt))];
+        assert!(matches!(
+            approval_authority_refusal(&v, &verified(author_policy(), &v)),
+            Some(ApprovalAuthorityRefusal::Unattested { .. })
+        ));
+    }
+
+    #[test]
+    fn attestation_that_does_not_authorize_refuses() {
+        let base = human(HEAD, &["session:other"]);
+        let cases = [
+            // An implementer seat is never authority, even without the label.
+            RecorderAttestation {
+                human_at_tty: false,
+                seat: Some("implementer".into()),
+                grant_id: Some("g".into()),
+                ..base.clone()
+            },
+            // Neither a seat nor a human at a TTY.
+            RecorderAttestation {
+                human_at_tty: false,
+                ..base.clone()
+            },
+            // The author check never ran.
+            RecorderAttestation {
+                author_check_passed: false,
+                ..base.clone()
+            },
+            // Attested for a different commit than the verdict now names.
+            RecorderAttestation {
+                sha: OLD.into(),
+                ..base.clone()
+            },
+        ];
+        for attestation in cases {
+            let v = [approval(
+                HEAD,
+                "advisor (advisor seat)",
+                Some(attestation.clone()),
+            )];
+            assert!(
+                matches!(
+                    approval_authority_refusal(&v, &verified(ShipApprovalPolicy::default(), &v)),
+                    Some(ApprovalAuthorityRefusal::Unattested { .. })
+                ),
+                "{attestation:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn reused_pid_of_a_different_process_is_not_the_author() {
+        let v = [approval(
+            HEAD,
+            OPERATOR,
+            Some(human(HEAD, &["proc:4242@t1"])),
+        )];
+        assert_eq!(
+            approval_authority_refusal(&v, &verified(author_policy(), &v)),
+            None
+        );
     }
 }

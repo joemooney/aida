@@ -1566,14 +1566,38 @@ pub(crate) fn ship_refusal_release(
 /// was granted for, after a durable `advisor-activity.jsonl` record naming
 /// both shas. `Err` = refused (logged as a failed merge step).
 // trace:TASK-1458 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn pr_ship_approval_gate(
     main_worktree: &std::path::Path,
     pr_number: u64,
     candidates: &[crate::review_verdict::RecordedVerdict],
     head_sha: Option<&str>,
+    policy: &pr_ship::ShipApprovalPolicy,
     override_stale_approval: bool,
     delete_branch: bool,
 ) -> Result<Option<String>> {
+    // BUG-1918: the approval must come from an authorized, non-author seat
+    // (or the PR's specs must have opted out of review). Checked first and
+    // NOT overridable: `--override-stale-approval` excuses a head that moved
+    // past a real approval, never a missing or self-recorded one.
+    // trace:BUG-1918 | ai:claude
+    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
+        let message = pr_ship::approval_authority_refusal_message(pr_number, &refusal);
+        log_ship_activity(
+            main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Failed(message.clone()),
+        );
+        crate::events::record_gate_held(
+            main_worktree,
+            crate::events::GATE_APPROVAL_AUTHORITY,
+            None,
+            Some(pr_number),
+            &message,
+        );
+        return Err(pr_ship::ShipRefusal::Review.error(message));
+    }
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));
     };
@@ -1613,6 +1637,78 @@ pub(crate) fn pr_ship_approval_gate(
         .map(str::trim)
         .filter(|sha| !sha.is_empty())
         .map(str::to_string))
+}
+
+/// BUG-1918: the approval policy for the specs a PR ships — its author
+/// sessions (authoring leases on those specs or on the PR's head branch, live
+/// or recorded in the durable authorship ledger), whether every spec opted
+/// out of review via the fasttrack lane's `lifecycle:no-review` (an
+/// unresolvable or untagged spec, or an empty id set, keeps review required),
+/// and which recorded approvals' authority re-validates against its durable
+/// store. `spec_ids` already include the trailing ids of every commit in the
+/// PR's range (see [`ship_gate_spec_records`]).
+// trace:BUG-1918 | ai:claude
+pub(crate) fn ship_approval_policy(
+    main_worktree: &std::path::Path,
+    spec_ids: &[String],
+    head_branch: Option<&str>,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+) -> pr_ship::ShipApprovalPolicy {
+    let ids = normalized_spec_ids(spec_ids);
+    let review_opt_out = load_store_for_lookup(main_worktree)
+        .is_some_and(|store| specs_opt_out_of_review(&store.requirements, &ids));
+    pr_ship::ShipApprovalPolicy {
+        author_sessions: crate::review_authority::author_sessions_at(
+            main_worktree,
+            &ids,
+            head_branch,
+        ),
+        review_opt_out,
+        verified_authority: crate::review_authority::verified_authority_keys(
+            main_worktree,
+            candidates,
+        ),
+    }
+}
+
+/// Trimmed, upper-cased, deduplicated, non-empty spec ids.
+// trace:BUG-1918 | ai:claude
+fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
+    let mut ids: Vec<String> = spec_ids
+        .iter()
+        .map(|id| id.trim().to_ascii_uppercase())
+        .filter(|id| !id.is_empty())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// BUG-1918: did EVERY one of `ids` explicitly opt out of review
+/// (`lifecycle:no-review`, the fasttrack lane's tag)? An empty set, or an id
+/// that resolves to no requirement, keeps review required.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn specs_opt_out_of_review(
+    requirements: &[aida_core::Requirement],
+    ids: &[String],
+) -> bool {
+    !ids.is_empty()
+        && ids.iter().all(|id| {
+            requirements
+                .iter()
+                .find(|r| {
+                    [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|s| s.eq_ignore_ascii_case(id))
+                })
+                .is_some_and(|r| {
+                    crate::auto_complete::LifecycleSkip::from_tags(
+                        r.tags.iter().map(String::as_str),
+                    )
+                    .no_review
+                })
+        })
 }
 
 // trace:TASK-1606 | ai:codex
@@ -1700,11 +1796,13 @@ fn ship_preflight_gates(
         &ids,
         Some(&status.head_sha),
     );
+    let policy = ship_approval_policy(main_worktree, &ids, Some(&change.branch), &candidates);
     pr_ship_approval_gate(
         main_worktree,
         change.id,
         &candidates,
         Some(&status.head_sha),
+        &policy,
         override_stale_approval,
         delete_branch,
     )?;
@@ -2460,11 +2558,18 @@ pub(crate) fn pr_ship_handler(
         // TASK-1458: gate + merge pin + durable override audit, in one
         // function so the wiring test drives exactly what ship runs.
         // trace:TASK-1458 | ai:claude
+        let policy = ship_approval_policy(
+            &main_worktree,
+            &gate_spec_ids,
+            Some(&ship_branch),
+            &candidates,
+        );
         let match_head = pr_ship_approval_gate(
             &main_worktree,
             pr_number,
             &candidates,
             head_sha.as_deref(),
+            &policy,
             override_stale_approval,
             delete_branch,
         )?;
@@ -5102,7 +5207,8 @@ mod task_1416_lookup_failure_tests {
 #[cfg(test)]
 mod task_1458_pr_ship_approval_gate_tests {
     use super::pr_ship_approval_gate;
-    use crate::review_verdict::{RecordedVerdict, VerdictKind};
+    use crate::pr_ship::ShipApprovalPolicy;
+    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
 
     const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -5113,8 +5219,35 @@ mod task_1458_pr_ship_approval_gate_tests {
             raw: "approved".into(),
             reviewed_sha: Some(sha.into()),
             recorded_at: Some("2026-09-23T00:00:00Z".into()),
+            // BUG-1918: an independent human-at-TTY recorder, so these tests
+            // exercise the head-coverage gate behind the authority gate.
+            // trace:BUG-1918 | ai:claude
+            attestation: Some(RecorderAttestation {
+                sha: sha.into(),
+                human_at_tty: true,
+                receipt_id: Some("rcpt".into()),
+                identity: vec!["session:independent-reviewer".into()],
+                author_check_passed: true,
+                ..Default::default()
+            }),
             ..Default::default()
         }
+    }
+
+    /// BUG-1918: a policy under which `verdicts`' attestations re-validated.
+    // trace:BUG-1918 | ai:claude
+    fn policy(verdicts: &[RecordedVerdict]) -> ShipApprovalPolicy {
+        let mut p = ShipApprovalPolicy::default();
+        for v in verdicts {
+            if let Some(k) = v
+                .attestation
+                .as_ref()
+                .and_then(|a| a.authority_key(v.recorded_at.as_deref()))
+            {
+                p.verified_authority.insert(k);
+            }
+        }
+        p
     }
 
     fn activity(root: &std::path::Path) -> Vec<serde_json::Value> {
@@ -5128,24 +5261,56 @@ mod task_1458_pr_ship_approval_gate_tests {
     #[test]
     fn covering_approval_pins_the_merge_to_the_approved_head() {
         let tmp = tempfile::tempdir().unwrap();
-        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(HEAD)], Some(HEAD), false, true)
-            .expect("an approval at the head merges");
+        let pin = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[approval(HEAD)],
+            Some(HEAD),
+            &policy(&[approval(HEAD)]),
+            false,
+            true,
+        )
+        .expect("an approval at the head merges");
         assert_eq!(pin.as_deref(), Some(HEAD));
         assert!(activity(tmp.path()).is_empty(), "nothing to audit");
     }
 
+    /// BUG-1918: no approval refuses by default; only a review opt-out
+    /// (fasttrack's `lifecycle:no-review`) merges it, unpinned.
+    // trace:BUG-1918 | ai:claude
     #[test]
-    fn no_approval_merges_unpinned() {
+    fn no_approval_refuses_unless_review_opted_out() {
         let tmp = tempfile::tempdir().unwrap();
-        let pin = pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), false, true).unwrap();
+        let err = pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), &policy(&[]), false, true)
+            .expect_err("no approval refuses");
+        assert!(err.to_string().contains("no approval recorded"), "{err}");
+        // NOT overridable: --override-stale-approval never excuses it.
+        assert!(
+            pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), &policy(&[]), true, true)
+                .is_err()
+        );
+        let opted_out = ShipApprovalPolicy {
+            review_opt_out: true,
+            ..Default::default()
+        };
+        let pin =
+            pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), &opted_out, false, true).unwrap();
         assert_eq!(pin, None);
     }
 
     #[test]
     fn stale_approval_refuses_and_logs_a_failed_merge_step() {
         let tmp = tempfile::tempdir().unwrap();
-        let err = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), false, true)
-            .expect_err("a stale approval refuses");
+        let err = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[approval(OLD)],
+            Some(HEAD),
+            &policy(&[approval(OLD)]),
+            false,
+            true,
+        )
+        .expect_err("a stale approval refuses");
         assert!(
             err.to_string().contains("--override-stale-approval"),
             "{err}"
@@ -5162,7 +5327,15 @@ mod task_1458_pr_ship_approval_gate_tests {
     fn stale_approval_refusal_records_a_gate_held_event() {
         let tmp = tempfile::tempdir().unwrap();
         let _on = crate::test_env::EnvVarGuard::unset(crate::events::EVENTS_DISABLE_ENV);
-        let _ = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), false, true);
+        let _ = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[approval(OLD)],
+            Some(HEAD),
+            &policy(&[approval(OLD)]),
+            false,
+            true,
+        );
         let evs = crate::events::read_all(tmp.path());
         assert_eq!(evs.len(), 1, "{evs:?}");
         assert!(matches!(
@@ -5171,15 +5344,31 @@ mod task_1458_pr_ship_approval_gate_tests {
                 if gate == crate::events::GATE_STALE_APPROVAL
         ));
         let other = tempfile::tempdir().unwrap();
-        let _ = pr_ship_approval_gate(other.path(), 5, &[approval(OLD)], Some(HEAD), true, true);
+        let _ = pr_ship_approval_gate(
+            other.path(),
+            5,
+            &[approval(OLD)],
+            Some(HEAD),
+            &policy(&[approval(OLD)]),
+            true,
+            true,
+        );
         assert!(crate::events::read_all(other.path()).is_empty());
     }
 
     #[test]
     fn override_is_recorded_durably_with_both_shas_and_pins_the_overridden_head() {
         let tmp = tempfile::tempdir().unwrap();
-        let pin = pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), true, true)
-            .expect("the override ships");
+        let pin = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[approval(OLD)],
+            Some(HEAD),
+            &policy(&[approval(OLD)]),
+            true,
+            true,
+        )
+        .expect("the override ships");
         assert_eq!(
             pin.as_deref(),
             Some(HEAD),

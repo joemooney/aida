@@ -1115,6 +1115,10 @@ pub const GATE_MERGE_HOLD_CLEAR_FLOOR: &str = "merge-hold-clear-floor";
 pub const GATE_SHIP_HOLD_RELEASE: &str = "ship-hold-release";
 /// TASK-1448: the recorded approval does not cover the head about to merge.
 pub const GATE_STALE_APPROVAL: &str = "stale-approval";
+/// BUG-1918: no approval from an authorized, non-author seat (missing,
+/// unattested, or recorded by the session that authored the work).
+// trace:BUG-1918 | ai:claude
+pub const GATE_APPROVAL_AUTHORITY: &str = "approval-authority";
 /// STORY-1405: a reviewer is mid-way through this PR's head.
 pub const GATE_REVIEW_IN_PROGRESS: &str = "review-in-progress";
 /// Fresh pickup refused by an unsatisfied/permanent `BlockedBy`.

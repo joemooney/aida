@@ -143,6 +143,9 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
+    // BUG-1918: durable record of who claimed this spec, surviving release.
+    // trace:BUG-1918 | ai:claude
+    crate::review_authority::record_authoring_lease(&project_root, &lease);
 
     let id_short: String = id.chars().take(8).collect();
     if refreshed {

@@ -197,6 +197,98 @@ pub struct RecordedVerdict {
     /// RFC-3339 timestamp of when `closed_by_merge` was recorded.
     // trace:BUG-1529 | ai:claude
     pub closed_at: Option<String>,
+    /// BUG-1918: the bound recording identity `aida review record` stamped
+    /// onto this verdict — which seat grant / human-at-TTY gate authorized
+    /// it, at which commit, from which session. `None` for every verdict not
+    /// written through that command (hand-written JSON, older binaries, the
+    /// drain's provenance stamp), which `aida pr ship` treats as UNATTESTED.
+    // trace:BUG-1918 | ai:claude
+    pub attestation: Option<RecorderAttestation>,
+}
+
+/// BUG-1918: the JSON key carrying a [`RecorderAttestation`].
+// trace:BUG-1918 | ai:claude
+pub(crate) const ATTESTATION_KEY: &str = "recorder_attestation";
+
+/// BUG-1918: the bound identity behind a verdict, as `aida review record`
+/// established it — never inferred from the free-text `recorded_by` label.
+///
+/// `sha` is the commit the attestation was made for: a later writer that
+/// re-stamps the verdict at a different `reviewed_sha` leaves the attestation
+/// pointing at the old commit, so it no longer vouches for the new one.
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct RecorderAttestation {
+    /// The commit this attestation vouches for.
+    pub sha: String,
+    /// The seat of the validated session grant that recorded it, if any.
+    #[serde(default)]
+    pub seat: Option<String>,
+    /// The validated grant's id, if any.
+    #[serde(default)]
+    pub grant_id: Option<String>,
+    /// True only when the recorder passed the human-at-TTY floor.
+    #[serde(default)]
+    pub human_at_tty: bool,
+    /// The recording session's identity tokens (`kind:value`, see
+    /// `review_authority`): its session ids, its process ancestry, and the
+    /// leases it was bound to. These persist across shell calls, so the ship
+    /// gate can match them against the spec's author sessions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identity: Vec<String>,
+    /// The human-review receipt `aida review record` wrote to the user's
+    /// AIDA home when the recorder passed the human-at-TTY floor. The ship
+    /// gate re-reads it rather than trusting `human_at_tty` on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_id: Option<String>,
+    /// True once the recorder was checked against the spec's author
+    /// sessions and found not to be one of them.
+    #[serde(default)]
+    pub author_check_passed: bool,
+}
+
+impl RecorderAttestation {
+    /// Does this attestation carry authority to approve on its own terms: a
+    /// non-implementer seat grant or a human who passed the TTY floor, made
+    /// for exactly `reviewed_sha`, with the author check passed. Fails closed
+    /// on every missing piece.
+    // trace:BUG-1918 | ai:claude
+    pub(crate) fn authorizes(&self, reviewed_sha: Option<&str>) -> bool {
+        let Some(reviewed) = reviewed_sha.map(str::trim).filter(|s| !s.is_empty()) else {
+            return false;
+        };
+        let seat_ok = self
+            .seat
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("implementer"));
+        self.author_check_passed
+            && (seat_ok || self.human_at_tty)
+            && same_reviewed_sha(&self.sha, reviewed)
+    }
+
+    /// The key under which the ship gate re-validates this attestation's
+    /// authority against durable stores: the seat grant (as of the verdict's
+    /// `recorded_at`), or else the human-review receipt. `None` when the
+    /// attestation names neither, which never verifies.
+    // trace:BUG-1918 | ai:claude
+    pub(crate) fn authority_key(&self, recorded_at: Option<&str>) -> Option<String> {
+        fn nonempty(v: Option<&str>) -> Option<&str> {
+            v.map(str::trim).filter(|s| !s.is_empty())
+        }
+        if let (Some(grant), Some(seat)) = (
+            nonempty(self.grant_id.as_deref()),
+            nonempty(self.seat.as_deref()),
+        ) {
+            let at = nonempty(recorded_at)?;
+            return Some(format!("grant:{grant}:{seat}@{at}"));
+        }
+        if self.human_at_tty {
+            let receipt = nonempty(self.receipt_id.as_deref())?;
+            return Some(format!("receipt:{receipt}:{}", self.sha.trim()));
+        }
+        None
+    }
 }
 
 impl RecordedVerdict {
@@ -468,6 +560,10 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         inherited_findings,
         surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
+        // trace:BUG-1918 | ai:claude
+        attestation: obj
+            .get(ATTESTATION_KEY)
+            .and_then(|v| serde_json::from_value(v.clone()).ok()),
     })
 }
 
@@ -1190,6 +1286,15 @@ pub(crate) fn build_verdict_object(
             .collect(),
     );
     archive_current_round(&mut obj, &incoming_key);
+    // BUG-1918: a new verdict word is a new act of review; it must not
+    // inherit the previous recorder's attestation. Only `aida review record`
+    // writes one, after this builder returns. A provenance-only stamp
+    // (`verdict == None`) keeps it — the attestation's own `sha` stops it
+    // vouching for a different commit.
+    // trace:BUG-1918 | ai:claude
+    if verdict.map(str::trim).is_some_and(|w| !w.is_empty()) {
+        obj.remove(ATTESTATION_KEY);
+    }
     // BUG-1529 review fix: a close belongs to the round it closed. A new
     // round of review must not inherit it, or a fresh refusal reads as
     // resolved. trace:BUG-1529 | ai:claude
