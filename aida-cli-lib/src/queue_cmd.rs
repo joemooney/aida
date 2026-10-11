@@ -12577,6 +12577,34 @@ pub(crate) fn handle_queue_work(
                         )
                         .cyan()
                     );
+                    // BUG-1928: name the tree the session ACTUALLY runs in (the
+                    // lease's worktree — a warm-pool tree when the pool served
+                    // one) and the contained write boundary derived from it, so
+                    // the operator never sees only the orchestrator's requested
+                    // path. trace:BUG-1928 | ai:claude
+                    let phase_env = std::env::var(crate::orchestrator::PHASE_ENV).ok();
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                        crate::contained_boundary::workspace_announcement(
+                            crate::contained_boundary::launched_workspace_label(
+                                phase_env.as_deref()
+                            ),
+                            &lease.worktree_path,
+                            &lease.branch,
+                        )
+                    );
+                    if contained && headless_vendor == crate::session::HeadlessVendor::Claude {
+                        eprintln!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            crate::contained_boundary::write_boundary_announcement(
+                                &crate::contained_boundary::contained_write_roots(
+                                    &lease.worktree_path
+                                )
+                            )
+                        );
+                    }
                     eprintln!(
                         "  {} headless output → {}",
                         crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
