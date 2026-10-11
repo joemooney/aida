@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T10:18:50.971404531Z
+modified_at: 2026-10-11T10:38:34.115501373Z
 req_type: Task
 tags:
 - closure:pending
@@ -512,6 +512,12 @@ comments:
   created_at: 2026-10-11T10:18:50.971404531Z
   modified_at: 2026-10-11T10:18:50.971404531Z
   session_id: 74729565-cb48-4858-8a37-d58740f64a38
+- id: 01a12a8a-fc83-7212-8968-3ab2726ee568
+  author: joe
+  content: 'ADVISOR 03:50: Q6 PR #2508 APPROVED and MERGED (1-line pub(crate) mod shell_wrapper_harness, Build green). Run 6 (#2509) APPROVED and MERGED (rebase, d30e5b67f4) at d7e4831a72. verify_stack e3101a325e..d7e4831a72: 9 commits (6 MOVE, 3 RETARGET), checks 1–8 PASS. Proofs carry over, confirmed by tree equality: base trees e3101a325e = 8f60e13cdc, and the proven SHAs 330448fe72 and d9de0c60d2 are tree-equal to the rebased 5618bce20e and d7e4831a72. Rulings are applied correctly: verified_from_pr_ci_head and bug_1819 tests are in pr_merge_gate.rs (Q1), the USER_AIDA consts are in scaffold_init.rs with the render fn (Q2), and handle_autopilot_command is in autopilot_intake.rs (Q4). The retargets are config-trust rows; the lib.rs sites arithmetic is 35→34→33→31. The merge-tree was clean after #2508 landed. Proceed with run 7 (session_end, Q7 tooling, phase_driver, orchestrator_leases).'
+  created_at: 2026-10-11T10:38:34.115501373Z
+  modified_at: 2026-10-11T10:38:34.115501373Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
