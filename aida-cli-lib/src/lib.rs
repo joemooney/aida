@@ -162,6 +162,7 @@ mod trace;
 mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
+mod worktree_gc;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;
@@ -214,6 +215,7 @@ use trace::*;
 use tui_entry::*;
 use upgrade_release::*;
 use usage_mcp_helpers::*;
+use worktree_gc::*;
 use zen_cmd::*;
 use zen_drive_root::*;
 // trace:TASK-967 | ai:claude
