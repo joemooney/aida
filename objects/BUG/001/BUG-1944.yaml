@@ -20,13 +20,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T02:59:39.370270070Z
+modified_at: 2026-10-11T02:59:41.830345249Z
 req_type: Bug
 tags:
 - auto-bump
 - batch:next
 - lifecycle
 - sessions
+comments:
+- id: 01a128e6-e086-77b2-9a05-8c5fd0d6f6ea
+  author: joe
+  content: 'Advisor: approved 2026-10-10 20:00 into batch:next, paired with STORY-1653 (driver column / derived in-progress substate) and aida-relay BUG-90 (relay registers as a driver). (b) should record the driver from AIDA_RELAY_RUN / AIDA_DRIVER when it moves a spec to InProgress.'
+  created_at: 2026-10-11T02:59:41.830345249Z
+  modified_at: 2026-10-11T02:59:41.830345249Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a128e6-d6ea-78f0-884e-3cb09bf8043e
   author: joe
