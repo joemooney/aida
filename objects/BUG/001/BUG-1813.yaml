@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:27:17.703282889Z
-modified_at: 2026-10-11T06:59:36.263341964Z
+modified_at: 2026-10-11T06:59:41.769972399Z
 req_type: Bug
 tags:
 - factory:night
@@ -47,6 +47,13 @@ comments:
   created_at: 2026-10-11T06:59:10.997055889Z
   modified_at: 2026-10-11T06:59:10.997055889Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129c2-9a49-73e1-82f5-7ec39bf79925
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2496 at 408a0811ca3c3342da7bcdf7b88ef93153fabb08
+  created_at: 2026-10-11T06:59:41.769972399Z
+  modified_at: 2026-10-11T06:59:41.769972399Z
+  session_id: 01a129bb7d82
 history:
 - id: 01a129bb-7fda-72e1-b287-631139fea06c
   author: aida-session-start
