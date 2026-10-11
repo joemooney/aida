@@ -5,7 +5,7 @@
         cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
-        docs docs-build book book-glossary book-serve proto fmt lint check \
+        docs docs-build book book-glossary check-book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
@@ -297,6 +297,11 @@ docs-build: ## Generate documentation without opening
 # build the mdBook.
 book-glossary: ## Regenerate the AIDA Book's Glossary chapter from `aida docs glossary`
 	bash docs/cli/generate-glossary.sh
+
+# trace:BUG-1950 | ai:claude — fail when the committed page differs from the
+# generator's output (CI runs this against the freshly built binary).
+check-book-glossary: ## Fail if docs/cli/12-glossary.md differs from `aida docs glossary`
+	bash docs/cli/generate-glossary.sh --check
 
 book: book-glossary ## Build the AIDA Book (mdBook) — regenerates the Glossary chapter first
 	mdbook build docs/cli
