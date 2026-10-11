@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T07:30:13.894749387Z
+modified_at: 2026-10-11T10:47:20.022052374Z
 req_type: Doc
 tags:
 - factory:night
@@ -237,6 +237,20 @@ comments:
   created_at: 2026-10-11T07:30:13.894749387Z
   modified_at: 2026-10-11T07:30:13.894749387Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12a93-02d6-7e11-b833-d6717f294b9a
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 425bbdbf694a3d7f04089a59bec766e1c93ae225 (fresh reviewer)
+
+    1. BLOCKER: merging this PR would complete DOC-6. The PR title and both commit subjects end in `(DOC-6)`. `derive_squash_trailer` honours a title trailer, and DOC-6 has no closure:pending tag and no open children. The body's "Partial doc slice (B3); does not complete DOC-6" is not a recognised marker. Fix: add a standalone body line `aida: no-complete`, and drop the trailing `(DOC-6)` from the PR title (e.g. "docs(roles): seat entry, delegation and hint-only SESSION_ROLE — DOC-6 slice B3"), so a GitHub squash can't carry the trailer either.
+    2. MAJOR: aida-core/templates/.aida/discipline/advisor-role.md:265 (and its mirror) says "all three ambient paths were removed", but the code still has the orchestrated-drain advisor leg: role.rs `advisor_authority_from` (~1444-1447, ~1506-1520) grants advisor authority to a corroborated live --auto-complete drain without a grant (BUG-460). Internal code also still calls `storage.queue_add` directly (backlog.rs:914, assign_cmd.rs:73, supervisor.rs:432, schedule_cmd.rs:326). Fix: say only the env-prefix and bare-TTY legs were removed and the orchestrated-drain leg remains. Soften line 263 ("each hat is a grant") to match.
+    3. MAJOR: docs/cli/06-roles-sessions.md:23 says "Everything authority-gated … keys off the grant". Not true: an orchestrated drain is an advisor-authority exception, and `hold_authority_from` keeps a bare-TTY leg (the ADR-66 carve-out). Fix: add a one-clause qualifier naming live drains and holds as the documented exceptions.
+    Minors:
+    4. The checked-in ADR-66 copy has drifted from the canonical `aida show ADR-66`: it adds Draft-hold text, the broker paragraph, the 24h detail, and an Amendments section including amendment D, which exists only in an ADR comment. Either update the canonical ADR too, or keep the copy verbatim and note the amendments separately.
+    5. The docs/aida/05-decisions/README.md:12 edit is inside AIDA-AUTOGEN. Confirm the generator emits the same string.
+  created_at: 2026-10-11T10:47:20.022052374Z
+  modified_at: 2026-10-11T10:47:20.022052374Z
+  session_id: acfbf100-b965-4582-a364-9323fd734a00
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
