@@ -229,3 +229,23 @@ items = [
   "mod help_grouping_tests",
   "fn open_user_guide",
 ]
+
+[module.stakeholder_role]
+purpose = "Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)"
+items = [
+  "fn active_stakeholder_role",
+  "fn stakeholder_refusal_message",
+  "fn stakeholder_refusal",
+  "enum StakeholderAction",
+  "fn stakeholder_action_allowed",
+  "fn stakeholder_action_label",
+  "fn stakeholder_mcp_read_allowed",
+  "fn requester_intake_type_allowed",
+  "fn parse_requester_add_type",
+  "fn requester_add_type_allowed",
+  "fn add_csv_tag",
+  "fn enforce_stakeholder_role_capabilities",
+  "fn enforce_stakeholder_role_capabilities_for_role",
+  "mod stakeholder_cli_policy_tests",
+  "fn stakeholder_cli_action",
+]
