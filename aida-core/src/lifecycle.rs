@@ -424,10 +424,58 @@ pub fn is_accepted_decision(req_type: &str, status: &str) -> bool {
 /// ONE definition, read by every candidate/ready surface (the burndown selector
 /// and the backlog candidate collector) so the two can never disagree on what
 /// counts as buildable work.
+///
+/// STORY-1642: an FAQ is knowledge too — an answered question, not something to
+/// implement. The match is exhaustive (no wildcard) on purpose: adding a
+/// `RequirementType` variant fails to compile here until someone decides
+/// whether the new type is work or knowledge.
 // trace:BUG-784 | ai:claude
+// trace:STORY-1642 | ai:claude
 pub fn is_work_item_type(req_type: &crate::models::RequirementType) -> bool {
     use crate::models::RequirementType as T;
-    !matches!(req_type, T::Decision | T::Vision | T::Term | T::Principle)
+    match req_type {
+        // Knowledge: reference material, authored rather than implemented.
+        T::Decision | T::Vision | T::Term | T::Principle | T::Faq => false,
+        // Work: anything an implementer (or a structural rollup) can carry.
+        T::Functional
+        | T::NonFunctional
+        | T::System
+        | T::User
+        | T::ChangeRequest
+        | T::Bug
+        | T::Epic
+        | T::Story
+        | T::Task
+        | T::Spike
+        | T::Sprint
+        | T::Folder
+        | T::Meta
+        | T::Constraint
+        | T::Doc => true,
+    }
+}
+
+/// The knowledge-class types, lowercase, in the order list hints name them.
+/// Derived from [`is_work_item_type`] over [`RequirementType::ALL`] so the two
+/// can never disagree.
+///
+/// [`RequirementType::ALL`]: crate::models::RequirementType::ALL
+// trace:STORY-1642 | ai:claude
+pub fn knowledge_type_names() -> Vec<String> {
+    crate::models::RequirementType::ALL
+        .iter()
+        .filter(|t| !is_work_item_type(t))
+        .map(|t| format!("{t:?}").to_ascii_lowercase())
+        .collect()
+}
+
+/// Is `req_type` (a cache/CLI string such as `"faq"`, `"Decision"`) a
+/// knowledge-class type? The negation of [`is_work_item_type_str`] for
+/// RECOGNIZED types only: an unknown token is not knowledge, so it is never
+/// hidden from a work view.
+// trace:STORY-1642 | ai:claude
+pub fn is_knowledge_type_str(req_type: &str) -> bool {
+    !is_work_item_type_str(req_type)
 }
 
 /// String form of [`is_work_item_type`], for the surfaces that carry `req_type`
@@ -1265,47 +1313,62 @@ mod tests {
         assert!(!is_accepted_decision("task", "approved"));
     }
 
-    /// BUG-784: the work-item type class — exactly the four knowledge-class
-    /// types are excluded, every other type is buildable work, and the string
-    /// form agrees with the typed form for every variant.
+    /// BUG-784 / STORY-1642: the work-item type class. Iterates EVERY
+    /// `RequirementType` variant (via `ALL`) and states the expected class with
+    /// an exhaustive match, so a new type cannot be added without an explicit
+    /// work/knowledge choice here as well as in `is_work_item_type`.
     // trace:BUG-784 | ai:claude
+    // trace:STORY-1642 | ai:claude
     #[test]
     fn work_item_type_class_excludes_only_the_knowledge_types() {
         use crate::models::RequirementType as T;
-        let knowledge = [T::Decision, T::Vision, T::Term, T::Principle];
-        for t in [
-            T::Functional,
-            T::NonFunctional,
-            T::System,
-            T::User,
-            T::ChangeRequest,
-            T::Bug,
-            T::Epic,
-            T::Story,
-            T::Task,
-            T::Spike,
-            T::Sprint,
-            T::Folder,
-            T::Meta,
-            T::Principle,
-            T::Vision,
-            T::Constraint,
-            T::Decision,
-            T::Term,
-            T::Doc,
-        ] {
-            let want = !knowledge.contains(&t);
-            assert_eq!(is_work_item_type(&t), want, "typed verdict wrong for {t:?}");
+        fn expected_is_work(t: &T) -> bool {
+            match t {
+                T::Decision | T::Vision | T::Term | T::Principle | T::Faq => false,
+                T::Functional
+                | T::NonFunctional
+                | T::System
+                | T::User
+                | T::ChangeRequest
+                | T::Bug
+                | T::Epic
+                | T::Story
+                | T::Task
+                | T::Spike
+                | T::Sprint
+                | T::Folder
+                | T::Meta
+                | T::Constraint
+                | T::Doc => true,
+            }
+        }
+        for t in T::ALL.iter() {
+            let want = expected_is_work(t);
+            assert_eq!(is_work_item_type(t), want, "typed verdict wrong for {t:?}");
             assert_eq!(
                 is_work_item_type_str(&format!("{t:?}")),
                 want,
                 "string verdict wrong for {t:?}"
             );
+            assert_eq!(
+                is_knowledge_type_str(&format!("{t:?}")),
+                !want,
+                "knowledge verdict wrong for {t:?}"
+            );
         }
+        // STORY-1642 item 1 + 6: FAQ is knowledge, Doc stays work.
+        assert!(!is_work_item_type(&T::Faq));
+        assert!(is_work_item_type(&T::Doc));
+        assert_eq!(
+            knowledge_type_names(),
+            vec!["principle", "vision", "decision", "term", "faq"]
+        );
         // Trimmed + case-insensitive, and an unknown token stays a work item so
         // a future type is never silently hidden from a candidate view.
         assert!(!is_work_item_type_str(" DECISION "));
+        assert!(!is_work_item_type_str("faq"));
         assert!(is_work_item_type_str("some-future-type"));
+        assert!(!is_knowledge_type_str("some-future-type"));
     }
 
     #[test]

@@ -3008,6 +3008,11 @@ pub(crate) fn handle_queue_command(
                         aida_core::pickability::BlockedReason::NeedsTriage => {
                             reason_label.magenta().bold().to_string()
                         }
+                        // trace:STORY-1642 | ai:claude — knowledge rows
+                        // are reference material; dim, not alarming.
+                        aida_core::pickability::BlockedReason::KnowledgeType { .. } => {
+                            reason_label.dimmed().to_string()
+                        }
                         aida_core::pickability::BlockedReason::UnsatisfiedBlocker { .. } => {
                             reason_label.yellow().to_string()
                         }

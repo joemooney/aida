@@ -9211,7 +9211,8 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// Type of requirement: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
+        /// Type of requirement: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq. An faq is lightweight: filed as completed by default.
+        // trace:STORY-1642 | ai:claude
         #[clap(long)]
         r#type: Option<String>,
 
@@ -9414,7 +9415,11 @@ pub enum Command {
         ///   advisor         - the advisor dashboard (= `aida advisor`)
         ///   why             - the burndown classifier (= `aida burndown explain`)
         ///   inflight        - active leases + drain status
+        ///
+        /// Type words (= `--type <word>`, e.g. `aida list faq`):
+        ///   bug, story, task, epic, spike, faq, decision, vision, term, ...
         // trace:TASK-0415 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:STORY-1642 | ai:claude — type words in the positional.
         // trace:STORY-662 | ai:claude — verbatim_doc_comment preserves the
         // one-shortcut-per-line layout (clap otherwise reflows into paragraphs).
         #[clap(value_name = "STATUS", verbatim_doc_comment)]
@@ -9488,6 +9493,14 @@ pub enum Command {
         // trace:BUG-27 | ai:claude
         #[clap(long)]
         include_meta: bool,
+
+        /// Include knowledge rows (faq, decision, vision, term, principle) in
+        /// the output. They are reference material, not work, so the default
+        /// list hides them; `--type <type>` or `aida <type> list` (e.g.
+        /// `aida faq list`) also shows them.
+        // trace:STORY-1642 | ai:claude
+        #[clap(long)]
+        include_knowledge: bool,
 
         /// Restrict the listing to direct children of <id> (UUID or
         /// SPEC-ID). Composes with --status / --type / --tags etc., so
