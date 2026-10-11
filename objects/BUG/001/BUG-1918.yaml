@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T01:53:06.829049931Z
+modified_at: 2026-10-11T02:36:18.711541728Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -121,6 +121,12 @@ comments:
   created_at: 2026-10-11T01:10:11.297371179Z
   modified_at: 2026-10-11T01:10:11.297371179Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a128d1-7797-7522-b3a7-88efa2adb478
+  author: joe
+  content: 'PR #2485 ready for advisor review at fc0942c40e. Round 2: drain, release --after-pr and burndown now go through the authority gate (merge_approval_inputs, merge_path_approval_gate); the PR subject is resolved from the forge (fail closed); backdating is checked against the reviewed commit''s date; the lifecycle:no-review opt-out is removed and the fasttrack docs are updated; the ledger records session:<lease-id> plus the worker''s stamped pid/session; the anchor rule applies at record and at ship; newest approval is chosen by parsed timestamp; ledger read warnings; per-pid ancestry refresh; agy harness; threat model and identity lifetime are documented. New tests cover a renamed branch shipped from main, a launcher and worker with different AIDA_SESSION_IDs, unanchored record/ship, and release/burndown/drain wiring guards. Lib tests 7866/0, clippy clean, check-ci-fast green. HOLD, do not merge.'
+  created_at: 2026-10-11T02:36:18.711541728Z
+  modified_at: 2026-10-11T02:36:18.711541728Z
+  session_id: 01a128a9e7c2
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
