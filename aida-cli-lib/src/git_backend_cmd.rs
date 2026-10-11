@@ -5140,6 +5140,16 @@ pub(crate) fn handle_git_backend_command(
                             lines.push(crate::toon::scalar("filed_at", &p.summary_line()));
                         }
                         lines.extend(toon_show_comment_lines(&req.comments, *comments));
+                        // STORY-1649: one cheap default-branch linkage scalar;
+                        // `--no-git` turns it off. trace:STORY-1649 | ai:claude
+                        if !*no_git {
+                            if let Some(root) = store_path.parent() {
+                                let ids = crate::shipped_linkage::spec_lookup_ids(&req);
+                                lines.push(crate::shipped_linkage::toon_show_linkage_line(
+                                    root, &ids,
+                                ));
+                            }
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -6790,6 +6800,16 @@ pub(crate) fn handle_git_backend_command(
                         render_completion_crescendo(display_id, &req.title);
                     }
                     EditCompletionRender::Updated => println!("Updated: {}", id),
+                }
+                // STORY-1649: a code spec completed with nothing shipped on the
+                // default branch (local or origin) gets a warning, never a
+                // refusal. trace:STORY-1649 | ai:claude
+                if into_completed {
+                    if let Some(root) = store_path.parent() {
+                        crate::shipped_linkage::warn_if_completed_without_shipped_commit(
+                            root, &req,
+                        );
+                    }
                 }
 
                 // BUG-1770: say what the tag flags actually did, on the success
