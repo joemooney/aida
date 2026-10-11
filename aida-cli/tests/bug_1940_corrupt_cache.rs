@@ -186,7 +186,7 @@ fn read_command_and_verify_print_the_rebuild_hint_not_the_raw_error() {
             "{args:?} names the fix:\n{all}"
         );
         assert!(
-            !all.contains("Caused by") && !all.contains("Error code"),
+            !all.contains("Caused by"),
             "{args:?} must not surface the raw sqlite error:\n{all}"
         );
     }
@@ -231,4 +231,97 @@ fn a_locked_healthy_cache_is_not_quarantined() {
     assert!(quarantined(&fx).is_empty(), "nothing quarantined");
     holder.execute_batch("ROLLBACK").unwrap();
     ok(&aida(&fx, &["cache", "verify"]));
+}
+
+/// Hold the cache refresh lock (`.aida/cache.db.refresh.lock`, a flock) from
+/// another process, as a concurrent refresh would.
+struct HeldRefreshLock(std::process::Child);
+
+impl HeldRefreshLock {
+    fn hold(fixture: &Fixture) -> Self {
+        let lock = fixture.repo.join(".aida/cache.db.refresh.lock");
+        let ready = fixture.repo.join(".aida/lock-held");
+        // `--close`: the lock fd is not inherited by the `sh`/`sleep` child,
+        // so killing `flock` itself releases the lock.
+        let child = Command::new("flock")
+            .arg("--close")
+            .arg(&lock)
+            .arg("sh")
+            .arg("-c")
+            .arg(format!("touch '{}'; sleep 60", ready.display()))
+            .spawn()
+            .expect("spawn flock");
+        let start = std::time::Instant::now();
+        while !ready.exists() {
+            assert!(start.elapsed().as_secs() < 10, "flock never acquired");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        Self(child)
+    }
+}
+
+impl Drop for HeldRefreshLock {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn write_garbage_cache(fx: &Fixture) {
+    let path = cache_path(fx);
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+    std::fs::write(&path, b"this is not a sqlite database".repeat(200)).unwrap();
+}
+
+// Acceptance (b), SQLITE_NOTADB: when the open-time auto-heal cannot take the
+// refresh lock (another process holds it), a read prints the fix and the cause
+// instead of the raw error, and leaves the file where it is.
+#[test]
+fn notadb_read_prints_the_rebuild_hint_when_auto_heal_cannot_lock() {
+    let fx = fixture();
+    write_garbage_cache(&fx);
+    let held = HeldRefreshLock::hold(&fx);
+    let out = aida(&fx, &["list"]);
+    drop(held);
+    let (stdout, stderr) = text(&out);
+    let all = format!("{stdout}{stderr}");
+    assert!(!out.status.success(), "{all}");
+    assert!(all.contains("is corrupt. Fix: aida cache rebuild"), "{all}");
+    assert!(
+        all.contains("cause: "),
+        "original cause stays visible:\n{all}"
+    );
+    assert!(!all.contains("Caused by"), "{all}");
+    assert!(
+        quarantined(&fx).is_empty(),
+        "no quarantine without the lock"
+    );
+
+    // Lock released: the next read auto-heals and says where the file went.
+    let out = aida(&fx, &["list"]);
+    let (stdout, stderr) = text(&out);
+    assert!(out.status.success(), "{stdout}{stderr}");
+    assert!(stderr.contains("moved it aside to"), "{stderr}");
+    assert_eq!(quarantined(&fx).len(), 1);
+}
+
+// Rebuild respects the refresh lock: while another process holds it, rebuild
+// does not move the (corrupt) cache aside and says why.
+#[test]
+fn rebuild_waits_for_and_respects_the_refresh_lock() {
+    let fx = fixture();
+    break_fts(&fx);
+    let held = HeldRefreshLock::hold(&fx);
+    let out = aida(&fx, &["cache", "rebuild"]);
+    drop(held);
+    let (stdout, stderr) = text(&out);
+    let all = format!("{stdout}{stderr}");
+    assert!(!out.status.success(), "{all}");
+    assert!(all.contains("another aida process is refreshing"), "{all}");
+    assert!(quarantined(&fx).is_empty(), "nothing moved while locked");
+
+    let stdout = ok(&aida(&fx, &["cache", "rebuild"]));
+    assert!(stdout.contains("moved it aside to"), "{stdout}");
 }

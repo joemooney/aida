@@ -710,31 +710,31 @@ fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Conn
         // busy/lock error (the BUG-681 fast-fail path) and permissions errors
         // are NOT self-healed here; they keep their existing behavior.
         Err(err) if is_sqlite_corruption_error(&err) => {
-            // BUG-1940: move the corrupt file aside instead of deleting it, so
-            // the evidence survives and the user is told where it went.
+            // BUG-1940: quarantine (not delete) under the cache refresh lock, so
+            // a concurrent rebuild/refresh never has its fresh cache moved aside.
+            // The lock is re-entrant on this thread, so a caller already holding
+            // it does not deadlock; another holder makes us report instead.
             // trace:BUG-1940 | ai:claude
-            match quarantine_cache_files(path) {
-                Ok(moved) if !moved.is_empty() => note_cache_quarantined(path, &moved),
-                Ok(_) => {}
-                Err(_) => remove_corrupt_cache_files(path),
+            let guard =
+                super::cache_refresh::RefreshLock::acquire_within(path, AUTO_HEAL_LOCK_WAIT)
+                    .ok()
+                    .flatten();
+            let Some(_guard) = guard else {
+                return Err(tag_cache_corruption(path, err));
+            };
+            // Re-check under the lock: another process may have replaced it.
+            match open_connection_inner(path, lock_info_path) {
+                Ok(conn) => return Ok(conn),
+                Err(again) if is_sqlite_corruption_error(&again) => {}
+                Err(again) => return Err(again),
             }
+            quarantine_or_remove_with_note(path);
             // Re-open the now-absent file: sqlite creates a fresh empty db, the
             // WAL pragma succeeds, and Cache::open applies the schema. If the
-            // recreate ALSO fails (e.g. the file couldn't be removed — a
-            // permissions problem masquerading past the corruption class), fall
-            // back to an actionable message rather than the misleading
-            // WAL-mode wording.
-            open_connection_inner(path, lock_info_path).map_err(|second| {
-                if is_sqlite_corruption_error(&second) {
-                    anyhow::anyhow!(
-                        "cache database is unreadable (corrupt?) — delete it to \
-                         auto-rebuild: rm {}",
-                        path.display()
-                    )
-                } else {
-                    second
-                }
-            })
+            // recreate ALSO fails (the file could not be moved), report the
+            // corruption with its fix.
+            open_connection_inner(path, lock_info_path)
+                .map_err(|second| tag_cache_corruption(path, second))
         }
         Err(err) => Err(err),
     }
@@ -850,30 +850,155 @@ fn is_broken_fts_vtable_error(err: &anyhow::Error) -> bool {
     })
 }
 
-/// Move `path` and its `-wal` / `-shm` sidecars to
-/// `<path>.corrupt-<UTC timestamp>{,-wal,-shm}`. Returns the destination paths
-/// of the files that existed and were moved (main file first). The cache is a
+/// How many quarantined cache sets (`<cache>.corrupt-*{,-wal,-shm}`) to keep
+/// beside the cache; older sets are deleted after each quarantine.
+// trace:BUG-1940 | ai:claude
+pub const QUARANTINE_KEEP: usize = 2;
+
+/// Typed marker for an error that came from the cache database itself (not the
+/// history index, token ledger, or any other sqlite file) and is in the
+/// corruption class. The CLI keys its one-line `aida cache rebuild` fix on this
+/// type; the original error stays reachable as the source.
+// trace:BUG-1940 | ai:claude
+#[derive(Debug)]
+pub struct CacheCorruption {
+    pub path: PathBuf,
+    source: anyhow::Error,
+}
+
+impl std::fmt::Display for CacheCorruption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the local AIDA cache at {} is corrupt",
+            self.path.display()
+        )
+    }
+}
+
+impl std::error::Error for CacheCorruption {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // Deref to the original error object (not a boxed wrapper) so
+        // `chain().downcast_ref::<rusqlite::Error>()` still finds it.
+        let inner: &(dyn std::error::Error + Send + Sync + 'static) = self.source.as_ref();
+        Some(inner)
+    }
+}
+
+/// Wrap `err` in [`CacheCorruption`] when it is a corruption-class error from
+/// the cache at `path`; anything else (including an already-tagged error) is
+/// returned unchanged.
+// trace:BUG-1940 | ai:claude
+pub fn tag_cache_corruption(path: &Path, err: anyhow::Error) -> anyhow::Error {
+    let tagged = err
+        .chain()
+        .any(|cause| cause.downcast_ref::<CacheCorruption>().is_some());
+    if tagged || !is_cache_corruption_error(&err) {
+        return err;
+    }
+    anyhow::Error::new(CacheCorruption {
+        path: path.to_path_buf(),
+        source: err,
+    })
+}
+
+/// The quarantine destination base for `path`: `<path>.corrupt-<UTC>-<pid>`,
+/// plus `-<n>` until none of the main/`-wal`/`-shm` names exist, so a rename
+/// never overwrites an earlier quarantine.
+// trace:BUG-1940 | ai:claude
+fn unique_quarantine_base(path: &Path) -> String {
+    // Nanosecond stamp: names sort chronologically, so pruning keeps the
+    // newest sets even when a pruned name could otherwise be reused.
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
+    let stem = format!("{}.corrupt-{stamp}-{}", path.display(), std::process::id());
+    let taken = |base: &str| {
+        ["", "-wal", "-shm"]
+            .iter()
+            .any(|suffix| Path::new(&format!("{base}{suffix}")).exists())
+    };
+    if !taken(&stem) {
+        return stem;
+    }
+    (1u32..)
+        .map(|n| format!("{stem}-{n}"))
+        .find(|base| !taken(base))
+        .expect("an unbounded counter finds a free name")
+}
+
+/// Move `path` and its `-wal` / `-shm` sidecars to a unique
+/// `<path>.corrupt-<UTC>-<pid>{,-wal,-shm}` set, then prune older sets beyond
+/// [`QUARANTINE_KEEP`]. Returns the destinations (main file first). All or
+/// nothing: if a sidecar rename fails, the files already moved are renamed
+/// back, so a hot WAL is never left beside a missing database. The cache is a
 /// rebuildable projection, so moving it aside loses nothing canonical; keeping
-/// the bytes (rather than deleting them) leaves evidence for diagnosing how the
-/// corruption happened.
+/// the bytes leaves evidence for diagnosing the corruption. Callers hold the
+/// cache refresh lock.
 // trace:BUG-1940 | ai:claude
 pub fn quarantine_cache_files(path: &Path) -> std::io::Result<Vec<PathBuf>> {
-    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
-    let mut base = format!("{}.corrupt-{stamp}", path.display());
-    if Path::new(&base).exists() {
-        base = format!("{base}-{}", std::process::id());
-    }
-    let mut moved = Vec::new();
+    let base = unique_quarantine_base(path);
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     for suffix in ["", "-wal", "-shm"] {
         let src = PathBuf::from(format!("{}{}", path.display(), suffix));
         if !src.exists() {
             continue;
         }
         let dst = PathBuf::from(format!("{base}{suffix}"));
-        std::fs::rename(&src, &dst)?;
-        moved.push(dst);
+        if let Err(err) = std::fs::rename(&src, &dst) {
+            for (src, dst) in moved.iter().rev() {
+                let _ = std::fs::rename(dst, src);
+            }
+            return Err(err);
+        }
+        moved.push((src, dst));
     }
-    Ok(moved)
+    prune_quarantined_cache_files(path, QUARANTINE_KEEP);
+    Ok(moved.into_iter().map(|(_, dst)| dst).collect())
+}
+
+/// Delete all but the newest `keep` quarantined sets for `path`. Set names sort
+/// chronologically (UTC timestamp prefix). Best-effort.
+// trace:BUG-1940 | ai:claude
+pub fn prune_quarantined_cache_files(path: &Path, keep: usize) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let prefix = format!("{}.corrupt-", name.to_string_lossy());
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(&prefix))
+        .collect();
+    let set_of = |n: &str| {
+        n.strip_suffix("-wal")
+            .or_else(|| n.strip_suffix("-shm"))
+            .unwrap_or(n)
+            .to_string()
+    };
+    let mut sets: Vec<String> = files.iter().map(|n| set_of(n)).collect();
+    sets.sort();
+    sets.dedup();
+    if sets.len() <= keep {
+        return;
+    }
+    let doomed: HashSet<String> = sets[..sets.len() - keep].iter().cloned().collect();
+    files.retain(|n| doomed.contains(&set_of(n)));
+    for n in files {
+        let _ = std::fs::remove_file(dir.join(n));
+    }
+}
+
+/// Quarantine (falling back to deleting, so the cache can still be recreated)
+/// and tell the user where the files went.
+// trace:BUG-1940 | ai:claude
+fn quarantine_or_remove_with_note(path: &Path) {
+    match quarantine_cache_files(path) {
+        Ok(moved) if !moved.is_empty() => note_cache_quarantined(path, &moved),
+        Ok(_) => {}
+        Err(_) => remove_corrupt_cache_files(path),
+    }
 }
 
 // trace:BUG-1940 | ai:claude
@@ -887,6 +1012,11 @@ fn note_cache_quarantined(path: &Path, moved: &[PathBuf]) {
             .unwrap_or_default()
     );
 }
+
+/// How long the open-time auto-heal waits for the cache refresh lock before
+/// giving up and reporting the corruption instead.
+// trace:BUG-1940 | ai:claude
+const AUTO_HEAL_LOCK_WAIT: Duration = Duration::from_secs(2);
 
 /// Run a cache write under the lock-info sidecar.
 ///
@@ -1263,7 +1393,8 @@ impl Cache {
     // trace:TASK-1478 | ai:claude
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        Self::open_at(path, true)
+        // trace:BUG-1940 | ai:claude
+        Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))
     }
 
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
@@ -1522,13 +1653,15 @@ impl Cache {
         }
     }
 
-    /// Close this handle's connection, move the damaged files aside
-    /// ([`quarantine_cache_files`]) and reopen a fresh, empty cache at the same
-    /// path with the schema applied. Returns where the files went. Refuses on a
-    /// read-only handle (it cannot replace the file). Callers must only call
-    /// this after [`Self::integrity_problem`] confirmed damage.
+    /// Recovery step of `aida cache rebuild`; the caller holds the cache
+    /// refresh lock. Closes this handle's connection, re-checks integrity by
+    /// path (another process may already have replaced the file), moves a
+    /// still-damaged file set aside ([`quarantine_cache_files`]), and reopens a
+    /// connection at the same path. Closing first matters: an open handle on the
+    /// old inode would unlink `<path>-wal` by name when it closed later. Returns
+    /// where the files went (empty when the file was healthy) and the finding.
     // trace:BUG-1940 | ai:claude
-    pub fn quarantine_and_reopen(&self) -> Result<Vec<PathBuf>> {
+    pub fn quarantine_and_reopen(&self) -> Result<(Vec<PathBuf>, Option<String>)> {
         if self.read_only {
             anyhow::bail!(
                 "the AIDA cache at {} is corrupt but not writable here; move it aside by hand \
@@ -1538,16 +1671,24 @@ impl Cache {
             );
         }
         let mut guard = self.conn.lock().unwrap();
-        // Close the old connection BEFORE renaming: an open handle would later
-        // unlink `<path>-wal` by name on close, deleting the fresh cache's WAL.
         let old = std::mem::replace(&mut *guard, Connection::open_in_memory()?);
         let _ = old.close();
-        let moved = quarantine_cache_files(&self.path).with_context(|| {
-            format!(
-                "Failed to move the corrupt cache at {} aside",
-                self.path.display()
-            )
-        })?;
+        let mut result = self
+            .integrity_problem()
+            .map(|problem| (Vec::new(), problem));
+        if let Ok((moved, Some(_))) = &mut result {
+            match quarantine_cache_files(&self.path) {
+                Ok(paths) => *moved = paths,
+                Err(err) => {
+                    result = Err(anyhow::Error::from(err).context(format!(
+                        "Failed to move the corrupt cache at {} aside",
+                        self.path.display()
+                    )))
+                }
+            }
+        }
+        // Reopen whatever is at the path now, even on error, so this handle
+        // never keeps the in-memory placeholder.
         let fresh = Cache::open_at(self.path.clone(), false)?;
         let Cache {
             conn,
@@ -1560,7 +1701,7 @@ impl Cache {
             .store(migration_pending.into_inner(), Ordering::SeqCst);
         self.usable_snapshot
             .store(usable_snapshot.into_inner(), Ordering::SeqCst);
-        Ok(moved)
+        result
     }
 
     // Read-only connection, pinned before reading either metadata or rows.
@@ -6870,7 +7011,11 @@ mod tests {
         let problem = cache.integrity_problem().unwrap().expect("damage found");
         assert!(problem.contains("requirements_fts"), "{problem}");
 
-        let moved = cache.quarantine_and_reopen().unwrap();
+        let (moved, found) = cache.quarantine_and_reopen().unwrap();
+        assert!(
+            found.is_some(),
+            "re-check under the lock still finds damage"
+        );
         assert!(!moved.is_empty());
         assert!(moved[0]
             .file_name()
@@ -6884,6 +7029,65 @@ mod tests {
             "the reopened handle rebuilds into a fresh file"
         );
         assert_eq!(cache.integrity_problem().unwrap(), None);
+    }
+
+    // BUG-1940: quarantine names never collide (main, -wal and -shm are all
+    // checked) and only the newest QUARANTINE_KEEP sets are retained.
+    #[test]
+    fn quarantine_names_are_unique_and_old_sets_are_pruned() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let mut bases = Vec::new();
+        for round in 0..4 {
+            std::fs::write(&path, format!("bad {round}")).unwrap();
+            std::fs::write(format!("{}-wal", path.display()), "wal").unwrap();
+            let moved = quarantine_cache_files(&path).unwrap();
+            assert_eq!(moved.len(), 2, "main + wal moved");
+            assert!(!path.exists());
+            assert!(!Path::new(&format!("{}-wal", path.display())).exists());
+            bases.push(moved[0].clone());
+        }
+        let unique: HashSet<_> = bases.iter().collect();
+        assert_eq!(unique.len(), 4, "every round got its own name: {bases:?}");
+        let left: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with("cache.db.corrupt-"))
+            .collect();
+        assert_eq!(left.len(), QUARANTINE_KEEP * 2, "{left:?}");
+        for kept in &bases[bases.len() - QUARANTINE_KEEP..] {
+            assert!(kept.exists(), "newest sets survive: {kept:?}");
+        }
+        assert!(!bases[0].exists(), "oldest set pruned");
+        // The newest set holds the latest bytes.
+        assert_eq!(std::fs::read_to_string(&bases[3]).unwrap(), "bad 3");
+    }
+
+    // BUG-1940: the CLI hint keys on the CacheCorruption tag, applied only to
+    // errors from the cache file; lock errors are never tagged.
+    #[test]
+    fn tag_cache_corruption_tags_only_corruption() {
+        let path = Path::new("project/.aida/cache.db");
+        let corrupt = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            None,
+        ));
+        let tagged = tag_cache_corruption(path, corrupt);
+        assert!(tagged
+            .chain()
+            .any(|c| c.downcast_ref::<CacheCorruption>().is_some()));
+        assert!(
+            is_cache_corruption_error(&tagged),
+            "the sqlite cause stays reachable"
+        );
+        let busy = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            None,
+        ));
+        let busy = tag_cache_corruption(path, busy);
+        assert!(!busy
+            .chain()
+            .any(|c| c.downcast_ref::<CacheCorruption>().is_some()));
     }
 
     // BUG-1940: a healthy cache under another connection's write lock is not

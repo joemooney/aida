@@ -495,17 +495,26 @@ pub(crate) fn cache_corruption_message(problem: Option<&str>) -> String {
     }
 }
 
-/// Replace a corruption-class cache error (SQLITE_CORRUPT / SQLITE_NOTADB / a
-/// broken FTS table) with the one-line fix, so a read command never surfaces
-/// the raw sqlite error. Every other error passes through untouched; a lock or
-/// busy error is never rewritten.
+/// Replace an error tagged at its source as cache-database corruption
+/// ([`aida_core::db::CacheCorruption`]) with the one-line fix, keeping the
+/// original sqlite cause visible on a second line. Untagged errors — including
+/// corruption in other sqlite files such as the history index or token ledger,
+/// and every lock/busy error — pass through untouched.
 // trace:BUG-1940 | ai:claude
 pub(crate) fn with_cache_corruption_hint(err: anyhow::Error) -> anyhow::Error {
-    if aida_core::db::is_cache_corruption_error(&err) {
-        anyhow::anyhow!(cache_corruption_message(None))
-    } else {
-        err
-    }
+    let Some(corruption) = err
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<aida_core::db::CacheCorruption>())
+    else {
+        return err;
+    };
+    let cause = err
+        .chain()
+        .find(|cause| cause.downcast_ref::<rusqlite::Error>().is_some())
+        .or_else(|| err.chain().last())
+        .map(|cause| cause.to_string())
+        .unwrap_or_default();
+    anyhow::anyhow!("{corruption}. Fix: aida cache rebuild\n  cause: {cause}")
 }
 
 // trace:BUG-1940 | ai:claude
@@ -523,4 +532,44 @@ fn print_quarantine_notice(outcome: &aida_core::db::CacheRebuildOutcome) {
         problem,
         main.display()
     );
+}
+
+#[cfg(test)]
+mod bug_1940_tests {
+    use super::*;
+
+    fn corrupt() -> anyhow::Error {
+        anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            Some("database disk image is malformed".into()),
+        ))
+    }
+
+    // trace:BUG-1940 | ai:claude
+    #[test]
+    fn untagged_sqlite_corruption_from_another_db_is_not_rewritten() {
+        let err = corrupt().context("Failed to read history-v3.db");
+        let out = with_cache_corruption_hint(err);
+        assert!(!out.to_string().contains("aida cache rebuild"), "{out}");
+        assert!(out.to_string().contains("history-v3.db"));
+    }
+
+    // trace:BUG-1940 | ai:claude
+    #[test]
+    fn tagged_cache_corruption_gets_the_fix_and_keeps_the_cause() {
+        let err = aida_core::db::tag_cache_corruption(
+            std::path::Path::new("/p/.aida/cache.db"),
+            corrupt(),
+        )
+        .context("list requirements");
+        let out = with_cache_corruption_hint(err).to_string();
+        assert!(
+            out.contains("/p/.aida/cache.db is corrupt. Fix: aida cache rebuild"),
+            "{out}"
+        );
+        assert!(
+            out.contains("cause: database disk image is malformed"),
+            "{out}"
+        );
+    }
 }
