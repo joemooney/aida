@@ -14,12 +14,12 @@ description: |-
   - An existing node that lacks a block for a listed type claims one lazily on its first `aida add` of that type. Today allocation only runs on acquire, so already-acquired clones would never get one.
   - Regression test: on an already-acquired node, `aida add --type faq` yields an agreed `FAQ-N` ID with no merge-gate step.
   - Adding a type has a checklist item, or a test that fails, for block allocation.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:51:42.890900204Z
-modified_at: 2026-10-10T15:20:46.198837723Z
+modified_at: 2026-10-11T01:08:45.231889469Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -33,6 +33,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12881-4e2f-75d2-a90d-c9e300848944
+  author: aida-session-start
+  timestamp: 2026-10-11T01:08:45.231888927Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
