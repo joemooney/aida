@@ -16,10 +16,41 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T01:25:18.266739747Z
+modified_at: 2026-10-11T07:11:58.880139810Z
 req_type: Bug
 tags:
 - hooks
+comments:
+- id: 01a129cd-d9a0-7fa2-b312-de463997e17c
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the heredoc and multi-line-quoted cases reproduce against the hook on main, and every block reason is printed to stdout rather than stderr.
+
+    Problem
+    strip_quoted_args() runs sed line-by-line, so a quoted argument that spans lines, and any heredoc body (never quoted), still reach the force-push regex; a real block prints its reason with plain echo (stdout), which the agent runtime drops, leaving "hook error: No stderr output".
+
+    Evidence path (verified on main; ran the hook with crafted JSON)
+    - aida-core/templates/hooks/aida-git-guardrails.sh:296-298 — strip_quoted_args uses `sed -e "s/'[^']*'/''/g" -e 's/"[^"]*"/""/g'`, per line only.
+    - :347-353 — force-push detection runs on the whole SCAN_COMMAND, including heredoc bodies.
+    - :442-447 — `if ! check_destructive ...; then echo ""; echo "To proceed anyway..."; exit 2` — all `echo "BLOCKED: ..."` lines inside check_destructive (:306-420) go to stdout; nothing is sent to stderr.
+    - Repro: feed `{"tool_input":{"command":"cat > /tmp/x.md <<EOF\nnever force-push to main\nEOF"}}` (with the actual git force-push phrase in the body) => exit 2 with BLOCKED on stdout. Same for a `--description "line1\n...force-push phrase...\nline3"` spanning lines. A single-line quoted description is already allowed (BUG-692).
+    - The "Run git-guardrails parse test" CI gate exists (fast tier) and should gain these fixtures.
+
+    Acceptance criteria
+    - Fixture in the git-guardrails parse test: a heredoc body containing the force-push phrase and a protected branch exits 0.
+    - Fixture: a double-quoted argument spanning two lines containing the phrase exits 0.
+    - Fixture: a bare force-push to main still exits 2 AND its BLOCKED text is captured on stderr (test redirects 2> and asserts non-empty).
+    - Fixture: an unterminated quote / unparseable command still fails closed (exit 2) with a stderr reason.
+    - `make sync-templates && make check-templates` clean (hook is a template master; .claude/hooks is a symlink).
+
+    Scope / non-goals
+    - Not a full shell parser: strip heredoc bodies (from `<<WORD` to the terminator line) and make quote-stripping multi-line; keep fail-closed on ambiguity.
+    - related:BUG-692 related:BUG-1092 related:BUG-1751 related:BUG-661
+
+    Suggested size: S
+  created_at: 2026-10-11T07:11:58.880139810Z
+  modified_at: 2026-10-11T07:11:58.880139810Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
