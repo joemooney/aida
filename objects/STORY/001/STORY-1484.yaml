@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-08T21:55:05.789144401Z
+modified_at: 2026-10-11T01:51:28.976757455Z
 req_type: Story
 tags:
 - cache
@@ -262,4 +262,10 @@ comments:
   content: 'PROXY DESIGN GATE UPDATE — TASK1526 V4 exact62925B SHA383017916ce28dcafe3fed3a4df7ee950319c84d0f602eb3fe130e7d254080e2 now APPROVED-AS-AMENDED DESIGNONLY by independentcoldreviewer with bindingA1–A10, finalcorrected50387report SHA2abe15022b1bfb7d382dc1c48aa4305aeeaba50c025aef59ae4bf7567f4ce90a FULLnormalcanonicalrelay+exactreadback on child. InitialA5countercontradiction corrected SAMEreviewer, exactE/Arowmap nowdistinguishes weakFnMut/applicationclosure/tx, preservedoldreport/receipt. No implementation or measuredpass: originaldefaultfourway2.648286FAIL, oneE1diagnostic1.955642notAC1credit, actualnewcodedispatchREFUSED remains. Freshcodegate anddifferentfirstactualT4 owed; TASK1527blockedRETAINED/Cfutureindependentre-measure/BUG1674fullshow24hbothlimbsunmet/parentclosurepending. No status/dependencyrelease/grant/record/PRmerge/activation.'
   created_at: 2026-10-08T21:55:05.789137894Z
   modified_at: 2026-10-08T21:55:05.789137894Z
+- id: 01a128a8-6cd0-7783-9c7f-90808bd0b6bd
+  author: joe
+  content: 'Recurrence 2026-10-10: cache.db corrupted twice today. The first copy was saved as .aida/cache.db.malformed-2026-10-10 at 17:23. The second was found at 18:50 during an advisor relay check: ''database disk image is malformed'', integrity_check fails with ''vtable constructor failed: requirements_fts'', and aida cache rebuild refuses to open the corrupt file. Recovered by moving cache.db/-wal/-shm to .aida/quarantine/ (evidence kept) and running aida cache rebuild: 5006 specs, verify clean, integrity ok. No process held the file at the time. Context: about 4–6 concurrent agent sessions on an HDD host with heavy I/O stalls, and the disk was at 93% full until about 18:40. Two things worth fixing: (1) cache rebuild should rebuild from scratch when the existing file is malformed instead of erroring; (2) the corruption keeps happening (10-05, then twice on 10-10), so the FTS write path under concurrency needs a look.'
+  created_at: 2026-10-11T01:51:28.976757455Z
+  modified_at: 2026-10-11T01:51:28.976757455Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 execution_mode: guided
