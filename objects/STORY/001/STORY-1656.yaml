@@ -17,12 +17,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:59:40.157380366Z
-modified_at: 2026-10-11T07:12:07.448218162Z
+modified_at: 2026-10-11T07:12:45.842501810Z
 req_type: Story
 tags:
 - forge
 - gitlab
 - init
+- triaged:night
 comments:
 - id: 01a129cd-fb18-7f41-af42-440c395bad99
   author: night-fable
