@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:22:50.976734054Z
-modified_at: 2026-10-11T14:46:32.496376279Z
+modified_at: 2026-10-11T14:46:53.505773133Z
 req_type: Bug
 tags:
 - cli
@@ -74,6 +74,12 @@ comments:
   created_at: 2026-10-11T13:46:57.494441568Z
   modified_at: 2026-10-11T13:46:57.494441568Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b6e-5541-7f43-92af-1fd129e71318
+  author: joe
+  content: 'Completed: PR #2515 squash-merged as c5bcada3501be9d8a3b7d859cff72497caf3f42b (merge seat).'
+  created_at: 2026-10-11T14:46:53.505773133Z
+  modified_at: 2026-10-11T14:46:53.505773133Z
+  session_id: 268d52ff-fd05-4376-91d6-c472ac1d6f52
 history:
 - id: 01a129ee-549f-7c71-8cb4-903e70ca8678
   author: joe
