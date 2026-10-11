@@ -5957,7 +5957,9 @@ mod task_192_fail_closed_fact_tests {
 /// Complete inventory for the review-story creation gate only. Bulk readers
 /// intentionally tolerate bad objects; absence here must not use that contract.
 // trace:BUG-1807 | ai:codex
-fn load_review_story_inventory(project_root: &std::path::Path) -> Result<RequirementsStore> {
+pub(crate) fn load_review_story_inventory(
+    project_root: &std::path::Path,
+) -> Result<RequirementsStore> {
     if let Some(store_path) = detect_distributed_store_from(project_root) {
         let objects = store_path.join("objects");
         let mut store = aida_core::GitBackend::read_metadata_only(&store_path)?;
@@ -6746,7 +6748,9 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
 }
 
 // trace:BUG-1807 | ai:codex
-fn require_review_handoff(outcome: &AutoQueueOutcome) -> Result<(), auto_complete::PhaseFailure> {
+pub(crate) fn require_review_handoff(
+    outcome: &AutoQueueOutcome,
+) -> Result<(), auto_complete::PhaseFailure> {
     match outcome.status {
         AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists => Ok(()),
         _ => Err(auto_complete::PhaseFailure::new(format!(
