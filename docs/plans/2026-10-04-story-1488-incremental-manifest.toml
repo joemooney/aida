@@ -361,3 +361,32 @@ items = [
   "mod merge_hold_cli_tests",
   "fn handle_merge_hold",
 ]
+
+[module.agent_registry_root]
+purpose = "`aida agent ls/gc/stop/register`, registered-process validation and child signal forwarding (STORY-1488 slice 1)"
+items = [
+  "fn agent_ls",
+  "fn agent_gc",
+  "fn agent_stop",
+  "fn agent_register",
+  "fn agent_describe",
+  "fn validate_registered_agent_type",
+  "fn validate_register_pid",
+  "fn validate_register_pid_owner",
+  "fn proc_status_uid",
+  "fn parse_proc_status_uid",
+  "fn registered_process_cwd",
+  "struct ChildSignalForwarder",
+  "impl impl:ChildSignalForwarder",
+  "fn install_child_signal_forwarder",
+  "fn forward_signal_to_child",
+  "fn find_aida_project_root_from",
+  "fn agent_launch_project_root_from",
+  "fn ensure_agent_launch_cwd_not_git_metadata",
+  "fn is_git_metadata_path",
+  "fn find_executable_on_path",
+  "fn executable_extensions",
+  "fn is_executable_file",
+  "mod agent_launcher_tests",
+  "mod presentation_env_tests",
+]
