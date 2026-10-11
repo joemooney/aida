@@ -1,0 +1,110 @@
+id: 01a12c98-a1cd-7902-8a9f-088c60cf53a1
+spec_id: STORY-1669
+agreed_id: STORY-1669
+title: 'aida regen corpus|trial|score: built-in regeneration trials with controls, sandboxed scoring and a regenerability score'
+description: |
+  ## F4. `aida regen` as a built-in workflow, and a regenerability score
+
+  **Seen:** the trial protocol in `docs/regeneration/README.md` is mechanical:
+  freeze the corpus, run an isolated agent, score it against held-out tests,
+  classify the gaps.
+
+  **Proposal:**
+  - `aida regen corpus` replaces `scripts/regen-corpus.sh`.
+  - `aida regen trial` starts the isolated agent with standard rules.
+  - `aida regen score` runs the oracle and writes the result to the store.
+  - A per-project regenerability score (oracle pass rate of the last trial, and
+    its age) appears in `aida statusline` and `aida digest`. What gets measured
+    gets maintained.
+
+  ## F14. Detect hollow passes when scoring
+
+  **Seen:** in trial 0, all 12 tmp-sweep passes were hollow. Every invocation
+  failed on an unknown option, so every "nothing was deleted" assertion passed.
+
+  **Proposal:**
+  - Before trusting negative assertions, `aida regen score` checks that each tool
+    actually ran: non-error exit and expected output present.
+  - Test authors pair each negative assertion with a positive one ("ran, and did
+    not delete").
+  - An oracle that lets a crashing tool pass is not yet an oracle.
+
+  ## F15. Score through a seam adapter to separate naming from behavior
+
+  **Seen:** one renamed variable (`AIDA_CARGO_REAL` vs `AIDA_REAL_CARGO`) hid
+  most of trial 0's correct behavior. With a one-line adapter the score went
+  from 20 to 27 of 51.
+
+  **Proposal:**
+  - Scoring runs twice: raw (R1, the exact interface) and through an adapter that
+    maps the regenerated system's names onto the contract (R2).
+  - The difference is the cost of interface gaps alone.
+  - The adapter is generated from the regenerating agent's GAPS file, so it is
+    cheap.
+
+  ## F21. Report the oracle score, not the gap count, as the quality metric
+
+  **Seen:** the gap count rose from 94 to 121 while the oracle score rose from
+  20/50 to 48/50. A richer store lets the regenerating agent see more precisely
+  what is still unsaid.
+
+  **Proposal:**
+  - `aida regen score` reports the oracle pass rate as the headline number.
+  - Gaps are classified and trended by category: interface gaps falling and
+    "missing" rising is healthy.
+  - The gap count alone must never be read as a quality signal.
+
+  ## F24. Scoring sandboxes must hide the original system (delegation contamination)
+
+  **Seen:**
+  - Trial 0's regenerated wrapper looks for "the real cargo" by searching PATH for a `cargo` other than itself.
+  - During scoring it found `~/.local/bin/cargo`, which is **our live wrapper**, and delegated to it.
+  - Some oracle passes were therefore earned by the original system, not the regenerated one.
+  - Found only because rescoring with a script changed one result.
+
+  **Proposal:**
+  - `aida regen score` runs the oracle with a sanitized PATH (system dirs plus a guard that logs and fails any fallback), a fake HOME, private XDG dirs, and no inherited tool homes.
+  - A score is reported as clean only with zero guard hits.
+  - A positive control (the original system, scored the same way) must reach 100%.
+
+  ## F27. Build controls before the first trial
+
+  **Seen:** every methodology incident in this pilot came from running trials before the controls
+  existed:
+  - delegation contamination;
+  - oracle crashes and flakes;
+  - hollow passes;
+  - a scorer parse bug.
+
+  **Proposal:** `aida regen` refuses to score a trial until three controls exist and have passed:
+  - a reference control (the original system must pass 100%, repeatedly, under load);
+  - a stub control (it measures the hollow checks, which are excluded from the discriminating metric);
+  - a clean sandbox (zero guard hits).
+
+  Results are parsed from exact markers, never loose prefixes.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:12:42.829403010Z
+modified_at: 2026-10-11T20:12:42.829403010Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
