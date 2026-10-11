@@ -250,6 +250,13 @@ sites = 1
 channels = ["worktree", "write"]
 sites = 2
 
+# STORY-1641: external `aida-<name>` dispatch reads only store_path (a frozen
+# location key, via store_path_candidates) to export AIDA_STORE_PATH to the
+# child. The executable itself is resolved from PATH, never from this file.
+[readers."aida-cli-lib/src/external_cmd.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
 sites = 4
