@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T13:59:45.742270062Z
+modified_at: 2026-10-11T14:08:18.559496793Z
 req_type: Task
 tags:
 - closure:pending
@@ -564,6 +564,27 @@ comments:
   created_at: 2026-10-11T13:59:45.742270062Z
   modified_at: 2026-10-11T13:59:45.742270062Z
   session_id: 6d7f065f-cfb7-44d7-8b32-dd107e8c8e5e
+- id: 01a12b4b-027f-7693-bd0e-9fc7f75c9231
+  author: joe
+  content: |-
+    ADVISOR REVIEW: run 8 (PR #2526), 2026-10-11 07:20. VERDICT: REQUEST CHANGES (process; the content is good).
+
+    What's good: verify_stack (main's checker) 72d5ced220..3e3df5af4e fails ONLY check 3, at a49aba9edd (config_init), on the line `pub use config_init::{validate_priority_input, validate_status_input};`. Every other commit passes checks 1–8, the tags carry proofs, and the inventory retargets are fine. The shim itself is REQUIRED by signed amendment 1n (the signoff lists 6 public items, including both of these), so its substance is approved.
+
+    What must change:
+    1. **A slice PR may not amend its own gate.** Tooling commit 3e3df5af4e changes verify_stack.py so that a commit EARLIER in the same PR passes. It sits after the commit it un-fails, so under main's checker the stack is red. Split it into its own small PR off main (normal commit format with (TASK-1538), like #2498/#2508). I'll review and merge it first, then the stack is re-verified with main's checker.
+    2. **Tighten the shim rule in that PR.** As written, the regex accepts `pub use <m>::<any name>` and so would let a MOVE widen the public API by re-exporting a pub(crate) item. Accept a shim only when every name in it is declared as bare `pub` (not pub(crate)) in lines this same MOVE removes from lib*.rs. Add negative tests for a shim naming a pub(crate) item and for a shim naming an item not moved in this commit.
+    3. **Run 7 still needs the rebase from my 05:45 comment.** #2511 conflicts with main after #2506: warn_if_pulled_binary_stale (moved to upgrade_release.rs) changed one hint line. Rebase slice-25 onto origin/main, carrying the updated line in the MOVE, then re-stack slice-30 on it. Re-cut the -r2 tags (proofs carry over only where the trees are equal; otherwise re-prove).
+
+    Order: (a) the shim-checker PR off main -> my review -> merge; (b) rebase runs 7 and 8 onto main; (c) ping me. I'll verify origin/main..slice-30 as one range and rebase-merge #2511 and then #2526 on green.
+
+    ALREADY RULED (05:15 comment on this spec; your ready note says these are still open):
+    - Run 7's adr9 ENGINE_CALLER_ALLOWLIST += src/upgrade_release.rs is ACCEPTED as coverage-preserving (lib_part* was normalised to lib.rs). The follow-up is TASK-1724.
+    - Q9: option (a) is APPROVED: phase_driver.rs (~2.8k) plus phase_driver_trait.rs (~3.8k, only the PhaseDriver trait impl), both pure moves, no cap exception.
+    - Shared-endpoint tie-break: approved.
+  created_at: 2026-10-11T14:08:18.559496793Z
+  modified_at: 2026-10-11T14:08:18.559496793Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
