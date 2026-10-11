@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1652",
+  "publishes": [
+    {
+      "at": "2026-10-11T20:34:44.994543568Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T20:45:31.764033132Z",
+      "spec": "STORY-1652",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T19:26:07.180688037Z",
+      "spec": "STORY-1652",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T19:48:10.897770145Z",
+      "spec": "STORY-1652",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1652",
+        "branch": "story-1652-work",
+        "first_seen": "2026-10-11T19:48:10.897719089+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T20:34:44.836218342Z",
+      "spec": "STORY-1652",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf",
+        "pr": 2540,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
