@@ -48,12 +48,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:45:09.320682147Z
-modified_at: 2026-10-11T13:45:09.320682147Z
+modified_at: 2026-10-11T13:45:24.395974744Z
 req_type: Story
 tags:
 - cli
 - history
 - reporting
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a128b6-26cd-75c2-856c-372b26a48fbd
+  created_at: 2026-10-11T13:45:24.395971309Z
+  created_by: joe
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
