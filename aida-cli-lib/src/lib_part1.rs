@@ -697,6 +697,8 @@ pub fn main_entry() {
         Ok(()) => 0,
         Err(err) if err.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>() => 0,
         Err(err) => {
+            // trace:BUG-1940 | ai:claude
+            let err = crate::cache_cmd::with_cache_corruption_hint(err);
             record_ambiguous_id_refusal(&err);
             let msg = format!("{:?}", err);
             // trace:BUG-1629 | ai:claude

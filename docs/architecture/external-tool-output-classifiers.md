@@ -15,6 +15,8 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `auto_complete::is_database_locked_message` |
 | `auto_complete::is_environmental_failure` |
 | `auto_complete::is_merge_conflict_failure` |
+| `cache::integrity_problem` |
+| `cache::is_broken_fts_vtable_error` |
 | `cache::is_cache_schema_drift_error` |
 | `claude_log_indicates_api_outage` |
 | `compete::parse_gate_result` |

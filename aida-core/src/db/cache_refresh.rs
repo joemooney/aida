@@ -141,6 +141,22 @@ impl RefreshLock {
         )
     }
 
+    /// Poll [`Self::try_acquire`] until it succeeds or `bound` elapses.
+    /// `Ok(None)` means another holder kept it the whole time.
+    // trace:BUG-1940 | ai:claude
+    pub fn acquire_within(cache_path: &Path, bound: Duration) -> std::io::Result<Option<Self>> {
+        let deadline = std::time::Instant::now() + bound;
+        loop {
+            if let Some(lock) = Self::try_acquire(cache_path)? {
+                return Ok(Some(lock));
+            }
+            let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) else {
+                return Ok(None);
+            };
+            std::thread::sleep(left.min(Duration::from_millis(50)));
+        }
+    }
+
     pub fn is_nested(&self) -> bool {
         self.nested
     }

@@ -20,6 +20,24 @@ use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
 
+/// How long `aida cache rebuild` waits for the cache refresh lock before it
+/// reports that another process is refreshing.
+// trace:BUG-1940 | ai:claude
+const QUARANTINE_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Result of [`CachedGitBackend::rebuild_cache_recovering`].
+// trace:BUG-1940 | ai:claude
+#[derive(Debug, Clone)]
+pub struct CacheRebuildOutcome {
+    /// Requirements projected into the rebuilt cache.
+    pub count: usize,
+    /// Where a corrupt cache file and its sidecars were moved (empty when the
+    /// old file was healthy).
+    pub quarantined: Vec<std::path::PathBuf>,
+    /// The integrity-check finding that triggered the quarantine.
+    pub problem: Option<String>,
+}
+
 pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
@@ -818,16 +836,20 @@ impl CachedGitBackend {
     where
         F: FnMut() -> Result<T>,
     {
+        // trace:BUG-1940 | ai:claude — corruption from the cache file is
+        // tagged here, at the source, so the CLI's rebuild hint never fires for
+        // other sqlite files (history index, token ledger, ...).
+        let tag = |err| super::cache::tag_cache_corruption(self.cache.path(), err);
         match f() {
             Ok(value) => Ok(value),
             Err(err) if is_cache_schema_drift_error(&err) => {
                 eprintln!(
                     "warning: cache schema drift while trying to {action}; rebuilding cache and retrying once: {err}"
                 );
-                self.rebuild_after_cache_schema_drift()?;
-                f()
+                self.rebuild_after_cache_schema_drift().map_err(tag)?;
+                f().map_err(tag)
             }
-            Err(err) => Err(err),
+            Err(err) => Err(tag(err)),
         }
     }
 
@@ -1141,6 +1163,55 @@ impl CachedGitBackend {
         let (store, head) = self.load_at_stable_head()?;
         let n = self.cache.rebuild_from_store(&store, &head)?;
         Ok(n)
+    }
+
+    /// [`Self::rebuild_cache`] that does not depend on the old cache file being
+    /// readable. If the rebuild fails with a corruption-class error, or an
+    /// integrity check finds the file damaged, then under the cache refresh lock
+    /// (the same flock single-flight refresh uses, held across the re-check,
+    /// the move and the rebuild) the file and its `-wal` / `-shm` sidecars are
+    /// moved to a quarantine path and the cache is rebuilt from the git store
+    /// into a fresh file. A lock/busy failure is returned as-is: a healthy cache
+    /// that is merely locked by another process is never quarantined.
+    // trace:BUG-1940 | ai:claude
+    pub fn rebuild_cache_recovering(&self) -> Result<CacheRebuildOutcome> {
+        use super::cache::{is_cache_corruption_error, tag_cache_corruption};
+        let path = self.cache.path().to_path_buf();
+        let err = match self.rebuild_cache() {
+            Ok(count) => {
+                return Ok(CacheRebuildOutcome {
+                    count,
+                    quarantined: Vec::new(),
+                    problem: None,
+                })
+            }
+            Err(err) => err,
+        };
+        let damaged = is_cache_corruption_error(&err)
+            || matches!(self.cache.integrity_problem(), Ok(Some(_)));
+        if !damaged {
+            return Err(err);
+        }
+        let Some(_guard) =
+            super::cache_refresh::RefreshLock::acquire_within(&path, QUARANTINE_LOCK_WAIT)?
+        else {
+            // Not tagged as corruption on purpose: the actionable part here is
+            // "wait for the other process", which the generic hint would hide.
+            return Err(anyhow::anyhow!(
+                "the AIDA cache at {} is corrupt, but another aida process is refreshing \
+                 it; retry `aida cache rebuild` when it finishes\n  cause: {err}",
+                path.display()
+            ));
+        };
+        let (quarantined, problem) = self.cache.quarantine_and_reopen()?;
+        let count = self
+            .rebuild_cache()
+            .map_err(|e| tag_cache_corruption(&path, e))?;
+        Ok(CacheRebuildOutcome {
+            count,
+            quarantined,
+            problem,
+        })
     }
 
     /// Re-stamp the cache HEAD-SHA after a write so the next stale-check
