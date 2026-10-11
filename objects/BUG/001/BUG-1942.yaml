@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T08:08:28.363348306Z
+modified_at: 2026-10-11T08:08:29.167387139Z
 req_type: Bug
 tags:
 - triaged:night
@@ -49,6 +49,12 @@ comments:
   content: 'ADVISOR (overnight 00:45): approval DEFERRED until STORY-1650 (#2491, the night batch, in flight) merges. Both touch the history catch-up/stall path, and a parallel factory PR would conflict with it. Re-check after #2491 lands.'
   created_at: 2026-10-11T07:43:15.076098804Z
   modified_at: 2026-10-11T07:43:15.076098804Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12a01-94ef-7783-a621-ea0a53ab1c1e
+  author: joe
+  content: 'ADVISOR (overnight 01:10): APPROVED now that STORY-1650 (#2491, 36c906f453) is merged. Build on FLOW_CATCH_UP_CAP and the merged catch-up path.'
+  created_at: 2026-10-11T08:08:29.167387139Z
+  modified_at: 2026-10-11T08:08:29.167387139Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a12a01-91cb-7483-89ce-183db6fe5dd1
