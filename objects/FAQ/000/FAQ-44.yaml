@@ -1,0 +1,43 @@
+id: 01a12b85-991e-7412-a701-296e2acfbcaa
+spec_id: FAQ-44
+agreed_id: FAQ-44
+title: How do I record an architecture decision (ADR), and why does --status accepted fail?
+description: |
+  **Use `aida add --type decision --status approved ...`. `aida add` rejects `--status accepted` ("invalid status `accepted`"), even though older decisions display as accepted. The new decision gets an `ADR-N` id.**
+
+  ## Why
+  `aida add --status` takes only the lifecycle statuses: draft, approved, planned, in-progress, done, completed, rejected, superseded, needs-attention. "Accepted" is how decisions read, and history's `--to` accepts `accepted` as a spelling of approved, but creation doesn't.
+
+  ## How
+  ```bash
+  aida add --type decision --status approved --priority high \
+    --tags "two-seat,merge" --title "<the decision, as one sentence>" \
+    --description-from-file /path/to/adr.md        # Decision / Conditions / Context / Related
+  aida rel add <FOLLOW-UP-ID> ADR-N --type implements   # link follow-ups
+  ```
+  Write the body to a file and pass `--description-from-file`, which avoids shell expansion of backticks. Supersede a decision later with a successor (`aida edit ADR-N --status superseded --superseded-by <NEW>`) instead of editing it in place.
+
+  ## See also
+  ADR-73 (an example with conditions and an enforcement-status section), FAQ-11
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T15:12:18.206929443Z
+modified_at: 2026-10-11T15:12:18.206929443Z
+req_type: Faq
+tags:
+- audience:user
+- topic:cli
+- topic:types
+filed_at:
+  code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:12:18.207005456Z
