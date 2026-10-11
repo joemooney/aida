@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-11T20:13:53.433255408Z
+modified_at: 2026-10-11T20:13:54.592194551Z
 req_type: Story
 tags:
 - from:aida-host
@@ -36,6 +36,10 @@ relationships:
 - rel_type: References
   target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
   created_at: 2026-10-11T20:13:53.433252444Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a12648-2503-7a23-b668-3762d04e08ff
+  created_at: 2026-10-11T20:13:54.592192247Z
   created_by: joe
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
