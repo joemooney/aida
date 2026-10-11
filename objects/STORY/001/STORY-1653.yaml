@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-11T22:09:54.951785915Z
+modified_at: 2026-10-11T22:50:01.536457219Z
 req_type: Story
 tags:
 - batch:next
@@ -85,6 +85,12 @@ comments:
     Relay contract: register --kind relay --run <id> --pid "$$" (--pid is required for relays).
   created_at: 2026-10-11T22:09:54.951785915Z
   modified_at: 2026-10-11T22:09:54.951785915Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
+- id: 01a12d28-a7c0-7481-bb7b-0832ab001954
+  author: joe
+  content: 'PARKED (night relay): PR #2542 is code-approved and the Build is green at 6c38cc2f, but it carries aida:merge-hold (supervised spec). Needs human `aida merge-hold clear 2542`, then squash-merge at that head.'
+  created_at: 2026-10-11T22:50:01.536457219Z
+  modified_at: 2026-10-11T22:50:01.536457219Z
   session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a1283c-a28e-72a3-91be-5fa6ae98d1bc
