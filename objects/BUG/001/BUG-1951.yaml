@@ -32,12 +32,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T13:22:04.638014401Z
+modified_at: 2026-10-11T13:22:05.266370096Z
 req_type: Bug
 tags:
 - cache
 - found:night-2026-10-10
 - locking
+comments:
+- id: 01a12b20-b152-73d1-89c3-729a27515200
+  author: joe
+  content: 'ADVISOR TRIAGE 2026-10-11: APPROVED, high. Verified on main: cached_git_backend.rs add_requirement captures pre_write_head at :1536 before the inner write takes the store lock, and bulk_update (:1296) and bulk_update_atomically (:1340) do the same. The atomic paths lock first (:1379-1380, :1453-1454). The fix shape in the acceptance (capture under the lock, or verify the new commit''s first parent == pre_write_head) is right. Prefer the first-parent check as the belt-and-braces, because it also covers any future path that forgets the lock. SEQUENCING: coordinate with TASK-1717 (#2502, serialize store sync under the writer lock, factory draft). If #2502 merges first, rebase onto it; this bug stays necessary either way, as the description notes. Lane: factory or drain eligible (S–M, local, clear acceptance with a deterministic regression test).'
+  created_at: 2026-10-11T13:22:05.266370096Z
+  modified_at: 2026-10-11T13:22:05.266370096Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a12b20-aedd-7960-b763-69719233e3e2
   author: joe
