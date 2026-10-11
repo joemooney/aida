@@ -1,0 +1,45 @@
+id: 01a12843-186e-76f0-8143-4a37b1058ba7
+spec_id: ADR-72
+agreed_id: ADR-72
+title: 'AIDA is Linux-only for the foreseeable future: Windows and macOS are unsupported, with no CI and no fix work'
+description: |
+  OPERATOR DECISION (Joe, 2026-10-10 17:00 MST), recorded verbatim: "I really don't care about Windows at the moment, or macOS for that matter. Windows has been a huge drain and slowed down progress. Nobody uses it. We keep re-enabling it. I think we punt on it for the foreseeable future."
+
+  DECISION
+  AIDA supports Linux only, for the foreseeable future. Windows and macOS are unsupported platforms. There is NO expiry condition: unlike ADR-47 and ADR-62 ("until the backlog drains"), this does not lapse when a queue empties or a release is cut. Only a new explicit operator decision reverses it.
+
+  WHY THE PRIOR DECISIONS KEPT LAPSING
+  ADR-47 and ADR-62 were scoped "until the backlog is drained"; ADR-65 kept a weekly Windows run plus path-filtered PR runs; and scripts/pre-release-check.sh requires cross-platform green within 24h, so every release re-forced Windows work. This ADR supersedes all three and removes those re-entry paths.
+
+  IN FORCE
+  - No Windows or macOS CI: no PR legs (path-filtered or otherwise), no weekly/nightly schedule, no release artifacts, no cross-target cargo check, no Windows-only contract/guard gates.
+  - Releases do not require any cross-platform run.
+  - Agents do not file, triage, fix, or re-enable Windows/macOS work. A Windows/macOS-only failure is not a bug; do not open specs for it. Existing open Windows/macOS specs are deferred.
+  - Do not add new #[cfg(windows)] / macOS portability work. Existing cfg(windows) code may stay where it is (no rip-out churn), but it is not maintained or tested; deleting it opportunistically while touching a file is fine.
+  - Advisors reject PRs whose purpose is Windows/macOS support, and reject PRs that re-add Windows/macOS CI.
+
+  NOT IN SCOPE
+  - Linux CI (Build (ubuntu-latest), merge-hold-gate) is unchanged.
+  - Workflow files may be kept with workflow_dispatch-only triggers so a future reversal is cheap; they must not run automatically.
+
+  Implementation: see the linked TASK.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T00:00:48.238857387Z
+modified_at: 2026-10-11T00:00:48.238857387Z
+req_type: Decision
+tags:
+- ci
+- operator-decision
+- platforms
+- policy
+filed_at:
+  code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
