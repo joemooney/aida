@@ -1,0 +1,29 @@
+id: 01a12984-be8e-7f70-b3e6-9598e0d5ff90
+spec_id: BUG-1948
+agreed_id: BUG-1948
+title: 'Flaky: verbose_diagnostics_reuse_noexec_body… renders the launch preview twice from the live process env without the env lock, so a parallel test setting AIDA_OUTPUT_FORMAT flips presentation_env betw'
+description: |-
+  Failed CI on PR #2493 (lib-split run 3, 2026-10-11 05:3xZ). The PR only moves code; the test moved into agent_registry_root::agent_launcher_tests, which changed its name and when it runs. Assertion at agent_launcher_tests.rs:635: the two renders differ in exactly one line, 'presentation_env: AIDA_OUTPUT_FORMAT, AIDA_GLYPHS stripped (child decides its own output mode)' vs 'presentation_env: none set in the launching shell'.
+
+  Cause: the render path classifies std::env::vars() (resolve/classify_presentation_env, TASK-1482), while queue_json_rows_tests, task_1562_worktree_reclaim_tests and task970_agent_output_tests set AIDA_OUTPUT_FORMAT/AIDA_GLYPHS in the same test binary. agent_launcher_tests takes no shared env lock, so it races them.
+
+  Fix: have the test hold the crate's shared env lock for both renders (or inject a synthetic parent env as classify_presentation_env's doc comment intends). Acceptance: the test can't observe another test's env writes, plus a stress run (e.g. 200 iterations alongside the setters) with 0 failures.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T05:52:07.822005803Z
+modified_at: 2026-10-11T05:52:07.822005803Z
+req_type: Bug
+tags:
+- ci
+- env
+- flaky-test
+filed_at:
+  code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
