@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1813",
+  "publishes": [
+    {
+      "at": "2026-10-11T10:34:48.565937778Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T06:51:58.402140880Z",
+      "spec": "BUG-1813",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T09:05:53.048538588Z",
+      "spec": "BUG-1813",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1813",
+        "branch": "bug-1813-work",
+        "first_seen": "2026-10-11T09:05:53.048520174+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T10:34:48.553058508Z",
+      "spec": "BUG-1813",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2041055e12f9889c4de1436c4a7a2a95add6789c",
+        "pr": 2496,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
