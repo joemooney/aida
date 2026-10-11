@@ -24,12 +24,12 @@ description: |
 
   ## Out of scope
   The recipe runner itself, moving any existing command out of core, and an extension registry or installer.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-11T14:22:56.348459605Z
+modified_at: 2026-10-11T14:47:15.541449468Z
 req_type: Story
 tags:
 - cli
@@ -110,6 +110,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b6e-ab51-7e50-a539-674760fb2cb0
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:47:15.537335566Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b6e-ab55-71a3-b9b9-1f6727e0bde7
+  timestamp: 2026-10-11T14:47:15.541447240Z
+  agent: implementer
+  commit_sha: 437bbb43d1515ca90fdcfa7df7e57d67a826888b
+  summary: Completed via merge 437bbb43
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
@@ -118,3 +131,7 @@ filed_at:
   aida_build_sha: 430dc01de4
   vendor: antigravity
   session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:47:15.537330626Z
+  completion_sha: 437bbb43d1515ca90fdcfa7df7e57d67a826888b
