@@ -415,6 +415,17 @@ jobs:
           BASE="origin/${{ github.base_ref }}"
           python3 docs/monitor-contract-fixtures/verify.py "$BASE"
 
+      # BUG-1922: every fenced `aida ...` line in a skill/command template must
+      # name a real command and only flags its `--help` lists, so an invented
+      # flag (`aida list --search`) fails here instead of at every skill run.
+      # NOT gated on full_ci: the "Minimal aida-cli build" step above covers
+      # the target/debug/aida binary on docs-only PRs. trace:BUG-1922 | ai:claude
+      - name: Template command lint
+        run: |
+          export AIDA_BIN="$PWD/target/debug/aida"
+          python3 scripts/check-template-commands.py
+          python3 -m unittest tests/test_check_template_commands.py
+
       - name: Performance profile guard
         run: ./tests/test_performance_profile_opt_level.sh
         shell: bash

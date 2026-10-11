@@ -73,6 +73,8 @@
 "Minimal aida-cli build for docs-only guards" = "full"
 "CLI-manual drift-guard (every command documented)" = "full"
 "Monitor contract drift guard" = "full"
+# Runs target/debug/aida --help per template command. trace:BUG-1922 | ai:claude
+"Template command lint" = "full"
 "Performance profile guard" = "fast"
 "Check formatting" = "fast"
 "Removed mode-flag spelling guard" = "fast"
