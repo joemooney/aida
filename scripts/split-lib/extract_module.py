@@ -41,7 +41,15 @@ def match(selector, rows):
             out = [r for r in rows if r["kind"] == selector]
     else:
         kind, _, name = selector.partition(" ")
-        out = [r for r in rows if r["kind"] == kind and r["name"] == name]
+        if kind == "impl" and "@L" in name:
+            # "impl impl:Type@L<line>" picks the one block of that type spanning
+            # <line> of the current part, for types with several impl blocks.
+            name, line = name.rsplit("@L", 1)
+            line = int(line)
+            out = [r for r in rows if r["kind"] == kind and r["name"] == name
+                   and r["start"] <= line <= r["end"]]
+        else:
+            out = [r for r in rows if r["kind"] == kind and r["name"] == name]
     return out
 
 def extend_back(lines, start, floor):
