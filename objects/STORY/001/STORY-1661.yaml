@@ -8,12 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-11T07:17:10.559159190Z
+modified_at: 2026-10-11T07:17:18.082721029Z
 req_type: Story
 tags:
 - history
 - index
 - performance
+- triaged:night
 comments:
 - id: 01a129d2-9b1f-7e60-a80f-09be466a8380
   author: night-fable
