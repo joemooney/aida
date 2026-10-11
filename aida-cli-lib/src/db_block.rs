@@ -676,11 +676,27 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
 /// `aida db merge-gate` to promote them — friction the user shouldn't
 /// have to think about. Includes the five docs-layer types from FR-1-074
 /// so new clones get short ADR-1, PRIN-1, VIS-1, etc., out of the box.
+///
+/// Derived from the type registry (`RequirementType::auto_allocates_block`,
+/// an exhaustive match) rather than a hand-kept prefix list: the old
+/// literal list silently missed FAQ, DOC and CR when those types were
+/// added, so they always fell back to node-aware ids.
 /// trace:FR-1-073 | ai:claude
 /// trace:FR-1-074 | ai:claude
-pub(crate) const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
-    "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE", "PRIN", "VIS", "CON", "ADR", "TERM",
-];
+// trace:BUG-1921 | ai:claude
+pub(crate) fn phase3_auto_alloc_types() -> Vec<&'static str> {
+    aida_core::models::RequirementType::auto_allocated_prefixes()
+}
+
+/// True when `type_prefix` (case-insensitive) is one of the
+/// block-allocated type prefixes. Custom `prefix_override` values never
+/// match, so they keep their existing explicit-claim behaviour.
+// trace:BUG-1921 | ai:claude
+pub(crate) fn is_auto_alloc_prefix(type_prefix: &str) -> bool {
+    phase3_auto_alloc_types()
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(type_prefix))
+}
 
 /// Auto-allocate initial blocks for a freshly-acquired node. Claims one
 /// block per common type that doesn't already have one for this node.
@@ -736,7 +752,7 @@ pub(crate) fn auto_allocate_initial_blocks_with_scope(
         return Ok(allocated);
     }
 
-    for type_prefix in PHASE3_AUTO_ALLOC_TYPES {
+    for type_prefix in phase3_auto_alloc_types() {
         if let Some(label) =
             auto_allocate_block_for_type(store_path, node_id, hn, email, type_prefix)?
         {
@@ -758,6 +774,10 @@ pub(crate) enum BlockClaimReason {
     /// Refill on auto-claim threshold cross — explicitly claims another
     /// block alongside any existing active block.
     OnThresholdCross,
+    /// A node's first block for a type, claimed lazily on its first
+    /// `aida add` of that type. Idempotent like `OnAcquire`.
+    // trace:BUG-1921 | ai:claude
+    OnFirstAdd,
 }
 
 /// Like `auto_allocate_block_for_type` but with an explicit size — used
@@ -847,7 +867,7 @@ pub(crate) fn auto_allocate_block_inner(
         }
 
         let mut registry = BlockRegistry::load(&blocks_path)?;
-        if reason == BlockClaimReason::OnAcquire
+        if reason != BlockClaimReason::OnThresholdCross
             && registry.find_active_block(node_id, type_prefix).is_some()
         {
             return Ok(None);
@@ -876,6 +896,10 @@ pub(crate) fn auto_allocate_block_inner(
             ),
             BlockClaimReason::OnThresholdCross => format!(
                 "chore(registry): auto-claim {}-{}..{} for node {} on threshold cross",
+                type_prefix, block.range_start, block.range_end, node_id
+            ),
+            BlockClaimReason::OnFirstAdd => format!(
+                "chore(registry): claim first {}-{}..{} for node {} on first add",
                 type_prefix, block.range_start, block.range_end, node_id
             ),
         };
@@ -1041,6 +1065,11 @@ pub(crate) struct AutoClaimOutcome {
     pub(crate) label: String,
     pub(crate) previous_remaining: u32,
     pub(crate) new_remaining: u32,
+    /// True when this was the node's first block for the type (lazy
+    /// bootstrap for a node acquired before the type was block-allocated),
+    /// rather than a threshold-cross refill.
+    // trace:BUG-1921 | ai:claude
+    pub(crate) bootstrap: bool,
 }
 
 /// Ensure the (node, type) pair has at least `cfg.threshold_for(type)`
@@ -1048,11 +1077,21 @@ pub(crate) struct AutoClaimOutcome {
 /// fresh block of `cfg.size_for(type)`. Scope-aware: under
 /// `IdCounterScope::Global` the check + claim target the shared `*` block.
 ///
+/// When the node has no active block for the type at all, this is a
+/// first-block claim instead of a refill (see `claim_first_block`): nodes
+/// acquired before a type joined the block-allocated set never got a block,
+/// and acquire never re-runs. That claim is best-effort — it never fails
+/// the add.
+///
 /// Returns:
-/// - `Ok(None)` — no action taken (auto-claim disabled OR above threshold).
+/// - `Ok(None)` — no action taken: auto-claim disabled, above threshold,
+///   Global scope with no shared block, or a first-block claim skipped
+///   (type not block-allocated, custom prefix, node already used up a block
+///   for the type, remote sync disabled, or the claim could not be pushed —
+///   the add then falls back to a node-aware id).
 /// - `Ok(Some(outcome))` — a fresh block was claimed; caller should print
-///   the info notice.
-/// - `Err(e)` — the claim's push failed after retries. BUG-372 upgraded the
+///   the info notice (`outcome.bootstrap` marks a first-block claim).
+/// - `Err(e)` — a threshold-cross refill's push failed after retries. BUG-372 upgraded the
 ///   `aida add` caller to fail loud instead of dispensing from a potentially
 ///   stale local block, because continuing there can recreate the cross-clone
 ///   ID collision that lost specs during the PR-270 pull.
@@ -1085,15 +1124,23 @@ pub(crate) fn ensure_block_capacity(
     let blocks_path = store_path.join("registry").join("blocks.yaml");
     let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
 
-    // No active block for this (node, type) at all? Don't auto-claim here —
-    // that path is owned by `auto_allocate_initial_blocks` (on `aida node
-    // acquire`) and the explicit `aida db block claim` command. Auto-claim
-    // is for refilling capacity that's running low, not bootstrap.
+    // No active block for this (node, type) at all? See
+    // `claim_first_block` — it decides whether this is a first-block claim
+    // (block-allocated type, never had one) or a plain skip.
+    // trace:BUG-1921 | ai:claude
     if registry
         .find_active_block_or_global(node_id, &effective_prefix)
         .is_none()
     {
-        return Ok(None);
+        if scope == aida_core::IdCounterScope::Global {
+            return Ok(None);
+        }
+        return claim_first_block(
+            store_path,
+            node_id,
+            &effective_prefix,
+            cfg.size_for(&effective_prefix),
+        );
     }
 
     let previous_remaining = registry.aggregate_remaining(node_id, &effective_prefix);
@@ -1130,7 +1177,165 @@ pub(crate) fn ensure_block_capacity(
         label,
         previous_remaining,
         new_remaining,
+        bootstrap: false,
     }))
+}
+
+/// Lazily claim a node's first block for `type_prefix` on `aida add`.
+///
+/// Skips (returns `Ok(None)`, so the add falls back to a node-aware id)
+/// when the type is not block-allocated or is a custom prefix, when the
+/// node already had a block for the type (an exhausted block is the
+/// TASK-36 roll-off path, not a bootstrap), or when the add runs with
+/// remote sync disabled against a store that has a remote. The claim is
+/// best-effort: if it cannot be committed or pushed, the claim is rolled
+/// back (see `rollback_unpushed_claim`) and a warning is printed — an
+/// unpushed claim could collide with another clone's (BUG-372), and a
+/// node-aware id is always safe.
+///
+/// The decision and the claim run under the blocks dispense lock and
+/// re-read the registry there, so two concurrent first adds in one clone
+/// claim a single block (the second sees the first's claim and skips).
+// trace:BUG-1921 | ai:claude
+pub(crate) fn claim_first_block(
+    store_path: &std::path::Path,
+    node_id: &str,
+    type_prefix: &str,
+    size: u32,
+) -> Result<Option<AutoClaimOutcome>> {
+    use aida_core::BlockRegistry;
+
+    if !is_auto_alloc_prefix(type_prefix) {
+        return Ok(None);
+    }
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let has_remote = aida_core::git_ops::has_remote(store_path, "origin");
+
+    BlockRegistry::with_dispense_lock(&blocks_path, || {
+        let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+        if registry
+            .find_active_block_or_global(node_id, type_prefix)
+            .is_some()
+        {
+            // A concurrent first add claimed it while we waited.
+            return Ok(None);
+        }
+        let ever_had_block = registry
+            .blocks
+            .iter()
+            .any(|b| b.node_id == node_id && b.type_prefix.eq_ignore_ascii_case(type_prefix));
+        if ever_had_block {
+            return Ok(None);
+        }
+        if has_remote && add_remote_sync_disabled() {
+            eprintln!(
+                "{} No {} id block for this clone and remote sync is off; using a \
+                 node-aware id. Run `aida db block claim --type {} --size 100` online \
+                 for short ids.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                type_prefix,
+                type_prefix,
+            );
+            return Ok(None);
+        }
+
+        let pre_head = aida_core::git_ops::head_sha(store_path).ok();
+        let email = aida_core::git_ops::git_config_get("user.email").ok();
+        let hn = hostname();
+        let claimed = auto_allocate_block_inner(
+            store_path,
+            node_id,
+            &hn,
+            email.as_deref(),
+            type_prefix,
+            size,
+            BlockClaimReason::OnFirstAdd,
+        );
+        let label = match claimed {
+            Ok(Some(label)) => label,
+            Ok(None) => return Ok(None),
+            Err(e) => {
+                rollback_unpushed_claim(store_path, pre_head.as_deref(), node_id, type_prefix);
+                eprintln!(
+                    "{} Could not claim a {} id block ({}); using a node-aware id. \
+                     Run `aida db block claim --type {} --size 100` once online.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    type_prefix,
+                    e.to_string()
+                        .lines()
+                        .next()
+                        .unwrap_or("claim failed")
+                        .trim(),
+                    type_prefix,
+                );
+                return Ok(None);
+            }
+        };
+        let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+        Ok(Some(AutoClaimOutcome {
+            label,
+            previous_remaining: 0,
+            new_remaining: registry.aggregate_remaining(node_id, type_prefix),
+            bootstrap: true,
+        }))
+    })
+}
+
+/// Undo a first-add block claim that failed part-way, so no unpushed claim
+/// can be dispensed from (BUG-372). Two steps:
+///
+/// 1. Drop the claim commit, but only when HEAD is *this* node's first-add
+///    claim for `type_prefix` and is not reachable from `origin/<branch>`.
+///    A rejected push's retry pulls the remote tip, which can be another
+///    clone's claim commit with the same shape; a commit that came from
+///    the remote is never reset.
+/// 2. Always unstage `registry/blocks.yaml` and restore it from HEAD. The
+///    allocator saves the file before `git add`/`git commit`, so a failure
+///    there (index lock, signing, a hook) leaves the claim on disk with
+///    HEAD unchanged; the restore removes it either way.
+///
+/// Every other file in the store worktree is left untouched.
+// trace:BUG-1921 | ai:claude
+fn rollback_unpushed_claim(
+    store_path: &std::path::Path,
+    pre_head: Option<&str>,
+    node_id: &str,
+    type_prefix: &str,
+) {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(store_path)
+            .output()
+    };
+    let head = aida_core::git_ops::head_sha(store_path).ok();
+    let head_moved = match (head.as_deref(), pre_head) {
+        (Some(h), Some(p)) => h.trim() != p.trim(),
+        _ => false,
+    };
+    if head_moved {
+        let subject = git(&["log", "-1", "--format=%s"])
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        let is_our_claim = subject
+            .starts_with(&format!("chore(registry): claim first {}-", type_prefix))
+            && subject.ends_with(&format!(" for node {} on first add", node_id));
+        let branch = aida_core::git_ops::current_branch(store_path)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        let from_remote = git(&[
+            "merge-base",
+            "--is-ancestor",
+            "HEAD",
+            &format!("refs/remotes/origin/{}", branch),
+        ])
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+        if is_our_claim && !from_remote {
+            let _ = git(&["reset", "--mixed", "-q", "HEAD~1"]);
+        }
+    }
+    let _ = git(&["reset", "-q", "HEAD", "--", "registry/blocks.yaml"]);
+    let _ = git(&["checkout", "HEAD", "--", "registry/blocks.yaml"]);
 }
 
 #[cfg(test)]

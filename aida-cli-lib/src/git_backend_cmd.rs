@@ -3855,14 +3855,25 @@ pub(crate) fn handle_git_backend_command(
 
                     // TASK-281: auto-claim a fresh block before dispensing when
                     // aggregate remaining drops below the configured threshold.
-                    // Skips when auto-claim is disabled, when there's no active
-                    // block yet (bootstrap is owned by `aida node acquire`), and
-                    // when we're still above threshold. BUG-372 makes a
+                    // Skips when auto-claim is disabled and when we're still
+                    // above threshold. With no block yet for a block-allocated
+                    // type it claims the node's first one (BUG-1921: nodes
+                    // acquired before FAQ/DOC/CR were block-allocated); that
+                    // claim is best-effort and never errors. BUG-372 makes a
                     // refill push failure fatal for add: continuing with a
                     // stale local block can recreate the cross-clone
                     // duplicate SPEC-ID race.
                     // trace:TASK-281 BUG-372 | ai:claude
                     match ensure_block_capacity(store_path, &project_dir, &node_id, &type_prefix) {
+                        // trace:BUG-1921 | ai:claude
+                        Ok(Some(outcome)) if outcome.bootstrap => {
+                            eprintln!(
+                                "{} Claimed {} (first {} id block for this clone)",
+                                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                                outcome.label,
+                                type_prefix.to_uppercase(),
+                            );
+                        }
                         Ok(Some(outcome)) => {
                             eprintln!(
                                 "{} Auto-claimed {} (threshold crossed: {} remaining → {})",

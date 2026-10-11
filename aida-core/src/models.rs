@@ -966,6 +966,61 @@ impl RequirementType {
         }
     }
 
+    /// Whether this type gets an agreed-id block pre-allocated on node
+    /// acquire (and claimed lazily on its first `aida add` when a node
+    /// lacks one), so new specs of this type are born with a short
+    /// `<PREFIX>-<N>` id instead of the node-aware fallback that needs
+    /// `aida db merge-gate` to promote.
+    ///
+    /// The match is deliberately exhaustive (no `_` arm): adding a new
+    /// variant fails to compile until someone decides whether it is
+    /// block-allocated, so a new type cannot silently miss its block again.
+    ///
+    /// Excluded types and why: `NonFunctional`, `System`, `User` are legacy
+    /// requirement categories rarely created in git-canonical stores;
+    /// `Sprint`, `Folder`, `Meta` are organisational containers, not
+    /// specs people cite by id. They keep node-aware ids unless a block is
+    /// claimed explicitly with `aida db block claim`.
+    // trace:BUG-1921 | ai:claude
+    pub fn auto_allocates_block(&self) -> bool {
+        match self {
+            RequirementType::Functional
+            | RequirementType::ChangeRequest
+            | RequirementType::Bug
+            | RequirementType::Epic
+            | RequirementType::Story
+            | RequirementType::Task
+            | RequirementType::Spike
+            | RequirementType::Principle
+            | RequirementType::Vision
+            | RequirementType::Constraint
+            | RequirementType::Decision
+            | RequirementType::Term
+            | RequirementType::Doc
+            | RequirementType::Faq => true,
+            RequirementType::NonFunctional
+            | RequirementType::System
+            | RequirementType::User
+            | RequirementType::Sprint
+            | RequirementType::Folder
+            | RequirementType::Meta => false,
+        }
+    }
+
+    /// Default prefixes of every type that [`auto_allocates_block`], in
+    /// [`RequirementType::ALL`] order. The single source for the
+    /// acquire-time block allocation list.
+    ///
+    /// [`auto_allocates_block`]: RequirementType::auto_allocates_block
+    // trace:BUG-1921 | ai:claude
+    pub fn auto_allocated_prefixes() -> Vec<&'static str> {
+        Self::ALL
+            .iter()
+            .filter(|t| t.auto_allocates_block())
+            .map(|t| t.default_prefix())
+            .collect()
+    }
+
     /// Depth rank in the spec hierarchy, used to orient an otherwise-ambiguous
     /// parent/child edge toward the true parent. Lower = closer to a tree root:
     /// an `Epic` (0) is the parent of a `Story` (1), which is the parent of a
@@ -7729,6 +7784,60 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1921: knowledge types and change requests get a pre-allocated
+    // block, and the list is derived from the type registry (not a second
+    // hand-kept prefix table that drifts when a type is added).
+    // trace:BUG-1921 | ai:claude
+    #[test]
+    fn auto_allocated_prefixes_cover_faq_doc_and_cr() {
+        let prefixes = RequirementType::auto_allocated_prefixes();
+        for want in [
+            "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE", "PRIN", "VIS", "CON", "ADR", "TERM",
+            "DOC", "FAQ", "CR",
+        ] {
+            assert!(prefixes.contains(&want), "{want} missing from {prefixes:?}");
+        }
+        for not_wanted in ["NFR", "SR", "UR", "SPRINT", "FOLDER", "META"] {
+            assert!(
+                !prefixes.contains(&not_wanted),
+                "{not_wanted} unexpectedly auto-allocated"
+            );
+        }
+        let mut dedup = prefixes.clone();
+        dedup.sort_unstable();
+        dedup.dedup();
+        assert_eq!(
+            dedup.len(),
+            prefixes.len(),
+            "duplicate prefix in {prefixes:?}"
+        );
+    }
+
+    // BUG-1921: `RequirementType::ALL` is hand-kept, and the block-allocation
+    // list (plus other registry-derived tables) walks it. Prove it lists
+    // every variant: the TS derive renders the enum from its definition, so
+    // its variant set is macro-generated and cannot drift from the enum.
+    // trace:BUG-1921 | ai:claude
+    #[test]
+    fn requirement_type_all_lists_every_variant() {
+        let decl = <RequirementType as TS>::inline();
+        let mut from_derive: Vec<String> = decl
+            .split('|')
+            .map(|v| v.trim().trim_matches('"').to_string())
+            .filter(|v| !v.is_empty())
+            .collect();
+        from_derive.sort();
+        let mut from_all: Vec<String> = RequirementType::ALL
+            .iter()
+            .map(|t| format!("{t:?}"))
+            .collect();
+        from_all.sort();
+        assert_eq!(
+            from_all, from_derive,
+            "RequirementType::ALL is out of sync with the enum (TS decl: {decl})"
+        );
+    }
 
     // BUG-1535: an ambiguous id (native spec_id on one object, agreed_id on
     // another) resolves to the NATIVE owner regardless of load order.
