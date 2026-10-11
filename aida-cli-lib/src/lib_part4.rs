@@ -5716,6 +5716,72 @@ pub(crate) fn ps_display_role(
     }
 }
 
+/// BUG-1941: is this lease's worktree the project's own main checkout (not an
+/// isolation worktree)? Legacy `harness-worktree` leases were minted there
+/// before BUG-1772 stopped that, and the cwd probe attaches whatever session
+/// runs in the main checkout to them. Pure over the lease record.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_lease_is_main_checkout(l: &SessionLease) -> bool {
+    !l.worktree_path.as_os_str().is_empty()
+        && l.parent_project_root.as_deref() == Some(l.worktree_path.as_path())
+}
+
+/// BUG-1941: the role a row shows, given whether its lease sits on the main
+/// checkout. A placeholder-role lease there is NOT an Agent-tool subagent: the
+/// process the cwd probe attaches is a top-level session (the operator's
+/// advisor, an autonomous relay, …), so the generic `subagent` label would be
+/// wrong. Such a row shows the manifest-joined role when one exists, else no
+/// role. The ambiguous transcript scan is not used: every session in the main
+/// checkout shares one transcript directory, so it can name another session's
+/// role. Everywhere else this is [`ps_display_role`] unchanged.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_row_role(
+    lease_role: Option<&str>,
+    manifest_role: Option<&str>,
+    jsonl_role: Option<&str>,
+    main_checkout: bool,
+) -> Option<String> {
+    let placeholder = lease_role
+        .map(str::trim)
+        .is_some_and(|r| r.eq_ignore_ascii_case(tail_cmd::HARNESS_AGENT_TYPE));
+    if main_checkout && placeholder {
+        return manifest_role.map(str::to_string);
+    }
+    ps_display_role(lease_role, manifest_role, jsonl_role)
+}
+
+/// BUG-1941: the live session a lease's worktree hosts, chosen
+/// deterministically. Several sessions can share one cwd (the main checkout
+/// runs the operator's advisor beside autonomous relays) and the `/proc` walk
+/// returns them in no stable order, so "first match" made the row's pid change
+/// from run to run. An exact cwd match beats a subdirectory, then the lowest
+/// pid wins.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_live_in_worktree<'a>(
+    live: &'a [process_probe::LiveSession],
+    worktree: &std::path::Path,
+) -> Option<&'a process_probe::LiveSession> {
+    live.iter()
+        .filter(|s| !s.stale_cwd && (s.cwd == worktree || s.cwd.starts_with(worktree)))
+        .min_by_key(|s| (s.cwd != worktree, s.pid))
+}
+
+/// BUG-1941: the note a row carries when its dispatch reads `moving` while no
+/// running process backs the lease (dormant / stale) — fresh files or a fresh
+/// commit in the worktree. Without it the human view showed only "dormant"
+/// while the agent view said `moving` for the same row. `None` otherwise.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_unattributed_movement_note(
+    state: LeaseState,
+    dispatch: Option<dispatch_health_ps::DispatchState>,
+) -> Option<&'static str> {
+    (!matches!(state, LeaseState::Live)
+        && dispatch == Some(dispatch_health_ps::DispatchState::Moving))
+    .then_some(
+        "recent changes in this worktree, but no running process is attributed to this session",
+    )
+}
+
 /// BUG-1681: re-read one row's dispatch verdict in the light of its
 /// integration standing, replacing the stalled/stopped reading (and its
 /// resume hint) with the actionless `awaiting-integration` note. Returns
@@ -5991,11 +6057,23 @@ pub(crate) fn ps_elapsed_secs(
     pid_started: Option<chrono::DateTime<chrono::Utc>>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> u64 {
-    let anchor = match pid_started {
+    let anchor = ps_session_started_at(lease_started, pid_started);
+    now.signed_duration_since(anchor).num_seconds().max(0) as u64
+}
+
+/// BUG-1941: when the row's work session started — the ONE anchor both the
+/// `started` and the `elapsed` columns read, so they always describe the same
+/// thing. On an adopted lease that is the live process's start; otherwise the
+/// lease's. The lease's own age stays in the adopted note only.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_session_started_at(
+    lease_started: chrono::DateTime<chrono::Utc>,
+    pid_started: Option<chrono::DateTime<chrono::Utc>>,
+) -> chrono::DateTime<chrono::Utc> {
+    match pid_started {
         Some(p) if ps_lease_is_adopted(lease_started, p) => p,
         _ => lease_started,
-    };
-    now.signed_duration_since(anchor).num_seconds().max(0) as u64
+    }
 }
 
 /// The adopted-lease annotation for one `aida ps` row — `Some` (naming BOTH
@@ -6975,9 +7053,9 @@ pub(crate) fn build_running_work(
         .iter()
         .map(|l| {
             let state = lease_state_for(l, live, now);
-            let live_in_worktree = live.iter().find(|s| {
-                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            });
+            // trace:BUG-1941 | ai:claude — deterministic pick among sessions
+            // sharing the worktree.
+            let live_in_worktree = ps_live_in_worktree(live, &l.worktree_path);
             let pid = l
                 .active_pid
                 .filter(|p| process_probe::pid_is_alive(*p))
@@ -7011,10 +7089,13 @@ pub(crate) fn build_running_work(
             // claude_session_id join) next, then jsonl_role (the ambiguous
             // transcript scan), and only the placeholder itself as the last
             // resort when nothing else resolved. trace:BUG-1521 | ai:claude
-            let role = ps_display_role(
+            // trace:BUG-1941 | ai:claude — no `subagent` label on the main
+            // checkout's placeholder leases.
+            let role = ps_row_role(
                 lease_role.as_deref(),
                 manifest_role.as_deref(),
                 jsonl_role.as_deref(),
+                ps_lease_is_main_checkout(l),
             );
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
@@ -7053,6 +7134,13 @@ pub(crate) fn build_running_work(
                 // cwd-based worktree probe), so it must not be treated as a
                 // dead process and offered the salvage-commit hint.
                 let pid_alive = ps_pid_liveness(state, harness_lease_without_pid_signal(l));
+                // BUG-1941: a live process with its cwd in this worktree means
+                // the worktree is in use — never Salvageable, whatever this
+                // lease's own recorded pid says. trace:BUG-1941 | ai:claude
+                let pid_alive = dispatch_health_ps::pid_liveness_with_occupant(
+                    pid_alive,
+                    live_in_worktree.is_some(),
+                );
                 // BUG-778: how long ago `aida worktree enter|add` handed this
                 // worktree to a human, when it did. `None` on every
                 // orchestrator-spawned lease — those DO expect an agent, so
@@ -7079,6 +7167,27 @@ pub(crate) fn build_running_work(
                 // its way out is a stopped wave, not a crashed agent — the
                 // dead-process/clean-tree arm reads `stopped`.
                 // trace:TASK-1518 | ai:claude
+                // BUG-1941: a fresh commit on a branch ahead of main is
+                // movement; untracked-only scratch on a protected branch (the
+                // main checkout) is not salvageable work. trace:BUG-1941 | ai:claude
+                let ds = dispatch_health_ps::apply_commit_movement(
+                    ds,
+                    pid_alive,
+                    probe.ahead_of_main,
+                    probe.head_commit_age_secs,
+                    dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                );
+                let ds = if ds == dispatch_health_ps::DispatchState::Salvageable
+                    && probe.untracked_records_only
+                {
+                    dispatch_health_ps::apply_main_checkout_untracked(
+                        ds,
+                        dispatch_health_ps::is_protected_branch_at(&l.worktree_path, &l.branch),
+                        probe.untracked_records_only,
+                    )
+                } else {
+                    ds
+                };
                 let ds = dispatch_health_ps::apply_interruption(
                     ds,
                     pid_alive,
@@ -7724,8 +7833,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // BUG-763: time-of-day for today's leases, "Jun-26 11:55" for
             // anything older — a June birth must never read as this morning
             // next to a 500h elapsed.
+            // BUG-1941: the same anchor as `elapsed` — the live process on an
+            // adopted lease — so the two columns never describe different
+            // things. trace:BUG-1941 | ai:claude
             let started = ps_started_cell(
-                l.started_at.with_timezone(&chrono::Local).naive_local(),
+                ps_session_started_at(l.started_at, row.pid_started_at)
+                    .with_timezone(&chrono::Local)
+                    .naive_local(),
                 now.with_timezone(&chrono::Local).date_naive(),
             );
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
@@ -7786,6 +7900,19 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // lease-age vs process-age never mix silently in one row.
             if let Some(note) = ps_adopted_note(l.started_at, row.pid_started_at, now) {
                 println!("{}{}", " ".repeat(11), note.dimmed());
+            }
+            // BUG-1941: a no-process row whose dispatch reads `moving` says so,
+            // so this view and the agent view agree. trace:BUG-1941 | ai:claude
+            if let Some(note) =
+                ps_unattributed_movement_note(row.state, row.dispatch.as_ref().map(|d| d.state))
+            {
+                println!(
+                    "{}{} {}: {}",
+                    " ".repeat(11),
+                    crate::glyph(crate::glyphs::Glyph::Info),
+                    "moving".cyan(),
+                    note.dimmed()
+                );
             }
             // TASK-1090: a third line names the dispatch-health hint —
             // nothing printed for Moving (it's fine, per the acceptance).

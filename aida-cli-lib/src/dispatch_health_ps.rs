@@ -408,6 +408,22 @@ pub(crate) struct WorktreeGitProbe {
     /// (no tracked modified/deleted/staged changes).
     // trace:BUG-1680 | ai:antigravity
     pub(crate) untracked_only: bool,
+    /// BUG-1941: True when every changed path is untracked (`??`), with no
+    /// tracked modification, deletion or staged change — WITHOUT
+    /// [`untracked_only`](Self::untracked_only)'s "outside a tracked
+    /// directory" refinement. On the main checkout a root-level scratch file
+    /// (`ci.log`, `fix_*.py`) sits beside tracked files, so `untracked_only`
+    /// reads false for it; this field is the plain "nothing tracked changed"
+    /// signal the main-checkout salvage rule needs.
+    // trace:BUG-1941 | ai:claude
+    pub(crate) untracked_records_only: bool,
+    /// BUG-1941: seconds since the worktree's `HEAD` commit was made
+    /// (committer time). `None` when there are no commits or git fails. A
+    /// fresh commit on a branch ahead of main is movement even when no
+    /// process is attributed to the lease (a relay that adopted the lease
+    /// from a different cwd).
+    // trace:BUG-1941 | ai:claude
+    pub(crate) head_commit_age_secs: Option<u64>,
 }
 
 /// BUG-1656: how recently the newest dirty file must have been written for
@@ -575,7 +591,14 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         .or_else(|| git_stdout(worktree_path, &["rev-list", "--count", "main..HEAD"]))
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(0);
-    let last_commit_subject = git_stdout(worktree_path, &["log", "-1", "--format=%s"]);
+    // BUG-1941: one `git log` call for both the subject and the committer
+    // time, so commit recency costs no extra process.
+    // trace:BUG-1941 | ai:claude
+    let (last_commit_subject, head_commit_age_secs) =
+        match git_stdout(worktree_path, &["log", "-1", "--format=%ct%x09%s"]) {
+            Some(line) => parse_commit_time_and_subject(&line, chrono::Utc::now().timestamp()),
+            None => (None, None),
+        };
     // trace:BUG-1656 | ai:claude
     let dirty_newest_mtime_age_secs = if dirty {
         newest_mtime_age_secs(&dirty_paths(worktree_path), std::time::SystemTime::now())
@@ -584,10 +607,18 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     };
     // BUG-1680: distinguish untracked-only files from salvageable changes.
     // trace:BUG-1680 | ai:antigravity
-    let untracked_only = if dirty {
-        probe_untracked_only(worktree_path)
+    // trace:BUG-1941 | ai:claude — one porcelain read feeds both flags.
+    let (untracked_only, untracked_records_only) = if dirty {
+        let records = porcelain_records(worktree_path);
+        let all_untracked = records_are_untracked_only(&records);
+        let refined = all_untracked
+            && !records
+                .iter()
+                .filter(|(xy, _)| xy == "??")
+                .any(|(_, path)| is_untracked_inside_tracked_dir(worktree_path, path));
+        (refined, all_untracked)
     } else {
-        false
+        (false, false)
     };
     WorktreeGitProbe {
         dirty,
@@ -595,7 +626,54 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         last_commit_subject,
         dirty_newest_mtime_age_secs,
         untracked_only,
+        untracked_records_only,
+        head_commit_age_secs,
     }
+}
+
+/// BUG-1941: split one `git log -1 --format=%ct%x09%s` line into the subject
+/// and the commit's age in seconds relative to `now_secs`. A missing or
+/// unparsable timestamp yields no age (never "fresh"); a future timestamp
+/// (clock skew) is likewise unknown rather than age 0.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn parse_commit_time_and_subject(
+    line: &str,
+    now_secs: i64,
+) -> (Option<String>, Option<u64>) {
+    let (ts, subject) = match line.split_once('\t') {
+        Some((ts, subject)) => (Some(ts), subject),
+        None => (None, line),
+    };
+    let age = ts
+        .and_then(|t| t.trim().parse::<i64>().ok())
+        .and_then(|t| u64::try_from(now_secs - t).ok());
+    let subject = Some(subject.to_string()).filter(|s| !s.is_empty());
+    (subject, age)
+}
+
+/// BUG-1941: `git status --porcelain -z --untracked-files=all` records for
+/// `worktree`; empty when git fails.
+// trace:BUG-1941 | ai:claude
+fn porcelain_records(worktree: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(out) = Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    parse_porcelain_z_bytes(&out.stdout)
+}
+
+/// BUG-1941: are these porcelain records all untracked (`??`, ignoring
+/// `!!`), with at least one record? Pure over parsed records.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn records_are_untracked_only(records: &[(String, PathBuf)]) -> bool {
+    !records.is_empty() && records.iter().all(|(xy, _)| xy == "??" || xy == "!!")
 }
 
 /// BUG-1680: True when an untracked file is inside a directory tracked in git.
@@ -665,23 +743,8 @@ pub(crate) fn is_untracked_inside_tracked_dir<P: AsRef<Path>>(
 /// outside of tracked directories, and none are tracked modifications, deletions, or staged changes.
 // trace:BUG-1680 | ai:antigravity
 pub(crate) fn probe_untracked_only(worktree: &Path) -> bool {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
-        .args(["status", "--porcelain", "-z", "--untracked-files=all"])
-        .output()
-    else {
-        return false;
-    };
-    if !out.status.success() {
-        return false;
-    }
-    let records = parse_porcelain_z_bytes(&out.stdout);
-    if records.is_empty() {
-        return false;
-    }
-    let has_tracked_change = records.iter().any(|(xy, _)| xy != "??" && xy != "!!");
-    if has_tracked_change {
+    let records = porcelain_records(worktree);
+    if !records_are_untracked_only(&records) {
         return false;
     }
     let untracked_in_tracked_dir = records
@@ -725,6 +788,70 @@ pub(crate) fn dispatch_state_with_movement(
         manual_enter_secs,
         awaiting_agent_grace_secs,
     )
+}
+
+/// BUG-1941: the pid-liveness input once the worktree's own occupancy is
+/// known. A lease whose recorded pid is dead still has a live occupant when
+/// some other live process has its cwd in the lease's worktree (the main
+/// checkout hosts several sessions under persistent leases). That worktree is
+/// in use, so its files must never be offered for a salvage-commit:
+/// `Some(false)` becomes `Some(true)`. Undeterminable (`None`) and already-live
+/// readings are unchanged. Pure so the rule is fixture-testable.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn pid_liveness_with_occupant(
+    pid_alive: Option<bool>,
+    live_process_in_worktree: bool,
+) -> Option<bool> {
+    match pid_alive {
+        Some(false) if live_process_in_worktree => Some(true),
+        other => other,
+    }
+}
+
+/// BUG-1941: untracked-only changes on a protected branch (the main checkout)
+/// are operator scratch, not session work at risk — a dead session there is
+/// [`Stalled`](DispatchState::Stalled), never
+/// [`Salvageable`](DispatchState::Salvageable). Any tracked change keeps the
+/// salvage reading, and so does any non-protected branch. Pure.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn apply_main_checkout_untracked(
+    state: DispatchState,
+    protected_branch: bool,
+    untracked_records_only: bool,
+) -> DispatchState {
+    if state == DispatchState::Salvageable && protected_branch && untracked_records_only {
+        DispatchState::Stalled
+    } else {
+        state
+    }
+}
+
+/// BUG-1941: a branch ahead of main whose `HEAD` commit is fresher than
+/// `fresh_secs` is moving even when no live process is attributed to the
+/// lease — a relay that adopted the lease from another cwd commits there while
+/// the pid probe sees nothing. Only the no-process readings
+/// ([`Stalled`](DispatchState::Stalled) and
+/// [`Salvageable`](DispatchState::Salvageable)) are lifted; a recent commit is
+/// the same "someone is working here" evidence BUG-1656's fresh dirty files
+/// are. Pure.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn apply_commit_movement(
+    state: DispatchState,
+    pid_alive: Option<bool>,
+    branch_ahead_of_main: u32,
+    head_commit_age_secs: Option<u64>,
+    fresh_secs: u64,
+) -> DispatchState {
+    let fresh_commit =
+        branch_ahead_of_main > 0 && head_commit_age_secs.is_some_and(|a| a < fresh_secs);
+    if fresh_commit
+        && pid_alive == Some(false)
+        && matches!(state, DispatchState::Stalled | DispatchState::Salvageable)
+    {
+        DispatchState::Moving
+    } else {
+        state
+    }
 }
 
 /// The exact next command for a row's dispatch state — "no interpretation
