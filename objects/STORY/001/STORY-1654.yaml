@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-11T01:25:33.483467282Z
+modified_at: 2026-10-11T07:09:09.935504600Z
 req_type: Story
 tags:
 - batch:next
@@ -42,6 +42,84 @@ comments:
   created_at: 2026-10-11T01:25:33.483467282Z
   modified_at: 2026-10-11T01:25:33.483467282Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a129cb-45af-73a3-bd4c-c3119f713392
+  author: night-fable
+  content: |
+    DESIGN SKETCH (night, 2026-10-11 product seat). Read against PR #2485 at 3fcaa2488a (review_authority.rs, pr_ship.rs), queue_cmd.rs on main, session.rs, seat_authority.rs, the aida-orchestrate / aida-burndown / aida-drain-queue / aida-review templates, and ~/ai/aida-relay/bin/relay.sh. No code was built.
+
+    ## Recommendation: Option 1, using the standalone headless reviewer that already exists
+
+    The orchestrator launches each reviewer with a Bash call, never with the Agent tool:
+
+        aida queue work PR-<n> --role reviewer --no-human
+
+    That is the BUG-226 standalone reviewer path (queue_cmd.rs:12361 and run_standalone_reviewer at :12636). It is already a separate `claude -p` process with its own PR-scoped lease, its own review worktree, a child reviewer grant, AIDA_HEADLESS=1, the aida-review headless contract, and a verdict file the caller waits on. Nothing new has to be invented for the process boundary; the work is to make the skills and relay prompts use it and to prove the identity flow with a test.
+
+    Option 2 (a dedicated reviewer relay) is sound but is a scaling step, not the fix: it needs a second relay instance per project, the orchestrator must poll the verdict state instead of waiting on a child, and review latency becomes the relay's rotation cadence. Keep it as a follow-up for when one orchestrator cannot keep up with reviews. Nothing in Option 1 precludes it: Option 2 drains the same `Review PR-<n>` stories that `aida-drain-queue --mode review` already routes to the reviewer role.
+
+    ## Why the Agent-tool reviewer fails and the Bash-launched one passes (verified facts)
+
+    - Recorder identity (review_authority.rs:261-285, recorder_tokens): session ids from AIDA_SESSION_ID and CLAUDE_CODE_SESSION_ID, the shell that ran the command, and every ancestor process up to and including the NEAREST agent harness; the walk stops there. Plus a `lease:` token for every lease that covers the cwd or matches AIDA_SESSION_ID (lease_bound_by_context, :434).
+    - An Agent-tool subagent runs inside the orchestrator's own claude process: same CLAUDE_CODE_SESSION_ID, same harness pid. Its `aida review record` therefore overlaps the implementer's ledger record (same session, same proc) and ship refuses AuthorSession (pr_ship.rs:1669-1706).
+    - A nested `claude -p` gets its own identity. Probed tonight from this relay session: parent CLAUDE_CODE_SESSION_ID=fe2e54bf..., CLAUDE_PID=2043311; the child printed CLAUDE_CODE_SESSION_ID=7cfa3eee..., CLAUDE_PID=2086759, and its bash's parent was the child claude. So the child's recorder tokens stop at the child harness and never include the orchestrator's session or pid.
+    - Grant: the headless launch (session.rs:1221 and :3063) calls issue_child(seat=reviewer) and exports the NEW grant id in AIDA_SESSION_GRANT with AIDA_SESSION_ROLE=reviewer. The child does not inherit the orchestrator's grant. The attestation then re-validates as a reviewer seat at ship (attestation.authorizes, pr_ship.rs:1718).
+    - Lease: the reviewer's lease is PR-scoped and review_verb, so is_authoring_lease is false (review_authority.rs:496); it never becomes an author, and its cwd is the review worktree, not the implementer's, so no `lease:` overlap either.
+
+    ## Process and identity flow (Option 1)
+
+    1. Relay/orchestrator process O: `claude -p`, session S0, harness pid P0, grant G0 (seat advisor or orchestrator). G0 MUST have been entered with `--delegate-seat reviewer` (and `--delegate-seat implementer` if implementers are launched the same way); issue_child fails closed otherwise (seat_authority.rs:211-230, message tells the operator to re-enter the role).
+    2. Implementer: unchanged for this story. Whether it is an in-process subagent or `aida worktree add <SPEC>` from O's shell, the ledger records S0/P0/lease L1 as authors of SPEC (append_authorship_as, :636). Consequence: O itself is an author of everything it implements through subagents. That is acceptable because O never records approvals; the one cost is that O cannot use `aida pr ship --override-stale-approval` (stale_override_refusal, pr_ship.rs:1622). See open question 2.
+    3. Reviewer: O runs the Bash command above and waits for exit (BUG-226 spawns and waits; the end-of-command summary prints the verdict). Child R: session S1, pid P1, grant G1 child of G0 with seat reviewer, lease L2 (PR-<n>, review_verb), cwd = review worktree. R records with `aida review record <SPEC> --verdict approved --sha <head> --pr <n>` per the aida-review skill step 6a. Attestation identity = {session:S1, shell, proc:P1, lease:L2}; authority key = G1.
+    4. Ship: O runs `aida pr ship <n>` (or the drain's phase 4). approval_authority_refusal finds the newest approval attested by S1/P1, re-validates G1 as a reviewer seat, checks the recorder is anchored and not an author, checks dates, and proceeds. Shipper identity S0 is an author, which only blocks the override path.
+    5. Rework loop: on REQUEST_CHANGES O sends findings to the same implementer (unchanged) and launches a NEW reviewer process for the new head (the standalone path makes a fresh lease each time; the previous PR-scoped lease must have been released by `aida review record`, which clears the claim marker).
+
+    Which grant each process holds: O = G0 (delegating reviewer, implementer); implementer = G0 inherited if in-process, or a child implementer grant if launched via `aida agent new claude --role implementer` / `aida queue work`; reviewer = G1 (reviewer, non-delegating, expires with G0). Implementers never hold a reviewer grant because issue_child only mints the requested seat and the reviewer launch is the only place reviewer is requested.
+
+    ## Files to change
+
+    Templates (edit the masters, then `make sync-templates && make check-templates`):
+    - aida-core/templates/skills/aida-orchestrate.md §5 "Fresh review of every branch" (lines ~195-216): replace the "send a reviewer subagent" instruction with the Bash launch, the wait, and reading the verdict file `.aida/review-verdicts/PR-<n>.json`; state that `aida review record` must run inside the reviewer process, never from the orchestrator shell. Add to §"what the harness provides" (line ~74) that the Agent tool is for implementers only.
+    - aida-core/templates/skills/aida-burndown.md: the Agent(isolation: "worktree") fan-out stays for implementers; the integrate step must call the standalone reviewer, not a review subagent (lines ~104-130 and the integrate section).
+    - aida-core/templates/skills/aida-review.md: one paragraph under the headless contract (line ~70): a verdict is valid only when recorded by the reviewer process that was launched for the PR; an orchestrator relaying a verdict is refused at ship.
+    - aida-core/templates/skills/aida-drain-queue.md: no change needed; `--mode review` already queues `Review PR-<n>` for the reviewer role, which is what Option 2 would later drain.
+    - The mirrors (.claude/skills, commands) regenerate.
+    - .aida/handoff/orchestrator/relay-prompt-*.md and the night relay prompts: replace "FRESH reviewer subagent" with the Bash command (these are operator files, not templates).
+
+    Code (small, optional for this story, recommended):
+    - queue_cmd.rs standalone reviewer (:12361 onward): when `--no-human` and the parent grant does not delegate reviewer, the error already fails closed; add the delegate hint to the relay launch docs instead of changing code.
+    - A guard in `aida review record` (review_verdict.rs on the PR branch): if CLAUDE_CODE_CHILD_SESSION is unset and the recorder's harness pid equals any author's harness pid, print the AuthorSession refusal at record time with the exact Bash launch command as the hint. The PR already refuses at record time; this is only a better message.
+    - aida-relay (separate repo, BUG-90 / STORY-1653): document that the operator must enter the seat with `--delegate-seat reviewer`; relay.sh itself needs no change for Option 1.
+
+    ## Test plan
+
+    1. Unit (exists on PR #2485): bug_1918_review_authority_tests cover token matching, launcher vs worker binding, and refusal classes. Add one case: recorder tokens whose chain contains two harnesses (child claude under parent claude) include only the child's pid.
+    2. Shell integration (new, aida-cli/tests or tests/shell): no real claude. Put a stub executable named `claude` first on PATH that runs its argv as a shell command; is_agent_harness matches on the command (review_authority.rs:159), so the stub is a harness. From a "parent" stub: claim SPEC via `aida worktree add`, then (a) run `aida review record --verdict approved` from the same stub process → expect the AuthorSession refusal; (b) run `aida queue work PR-<n> --role reviewer --no-human --no-launch` to assert the lease, worktree and child grant are created, then run `aida review record` under a NESTED stub with AIDA_SESSION_GRANT=<child grant>, cwd = review worktree → expect success; then `aida pr ship --dry-run`-equivalent (merge_approval_inputs + approval_authority_refusal) → None. Requires a forge stub or the existing fake-forge fixture used by task_1287_label_only_merge_hold.rs.
+    3. End to end (acceptance bullet 1 of this story): one relay rotation on a build that includes PR #2485, implementer subagent → Bash reviewer → `aida pr ship`, no override. Then the negative: an Agent-tool reviewer on the same PR → ship refuses AuthorSession. Record both outcomes as a comment here.
+    4. Template gate: `make check-templates` after the edits; grep the templates for "reviewer subagent" returns nothing.
+
+    ## Throughput estimate (measured, not guessed)
+
+    Standalone headless reviewer sessions already in .aida/headless-logs (pr-*.jsonl; start from the UUIDv7 session id, end from file mtime), 10 most recent:
+
+    | PR | wall-clock |
+    |---|---|
+    | 2064, 2066 | 5.0, 5.2 min |
+    | 2431, 2435 | 19.0, 19.6 min |
+    | 2432, 2439, 2443 | 2.0, 2.4, 2.3 min |
+    | 2440, 2444, 2445 | 6.2, 7.2, 5.3 min |
+
+    Median about 5 min, long tail 20 min when the reviewer builds and runs tests. An Agent-tool reviewer in the orchestrator's process has no comparable log, but it does the same model work; the fixed overhead of a separate process is `claude -p` startup plus review-worktree creation, roughly 30-60 s. At the relay's rate of 2026-10-10 (62 `aida review record` calls in a day) that is 30-60 min of extra wall-clock per day, fully parallelisable if the orchestrator launches reviewers for independent PRs concurrently. Token cost is the larger difference: a fresh process has no shared prompt cache with the orchestrator; expect each review to cost about what a standalone `aida queue work PR-<n> --role reviewer` costs today. Acceptance bullet 3 asks for before/after; the before number is best taken from the orchestrator's own transcript timestamps between "reviewer sent" and "verdict received" on 2026-10-10.
+
+    ## Open questions for the operator
+
+    1. Seat and delegation: which seat do the night and lib-split relays enter, and is it entered with `--delegate-seat reviewer`? Without it the first reviewer launch fails closed. Suggest the relay README states the exact command.
+    2. Implementers: keep in-process subagents for now (orchestrator becomes an author; loses only the stale-approval override), or move them to separate processes as well, as Joe's 2026-10-10 comment on this story asks for the advisor-launched case? If separate: `aida queue work <SPEC> --no-human=both` runs the whole drain including a separate reviewer, which may make most of /aida-orchestrate's manual loop redundant for simple specs. Recommend: this story does reviewers only; file the implementer half as its own story so the orchestrator rework stays reviewable.
+    3. Concurrency: may the orchestrator run several standalone reviewers at once (one per PR)? The verdict file is per PR so the handshake is safe; the open risk is review-worktree churn and BUG-1929/BUG-1928 contained-mode write failures if `--sandbox` is on. Recommend: no `--sandbox` for reviewers until BUG-1928/1929 land.
+    4. Override policy: with the orchestrator as an author, nobody in a relay can use `--override-stale-approval`. Confirm that is intended (fail closed) and that a stale approval always means "launch a new reviewer".
+    5. Option 2 timing: file it now as a follow-up story (dedicated reviewer relay draining `Review PR-<n>` with its own reviewer seat) or wait until a measured throughput problem exists? Recommend wait.
+  created_at: 2026-10-11T07:09:09.935504600Z
+  modified_at: 2026-10-11T07:09:09.935504600Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
