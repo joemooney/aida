@@ -123,6 +123,7 @@ mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
 mod tui_entry;
+mod usage_mcp_helpers;
 mod zen_cmd;
 use claim::*;
 use db_block::*;
@@ -143,6 +144,7 @@ use stakeholder_role::*;
 use status_cmd::*;
 use statusline_root::*;
 use tui_entry::*;
+use usage_mcp_helpers::*;
 use zen_cmd::*;
 // trace:TASK-967 | ai:claude
 mod drain_summary;

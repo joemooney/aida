@@ -274,3 +274,17 @@ items = [
   "fn project_memory_dir",
   "fn print_status_memory_drift_section",
 ]
+
+[module.usage_mcp_helpers]
+purpose = "Shared usage-telemetry aggregation and MCP server launch/publish helpers (STORY-1488 slice 1)"
+items = [
+  "fn detect_store_path",
+  "fn poll_until_published",
+  "fn spawn_log_pump",
+  "fn locate_aida_server_binary",
+  "fn split_last_char",
+  "struct UsageRow",
+  "impl impl:UsageRow",
+  "fn aggregate_events",
+  "fn bug_status",
+]
