@@ -12,12 +12,12 @@ description: |-
   The diagnostics show a direct flock returning WouldBlock while neither the in-process registry nor the holder scan finds any holder. That points to a race between the forked child releasing the lock (exec/exit) and the parent's probe, or to a holder the scan can't see. Same family as BUG-1729 and BUG-1736, which made earlier refresh-lock tests wait out contended flocks. This test seems to need the same bounded wait-for-release, or a deterministic handshake with the child.
 
   Acceptance: the test is deterministic under parallel cargo test on a loaded host (for example, 200 iterations with stress), and asserts the real invariant instead of timing.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:36:04.697193014Z
-modified_at: 2026-10-11T06:27:46.848581143Z
+modified_at: 2026-10-11T15:46:37.768303681Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -32,6 +32,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12ba5-0648-7d73-9378-ba111783f7ad
+  author: aida-session-start
+  timestamp: 2026-10-11T15:46:37.768303087Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
