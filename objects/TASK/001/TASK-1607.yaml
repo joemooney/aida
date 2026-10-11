@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-11T01:09:30.568667126Z
+modified_at: 2026-10-11T01:09:38.145073927Z
 req_type: Task
 tags:
 - guided-lane
@@ -753,6 +753,12 @@ comments:
   content: 'Advisor 2026-10-10 18:10: routed to relay 1 (batch:relay-2026-10-10). Work: rebase story-1485 / PR #2451 onto main (expect lib.rs-split conflicts; move code into the extracted modules), make check-ci-fast green, mark the PR ready, post ''PR #2451 ready for advisor review at <sha>''. This touches seats/single-occupancy, so it is ADVISOR-REVIEW ONLY: the relay must not merge it. Note: the advisor approval at 56f7b55 is void after the rebase.'
   created_at: 2026-10-11T01:08:54.204706389Z
   modified_at: 2026-10-11T01:08:54.204706389Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a12882-1ce1-7df0-a889-eda0a29c22a3
+  author: joe
+  content: 'Advisor 2026-10-10 18:11: CORRECTION. Routing to relay 1 is reverted: TASK-1607 is guided-lane (supervised) and must not run in a headless relay. It needs a supervised implementer session (operator-attended) for the rebase of PR #2451. Advisor review only; the 56f7b55 approval is void after the rebase.'
+  created_at: 2026-10-11T01:09:38.145073927Z
+  modified_at: 2026-10-11T01:09:38.145073927Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
