@@ -1,10 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-11T16:21:27.139319102Z
+last_run: 2026-10-11T22:41:53.850919073Z
 last_by:
   seat: advisor
-  session: ac2268c9-a663-49e5-a9ef-27117f872438
-  vendor: antigravity
+  session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+  vendor: claude
 result: done
-note: 'Trips: (a) mail-poll-setup on advisor session ac2268c9: my check-in cron prompt named the coordination inbox. Deleted it and recreated it without the mail step (cron 1d417efc). (b) compactions on acdb011f (integrator), d28185fc (orchestrator/integrator), fe2e54bf (product): all three last wrote 21:07 to 01:19 and have since rotated or finished, so no live seat to restart. No new poll added.'
-due_since: 2026-10-11T22:41:18.319138114Z
-due_reason: on CronJobFailed:watchdog
+note: 'Advisor triage 2026-10-11 15:45. Four of the five findings are carry-overs already handled at the 16:21 triage (session ac2268c9 mail-poll cron fixed; sessions acdb011f, d28185fc and fe2e54bf rotated or finished; their ''still active'' flag is stale). New: session 0a74bb87, a Claude transcript, is the night relay (STORY-1652 to STORY-1653). It has compacted twice in about 7h (09:55 to 15:32), was still productive (pushed #2542 head 6c38cc2fd9 at 15:31), and is not looping. Action: no poll added; the operator will be asked to rotate it via handoff once STORY-1653 (#2542) lands.'
