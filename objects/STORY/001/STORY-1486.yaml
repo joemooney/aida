@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T19:18:03.739394004Z
+modified_at: 2026-10-11T07:11:00.751844880Z
 req_type: Story
 tags:
 - agent-launch
@@ -389,6 +389,32 @@ comments:
   created_at: 2026-10-08T19:18:03.739394004Z
   modified_at: 2026-10-08T19:18:03.739394004Z
   relayed_from: answered-v3-independent-advisor
+- id: 01a129cc-f68f-75d1-a187-1f50516cf768
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the operator's recorded answer (2026-10-08T15:54:29Z, "Profile without exemptions") settles the open fork and the remaining work is a sketched, independently reviewed least-privilege change; this spec is operator-only (needs-operator), so this is a recommendation for the operator, not a proxy approval.
+
+    Problem: scaffolded launches do not distinguish the consumer project's writable roots from the AIDA checkout, there is no seat-based Git read-only downgrade, and the description's AC3 still proposes an approval-prompt exemption list that the recorded decision rejected.
+
+    Evidence path (verified):
+    - Description is STALE against the recorded decision: the "no-approval-prompt" bullet and AC3 must be replaced (sketch comment 2026-10-08 09:31 and signoff 09:42 both say so). Proposed title: "Scaffolded agent launch profile: root scoping and seat-based Git read-only downgrade".
+    - Seams exist on main: aida-cli-lib/src/aida_bin.rs (TASK-1499 resolver), aida-cli-lib/src/scaffold_cmd.rs, aida-cli-lib/src/seat_authority.rs. aida-cli-lib/src/session.rs:1934 codex_headless_args_with_model_and_effort pushes --dangerously-bypass-approvals-and-sandbox (line 1942) and session.rs:2431 bwrap_confinement_args_inner always binds the worktree writable, which confirms the sketch's finding that AC2's strong "cannot run a Git write" is NOT enforceable on current adapters.
+    - Blocker TASK-1499 is Completed and STORY-1473 is Completed; nothing but the operator decision is pending.
+    - Signoff state: V2 plus V3 amendment APPROVED AS AMENDED "as an accurate blocked contract"; the functional strong profile is CHANGES REQUESTED (no supported backend).
+
+    Acceptance criteria (amended per the sketch):
+    1. consumer_profile_keeps_aida_checkout_read_only and aida_self_development_uses_verified_repo_identity: the generated profile lists writable and read-only roots separately; the AIDA checkout is read-only for a consumer project and writable only when resolved repo identity is AIDA itself.
+    2. generated_profile_preserves_approval_prompts: no allow/no-ask rule and no bypass flag in generated artifacts or effective launch argv; this replaces the old AC3 entirely.
+    3. unsupported_git_boundary_refuses_before_spawn: `aida agent new --git-read-only` on an adapter that cannot enforce the boundary refuses before spawn with zero session/lease/worktree effects; `--no-exec --verbose` prints requested versus enforceable Git mode.
+    4. debug_release_switch_needs_no_rescaffold: both target/debug and target/release resolve through aida_bin from one recipe.
+    5. relocated_project_and_aida_install_keep_profile_portable: no machine-specific absolute path in any generated file (TASK-1499 rule).
+
+    Scope / non-goals: no exemption list, no new seat/grant/delegation, no credential broker, no change to effective_role_with_roster's fallback. Suggest splitting on approval: (a) portable recipe + preview + fail-closed refusal, approvable now; (b) enforcement backend for the strong Git-write guarantee, blocked until a reviewed adapter exists. Related: related:TASK-1499 related:STORY-1473 related:ADR-61 related:TASK-1612 related:BUG-1934.
+
+    Suggested size: M for (a); L overall.
+  created_at: 2026-10-11T07:11:00.751844880Z
+  modified_at: 2026-10-11T07:11:00.751844880Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
