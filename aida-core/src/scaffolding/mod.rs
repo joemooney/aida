@@ -4715,6 +4715,50 @@ mod tests {
         }
     }
 
+    /// Both orchestrate bodies cap child concurrency, budget each child, make
+    /// the child model explicit instead of assumed, and ask for targeted reads.
+    // trace:BUG-1816 | ai:claude
+    #[test]
+    fn orchestrate_bodies_cap_concurrency_and_budget_children() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        for key in [
+            "skills/aida-orchestrate.md",
+            "skills-portable/aida-orchestrate.md",
+        ] {
+            let body = EMBEDDED_TEMPLATES
+                .get(key)
+                .expect("orchestrate body embedded");
+            for guidance in [
+                "Dispatch implementers (bounded parallel)",
+                "at most 3 live child sessions",
+                "Per-child budget.",
+                "retry silently",
+                "--max-runtime",
+                "--max-tokens",
+                "parent's model explicitly to inherit it",
+                "`aida agent new codex`",
+                "time budget is the one you enforce live",
+                "Bounded check-ins.",
+                "rg -n <term> <file>",
+                "sed -n '<a>,<b>p' <file>",
+            ] {
+                assert!(body.contains(guidance), "{key} lacks `{guidance}`");
+            }
+        }
+        // The command summary carries the same cap and budget sentence.
+        let command = EMBEDDED_TEMPLATES
+            .get("commands/aida-orchestrate.md")
+            .expect("orchestrate command embedded");
+        for guidance in [
+            "Keep at most 3 child sessions live",
+            "wall-clock and token budget",
+            "state the\n   child's model explicitly",
+            "never retried silently",
+        ] {
+            assert!(command.contains(guidance), "command lacks `{guidance}`");
+        }
+    }
+
     // STORY-1129: default scaffolding keeps CLI-capable agents on the
     // token-efficient CLI/TOON lane and does not register MCP unless opted in.
     // trace:TASK-0424 STORY-1129 | ai:claude,codex

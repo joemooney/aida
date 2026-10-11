@@ -30,7 +30,10 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
 4. Dispatch one implementer session per spec, each with its own
    `aida worktree add <SPEC>`, which takes the lease. Tests use fixtures only,
    no polling loops, and Python never runs as a shell script. The implementer
-   pushes its branch and opens no PR.
+   pushes its branch and opens no PR. Keep at most 3 child sessions live at
+   once, give each a wall-clock and token budget in its brief, and state the
+   child's model explicitly; a child that runs out is stopped and re-dispatched
+   once, never retried silently. <!-- trace:BUG-1816 | ai:claude -->
 5. Give every branch a fresh reviewer, and a strict one for drain, merge,
    store, lock, authority or unattended-launch code. On REQUEST_CHANGES,
    return the findings to the same implementer, then re-review with a new
