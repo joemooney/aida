@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T20:14:34.339253508Z
+modified_at: 2026-10-11T20:22:49.850398662Z
 req_type: Bug
 tags:
 - contained
@@ -134,6 +134,12 @@ comments:
   created_at: 2026-10-11T20:14:34.339253508Z
   modified_at: 2026-10-11T20:14:34.339253508Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ca1-e4fa-7762-90ea-87f8d923a805
+  author: joe
+  content: 'FACTORY DRAFT: PR #2541 at 7c28e4f96e. Built only on CI; not compiled locally. Plan deviations: (1) cache.db.lock-info is NOT in the allowWrite list. It is created and deleted on every write, so a file bind can''t hold it. Instead, write_lock_info_at treats a read-only/EACCES directory as ''unclaimed'' (the record is advisory). (2) probe_cache_writable now also accepts a writable db + -wal + -shm inside a read-only dir. Without that, the sandbox''s file binds would still read as a read-only cache. Advisor-review items are in the PR body: store git-commit gotcha, PERSIST_WAL for all callers.'
+  created_at: 2026-10-11T20:22:49.850398662Z
+  modified_at: 2026-10-11T20:22:49.850398662Z
+  session_id: a751d075-b74d-4c08-98b2-d415c6110e9b
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
