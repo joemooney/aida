@@ -231,3 +231,61 @@ fn pr_open_bump_targets_cover_scope_branch_and_covered_specs() {
     )
     .is_empty());
 }
+
+// ── review fixes: bounded forge, git failure ───────────────────────────────
+
+#[test]
+fn forge_lookup_runs_under_the_ceiling_and_a_spent_budget_skips_it() {
+    // Each lookup runs with the scoped per-call ceiling set, so a hung `gh`
+    // is killed and reads GhUnreachable (Keep) instead of stalling the doctor.
+    let started = std::time::Instant::now();
+    let seen =
+        crate::live_work::bounded_pr_lookup(started, std::time::Duration::from_secs(60), || {
+            assert_eq!(
+                crate::FORGE_LOOKUP_TIMEOUT.with(|c| c.get()),
+                Some(crate::FORGE_CLI_CALL_TIMEOUT)
+            );
+            crate::PrLookup::NoOpenPr
+        });
+    assert!(matches!(seen, crate::PrLookup::NoOpenPr));
+    assert_eq!(crate::FORGE_LOOKUP_TIMEOUT.with(|c| c.get()), None);
+
+    // Once the total budget is spent no lookup runs, and the answer is unknown.
+    let spent = crate::live_work::bounded_pr_lookup(started, std::time::Duration::ZERO, || {
+        panic!("a spent budget must not call the forge")
+    });
+    assert!(matches!(spent, crate::PrLookup::GhUnreachable(_)));
+    let ev = vec![(
+        "bug-9944-work".to_string(),
+        crate::live_work::BranchEvidence::Unknown("forge lookup budget spent".to_string()),
+    )];
+    assert!(matches!(
+        crate::live_work::decide(&ev),
+        crate::live_work::LiveWorkVerdict::Keep(_)
+    ));
+}
+
+#[test]
+fn git_failing_to_list_branches_keeps_the_spec() {
+    // A checkout whose refs git cannot read must not read as "no branches".
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join(".git"), "gitdir: /nonexistent/bug-1944\n").unwrap();
+    assert!(crate::live_work::spec_branch_refs(dir.path(), "BUG-9944").is_err());
+    let verdict = crate::live_work::spec_live_work_with(dir.path(), "BUG-9944", &no_pr);
+    assert!(
+        matches!(verdict, crate::live_work::LiveWorkVerdict::Keep(_)),
+        "{verdict:?}"
+    );
+}
+
+#[test]
+fn every_pr_open_path_bumps_the_branch_spec() {
+    // `try_auto_queue_pr_review` (used by the PR skill, the session-end
+    // backup and the orphan sweep) bumps through `bump_pr_specs`.
+    let dir = project("BUG-9945", RequirementStatus::Approved);
+    crate::live_work::bump_pr_specs(dir.path(), "bug-9945-work", &[]);
+    assert_eq!(
+        status_of(dir.path(), "BUG-9945"),
+        RequirementStatus::InProgress
+    );
+}

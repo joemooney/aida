@@ -66,9 +66,16 @@ pub(crate) fn decide(evidence: &[(String, BranchEvidence)]) -> LiveWorkVerdict {
 }
 
 /// Local and `origin/` refs whose branch name carries `spec_id`, grouped by
-/// branch name: `(branch, refs)`. A repository that git cannot read yields
-/// nothing.
-pub(crate) fn spec_branch_refs(project_root: &Path, spec_id: &str) -> Vec<(String, Vec<String>)> {
+/// branch name: `(branch, refs)`. A project root that is not a git checkout
+/// has no branches (`Ok(empty)`); a checkout whose refs git cannot list is an
+/// `Err`, which callers must treat as "unknown", never as "no branches".
+pub(crate) fn spec_branch_refs(
+    project_root: &Path,
+    spec_id: &str,
+) -> Result<Vec<(String, Vec<String>)>, String> {
+    if !project_root.join(".git").exists() {
+        return Ok(Vec::new());
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -78,12 +85,13 @@ pub(crate) fn spec_branch_refs(project_root: &Path, spec_id: &str) -> Vec<(Strin
             "refs/heads",
             "refs/remotes/origin",
         ])
-        .output();
-    let Ok(out) = out else {
-        return Vec::new();
-    };
+        .output()
+        .map_err(|e| format!("git could not run: {e}"))?;
     if !out.status.success() {
-        return Vec::new();
+        return Err(format!(
+            "git could not list branches: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
     }
     let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
     for full in String::from_utf8_lossy(&out.stdout).lines() {
@@ -107,7 +115,7 @@ pub(crate) fn spec_branch_refs(project_root: &Path, spec_id: &str) -> Vec<(Strin
             None => grouped.push((branch, vec![short_ref])),
         }
     }
-    grouped
+    Ok(grouped)
 }
 
 /// Per-ref ceiling for the squash-aware unmerged-commit probe, so one
@@ -165,7 +173,10 @@ pub(crate) fn spec_live_work_with(
     spec_id: &str,
     open_pr: &dyn Fn(&str) -> crate::PrLookup,
 ) -> LiveWorkVerdict {
-    let branches = spec_branch_refs(project_root, spec_id);
+    let branches = match spec_branch_refs(project_root, spec_id) {
+        Ok(branches) => branches,
+        Err(why) => return LiveWorkVerdict::Keep(format!("{why}; keeping it to be safe")),
+    };
     if branches.is_empty() {
         return LiveWorkVerdict::NoLiveWork;
     }
@@ -183,9 +194,70 @@ pub(crate) fn spec_live_work_with(
 /// Does `spec_id` still have live work (an open PR, or commits not yet on the
 /// default branch) on any branch carrying its id?
 pub(crate) fn spec_live_work(project_root: &Path, spec_id: &str) -> LiveWorkVerdict {
+    let started = std::time::Instant::now();
     spec_live_work_with(project_root, spec_id, &|branch| {
-        crate::detect_open_pr_for_branch(project_root, branch)
+        bounded_pr_lookup(started, FORGE_BUDGET, || {
+            crate::detect_open_pr_for_branch(project_root, branch)
+        })
     })
+}
+
+/// Total forge time one live-work check may spend across all spec branches.
+/// Each lookup is also capped at [`crate::FORGE_CLI_CALL_TIMEOUT`].
+const FORGE_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// One forge lookup under the scoped per-call ceiling: a lookup killed at the
+/// ceiling comes back `GhUnreachable`, and once `budget` (measured from
+/// `started`) is spent no further call is made. Both read as "unknown", so
+/// the spec is kept, and a slow forge cannot stall the caller (the doctor
+/// holds the loaded store while it heals).
+pub(crate) fn bounded_pr_lookup(
+    started: std::time::Instant,
+    budget: std::time::Duration,
+    lookup: impl FnOnce() -> crate::PrLookup,
+) -> crate::PrLookup {
+    if started.elapsed() >= budget {
+        return crate::PrLookup::GhUnreachable("forge lookup budget spent".to_string());
+    }
+    crate::with_forge_lookup_timeout(crate::FORGE_CLI_CALL_TIMEOUT, lookup)
+}
+
+/// [`crate::try_auto_queue_pr_review_unbumped`], then — when the PR is open
+/// (a review story was filed or already exists) — move the specs it carries
+/// (branch spec and covered specs) Approved → In Progress. Every PR-open
+/// path goes through here: `aida pr auto-queue-review`, the session-end
+/// backup, and the orphan sweep.
+pub(crate) fn try_auto_queue_pr_review(
+    project_root: &Path,
+    branch: &str,
+    session_id: &str,
+    origin: crate::AutoQueueOrigin,
+) -> crate::AutoQueueOutcome {
+    let outcome =
+        crate::try_auto_queue_pr_review_unbumped(project_root, branch, session_id, origin);
+    if matches!(
+        outcome.status,
+        crate::AutoQueueStatus::Filed | crate::AutoQueueStatus::AlreadyExists
+    ) {
+        bump_pr_specs(project_root, branch, &outcome.covered_specs);
+    }
+    outcome
+}
+
+/// Bump every spec an open PR carries. The store lives in the main checkout,
+/// so a worktree root falls back to it.
+pub(crate) fn bump_pr_specs(project_root: &Path, branch: &str, covered_specs: &[String]) {
+    let store_owner = if project_root.join(".aida-store").is_dir() {
+        project_root.to_path_buf()
+    } else {
+        match crate::find_main_worktree_root() {
+            Ok(root) => root,
+            Err(_) => return,
+        }
+    };
+    for spec in crate::pr_cmd::pr_open_bump_targets(None, branch, covered_specs) {
+        bump_spec_in_progress(&store_owner, &spec, aida_core::conflict::PR_OPEN_AUTHOR);
+    }
 }
 
 /// Targeted Approved → In Progress bump for one spec, through the
@@ -202,9 +274,8 @@ pub(crate) fn bump_spec_in_progress(project_root: &Path, spec_id: &str, author: 
         let Some(req) = backend.get_requirement_unambiguous(spec_id)? else {
             return Ok(false);
         };
-        if !matches!(req.status, aida_core::RequirementStatus::Approved) {
-            return Ok(false);
-        }
+        // The status check runs on the copy read under the store lock, so a
+        // concurrent writer cannot be overwritten (BUG-1637).
         crate::status_write_race_seam(&store_root);
         let mut bumped = false;
         backend.update_spec_atomically(&req, |r| {

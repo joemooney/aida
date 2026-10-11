@@ -5083,11 +5083,14 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
                 let _ = std::fs::remove_file(&marker);
             }
         }
-        // BUG-1944: an open PR is work in flight. Move each spec it carries
-        // (session scope, branch name, covered specs) Approved → In Progress.
+        // BUG-1944: `try_auto_queue_pr_review` already moved the branch's and
+        // covered specs to In Progress; the session scope is known only here.
         // trace:BUG-1944 | ai:claude
-        let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
-        for spec in pr_open_bump_targets(lease_scope.as_deref(), &branch, &outcome.covered_specs) {
+        if let Some(spec) = lease_scope
+            .as_deref()
+            .and_then(crate::worktree_lease::spec_id_from_branch)
+        {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
             crate::live_work::bump_spec_in_progress(
                 &main_root,
                 &spec,

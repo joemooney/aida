@@ -6464,7 +6464,9 @@ pub(crate) fn auto_queue_working_dir(
         .map(|p| p.to_path_buf())
 }
 
-pub(crate) fn try_auto_queue_pr_review(
+// BUG-1944: callers use `live_work::try_auto_queue_pr_review`, which wraps
+// this and moves the PR's specs to In Progress. trace:BUG-1944 | ai:claude
+pub(crate) fn try_auto_queue_pr_review_unbumped(
     project_root: &std::path::Path,
     branch: &str,
     session_id: &str,
