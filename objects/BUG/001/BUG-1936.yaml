@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T13:23:33.587546757Z
+modified_at: 2026-10-11T13:25:01.275134221Z
 req_type: Bug
 tags:
 - hooks
@@ -58,6 +58,12 @@ comments:
   created_at: 2026-10-11T07:48:07.192024968Z
   modified_at: 2026-10-11T07:48:07.192024968Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b23-60db-7140-8a37-43e085201234
+  author: joe
+  content: 'FACTORY PLAN (night): Replace the per-line sed strip_quoted_args in aida-core/templates/hooks/aida-git-guardrails.sh with a small POSIX-awk shell-literal scanner (strip_shell_literals) that (a) empties single/double/$''...'' quoted bodies across lines, (b) drops heredoc bodies from <<WORD / <<-WORD / <<''WORD'' to the terminator line, (c) drops # comments and joins backslash line-continuations, (d) honours backslash escapes. Unterminated quote or heredoc => scanner fails, hook fails CLOSED (exit 2) with a stated reason. Route every BLOCKED message (check_destructive output + trailer) to stderr. Tests: extend tests/test_git_guardrails_parse.sh (CI fast gate) with fixtures: heredoc body with force-push phrase allowed; quoted heredoc delimiter allowed; double-quoted arg spanning lines allowed; single-line quoted description allowed; bare force-push to main exit 2 with BLOCKED on stderr; reset --hard reason on stderr; real force-push after a heredoc still blocked; line-continued force-push blocked; unterminated quote and unterminated heredoc exit 2 with stderr reason. Risks: awk portability (mawk/BSD) — use only substr/length/printf; arithmetic 1<<2 must not be treated as heredoc (track $(( / (( depth). Then make sync-templates + check-templates + check-ci-fast.'
+  created_at: 2026-10-11T13:25:01.275134221Z
+  modified_at: 2026-10-11T13:25:01.275134221Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-9841-7d11-b580-163c37355ef4
   author: joe
