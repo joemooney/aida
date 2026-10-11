@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-11T15:17:51.159841554Z
+modified_at: 2026-10-11T16:33:51.372960831Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -30,6 +30,12 @@ comments:
   content: Approved at operator triage 2026-10-11 (advisor seat).
   created_at: 2026-10-11T15:17:51.159841554Z
   modified_at: 2026-10-11T15:17:51.159841554Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12bd0-430c-7071-ab52-070f1ba1a8a6
+  author: joe
+  content: 'ADVISOR 2026-10-11: routed to the night relay, AFTER BUG-1918 / PR #2485 merges (both touch the pr ship path; doing it first would force a rebase through #2485''s 4.3k-line diff). Not factory work.'
+  created_at: 2026-10-11T16:33:51.372960831Z
+  modified_at: 2026-10-11T16:33:51.372960831Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
