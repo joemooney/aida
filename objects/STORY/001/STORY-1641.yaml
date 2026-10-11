@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-11T13:28:00.473222063Z
+modified_at: 2026-10-11T13:31:18.672703761Z
 req_type: Story
 tags:
 - cli
@@ -76,6 +76,12 @@ comments:
   created_at: 2026-10-11T07:48:36.373803543Z
   modified_at: 2026-10-11T07:48:36.373803543Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b29-2310-7931-839c-2e2f6b9b8b82
+  author: joe
+  content: 'FACTORY PLAN (night): Approach: new focused module aida-cli-lib/src/external_cmd.rs owns discovery (scan PATH for executable aida-<name>; first hit wins; names shadowed by a real subcommand/clap alias, ''help'', or AIDA''s own companion binaries aida-server/aida-generate-types are excluded), the dispatch decision, the extension context env, and the not-found near-match hint. Wiring in run() (lib_part1.rs, ~5 lines): after user-alias expansion + built-in argv rewrites and before Cli::parse_from, if argv[1] is a non-flag, non-real name and aida-<name> resolves on PATH, exec it (Unix CommandExt::exec; Windows spawn+wait and propagate the code, resolving .exe/.cmd/.bat). Resolution order therefore is built-in > built-in alias/rewrite > user alias (human only) > external. Env names: AIDA_PROJECT_ROOT, AIDA_STORE_PATH (removed when outside an AIDA project), AIDA_OUTPUT_FORMAT (resolved human/toon/json), AIDA_CALLER_KIND (human/agent/headless, same classification as the alias gate), AIDA_BIN (the invoking binary). help: ''aida help'' and ''aida help --all'' gain an ''External commands'' section; ''aida help <ext>'' delegates to ''aida-<ext> --help'' after exact-command and topic-group lookup miss. ''aida alias list'' (human/toon/json) appends an ''External commands'' group with the resolved path. Not found: clap error and exit code unchanged; when an installed extension is within edit distance 2, a one-line hint is printed first (reuses help_catalog levenshtein, made pub(crate)). Small lib_part6 tweak: don''t warn ''AIDA_BIN not honored'' when AIDA_BIN names the running binary itself (an extension calling back via AIDA_BIN). Tests: black-box aida-cli/tests/story_1641_external_subcommands.rs (linux): external_subcommand_execs_aida_prefixed_binary (argv, stdout/stderr, exit 3, SIGTERM), builtin_shadows_external, agent_caller_runs_external_even_when_user_alias_exists, external_receives_context_env (root/subdir/outside, headless+agent kinds), unknown_name_without_extension_keeps_error_and_exit_code (+ near-match hint), help_and_alias_list_show_externals (human/toon/json, and none when absent), help_ext_delegates_to_ext_help; unit tests in external_cmd.rs for discovery, shadowing (human alias expansion wins), caller kind, output format label, context resolution. Docs: docs/cli/07-project-setup.md extension section (contract: CLI + machine output only, never write the store/cache), alias entry note. Risks: cannot compile locally; exec/ETXTBSY on freshly-written stubs (tests retry); AIDA_BIN decline warning interplay. Acceptance checked by CI running the new tests.'
+  created_at: 2026-10-11T13:31:18.672703761Z
+  modified_at: 2026-10-11T13:31:18.672703761Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-5f13-79b1-9eb0-ebdaf6c760ed
   author: joe
