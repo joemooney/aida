@@ -133,40 +133,40 @@ pub fn drivers_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("drivers")
 }
 
-/// Ids land in a file name: keep `[A-Za-z0-9._-]`, map everything else to `_`.
-fn file_safe(id: &str) -> String {
-    id.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-/// The record file for one driver.
+/// The record file for one driver. `id` must already have passed
+/// [`validate_id`]; it is used verbatim (trimmed), never rewritten, so two
+/// distinct ids can never share a file.
+// trace:STORY-1653 | ai:claude
 pub fn record_path(project_root: &Path, kind: DriverKind, id: &str) -> PathBuf {
-    drivers_dir(project_root).join(format!("{}-{}.json", kind.as_str(), file_safe(id)))
+    drivers_dir(project_root).join(format!("{}-{}.json", kind.as_str(), id.trim()))
 }
 
-/// Validate a driver id: non-empty, no whitespace or `:` (it is the right-hand
-/// side of a `<kind>:<id>` label).
-pub fn validate_id(id: &str) -> Result<(), String> {
+/// Validate a driver id and return it trimmed: non-empty and made only of
+/// `[A-Za-z0-9._-]`. The id lands verbatim in a file name and on the
+/// right-hand side of a `<kind>:<id>` label, so anything else is rejected
+/// rather than sanitized (sanitizing would map distinct ids to one file).
+// trace:STORY-1653 | ai:claude
+pub fn validate_id(id: &str) -> Result<&str, String> {
     let id = id.trim();
     if id.is_empty() {
         return Err("driver id must not be empty".into());
     }
-    if id
+    if !id
         .chars()
-        .any(|c| c.is_whitespace() || c == ':' || c == '/')
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
     {
         return Err(format!(
-            "driver id `{id}` must not contain whitespace, `:` or `/`"
+            "driver id `{id}` may contain only letters, digits, `.`, `_` and `-`"
         ));
     }
-    Ok(())
+    if id.chars().all(|c| c == '.') {
+        return Err(format!("driver id `{id}` must not be only dots"));
+    }
+    Ok(id)
+}
+
+fn invalid_input(e: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
 }
 
 /// Register (or refresh) a driver. Re-registering the same kind+id refreshes
@@ -179,15 +179,21 @@ pub fn register(
     pid_start_time: Option<String>,
     now: DateTime<Utc>,
 ) -> std::io::Result<DriverRecord> {
-    validate_id(&reg.id).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
-    let path = record_path(project_root, reg.kind, &reg.id);
+    let id = validate_id(&reg.id).map_err(invalid_input)?.to_string();
+    if reg.pid <= 1 || reg.pid > i32::MAX as u32 {
+        return Err(invalid_input(format!(
+            "driver pid {} is not a usable process id (must be > 1)",
+            reg.pid
+        )));
+    }
+    let path = record_path(project_root, reg.kind, &id);
     let started_at = read_record(&path)
         .filter(|old| old.pid == reg.pid)
         .map(|old| old.started_at)
         .unwrap_or(now);
     let rec = DriverRecord {
         kind: reg.kind,
-        id: reg.id.trim().to_string(),
+        id,
         pid: reg.pid,
         pid_start_time,
         selector: reg.selector.filter(|s| !s.trim().is_empty()),
@@ -206,6 +212,7 @@ pub fn register(
 
 /// Remove one driver's own record. Returns `false` when there was none.
 pub fn deregister(project_root: &Path, kind: DriverKind, id: &str) -> std::io::Result<bool> {
+    let id = validate_id(id).map_err(invalid_input)?;
     let path = record_path(project_root, kind, id);
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(true),
@@ -479,6 +486,36 @@ mod tests {
         assert!(!deregister(root, DriverKind::Relay, "a").unwrap());
         let left: Vec<_> = read_all(root).into_iter().map(|r| r.id).collect();
         assert_eq!(left, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn ids_and_pids_are_validated_on_register_and_deregister() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let reg = |id: &str, pid: u32| Registration {
+            kind: DriverKind::Relay,
+            id: id.into(),
+            pid,
+            selector: None,
+            seat: None,
+            handoff: None,
+            ttl_secs: None,
+        };
+        // Distinct ids that a sanitizer would have collapsed onto one file.
+        for bad in ["a/b", "a b", "a:b", "a_b\n x", "", "  ", "..", "../x"] {
+            assert!(
+                register(root, reg(bad, 7), None, Utc::now()).is_err(),
+                "{bad:?}"
+            );
+            assert!(deregister(root, DriverKind::Relay, bad).is_err(), "{bad:?}");
+        }
+        for bad_pid in [0, 1, i32::MAX as u32 + 1, u32::MAX] {
+            assert!(register(root, reg("ok", bad_pid), None, Utc::now()).is_err());
+        }
+        let r = register(root, reg("  lib-split.v2_1 ", 7), None, Utc::now()).unwrap();
+        assert_eq!(r.id, "lib-split.v2_1");
+        assert!(record_path(root, DriverKind::Relay, "lib-split.v2_1").exists());
+        assert!(deregister(root, DriverKind::Relay, " lib-split.v2_1").unwrap());
     }
 
     #[test]

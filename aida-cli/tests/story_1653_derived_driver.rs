@@ -12,6 +12,10 @@ use std::process::{Child, Command, Output};
 mod support;
 
 fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
+    aida_env(repo, home, args, &[])
+}
+
+fn aida_env(repo: &Path, home: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(repo)
         .env("HOME", home)
@@ -23,6 +27,7 @@ fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
     if let Some(grant) = support::ensure_seat(home, repo, "advisor", &[]) {
         cmd.env("AIDA_SESSION_GRANT", grant);
     }
+    cmd.envs(env.iter().copied());
     cmd.args(args).output().expect("run aida")
 }
 
@@ -100,38 +105,88 @@ fn add_in_progress(repo: &Path, home: &Path, tags: Option<&str>) -> String {
     id
 }
 
-fn sleeper() -> Child {
-    Command::new("sleep")
-        .arg("600")
-        .spawn()
-        .expect("spawn sleep")
+/// A fake driver/agent process: a `sleep 600` child that is killed and
+/// reaped on drop, so a failing assertion never leaks it.
+struct Sleeper(Child);
+
+impl Sleeper {
+    fn id(&self) -> u32 {
+        self.0.id()
+    }
+
+    /// Kill and reap (idempotent).
+    fn kill(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+impl Drop for Sleeper {
+    fn drop(&mut self) {
+        self.kill();
+    }
+}
+
+fn sleeper() -> Sleeper {
+    Sleeper(
+        Command::new("sleep")
+            .arg("600")
+            .spawn()
+            .expect("spawn sleep"),
+    )
 }
 
 /// A pid that is guaranteed dead: spawn, kill, reap.
 fn dead_pid() -> u32 {
     let mut c = sleeper();
     let pid = c.id();
-    c.kill().unwrap();
-    c.wait().unwrap();
+    c.kill();
     pid
 }
 
 /// Write a session lease the way pre-driver binaries did: NO `driver` key
 /// unless `driver` is given — old lease files must keep parsing.
 fn write_lease(repo: &Path, id: &str, spec: &str, active_pid: u32, driver: Option<&str>) {
+    write_lease_at(
+        repo,
+        &repo.join("no-such-worktree"),
+        id,
+        spec,
+        active_pid,
+        driver,
+    );
+}
+
+fn write_lease_at(
+    repo: &Path,
+    worktree: &Path,
+    id: &str,
+    spec: &str,
+    active_pid: u32,
+    driver: Option<&str>,
+) {
     let dir = repo.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
-    let mut body = format!(
-        "id = \"{id}\"\nscope = \"{spec}\"\nslug = \"{slug}\"\nowner = \"tester\"\n\
-         worktree_path = \"{wt}\"\nbranch = \"{slug}\"\nstarted_at = \"{now}\"\n\
-         hostname = \"h\"\nrole = \"implementer\"\nactive_pid = {active_pid}\n",
-        slug = spec.to_ascii_lowercase(),
-        wt = repo.join("no-such-worktree").display(),
-        now = chrono::Utc::now().to_rfc3339(),
-    );
-    if let Some(d) = driver {
-        body.push_str(&format!("driver = \"{d}\"\n"));
+    let slug = spec.to_ascii_lowercase();
+    let mut lease = toml::map::Map::new();
+    for (k, v) in [
+        ("id", id.to_string()),
+        ("scope", spec.to_string()),
+        ("slug", slug.clone()),
+        ("owner", "tester".to_string()),
+        ("worktree_path", worktree.to_string_lossy().into_owned()),
+        ("branch", slug),
+        ("started_at", chrono::Utc::now().to_rfc3339()),
+        ("hostname", "h".to_string()),
+        ("role", "implementer".to_string()),
+    ] {
+        lease.insert(k.into(), toml::Value::String(v));
     }
+    lease.insert("active_pid".into(), toml::Value::Integer(active_pid.into()));
+    if let Some(d) = driver {
+        lease.insert("driver".into(), toml::Value::String(d.into()));
+    }
+    let body = toml::to_string(&toml::Value::Table(lease)).unwrap();
     std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
 }
 
@@ -173,14 +228,21 @@ fn ps_entry(repo: &Path, home: &Path, spec: &str) -> (String, serde_json::Value)
     panic!("{spec} missing from ps json: {v}");
 }
 
-/// Registered relay + spec in its batch + dead lease pid → `relay:<run>`
-/// everywhere, the row reads live (no stale/stalled wording). Killing the
-/// relay degrades the spec to `queued (batch:X)` without deleting anything.
+/// Registered relay + spec in its batch + a dead lease pid on a lease that
+/// names the relay → `relay:<run>` everywhere, the row reads live (no
+/// stale/stalled wording). Killing the relay degrades the spec to
+/// `queued (batch:X)` without deleting anything.
 #[test]
 fn relay_drives_batch_spec_then_degrades_to_queued_when_killed() {
     let (_tmp, repo, home) = init_repo();
     let spec = add_in_progress(&repo, &home, Some("batch:next"));
-    write_lease(&repo, "aaaabbbbcccc", &spec, dead_pid(), None);
+    write_lease(
+        &repo,
+        "aaaabbbbcccc",
+        &spec,
+        dead_pid(),
+        Some("relay:lib-split"),
+    );
 
     let mut relay = sleeper();
     let pid = relay.id().to_string();
@@ -253,8 +315,7 @@ fn relay_drives_batch_spec_then_degrades_to_queued_when_killed() {
     }
 
     // Kill the relay: nothing is cleaned up, the spec just stops being driven.
-    relay.kill().unwrap();
-    relay.wait().unwrap();
+    relay.kill();
     let record = repo
         .join(".aida")
         .join("drivers")
@@ -318,8 +379,7 @@ fn lease_driver_field_attributes_to_live_relay() {
         "{row}"
     );
     assert_eq!(list_row(&repo, &home, &spec)["driver"], "relay:nightly");
-    relay.kill().unwrap();
-    relay.wait().unwrap();
+    relay.kill();
 }
 
 /// A lease whose own process is alive → `agent:<session>`.
@@ -335,8 +395,7 @@ fn live_lease_pid_resolves_to_agent() {
     assert_eq!(row["driver"], "agent:01234567", "{row}");
     let lrow = list_row(&repo, &home, &spec);
     assert_eq!(lrow["driver_kind"], "agent", "{lrow}");
-    agent.kill().unwrap();
-    agent.wait().unwrap();
+    agent.kill();
 }
 
 /// No lease, no driver, no batch → `idle <age>`, reported as an orphan with
@@ -359,4 +418,104 @@ fn no_lease_no_driver_is_idle() {
         "list --driver",
     );
     assert_eq!(none.as_array().map(Vec::len), Some(0), "{none}");
+}
+
+/// A live relay that covers the spec only through its batch tag must NOT
+/// vouch for a dead session: with uncommitted work in the dead session's
+/// worktree the row still reads salvageable (and is not lifted to live),
+/// while the driver label still names the relay.
+#[test]
+fn tag_covered_dead_session_with_dirty_worktree_stays_salvageable() {
+    let (tmp, repo, home) = init_repo();
+    std::fs::write(repo.join("work.txt"), "base\n").unwrap();
+    git(&repo, &["add", "work.txt"]);
+    git(&repo, &["commit", "-q", "-m", "base"]);
+    let spec = add_in_progress(&repo, &home, Some("batch:next"));
+    let wt = tmp.path().canonicalize().unwrap().join("wt-dirty");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "dirty-branch",
+            wt.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(wt.join("work.txt"), "uncommitted edit\n").unwrap();
+    // Age the edit past the fresh-dirty-movement window, which would
+    // otherwise read the tree as still moving.
+    assert!(Command::new("touch")
+        .args(["-d", "2 hours ago"])
+        .arg(wt.join("work.txt"))
+        .status()
+        .expect("run touch")
+        .success());
+    write_lease_at(&repo, &wt, "5a1a5a1a5a1a", &spec, dead_pid(), None);
+
+    let relay = sleeper();
+    let pid = relay.id().to_string();
+    let reg = aida(
+        &repo,
+        &home,
+        &[
+            "driver",
+            "register",
+            "--run",
+            "lib-split",
+            "--tag",
+            "batch:next",
+            "--pid",
+            &pid,
+        ],
+    );
+    assert!(
+        reg.status.success(),
+        "register: {}",
+        String::from_utf8_lossy(&reg.stderr)
+    );
+
+    let (section, row) = ps_entry(&repo, &home, &spec);
+    assert_eq!(section, "sessions", "{row}");
+    assert_eq!(row["dispatch_state"], "salvageable", "{row}");
+    assert_ne!(row["liveness"], "live", "a tag match never lifts: {row}");
+    assert_eq!(row["driver"], "relay:lib-split", "{row}");
+    drop(relay);
+}
+
+/// `AIDA_RELAY_RUN` in the environment of `aida claim` is recorded as the
+/// minted lease's `driver` — the attribution is written by the CLI itself.
+#[test]
+fn relay_run_env_is_stamped_on_the_claim_lease() {
+    let (_tmp, repo, home) = init_repo();
+    let spec = add_in_progress(&repo, &home, None);
+    let out = aida_env(
+        &repo,
+        &home,
+        &["claim", &spec],
+        &[("AIDA_RELAY_RUN", "nightly")],
+    );
+    assert!(
+        out.status.success(),
+        "claim: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let dir = repo.join(".aida").join("sessions");
+    let leases: Vec<toml::Value> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "toml"))
+        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+        .filter_map(|b| toml::from_str(&b).ok())
+        .filter(|v: &toml::Value| v.get("scope").and_then(|s| s.as_str()) == Some(spec.as_str()))
+        .collect();
+    assert_eq!(leases.len(), 1, "one claim lease: {leases:?}");
+    assert_eq!(
+        leases[0].get("driver").and_then(|d| d.as_str()),
+        Some("relay:nightly"),
+        "{:?}",
+        leases[0]
+    );
 }

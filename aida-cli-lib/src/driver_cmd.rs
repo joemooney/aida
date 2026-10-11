@@ -30,7 +30,10 @@ pub enum DriverCommand {
         /// specs carrying this tag resolve to this driver.
         #[clap(long)]
         tag: Option<String>,
-        /// The driver's own process id (defaults to the parent shell's pid).
+        /// The driver's own long-lived process id. Pass `--pid "$$"` from the
+        /// driver's loop: the parent of `aida` is a throwaway subshell when
+        /// called from `$(...)` or a pipe. Required for relays; other kinds
+        /// fall back to the parent process.
         #[clap(long)]
         pid: Option<u32>,
         /// Seat the driver occupies, if any.
@@ -96,7 +99,20 @@ pub(crate) fn handle_driver_command(cmd: &DriverCommand) -> Result<()> {
             json,
         } => {
             let kind = parse_kind(kind)?;
-            let pid = pid.unwrap_or_else(parent_pid);
+            // trace:STORY-1653 | ai:claude — a relay outlives every shell
+            // that registers it, so the parent pid is never right for it.
+            let pid = match (pid, kind) {
+                (Some(p), _) => *p,
+                (None, DriverKind::Relay) => anyhow::bail!(
+                    "a relay must pass its own pid: `aida driver register --run {run} --pid \"$$\"`"
+                ),
+                (None, _) => parent_pid(),
+            };
+            if pid <= 1 || pid > i32::MAX as u32 {
+                anyhow::bail!(
+                    "pid {pid} is not a usable driver process id; pass the driver's own pid with `--pid \"$$\"`"
+                );
+            }
             let reg = Registration {
                 kind,
                 id: run.trim().to_string(),

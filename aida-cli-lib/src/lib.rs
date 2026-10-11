@@ -69,13 +69,13 @@ mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
 mod db_block;
-// Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
 mod db_cmd;
 mod db_reconcile;
 mod decide_cmd;
 mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
+// Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
 mod driver_cmd;
 mod driver_view;
 // trace:STORY-1646 | ai:claude
