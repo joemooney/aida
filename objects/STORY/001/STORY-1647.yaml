@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:16.006176829Z
-modified_at: 2026-10-11T16:57:22.878794162Z
+modified_at: 2026-10-11T17:05:54.494106649Z
 req_type: Story
 tags:
 - dev-tooling
@@ -78,6 +78,12 @@ comments:
   content: 'FACTORY PLAN (day): Approach: new gate 0b in aida-core/templates/hooks/aida-pre-commit.sh (master; .git/hooks/pre-commit symlinks to it), placed before the AIDA_ALLOW_INTERMEDIATE bypass so only AIDA_ALLOW_PRIMARY_COMMIT=1 overrides it. Gate is inert unless <toplevel>/.aida/config.toml has [hooks] block_primary_commits = true (POSIX awk parse, no binary needed). When on: primary checkout = absolute --git-dir equals absolute --git-common-dir; protected branch = main plus origin/HEAD''s branch if set. Exempt silently: MERGE_HEAD present, rebase-merge/rebase-apply dir present, aida-store branch or .aida-store path, linked worktrees. Primary checkout + protected branch -> exit 1 with message naming ''aida worktree add <SPEC>'' and AIDA_ALLOW_PRIMARY_COMMIT=1. Primary checkout + other named branch -> one-line warning, allowed. Override -> note on stderr, remaining gates run, TASK-917 sentinel still written at the end. Files: hook master (+ make sync-templates mirrors), .aida/config.toml ([hooks] block_primary_commits = true), scripts/release.sh (operator release commit on main sets AIDA_ALLOW_PRIMARY_COMMIT=1 until TASK-1721 moves release to a PR), new tests/test_precommit_primary_checkout.sh wired into ci.yml next to the provenance hook tests. Named tests in that script: refused_on_main_primary, override_allows_and_writes_sentinel, merge_commit_allowed, rebase_replay_allowed, aida_store_branch_allowed, worktree_feature_branch_allowed_silently, primary_non_main_warns, gate_inert_without_opt_in. Risks: existing hook tests and Rust tests commit on main in temp repos (no opt-in config, so inert, which the inert test covers); release.sh commit on main (handled with override); cherry-pick/revert on main in primary are refused (not in the exemption list; override available). Acceptance: each criterion maps to one named case in the shell test; make check-templates for the template criterion.'
   created_at: 2026-10-11T16:57:22.878794162Z
   modified_at: 2026-10-11T16:57:22.878794162Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
+- id: 01a12bed-9b3e-7c43-ab8c-8c0796855c04
+  author: joe
+  content: 'FACTORY DRAFT: PR #2531 at 56e8260a603be671684c55276ce4014f0dc9ffd1'
+  created_at: 2026-10-11T17:05:54.494106649Z
+  modified_at: 2026-10-11T17:05:54.494106649Z
   session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8d-9452-7c42-bbf7-8075ff6da32f
