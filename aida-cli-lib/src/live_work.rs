@@ -235,13 +235,23 @@ pub(crate) fn try_auto_queue_pr_review(
 ) -> crate::AutoQueueOutcome {
     let outcome =
         crate::try_auto_queue_pr_review_unbumped(project_root, branch, session_id, origin);
+    bump_on_pr_open(project_root, branch, &outcome);
+    outcome
+}
+
+/// Bump the PR's specs only when the outcome says the PR is open: a review
+/// story was filed or already exists. Skips leave every status alone.
+pub(crate) fn bump_on_pr_open(
+    project_root: &Path,
+    branch: &str,
+    outcome: &crate::AutoQueueOutcome,
+) {
     if matches!(
         outcome.status,
         crate::AutoQueueStatus::Filed | crate::AutoQueueStatus::AlreadyExists
     ) {
         bump_pr_specs(project_root, branch, &outcome.covered_specs);
     }
-    outcome
 }
 
 /// Bump every spec an open PR carries. The store lives in the main checkout,
@@ -250,10 +260,7 @@ pub(crate) fn bump_pr_specs(project_root: &Path, branch: &str, covered_specs: &[
     let store_owner = if project_root.join(".aida-store").is_dir() {
         project_root.to_path_buf()
     } else {
-        match crate::find_main_worktree_root() {
-            Ok(root) => root,
-            Err(_) => return,
-        }
+        crate::main_worktree_root_from(project_root)
     };
     for spec in crate::pr_cmd::pr_open_bump_targets(None, branch, covered_specs) {
         bump_spec_in_progress(&store_owner, &spec, aida_core::conflict::PR_OPEN_AUTHOR);

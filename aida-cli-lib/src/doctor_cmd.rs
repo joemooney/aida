@@ -7308,17 +7308,29 @@ pub(crate) fn heal_doctor_spec_status(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
+    // BUG-1944: the snapshot is read-only. Each write goes through the
+    // per-spec atomic update, which re-reads the spec under the store lock and
+    // re-checks its status there, so the live-work probes (which may wait on
+    // git and the forge) never hold a stale whole-store copy that a save would
+    // write back over concurrent changes.
+    // trace:BUG-1944 | ai:claude
     let storage = Storage::new(project_root.join(".aida-store"));
-    let mut store = storage.load()?;
-    let current_scope_lease = list_leases(project_root)
-        .iter()
-        .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id));
+    let store_root = project_root.join(".aida-store");
+    let matching: Vec<aida_core::Requirement> = storage
+        .load()?
+        .requirements
+        .into_iter()
+        .filter(|req| req.spec_id.as_deref() == Some(finding.id.as_str()))
+        .collect();
+    let scope_lease_held = || {
+        list_leases(project_root)
+            .iter()
+            .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id))
+    };
+    let current_scope_lease = scope_lease_held();
     let mut action = None;
     let mut kept: Option<String> = None;
-    for req in &mut store.requirements {
-        if req.spec_id.as_deref() != Some(finding.id.as_str()) {
-            continue;
-        }
+    for req in &matching {
         if matches!(req.status, RequirementStatus::Approved)
             && finding.action.starts_with("bump spec to In Progress")
         {
@@ -7329,16 +7341,25 @@ pub(crate) fn heal_doctor_spec_status(
             if !current_scope_lease {
                 continue;
             }
-            // BUG-1637: an automated repair, recorded under the doctor's
-            // author so the BUG-1625 merge guard can see it.
-            // trace:BUG-1637 | ai:claude
-            aida_core::conflict::set_status_recorded(
-                req,
-                RequirementStatus::InProgress,
-                aida_core::conflict::DOCTOR_AUTHOR,
-            );
-            req.modified_at = chrono::Utc::now();
-            action = Some("bumped Approved spec to In Progress".to_string());
+            crate::status_write_race_seam(&store_root);
+            let mut applied = false;
+            storage.update_spec_atomically(req, |r| {
+                if matches!(r.status, RequirementStatus::Approved) {
+                    // BUG-1637: an automated repair, recorded under the
+                    // doctor's author so the BUG-1625 merge guard can see it.
+                    // trace:BUG-1637 | ai:claude
+                    aida_core::conflict::set_status_recorded(
+                        r,
+                        RequirementStatus::InProgress,
+                        aida_core::conflict::DOCTOR_AUTHOR,
+                    );
+                    r.modified_at = chrono::Utc::now();
+                    applied = true;
+                }
+            })?;
+            if applied {
+                action = Some("bumped Approved spec to In Progress".to_string());
+            }
         } else if matches!(req.status, RequirementStatus::InProgress)
             && finding.action.contains("no active lease")
         {
@@ -7355,21 +7376,31 @@ pub(crate) fn heal_doctor_spec_status(
                 kept = Some(why);
                 continue;
             }
-            // trace:BUG-1637 | ai:claude
-            aida_core::conflict::set_status_recorded(
-                req,
-                RequirementStatus::Approved,
-                aida_core::conflict::DOCTOR_AUTHOR,
-            );
-            req.modified_at = chrono::Utc::now();
-            action = Some(format!(
-                "reverted {} from In Progress to Approved (no active lease found)",
-                finding.id
-            ));
+            // The probes take time; a session may have taken the spec since.
+            if scope_lease_held() {
+                continue;
+            }
+            crate::status_write_race_seam(&store_root);
+            let mut applied = false;
+            storage.update_spec_atomically(req, |r| {
+                if matches!(r.status, RequirementStatus::InProgress) {
+                    // trace:BUG-1637 | ai:claude
+                    aida_core::conflict::set_status_recorded(
+                        r,
+                        RequirementStatus::Approved,
+                        aida_core::conflict::DOCTOR_AUTHOR,
+                    );
+                    r.modified_at = chrono::Utc::now();
+                    applied = true;
+                }
+            })?;
+            if applied {
+                action = Some(format!(
+                    "reverted {} from In Progress to Approved (no active lease found)",
+                    finding.id
+                ));
+            }
         }
-    }
-    if action.is_some() {
-        storage.save(&store)?;
     }
     let changed = action.is_some();
     // trace:BUG-1944 | ai:claude
