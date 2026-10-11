@@ -8,12 +8,12 @@ description: |
   Want: when docs/cli/** or the clap definitions change, check-ci-fast runs verify-manual.py's flags and completeness checks against an existing target/debug or target/release aida if present (warning if it is stale), or a static fast-tier variant parses --flag citations against cli.rs.
 
   Acceptance: re-introducing a citation of a hidden flag fails `make check-ci-fast` locally.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:23.618102809Z
-modified_at: 2026-10-11T07:48:15.800442576Z
+modified_at: 2026-10-11T13:26:58.872510017Z
 req_type: Bug
 tags:
 - ci
@@ -64,6 +64,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b25-2c38-7d33-8bcf-2c97116007e5
+  author: aida-session-start
+  timestamp: 2026-10-11T13:26:58.872509460Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
