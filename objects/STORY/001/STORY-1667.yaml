@@ -1,0 +1,47 @@
+id: 01a12c98-5687-7043-980c-ac3f72d1841a
+spec_id: STORY-1667
+agreed_id: STORY-1667
+title: Decision rows with Context / Chosen / Rejected-because / Evidence / Revisit-when, anchored from code by trace:DEC-N
+description: |
+  ## F2. Decision rows with "rejected because" and code anchors
+
+  **Seen:** this project's most expensive knowledge is negative.
+  - Polling for slots starved waiters.
+  - An inherited lock fd deadlocked.
+  - A queue lock had to be explicitly released.
+  - Exit code 200 collided with the slot-busy sentinel.
+
+  All of it lives in code comments. A rewrite deletes it.
+
+  **Proposal:**
+  - A decision row template with Context / Chosen / Rejected-because / Evidence /
+    Revisit-when.
+  - Code points at it with `trace:DEC-N`, so the reason is one hop away from the
+    line it protects.
+  - `aida show` on a story lists the decisions traced into its files.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:12:23.559489680Z
+modified_at: 2026-10-11T20:12:23.559489680Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
