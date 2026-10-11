@@ -16,7 +16,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/aida" <<'SH'
 #!/usr/bin/env bash
-[ "$1 $2" = "docs glossary" ] || { echo "stub: unexpected args: $*" >&2; exit 64; }
+[ "$*" = "docs glossary --format human" ] || { echo "stub: unexpected args: $*" >&2; exit 64; }
 D="${STUB_TEMPLATE_DIR:?}"
 printf '%s\n\n%s' "$(cat "$D/machinery-glossary.md")" "$(cat "$D/lifecycle-vocabulary.md")"
 SH

@@ -42,8 +42,10 @@ if ! command -v "$AIDA" >/dev/null 2>&1; then
   exit 1
 fi
 
-# `aida docs glossary` (no flags) emits both sections, machinery first.
-GLOSSARY="$("$AIDA" docs glossary)"
+# `aida docs glossary` (no section flags) emits both sections, machinery first.
+# Pin `--format human`: captured stdout otherwise defaults to TOON, which
+# appends a `cache:` footer that is not part of the glossary. trace:BUG-1950 | ai:claude
+GLOSSARY="$("$AIDA" docs glossary --format human)"
 
 if [ -z "$GLOSSARY" ]; then
   echo "error: 'aida docs glossary' produced no output" >&2
