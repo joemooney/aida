@@ -16,11 +16,12 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T07:11:27.409878390Z
+modified_at: 2026-10-11T07:11:55.427927621Z
 req_type: Bug
 tags:
 - papercut
 - shell-wrapper
+- triaged:night
 comments:
 - id: 01a129cd-5eb1-7650-962e-3bce4f0f5870
   author: night-fable
