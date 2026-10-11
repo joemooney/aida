@@ -202,5 +202,122 @@ pub struct Other {
         self.assertEqual(self.vm.main_static(files), 0)
 
 
+class VerifyManualSubcommandTest(unittest.TestCase):
+    """Cited subcommands must exist in the CLI. trace:BUG-1949 | ai:claude"""
+
+    # A fake CLI: `session` and `role` (with a nested `scope`) have verbs;
+    # `show` takes a positional, so it never rejects a word as a subcommand.
+    KNOWN = {
+        "session",
+        "session conversations",
+        "session resume",
+        "session prune",
+        "session gc",
+        "role",
+        "role scope",
+        "role scope set",
+        "role scope clear",
+        "role show",
+        "show",
+        "pr",
+    }
+    WITH_VERBS = {"session", "role", "role scope"}
+
+    def setUp(self):
+        self.vm = load_verify_manual()
+
+    def known(self, path):
+        return path in self.KNOWN
+
+    def unrecognized(self, path):
+        parent = path.rsplit(" ", 1)[0] if " " in path else ""
+        return parent in self.WITH_VERBS and path not in self.KNOWN
+
+    def _misses(self, lines):
+        with tempfile.TemporaryDirectory() as td:
+            chapter = Path(td) / "manual.md"
+            chapter.write_text("\n".join(lines) + "\n")
+            cites = self.vm.subcommand_citations([str(chapter)])
+        return [
+            (m["path"], m["line"])
+            for m in self.vm.subcommand_misses(cites, self.unrecognized, self.known)
+        ]
+
+    def test_subcommand_citations_flag_cut_session_verb(self):
+        # The original drift: a cut verb in a slash list, a `vs` bullet, an
+        # explicit backtick invocation and a fenced example all fail.
+        misses = self._misses(
+            [
+                "### `aida session`",
+                "Conversations (`conversations` / `resume` / `prune` / `forget`).",
+                "- `prune` vs `forget` — bulk vs one-by-id.",
+                "Run `aida session forget <id>` to drop one.",
+                "```bash",
+                "$ aida session forget abc",
+                "```",
+            ]
+        )
+        self.assertEqual(
+            misses,
+            [
+                ("session forget", 2),
+                ("session forget", 3),
+                ("session forget", 4),
+                ("session forget", 6),
+            ],
+        )
+
+    def test_subcommand_citations_extract_verb_lists(self):
+        # Real verbs, a nested `scope` list, positionals and PATH extensions pass.
+        misses = self._misses(
+            [
+                "### `aida session`",
+                "Conversations (`conversations` / `resume` / `prune`); cleanup is `gc`.",
+                "`aida show forget` reads a spec; `aida deploy --dry-run` is an extension.",
+                "### `aida role`",
+                "- `scope` (`set` / `show` / `clear`) — standing filter.",
+                "Roles (`advisor` / `implementer` / `reviewer`) are names, not verbs.",
+            ]
+        )
+        self.assertEqual(misses, [])
+
+    def test_subcommand_misses_reports_unrecognized_only(self):
+        # A minority-known list is not a verb list; a top-level command cited
+        # beside a subcommand is a cross-reference; a nested miss is reported.
+        misses = self._misses(
+            [
+                "### `aida session`",
+                "Reads (`list` / `search` / `resume`) are graph reads.",
+                "The `pr` / `resume` / `prune` verbs.",
+                "### `aida role`",
+                "- `scope` (`set` / `clear` / `wipe`) — standing filter.",
+                "## Notes",
+                "`set` / `wipe` outside a command section is not a citation.",
+            ]
+        )
+        self.assertEqual(misses, [("role scope wipe", 5)])
+
+    def test_subcommand_unrecognized_reads_clap_error(self):
+        class Result:
+            def __init__(self, stderr):
+                self.stderr = stderr
+                self.stdout = ""
+
+        def fake_run(args, capture_output, text, timeout=None):
+            if args == ["aida", "session", "forget", "--help"]:
+                return Result("error: unrecognized subcommand 'forget'\n")
+            return Result("")
+
+        old_run = self.vm.subprocess.run
+        self.vm.subprocess.run = fake_run
+        self.vm.subcommand_unrecognized.cache_clear()
+        try:
+            self.assertTrue(self.vm.subcommand_unrecognized("session forget"))
+            self.assertFalse(self.vm.subcommand_unrecognized("session prune"))
+        finally:
+            self.vm.subprocess.run = old_run
+            self.vm.subcommand_unrecognized.cache_clear()
+
+
 if __name__ == "__main__":
     unittest.main()
