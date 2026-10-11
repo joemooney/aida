@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-10T19:08:20.280577712Z
+modified_at: 2026-10-11T07:01:02.229905042Z
 req_type: Bug
 tags:
 - atomicity
@@ -4115,6 +4115,42 @@ comments:
   created_at: 2026-10-10T19:08:20.280577712Z
   modified_at: 2026-10-10T19:08:20.280577712Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a129c3-d495-7372-b56f-89bb46f04375
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided; authority-class, needs a short NEW sketch + independent advisor signoff per the 2026-10-10 scope ruling. This comment is the candidate one-page sketch.
+
+    ## Approach
+    `handle_queue_work` (aida-cli-lib/src/queue_cmd.rs:10687) already calls the read-only `seat_authority::validate_child_delegation(&project_root, &canonical_role_name(&role))` at queue_cmd.rs:10973, after `infer_queue_work_role` (10950) and `preflight_queue_work_branch` (10968) and before `storage.queue_add` (10984), calibration writes (11012+), the scope-conflict sweep / `force_cleanup_lease` (11651, 11744), `session_start` (12082: status bump, worktree, lease) and `write_queue_work_manifest` (12236). The gap is in the guard condition: the check is skipped when `no_launch || no_human` (10972) and when `dry_run`, so `--no-human` (the drain's own launch mode) and `--no-launch` reach `queue_add`, `session_start` and the manifest with no delegation check at all. The narrow fix: run the check unconditionally for every non-`dry_run` path that will mutate, and make its refusal wording distinguish queue selection (`pickup role: X (origin)`, 10956) from delegation (`the active <seat> grant does not delegate <role>`). Inputs read: the active launcher grant (`seat_authority::current_grant`), its `delegable_seats`, the routed child role from `infer_queue_work_role`, and `roster_allows(principal, role)` via `aida_core::team::TeamRoster`. No new state, no CommittedDispatch, no transport.
+
+    ## Files and functions
+    - aida-cli-lib/src/queue_cmd.rs:10972 — drop `&& !no_human` (and decide `--no-launch`: it still runs `session_start`, so it must also be gated); keep `dry_run` exempt.
+    - aida-cli-lib/src/queue_cmd.rs:10956-10963 — when the role came from queue routing and delegation fails, append: "queue routing selected `<role>`; your `<seat>` grant cannot launch it — pass `--role <delegable>` or re-enter with `--delegate-seat <role>`" (advisor/product/integrator launchers get the explicit-selector line; implementer launchers get the refusal only).
+    - aida-cli-lib/src/seat_authority.rs:211 `validate_child_delegation` — unchanged API; only the error text gains the queue-vs-delegation prefix supplied by the caller.
+    - aida-cli-lib/src/tests/ (new file bug_1808_delegation_preflight_tests.rs) — snapshot helper: hash of `.aida-store/objects`, `queue_list`, `.aida/leases`, `git worktree list --porcelain`, grant dir, manifest dir.
+
+    ## Tests (named)
+    - implementer_grant_launching_implementer_routed_work_is_refused — grant seat=implementer, delegable_seats=[], queued entry for_role=implementer → `handle_queue_work` errs before `session_start`.
+    - refusal_leaves_store_queue_lease_worktree_manifest_byte_identical — snapshot before/after; assert equal, including the `--no-human` and `--no-launch` paths.
+    - advisor_grant_without_delegation_gets_explicit_role_selector_hint — message names `--role`/`--delegate-seat`, not "no items routed".
+    - delegation_refusal_text_is_distinct_from_queue_selection_text — the two diagnostics never share a prefix.
+    - mutation witness: remove the guard → refusal test fails → restore (record in PR).
+
+    ## Risks
+    - `--no-human` is the drain's launch path; an unconditional check may refuse drains whose grant has no delegable seats. Mitigation: a fixture that asserts the orchestrator's `--delegate-seat implementer` grant still passes.
+    - `dry_run` must stay exempt or `aida queue work --dry-run` starts refusing previews.
+
+    ## Acceptance check
+    - "read-only check before any mutation" → code order: check precedes queue_add (10984) and session_start (12082); snapshot test.
+    - "refusal leaves state unchanged" → byte-identical snapshot test.
+    - "implementer launching implementer-routed work refused" → named regression test.
+    - "diagnostics distinguish queue selection from delegation" → text test.
+
+    ## Gate before implementation
+    Independent advisor signoff on this sketch (one page, above); then guided lane with Joe; operator merges. Do NOT build on `origin/bug-1808-delegation-publication` (parked under EPIC-76).
+  created_at: 2026-10-11T07:01:02.229905042Z
+  modified_at: 2026-10-11T07:01:02.229905042Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
