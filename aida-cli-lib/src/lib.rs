@@ -158,6 +158,7 @@ use store_push_pull::*;
 use tui_entry::*;
 use usage_mcp_helpers::*;
 use zen_cmd::*;
+use zen_drive_root::*;
 // trace:TASK-967 | ai:claude
 mod drain_summary;
 // trace:STORY-1415 | ai:claude
@@ -433,6 +434,7 @@ mod worktree_scope_gate;
 mod zen;
 // trace:STORY-721 | ai:claude — `aida zen <spec>` autonomous implement+ship drive.
 mod zen_drive;
+mod zen_drive_root;
 
 use anyhow::{Context, Result};
 use clap::Parser;

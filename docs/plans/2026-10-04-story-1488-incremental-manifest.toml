@@ -500,3 +500,29 @@ items = [
   "fn handle_why_plain",
   "mod why_plain_tests",
 ]
+
+[module.zen_drive_root]
+purpose = "Drafted-thought preview, `aida do`/zen drive loop and zen auto-approve (STORY-1488 slice 1)"
+items = [
+  "fn extract_acceptance_section",
+  "fn drafted_lead_prose",
+  "fn drafted_acceptance_bullets",
+  "fn render_zen_dry_run_draft",
+  "fn render_drafted_thought_preview",
+  "fn is_plan_commit_subject",
+  "fn extract_spec_ids_from_commit",
+  "fn run_do_drive",
+  "fn do_micro_groom_mode",
+  "fn run_zen_gate_json",
+  "fn apply_drive_vendor_override",
+  "fn run_zen_drive",
+  "fn zen_file_thought_as_draft",
+  "fn file_drafted_thought",
+  "fn zen_try_ai_draft",
+  "fn load_autopilot_envelope",
+  "fn zen_auto_approve",
+  "fn record_autopilot_execution",
+  "fn zen_surface_to_advisor",
+  "fn spec_is_under_specified",
+  "mod bug708_under_specified_tests",
+]
