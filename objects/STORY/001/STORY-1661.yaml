@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-11T08:08:32.315552376Z
+modified_at: 2026-10-11T13:40:01.450391004Z
 req_type: Story
 tags:
 - history
@@ -57,6 +57,43 @@ comments:
   created_at: 2026-10-11T08:08:32.315552376Z
   modified_at: 2026-10-11T08:08:32.315552376Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b31-1d2a-7191-9433-04df4917db2d
+  author: joe
+  content: |-
+    FACTORY PLAN (night): plan only. The advisor marked this an architecture slice (approval comment 01:10), so no worktree or code yet. It needs a design sketch plus advisor signoff on the trigger and spawn model below before implementation.
+
+    Grounding (origin/main 4cced67be8)
+    - history_cache.rs: FLOW_CATCH_UP_CAP=16 (:122); serve_flow (:2040ff) does the bounded inline catch-up and otherwise misses as IndexMiss::Behind. catch_up_guarded (:1327) increments CATCH_UP_FAILURES_KEY before each budgeted run and refuses at CATCH_UP_STALL_LIMIT; finish_append clears it on a kept chunk (:1507). The index has its own lock, IndexLock on `<db>.lock` (:350ff). It never opens the requirements cache and never takes the store write lock (module doc :11).
+    - STORY-1484/TASK-1527 detached pattern: aida-core/src/db/refresh_worker.rs spawn_detached_worker (:109; setsid/DETACHED_PROCESS); cache_cmd.rs handle_cache_refresh `--worker` (runtime-cap watchdog, explicit --store/--cache) and `--if-requested` (schedule tick runs the work inline); maintenance_schedule.rs:2757 registers that tick.
+
+    Proposed design (needs signoff)
+    1. New focused module aida-cli-lib/src/history_indexer.rs, so nothing lands in lib_part*.rs:
+       - `run_tick(store) -> TickOutcome {Disabled, NotBuilt, Busy, UpToDate, Advanced{appended, lag}}`. If cache_enabled() is false, return Disabled. If the db file is missing, return NotBuilt: never create the index off-path, since serve_flow also refuses to. Otherwise IndexLock::try_acquire, and if the lock is held, return Busy with exit 0 (single-flight). Then run chunked budgeted catch-up in a loop through a new pub(crate) HistoryCache entry, `catch_up_background(store, deadline)`, until lag==0 or the runtime deadline passes.
+       - catch_up_background has to bypass the stall refusal but keep the counter semantics: a kept chunk already clears CATCH_UP_FAILURES_KEY via finish_append, which re-enables inline catch-up (acceptance 5). It must not increment the counter itself, so a killed background worker can't stall foreground queries. That is the BUG-1942 coordination point.
+    2. Triggers. Pick one or both; this is the decision for signoff:
+       (a) Schedule tick: a new maintenance_schedule entry `cache refresh --history --if-behind` next to the existing `--if-requested` tick. It runs inline in the tick process, so nothing new is detached. This is the lowest-risk option and satisfies "within one tick".
+       (b) Post-commit trigger: after a store commit in the CLI writer path, call spawn_detached_worker-style `aida cache refresh --history --worker --store <p>` with a runtime-cap watchdog. Only spawn when lag > FLOW_CATCH_UP_CAP, because smaller gaps are already handled inline. This spawns detached processes from hot write paths, which is the part that most needs the advisor's call.
+       Recommendation: ship (a) first as slice 1 and leave (b) as a follow-up slice behind a config knob.
+    3. CLI: add `--history` (and `--if-behind`) to CacheCommand::Refresh in cli.rs/cache_cmd.rs, or a new `cache refresh-history` subcommand. Developer/operator-facing prose only, with no SPEC IDs.
+    4. Lock ordering: the history worker takes only IndexLock and never RefreshLock or the store write lock, so it can't contend with the requirements cache refresh. Add a doc comment that states this invariant.
+
+    Named tests (history_indexer.rs #[cfg(test)], mirroring the history_cache.rs fixtures)
+    - tick_after_200_commits_reaches_zero_lag (with the chunk override, so it loops). Then serve_flow answers with no inline catch-up beyond the cap.
+    - tick_is_single_flight_when_index_lock_held (holds IndexLock and expects Busy, with updated_at unchanged)
+    - tick_and_cache_refresh_run_concurrently_without_deadlock (holds RefreshLock while running the tick, which completes)
+    - tick_disabled_spawns_nothing (cache_enabled false gives Disabled and no db file created; the schedule entry is gated the same way)
+    - background_kept_chunk_clears_stall_counter (seeds CATCH_UP_FAILURES_KEY=LIMIT; after the tick it is cleared and inline serve_flow catches up again)
+    - tick_does_not_build_missing_index
+
+    Risks
+    - Overlaps BUG-1942, which owns the stall/cool-down semantics, and TASK-1717 (writer-lock serialization). Avoid the history.rs digest sorting region that sibling draft PR #2517 (BUG-1945) touches; this plan doesn't need history.rs.
+    - Option (b) detached spawns on commit: process churn, Windows, and test isolation (the env must suppress spawning under cargo test).
+    - Can't be compiled locally under factory rules, so the HistoryCache internals touched must stay minimal.
+
+    Acceptance check: the named tests on CI, plus a manual run: 200 `aida edit`s, then one tick, then `aida cache status --json` shows history lag 0 and bare `aida history` shows the flow.
+  created_at: 2026-10-11T13:40:01.450391004Z
+  modified_at: 2026-10-11T13:40:01.450391004Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a12a01-9e8b-7502-ae6d-15a3366a2b21
   author: joe
