@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-10T21:41:19.203048530Z
+modified_at: 2026-10-11T07:17:12.664406628Z
 req_type: Bug
 tags:
 - contained
@@ -33,6 +33,38 @@ relationships:
   target_id: 01a127c3-1763-75c2-b672-1b09af6c9250
   created_at: 2026-10-10T21:41:19.203045438Z
   created_by: joe
+comments:
+- id: 01a129d2-a358-7902-9550-58c663dfb282
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the contained session's sandbox write boundary excludes the main checkout's store and cache, and the logs show the AIDA CLI failing on `store-write.lock` and the cache from inside the sandbox; one correction — the store is resolved, not symlinked.
+
+    Problem
+    Pool/lease worktrees have no `.aida-store` of their own; the CLI resolves the store and cache to the main checkout, which sits outside the contained session's writable area. Skills' mandatory writes (claim, comment, queue done) fail, and a status change can print an error while the card still shows the new status.
+
+    Separate from BUG-1928 (see its comment): that bug is the Claude permission-rule layer for Edit/Write; this one is the OS sandbox filesystem boundary that the `aida` binary (spawned via Bash) hits. Fix after 1928 so the boundary is extended in the same mechanism 1928 lands.
+
+    Evidence path (verified on main + logs)
+    - `ls -la /home/joe/ai/aida-pool-aida-relay-0/.aida-store` → does not exist (not a symlink); `.aida/agents` is a symlink to the main checkout. Store resolution: aida-core/src/store_locate.rs (:204 attached orphan-store worktree, resolved through symlinks).
+    - Logs /home/joe/ai/aida-relay/.aida/headless-logs/{bug-81,bug-83,story-85}-*.jsonl: "store-write.lock ... isn't writable from this sandbox" (bug-81 x2, story-85 x2); "not writable, so it cannot be migrated or rebuilt (reads still work)" in all three (cache).
+    - aida-cli-lib/src/session.rs:2265-2289 — the `sandbox` block sets enabled/failIfUnavailable/network only; no filesystem allow entries, so the sandbox default (cwd-only writes) applies.
+    - Partial-success claim ("card showed In Progress although it errored") not reproduced tonight — needs the edit path checked: the store write may succeed before the cache refresh fails.
+
+    Acceptance criteria
+    - A contained session can run `aida edit <ID> --status in-progress`, `aida comment add`, `aida queue done`: integration test in a fixture repo with a pool worktree asserts all three succeed and the main checkout sees the results (`aida show <ID>` from main).
+    - The writable set added is minimal and explicit: `<main>/.aida-store/**` and `<main>/.aida/cache.db*` (plus the lock file), nothing else in the main checkout; a unit test on the settings JSON asserts exactly those entries.
+    - Alternative accepted: a broker (store writes performed by the orchestrator outside the sandbox) — if chosen, the same integration test must pass.
+    - If a store write fails, the command exits non-zero and prints one error; the status is not shown as changed (unit test: cache unwritable → edit fails atomically or reports exactly what persisted).
+    - `aida doctor check permission-posture` reports when contained mode would exclude the resolved store/cache paths.
+
+    Scope / non-goals
+    - Not a redesign of writable/read-only roots (STORY-1486 is the general design; this is the minimal fix that unblocks contained drains).
+    - related:BUG-1928 related:STORY-567 related:STORY-1486 related:STORY-1127
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:12.664406628Z
+  modified_at: 2026-10-11T07:17:12.664406628Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
