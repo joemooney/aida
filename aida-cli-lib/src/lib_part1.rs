@@ -12749,6 +12749,26 @@ pub(crate) fn group_spec_id_collisions(rows: Vec<(String, Uuid, String)>) -> Vec
         .collect()
 }
 
+/// [`ensure_no_spec_id_collisions`] for a caller holding the store write
+/// lock: a full, strict scan of the canonical objects (an unreadable or
+/// unparsable object is an error, not a skip), never the cache. Refreshing
+/// the cache would mean waiting on the cache lock while holding the store
+/// lock, and a stale cache could miss a duplicate the rebase just brought in.
+// trace:TASK-1717 | ai:claude
+pub(crate) fn ensure_no_spec_id_collisions_canonical(store_path: &std::path::Path) -> Result<()> {
+    let mut store = RequirementsStore::default();
+    store.requirements = aida_core::git_ops::load_requirements_strict(store_path)
+        .context("cannot check for duplicate ids: the canonical store did not read completely")?;
+    let collisions = find_spec_id_collisions(&store);
+    if collisions.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{}",
+        spec_id_collision_recovery_message(&collisions, store_path)
+    );
+}
+
 pub(crate) fn ensure_no_spec_id_collisions(store_path: &std::path::Path) -> Result<()> {
     // BUG-701: on the hot `aida add` path this ran a full O(n) `GitBackend::load()`
     // (re-parsing every spec YAML) purely to detect duplicate spec_ids — ~2s and
@@ -12822,13 +12842,25 @@ pub(crate) fn pull_store_before_id_allocation(
         return ensure_no_spec_id_collisions(store_path);
     }
 
-    if git_ops::has_changes(store_path).unwrap_or(false) {
-        let _ = git_ops::add(store_path, &["."]);
-        let _ = git_ops::commit(
-            store_path,
-            "chore: sync pending changes before id allocation",
-        );
-    }
+    // trace:TASK-1717 | ai:claude — the pending commit is a store-writer
+    // transaction of its own; the commit is kept whatever the network does.
+    // A failed stage/commit (a refusing hook) stops the allocation with the
+    // original error; the pending changes stay as they were.
+    aida_core::db::with_store_write_lock(store_path, || {
+        if git_ops::has_changes_checked(store_path)
+            .context("cannot read the store status before id allocation")?
+        {
+            git_ops::add(store_path, &["."])
+                .and_then(|_| {
+                    git_ops::commit(
+                        store_path,
+                        "chore: sync pending changes before id allocation",
+                    )
+                })
+                .context("could not commit pending store changes before id allocation")?;
+        }
+        Ok(())
+    })?;
 
     let cfg = read_store_allocation_config(project_root)?;
     let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
@@ -12872,8 +12904,16 @@ pub(crate) fn pull_store_before_id_allocation(
     }
 
     for attempt in 0..cfg.retry_max {
-        match git_ops::pull_rebase(store_path, "origin", &branch) {
-            Ok(()) => return ensure_no_spec_id_collisions(store_path),
+        // trace:TASK-1717 | ai:claude — each attempt's rebase, its own
+        // cleanup and the collision re-read of the result share one lock
+        // window, so the allocator never starts from a store another writer
+        // changed between the pull and the check.
+        let pulled = aida_core::db::with_store_write_lock(store_path, || {
+            git_ops::pull_rebase(store_path, "origin", &branch)?;
+            Ok(ensure_no_spec_id_collisions_canonical(store_path))
+        });
+        match pulled {
+            Ok(checked) => return checked,
             Err(e) if attempt + 1 < cfg.retry_max => {
                 eprintln!(
                     "{} store allocation pull failed ({}) — retrying ({}/{})",
@@ -12916,10 +12956,18 @@ pub(crate) fn push_store_after_id_allocation(
     }
 
     let cfg = read_store_allocation_config(project_root)?;
-    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    ensure_no_spec_id_collisions(store_path)?;
+    // trace:TASK-1717 | ai:claude — capture the exact commit to publish under
+    // the store write lock, push it by SHA outside the lock, and on rejection
+    // rebase the CURRENT store (keeping commits other writers made meanwhile)
+    // under a fresh lock window before capturing the next SHA.
+    let (branch, mut sha) = aida_core::db::with_store_write_lock(store_path, || {
+        let branch =
+            git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+        Ok((branch, git_ops::head_sha(store_path)?))
+    })?;
     for attempt in 0..cfg.retry_max {
-        ensure_no_spec_id_collisions(store_path)?;
-        match git_ops::push(store_path, "origin", &branch) {
+        match git_ops::push_exact(store_path, "origin", &sha, &branch) {
             Ok(true) => return Ok(()),
             Ok(false) if attempt + 1 < cfg.retry_max => {
                 eprintln!(
@@ -12929,8 +12977,11 @@ pub(crate) fn push_store_after_id_allocation(
                     attempt + 1,
                     cfg.retry_max
                 );
-                git_ops::pull_rebase(store_path, "origin", &branch)?;
-                ensure_no_spec_id_collisions(store_path)?;
+                sha = aida_core::db::with_store_write_lock(store_path, || {
+                    git_ops::pull_rebase(store_path, "origin", &branch)?;
+                    ensure_no_spec_id_collisions_canonical(store_path)?;
+                    git_ops::head_sha(store_path)
+                })?;
             }
             Ok(false) => {
                 anyhow::bail!(

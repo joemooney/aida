@@ -39,6 +39,7 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
     let output = Command::new("git")
         .current_dir(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
+        .args(transaction_git_config())
         .args(args)
         .output()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
@@ -48,6 +49,23 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
     })
+}
+
+/// `-c` options for a git command run inside a store-writer transaction:
+/// no automatic maintenance. `git commit`, `fetch`, `merge` and `rebase`
+/// otherwise start `maintenance --auto` (or `gc --auto`), which would run
+/// optional, possibly detached maintenance and its `pre-auto-gc` hook while
+/// the store write lock is held. Store maintenance runs after the
+/// transaction instead (`opportunistic_store_gc`). Empty when this thread
+/// holds no store write lock. The settings reach child git processes
+/// through `GIT_CONFIG_PARAMETERS`.
+// trace:TASK-1717 | ai:claude
+pub fn transaction_git_config() -> &'static [&'static str] {
+    if crate::db::any_store_write_lock_held() {
+        &["-c", "maintenance.auto=false", "-c", "gc.auto=0"]
+    } else {
+        &[]
+    }
 }
 
 /// Check if a directory is a git repository.
@@ -290,6 +308,35 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
         crate::external_tool_output::GIT_PUSH_REJECTED,
     ) {
         Ok(false) // push rejected — caller should pull and retry
+    } else {
+        anyhow::bail!("git push failed: {}", result.stderr);
+    }
+}
+
+/// Push exactly commit `sha` to `remote`'s `branch` (`<sha>:refs/heads/<branch>`).
+/// Returns true on success, false if rejected (non-fast-forward), like
+/// [`push`]. Store writers capture `sha` under the store write lock and push
+/// it after releasing the lock, so a later local commit is never published
+/// by accident. Never call this while holding a store write lock: the push
+/// runs hooks and network I/O.
+// trace:TASK-1717 | ai:claude
+#[cfg(feature = "native")]
+pub fn push_exact(repo: &Path, remote: &str, sha: &str, branch: &str) -> Result<bool> {
+    // external-prose-classifier: git_ops::push_exact
+    anyhow::ensure!(
+        !crate::db::any_store_write_lock_held(),
+        "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
+    );
+    reject_option_like("branch", branch)?;
+    let refspec = format!("{sha}:refs/heads/{branch}");
+    let result = git(repo, &["push", "--end-of-options", remote, &refspec])?;
+    if result.success {
+        Ok(true)
+    } else if crate::external_tool_output::contains_any_case_insensitive(
+        &result.stderr,
+        crate::external_tool_output::GIT_PUSH_REJECTED,
+    ) {
+        Ok(false)
     } else {
         anyhow::bail!("git push failed: {}", result.stderr);
     }
@@ -1302,6 +1349,22 @@ pub fn current_branch(repo: &Path) -> Result<String> {
 /// Check if the working tree has uncommitted changes.
 pub fn has_changes(repo: &Path) -> Result<bool> {
     let result = git(repo, &["status", "--porcelain"])?;
+    Ok(!result.stdout.is_empty())
+}
+
+/// [`has_changes`] for a store writer deciding whether to stage, commit or
+/// publish: a `git status` that fails (unreadable index, corrupt repository)
+/// is an error carrying git's stderr, never "clean". [`has_changes`] keeps
+/// its tolerant contract for its other callers.
+// trace:TASK-1717 | ai:claude
+pub fn has_changes_checked(repo: &Path) -> Result<bool> {
+    let result = git(repo, &["status", "--porcelain"])?;
+    anyhow::ensure!(
+        result.success,
+        "git status failed in {}: {}",
+        repo.display(),
+        result.stderr.trim()
+    );
     Ok(!result.stdout.is_empty())
 }
 
@@ -3618,7 +3681,378 @@ pub fn collect_taken_short_ids(
     taken
 }
 
+/// Hooks git can run while an AIDA command holds the store write lock:
+/// commit, rebase, merge and ref-update hooks. Push hooks are excluded:
+/// every store push runs after the lock is released.
+// trace:TASK-1717 | ai:claude
+const IN_TRANSACTION_HOOKS: &[&str] = &[
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-rebase",
+    "post-rewrite",
+    "post-checkout",
+    "post-merge",
+    "pre-merge-commit",
+    "reference-transaction",
+    "pre-auto-gc",
+];
+
+/// Refuse, before a store-writer transaction changes anything, a hook
+/// profile that can call back into an `aida` store writer. Git runs these
+/// hooks while the transaction holds the store write lock, and the lock does
+/// not pass to child processes, so a hook that runs `aida edit` (or anything
+/// else that takes the lock) would wait for its own parent until timeout.
+///
+/// Supported installed profile (`classify_hook`), keyed by the git
+/// hook name to the template `aida init` installs under that name:
+/// - the template bytes themselves (a copy, or a symlink to the template:
+///   metadata and reads follow links);
+/// - the copy `aida init`/`aida scaffold apply` writes, i.e. the template
+///   with the two `# AIDA Generated: v… | checksum:…` / `# To customize…`
+///   lines after the shebang, under any header version (the header confers
+///   nothing; only the executable body is compared);
+/// - custom hooks whose only `aida` uses are `aida internal ...` (dispatched
+///   before any store is opened) or a `command -v`/`which`/`type` probe whose
+///   result is not run; quoted echo/printf prose and assigned paths are data.
+///
+/// Version-drift policy: a hook carrying the generated header whose body is
+/// not this build's template for that name (older or newer scaffold, or
+/// edited after install) is refused before any effect with guidance to run
+/// `aida scaffold apply`; it is never overwritten or run as supported. A
+/// shipped template installed under a different hook name is not a shipped
+/// hook (`aida-track-commits.sh` as post-commit runs store writers).
+///
+/// A hook that sources `.aida/commit-config` (the shipped commit-msg does)
+/// needs that file to be plain `NAME=value` assignments: anything else is
+/// executable shell this check cannot classify. Non-executable hooks are
+/// skipped (git ignores them). Residual limits, by design (no shell parser,
+/// hooks are never executed to classify them): `$(command -v aida) edit`
+/// is caught, but quoting tricks, sourced scripts, `run-parts` and hook
+/// managers are not; an undetected reentry degrades to the store lock
+/// timeout with a propagated error, not a deadlock.
+// trace:TASK-1717 | ai:claude
+pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
+    if !is_git_repo(store) {
+        return Ok(());
+    }
+    let out = git(store, &["rev-parse", "--git-path", "hooks"])?;
+    anyhow::ensure!(out.success, "locate store hooks failed: {}", out.stderr);
+    let dir = if Path::new(&out.stdout).is_absolute() {
+        PathBuf::from(&out.stdout)
+    } else {
+        store.join(&out.stdout)
+    };
+    let mut sources_config = false;
+    for name in IN_TRANSACTION_HOOKS {
+        let path = dir.join(name);
+        let meta = match std::fs::metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "refusing AIDA store write: cannot inspect the `{name}` hook {}",
+                        path.display()
+                    )
+                })
+            }
+        };
+        if !meta.is_file() || !is_executable(&meta) {
+            continue;
+        }
+        // TASK-346: read_atomic on a hook `aida scaffold apply` may be
+        // replacing concurrently.
+        let body = crate::read_atomic(&path).with_context(|| {
+            format!(
+                "refusing AIDA store write: cannot read the `{name}` hook {}",
+                path.display()
+            )
+        })?;
+        if body.contains(".aida/commit-config") {
+            sources_config = true;
+        }
+        match classify_hook(name, &body) {
+            HookKind::Shipped => continue,
+            HookKind::OtherAidaGenerated => anyhow::bail!(
+                "refusing AIDA store write: the `{name}` hook ({}) is an AIDA-generated hook whose body is not \
+                 this aida build's shipped `{name}` hook (installed by another AIDA version, or edited after \
+                 install). Git runs it while this command holds the store write lock, and its safety there is \
+                 not established. Nothing was changed. Run `aida scaffold apply` (or `aida init --force`) to \
+                 install this build's `{name}` hook; if you changed it on purpose, remove its two \
+                 `# AIDA Generated` / `# To customize` header lines so it is checked as a custom hook.",
+                path.display()
+            ),
+            HookKind::Custom => {}
+        }
+        if let Some(line) = aida_writer_call(&body) {
+            anyhow::bail!(
+                "refusing AIDA store write: the `{name}` hook ({}) runs `aida` (`{line}`) and is not a shipped AIDA hook. \
+                 Git runs it while this command holds the store write lock, so an aida write from it would wait for this \
+                 command until it times out. Nothing was changed. Use the shipped AIDA hook, limit the hook to \
+                 `aida internal ...`, or move the call out of the hook.",
+                path.display()
+            );
+        }
+    }
+    if sources_config {
+        let config = store.join(".aida").join("commit-config");
+        // TASK-346: read_atomic, the scaffolder may be rewriting it.
+        match crate::read_atomic(&config) {
+            Ok(body) => {
+                if let Some(line) = body.lines().find(|l| !is_literal_config_line(l)) {
+                    anyhow::bail!(
+                        "refusing AIDA store write: {} is sourced as shell by the commit-msg hook and is not plain \
+                         `NAME=value` settings (`{}`). Git runs that hook while this command holds the store write \
+                         lock, and arbitrary shell there cannot be shown not to call back into aida. Nothing was \
+                         changed. Keep only `NAME=value` lines in it.",
+                        config.display(),
+                        line.trim()
+                    );
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "refusing AIDA store write: cannot read {}",
+                        config.display()
+                    )
+                })
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn is_executable(meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_meta: &std::fs::Metadata) -> bool {
+    true
+}
+
+/// The shipped template each git hook name may carry: `aida init` writes
+/// the first four into `.git/hooks/` (with a generated header); the
+/// agent-skills sync hook is installed for the three checkout hooks in the
+/// AIDA checkout itself. A template is supported only under its own name.
+// trace:TASK-1717 | ai:claude
+const SHIPPED_HOOKS: &[(&str, &str)] = &[
+    ("pre-commit", "hooks/aida-pre-commit.sh"),
+    ("post-commit", "hooks/aida-post-commit.sh"),
+    ("commit-msg", "hooks/aida-commit-msg"),
+    ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+    ("post-rewrite", "hooks/aida-sync-agent-skills.sh"),
+    ("post-checkout", "hooks/aida-sync-agent-skills.sh"),
+    ("post-merge", "hooks/aida-sync-agent-skills.sh"),
+];
+
+#[derive(Debug, PartialEq, Eq)]
+enum HookKind {
+    /// This build's shipped hook for that name, bare or as `aida init`
+    /// wrote it (generated header after the shebang, any header version).
+    Shipped,
+    /// Carries the AIDA generated header but its body is not this build's
+    /// shipped hook for that name: another version, or edited.
+    OtherAidaGenerated,
+    /// Anything else: checked by [`aida_writer_call`].
+    Custom,
+}
+
+// trace:TASK-1717 | ai:claude
+fn classify_hook(name: &str, body: &str) -> HookKind {
+    let (generated, unwrapped) = strip_generated_header(body);
+    let shipped = SHIPPED_HOOKS
+        .iter()
+        .filter(|(hook, _)| *hook == name)
+        .filter_map(|(_, key)| crate::templates::EMBEDDED_TEMPLATES.get(key))
+        .any(|tpl| tpl.trim_end() == unwrapped.trim_end());
+    match (shipped, generated) {
+        (true, _) => HookKind::Shipped,
+        (false, true) => HookKind::OtherAidaGenerated,
+        (false, false) => HookKind::Custom,
+    }
+}
+
+/// Remove exactly the two header lines `wrap_with_aida_header` puts after
+/// the shebang (`# AIDA Generated: v… | checksum:…` and `# To customize: …`).
+/// Returns whether they were present and the hook with them removed. The
+/// header's version and checksum confer nothing: only the remaining body is
+/// compared with a template.
+fn strip_generated_header(body: &str) -> (bool, String) {
+    let (shebang, rest) = if body.starts_with("#!") {
+        let split = body.find('\n').map(|nl| nl + 1).unwrap_or(body.len());
+        body.split_at(split)
+    } else {
+        ("", body)
+    };
+    let mut lines = rest.splitn(3, '\n');
+    let (Some(first), Some(second)) = (lines.next(), lines.next()) else {
+        return (false, body.to_string());
+    };
+    let generated = first.starts_with("# AIDA Generated: v")
+        && first.contains(" | checksum:")
+        && second == "# To customize: copy this file and modify the copy";
+    if !generated {
+        return (false, body.to_string());
+    }
+    (true, format!("{shebang}{}", lines.next().unwrap_or("")))
+}
+
+/// The first line of a hook that invokes `aida` as anything other than
+/// `aida internal ...` or a `command -v` / `which` / `type` probe. Comment
+/// lines are ignored; a word counts as the `aida` command when it is a whole
+/// word or a path ending in `/aida`, followed by whitespace, a quote, a shell
+/// operator or the end of the line. `$AIDA_BIN` counts as an invocation.
+// trace:TASK-1717 | ai:claude
+fn aida_writer_call(body: &str) -> Option<String> {
+    for raw in body.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.contains("AIDA_BIN") {
+            return Some(line.to_string());
+        }
+        let bytes = line.as_bytes();
+        let mut from = 0;
+        while let Some(off) = line[from..].find("aida") {
+            let at = from + off;
+            let end = at + 4;
+            from = end;
+            let prev_ok = at == 0 || {
+                let c = bytes[at - 1] as char;
+                !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+            };
+            let next_ok = end == bytes.len() || {
+                let c = bytes[end] as char;
+                c.is_whitespace() || matches!(c, '"' | '\'' | ';' | '&' | '|' | ')' | '`')
+            };
+            if !(prev_ok && next_ok) {
+                continue;
+            }
+            // Inside a quoted string (echo/printf prose, a path assigned to a
+            // variable) the word is data, unless that string runs a command
+            // substitution.
+            if let Some(open) = quoted_from(&line[..at]) {
+                let inside = &line[open..at];
+                if !(inside.contains("$(") || inside.contains('`')) {
+                    continue;
+                }
+            }
+            let before = line[..at].trim_end();
+            let rest = line[end..].trim_start();
+            let probe = ["command -v", "which", "type"]
+                .iter()
+                .any(|p| before.ends_with(p));
+            // `$(command -v aida) edit …` runs what the probe found.
+            let probe_runs = probe
+                && rest
+                    .strip_prefix(')')
+                    .map(|after| after.trim_start())
+                    .is_some_and(|after| after.starts_with(|c: char| c.is_ascii_alphanumeric()));
+            let internal = rest.starts_with("internal ");
+            if (!probe || probe_runs) && !internal {
+                return Some(line.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// If the end of `prefix` is inside a quoted string, the byte offset where
+/// that string's quote opened. Backslash escapes are honored outside single
+/// quotes.
+fn quoted_from(prefix: &str) -> Option<usize> {
+    let mut open: Option<(char, usize)> = None;
+    let mut escaped = false;
+    for (i, c) in prefix.char_indices() {
+        match open {
+            Some(('\'', _)) => {
+                if c == '\'' {
+                    open = None;
+                }
+            }
+            _ if escaped => escaped = false,
+            _ if c == '\\' => escaped = true,
+            Some(('"', _)) => {
+                if c == '"' {
+                    open = None;
+                }
+            }
+            _ => {
+                if c == '\'' || c == '"' {
+                    open = Some((c, i));
+                }
+            }
+        }
+    }
+    open.map(|(_, i)| i)
+}
+
+/// A `.aida/commit-config` line that only sets a variable: blank, comment,
+/// or `NAME=value` with a bare, single-quoted or expansion-free double-quoted
+/// value.
+fn is_literal_config_line(line: &str) -> bool {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return true;
+    }
+    let line = line.strip_prefix("export ").unwrap_or(line).trim();
+    let Some((name, value)) = line.split_once('=') else {
+        return false;
+    };
+    let name_ok = !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !name.starts_with(|c: char| c.is_ascii_digit());
+    let value = value.trim_end();
+    let value_ok = if let Some(inner) = value.strip_prefix('\'').and_then(|v| v.strip_suffix('\''))
+    {
+        !inner.contains('\'')
+    } else if let Some(inner) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+        !inner.contains(['"', '$', '`', '\\'])
+    } else {
+        value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_.,:/+-@%".contains(c))
+    };
+    name_ok && value_ok
+}
+
+/// Every requirement object in the store, read strictly: an unreadable
+/// directory, file or unparsable object is an error, never a skip. Store
+/// writers that decide from the canonical objects (collision scans, conflict
+/// preimages) use this instead of the tolerant `GitBackend::load`, which
+/// warns and leaves a bad object out. A store with no `objects/` yet is empty.
+// trace:TASK-1717 | ai:claude
+pub fn load_requirements_strict(store: &Path) -> Result<Vec<crate::models::Requirement>> {
+    let objects = store.join("objects");
+    match std::fs::symlink_metadata(&objects) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("Cannot inspect {}", objects.display())),
+        Ok(_) => {}
+    }
+    crate::object_store::list_objects_strict(&objects)?
+        .into_iter()
+        .map(|(_, path)| crate::object_store::read_object_from_path(&path))
+        .collect()
+}
+
+/// Assign agreed ids to every object that lacks one, and commit the result.
+/// The whole run (counter read, object scan, writes, stage and commit) is one
+/// store-writer transaction; called from inside an enclosing one (a pull)
+/// it nests on the same lock.
+// trace:TASK-1717 | ai:claude
 pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
+    crate::db::with_store_write_lock(store_path, || merge_gate_locked(store_path))
+}
+
+fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
     use crate::node::AgreedCounters;
     use crate::object_store;
 
@@ -3800,27 +4234,54 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     Ok(assignments)
 }
 
+/// Commit pending `objects/` and `metadata.yaml` changes and publish them.
+///
+/// Stage and commit run under the store write lock, which also captures the
+/// exact commit to push. The push runs after the lock is released and names
+/// that commit, never the moving branch. On rejection the lock is taken
+/// again, the current store is rebased onto the remote (keeping any commit
+/// another writer made meanwhile), and the new head is pushed.
+///
+/// This publishes, so it must be called OUTSIDE any store-writer transaction
+/// on this thread: a caller holding the store write lock gets an error before
+/// anything is staged (its lock is never released for it). A writer that
+/// changes store files writes them in its own transaction, ends it, then
+/// calls this; the stage/commit here re-reads the files under a fresh lock.
+// trace:TASK-1717 | ai:claude
 pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
-    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+    anyhow::ensure!(
+        !crate::db::any_store_write_lock_held(),
+        "sync_objects publishes to origin and cannot run inside a store-writer transaction: \
+         commit inside the transaction and publish after it ends"
+    );
+    let committed = crate::db::with_store_write_lock(aida_repo, || {
+        let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
-    // Stage all changes in objects/ and metadata.yaml
-    add_all(aida_repo, "objects")?;
-    if aida_repo.join("metadata.yaml").exists() {
-        add(aida_repo, &["metadata.yaml"])?;
-    }
+        // Stage all changes in objects/ and metadata.yaml
+        add_all(aida_repo, "objects")?;
+        if aida_repo.join("metadata.yaml").exists() {
+            add(aida_repo, &["metadata.yaml"])?;
+        }
 
-    // Commit
-    let committed = commit(aida_repo, message)?;
-    if !committed {
-        return Ok(false); // nothing to sync
-    }
+        // Commit
+        if !commit(aida_repo, message)? {
+            return Ok(None); // nothing to sync
+        }
+        Ok(Some((branch, head_sha(aida_repo)?)))
+    })?;
+    let Some((branch, mut sha)) = committed else {
+        return Ok(false);
+    };
 
     // Push — retry with pull on rejection
     for _attempt in 0..MAX_CAS_RETRIES {
-        match push(aida_repo, "origin", &branch)? {
+        match push_exact(aida_repo, "origin", &sha, &branch)? {
             true => return Ok(true),
             false => {
-                pull_rebase(aida_repo, "origin", &branch)?;
+                sha = crate::db::with_store_write_lock(aida_repo, || {
+                    pull_rebase(aida_repo, "origin", &branch)?;
+                    head_sha(aida_repo)
+                })?;
             }
         }
     }
@@ -6318,5 +6779,364 @@ mod tests {
         // An ordinary pull still works.
         pull_rebase(&repo, "origin", "aida-store").unwrap();
         assert!(reject_option_like("branch", "main").is_ok());
+    }
+
+    // trace:TASK-1717 | ai:claude — the gate is one store-writer transaction:
+    // with another writer holding the lock it creates, reads and writes
+    // nothing (not even the registry dir) until the lock is free.
+    #[test]
+    fn task_1717_merge_gate_waits_for_the_store_lock_before_touching_anything() {
+        use crate::models::{Requirement, RequirementType};
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        let mut pending = Requirement::new("TASK-2-001".into(), String::new());
+        pending.spec_id = Some("TASK-2-001".into());
+        pending.req_type = RequirementType::Task;
+        crate::object_store::write_object(&objects, &pending).unwrap();
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        let (held_tx, held_rx) = mpsc::channel();
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let s2 = store.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&s2, || {
+                held_tx.send(()).unwrap();
+                go_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        held_rx.recv().unwrap();
+        let s3 = store.clone();
+        let gate = std::thread::spawn(move || tx.send(merge_gate(&s3)).unwrap());
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(rx.try_recv().is_err(), "the gate waits for the lock");
+        assert!(
+            !store.join("registry").exists(),
+            "nothing created before the lock"
+        );
+        go_tx.send(()).unwrap();
+        holder.join().unwrap();
+        let assignments = rx.recv_timeout(Duration::from_secs(30)).unwrap().unwrap();
+        gate.join().unwrap();
+        assert_eq!(assignments.len(), 1);
+        assert!(store.join("registry/agreed_counters.toml").exists());
+        assert!(
+            !has_changes(&store).unwrap(),
+            "counters and objects committed"
+        );
+    }
+
+    // trace:TASK-1717 | ai:claude — `sync_objects` commits under the lock and
+    // pushes the captured commit after releasing it: a pre-push hook finds the
+    // lock free, and origin receives exactly that commit.
+    #[cfg(unix)]
+    #[test]
+    fn task_1717_sync_objects_pushes_the_captured_commit_outside_the_lock() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        run_git(
+            dir.path(),
+            &["init", "-q", "--bare", "-b", "main", "origin.git"],
+        );
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        run_git(&repo, &["push", "-q", "origin", "main"]);
+        // Lock files stay out of commits, like a real store's .gitignore.
+        std::fs::write(repo.join(".gitignore"), ".aida/*.lock\n").unwrap();
+        run_git(&repo, &["add", ".gitignore"]);
+        run_git(&repo, &["commit", "-qm", "ignore"]);
+        let log = dir.path().join("prepush.log");
+        let hook = repo.join(".git/hooks/pre-push");
+        std::fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh\nif flock -n '{}' true; then echo free; else echo held; fi >> '{}'\ncat >> '{}'\n",
+                crate::db::store_write_lock_path(&repo).display(),
+                log.display(),
+                log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(repo.join("objects")).unwrap();
+        std::fs::write(repo.join("objects/a.yaml"), "a: 1\n").unwrap();
+
+        assert!(sync_objects(&repo, "chore: sync objects").unwrap());
+        let head = run_git(&repo, &["rev-parse", "HEAD"]);
+        let log = std::fs::read_to_string(&log).unwrap();
+        assert!(log.starts_with("free\n"), "{log}");
+        assert!(log.contains(&head), "pushed the captured commit: {log}");
+        assert_eq!(run_git(&bare, &["rev-parse", "refs/heads/main"]), head);
+    }
+
+    // trace:TASK-1717 | ai:claude — publication cannot run inside a
+    // store-writer transaction: the nested call is refused before it stages
+    // or commits anything, and the caller's lock is never released for it.
+    #[test]
+    fn task_1717_sync_objects_refuses_to_publish_inside_a_transaction() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        let head = run_git(&repo, &["rev-parse", "HEAD"]);
+        let err = crate::db::with_store_write_lock(&repo, || {
+            std::fs::create_dir_all(repo.join("objects")).unwrap();
+            std::fs::write(repo.join("objects/a.yaml"), "a: 1\n").unwrap();
+            let nested = sync_objects(&repo, "chore: nested");
+            assert!(
+                crate::db::store_write_lock_held(&repo),
+                "caller still holds its lock"
+            );
+            nested
+        })
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot run inside a store-writer transaction"),
+            "{err:#}"
+        );
+        assert_eq!(
+            run_git(&repo, &["rev-parse", "HEAD"]),
+            head,
+            "nothing committed"
+        );
+        assert_eq!(
+            run_git(&repo, &["diff", "--cached", "--name-only"]),
+            "",
+            "nothing staged"
+        );
+        // The supported composition: write in the transaction, publish after.
+        let push =
+            crate::db::with_store_write_lock(&repo, || push_exact(&repo, "origin", &head, "main"))
+                .unwrap_err();
+        assert!(push.to_string().contains("refusing to push"), "{push:#}");
+    }
+
+    /// Every form `aida init`/`scaffold apply` leaves in `.git/hooks/` is
+    /// supported through the real directory walk: a symlink to the template,
+    /// a wrapped copy with the current header, and a wrapped copy with an
+    /// older header over the same body. A wrapped copy whose body drifted is
+    /// refused naming `aida scaffold apply`; the same file non-executable is
+    /// skipped, since git ignores it.
+    // trace:TASK-1717 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn task_1717_installed_hook_forms_are_supported() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let executable = |path: &Path, body: &str| {
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let tpl = |key: &str| crate::templates::EMBEDDED_TEMPLATES[key];
+        let wrapped = |name: &str, key: &str| {
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                tpl(key),
+            )
+        };
+        // pre-commit: symlink to a template copy elsewhere (the AIDA
+        // checkout's own profile).
+        let template_copy = dir.path().join("aida-pre-commit.sh");
+        executable(&template_copy, tpl("hooks/aida-pre-commit.sh"));
+        std::os::unix::fs::symlink(&template_copy, hooks.join("pre-commit")).unwrap();
+        // commit-msg: current scaffolder output.
+        executable(
+            &hooks.join("commit-msg"),
+            &wrapped("commit-msg", "hooks/aida-commit-msg"),
+        );
+        // post-commit: older header over this build's body.
+        let older = wrapped("post-commit", "hooks/aida-post-commit.sh").replacen(
+            "# AIDA Generated: v",
+            "# AIDA Generated: v0.0.1-old-",
+            1,
+        );
+        executable(&hooks.join("post-commit"), &older);
+        // prepare-commit-msg: scaffolded store-pair hook.
+        executable(
+            &hooks.join("prepare-commit-msg"),
+            &wrapped("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+        );
+        ensure_store_hooks_supported(&repo).expect("installed AIDA hook profile is supported");
+
+        // A generated hook whose body drifted is refused with upgrade guidance.
+        let drifted = format!("{}\necho drifted\n", older.trim_end());
+        executable(&hooks.join("post-commit"), &drifted);
+        let err = ensure_store_hooks_supported(&repo).unwrap_err().to_string();
+        assert!(err.contains("`post-commit`"), "{err}");
+        assert!(err.contains("aida scaffold apply"), "{err}");
+        assert!(err.contains("Nothing was changed"), "{err}");
+        // Non-executable, git ignores it; so does the classifier.
+        std::fs::set_permissions(
+            hooks.join("post-commit"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        ensure_store_hooks_supported(&repo).expect("non-executable hooks are skipped");
+        // A dangling symlink is nothing git can run: skipped like a missing
+        // hook (metadata follows the link and reports NotFound).
+        std::fs::remove_file(&template_copy).unwrap();
+        ensure_store_hooks_supported(&repo).expect("dangling symlink hooks are skipped");
+    }
+
+    /// B2: a failing `git status` is an error for store writers, never
+    /// "clean"; the tolerant reader keeps its contract for displays.
+    // trace:TASK-1717 | ai:claude
+    #[test]
+    fn task_1717_has_changes_checked_fails_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+        assert!(!has_changes_checked(&repo).unwrap());
+        std::fs::write(repo.join("b.txt"), "b").unwrap();
+        assert!(has_changes_checked(&repo).unwrap());
+
+        // Point the worktree at a gitdir that does not exist: `git status`
+        // exits 128 with empty stdout and a message on stderr.
+        let broken = dir.path().join("broken");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join(".git"),
+            format!("gitdir: {}\n", dir.path().join("missing-gitdir").display()),
+        )
+        .unwrap();
+        let err = has_changes_checked(&broken).unwrap_err().to_string();
+        assert!(err.contains("git status failed"), "{err}");
+        assert!(!err.trim_end().ends_with(':'), "stderr retained: {err}");
+        assert!(
+            !has_changes(&broken).unwrap(),
+            "tolerant reader still answers clean for displays"
+        );
+    }
+
+    // trace:TASK-1717 | ai:claude
+    #[test]
+    fn task_1717_hook_classification() {
+        // Every shipped git hook is supported under its own name, bare and
+        // exactly as `aida init` writes it (generated header after the
+        // shebang). An older generated header over the SAME body is too.
+        for (name, key) in SHIPPED_HOOKS {
+            let tpl = crate::templates::EMBEDDED_TEMPLATES[key];
+            let wrapped = crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                tpl,
+            );
+            assert!(wrapped.contains("# AIDA Generated: v"), "{name}");
+            assert_eq!(classify_hook(name, tpl), HookKind::Shipped, "{name} bare");
+            assert_eq!(
+                classify_hook(name, &wrapped),
+                HookKind::Shipped,
+                "{name} wrapped"
+            );
+            let older = wrapped.replacen("# AIDA Generated: v", "# AIDA Generated: v0.0.1-old-", 1);
+            assert_eq!(
+                classify_hook(name, &older),
+                HookKind::Shipped,
+                "{name} older header"
+            );
+            // A changed body under the generated header is not trusted.
+            let edited = format!("{}\necho changed\n", wrapped.trim_end());
+            assert_eq!(
+                classify_hook(name, &edited),
+                HookKind::OtherAidaGenerated,
+                "{name}"
+            );
+        }
+        // A shipped template is not supported under another hook's name.
+        let track = crate::templates::EMBEDDED_TEMPLATES["hooks/aida-track-commits.sh"];
+        assert_ne!(classify_hook("post-commit", track), HookKind::Shipped);
+        let pre = crate::templates::EMBEDDED_TEMPLATES["hooks/aida-pre-commit.sh"];
+        assert_ne!(classify_hook("commit-msg", pre), HookKind::Shipped);
+        // Header lines anywhere but right after the shebang are user text.
+        let moved = format!("#!/bin/sh\necho hi\n# AIDA Generated: v1 | checksum:00\n# To customize: copy this file and modify the copy\n{pre}");
+        assert_eq!(classify_hook("pre-commit", &moved), HookKind::Custom);
+        // The shipped pre-commit's prose and binary-path strings are data,
+        // so even a drifted copy without a header is not misread as a writer.
+        assert_eq!(aida_writer_call(pre), None);
+        // Store-reading and aida-internal hooks are supported.
+        for ok in [
+            "#!/bin/bash\nenv -u GIT_DIR git -C /home/u/aida/.aida-store rev-parse HEAD\n",
+            "#!/bin/sh\nif command -v aida >/dev/null; then\n  aida internal record-no-verify-bypass || true\nfi\n",
+            "#!/bin/sh\n# aida edit in a comment is fine\nexit 0\n",
+            "#!/bin/sh\nwhich aida\n",
+        ] {
+            assert_eq!(aida_writer_call(ok), None, "{ok}");
+        }
+        // Anything else that runs aida (or $AIDA_BIN) is an unsupported writer profile.
+        for bad in [
+            "#!/bin/sh\naida edit TASK-1 --title x\n",
+            "#!/bin/sh\n/usr/local/bin/aida queue add TASK-1\n",
+            "#!/bin/sh\nfoo && aida db sync\n",
+            "#!/bin/sh\n\"$AIDA_BIN\" edit TASK-1\n",
+            "#!/bin/sh\n$(command -v aida) edit TASK-1\n",
+            "#!/bin/sh\necho \"$(aida edit TASK-1)\"\n",
+        ] {
+            assert!(aida_writer_call(bad).is_some(), "{bad}");
+        }
+        for ok in [
+            "",
+            "# c",
+            "A=1",
+            "export B_2='x y'",
+            "C=\"plain\"",
+            "D=true",
+        ] {
+            assert!(is_literal_config_line(ok), "{ok}");
+        }
+        for bad in [
+            "aida edit X",
+            "A=$(id)",
+            "A=\"$HOME\"",
+            "A=`id`",
+            "A=1; rm -rf x",
+            "1A=2",
+        ] {
+            assert!(!is_literal_config_line(bad), "{bad}");
+        }
+    }
+
+    // trace:TASK-1717 | ai:claude — strict canonical loading: a bad object
+    // is an error, where the tolerant loader would leave it out.
+    #[test]
+    fn task_1717_strict_load_reports_an_unparsable_object() {
+        use crate::models::Requirement;
+        let dir = tempfile::tempdir().unwrap();
+        let objects = dir.path().join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        let mut r = Requirement::new("TASK-1".into(), String::new());
+        r.spec_id = Some("TASK-1".into());
+        crate::object_store::write_object(&objects, &r).unwrap();
+        assert_eq!(load_requirements_strict(dir.path()).unwrap().len(), 1);
+        let (_, path) = crate::object_store::list_objects(&objects)
+            .unwrap()
+            .remove(0);
+        std::fs::write(&path, "id: [unclosed\n").unwrap();
+        assert!(load_requirements_strict(dir.path()).is_err());
+        let empty = tempfile::tempdir().unwrap();
+        assert!(load_requirements_strict(empty.path()).unwrap().is_empty());
     }
 }

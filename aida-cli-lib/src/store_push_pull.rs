@@ -558,21 +558,35 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
     if !git_ops::is_git_repo(store_path) || !git_ops::has_remote(store_path, "origin") {
         return;
     }
-    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-    if git_ops::has_changes(store_path).unwrap_or(false) {
-        if let Err(e) = git_ops::add_all(store_path, ".")
-            .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
-        {
+    // trace:TASK-1717 | ai:claude — commit pending changes and capture the
+    // exact commit under the store write lock; the timed push (and its
+    // pre-push hook) runs after release and names that commit.
+    let captured = aida_core::db::with_store_write_lock(store_path, || {
+        let branch =
+            git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+        // A failing `git status` defers the push (warned below); it is
+        // never read as "nothing pending".
+        if git_ops::has_changes_checked(store_path)? {
+            git_ops::add_all(store_path, ".")
+                .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
+                .context("could not commit pending store changes")?;
+        }
+        Ok((branch, git_ops::head_sha(store_path)?))
+    });
+    let (branch, sha) = match captured {
+        Ok(c) => c,
+        Err(e) => {
             eprintln!(
-                "  {} stored locally; push deferred ({reason}: could not commit pending store changes: {e})",
+                "  {} stored locally; push deferred ({reason}: {e:#})",
                 "Warning:".yellow().bold()
             );
             return;
         }
-    }
+    };
+    let refspec = format!("{sha}:refs/heads/{branch}");
     match run_git_with_timeout(
         store_path,
-        &["push", "origin", &branch],
+        &["push", "origin", &refspec],
         std::time::Duration::from_secs(5),
     ) {
         Ok(status) if status.success() => {
@@ -601,17 +615,26 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
 /// auto-triggers (session-end / drain-end). Returns the number of messages
 /// newly digested (0 = nothing new). Append-only/id-keyed, so this is
 /// idempotent — re-running digests nothing. trace:STORY-493 | ai:claude
+// trace:TASK-1717 | ai:claude — the local layer is read first, without the
+// store lock; the canonical re-read, writes, stage and commit then run as one
+// store-writer transaction, so no other writer or rebase lands in between.
 pub(crate) fn digest_mailbox_to_canonical(
     store_root: &std::path::Path,
     project_root: &std::path::Path,
 ) -> Result<usize> {
-    let n = mailbox_store::digest_local_to_canonical(store_root, project_root)?;
-    if n == 0 {
-        return Ok(0);
-    }
-    aida_core::git_ops::add(store_root, &["mailbox"])?;
-    aida_core::git_ops::commit(store_root, &format!("mailbox: digest {n} message(s)"))?;
-    Ok(n)
+    let local = mailbox_store::read_local_messages(project_root)?;
+    aida_core::db::with_store_write_lock(store_root, || {
+        // A store whose status cannot be read is refused before any
+        // canonical write.
+        aida_core::git_ops::has_changes_checked(store_root)?;
+        let n = mailbox_store::digest_snapshot_to_canonical(store_root, &local)?;
+        if n == 0 {
+            return Ok(0);
+        }
+        aida_core::git_ops::add(store_root, &["mailbox"])?;
+        aida_core::git_ops::commit(store_root, &format!("mailbox: digest {n} message(s)"))?;
+        Ok(n)
+    })
 }
 
 /// STORY-643: project-wide opt-out for the auto mailbox sync wired into the
@@ -650,21 +673,53 @@ pub(crate) fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
 /// messages newly staged (0 = nothing new / disabled / no local layer).
 /// trace:STORY-643 | ai:claude
 pub(crate) fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) -> usize {
-    let Some(project_root) = store_path.parent() else {
-        return 0;
-    };
-    if !mailbox_autosync_enabled(project_root) {
-        return 0;
-    }
-    match mailbox_store::digest_local_to_canonical(store_path, project_root) {
-        Ok(0) => 0,
-        Ok(n) => {
-            eprintln!(
-                "  {} published {n} mailbox message(s) to the canonical store ({reason})",
-                crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
-            );
+    match mailbox_publish_snapshot(store_path, reason) {
+        Some(local) => {
+            let n = publish_mailbox_snapshot(store_path, &local, reason);
+            report_mailbox_published(n, reason);
             n
         }
+        None => 0,
+    }
+}
+
+/// The local mailbox messages a sync publishes, read BEFORE the sync takes
+/// the store write lock (local reads and sends never need it). `None` when
+/// autosync is off or the local layer cannot be read (warned).
+// trace:TASK-1717 | ai:claude
+pub(crate) fn mailbox_publish_snapshot(
+    store_path: &std::path::Path,
+    reason: &str,
+) -> Option<Vec<aida_core::mailbox::Message>> {
+    let project_root = store_path.parent()?;
+    if !mailbox_autosync_enabled(project_root) {
+        return None;
+    }
+    match mailbox_store::read_local_messages(project_root) {
+        Ok(local) => Some(local),
+        Err(e) => {
+            eprintln!(
+                "  {} mailbox publish skipped ({reason}): {e}",
+                "Warning:".yellow().bold()
+            );
+            None
+        }
+    }
+}
+
+/// Write a [`mailbox_publish_snapshot`] into the canonical store, inside the
+/// caller's store-writer transaction (the sync's pending-changes commit picks
+/// the files up). Returns how many messages were written; the caller reports
+/// them with [`report_mailbox_published`] only once its commit succeeded.
+/// Best-effort: a failure is warned and counts as nothing written.
+// trace:TASK-1717 | ai:claude
+pub(crate) fn publish_mailbox_snapshot(
+    store_path: &std::path::Path,
+    local: &[aida_core::mailbox::Message],
+    reason: &str,
+) -> usize {
+    match mailbox_store::digest_snapshot_to_canonical(store_path, local) {
+        Ok(n) => n,
         Err(e) => {
             eprintln!(
                 "  {} mailbox publish skipped ({reason}): {e}",
@@ -672,6 +727,17 @@ pub(crate) fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reaso
             );
             0
         }
+    }
+}
+
+/// Report mailbox messages a sync committed to the canonical store.
+// trace:TASK-1717 | ai:claude
+pub(crate) fn report_mailbox_published(n: usize, reason: &str) {
+    if n > 0 {
+        eprintln!(
+            "  {} published {n} mailbox message(s) to the canonical store ({reason})",
+            crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+        );
     }
 }
 
@@ -1083,6 +1149,20 @@ pub(crate) fn push_notice_suppressed_by_env() -> bool {
 /// drift. Shared by `aida db sync --push` (store leg) and `aida push` (both
 /// legs) so a clone can't silently leave one hub behind.
 // trace:STORY-760 | ai:claude
+/// Fan a store push out to the mirrors, pinned to `origin_sha`: the exact
+/// commit origin just accepted, never the local branch (which another writer
+/// may have advanced since the push).
+// trace:TASK-1717 | ai:claude
+pub(crate) fn fan_out_store_mirror_push(
+    store: &std::path::Path,
+    branch: &str,
+    origin_sha: &str,
+    project_root: &std::path::Path,
+) {
+    let refspec = format!("{origin_sha}:refs/heads/{branch}");
+    fan_out_mirror_refspec(store, branch, &refspec, project_root);
+}
+
 pub(crate) fn fan_out_mirror_push(
     repo: &std::path::Path,
     branch: &str,
@@ -1106,6 +1186,16 @@ pub(crate) fn fan_out_mirror_push(
             }
         }
     };
+    fan_out_mirror_refspec(repo, branch, &refspec, project_root);
+}
+
+fn fan_out_mirror_refspec(
+    repo: &std::path::Path,
+    branch: &str,
+    refspec: &str,
+    project_root: &std::path::Path,
+) {
+    let cfg = read_store_sync_config(project_root).unwrap_or_default();
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     for mirror in &cfg.mirror_remotes {
         if mirror == "origin" {
@@ -1124,7 +1214,7 @@ pub(crate) fn fan_out_mirror_push(
             continue;
         }
         println!("Mirroring {branch} → {mirror}...");
-        match aida_core::git_ops::push(repo, mirror, &refspec) {
+        match aida_core::git_ops::push(repo, mirror, refspec) {
             Ok(true) => {
                 println!("  Mirror push complete.");
                 clear_store_mirror_fanout_failure(project_root, repo, branch, mirror);
@@ -1487,40 +1577,73 @@ pub(crate) fn handle_push_command(
         // single store commit below and propagate with this push — no manual
         // `aida mailbox sync`. Best-effort + idempotent; folded into the same
         // commit (no second push). trace:STORY-643 | ai:claude
-        let _ = maybe_publish_mailbox_for_sync(store_path, "push");
-        // Commit any pending orphan-branch changes regardless of origin —
-        // the user's local edits should land in a commit either way so
-        // subsequent operations have a clean tree. trace:BUG-44 | ai:claude
-        if git_ops::has_changes(store_path).unwrap_or(false) {
-            let msg = message.unwrap_or("chore: sync pending changes");
-            let _ = git_ops::add(store_path, &["."]);
-            let _ = git_ops::commit(store_path, msg);
-            println!("  Committed: {}", msg);
-        }
-        if store_has_origin {
+        // trace:TASK-1717 | ai:claude — local messages are read first; the
+        // canonical digest, the pending-changes commit and the capture of the
+        // commit to push are one store-writer transaction. The push names
+        // that commit and runs after the lock is released.
+        let mailbox = mailbox_publish_snapshot(store_path, "push");
+        let window = aida_core::db::with_store_write_lock(store_path, || {
+            // A store whose status cannot be read fails the leg before the
+            // digest or anything else touches it.
+            git_ops::has_changes_checked(store_path)
+                .context("cannot read the store status; nothing was written or pushed")?;
+            let published = mailbox
+                .as_ref()
+                .map(|local| publish_mailbox_snapshot(store_path, local, "push"))
+                .unwrap_or(0);
+            // Commit any pending orphan-branch changes regardless of origin —
+            // the user's local edits should land in a commit either way so
+            // subsequent operations have a clean tree. trace:BUG-44 | ai:claude
+            // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing
+            // hook) fails the leg with git's error: nothing is pushed and
+            // the pending changes are kept, uncommitted.
+            if git_ops::has_changes_checked(store_path)? {
+                let msg = message.unwrap_or("chore: sync pending changes");
+                let committed = git_ops::add(store_path, &["."])
+                    .and_then(|_| git_ops::commit(store_path, msg))
+                    .context("could not commit pending store changes; nothing was pushed")?;
+                if committed {
+                    println!("  Committed: {}", msg);
+                }
+            }
+            report_mailbox_published(published, "push");
+            if !store_has_origin {
+                return Ok(None);
+            }
             let branch =
                 git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-            match git_ops::push(store_path, "origin", &branch) {
-                Ok(true) => {
-                    store_outcome = PushLegOutcome::Pushed;
-                    println!("  {}", "store push complete".green());
-                    // STORY-760: fan the store branch out to every mirror hub.
-                    fan_out_mirror_push(store_path, &branch, &project_root);
-                }
-                // BUG-1626: a rejected store push is a failed leg, not a
-                // warning over a zero exit. trace:BUG-1626 | ai:claude
-                Ok(false) => {
-                    eprintln!(
-                        "  {} push rejected — pull/rebase first (`aida db sync --pull`)",
-                        "Warning:".yellow().bold()
-                    );
-                    store_outcome = PushLegOutcome::Failed(format!(
+            Ok(Some((branch, git_ops::head_sha(store_path)?)))
+        });
+        match window {
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("  {} store push failed: {e:#}", "Warning:".yellow().bold());
+                store_outcome = PushLegOutcome::Failed(format!("store push failed: {e:#}"));
+            }
+            Ok(Some((branch, sha))) => {
+                match git_ops::push_exact(store_path, "origin", &sha, &branch) {
+                    Ok(true) => {
+                        store_outcome = PushLegOutcome::Pushed;
+                        println!("  {}", "store push complete".green());
+                        // STORY-760: fan the store branch out to every mirror hub.
+                        // trace:TASK-1717 | ai:claude — the commit origin accepted.
+                        fan_out_store_mirror_push(store_path, &branch, &sha, &project_root);
+                    }
+                    // BUG-1626: a rejected store push is a failed leg, not a
+                    // warning over a zero exit. trace:BUG-1626 | ai:claude
+                    Ok(false) => {
+                        eprintln!(
+                            "  {} push rejected — pull/rebase first (`aida db sync --pull`)",
+                            "Warning:".yellow().bold()
+                        );
+                        store_outcome = PushLegOutcome::Failed(format!(
                         "git push origin {branch} rejected; origin has store commits you do not have"
                     ));
-                }
-                Err(e) => {
-                    eprintln!("  {} store push failed: {}", "Warning:".yellow().bold(), e);
-                    store_outcome = PushLegOutcome::Failed(format!("store push failed: {e}"));
+                    }
+                    Err(e) => {
+                        eprintln!("  {} store push failed: {}", "Warning:".yellow().bold(), e);
+                        store_outcome = PushLegOutcome::Failed(format!("store push failed: {e}"));
+                    }
                 }
             }
         }
@@ -2180,6 +2303,121 @@ mod bug_1500_store_pull_hint_tests {
     }
 }
 
+/// `aida pull`'s store leg between the mailbox publish and the code-derived
+/// reconcile. The caller holds the store write lock. `Err` carries the
+/// store-leg failure text for the exit summary (already warned).
+// trace:TASK-1717 | ai:claude
+fn pull_store_leg_locked(
+    store_path: &std::path::Path,
+    quiet: bool,
+    no_gate: bool,
+    mailbox_published: usize,
+) -> std::result::Result<(), String> {
+    use aida_core::git_ops;
+    // Mirror `aida db sync --pull`: commit any pending orphan
+    // changes first, then pull --rebase. Without the pre-commit
+    // step, rebase refuses on a dirty tree and leaves the user
+    // half-pulled.
+    // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing hook)
+    // ends the leg with git's own error before any pull; the pending changes
+    // are kept, uncommitted.
+    let pending = git_ops::has_changes_checked(store_path).map_err(|e| {
+        let failure = format!("store leg could not read pending changes: {e:#}");
+        eprintln!("  {} {failure}", "Warning:".yellow().bold());
+        failure
+    })?;
+    if pending {
+        if let Err(e) = git_ops::add(store_path, &["."])
+            .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
+        {
+            let failure = format!("store leg could not commit pending changes: {e:#}");
+            eprintln!("  {} {failure}", "Warning:".yellow().bold());
+            return Err(failure);
+        }
+        println!("  Committed pending orphan changes before pull");
+    }
+    report_mailbox_published(mailbox_published, "pull");
+    let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+    println!("{}", pull_store_start_line());
+
+    // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
+    // can summarize what landed once it completes. None when the
+    // store is empty / not yet committed. trace:TASK-73 | ai:claude
+    let pre_sha = git_ops::head_sha(store_path).ok();
+
+    // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
+    // of stopping for manual resolution. Two clones editing the SAME spec
+    // (each appending a HistoryEntry + a scalar edit) are structurally
+    // mergeable — history is unioned by id, scalars resolve LWW. The
+    // oplog and per-user queue registries (same user on two machines —
+    // BUG-725) union the same way; other conflicts (blocks, nodes,
+    // counters) still fall back to the manual path.
+    // trace:STORY-641 | ai:claude
+    let outcome = match git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            eprintln!(
+                "  {} {}",
+                "Warning:".yellow().bold(),
+                store_pull_failure_hint(store_path, &e.to_string())
+            );
+            return Err(format!("store leg pull_rebase failed: {}", e));
+        }
+    };
+    if let git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
+        for note in notes {
+            println!("  {} {}", "auto-merged".cyan().bold(), note);
+        }
+    }
+    println!("  {}", "store pull complete".green());
+    if let Err(e) = ensure_no_spec_id_collisions_canonical(store_path) {
+        eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+        return Err(format!("store collision scan failed: {}", e));
+    }
+    // TASK-73 — summarize the delta unless --quiet.
+    if !quiet {
+        if let Some(pre) = pre_sha.as_deref() {
+            print_pull_summary(store_path, pre);
+        }
+    }
+    // TASK-78: post-pull merge-gate. The pull may have brought
+    // in commits from collaborators with un-gated node-aware
+    // ids; promoting them now means subsequent `aida list` /
+    // queue surfaces show short ids without an extra ritual.
+    // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
+    // Idempotent (no-op when there's nothing pending) and
+    // cheap. trace:TASK-78 | ai:claude
+    if !no_gate && auto_merge_gate_enabled() {
+        match git_ops::merge_gate(store_path) {
+            Ok(assignments) if assignments.is_empty() => {
+                // Stay silent when nothing was promoted — pull
+                // already printed its summary; an empty footer
+                // would just be noise.
+            }
+            Ok(assignments) => {
+                println!(
+                    "  {} ({} promotion{})",
+                    "auto-gate ran".cyan(),
+                    assignments.len(),
+                    if assignments.len() == 1 { "" } else { "s" }
+                );
+                for (node_id, agreed_id) in &assignments {
+                    println!("    {} → {}", node_id, agreed_id.green().bold());
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} merge-gate failed: {} \
+                     (run `aida db merge-gate` manually to retry)",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -2533,115 +2771,56 @@ pub(crate) fn handle_pull_command(
         // makes messages flow both ways on a normal `aida pull` — no manual
         // digest. Best-effort + idempotent; folded into the pre-pull commit
         // (no separate commit). trace:STORY-643 | ai:claude
-        let _ = maybe_publish_mailbox_for_sync(store_path, "pull");
-        // Mirror `aida db sync --pull`: commit any pending orphan
-        // changes first, then pull --rebase. Without the pre-commit
-        // step, rebase refuses on a dirty tree and leaves the user
-        // half-pulled.
-        if git_ops::has_changes(store_path).unwrap_or(false) {
-            let _ = git_ops::add(store_path, &["."]);
-            let _ = git_ops::commit(store_path, "chore: sync pending changes");
-            println!("  Committed pending orphan changes before pull");
-        }
-        let branch =
-            git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-        println!("{}", pull_store_start_line());
-
-        // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
-        // can summarize what landed once it completes. None when the
-        // store is empty / not yet committed. trace:TASK-73 | ai:claude
-        let pre_sha = git_ops::head_sha(store_path).ok();
-
-        // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
-        // of stopping for manual resolution. Two clones editing the SAME spec
-        // (each appending a HistoryEntry + a scalar edit) are structurally
-        // mergeable — history is unioned by id, scalars resolve LWW. The
-        // oplog and per-user queue registries (same user on two machines —
-        // BUG-725) union the same way; other conflicts (blocks, nodes,
-        // counters) still fall back to the manual path.
-        // trace:STORY-641 | ai:claude
-        match git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
-            Ok(outcome) => {
-                if let git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
-                    for note in notes {
-                        println!("  {} {}", "auto-merged".cyan().bold(), note);
-                    }
-                }
-                println!("  {}", "store pull complete".green());
-                if let Err(e) = ensure_no_spec_id_collisions(store_path) {
-                    eprintln!("  {} {}", "Warning:".yellow().bold(), e);
-                    store_failed = Some(format!("store collision scan failed: {}", e));
-                }
-                // TASK-73 — summarize the delta unless --quiet.
-                if store_failed.is_none() && !quiet {
-                    if let Some(pre) = pre_sha.as_deref() {
-                        print_pull_summary(store_path, pre);
-                    }
-                }
-                // TASK-78: post-pull merge-gate. The pull may have brought
-                // in commits from collaborators with un-gated node-aware
-                // ids; promoting them now means subsequent `aida list` /
-                // queue surfaces show short ids without an extra ritual.
-                // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
-                // Idempotent (no-op when there's nothing pending) and
-                // cheap. trace:TASK-78 | ai:claude
-                if store_failed.is_none() && !no_gate && auto_merge_gate_enabled() {
-                    match git_ops::merge_gate(store_path) {
-                        Ok(assignments) if assignments.is_empty() => {
-                            // Stay silent when nothing was promoted — pull
-                            // already printed its summary; an empty footer
-                            // would just be noise.
-                        }
-                        Ok(assignments) => {
-                            println!(
-                                "  {} ({} promotion{})",
-                                "auto-gate ran".cyan(),
-                                assignments.len(),
-                                if assignments.len() == 1 { "" } else { "s" }
-                            );
-                            for (node_id, agreed_id) in &assignments {
-                                println!("    {} → {}", node_id, agreed_id.green().bold());
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "  {} merge-gate failed: {} \
-                                 (run `aida db merge-gate` manually to retry)",
-                                "Warning:".yellow().bold(),
-                                e
-                            );
-                        }
-                    }
-                }
+        // trace:TASK-1717 | ai:claude — local messages are read first; the
+        // canonical digest, the pending-changes commit, the rebase pull with
+        // its own cleanup, the collision scan, the summary and the nested
+        // merge-gate are ONE store-writer transaction under the store write
+        // lock. The code-derived reconcile and maintenance run after release.
+        let mailbox = mailbox_publish_snapshot(store_path, "pull");
+        let window = aida_core::db::with_store_write_lock(store_path, || {
+            // A store whose status cannot be read ends the leg before the
+            // digest or anything else touches it.
+            if let Err(e) = git_ops::has_changes_checked(store_path) {
+                let failure = format!("store leg could not read pending changes: {e:#}");
+                eprintln!("  {} {failure}", "Warning:".yellow().bold());
+                return Ok(Err(failure));
+            }
+            let published = mailbox
+                .as_ref()
+                .map(|local| publish_mailbox_snapshot(store_path, local, "pull"))
+                .unwrap_or(0);
+            Ok(pull_store_leg_locked(store_path, quiet, no_gate, published))
+        });
+        let pulled = matches!(window, Ok(Ok(())));
+        match window {
+            Ok(Ok(())) => {
                 // BUG-1625: the store is now fresh — run the code-derived
                 // reconcile (auto-bump, closure steps, followup extraction,
                 // archive sweep) against it, never against the pre-pull
                 // snapshot. trace:BUG-1625 | ai:claude
-                if store_failed.is_none() {
-                    if let Some(scan_pre) = deferred_reconcile.take() {
-                        run_deferred_code_reconcile(
-                            &project_root,
-                            store_path,
-                            scan_pre.as_deref(),
-                            quiet,
-                            true,
-                        );
-                    }
+                if let Some(scan_pre) = deferred_reconcile.take() {
+                    run_deferred_code_reconcile(
+                        &project_root,
+                        store_path,
+                        scan_pre.as_deref(),
+                        quiet,
+                        true,
+                    );
                 }
-                // TASK-1033: opportunistic store maintenance after a clean
-                // store-leg pull — ensure the lowered gc.auto is set, then
-                // `git gc --auto` (no-op unless the threshold is exceeded).
-                // Best-effort; never affects pull's exit code.
-                aida_core::git_ops::opportunistic_store_gc(store_path);
             }
+            Ok(Err(failure)) => store_failed = Some(failure),
             Err(e) => {
-                eprintln!(
-                    "  {} {}",
-                    "Warning:".yellow().bold(),
-                    store_pull_failure_hint(store_path, &e.to_string())
-                );
-                store_failed = Some(format!("store leg pull_rebase failed: {}", e));
+                eprintln!("  {} {e:#}", "Warning:".yellow().bold());
+                store_failed = Some(format!("store leg could not start: {e:#}"));
             }
+        }
+        // TASK-1033: opportunistic store maintenance after a clean
+        // store-leg pull — ensure the lowered gc.auto is set, then
+        // `git gc --auto` (no-op unless the threshold is exceeded).
+        // Best-effort; never affects pull's exit code. It runs after the
+        // store write lock is released: `gc --auto` may detach.
+        if pulled {
+            aida_core::git_ops::opportunistic_store_gc(store_path);
         }
     }
     // BUG-1625: the store leg failed (or its post-pull scan did), so the local
