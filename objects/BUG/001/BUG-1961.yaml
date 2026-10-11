@@ -1,0 +1,24 @@
+id: 01a12b25-67f0-7370-a16a-0e6a5d7f0fdf
+spec_id: BUG-1961
+agreed_id: BUG-1961
+title: 'performance-guard failures stop being recorded in failure_trips: last_run failed:1 on 2026-10-11, but the newest trip is 2026-10-03'
+description: 'Seen 2026-10-11 03:10 local while clearing the performance-guard-route seat job. In .aida-store/schedule/performance-guard.yaml, last_run 2026-10-11T10:00:26Z has result failed:1, but failure_trips holds only 2 entries (2026-09-29 and 2026-10-03). The route job (due since ~04:20Z) points the advisor at ''the routed trip evidence'', which didn''t exist for the current breach, so the advisor had to re-run ''aida doctor check performance'' to get it (show: worst 27868 ms, CEILING BREACHED, filed as BUG-1956). BUG-1745 (completed) fixed unparseable trips; this looks like trips not being appended at all, or a cap/dedupe dropping new ones. Acceptance: every failed substrate run appends a FailureTrip with its parsed evidence (or the parse error); a test runs two failing ticks and asserts two new trips; the route job''s text names the trip_id it was raised for.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:27:14.160176187Z
+modified_at: 2026-10-11T13:27:14.160176187Z
+req_type: Bug
+tags:
+- found:night-2026-10-10
+- performance
+- schedule
+filed_at:
+  code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
