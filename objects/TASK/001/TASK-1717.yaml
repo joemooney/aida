@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-11T07:47:59.776703402Z
+modified_at: 2026-10-11T08:05:37.106410036Z
 req_type: Task
 tags:
 - factory:night
@@ -1112,6 +1112,12 @@ comments:
     Branch task-1717 rebased onto main (post lib.rs split): a6fac83f5c + 223c192aa1 + 3c1445d532 squashed to d09438cef7 with the 18 lib.rs hunks relocated to lib_part1/3/4.rs (line sets verified identical), then bac130604f: drift guidance names `aida scaffold apply`/`aida init --force` (not `aida upgrade`), classifier doc states the supported profile, drift policy and residual limits, new core witnesses task_1717_installed_hook_forms_are_supported and task_1717_has_changes_checked_fails_closed, push_exact external-prose marker inventoried, portability ratchet clean. make check-ci-fast 21/21. Built only on CI; not compiled locally. Design question for the advisor in the PR body: drifted AIDA-generated hooks are refused with upgrade guidance, never auto-overwritten.
   created_at: 2026-10-11T07:47:55.358609624Z
   modified_at: 2026-10-11T07:47:55.358609624Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129fe-f4d2-7d13-b452-fcdbae5355f7
+  author: joe
+  content: 'FACTORY CI FIX: PR #2502 head moved to 540425fa85 (on bac130604f). Run 38122567482 red fixes: (1) git_ops.rs hook-body and .aida/commit-config reads switched to aida_core::read_atomic (TASK-346 guard); (2) repeated_rejection_fails_and_keeps_local_commits was a fixture race — Fx::release now waits for the parked hook to drop its reached marker; implementation retried exactly once as the spec allows, no assertion changed. Gates: rustfmt --check, check-portability.sh, make check-ci-fast 21/21. Still draft; awaiting CI.'
+  created_at: 2026-10-11T08:05:37.106410036Z
+  modified_at: 2026-10-11T08:05:37.106410036Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
