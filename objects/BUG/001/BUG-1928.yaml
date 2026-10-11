@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-11T17:10:26.807815632Z
+modified_at: 2026-10-11T17:23:10.623741843Z
 req_type: Bug
 tags:
 - contained
@@ -112,6 +112,12 @@ comments:
     Acceptance check: AC1 -> behavioural harness + env-gated real-claude test; AC2 -> pool announcement test + roots derived from the lease cwd; AC3 -> BUG-1929 (operator: lands after this).
   created_at: 2026-10-11T17:10:26.807815632Z
   modified_at: 2026-10-11T17:10:26.807815632Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
+- id: 01a12bfd-6a9f-7a10-8203-06d31708bbdf
+  author: joe
+  content: 'FACTORY DRAFT: PR #2534 at db1d53d295'
+  created_at: 2026-10-11T17:23:10.623741843Z
+  modified_at: 2026-10-11T17:23:10.623741843Z
   session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8d-83d7-70c1-a870-4853ee25287b
