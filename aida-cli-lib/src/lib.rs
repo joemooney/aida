@@ -118,6 +118,7 @@ mod solo_cmd;
 mod stakeholder_role;
 mod status_cmd;
 mod statusline_root;
+mod store_push_pull;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
@@ -151,6 +152,7 @@ use solo_cmd::*;
 use stakeholder_role::*;
 use status_cmd::*;
 use statusline_root::*;
+use store_push_pull::*;
 use tui_entry::*;
 use usage_mcp_helpers::*;
 use zen_cmd::*;
