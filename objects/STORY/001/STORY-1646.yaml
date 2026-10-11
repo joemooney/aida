@@ -35,12 +35,12 @@ description: |
   ## Split out
   - Pre-commit refusal in the primary checkout, and the session-start/status-line drift indicator: separate specs, related:STORY-1646.
   - Changing the release flow so GitHub "require a pull request" can be enabled: a separate spec.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-11T06:28:01.317855089Z
+modified_at: 2026-10-11T08:04:44.749472264Z
 req_type: Story
 tags:
 - batch:next
@@ -94,6 +94,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a129fe-284d-7222-a013-369efbb9bf0d
+  author: aida-session-start
+  timestamp: 2026-10-11T08:04:44.749471822Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
