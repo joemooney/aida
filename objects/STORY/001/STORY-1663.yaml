@@ -1,0 +1,37 @@
+id: 01a12b31-d69a-7453-bca0-bc9ba52dfc20
+spec_id: STORY-1663
+agreed_id: STORY-1663
+title: aida pr ship supports rebase merges with the same gates as squash, so verified slice stacks stop bypassing it
+description: |
+  ## Problem
+  `aida pr ship` only squash-merges. Verified mechanical slice stacks (the STORY-1488 lib.rs split) must rebase-merge so each module move stays its own commit (FAQ-8). So those merges go through a raw `gh pr merge --rebase --match-head-commit`, which bypasses every approval-authority check `aida pr ship` runs. The advisor-merge decision (linked) allows that only as a narrow, temporary exception.
+
+  ## Want
+  - `aida pr ship <n> --rebase` (or `--merge-method rebase`): the same gates as today (approval at head, approval authority, CI green on the pinned head, holds, completion handling), then a rebase merge pinned to the head SHA.
+  - Completion: rebase merges produce no squash subject, so no trailer is derived from the title or branch. The spec completes only when explicitly requested (e.g. a final-slice flag); slices never auto-complete their spec (cf. BUG-1919 for squash).
+  - Optional pre-merge hook: when the PR is a slice stack, run the configured verifier (scripts/split-lib/verify_stack.py <base> <head>) and refuse on FAIL.
+
+  ## Acceptance
+  - Rebase-shipping a PR without an independent approval at head is refused, exactly as a squash ship is.
+  - A stale head (a new commit after approval or CI) is refused.
+  - A rebase ship of a slice PR leaves the owning spec's status unchanged unless the final-slice flag is given.
+  - After it lands, the advisor-merge decision's exception for slice stacks is removed and the two-seat docs point at `aida pr ship --rebase`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:40:48.922607973Z
+modified_at: 2026-10-11T13:40:48.922607973Z
+req_type: Story
+tags:
+- merge
+- pr-ship
+- two-seat
+filed_at:
+  code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
