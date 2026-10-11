@@ -1,0 +1,39 @@
+id: 01a12b45-ac4d-7b23-bd20-d52719e5baf3
+spec_id: BUG-1963
+agreed_id: BUG-1963
+title: aida-git-guardrails.sh blocks Bash commands whose heredoc BODY mentions a destructive git verb (reset --hard, clean -f, push --force)
+description: |-
+  From aida-relay TASK-68. The aida-git-guardrails.sh PreToolUse hook (aida 0.15.0, as scaffolded into aida-relay/.claude/hooks/) matches destructive-git patterns against the whole Bash command string. strip_quoted_args (BUG-692) blanks quoted arguments, but heredoc BODIES are not stripped, so a command that only WRITES prose mentioning a git verb into a file is blocked (exit 2). This bites agents that write relay prompts, briefs, or docs with `cat > file <<EOF`.
+
+  ## Repro (scratch dir, hook fed the PreToolUse JSON on stdin)
+  Command `cat > prompt.md <<EOF` / `never run git reset --hard here` / `EOF` → exit 2, "BLOCKED: 'git reset --hard' discards all uncommitted changes."
+  Same with a quoted delimiter (`<<'EOF'`, whose body the shell never expands or executes) → exit 2.
+  Heredoc body `don't git clean -fd` → exit 2 (git clean -f).
+  Heredoc body `never git push --force origin main` → exit 2 (git push --force).
+  Heredoc body `the base's head; then git reset --hard` → exit 2.
+  Control: heredoc body with `git rebase --onto origin/main <old> <branch>` alone → exit 0 (the incident prompt quoted rebase --onto alongside force-push/reset wording; the rebase text itself is not the trigger).
+  Repro script: python3 -I /tmp/claude-1000/task68/repro.py on the operator's machine (feeds each case to the hook and prints exit code + first message).
+
+  ## Expected
+  The hook judges only the command words the shell will actually execute. Text inside heredoc bodies (both `<<EOF` and `<<'EOF'`/`<<-EOF` forms) and quoted strings is data, not commands, and must not trip the destructive-pattern checks. A real `git reset --hard` etc. before or after the heredoc on the same command line must still be blocked.
+
+  ## Acceptance
+  - Each repro case above exits 0 (heredoc body not scanned), for unquoted, quoted and `<<-` delimiters.
+  - `git reset --hard; cat > f <<EOF ... EOF` and `cat > f <<EOF ... EOF` followed by `git reset --hard` on the line after the terminator are still blocked (exit 2).
+  - Shell test covering both directions in the hook's test suite.
+  - Workaround until fixed: write files with a file-writing tool, not a heredoc.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T14:02:28.813568163Z
+modified_at: 2026-10-11T14:02:28.813568163Z
+req_type: Bug
+filed_at:
+  code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: 5cb4ab3c-888e-4e4f-8b14-3c332cc49787
