@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:22:50.976734054Z
-modified_at: 2026-10-11T13:18:27.832636145Z
+modified_at: 2026-10-11T13:27:10.991743475Z
 req_type: Bug
 tags:
 - cli
@@ -60,6 +60,12 @@ comments:
   content: 'FACTORY PLAN (night): In aida-cli-lib/src/pr_list.rs, replace the per-spec row loop with a mapping step: title IDs, then branch IDs (unchanged loose extractor), then the first spec ID in the PR body (case-sensitive uppercase ID, forge refs excluded), then the scope of a live lease riding the PR branch, else none. Unmapped PRs still get one row with spec_id None. PrListEntry.spec_id becomes Option<String> (JSON null) and gains mapping_source in {title,branch,body,lease,none}; the table shows ''—'' or ''body:TASK-1538''. gh query adds the body field; GitLab reads the MR description. Add --mapped-only to ''aida pr list'' (old filter); ''aida list pr'' keeps default all-PRs. Empty-state message only says ''with mapped specs'' under --mapped-only. Refactor GH/GL row building into pure fns over deserialized structs and add inline tests: pr_list_keeps_unmapped_pr, pr_list_maps_body_only_reference (both assert PR number appears once), plus title-mapping, lease-mapping, mapped_only filter and JSON null tests. Risks: compile-only on CI; no TOON output exists for pr list today (JSON only), so TOON is out of scope. Acceptance checked by those unit tests.'
   created_at: 2026-10-11T13:18:27.832636145Z
   modified_at: 2026-10-11T13:18:27.832636145Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b25-5b8f-79e2-8eac-2f6bbeb4ad03
+  author: joe
+  content: 'FACTORY DRAFT: PR #2515 at a4239d8e9c'
+  created_at: 2026-10-11T13:27:10.991743475Z
+  modified_at: 2026-10-11T13:27:10.991743475Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-549f-7c71-8cb4-903e70ca8678
