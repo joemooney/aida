@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-11T20:14:48.367617017Z
+modified_at: 2026-10-11T20:15:52.188841605Z
 req_type: Story
 tags:
 - batch:next
@@ -68,6 +68,12 @@ comments:
   created_at: 2026-10-11T02:59:37.018099062Z
   modified_at: 2026-10-11T02:59:37.018099062Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a12c9b-857c-7ad1-adeb-1de7fe7ed7f4
+  author: joe
+  content: "SKETCH (slice A, implementer): \nSTORAGE: one JSON file per driver at .aida/drivers/<id>.json (id = <kind>-<run>, e.g. relay-lib-split), written atomically (temp file + rename). Record: kind (relay|drain|agent), id, pid, selector (e.g. batch:X), started_at, heartbeat_at, seat?, handoff?. Liveness is DERIVED, never stored: pid alive AND heartbeat_at newer than 15 min (default). A re-register refreshes heartbeat_at and keeps started_at. Dead or stale files are ignored by readers and never deleted except by an explicit 'aida driver deregister --run <id>' of that id. New module aida-core/src/driver_registry.rs; CLI in a new aida-cli-lib/src/driver_cmd.rs (register/deregister/list, TOON/JSON).\nLEASE: SessionLease gains an optional 'driver' (serde default, skip if None; old leases parse unchanged), stamped from AIDA_RELAY_RUN (-> relay:<run>) or AIDA_DRIVER (verbatim kind:id) by worktree add / claim / session start.\nRESOLUTION (derived per spec, first match wins, never stored on the spec): (1) the spec's lease names a driver that is live -> relay:<run>; (2) a live drain lock covers the spec -> drain:<pid> (if the drain lock exposes its members; otherwise TODO); (3) the lease's own pid (active/creator pid via the existing liveness probe) is alive -> agent:<session>; (4) a spec batch:* tag matches a live relay's selector -> relay:<run>; (5) the spec has a batch:* tag -> queued (batch:X); (6) otherwise idle <age since last activity>.\nDISPLAY: aida list shows 'In Progress · <driver>' for in-progress specs and adds --driver <kind> as a filter. aida ps shows a driver column, and a row whose lease pid is dead but whose driver is live reads the driver, not dormant/stalled/orphaned. JSON/TOON carry driver and driver_kind as separate fields. The wording is 'idle'.\nSCOPE: registry + CLI + lease attribution + derived resolution + list/ps display + tests (fake pids from a killed sleep child, isolated tempdir). The aida awaiting staleness line goes in only if it stays small; otherwise it is slice B."
+  created_at: 2026-10-11T20:15:52.188841605Z
+  modified_at: 2026-10-11T20:15:52.188841605Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a1283c-a28e-72a3-91be-5fa6ae98d1bc
   author: joe
