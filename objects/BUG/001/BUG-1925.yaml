@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:40:19.364053755Z
-modified_at: 2026-10-11T00:08:14.838622146Z
+modified_at: 2026-10-11T00:09:08.958256061Z
 req_type: Bug
 tags:
 - batch:history-2026-10-10
@@ -45,6 +45,12 @@ comments:
   content: 'Advisor verdict 2026-10-10 17:12: APPROVE PR #2482 at f2d41305e3. Reviewed the hook diff in full: single-pass POSIX awk, O(1) move credits, settle-per-diff ordering preserved, and the merge-parent multiset intersection is correct (non-merge path collapses to ndiff=1). SPEC_ID_RE has no backslashes, so awk -v is safe. No remaining callers of the removed shell helpers (the cli.rs mention is a comment). Re-ran both tests locally under mawk 1.3.4: move 23/23, perf+merge-delta all pass (~5 s). Non-blocking notes: (a) a failing per-parent git diff (2>/dev/null) yields an empty diff and fails open on merges, which is acceptable given MERGE_HEAD SHAs are validated hex; (b) [[:space:]] needs mawk>=1.3.4/gawk, fine under ADR-72 Linux-only. Required checks green; Windows cancelled per ADR-72. Merging.'
   created_at: 2026-10-11T00:08:14.838622146Z
   modified_at: 2026-10-11T00:08:14.838622146Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a1284a-bc5e-77c0-b066-e0a5c7344226
+  author: joe
+  content: 'Advisor 2026-10-10 17:13: PR #2482 MERGED at 7cad9ce231 (squash). Orchestrator-history: run close-out for BUG-1925 (status is still in-progress) and proceed to BUG-1923, then STORY-1650.'
+  created_at: 2026-10-11T00:09:08.958256061Z
+  modified_at: 2026-10-11T00:09:08.958256061Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a1278c-bf3b-7233-bbcd-54f7523e666a
