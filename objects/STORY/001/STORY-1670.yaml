@@ -1,0 +1,65 @@
+id: 01a12c98-c749-7fb0-a8db-04f2731ee370
+spec_id: STORY-1670
+agreed_id: STORY-1670
+title: 'Cheap gap finders: reverse trials (code to specs), ablation tiers, and trial gaps as design review'
+description: |
+  ## F5. Reverse trials: code to specs, then compare
+
+  **Idea:** a cheaper gap finder than a full regeneration.
+  - Give a fresh agent the **code only** and ask it to write the specs.
+  - Diff its output against the store. Anything it found that the store lacks is
+    a candidate gap.
+  - Statements in the store that it could not find in the code are candidates for
+    stale or unimplemented specs.
+
+  This costs one read-only pass instead of a rebuild.
+
+  ## F12. Ablation tiers: measure where the meaning actually lives
+
+  **Idea:** run the same trial with growing inputs:
+  1. store only;
+  2. store + `docs/`;
+  3. store + docs + README;
+  4. store + transcripts.
+
+  The score differences show how much meaning lives outside the store, and in
+  which artifact. That tells AIDA what to absorb next, for example whether
+  README tables of env vars should become contract rows.
+
+  ## F16. Use regeneration trials as adversarial design review
+
+  **Seen:** the trial agent had to decide things our system never decided. One
+  of its questions exposed a real production risk: secrets in command-line args
+  are logged verbatim (TASK-JM-002).
+
+  **Proposal:**
+  - Treat the `missing` and `ambiguous` gaps from every trial as review input for
+    the live system, not only for the store.
+  - `aida regen review` lists them as candidate decisions for the human: "your
+    system does X here; is that intended?"
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:12:52.425752547Z
+modified_at: 2026-10-11T20:12:52.425752547Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
