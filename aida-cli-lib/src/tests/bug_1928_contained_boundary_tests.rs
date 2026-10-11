@@ -186,13 +186,13 @@ fn unsafe_roots_emit_no_rule() {
     for root in [
         "relative/worktree",
         "/",
-        "/tmp/a*b",
-        "/tmp/a?b",
-        "/tmp/[ab]",
-        "/tmp/a(b)",
-        "/tmp/a{b}",
-        "/tmp/a\\b",
-        "/tmp/a/../b",
+        "/work/a*b",
+        "/work/a?b",
+        "/work/[ab]",
+        "/work/a(b)",
+        "/work/a{b}",
+        "/work/a\\b",
+        "/work/a/../b",
     ] {
         let roots = vec![PathBuf::from(root)];
         assert!(
