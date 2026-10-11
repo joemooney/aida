@@ -1,0 +1,48 @@
+id: 01a12ca6-ea19-70c1-ba95-0aa80ea72fdc
+spec_id: FAQ-48
+agreed_id: FAQ-48
+title: Why does an env-gated real-claude test report 'Not logged in'?
+description: |
+  **The lib test binary points `HOME` at a temp dir (BUG-1642), so a `claude` child can't find its login. Pass a wrapper through `AIDA_TEST_CLAUDE_BIN` that restores the real `HOME` for `claude` only.**
+
+  ## Why
+  `aida-cli-lib/src/test_home.rs` sets `HOME=/tmp/aida-lib-test-home-<pid>` for the whole test process, so tests never touch the operator's real `~/.aida`. Child processes inherit it. `claude -p` then finds no `~/.claude/.credentials.json` and returns `Not logged in · Please run /login`.
+
+  ## How
+  ```bash
+  cat > /tmp/claude-realhome.sh <<'EOF'
+  #!/bin/bash
+  export HOME=/home/<you>
+  exec "$(command -v claude)" "$@"
+  EOF
+  chmod +x /tmp/claude-realhome.sh
+  AIDA_TEST_REAL_CLAUDE=1 AIDA_TEST_CLAUDE_BIN=/tmp/claude-realhome.sh \
+    cargo test -p aida-cli-lib --lib real_claude_contained_session_write_boundary -- --nocapture
+  ```
+
+  ## Caveat
+  BUG-1971 tracks making the test pass the real home to the claude child itself, so no wrapper is needed.
+
+  ## See also
+  BUG-1928, BUG-1971, BUG-1642
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:28:18.841909108Z
+modified_at: 2026-10-11T20:28:18.841909108Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:testing
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T20:28:18.841952073Z
