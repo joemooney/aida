@@ -577,6 +577,11 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
     let prompt = AgentPromptOptions::new(None, false);
     let prompt_args = vec!["generated prompt text".to_string()];
 
+    // BUG-1948: both renders read AIDA_OUTPUT_FORMAT into their
+    // presentation_env line; hold the shared env lock across the pair so a
+    // parallel EnvVarsGuard setter cannot change it between them.
+    // trace:BUG-1948 | ai:claude
+    let _env = crate::test_env::env_lock();
     let diagnostics = render_agent_launch_diagnostics(
         std::path::Path::new("/usr/bin/claude"),
         &config,
