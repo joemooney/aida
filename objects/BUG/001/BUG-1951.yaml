@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T13:51:00.486822707Z
+modified_at: 2026-10-11T13:52:24.774943162Z
 req_type: Bug
 tags:
 - cache
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-10-11T13:22:05.266370096Z
   modified_at: 2026-10-11T13:22:05.266370096Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b3c-74c6-7a23-960c-ff67fd3812a1
+  author: joe
+  content: 'FACTORY PLAN (night): Fix in aida-core/src/db/cached_git_backend.rs only (write paths; no touch to the ensure_cache_fresh/single-flight refresh territory of STORY-1484/TASK-1526/TASK-1527). (1) add_requirement, update_requirement, update_requirement_versioned, delete_requirement, bulk_update, bulk_update_atomically take inner.lock_store() (re-entrant per thread, already taken by the inner call, so no new lock ordering) BEFORE capturing pre_write_head, matching the atomic paths. (2) Every write path also captures post_write_head while still holding the lock; restamp_head/refresh_epics_then_restamp take (pre, post) and stamp the post-write head captured under the lock rather than the live HEAD, so a commit landing after the lock drops shows as stale instead of being absorbed. Bulk paths drop the lock before cache upserts (keeps BUG-1671 design). (3) Belt-and-braces per advisor: restamp only when post == pre or first-parent(post) == pre (new git_ops::first_parent_sha helper); otherwise clear the stamp so the next read rebuilds. Covers non-locking writers (store sync pre-TASK-1717). Tests (cached_git_backend tests module): restamp_after_external_commit_between_capture_and_write_marks_stale (capture A, external commit B, inner write C, restamp(A,C) -> stale, strict list shows all 3 rows); restamp_stamps_post_write_head_captured_under_lock (commit after post capture -> recorded == post, stale vs live HEAD, external row visible); first_parent_sha unit test in git_ops. Existing TASK-712 test still covers the pre-capture external commit. Risk: one extra git rev-parse per committing write; residual window (no-op write + exactly one non-locking external commit under the lock) closes when TASK-1717 serializes sync on the lock. Acceptance checked by the new tests on CI.'
+  created_at: 2026-10-11T13:52:24.774943162Z
+  modified_at: 2026-10-11T13:52:24.774943162Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a12b20-aedd-7960-b763-69719233e3e2
   author: joe
