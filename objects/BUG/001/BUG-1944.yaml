@@ -15,12 +15,12 @@ description: |-
   (b) Any path that starts work on a spec (worktree add, session start, relay dispatch, the pr create/open path) moves Approved→InProgress.
   (c) Merge-time auto-bump completes an Approved spec whose (SPEC-ID) trailer lands on main, not only InProgress ones. Same gate rules (closure:pending holds still apply).
   (d) A regression test for each of (a)–(c).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T15:24:14.991679762Z
+modified_at: 2026-10-11T15:38:07.630477177Z
 req_type: Bug
 tags:
 - auto-bump
@@ -86,6 +86,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b9d-3d8b-7351-af70-13266e1dc070
+  author: aida-auto-bump
+  timestamp: 2026-10-11T15:38:07.627917055Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b9d-3d8e-76e3-9a66-239ddf305cd2
+  timestamp: 2026-10-11T15:38:07.630475129Z
+  agent: aida
+  commit_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
+  summary: Completed via merge 97453570
 filed_at:
   code_sha: db70971d43e7ced30e179fcbcb9483a1dbfae465
   branch: main
@@ -94,3 +107,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:38:07.627912037Z
+  completion_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
