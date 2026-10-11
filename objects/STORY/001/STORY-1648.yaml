@@ -16,12 +16,12 @@ description: |-
   - Tests for clean, tracked-dirty, untracked-only, off-main, and behind origin.
   - The hook adds less than 50ms (one `git status --porcelain` plus `rev-parse`).
   - Template masters are edited, then `make sync-templates` and `make check-templates`.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:20.116652715Z
-modified_at: 2026-10-11T14:07:51.266019061Z
+modified_at: 2026-10-11T14:51:48.438675978Z
 req_type: Story
 tags:
 - dev-tooling
@@ -98,6 +98,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b72-d553-79a3-9a49-422902d2afbe
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:51:48.435984124Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b72-d556-74a2-a04f-d1c1fe96acd8
+  timestamp: 2026-10-11T14:51:48.438673723Z
+  agent: implementer
+  commit_sha: f5fbf0dc8104c8d964978a6a2a4131a0b171821a
+  summary: Completed via merge f5fbf0dc
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -106,3 +119,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:51:48.435979634Z
+  completion_sha: f5fbf0dc8104c8d964978a6a2a4131a0b171821a
