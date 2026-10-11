@@ -28,6 +28,9 @@ use std::path::{Path, PathBuf};
 const ENGINE_CALLER_ALLOWLIST: &[&str] = &[
     "src/auto_complete.rs", // the engine module itself (the orchestrate wrapper)
     "src/lib.rs", // the `aida queue work --auto-complete` handler (STORY-772: was main.rs)
+    // test-only: `#[cfg(test)] mod bug_1265_finish_ci_tests` drives the engine
+    // through a harness; the STORY-1488 split moved it out of lib.rs.
+    "src/upgrade_release.rs",
 ];
 
 /// The engine entry point every per-spec driver must route through.
