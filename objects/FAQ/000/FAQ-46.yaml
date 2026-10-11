@@ -1,0 +1,41 @@
+id: 01a12ca6-a140-7d43-95a9-97b62e499c9c
+spec_id: FAQ-46
+agreed_id: FAQ-46
+title: Why didn't my merged PR's spec move to Completed?
+description: |
+  **Merge-time completion runs when `aida pull` brings in the merge commit. After a plain `git pull` or a `gh pr merge`, run `aida db reconcile-status --since <sha>`.**
+
+  ## Why
+  A trailing `(SPEC-ID)` on a merged commit completes the spec, but only through the pull-time auto-bump scan, which looks only at the commits that the current `aida pull` brings in. Commits pulled some other way (`git pull`, or merging on GitHub and fetching with git) are never scanned, so the spec stays In Progress. The trailer itself is fine: a squash title like `... (BUG-1928) (#2534)` is recognised.
+
+  ## How
+  ```bash
+  aida db reconcile-status --since <sha-before-the-merges> --dry-run   # preview
+  aida db reconcile-status --since <sha-before-the-merges>
+  aida db reconcile-status --spec BUG-1928                              # one spec
+  ```
+  Specs with an open PR still referencing them stay as they are.
+
+  ## See also
+  FAQ-2, FAQ-16, BUG-506, TASK-1338
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:28:00.192221254Z
+modified_at: 2026-10-11T20:28:00.192221254Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:lifecycle
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T20:28:00.192256076Z
