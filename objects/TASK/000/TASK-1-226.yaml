@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-11T06:50:53.441358127Z
+modified_at: 2026-10-11T06:56:51.598951141Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -851,6 +851,15 @@ comments:
     Integration only: rebase the independently approved branch (aba02517) onto origin/main, resolve lib-split relocations, open draft PR for CI. No semantic changes; any conflict resolution is a pure relocation and is listed in the PR body.
   created_at: 2026-10-11T06:50:53.441358127Z
   modified_at: 2026-10-11T06:50:53.441358127Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129c0-018f-7fe3-bfcc-6aa1284eac6e
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2495 at cb2ef728832877bc107e60672ef636f6b986e38b (rebase of approved aba02517)
+
+    Rebased onto origin/main 612cf8c2; lib.rs conflicts resolved by pure relocation of all 41 hunks into lib_part4.rs (zero fuzz); mod line stays in lib.rs. +/- line set identical to approved diff; forge.rs, reconcile_evidence.rs, CLI fixture and 10-storage.md byte-identical to reviewer pins. make check-ci-fast 21/21. Built only on CI.
+  created_at: 2026-10-11T06:56:51.598951141Z
+  modified_at: 2026-10-11T06:56:51.598951141Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
