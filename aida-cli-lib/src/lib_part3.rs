@@ -3262,7 +3262,7 @@ pub(crate) fn session_end_explicit_target(
 // trace:TASK-1174 | ai:claude
 #[cfg(test)]
 #[path = "tests/shell_wrapper_harness.rs"]
-mod shell_wrapper_harness;
+pub(crate) mod shell_wrapper_harness;
 
 #[cfg(test)]
 #[path = "tests/bug_779_wrapper_eval_tests.rs"]
