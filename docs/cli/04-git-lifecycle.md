@@ -87,7 +87,7 @@ or forced completion is needed for an ID remapping.
 **Non-completing slices.** The squash subject's trailing `(SPEC-ID)` group is
 what completes a spec at merge time. Ship derives it from an explicit title
 trailer first, then from the branch name — so a slice PR with no id in its
-title but a `task-1538-…` branch would complete TASK-1538 after one of many
+title but a `<spec-id>-…` branch would complete `<spec-id>` after one of many
 PRs. Three things stop that: `aida pr ship --no-complete`, a PR-body line
 reading `aida: no-complete` or `Non-completing slice` (either one withholds
 the trailer from every source — the spec id stays in the PR body as a trace),
