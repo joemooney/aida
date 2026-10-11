@@ -29,12 +29,12 @@ description: |
   - scripts/pre-release-check.sh passes with no cross-platform run in existence.
   - `aida awaiting` no longer reports a cross-platform nightly_red.
   - make check-ci-fast is green.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:01:40.523945463Z
-modified_at: 2026-10-11T01:12:44.891301825Z
+modified_at: 2026-10-11T01:32:47.010791635Z
 req_type: Task
 tags:
 - batch:next
@@ -53,6 +53,14 @@ comments:
   created_at: 2026-10-11T01:12:44.891301825Z
   modified_at: 2026-10-11T01:12:44.891301825Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+history:
+- id: 01a12897-4e22-7a02-9d27-12e9b3a09e1b
+  author: joe
+  timestamp: 2026-10-11T01:32:47.010787561Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
@@ -61,3 +69,6 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T01:32:47.010771746Z
