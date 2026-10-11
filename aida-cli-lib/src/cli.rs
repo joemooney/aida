@@ -11268,10 +11268,12 @@ pub enum Command {
     /// `AIDA_PUSH_DEFAULT=code|store` to flip the default scope.
     // trace:FR-264 TASK-106 | ai:claude
     Push {
-        /// Skip the code push (only sync the orphan store).
+        /// Push only the code branch (skip the orphan-store sync).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "store_only")]
         code_only: bool,
-        /// Skip the orphan-store sync (only `git push`).
+        /// Sync only the orphan store (skip the code push).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
         /// Commit any pending orphan-store changes with this message
@@ -11385,10 +11387,12 @@ pub enum Command {
     /// remote).
     // trace:TASK-43 TASK-106 | ai:claude
     Pull {
-        /// Skip the code pull (only sync the orphan store).
+        /// Pull only the code branch (skip the orphan-store sync).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "store_only")]
         code_only: bool,
-        /// Skip the orphan-store sync (only `git pull`).
+        /// Sync only the orphan store (skip the code pull).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
         /// Suppress the per-commit change summary printed after the

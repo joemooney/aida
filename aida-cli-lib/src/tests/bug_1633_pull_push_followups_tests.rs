@@ -733,3 +733,25 @@ fn bug_1648_backslash_plan_paths_read_back_as_forward_slash() {
         "docs/plans/b.md"
     ));
 }
+
+/// BUG-1917: the dry-run plan honours the scope flags the way the flag NAMES
+/// say — `--code-only` plans only the code leg, `--store-only` only the store
+/// leg. Pairs with the help-text pin in `push_pull_scope_tests.rs`, so the
+/// description and the behaviour can't drift apart again unnoticed.
+// trace:BUG-1917 | ai:claude
+#[test]
+fn push_dry_run_scope_flags_keep_only_the_named_leg() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (proj, _code_bare, _store_bare) = push_project(tmp.path());
+    let store = proj.join(".aida-store");
+
+    let labels = |code_only: bool, store_only: bool| -> Vec<&'static str> {
+        push_dry_run_legs(&store, code_only, store_only, PUSH_REMOTE_REFRESH_TIMEOUT)
+            .iter()
+            .map(|leg| leg.label)
+            .collect()
+    };
+    assert_eq!(labels(false, false), vec!["code", "store"]);
+    assert_eq!(labels(true, false), vec!["code"]);
+    assert_eq!(labels(false, true), vec!["store"]);
+}

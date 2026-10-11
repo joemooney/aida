@@ -241,3 +241,74 @@ fn dry_run_flags_parse() {
     let cli = Cli::try_parse_from(["aida", "pull", "--json"]).unwrap();
     assert!(matches!(cli.command, Command::Pull { json: true, .. }));
 }
+
+/// BUG-1917: the `--code-only` / `--store-only` help strings on `push` and
+/// `pull` were swapped relative to the implemented behaviour — the flag NAMES
+/// were right, the descriptions inverted — so an agent that trusted the help
+/// to push only the store pushed a code branch instead. Pin each flag's
+/// description to the leg it keeps, for all three two-leg verbs: the leg
+/// named right after "skip the" must be the one the flag drops, and the kept
+/// leg must be named. `fetch` already had the right wording and serves as the
+/// reference shape.
+// trace:BUG-1917 | ai:claude
+#[test]
+fn push_pull_fetch_leg_flags_describe_the_leg_they_keep() {
+    use clap::CommandFactory;
+    let cmd = Cli::command();
+    for verb in ["push", "pull", "fetch"] {
+        let sub = cmd
+            .get_subcommands()
+            .find(|s| s.get_name() == verb)
+            .unwrap_or_else(|| panic!("subcommand `{verb}` not found"));
+        // Flatten whitespace (clap wraps at terminal width) and lowercase so
+        // a line break or capitalised "Skip" can't let a swap slip past.
+        let help_for = |flag: &str| -> String {
+            let arg = sub
+                .get_arguments()
+                .find(|a| a.get_long() == Some(flag))
+                .unwrap_or_else(|| panic!("`aida {verb}` has no --{flag}"));
+            let help = arg
+                .get_long_help()
+                .or_else(|| arg.get_help())
+                .unwrap_or_else(|| panic!("`aida {verb} --{flag}` has no help text"))
+                .to_string();
+            help.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
+        // The clause right after "skip the", up to the first bracket or
+        // full stop, names the leg the flag drops.
+        let dropped_leg = |help: &str| -> String {
+            let (_, rest) = help.split_once("skip the ").unwrap_or_else(|| {
+                panic!("`aida {verb}` help does not say which leg it skips; got: {help}")
+            });
+            rest.split(['(', ')', '.'])
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let code_only = help_for("code-only");
+        let dropped = dropped_leg(&code_only);
+        assert!(
+            dropped.contains("store") && !dropped.contains("code"),
+            "`aida {verb} --code-only` must say it skips the STORE leg; got: {code_only}"
+        );
+        assert!(
+            code_only.contains("code"),
+            "`aida {verb} --code-only` must name the code leg it keeps; got: {code_only}"
+        );
+
+        let store_only = help_for("store-only");
+        let dropped = dropped_leg(&store_only);
+        assert!(
+            dropped.contains("code") && !dropped.contains("store"),
+            "`aida {verb} --store-only` must say it skips the CODE leg; got: {store_only}"
+        );
+        assert!(
+            store_only.contains("store"),
+            "`aida {verb} --store-only` must name the store leg it keeps; got: {store_only}"
+        );
+    }
+}
