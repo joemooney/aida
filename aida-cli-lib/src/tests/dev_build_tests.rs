@@ -681,6 +681,11 @@ fn full_clean_removes_exactly_the_agent_profile_dir() {
     );
     write(&f.layout.repo.join("src/lib.rs"), "");
     let t = &f.layout.target_dir;
+    // Newer cargo refuses to clean a target dir without cargo's own tag file.
+    write(
+        &t.join("CACHEDIR.TAG"),
+        "Signature: 8a477f597d28d172789f06886806bc55\n",
+    );
     write(&t.join("agent/incremental/x"), "inc");
     write(&t.join("agent/deps/y"), "dep");
     write(&t.join("release/aida"), "rel");
