@@ -4727,6 +4727,7 @@ pub(crate) fn handle_git_backend_command(
             full,
             rels,
             json,
+            raw,
         } => {
             // trace:TASK-518 | ai:antigravity
             let mut resolved_id = id.clone();
@@ -5820,8 +5821,24 @@ pub(crate) fn handle_git_backend_command(
                             crate::do_dispatch::human_contract(m).dimmed()
                         );
                     }
+                    // Human output at an interactive terminal renders the
+                    // markdown in the description (the knowledge body for
+                    // FAQs and other knowledge types) and in comment bodies.
+                    // `--raw` / AIDA_MARKDOWN=raw and piped output print the
+                    // source exactly as before. trace:STORY-1652 | ai:claude
+                    let markdown_width = crate::markdown_render::show_renders_markdown(*raw)
+                        .then(crate::markdown_render::terminal_width);
                     if !req.description.is_empty() {
-                        println!("\n{}", req.description);
+                        match markdown_width {
+                            Some(width) => println!(
+                                "\n{}",
+                                crate::markdown_render::render_markdown_for_terminal(
+                                    &req.description,
+                                    width
+                                )
+                            ),
+                            None => println!("\n{}", req.description),
+                        }
                     }
                     // STORY-1434: corrections and carve-outs recorded as
                     // comments must be visible in the DEFAULT view (no
@@ -5840,7 +5857,7 @@ pub(crate) fn handle_git_backend_command(
                         if !visible_comments.is_empty() {
                             println!("\n{}:", "Corrections / carve-outs".yellow().bold());
                             for c in &visible_comments {
-                                print_comment(c, 0);
+                                crate::print_comment_with(c, 0, markdown_width);
                             }
                         }
                     }
@@ -5872,7 +5889,7 @@ pub(crate) fn handle_git_backend_command(
                     {
                         println!("\n{}:", "Comments".green().bold());
                         for c in &req.comments {
-                            print_comment(c, 0);
+                            crate::print_comment_with(c, 0, markdown_width);
                         }
                     }
                     // STORY-582: surface the durable processing record — the

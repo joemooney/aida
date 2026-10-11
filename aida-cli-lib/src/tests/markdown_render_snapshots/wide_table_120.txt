@@ -1,0 +1,10 @@
+┌─────────────┬───────────────────────────────────────────────────┬────────────────────────────────────────────────────┐
+│             │ aida queue work --auto-complete                   │ aida drain start                                   │
+├─────────────┼───────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ No selector │ The head of your role's queue: one spec           │ The whole queue (--drain): every spec that can run │
+│             │                                                   │ unattended, skipping blocked, human-only or        │
+│             │                                                   │ in-flight ones                                     │
+│ Sessions    │ Interactive by default: you can talk to each      │ Headless by default (--no-human=both)              │
+│             │ phase's session                                   │                                                    │
+│ Stopping    │ Ctrl-C, or the budgets (--max, --max-failures)    │ Those budgets, plus aida drain stop                │
+└─────────────┴───────────────────────────────────────────────────┴────────────────────────────────────────────────────┘

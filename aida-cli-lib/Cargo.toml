@@ -26,6 +26,11 @@ clap = { workspace = true }
 inquire = { workspace = true }
 colored = { workspace = true }
 crossterm = { workspace = true }
+# Terminal markdown rendering for `aida show` (a small renderer over the
+# CommonMark parser aida-core already uses; unicode-width for display-width
+# alignment). Both were already in the dependency graph. trace:STORY-1652 | ai:claude
+pulldown-cmark = { version = "0.9", default-features = false }
+unicode-width = "0.2"
 signal-hook = "0.3"
 # Pure-Rust unified-diff producer for `aida scaffold diff` (FR-1-027).
 # Lightweight, no hard dep on /usr/bin/diff — works on Windows too.

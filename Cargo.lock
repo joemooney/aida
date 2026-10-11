@@ -63,6 +63,7 @@ dependencies = [
  "libc",
  "prost",
  "protox",
+ "pulldown-cmark 0.9.6",
  "regex",
  "reqwest",
  "rusqlite",
@@ -80,6 +81,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "ts-rs-forge",
+ "unicode-width 0.2.2",
  "uuid",
 ]
 
