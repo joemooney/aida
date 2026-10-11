@@ -6,12 +6,12 @@ description: |
   Observed 2026-10-10 creating aida-host. `aida remote mirror gitlab --url ...` (with `aida init --github` before it) changed .aida/config.toml (mirror_remotes, provider, class, ci) but did not commit the change or mention it, so the file sat dirty until noticed. The mirror is also skipped on the first push ("not confirmed on origin"); that is expected, but the setup flow should still end with every hub in sync.
 
   Want: a command that changes committed config either commits it (as an [AI:tool] chore commit) or prints a clear "config changed; commit it" line. The init/mirror flow finishes with `aida remote mirror-sync` and `aida remote status`. Related: STORY-1656.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:27.326683954Z
-modified_at: 2026-10-11T07:48:21.651424178Z
+modified_at: 2026-10-11T13:46:49.606853044Z
 req_type: Bug
 tags:
 - forge
@@ -60,6 +60,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b37-5786-7bc3-8440-75599314352a
+  author: aida-session-start
+  timestamp: 2026-10-11T13:46:49.606852380Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
