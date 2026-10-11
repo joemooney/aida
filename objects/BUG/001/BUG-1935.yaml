@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:08.306254718Z
-modified_at: 2026-10-11T13:21:40.893724341Z
+modified_at: 2026-10-11T13:27:31.906622858Z
 req_type: Bug
 tags:
 - ci
@@ -59,6 +59,12 @@ comments:
   content: 'FACTORY PLAN (night): (1) CI column: in aida-cli-lib/src/pr_list.rs replace the inline statusCheckRollup loop with a pure helper github_rollup_ci_status(rollup, &CiGateConfig) that maps each rollup entry (CheckRun name/workflowName/status/conclusion; StatusContext context/state) to a ci_gate::CheckRow bucket and runs ci_gate::classify_red (required = [] so no extra API call; config read once via read_ci_gate_config). Real red -> Failing; only informational red -> ''Passing (N informational red)''; relevant pending -> Pending. Human table colours any ''Passing…'' green. (2) De-dup: a post-pass collapse_by_pr(entries) merges rows sharing pr_number, joining spec_id with '','' (order preserved) — applied at the return of both GitHub and GitLab builders so the listing loop (concurrently touched by BUG-1927) is not restructured. Tests (new #[cfg(test)] mod in pr_list.rs): ci_column_ignores_informational_checks, ci_column_fails_on_required_red, ci_column_pending_ignores_informational_pending, multi_spec_pr_is_one_row. Docs: aida pr list bullet in docs/cli/04-git-lifecycle.md (one row per PR, comma-joined spec ids in --json spec_id, informational checks don''t fail). Risks: no local compile; merge-hold-gate red stays Failing (no hold-marker lookup) as before.'
   created_at: 2026-10-11T13:21:40.893724341Z
   modified_at: 2026-10-11T13:21:40.893724341Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b25-ad42-7ac3-8575-f745388efe15
+  author: joe
+  content: 'FACTORY DRAFT: PR #2516 at 0af96267ac'
+  created_at: 2026-10-11T13:27:31.906622858Z
+  modified_at: 2026-10-11T13:27:31.906622858Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-7704-7672-a447-a2a2c13f06da
