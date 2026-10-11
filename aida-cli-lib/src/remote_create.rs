@@ -913,6 +913,15 @@ fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<
     None
 }
 
+/// The GitLab token for `host`: `AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`, else the
+/// host-scoped token `glab auth login` stored. Backs the create-if-missing
+/// project fallback.
+// trace:STORY-1656 | ai:claude
+pub(crate) fn gitlab_token_for_host(host: &str) -> Option<String> {
+    gitlab_release_token_from_env()
+        .or_else(|| gitlab_release_token_from_glab_config_for_host(&host.to_ascii_lowercase()))
+}
+
 fn gitlab_release_token_for_api_url(api_url: &str) -> Option<String> {
     gitlab_release_token_from_env().or_else(|| {
         // trace:TASK-1223 | ai:codex
@@ -2028,7 +2037,7 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
 /// [`handle_remote_mirror`] with the config-commit decision injected, so
 /// tests can drive both the commit and the hint path without a terminal.
 // trace:BUG-1938 | ai:claude
-fn run_remote_mirror(
+pub(crate) fn run_remote_mirror(
     project_root: &Path,
     name: &str,
     url: Option<&str>,
@@ -2069,6 +2078,11 @@ fn run_remote_mirror(
             anyhow::bail!("`git remote add {name} {u}` failed");
         }
         println!("{check} added remote `{name}` → {u}");
+        // A GitLab group that refuses push-to-create gets the project made
+        // through the API (private), so the first mirror push lands. A
+        // missing token leaves the remote wired and exits non-zero with the
+        // manual recipe. trace:STORY-1656 | ai:claude
+        crate::gitlab_project_create::ensure_gitlab_project_exists(project_root, u, false)?;
     }
 
     // 2. Store-leg fan-out config.

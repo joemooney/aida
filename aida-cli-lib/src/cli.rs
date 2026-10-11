@@ -12737,8 +12737,8 @@ pub enum Command {
     ))]
     #[clap(group(
         ArgGroup::new("init_visibility_target")
-            .args(["github", "forge"])
-            .multiple(false)
+            .args(["github", "forge", "gitlab"])
+            .multiple(true)
     ))]
     Init {
         /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
@@ -12854,6 +12854,21 @@ pub enum Command {
         // trace:STORY-823 | ai:codex
         #[clap(long, value_name = "NAME", requires = "dir")]
         forge: Option<String>,
+
+        /// Also create the project on this GitLab host and group
+        /// (HOST or HOST/GROUP; PRIVATE unless --public) and publish both
+        /// legs there. With --github it becomes a mirror hub; alone it is
+        /// origin. When the group refuses push-to-create, the project is
+        /// created through the GitLab API (needs a `glab` login or
+        /// GITLAB_TOKEN).
+        // trace:STORY-1656 | ai:claude
+        #[clap(
+            long,
+            value_name = "HOST[/GROUP]",
+            requires = "dir",
+            conflicts_with = "remote"
+        )]
+        gitlab: Option<String>,
 
         /// (deprecated, accepted for backwards compat) Initialize in
         /// distributed mode. Distributed is now the default, so this

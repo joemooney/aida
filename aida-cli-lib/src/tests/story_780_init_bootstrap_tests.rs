@@ -9,6 +9,7 @@ fn plain_plan(dir: std::path::PathBuf) -> BootstrapPlan {
         remote: None,
         forge: None,
         github_repo: None,
+        gitlab: None,
     }
 }
 

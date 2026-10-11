@@ -26,6 +26,10 @@ pub(crate) struct BootstrapPlan {
     pub remote: Option<String>,
     pub forge: Option<String>,
     pub github_repo: Option<String>,
+    /// A GitLab hub (`--gitlab HOST[/GROUP]` or a profile's `mirrors`): the
+    /// second hub when GitHub is origin, else origin itself.
+    // trace:STORY-1656 | ai:claude
+    pub gitlab: Option<crate::gitlab_project_create::GitLabHub>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,8 +103,8 @@ fn which_ok(tool: &str) -> bool {
 /// Everything that can refuse must refuse BEFORE the first mkdir, so a failed
 /// pre-flight leaves the filesystem untouched.
 pub(crate) fn preflight(plan: &BootstrapPlan) -> Result<()> {
-    if plan.public && !plan.github && plan.forge.is_none() {
-        bail!("--public only applies with --github or --forge");
+    if plan.public && !plan.github && plan.forge.is_none() && plan.gitlab.is_none() {
+        bail!("--public only applies with --github, --gitlab or --forge");
     }
     if !tool_on_path("git") {
         bail!("git is required to bootstrap a project and was not found on PATH");
@@ -143,7 +147,7 @@ pub(crate) fn resolve_forge_profile(plan: &mut BootstrapPlan) -> Result<()> {
 
     let selected = if let Some(name) = &plan.forge {
         Some(name.clone())
-    } else if plan.github || plan.remote.is_some() {
+    } else if plan.github || plan.remote.is_some() || plan.gitlab.is_some() {
         None
     } else if std::env::var("AIDA_HEADLESS").ok().as_deref() == Some("1") {
         profiles.defaults.profile.clone()
@@ -167,8 +171,31 @@ pub(crate) fn resolve_forge_profile(plan: &mut BootstrapPlan) -> Result<()> {
             }
         }
         crate::forge_profiles::ForgeProfileKind::GitLab => {
+            if plan.gitlab.is_some() {
+                bail!(
+                    "--forge `{name}` is a GitLab profile; drop --gitlab or name a GitHub profile"
+                );
+            }
             plan.remote = Some(profile.gitlab_remote_url(&repo)?);
         }
+    }
+    // A profile listing a mirror creates the repo on that forge too.
+    // trace:STORY-1656 | ai:claude
+    for mirror in &profile.mirrors {
+        let hub = profiles.require(mirror)?;
+        if hub.kind != crate::forge_profiles::ForgeProfileKind::GitLab
+            || profile.kind != crate::forge_profiles::ForgeProfileKind::GitHub
+        {
+            bail!(
+                "profile `{name}` mirrors `{mirror}`: only a GitHub profile mirroring a GitLab profile is supported"
+            );
+        }
+        if plan.gitlab.is_some() {
+            bail!(
+                "profile `{name}` lists more than one mirror hub; only one GitLab hub is supported"
+            );
+        }
+        plan.gitlab = Some(hub.gitlab_hub());
     }
     Ok(())
 }
@@ -318,40 +345,8 @@ fn origin_exists(dir: &Path) -> bool {
 /// in that order, every time. cwd is already the project dir here.
 pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
     let dir = std::env::current_dir().context("no current dir")?;
-    let branch = current_branch(&dir)?;
-    let name = repo_name(&plan.dir);
-
-    if plan.github {
-        let repo_arg = plan.github_repo.as_deref().unwrap_or(&name);
-        if origin_exists(&dir) {
-            println!(
-                "  {} origin already configured — skipping repo creation",
-                "Note:".dimmed()
-            );
-            run_in(&dir, "git", &["push", "-u", "origin", &branch])?;
-        } else {
-            let argv = crate::forge::ForgeKind::GitHub
-                .repo_create_argv(repo_arg, plan.public)
-                .expect("github forge always yields a create argv");
-            let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-            run_in(&dir, argv_refs[0], &argv_refs[1..])?;
-            println!(
-                "  {} created {} GitHub repo `{}` and pushed `{}`",
-                "+".green(),
-                if plan.public { "public" } else { "private" },
-                repo_arg,
-                branch
-            );
-        }
-    } else if let Some(url) = &plan.remote {
-        if !origin_exists(&dir) {
-            run_in(&dir, "git", &["remote", "add", "origin", url])?;
-        }
-        // Works for hosts with push-to-create (GitLab): the first push
-        // creates the project.
-        run_in(&dir, "git", &["push", "-u", "origin", &branch])?;
-        println!("  {} pushed `{}` to {}", "+".green(), branch, url);
-    } else {
+    let Some(hubs) = publish_remotes(plan, &dir)? else {
+        let branch = current_branch(&dir)?;
         println!();
         println!(
             "  {} local-only project — when you add a remote, push BOTH legs:",
@@ -361,17 +356,128 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
         println!("      git push -u origin aida-store");
         emit_enter_dir(&plan.dir);
         return Ok(());
+    };
+    // Every hub already agrees (publish_remotes verified it); show the
+    // standard drift readout so the operator sees the same view later
+    // `aida remote status` gives. trace:STORY-1656 | ai:claude
+    if hubs.len() >= 2 {
+        println!();
+        println!("  {} aida remote status", "$".dimmed());
+        if let Err(e) = crate::remote_create::handle_remote_status(&dir, false, true) {
+            eprintln!("  {} remote status unavailable: {e}", "Note:".dimmed());
+        }
+    }
+    println!();
+    println!("  {} project ready:", "✓".green().bold());
+    emit_enter_dir(&plan.dir);
+    Ok(())
+}
+
+/// Create/attach every requested hub and publish to each: the code branch to
+/// every hub first, then `aida-store` to every hub (the TASK-844 order), then
+/// verify each hub's tips equal local. Returns the hub remote names, or None
+/// for a local-only project. A GitLab hub whose push-to-create is refused is
+/// created through the API; with no token the error carries the manual
+/// recipe and an already-created GitHub repo is reported, never rolled back.
+// trace:STORY-780 | ai:claude
+// trace:STORY-1656 | ai:claude
+pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option<Vec<String>>> {
+    let branch = current_branch(dir)?;
+    let name = repo_name(&plan.dir);
+    let repo_arg = plan.github_repo.as_deref().unwrap_or(&name).to_string();
+    let mut hubs: Vec<String> = Vec::new();
+
+    if plan.github {
+        if origin_exists(dir) {
+            println!(
+                "  {} origin already configured — skipping repo creation",
+                "Note:".dimmed()
+            );
+            run_in(dir, "git", &["push", "-u", "origin", &branch])?;
+        } else {
+            let argv = crate::forge::ForgeKind::GitHub
+                .repo_create_argv(&repo_arg, plan.public)
+                .expect("github forge always yields a create argv");
+            let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+            run_in(dir, argv_refs[0], &argv_refs[1..])?;
+            println!(
+                "  {} created {} GitHub repo `{}` and pushed `{}`",
+                "+".green(),
+                if plan.public { "public" } else { "private" },
+                repo_arg,
+                branch
+            );
+        }
+        hubs.push("origin".to_string());
+    } else if let Some(url) = &plan.remote {
+        if !origin_exists(dir) {
+            run_in(dir, "git", &["remote", "add", "origin", url])?;
+        }
+        // Works for hosts with push-to-create (GitLab): the first push
+        // creates the project.
+        run_in(dir, "git", &["push", "-u", "origin", &branch])?;
+        println!("  {} pushed `{}` to {}", "+".green(), branch, url);
+        hubs.push("origin".to_string());
+    }
+
+    // The GitLab hub: origin when it is the only forge, else a mirror hub.
+    // trace:STORY-1656 | ai:claude
+    let mut gitlab_mirror: Option<String> = None;
+    if let Some(hub) = &plan.gitlab {
+        let remote = if hubs.is_empty() {
+            "origin".to_string()
+        } else {
+            crate::gitlab_project_create::GITLAB_HUB_REMOTE.to_string()
+        };
+        let url = match aida_core::git_ops::remote_url(dir, &remote) {
+            Some(existing) => existing,
+            None => {
+                let url = hub.remote_url(&name);
+                run_in(
+                    dir,
+                    "git",
+                    &["remote", "add", remote.as_str(), url.as_str()],
+                )?;
+                url
+            }
+        };
+        if let Err(e) = crate::gitlab_project_create::push_with_create_fallback(
+            dir,
+            &remote,
+            &url,
+            &branch,
+            remote == "origin",
+            plan.public,
+        ) {
+            if plan.github {
+                eprintln!(
+                    "  {} the GitHub repo `{repo_arg}` was created and `{branch}` pushed — it is left in place; \
+                     re-run once the GitLab project exists",
+                    "Note:".dimmed()
+                );
+            }
+            return Err(e);
+        }
+        println!("  {} pushed `{}` to {}", "+".green(), branch, url);
+        if remote != "origin" {
+            gitlab_mirror = Some(remote.clone());
+        }
+        hubs.push(remote);
+    }
+
+    if hubs.is_empty() {
+        return Ok(None);
     }
 
     // Bootstrap runs the standard `aida init` before a hosted remote may exist,
     // so the scaffolded config can briefly say pure-git. Once `origin` is real,
     // refresh the provider from the remote host before drains/reviewers see it.
     // trace:BUG-1109 | ai:codex
-    if let Some(detected) = crate::forge::origin_url(&dir)
+    if let Some(detected) = crate::forge::origin_url(dir)
         .map(|u| crate::forge::detect_forge_kind(&u))
         .filter(|kind| *kind != crate::forge::ForgeKind::None)
     {
-        if crate::forge::write_forge_config_provider(&dir, detected).unwrap_or(false) {
+        if crate::forge::write_forge_config_provider(dir, detected).unwrap_or(false) {
             println!(
                 "  {} refreshed forge provider to {}",
                 "+".green(),
@@ -380,16 +486,51 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
         }
     }
 
-    // The store leg, always last and never skipped when a remote exists.
-    run_in(&dir, "git", &["push", "-u", "origin", "aida-store"])?;
+    // The store leg, always last and never skipped when a remote exists —
+    // to every hub, after the code branch reached every hub.
+    for hub in &hubs {
+        if hub == "origin" {
+            run_in(dir, "git", &["push", "-u", "origin", "aida-store"])?;
+        } else {
+            run_in(dir, "git", &["push", hub.as_str(), "aida-store"])?;
+        }
+    }
     println!(
-        "  {} pushed `aida-store` (the requirements store)",
-        "+".green()
+        "  {} pushed `aida-store` (the requirements store) to {}",
+        "+".green(),
+        hubs.join(", ")
     );
-    println!();
-    println!("  {} project ready:", "✓".green().bold());
-    emit_enter_dir(&plan.dir);
-    Ok(())
+
+    // Wire the second hub as a mirror (store fan-out + code-leg hook). The
+    // config change is left for init's own end-of-run refresh to settle.
+    // trace:STORY-1656 | ai:claude
+    if let Some(mirror) = &gitlab_mirror {
+        crate::remote_create::run_remote_mirror(
+            dir,
+            mirror,
+            None,
+            crate::config_commit::CommitMode::Never,
+        )?;
+    }
+
+    let disagreements = crate::gitlab_project_create::hub_disagreements(
+        dir,
+        &hubs,
+        &[branch.as_str(), "aida-store"],
+    );
+    if !disagreements.is_empty() {
+        bail!(
+            "the hubs do not agree after publishing:\n  {}\nRun `aida remote status` for the full picture.",
+            disagreements.join("\n  ")
+        );
+    }
+    println!(
+        "  {} every hub ({}) agrees on `{}` and `aida-store`",
+        "+".green(),
+        hubs.join(", "),
+        branch
+    );
+    Ok(Some(hubs))
 }
 
 /// How the final `cd` into the new project reaches the calling shell.
