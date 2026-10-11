@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:49:05.302626163Z
-modified_at: 2026-10-11T07:45:28.432864366Z
+modified_at: 2026-10-11T07:49:25.959485807Z
 req_type: Bug
 tags:
 - cli
@@ -56,6 +56,30 @@ comments:
   created_at: 2026-10-11T07:42:58.062590729Z
   modified_at: 2026-10-11T07:42:58.062590729Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a129f0-2347-7f52-a4c7-921e2c99b8e8
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    Root cause
+    - aida-cli-lib/src/cli.rs `Command::Push` (≈11260-11265) and `Command::Pull` (≈11377-11382): the `///` doc comments that clap renders as `--help` text are swapped between `code_only` and `store_only`. The implementation (lib_part4.rs `handle_push_command` ≈12354-12362/12385/12601 and `handle_pull_dry_run` ≈12068/12119) gates on the flag NAMES: `--code-only` drops the store leg and pushes/pulls code; `--store-only` drops the code leg. `Fetch` wording is already correct and is the reference shape.
+    - No docs/cli, template, or MCP surface repeats the swapped sentences (`rg "Skip the code push|Skip the orphan-store sync"` outside cli.rs is empty), so the manual needs no text change.
+
+    Files
+    - aida-cli-lib/src/cli.rs — fix the four doc strings; add `// trace:BUG-1917 | ai:claude`.
+    - aida-cli-lib/src/tests/push_pull_scope_tests.rs — new `push_pull_fetch_leg_flags_describe_the_leg_they_keep`: renders each of push/pull/fetch via `Cli::command()`, reads `--code-only`/`--store-only` `get_help()`, and asserts the leg named right after "skip the" is the dropped leg (store for --code-only, code for --store-only) and the kept leg is named. Fails on the current (swapped) text; passes for Fetch's existing wording.
+    - aida-cli-lib/src/tests/bug_1633_pull_push_followups_tests.rs — new `push_dry_run_scope_flags_keep_only_the_named_leg`: `push_dry_run_legs(.., code_only=true, ..)` yields only the `code` leg and `store_only=true` only the `store` leg (uses the existing `push_project` fixture).
+
+    Acceptance mapping
+    1. Each flag's help describes what it does → cli.rs doc-string fix (push + pull).
+    2. A test pins help text to behaviour → `push_pull_fetch_leg_flags_describe_the_leg_they_keep`.
+    Triage extras: dry-run plan names only the in-scope leg → `push_dry_run_scope_flags_keep_only_the_named_leg`; docs embed no swapped text → verified empty, no change.
+
+    Non-goals: no behaviour change to either leg; Fetch wording untouched.
+    Built only on CI; not compiled locally (factory rule).
+  created_at: 2026-10-11T07:49:25.959485807Z
+  modified_at: 2026-10-11T07:49:25.959485807Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129ea-0625-7c83-95ff-dbcf0ccc406b
   author: joe
