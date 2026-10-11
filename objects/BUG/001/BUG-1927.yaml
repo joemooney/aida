@@ -8,12 +8,12 @@ description: |-
   Fix: list every open PR. Unmapped ones get Spec ID '—', or the spec found through the PR body, branch or lease if one exists (PR #2480's body names STORY-1488/TASK-1538), shown as 'body:TASK-1538'. Add a --mapped-only flag for the old behaviour. Do the same in the TOON/JSON outputs, with spec_id null and a mapping_source field.
 
   Acceptance: with one open PR whose title has no spec ID, aida pr list shows it with its CI/rebase columns. A test covers a body-only reference and a PR with no reference at all.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:22:50.976734054Z
-modified_at: 2026-10-11T07:47:31.313289443Z
+modified_at: 2026-10-11T13:17:29.572720744Z
 req_type: Bug
 tags:
 - cli
@@ -63,6 +63,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b1c-7c64-7e42-bb37-b912ded04ae6
+  author: aida-session-start
+  timestamp: 2026-10-11T13:17:29.572719995Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
