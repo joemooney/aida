@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T23:09:03.897481729Z
+modified_at: 2026-10-11T23:23:54.632184792Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -69,6 +69,12 @@ comments:
   content: 'IMPLEMENTED: PR #2543 (head 8268d438e8). resolve_session_end_root() in session_end.rs rebinds project_root to the main checkout (git worktree registry) before symlink stripping. Hermetic binary tests in aida-cli/tests/bug_1952_session_end_from_worktree.rs (claim+manifest reap / parity with main, BUG-483 peer guard, pool return) all fail without the fix. BUG-1947 should evaluate its live-process check against the same resolved project_root.'
   created_at: 2026-10-11T23:09:03.897481729Z
   modified_at: 2026-10-11T23:09:03.897481729Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
+- id: 01a12d47-ad88-7bf3-934d-e700ec308a55
+  author: joe
+  content: 'Night relay: PR #2543 was APPROVED by a fresh reviewer at 8268d438 (the 3 tests fail without the fix, for the right reasons). The low nits (test hermeticity, pool assert order, comment) are fixed at 5f171b50, and the orchestrator verified the delta. Held by the lib-split landing window: it releases after #2526 merges + an advisor/human `aida merge-hold clear 2543`, then merge with --match-head-commit.'
+  created_at: 2026-10-11T23:23:54.632184792Z
+  modified_at: 2026-10-11T23:23:54.632184792Z
   session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a12b20-a9e0-73b3-b17d-594a14e60951
