@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-11T01:51:28.976757455Z
+modified_at: 2026-10-11T07:02:02.445153266Z
 req_type: Story
 tags:
 - cache
@@ -268,4 +268,38 @@ comments:
   created_at: 2026-10-11T01:51:28.976757455Z
   modified_at: 2026-10-11T01:51:28.976757455Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a129c4-bfcd-7f61-be0e-b0bdb14a89a8
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: architecture parent; slices B (TASK-1526, tagged batch:night-2026-10-10) and C (TASK-1527, blocked by B) are owned by other relays tonight. This plan covers ONLY the parent's remaining closure obligations.
+
+    ## Approach
+    The ADVISOR SIGNOFF (comments[5], 2026-09-26) split the story: A = BUG-1664 + BUG-1670 (both Completed), B = TASK-1526 (Approved; V4 design APPROVED-AS-AMENDED design-only per comments[11], no measured pass yet), C = TASK-1527 (Approved, blocked by B). TASK-1515 (A11) is Completed. The parent is tagged `closure:pending` and "closes when B and C complete" (comments[6]). What the parent still owes beyond the slices: (1) acceptance line #4 must be reworded per A13 ("no reader path calls with_cache_write" → scoped to single-flight LOSERS); (2) the BUG-1674 amendment (comments[8]) added `show` to the stale-allowed list — description already updated (comments[9]) but the 24h full-show measurement "both limbs unmet" (comments[11]) must be recorded before closure; (3) the 2026-10-05 and 2026-10-10 cache.db corruption recurrences (comments[10], [12]) are new evidence NOT covered by B/C acceptance — file two children/bugs: rebuild-from-malformed and FTS write path under concurrency; (4) TASK-1514's acceptance must carry the A9 MCP-label line; (5) final closure evidence: the four-reader < 2 s measurement and worker-kill recovery, run on the merged binary, posted here.
+
+    ## Files and functions (parent-level, no code)
+    - STORY-1484 description — acceptance #4 reword (A13); add "closes when TASK-1526 and TASK-1527 Completed and the four-reader measure is posted".
+    - New BUG: `aida cache rebuild` refuses a malformed cache.db ("database disk image is malformed", `vtable constructor failed: requirements_fts`) — expected: quarantine + rebuild from scratch (aida-core/src/db/cache.rs:1767 rebuild path).
+    - New BUG/SPIKE: FTS write-path corruption under 4-6 concurrent writers on HDD (two occurrences 2026-10-10, one 2026-10-05); evidence in `.aida/cache.db.malformed-2026-10-10` and `.aida/quarantine/`.
+    - TASK-1514 — add A9 acceptance line ("each converted MCP read tool carries the cache object on every call").
+    - docs/explanations or docs/architecture/2026-09-26-spike-90-stale-cache-snapshot.md — closure note linking slices and measurements.
+
+    ## Tests (named, owned by slices; parent only verifies they exist at closure)
+    - four_concurrent_readers_one_refresh_under_two_seconds (B, AC1)
+    - loser_reader_labels_stale_and_exits_zero (B, AC2)
+    - worker_killed_mid_refresh_leaves_cache_readable_and_request_present (C, AC3)
+    - reader_path_never_calls_with_cache_write (scoped to losers, A13)
+    - cache_status_shows_heads_request_and_lock_holder (C, AC5)
+
+    ## Risks
+    - Closing on slice merge alone without the measured four-reader result would repeat the "asserted, not measured" pattern.
+    - Corruption evidence may point at a cause outside B/C scope (binary replaced mid-stream by `make build-fast`); keep it as separate bugs, not scope creep on B.
+
+    ## Acceptance check
+    - #1, #2, #4 → B's PR and measurement. #3, #5 → C's PR. Parent → all five verified on main, A13 reword applied, BUG-1674 24h limbs recorded, corruption bugs filed and linked.
+
+    ## Gate before implementation
+    TASK-1526 merged with a fresh code-gate and measured T4 pass (comments[11]); TASK-1527 unblocked and merged; then the parent closes via the completion-seam, not by hand.
+  created_at: 2026-10-11T07:02:02.445153266Z
+  modified_at: 2026-10-11T07:02:02.445153266Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 execution_mode: guided
