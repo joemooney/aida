@@ -1,0 +1,51 @@
+id: 01a12b24-db8a-7b11-9614-12efc851e662
+spec_id: FAQ-40
+agreed_id: FAQ-40
+title: How do I give a running relay new instructions without editing its handoff?
+description: |
+  **Queue an operator note: `~/ai/aida-relay/bin/relay.sh --add-note <handoff-file|seat> "<text>"` (add `--sticky` for a standing rule). The relay injects it into the next session's prompt under "OPERATOR ADDENDUM", ahead of the handoff.**
+
+  ## Why
+  - A running session rewrites the handoff file when it rotates, so editing `latest.md` by hand races it and can be lost.
+  - Editing the `--prompt-file` works but is invisible and permanent: there's no record of delivery and nothing to drop it later.
+  - Addenda (aida-relay STORY-85) live next to the handoff in `addenda/`. Writing one never touches the handoff. The session acknowledges with an `ADDENDUM-ACK: <ids>` line, and `addenda/addenda.log` records added / delivered / ACK / dropped.
+
+  ## How
+  ```bash
+  # one-shot note to the night relay's next session
+  ~/ai/aida-relay/bin/relay.sh --add-note ~/ai/aida/.aida/handoff/night/latest.md \
+    "The factory relay is down; do factory PR rebases yourself."
+  # standing rule, every session until dropped
+  ~/ai/aida-relay/bin/relay.sh --add-note --sticky ~/ai/aida/.aida/handoff/night/latest.md "No --sandbox for reviewers."
+  ~/ai/aida-relay/bin/relay.sh --list-notes ~/ai/aida/.aida/handoff/night/latest.md
+  ~/ai/aida-relay/bin/relay.sh --drop-note <id> ...
+  ```
+  TARGET is a handoff file if it contains `/` or ends in `.md`, otherwise a seat name. Use `-` to read the text from stdin.
+
+  ## Caveat
+  - Notes reach the NEXT session, not the one currently running. For something urgent that touches a PR or spec, also comment on that PR or spec, because a session re-reads those before acting.
+  - Only relays started from a relay.sh that has STORY-85 (aida-relay fcfec22, 2026-10-10 18:51) read addenda.
+
+  ## See also
+  aida-relay STORY-85, aida-relay BUG-84 (run lock)
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:26:38.218389675Z
+modified_at: 2026-10-11T13:26:38.218389675Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+filed_at:
+  code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T13:26:38.218432905Z
