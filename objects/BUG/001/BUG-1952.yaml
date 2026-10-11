@@ -27,10 +27,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T13:51:24.828721911Z
+modified_at: 2026-10-11T13:51:26.368521342Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
+- plan:night
 - session-end
 - worktree
 comments:
