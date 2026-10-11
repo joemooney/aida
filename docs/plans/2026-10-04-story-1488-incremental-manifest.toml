@@ -1482,3 +1482,38 @@ items = [
   "fn referenced_spec_ids_from_messages",
   "fn scan_completed_without_commit_with_options",
 ]
+
+[module.human]
+purpose = "`aida human` review-awaiting list, advisor worklist, and the unblock/audit sweep (STORY-1488 slice 1)"
+items = [
+  "struct ReviewAwaiting",
+  "fn pr_has_approved_verdict",
+  "fn review_comment_verdict",
+  "fn latest_review_comment_verdict",
+  "fn verdict_file_written_at",
+  "fn spec_review_approved",
+  "fn review_candidates_approved",
+  "fn pr_has_local_verdict",
+  "fn verdict_candidates_for_pr",
+  "fn pr_review_decision",
+  "fn local_suppressed_prs",
+  "fn pr_review_rows",
+  "fn pr_review_rows_routed",
+  "fn specs_with_unmerged_commits",
+  "fn reviews_awaiting_human",
+  "fn handle_list_human",
+  "fn handle_advisor_worklist",
+  "fn collect_unblock_facts",
+  "fn handle_human_subcommand",
+  "fn handle_human_audit",
+  "fn human_subcommand_needs_no_storage",
+  "mod story_611_human_alias_tests",
+  "fn handle_human_unblock",
+  "fn run_interactive_unblock_sweep",
+  "fn print_groom_handoff_help",
+  "const NEEDS_DESIGN_TAG",
+  "fn tags_to_clear_on_note",
+  "fn load_spec_tags",
+  "mod task_1086_unblock_clears_needs_design",
+  "fn apply_sweep_choice",
+]
