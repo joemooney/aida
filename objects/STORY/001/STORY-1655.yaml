@@ -8,10 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-11T07:16:54.395608534Z
+modified_at: 2026-10-11T07:16:57.127813578Z
 req_type: Story
 tags:
 - review
+- triaged:night
 comments:
 - id: 01a129d2-5bfb-7aa3-a3f9-af9f872dcc6e
   author: night-fable
