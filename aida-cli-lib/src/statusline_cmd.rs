@@ -348,6 +348,16 @@ pub(crate) fn handle_statusline_command(
             }
         }
     }
+    // STORY-1648: compact marker while the primary checkout has drifted
+    // (uncommitted edits, untracked files, off main, or diverged from its
+    // upstream). One `git status` that takes no index lock; a clean checkout
+    // or any git failure renders nothing. Read-only.
+    // trace:STORY-1648 | ai:claude
+    if let Some(marker) = crate::main_checkout_drift::statusline_marker(
+        crate::main_checkout_drift::probe(&drain_root).as_ref(),
+    ) {
+        parts.push(marker.red().bold().to_string());
+    }
     // sess:<scope> segment — emitted when cwd resolves into an active
     // session lease's worktree. TASK-282: this standalone segment now
     // renders only when there is NO @SPEC segment to fold into (no active
