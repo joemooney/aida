@@ -21,13 +21,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:15:16.929822029Z
-modified_at: 2026-10-11T06:27:59.489117229Z
+modified_at: 2026-10-11T13:22:12.027533937Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - data-safety
 - sessions
 - worktree
+comments:
+- id: 01a12b20-cbbb-7992-a283-f9f9bd5886b2
+  author: joe
+  content: 'ADVISOR 2026-10-11: BUG-1952 (session_end from inside its own worktree resolves project_root to the worktree) is related, but probably not this sweep''s cause, since the sweep''s scratch files are in the main checkout. Land BUG-1952 first, then this one, so the live-process check uses the resolved main root. Both should land after lib-split run 7 (#2511) moves session_end.'
+  created_at: 2026-10-11T13:22:12.027533937Z
+  modified_at: 2026-10-11T13:22:12.027533937Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a129a5-9381-7d03-a327-42ae5b997c03
   author: joe
