@@ -8,8 +8,37 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:27:17.703282889Z
-modified_at: 2026-10-11T06:51:56.250722482Z
+modified_at: 2026-10-11T06:54:10.969828695Z
 req_type: Bug
+comments:
+- id: 01a129bd-8e19-7702-8b09-5700b4502760
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    Context: PR #2467 (merged, no spec trailer so this spec never closed) already added the `~/.aida` marker fallback and routed the cache-config call through `agent_output_mode_quiet()`. Remaining gaps: the hint still prints when the marker cannot be persisted (so a new process every invocation = spam), it still prints when stderr is not a terminal (no human watching; `2>&1` captures get polluted), and none of it is unit-tested because the decision, marker path, fs writes and `eprintln!` are fused in one function in `lib_part1.rs`.
+
+    Approach:
+    - Move the hint logic into `aida-cli-lib/src/output_format.rs` as pure, testable pieces:
+      - `toon_switch_hint_applies(pin, agent_env, stdout_is_tty, stderr_is_tty)` — true only on the real auto-switch path (no `--format`/`AIDA_OUTPUT_FORMAT` pin, no `AIDA_AGENT_OUTPUT`, stdout not a TTY) AND stderr is a TTY (keeps STORY-764's interactive-human-piping case; drops the noise case).
+      - `toon_switch_hint_marker(project_root, home)` — project `.aida/.format-hint-shown`, else `~/.aida/.format-hint-shown`, else None.
+      - `emit_toon_switch_hint_once(marker, &mut dyn Write) -> bool` — persist the marker FIRST; emit only if persistence succeeded. No marker path / unwritable marker => suppress rather than spam.
+      - `maybe_emit_toon_switch_hint()` thin wrapper (process-once + real fs/stderr) replaces the copy in `lib_part1.rs` (deleted there; tiny edit).
+    - `agent_output_mode()` calls `toon_switch_hint_applies` with real stdout/stderr TTY state.
+
+    Tests (`aida-cli-lib/src/tests/bug_1813_toon_hint_tests.rs`, mounted from `output_format.rs`):
+    - `hint_applies_only_on_real_auto_switch` — pinned format (toon/json/human), `AIDA_AGENT_OUTPUT` set, stdout TTY, or stderr non-TTY => no hint; plain pipe => hint.
+    - `marker_prefers_project_then_home_then_none`.
+    - `hint_emitted_at_most_once_with_project_marker` — tempdir project; first call writes hint + marker, second call silent.
+    - `hint_emitted_at_most_once_outside_project_via_home` — tempdir HOME fallback, same once-only.
+    - `no_marker_location_suppresses_hint`, `unwritable_marker_suppresses_hint`.
+
+    Risks: a human running `aida ... 2>&1 | less` no longer sees the nudge (acceptable; the durable reference is docs/environment-variables.md). Deleting ~30 lines from `lib_part1.rs` could conflict with tonight's module split if that region is extracted concurrently. Built only on CI; not compiled locally.
+
+    Acceptance check: tests above green on CI; `rg maybe_emit_toon_switch_hint` shows a single definition in output_format.rs; `make check-ci-fast` clean.
+  created_at: 2026-10-11T06:54:10.969828695Z
+  modified_at: 2026-10-11T06:54:10.969828695Z
+  session_id: 01a129bb7d82
 history:
 - id: 01a129bb-7fda-72e1-b287-631139fea06c
   author: aida-session-start
