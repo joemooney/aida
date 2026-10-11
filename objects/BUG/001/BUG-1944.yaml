@@ -15,12 +15,12 @@ description: |-
   (b) Any path that starts work on a spec (worktree add, session start, relay dispatch, the pr create/open path) moves Approved→InProgress.
   (c) Merge-time auto-bump completes an Approved spec whose (SPEC-ID) trailer lands on main, not only InProgress ones. Same gate rules (closure:pending holds still apply).
   (d) A regression test for each of (a)–(c).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T06:28:03.074485903Z
+modified_at: 2026-10-11T14:19:17.748360528Z
 req_type: Bug
 tags:
 - auto-bump
@@ -49,6 +49,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b55-1174-78d0-a5e1-3f9bdcd33643
+  author: joe
+  timestamp: 2026-10-11T14:19:17.748353888Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: db70971d43e7ced30e179fcbcb9483a1dbfae465
   branch: main
