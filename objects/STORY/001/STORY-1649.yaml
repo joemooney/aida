@@ -26,12 +26,12 @@ description: |-
   - AC3: `aida edit X --status completed`, for a code-type spec with no referencing commit on the default branch, exits 0 and prints a warning naming X and the opt-out tag.
   - AC4: the same command, for a spec with a shipped commit, or for a non-code type (decision, faq, …), prints no warning.
   - AC5: the warning and the doctor scan use the same rule, so the two cannot disagree. Test both on the same fixture.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:11:01.493042018Z
-modified_at: 2026-10-11T02:22:09.029829218Z
+modified_at: 2026-10-11T02:22:09.864099540Z
 req_type: Story
 tags:
 - agent-surface
@@ -58,6 +58,14 @@ comments:
   created_at: 2026-10-11T02:22:09.029829218Z
   modified_at: 2026-10-11T02:22:09.029829218Z
   session_id: ce7b935f-d5da-41d3-94da-7ef94d2537e4
+history:
+- id: 01a128c4-83c8-7663-b10d-a3f5ec8926ac
+  author: joe
+  timestamp: 2026-10-11T02:22:09.864093257Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
