@@ -519,3 +519,67 @@ fn relay_run_env_is_stamped_on_the_claim_lease() {
         leases[0]
     );
 }
+
+/// A tag-covered spec whose session crashed on a clean worktree: the row is
+/// not lifted (a tag match never vouches for a dead session), so it stays
+/// stale and is hidden by default — but the spec must still be visible in
+/// default `aida ps`, under "Driven", and counted as driven (not orphaned)
+/// in the TOON scalars.
+#[test]
+fn tag_covered_crashed_session_is_listed_under_driven_by_default() {
+    let (tmp, repo, home) = init_repo();
+    let spec = add_in_progress(&repo, &home, Some("batch:next"));
+    let wt = tmp.path().canonicalize().unwrap().join("wt-clean");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "clean-branch",
+            wt.to_str().unwrap(),
+        ],
+    );
+    write_lease_at(&repo, &wt, "c1ea5c1ea5c1", &spec, dead_pid(), None);
+
+    let relay = sleeper();
+    let pid = relay.id().to_string();
+    let reg = aida(
+        &repo,
+        &home,
+        &[
+            "driver",
+            "register",
+            "--run",
+            "lib-split",
+            "--tag",
+            "batch:next",
+            "--pid",
+            &pid,
+        ],
+    );
+    assert!(
+        reg.status.success(),
+        "register: {}",
+        String::from_utf8_lossy(&reg.stderr)
+    );
+
+    let human = aida(&repo, &home, &["ps", "--format", "human"]);
+    let text = String::from_utf8_lossy(&human.stdout);
+    let driven = text
+        .split("Driven")
+        .nth(1)
+        .unwrap_or_else(|| panic!("no Driven section in default ps: {text}"));
+    assert!(
+        driven.contains(&spec) && driven.contains("relay:lib-split"),
+        "{text}"
+    );
+    assert!(!text.contains("Orphaned"), "{text}");
+
+    let toon = aida(&repo, &home, &["ps", "--format", "toon"]);
+    let toon = String::from_utf8_lossy(&toon.stdout);
+    assert!(toon.lines().any(|l| l == "orphaned: 0"), "{toon}");
+    assert!(toon.lines().any(|l| l == "driven: 1"), "{toon}");
+    drop(relay);
+}

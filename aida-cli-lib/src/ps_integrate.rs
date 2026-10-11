@@ -2716,7 +2716,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         // like `aida integrate`'s `running:`/`stale_hidden:` pair.
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
-        println!("orphaned: {}", orphans.len());
+        // trace:STORY-1653 | ai:claude — driven orphans have their own count.
+        let driven_orphans = orphans
+            .iter()
+            .filter(|o| driver_view::orphan_is_driven(o))
+            .count();
+        println!("orphaned: {}", orphans.len() - driven_orphans);
+        println!("driven: {driven_orphans}");
         if let Some(lock) = &live_wave {
             println!(
                 "wave_id: {}",

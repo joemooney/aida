@@ -276,9 +276,14 @@ pub(crate) fn apply_overlay(
         }
         row.driver = Some(d);
     }
-    // A spec whose row the driver keeps live is not also an orphan.
+    // A spec whose row reads live under a driven resolution is not also an
+    // orphan. A row that only carries a label (a tag match on a dead session
+    // that stayed stale) keeps its orphan entry, which then prints under
+    // "Driven" — otherwise the spec would vanish from the default view.
+    // trace:STORY-1653 | ai:claude
     let driven_rows: HashSet<String> = rows
         .iter()
+        .filter(|r| matches!(r.state, LeaseState::Live))
         .filter(|r| r.driver.as_ref().is_some_and(DerivedDriver::is_driven))
         .filter_map(|r| r.spec.as_ref().map(|s| s.to_ascii_uppercase()))
         .collect();
