@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T08:01:33.933931651Z
+modified_at: 2026-10-11T08:01:44.456113529Z
 req_type: Bug
 tags:
 - factory:night
@@ -100,6 +100,15 @@ comments:
     Not compiled locally (factory rule); CI builds and runs the Rust tests.
   created_at: 2026-10-11T07:48:16.084852708Z
   modified_at: 2026-10-11T07:48:16.084852708Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129fb-6808-76d3-af2d-8bec2b84d98a
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2505 at 16078e0fba75107033844200afd04beb69c9e5ca
+
+    https://github.com/joemooney/aida/pull/2505 (draft, label factory). Branch bug-0445-work, worktree /home/joe/ai/aida-bug-0445-factory. Side-channel file (AIDA_INIT_CD_FILE) replaces the stdout capture in the wrapper init arm; wrapper advertises init-cd-file instead of init-cd. Not compiled locally; CI builds and runs the Rust tests.
+  created_at: 2026-10-11T08:01:44.456113529Z
+  modified_at: 2026-10-11T08:01:44.456113529Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129e8-9016-7d23-a79d-bdb8b8d5b999
