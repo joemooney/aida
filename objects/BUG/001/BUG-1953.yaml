@@ -19,11 +19,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-11T15:17:47.099235662Z
+modified_at: 2026-10-11T15:17:51.159841554Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - pr-ship
+comments:
+- id: 01a12b8a-adb7-7d33-affc-bf558989a6f9
+  author: joe
+  content: Approved at operator triage 2026-10-11 (advisor seat).
+  created_at: 2026-10-11T15:17:51.159841554Z
+  modified_at: 2026-10-11T15:17:51.159841554Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
   author: joe
