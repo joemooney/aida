@@ -13,11 +13,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:08.306254718Z
-modified_at: 2026-10-11T13:27:31.906622858Z
+modified_at: 2026-10-11T13:27:35.020161505Z
 req_type: Bug
 tags:
 - ci
 - cli
+- factory:night
 - triaged:night
 comments:
 - id: 01a129cd-af71-7fe3-bff8-7c281f3c596a
