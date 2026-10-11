@@ -1,10 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-11T02:20:36.762243298Z
+last_run: 2026-10-11T08:09:05.194188784Z
 last_by:
   seat: advisor
-  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
   vendor: antigravity
 result: done
-note: 'No live trip: the watchdog ran ok at 2026-10-11 02:14Z, its schedule record has no failure_trips, and the route came from a trip 10 days ago. No seat is running away now (aida ps: every implementer seat is dormant, with no wake loops). Nothing to stop.'
-due_since: 2026-10-11T07:51:26.307663571Z
-due_reason: on CronJobFailed:watchdog
+note: '01:12 advisor: 3 compaction findings, none runaway. fe2e54bf (product relay) finished at 00:33. d28185fc has been idle since 21:07. acdb011f is the factory relay''s session 1, which compacted once while orchestrating 4 parallel implementers; its log is advancing and it''s shipping PRs. No action.'
