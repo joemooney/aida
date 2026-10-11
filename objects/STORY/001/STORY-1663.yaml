@@ -21,12 +21,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:40:48.922607973Z
-modified_at: 2026-10-11T13:40:48.922607973Z
+modified_at: 2026-10-11T13:41:29.976698729Z
 req_type: Story
 tags:
 - merge
 - pr-ship
 - two-seat
+comments:
+- id: 01a12b32-76f8-79e1-832e-850e0ef92f42
+  author: joe
+  content: 'The decision this story retires the exception from: ADR-73.'
+  created_at: 2026-10-11T13:41:29.976698729Z
+  modified_at: 2026-10-11T13:41:29.976698729Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
