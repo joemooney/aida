@@ -1,0 +1,44 @@
+id: 01a12b85-745a-7992-a4ea-283ea350f354
+spec_id: FAQ-43
+agreed_id: FAQ-43
+title: How do I delete a comment I posted on a spec by mistake?
+description: |
+  **`aida comment delete --req-id <SPEC-ID> --comment-id <comment-uuid>`. The flags are required; the positional form `aida comment delete <SPEC> <id>` is rejected.**
+
+  ## Why
+  Comments are part of the spec's record, so deleting one takes both IDs explicitly. The comment's UUID is the line ending in `:` above each comment in `aida comment list <SPEC-ID>`.
+
+  ## How
+  ```bash
+  aida comment list TASK-1538 | grep -B3 -E '^\s+x$'      # find the stray comment's id
+  aida comment delete --req-id TASK-1538 --comment-id 01a12b66-496d-7033-8a8c-45ab3ef2da16
+  aida comment list TASK-1538 | grep -c 01a12b66           # 0 = gone
+  ```
+  To correct a comment instead of removing it, use `aida comment edit`. In shared work, prefer posting a short correction comment, so readers who already saw the original can tell what changed.
+
+  ## Caveat
+  Text you pass through a shell in double quotes is expanded first: backticks run as commands and their output is dropped. For long or code-heavy comments, write the text to a file and pass it with `"$(cat file)"`, or use a tool that writes the file directly.
+
+  ## See also
+  `aida comment --help`
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T15:12:08.794749722Z
+modified_at: 2026-10-11T15:12:08.794749722Z
+req_type: Faq
+tags:
+- audience:user
+- topic:cli
+filed_at:
+  code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:12:08.794786813Z
