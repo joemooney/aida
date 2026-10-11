@@ -39,7 +39,10 @@ pub(crate) fn handle_cache_command(
             }
         }
         CacheCommand::Rebuild { history: false } => {
-            let n = backend.rebuild_cache()?;
+            // trace:BUG-1940 | ai:claude
+            let outcome = backend.rebuild_cache_recovering()?;
+            print_quarantine_notice(&outcome);
+            let n = outcome.count;
             println!(
                 "{}: Cache rebuilt. {} requirement(s) projected from git store at {}.",
                 "OK".green(),
@@ -384,12 +387,36 @@ fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: b
     use aida_core::db::status_divergences;
     use aida_core::DatabaseBackend;
 
+    // trace:BUG-1940 | ai:claude
+    // A damaged cache file is reported as corruption with the fix, not as the
+    // raw sqlite error the status comparison below would hit.
+    let mut rebuilt = false;
+    if let Some(problem) = backend.cache().integrity_problem()? {
+        if !fix {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "corrupt": true,
+                        "problem": problem,
+                        "fix": "aida cache rebuild",
+                    }))?
+                );
+            }
+            anyhow::bail!(cache_corruption_message(Some(&problem)));
+        }
+        let outcome = backend.rebuild_cache_recovering()?;
+        if !json {
+            print_quarantine_notice(&outcome);
+        }
+        rebuilt = true;
+    }
+
     let store = backend.inner().load()?;
     let mut divergences = status_divergences(backend.cache(), &store)?;
-    let mut rebuilt = false;
 
     if fix && !divergences.is_empty() {
-        backend.rebuild_cache()?;
+        backend.rebuild_cache_recovering()?;
         rebuilt = true;
         // Re-derive from a freshly-read store so the re-check compares against
         // the same canonical bytes the rebuild projected from.
@@ -453,4 +480,47 @@ fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: b
             divergences.len()
         )
     }
+}
+
+/// One-line, actionable description of a corrupt cache.
+// trace:BUG-1940 | ai:claude
+pub(crate) fn cache_corruption_message(problem: Option<&str>) -> String {
+    match problem {
+        Some(problem) => format!(
+            "the local AIDA cache (.aida/cache.db) is corrupt ({problem}). Fix: aida cache rebuild"
+        ),
+        None => {
+            "the local AIDA cache (.aida/cache.db) is corrupt. Fix: aida cache rebuild".to_string()
+        }
+    }
+}
+
+/// Replace a corruption-class cache error (SQLITE_CORRUPT / SQLITE_NOTADB / a
+/// broken FTS table) with the one-line fix, so a read command never surfaces
+/// the raw sqlite error. Every other error passes through untouched; a lock or
+/// busy error is never rewritten.
+// trace:BUG-1940 | ai:claude
+pub(crate) fn with_cache_corruption_hint(err: anyhow::Error) -> anyhow::Error {
+    if aida_core::db::is_cache_corruption_error(&err) {
+        anyhow::anyhow!(cache_corruption_message(None))
+    } else {
+        err
+    }
+}
+
+// trace:BUG-1940 | ai:claude
+fn print_quarantine_notice(outcome: &aida_core::db::CacheRebuildOutcome) {
+    let Some(main) = outcome.quarantined.first() else {
+        return;
+    };
+    let problem = outcome
+        .problem
+        .as_deref()
+        .unwrap_or("integrity check failed");
+    println!(
+        "{}: the cache was corrupt ({}); moved it aside to {} (with any -wal/-shm files) and rebuilt it from the git store.",
+        "NOTE".yellow(),
+        problem,
+        main.display()
+    );
 }

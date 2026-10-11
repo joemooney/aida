@@ -710,7 +710,14 @@ fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Conn
         // busy/lock error (the BUG-681 fast-fail path) and permissions errors
         // are NOT self-healed here; they keep their existing behavior.
         Err(err) if is_sqlite_corruption_error(&err) => {
-            remove_corrupt_cache_files(path);
+            // BUG-1940: move the corrupt file aside instead of deleting it, so
+            // the evidence survives and the user is told where it went.
+            // trace:BUG-1940 | ai:claude
+            match quarantine_cache_files(path) {
+                Ok(moved) if !moved.is_empty() => note_cache_quarantined(path, &moved),
+                Ok(_) => {}
+                Err(_) => remove_corrupt_cache_files(path),
+            }
             // Re-open the now-absent file: sqlite creates a fresh empty db, the
             // WAL pragma succeeds, and Cache::open applies the schema. If the
             // recreate ALSO fails (e.g. the file couldn't be removed — a
@@ -810,6 +817,75 @@ fn remove_corrupt_cache_files(path: &Path) {
         let sidecar = PathBuf::from(format!("{}{}", path.display(), suffix));
         let _ = std::fs::remove_file(sidecar);
     }
+}
+
+/// True when the error chain says the cache FILE is damaged, not merely busy:
+/// the SQLITE_CORRUPT / SQLITE_NOTADB codes (any extended variant, e.g.
+/// SQLITE_CORRUPT_VTAB for a broken FTS index), or an FTS5 table whose
+/// constructor fails because its shadow tables are gone or garbled
+/// ("vtable constructor failed", reported under the generic SQLITE_ERROR).
+/// Lock, busy, read-only and I/O errors are never corruption, so a healthy cache
+/// that is merely locked by another process is never quarantined.
+// trace:BUG-1940 | ai:claude
+pub fn is_cache_corruption_error(err: &anyhow::Error) -> bool {
+    if is_sqlite_lock_error(err) {
+        return false;
+    }
+    is_sqlite_corruption_error(err) || is_broken_fts_vtable_error(err)
+}
+
+/// SQLITE_ERROR whose message is SQLite's own "vtable constructor failed"
+/// (FTS5 shadow tables missing). SQLite reports this under the generic code
+/// with no extended code, so its message is the only discriminator.
+// trace:BUG-1940 | ai:claude
+fn is_broken_fts_vtable_error(err: &anyhow::Error) -> bool {
+    // external-prose-classifier: cache::is_broken_fts_vtable_error
+    err.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<rusqlite::Error>(),
+            Some(rusqlite::Error::SqliteFailure(code, Some(msg)))
+                if code.code == rusqlite::ErrorCode::Unknown
+                    && msg.starts_with("vtable constructor failed")
+        )
+    })
+}
+
+/// Move `path` and its `-wal` / `-shm` sidecars to
+/// `<path>.corrupt-<UTC timestamp>{,-wal,-shm}`. Returns the destination paths
+/// of the files that existed and were moved (main file first). The cache is a
+/// rebuildable projection, so moving it aside loses nothing canonical; keeping
+/// the bytes (rather than deleting them) leaves evidence for diagnosing how the
+/// corruption happened.
+// trace:BUG-1940 | ai:claude
+pub fn quarantine_cache_files(path: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    let mut base = format!("{}.corrupt-{stamp}", path.display());
+    if Path::new(&base).exists() {
+        base = format!("{base}-{}", std::process::id());
+    }
+    let mut moved = Vec::new();
+    for suffix in ["", "-wal", "-shm"] {
+        let src = PathBuf::from(format!("{}{}", path.display(), suffix));
+        if !src.exists() {
+            continue;
+        }
+        let dst = PathBuf::from(format!("{base}{suffix}"));
+        std::fs::rename(&src, &dst)?;
+        moved.push(dst);
+    }
+    Ok(moved)
+}
+
+// trace:BUG-1940 | ai:claude
+fn note_cache_quarantined(path: &Path, moved: &[PathBuf]) {
+    eprintln!(
+        "note: the AIDA cache at {} was corrupt; moved it aside to {} and started a fresh one",
+        path.display(),
+        moved
+            .first()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
+    );
 }
 
 /// Run a cache write under the lock-info sidecar.
@@ -1406,6 +1482,85 @@ impl Cache {
             }
         }
         Ok(cache)
+    }
+
+    /// Run `PRAGMA integrity_check` on a separate read-only connection.
+    /// `Ok(None)` means the file is healthy; `Ok(Some(detail))` means it is
+    /// damaged (including a check that itself fails with a corruption-class
+    /// error, e.g. an FTS table whose constructor fails). Any other failure —
+    /// notably a lock or busy error — is returned as `Err`, never as damage.
+    // trace:BUG-1940 | ai:claude
+    pub fn integrity_problem(&self) -> Result<Option<String>> {
+        // FTS5's integrity hook needs a writable handle (on a read-only one it
+        // reports "unable to validate the inverted index ... attempt to write a
+        // readonly database" even for a healthy index), so open read-write
+        // unless this handle is read-only.
+        let flags = if self.read_only {
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+        } else {
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+        };
+        let check = || -> Result<String> {
+            let conn = Connection::open_with_flags(&self.path, flags)?;
+            // A short wait rides out a brief writer; a longer lock surfaces
+            // as "unable to validate" (unknown) below, never as damage.
+            conn.busy_timeout(Duration::from_millis(500))?;
+            Ok(conn.query_row("PRAGMA integrity_check(1)", [], |row| row.get(0))?)
+        };
+        match check() {
+            Ok(result) if result.eq_ignore_ascii_case("ok") => Ok(None),
+            // FTS5 reports "unable to validate the inverted index ...: <why>"
+            // when its check could not run at all — e.g. "database is locked"
+            // while another process writes, or "attempt to write a readonly
+            // database". That is "unknown", never damage: a healthy cache that
+            // is merely busy must not be quarantined.
+            // external-prose-classifier: cache::integrity_problem
+            Ok(result) if result.starts_with("unable to validate") => Ok(None),
+            Ok(result) => Ok(Some(result)),
+            Err(err) if is_cache_corruption_error(&err) => Ok(Some(err.to_string())),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Close this handle's connection, move the damaged files aside
+    /// ([`quarantine_cache_files`]) and reopen a fresh, empty cache at the same
+    /// path with the schema applied. Returns where the files went. Refuses on a
+    /// read-only handle (it cannot replace the file). Callers must only call
+    /// this after [`Self::integrity_problem`] confirmed damage.
+    // trace:BUG-1940 | ai:claude
+    pub fn quarantine_and_reopen(&self) -> Result<Vec<PathBuf>> {
+        if self.read_only {
+            anyhow::bail!(
+                "the AIDA cache at {} is corrupt but not writable here; move it aside by hand \
+                 (mv {p} {p}.corrupt; rm -f {p}-wal {p}-shm) and run `aida cache rebuild`",
+                self.path.display(),
+                p = self.path.display()
+            );
+        }
+        let mut guard = self.conn.lock().unwrap();
+        // Close the old connection BEFORE renaming: an open handle would later
+        // unlink `<path>-wal` by name on close, deleting the fresh cache's WAL.
+        let old = std::mem::replace(&mut *guard, Connection::open_in_memory()?);
+        let _ = old.close();
+        let moved = quarantine_cache_files(&self.path).with_context(|| {
+            format!(
+                "Failed to move the corrupt cache at {} aside",
+                self.path.display()
+            )
+        })?;
+        let fresh = Cache::open_at(self.path.clone(), false)?;
+        let Cache {
+            conn,
+            migration_pending,
+            usable_snapshot,
+            ..
+        } = fresh;
+        *guard = conn.into_inner().unwrap_or_else(|p| p.into_inner());
+        self.migration_pending
+            .store(migration_pending.into_inner(), Ordering::SeqCst);
+        self.usable_snapshot
+            .store(usable_snapshot.into_inner(), Ordering::SeqCst);
+        Ok(moved)
     }
 
     // Read-only connection, pinned before reading either metadata or rows.
@@ -6667,6 +6822,89 @@ mod tests {
             is_sqlite_corruption_error(&corrupt),
             "SQLITE_CORRUPT is the corruption class — self-heal applies"
         );
+    }
+
+    // BUG-1940: the broader classifier used by rebuild/verify/read hints
+    // accepts the broken-FTS shape and never a lock.
+    #[test]
+    fn cache_corruption_classifier_accepts_broken_fts_and_rejects_locks() {
+        for code in [rusqlite::ffi::SQLITE_BUSY, rusqlite::ffi::SQLITE_LOCKED] {
+            let lock = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(code),
+                Some("database is locked".to_string()),
+            ));
+            assert!(
+                !is_cache_corruption_error(&lock),
+                "code {code} is not corruption"
+            );
+        }
+        let vtab = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
+            Some("vtable constructor failed: requirements_fts".to_string()),
+        ));
+        assert!(is_cache_corruption_error(&vtab));
+        let corrupt_vtab = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(267), // SQLITE_CORRUPT_VTAB
+            None,
+        ));
+        assert!(is_cache_corruption_error(&corrupt_vtab));
+    }
+
+    // BUG-1940: integrity_problem finds a broken FTS table, quarantine moves
+    // the files aside, and the reopened handle is a usable fresh cache.
+    #[test]
+    fn integrity_problem_then_quarantine_and_reopen_recovers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1940-A", "fts row"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(cache.integrity_problem().unwrap(), None, "healthy cache");
+
+        let breaker = Connection::open(&path).unwrap();
+        breaker
+            .execute_batch("DROP TABLE requirements_fts_config")
+            .unwrap();
+        drop(breaker);
+        let problem = cache.integrity_problem().unwrap().expect("damage found");
+        assert!(problem.contains("requirements_fts"), "{problem}");
+
+        let moved = cache.quarantine_and_reopen().unwrap();
+        assert!(!moved.is_empty());
+        assert!(moved[0]
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("cache.db.corrupt-"));
+        assert!(moved[0].exists());
+        assert_eq!(
+            cache.rebuild_from_store(&store, "head").unwrap(),
+            1,
+            "the reopened handle rebuilds into a fresh file"
+        );
+        assert_eq!(cache.integrity_problem().unwrap(), None);
+    }
+
+    // BUG-1940: a healthy cache under another connection's write lock is not
+    // reported as damaged (BUSY is not corruption).
+    #[test]
+    fn integrity_problem_on_a_locked_healthy_cache_is_not_damage() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1940-B", "locked"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let holder = Connection::open(&path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let got = cache.integrity_problem();
+        assert!(
+            !matches!(got, Ok(Some(_))),
+            "a lock is never reported as damage: {got:?}"
+        );
+        holder.execute_batch("ROLLBACK").unwrap();
+        assert!(path.exists());
     }
 
     // trace:BUG-1752 | ai:codex

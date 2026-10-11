@@ -20,6 +20,19 @@ use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
 
+/// Result of [`CachedGitBackend::rebuild_cache_recovering`].
+// trace:BUG-1940 | ai:claude
+#[derive(Debug, Clone)]
+pub struct CacheRebuildOutcome {
+    /// Requirements projected into the rebuilt cache.
+    pub count: usize,
+    /// Where a corrupt cache file and its sidecars were moved (empty when the
+    /// old file was healthy).
+    pub quarantined: Vec<std::path::PathBuf>,
+    /// The integrity-check finding that triggered the quarantine.
+    pub problem: Option<String>,
+}
+
 pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
@@ -1141,6 +1154,40 @@ impl CachedGitBackend {
         let (store, head) = self.load_at_stable_head()?;
         let n = self.cache.rebuild_from_store(&store, &head)?;
         Ok(n)
+    }
+
+    /// [`Self::rebuild_cache`] that does not depend on the old cache file being
+    /// readable. If the rebuild fails and an integrity check confirms the file is
+    /// damaged, the file and its `-wal` / `-shm` sidecars are moved to a
+    /// quarantine path and the cache is rebuilt from the git store into a fresh
+    /// file. A lock/busy failure is returned as-is: a healthy cache that is merely
+    /// locked by another process is never quarantined.
+    // trace:BUG-1940 | ai:claude
+    pub fn rebuild_cache_recovering(&self) -> Result<CacheRebuildOutcome> {
+        let err = match self.rebuild_cache() {
+            Ok(count) => {
+                return Ok(CacheRebuildOutcome {
+                    count,
+                    quarantined: Vec::new(),
+                    problem: None,
+                })
+            }
+            Err(err) => err,
+        };
+        // Only a confirmed-damaged file is moved aside. A busy/locked cache, a
+        // store-load failure, or an integrity check that cannot run keeps the
+        // original error.
+        let problem = match self.cache.integrity_problem() {
+            Ok(Some(problem)) => problem,
+            Ok(None) | Err(_) => return Err(err),
+        };
+        let quarantined = self.cache.quarantine_and_reopen()?;
+        let count = self.rebuild_cache()?;
+        Ok(CacheRebuildOutcome {
+            count,
+            quarantined,
+            problem: Some(problem),
+        })
     }
 
     /// Re-stamp the cache HEAD-SHA after a write so the next stale-check

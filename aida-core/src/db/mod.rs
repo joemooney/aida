@@ -35,9 +35,10 @@ mod yaml_backend;
 #[cfg(feature = "native")]
 pub use cache::{
     cache_lock_info_path, compute_blocked, compute_degrees, edge_weight, expected_cache_status,
-    fast_fail_cache_enabled, read_cache_lock_info, set_fast_fail_cache, sort_summaries_natural_id,
-    status_divergences, ArchiveFilter, Cache, CacheLockInfo, DeferFilter, Degrees, ListFilter,
-    RequirementSummary, SortOrder, StatusDivergence,
+    fast_fail_cache_enabled, is_cache_corruption_error, quarantine_cache_files,
+    read_cache_lock_info, set_fast_fail_cache, sort_summaries_natural_id, status_divergences,
+    ArchiveFilter, Cache, CacheLockInfo, DeferFilter, Degrees, ListFilter, RequirementSummary,
+    SortOrder, StatusDivergence,
 };
 #[cfg(feature = "native")]
 pub use cache_lock::{
@@ -46,7 +47,7 @@ pub use cache_lock::{
     LockInfoReclaim, LockOwnerState,
 };
 #[cfg(feature = "native")]
-pub use cached_git_backend::CachedGitBackend;
+pub use cached_git_backend::{CacheRebuildOutcome, CachedGitBackend};
 #[cfg(feature = "native")]
 pub use git_backend::{BulkAtomicReport, GitBackend, StoreConflictError};
 // BUG-675: the queue-user case-fold resolver, exposed so the aida-cli statusline
