@@ -1,0 +1,27 @@
+id: 01a12ace-e801-7690-87ee-515d8586455b
+spec_id: BUG-1959
+agreed_id: BUG-1959
+title: 'aida dev build follow-ups from STORY-1646 review: rollback crash recovery swaps .promoted wrongly, untested smoke env, empty sha'
+description: |-
+  Minor findings from the night round-2 review of PR #2506 (STORY-1646):
+  1. dev_build.rs:773-781: crash recovery can restore the .promoted records the wrong way round. 'swapped' is only true while a binary is mid-swap. If rollback crashes after both binaries are swapped but before swap_meta_forward, .rollback/ holds only .promoted, and recovery puts the parked record back onto live, where it now describes the wrong pair. Only metadata is affected. Fix: treat the swap as started when LIVE_BINARIES.iter().any(|n| !swap.join(n).is_file() || !layout.prev(n).exists()). Add a test with .rollback/ holding only .promoted.
+  2. dev_build.rs:1250-1256: there is no test that the smoke commands remove GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE. Extract pub(crate) fn smoke_command(bin) -> Command and assert on get_envs().
+  3. With --allow-dirty and an unreadable HEAD, PromotionMeta.sha is empty, and status prints 'HEAD  at …'. Write 'unknown' instead, or skip the Promoted: line.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T11:52:45.313569378Z
+modified_at: 2026-10-11T11:52:45.313569378Z
+req_type: Bug
+tags:
+- batch:night-2026-10-10
+- dev-tooling
+filed_at:
+  code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: acfbf100-b965-4582-a364-9323fd734a00
