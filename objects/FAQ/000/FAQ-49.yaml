@@ -1,0 +1,45 @@
+id: 01a12ca6-fb7c-7830-993d-08dda581480f
+spec_id: FAQ-49
+agreed_id: FAQ-49
+title: 'How do I fix ''refusing AIDA store write: hook is not this build''s shipped hook''?'
+description: |
+  **Back up the stale AIDA hooks under `.git/hooks`, delete them, and run `aida scaffold apply`, which recreates missing files. Never use `--force`.**
+
+  ## Why
+  Before committing to the store, AIDA refuses to run an AIDA-generated git hook whose body differs from the hook this build ships. Plain `aida scaffold apply` skips files that already exist, so it won't replace the stale hook. `--force` replaces EVERY scaffold file, including the repo's own README.md, CLAUDE.md and AGENTS.md. Each refusal names only one hook, so refresh all the AIDA git hooks at once.
+
+  ## How
+  ```bash
+  cd <repo> && mkdir -p ~/hooks-bak-<repo> && \
+    cp .git/hooks/{pre-commit,prepare-commit-msg,commit-msg,post-commit} ~/hooks-bak-<repo>/ && \
+    rm .git/hooks/{pre-commit,prepare-commit-msg,commit-msg,post-commit} && \
+    aida scaffold apply 2>&1 | grep -v skipped
+  ```
+  Git hooks aren't tracked, so there's nothing to commit. If you customised a hook on purpose, remove its `# AIDA Generated` / `# To customize` header lines instead, and AIDA checks it as a custom hook.
+
+  ## Caveat
+  BUG-1977 tracks a hooks-only refresh and a refusal message that lists every stale hook.
+
+  ## See also
+  BUG-1977
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:28:23.292998169Z
+modified_at: 2026-10-11T20:28:23.292998169Z
+req_type: Faq
+tags:
+- audience:user
+- topic:hooks
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T20:28:23.293038009Z
