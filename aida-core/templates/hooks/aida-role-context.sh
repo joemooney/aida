@@ -38,14 +38,17 @@ shown_role="$canonical_label"
 case "$canonical_label" in
     implementer | guest | requester) ;;
     *)
-        if command -v aida >/dev/null 2>&1 && seat=$(
+        # `aida role current` exits 0 (empty line) when no grant is held; a
+        # nonzero status (timeout kill, failure) leaves the label unvalidated.
+        if command -v aida >/dev/null 2>&1 && seat_out=$(
             cd "$project_root" 2>/dev/null || exit 1
             if command -v timeout >/dev/null 2>&1; then
-                timeout 2 aida role current 2>/dev/null | head -n 1
+                timeout 2 aida role current 2>/dev/null
             else
-                aida role current 2>/dev/null | head -n 1
+                aida role current 2>/dev/null
             fi
         ); then
+            seat=$(printf '%s\n' "$seat_out" | head -n 1)
             if [ -z "$seat" ]; then
                 shown_role="${canonical_label} (no grant)"
             elif [ "$seat" != "$canonical_label" ]; then

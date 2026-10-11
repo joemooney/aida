@@ -1,7 +1,7 @@
 use super::*;
 use crate::statusline_cmd::{
     derive_session_branch_suffix, draft_backlog_statusline_segment, role_display_segment_text,
-    sess_anchor_annotation, sess_label_with_suffix, wt_divergence_segment,
+    routing_role, sess_anchor_annotation, sess_label_with_suffix, wt_divergence_segment,
 };
 
 /// TASK-244: matching shell + session role — no warning, plain
@@ -6077,4 +6077,33 @@ fn role_segment_reflects_the_seat_grant_not_the_label() {
     let (text, warn) = role_display_segment_text(&RoleDisplay::Default, "implementer", None, false);
     assert_eq!(text, "role:implementer (default)");
     assert!(!warn);
+}
+
+/// With no label, a validated grant's seat routes queue depth and @SPEC;
+/// a set label keeps routing even when the grant names another seat.
+// trace:BUG-1924 | ai:claude
+#[test]
+fn routing_role_prefers_the_grant_only_without_a_label() {
+    use crate::seat_authority::RoleDisplay;
+
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            None,
+            ("implementer".into(), true)
+        ),
+        ("integrator".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            Some("advisor"),
+            ("advisor".into(), false)
+        ),
+        ("advisor".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(&RoleDisplay::Default, None, ("implementer".into(), true)),
+        ("implementer".to_string(), true)
+    );
 }

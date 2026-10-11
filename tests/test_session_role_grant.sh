@@ -19,6 +19,7 @@ mkdir -p "$HOME" "$TMP/project/.aida/roles" "$TMP/bin"
 cat >"$TMP/bin/aida" <<'STUB'
 #!/bin/sh
 if [ "${1:-}" = "role" ] && [ "${2:-}" = "current" ]; then
+    [ -n "${STUB_SLEEP:-}" ] && sleep "$STUB_SLEEP"
     printf '%s\n' "${STUB_SEAT:-}"
 fi
 exit 0
@@ -148,5 +149,15 @@ check "an unreachable project root skips the grant check (no false tag)" \
 
 ctx=$(role_ctx STUB_SEAT=advisor)
 check "no label: role addendum stays silent" "" "$ctx"
+
+# A grant check that times out is unvalidated, not a missing grant.
+if command -v timeout >/dev/null 2>&1; then
+    out=$(run "$SESSION_HOOK" AIDA_SESSION_ROLE=advisor STUB_SEAT= STUB_SLEEP=4)
+    check "timed-out grant check shows the label untagged in the digest" \
+        "AIDA · role: advisor · queue: 0 · in-flight: 0" "$out"
+    ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT= STUB_SLEEP=4)
+    check "timed-out grant check shows the label untagged in the addendum" \
+        "# AIDA active role: advisor" "$(printf '%s\n' "$ctx" | head -n 1)"
+fi
 
 exit "$fail"

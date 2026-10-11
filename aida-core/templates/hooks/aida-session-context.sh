@@ -42,13 +42,20 @@ cd "$project_root" 2>/dev/null || exit 0
 # Role names compare case-insensitively, as AIDA canonicalizes them.
 label=$(printf '%s' "${AIDA_SESSION_ROLE:-}" | tr '[:upper:]' '[:lower:]')
 [ "$label" = "dialog" ] && label=advisor
+# `aida role current` exits 0 with an empty line when no grant is held, so a
+# nonzero status (killed by the timeout, or any failure) means the check did
+# not complete: show the label as-is rather than a false "(no grant)".
 if command -v timeout >/dev/null 2>&1; then
-    seat=$(timeout 2 aida role current 2>/dev/null | head -n 1)
+    seat_out=$(timeout 2 aida role current 2>/dev/null)
 else
-    seat=$(aida role current 2>/dev/null | head -n 1)
+    seat_out=$(aida role current 2>/dev/null)
 fi
+seat_rc=$?
+seat=$(printf '%s\n' "$seat_out" | head -n 1)
 ungranted=""
-if [ -n "$seat" ]; then
+if [ "$seat_rc" -ne 0 ]; then
+    role="${label:-none}"
+elif [ -n "$seat" ]; then
     role="$seat"
 elif [ -z "$label" ] || [ "$label" = "none" ]; then
     role=none

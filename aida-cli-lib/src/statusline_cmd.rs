@@ -58,10 +58,11 @@ pub(crate) fn handle_statusline_command(
     // no label but a valid grant, the granted seat routes too.
     // trace:BUG-1924 | ai:claude
     let role_display = crate::seat_authority::role_display(&project_root, raw_role.as_deref());
-    let (effective_role_name, role_is_default) = match (&role_display, raw_role.as_deref()) {
-        (crate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
-        _ => (effective_role_name, role_is_default),
-    };
+    let (effective_role_name, role_is_default) = routing_role(
+        &role_display,
+        raw_role.as_deref(),
+        (effective_role_name, role_is_default),
+    );
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.
@@ -451,6 +452,21 @@ pub(crate) fn handle_statusline_command(
         println!("{line}");
     }
     Ok(())
+}
+
+/// The role that routes queue depth and @SPEC, plus whether it is the
+/// implicit default. The label (`label_role`, already resolved) routes when
+/// set; with no label, a validated grant's seat routes instead.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn routing_role(
+    display: &crate::seat_authority::RoleDisplay,
+    raw_label: Option<&str>,
+    label_role: (String, bool),
+) -> (String, bool) {
+    match (display, raw_label) {
+        (crate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
+        _ => label_role,
+    }
 }
 
 /// Plain text of the statusline role segment, plus whether it warrants the
