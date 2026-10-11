@@ -8,12 +8,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-11T06:26:58.058888299Z
+modified_at: 2026-10-11T07:17:10.559159190Z
 req_type: Story
 tags:
 - history
 - index
 - performance
+comments:
+- id: 01a129d2-9b1f-7e60-a80f-09be466a8380
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because STORY-1650's inline catch-up is capped by design and nothing on main advances the history index off the hot path; this is a distinct architectural slice and does NOT subsume BUG-1942 (the inline stall guard would also block a detached budgeted run).
+
+    Problem
+    Bare `aida history` only does a bounded inline catch-up (STORY-1650 / BUG-1923), so any large gap (bulk adds, long idle, big pull) falls back to the digest with a "behind" note until someone runs `aida cache rebuild --history`. Keep the index current via a detached, single-flight, budgeted catch-up triggered by store commits/pulls or a schedule tick.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/history_cache.rs:1255-1280 catch_up_guarded(): only the unbounded (rebuild) path bypasses the budget and the stall counter; a background tick calling the budgeted path would be refused once CATCH_UP_FAILURES_KEY >= 3 (BUG-1942 item 1), so this story must either use an unbounded/chunked detached mode or reset the counter when it keeps a chunk.
+    - aida-cli-lib/src/history_cache.rs:1860-1870 serve() is the only index entry (caller history.rs:1341); no post-commit/post-pull hook calls into it (`rg "history_cache" aida-cli-lib/src` outside history.rs/cache_cmd finds no triggers).
+    - aida-cli-lib/src/cache_cmd.rs:117-150, :219 — STORY-1484's detached single-flight worker with flock + durable request file is the pattern to reuse; STORY-1484 is approved (not completed), so confirm which parts have landed before depending on them.
+    - STORY-1650 is in-progress; BUG-1923 completed (budgeted catch-up, lag report, stall pause).
+
+    Acceptance criteria
+    - After 200 store commits in a test fixture, a single tick (`aida cache refresh --history` detached, or the post-commit trigger) brings `aida cache status --json` to lag == 0 without any `aida history` invocation paying more than the STORY-1650 cap.
+    - Single-flight: two concurrent ticks produce one worker (flock held) and the second exits 0 immediately; test asserts one `updated_at` write.
+    - The history worker takes a lock distinct from (or correctly ordered with) the cache refresh flock; test runs a cache refresh and a history tick concurrently with no deadlock and both complete.
+    - With `[history] index = false` (or the existing cache_enabled() = false), no worker is spawned and no hook is installed; test asserts.
+    - A kept chunk from the background worker clears CATCH_UP_FAILURES_KEY so inline catch-up is re-enabled (coordinate with BUG-1942).
+
+    Scope / non-goals
+    - Not changing the inline cap or the stall/cool-down semantics (BUG-1942 owns those); not a daemon — a detached one-shot worker per trigger.
+    - Decision: keep BUG-1942 as a separate S bug; STORY-1661 is the M/L architecture slice. related:BUG-1942 related:BUG-1923 related:STORY-1650 related:STORY-1484 related:TASK-1717 (writer-lock serialization touches the same locks)
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:10.559159190Z
+  modified_at: 2026-10-11T07:17:10.559159190Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
