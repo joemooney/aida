@@ -3762,7 +3762,9 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
         if !meta.is_file() || !is_executable(&meta) {
             continue;
         }
-        let body = std::fs::read_to_string(&path).with_context(|| {
+        // TASK-346: read_atomic on a hook `aida scaffold apply` may be
+        // replacing concurrently.
+        let body = crate::read_atomic(&path).with_context(|| {
             format!(
                 "refusing AIDA store write: cannot read the `{name}` hook {}",
                 path.display()
@@ -3796,7 +3798,8 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     }
     if sources_config {
         let config = store.join(".aida").join("commit-config");
-        match std::fs::read_to_string(&config) {
+        // TASK-346: read_atomic, the scaffolder may be rewriting it.
+        match crate::read_atomic(&config) {
             Ok(body) => {
                 if let Some(line) = body.lines().find(|l| !is_literal_config_line(l)) {
                     anyhow::bail!(

@@ -151,8 +151,21 @@ impl Fx {
         wait_for(&self.obs.join(format!("reached-{hook}")), hook);
     }
 
+    /// Release the parked `hook` and wait until it has left the park: the
+    /// hook removes its `reached` marker on the way out, and a following
+    /// `arm` + `wait_reached` round for the same hook must not mistake this
+    /// round's marker for the next park.
     fn release(&self, hook: &str) {
+        let reached = self.obs.join(format!("reached-{hook}"));
         std::fs::write(self.obs.join(format!("release-{hook}")), "").unwrap();
+        let start = Instant::now();
+        while reached.exists() {
+            assert!(
+                start.elapsed() < WAIT,
+                "timed out waiting for the {hook} hook to leave the park"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn obs_lines(&self, hook: &str) -> Vec<String> {
