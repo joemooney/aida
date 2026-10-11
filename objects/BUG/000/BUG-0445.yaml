@@ -11,12 +11,12 @@ description: |-
   - Explicit `--format` / `AIDA_OUTPUT_FORMAT` / `AIDA_AGENT_OUTPUT` choices remain authoritative.
   - Piped or captured wrapper output retains non-interactive format selection.
   - Real-shell regression coverage exercises Bash and Zsh where available.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T13:03:25.381758416Z
+modified_at: 2026-10-11T13:03:36.401804638Z
 req_type: Bug
 tags:
 - factory:night
@@ -133,9 +133,26 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b0f-c5cf-7753-9b58-792df1ba6159
+  author: aida-auto-bump
+  timestamp: 2026-10-11T13:03:36.399645733Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b0f-c5d1-7682-9c58-408aa467ac3f
+  timestamp: 2026-10-11T13:03:36.401802997Z
+  agent: implementer
+  commit_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  summary: Completed via merge fba16d9c
 filed_at:
   code_sha: c67728c1dcaf8a577539d920bdc6a3c86126cebb
   branch: main
   dirty: true
   aida_version: 0.15.0
   aida_build_sha: 887bf7e5fb
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T13:03:36.399641392Z
+  completion_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
