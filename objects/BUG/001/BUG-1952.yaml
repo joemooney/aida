@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T13:22:03.984828229Z
+modified_at: 2026-10-11T13:51:24.828721911Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -40,6 +40,29 @@ comments:
   created_at: 2026-10-11T13:22:03.984828229Z
   modified_at: 2026-10-11T13:22:03.984828229Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b3b-8a9c-7372-a191-4ad963cff863
+  author: joe
+  content: |-
+    FACTORY PLAN (night): PLAN-ONLY. The advisor triage sequences this after lib-split run 7 (#2511, which moves session_end into session_end.rs), and #2511 is still OPEN, so there's no worktree and no code tonight. Implement on top of the post-split session_end.rs.
+
+    APPROACH: resolve the main checkout once, at the top of session_end, before anything is unlinked.
+    1. Right after find_project_root(), add a small pure-ish helper in session_end.rs: fn resolve_session_end_root(invocation_root: &Path) -> PathBuf. It (a) returns invocation_root if it has a real .git dir (main checkout), (b) otherwise tries parent_project_root_for_session(cwd) (lease parent_project_root), then (c) falls back to main_worktree_root_from(invocation_root), and (d) canonicalizes. Rebind project_root to the result, so list_leases, the mcp-claim reap (mcp_claim_path(&leases_dir(..))), release_claim(<root>/.aida-store), the manifest delete, the BUG-483 remaining-leases peer guard, both is_pool_worktree calls, the set_current_dir target and the post-removal detect_distributed_store_from all use the main root. After resolution, also prefer target.parent_project_root when it's Some and is_dir(), and debug_assert that it agrees.
+    2. Keep the TASK-68 cwd_was_inside_worktree / cd-out logic. It now chdirs to the real main root instead of the dying worktree.
+    3. Leave a hook for BUG-1947: its live-process check takes the same resolved root (a doc comment plus passing &project_root).
+
+    TESTS (temp dirs only; new file aida-cli-lib/src/tests/bug_1952_session_end_from_worktree_tests.rs, mirroring the session_end_resolution_tests / bug_1680_salvage_main_tests fixtures):
+    - bug_1952_resolve_root_from_linked_worktree_returns_main: git init a temp main, git worktree add a linked tree, symlink .aida/sessions and .aida-store the way link_worktree_runtime_state does, and assert resolve_session_end_root(<wt>) == canonical main.
+    - bug_1952_resolve_root_survives_runtime_unlink: same fixture. Call unlink_worktree_aida_runtime first, then assert the resolution still gives main (via the git fallback).
+    - bug_1952_session_end_inside_worktree_removes_claim_and_manifest: run session_end with cwd set inside the temp worktree (serialized behind the existing cwd test mutex, yes=true, skip_ci=true). Assert the mcp-claim file and .manifest.toml under main/.aida/sessions are gone.
+    - bug_1952_peer_guard_fires_from_inside_worktree: two leases share the worktree_path. session_end from inside it must NOT remove the worktree (BUG-483 guard), and the peer lease survives.
+
+    RISKS: session_end shells out to git and may need env isolation (HOME, AIDA_* vars) in tests; copy whatever the existing session_end integration tests already do. Process-cwd mutation needs the shared cwd lock. Never run against real sessions. Per the advisor note, review must actually RUN the cwd-inside-worktree test.
+
+    ACCEPTANCE CHECK: acceptance 1 maps to the helper plus the rebinding. Acceptance 2 maps to tests 3 and 4. Acceptance 3 maps to the shared-root hook for BUG-1947.
+    NEXT: once #2511 merges, take the lease, then implement BUG-1952 and BUG-1947 back to back.
+  created_at: 2026-10-11T13:51:24.828721911Z
+  modified_at: 2026-10-11T13:51:24.828721911Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a12b20-a9e0-73b3-b17d-594a14e60951
   author: joe
