@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T14:38:14.699589981Z
+modified_at: 2026-10-11T17:02:05.846455630Z
 req_type: Task
 tags:
 - closure:pending
@@ -585,6 +585,27 @@ comments:
   created_at: 2026-10-11T14:08:18.559496793Z
   modified_at: 2026-10-11T14:08:18.559496793Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12bea-1e16-7f91-a34e-da958d0666b0
+  author: joe
+  content: |-
+    RUN 7 REBASED, -r2 READY (PR #2511, branch slice-25, head d845bdd69c, base origin/main ad50bb8233). Tags (all pushed; each proven at its own SHA, warnings 0/0, cargo test --workspace --no-fail-fast 10175/10175, 8 ignored):
+    - slice-25-r2 orchestrator_leases cd54df6d45 (2252)
+    - slice-26-r2 upgrade_release 2c836bd3cd (move e8dbea2374 + adr9 retarget) (2072)
+    - slice-27-r2 findings_gate 7845fb3943 (2129)
+    - slice-28-r2 questions 295f8bf9c7 (2635)
+    - slice-29-r2 session_end d845bdd69c (1765)
+    verify_stack ad50bb8233..slice-25: 7 commits (5 MOVE, 1 RETARGET, 1 TOOLING), checks 1-8 PASS. merge-tree into current origin/main 97453570d6 is clean (4 newer commits; none touch the moved text).
+    Conflicts carried into the MOVEs, so removed and added text match: (1) #2506's warn_if_pulled_binary_stale hint (`aida dev build`) is in upgrade_release.rs; (2) main's new `#[path = "tests/bug_0445_init_side_channel_tests.rs"] mod bug_0445_init_side_channel_tests;` (trace BUG-0445) is in session_end.rs after task_1171; (3) STORY-1641's names_self check in export_coordinating_bin_env is in orchestrator_leases.rs; (4) the lib.rs dev_build wiring auto-merged and is correct.
+    Proof note: the first r2 attempt ran two lanes under host load ~60 and hit timing tests the moves don't touch. I filed BUG-1966 (bug_1683 two_hour_live_lock: fixture wraps each aida call in `timeout 30`; it also fails 1/5 on main ad50bb8233 under the same load), BUG-1967 (bug_1674 show_is_bounded 5 s ceiling, 26 s under load) and BUG-1968 (task_1507 bug_1923 failure-count race). Also open: BUG-1964 and BUG-1965 from earlier. The proof script lacked --no-fail-fast, so those failed runs stopped early; it now runs every binary. The tagged proofs are complete green re-runs.
+
+    RUN 8 PROCESS FIXES (your 07:20 review):
+    1+2. Shim checker PR #2530 off main (branch verify-stack-shim): a `pub use <m>::{..};` shim is wiring only if every name is declared bare `pub` at the root of lines the same MOVE removes from lib*.rs. Negative tests cover a pub(crate) item, an unmoved item and another module (35/35). check-ci-fast passes 23 gates. Please review and merge it first.
+    3. Tooling commit 3e3df5af4e / cf561add47 is dropped from slice-30. slice-30 is re-stacked on the new slice-25 (10 commits: 6 MOVE, 4 RETARGET). With #2530's checker every check passes except 6 (tags pending). Under the current main checker only check 3 fails at config_init, until #2530 lands. The config-trust conflict with main's config_commit.rs row is resolved by keeping both rows. The doctor_root MOVE carries main's new `main-checkout-drift` DOCTOR_CATEGORY_ALIASES entry. Fresh r2 proofs for slice-30..35-r2 are running now, then I'll push.
+    Also #2527 (Q5-style pub(crate) for load_review_story_inventory / require_review_handoff / prepare_registered_auto_complete_phase1) is fmt-fixed and rebased (head f445f94b82). phase_driver's companion phase_gates waits on it.
+    RUN 9 (slice-36, stacked on slice-30): session_misc, plan_report, drain_batch, trace, worktree_gc (+ config-trust inventory). Proofs are queued behind run 8. Unreviewed runs: 3 (7 re-review, 8, 9), so there's no run 10 until those clear.
+  created_at: 2026-10-11T17:02:05.846455630Z
+  modified_at: 2026-10-11T17:02:05.846455630Z
+  session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
