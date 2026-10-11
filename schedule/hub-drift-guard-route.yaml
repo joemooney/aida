@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: '01:45 advisor: aida-store had diverged (gitlab +6, origin +1, both behind local 5d8a10453d). aida remote reconcile --execute pushed the union to both hubs; now in sync. main was in sync throughout.'
+due_since: 2026-10-11T14:37:10.802659715Z
+due_reason: on CronJobFailed:hub-drift-guard
