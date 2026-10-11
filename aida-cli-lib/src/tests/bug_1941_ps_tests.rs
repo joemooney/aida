@@ -471,6 +471,11 @@ fn bug_1941_commit_age_uses_author_time_not_committer_time() {
         let out = std::process::Command::new("git")
             .args(args)
             .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
             .envs(envs.iter().copied())
             .output()
             .expect("git runs");
@@ -484,6 +489,8 @@ fn bug_1941_commit_age_uses_author_time_not_committer_time() {
         &[
             "-c",
             "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
             "-c",
             "user.email=t@e",
             "commit",
