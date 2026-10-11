@@ -1,0 +1,17 @@
+{
+  "id": "74c49da3-1685-4a52-85ee-ac0c31a30883",
+  "thread_id": "74c49da3-1685-4a52-85ee-ac0c31a30883",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "L"
+  },
+  "timestamp": 1791720474707,
+  "body": "You were mentioned on TASK-1538 by joe: ADVISOR REVIEW: run 7 (PR #2511), 2026-10-11 05:15. VERDICT: APPROVED at 72d5ced…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
