@@ -59,7 +59,7 @@ if grep -F "trace:" "$PAGE" >/dev/null; then
 fi
 
 # (b) A hand edit of the page fails --check and leaves the page untouched.
-sed -i 's/Works the ready set\./Works the ready set, by hand./' "$PAGE"
+sed 's/Works the ready set\./Works the ready set, by hand./' "$PAGE" >"$PAGE.tmp" && mv "$PAGE.tmp" "$PAGE"
 cp "$PAGE" "$TMP/edited"
 if gen --check; then
   echo "FAIL: hand-edited page was not caught by --check" >&2
