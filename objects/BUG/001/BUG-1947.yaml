@@ -1,0 +1,37 @@
+id: 01a12963-0241-7053-9a15-e9e560fd60cb
+spec_id: BUG-1947
+agreed_id: BUG-1947
+title: A stale-session sweep salvage-committed and deleted worktrees that live implementers were building in (18:44–18:51 2026-10-10); the actor isn't identified, and the removal path has no live-process che
+description: |-
+  Reported by the orchestrator relay's completion handoff (.aida/relay-sessions/handoff_session_2_20261010_210706_complete.md) and confirmed by the advisor.
+
+  What happened: between 18:44 and 18:51, sessions for TASK-1722, BUG-1923, STORY-1643, BUG-1918, BUG-1921 and STORY-1644 were ended in sequence. aida-store shows 'release lease <spec>' commits, each followed by an auto-queued 'Review PR-N' story (STORY-1658/1659/1660). Each worktree got a 'wip: salvage <branch>' commit (task-1722-work at 18:44:16) and was then DELETED while implementers were working in it, which killed in-flight cargo jobs. Releasing the lease also moved STORY-1644 InProgress→Approved (BUG-1944). No work was lost, thanks to the salvage commits, and the relay recreated the worktrees by hand.
+
+  Actor: not identified. Neither relay's stream logs contain these commands, and the advisor didn't run them. Clues: ps_all.txt ('aida ps --all' captured at about 18:44, 41 running rows mostly 'stale'), stale_sessions.txt (a session-id list) and an empty session_ids.txt were written to the MAIN checkout at 18:42–18:44. That looks like an agent scripted a bulk end of everything 'aida ps' called stale or salvageable. At that time ps mislabelled live relay-driven work as dormant/stalled/salvageable (BUG-1941, STORY-1653), so a sweep that trusted ps would hit live work.
+
+  Defect, whoever the actor was: the session-end/salvage removal path deletes a worktree without checking for live processes whose cwd is inside it, or for a recent target/ or git-index mtime.
+
+  Acceptance:
+  (a) Refuse to remove a worktree that any live process has as its cwd, or that holds an open file or running cargo under it. Name the pid(s) and require --force.
+  (b) Bulk session end (any loop or script) is safe by default, because (a) applies per session.
+  (c) Releasing a lease never reverts the spec status while its branch has an open PR (shared with BUG-1944 a).
+  (d) A test with a fake live process inside the worktree.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T05:15:16.929822029Z
+modified_at: 2026-10-11T05:15:16.929822029Z
+req_type: Bug
+tags:
+- data-safety
+- sessions
+- worktree
+filed_at:
+  code_sha: b01c8752e723bd4687af197177043859bdec05ae
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
