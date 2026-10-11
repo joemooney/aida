@@ -1,0 +1,24 @@
+id: 01a12adc-d62b-7bd1-b936-c1b51cf46e38
+spec_id: TASK-1724
+agreed_id: TASK-1724
+title: 'ADR-9 engine-caller guard: scope whole-file allowlist entries so production calls in an allowlisted file are still caught'
+description: 'aida-cli-lib/tests/adr9_one_engine_guardrail.rs exempts entire files via ENGINE_CALLER_ALLOWLIST. The STORY-1488 split (run 7, TASK-1538) added src/upgrade_release.rs, because its #[cfg(all(test, unix))] mod bug_1265_finish_ci_tests drives orchestrate_with_resume. Before the split, that code was exempt through the lib_part*→lib.rs normalisation, so coverage is unchanged. But any future production engine call in upgrade_release.rs (and likewise in lib.rs) would now pass unnoticed. Acceptance: the guard distinguishes test code from production (e.g. skip #[cfg(test)] mod bodies, or pin an expected production-call count per allowlisted file, with upgrade_release.rs = 0), plus a negative test showing an injected production call in an allowlisted test-only file fails the guard. Do after the lib.rs split completes, to avoid churn on the protocol.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T12:07:58.251995249Z
+modified_at: 2026-10-11T12:07:58.251995249Z
+req_type: Task
+tags:
+- adr-9
+- found:night-2026-10-10
+- guardrail
+filed_at:
+  code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
