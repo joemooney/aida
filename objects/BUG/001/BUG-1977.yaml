@@ -1,0 +1,25 @@
+id: 01a12ca6-1a95-7391-b931-f4c1785c7c1c
+spec_id: BUG-1977
+agreed_id: BUG-1977
+title: Store-write refusal for a stale AIDA hook recommends 'aida scaffold apply', which skips existing hooks; --force would overwrite README/CLAUDE/AGENTS
+description: 'Seen 2026-10-11 in aida-relay after the live binary was promoted. ''refusing AIDA store write: the prepare-commit-msg hook ... is not this aida build''s shipped hook ... Run aida scaffold apply (or aida init --force)''. But ''aida scaffold apply'' skips every existing file (''skipped - exists, use --force''), so it never replaces the stale hook. ''--force'' would also overwrite the repo''s README.md, CLAUDE.md, AGENTS.md and 33 locally modified scaffold files. The only working fix was to delete the hooks and re-apply. Each run surfaced only ONE stale hook (pre-commit, then prepare-commit-msg), so it took several attempts. Acceptance: the refusal names a command that replaces only the stale AIDA-generated hooks (e.g. ''aida scaffold apply --hooks'' or ''aida scaffold hooks --refresh''); scaffold apply refreshes AIDA-generated hooks whose header matches the generated form, even without --force; the refusal lists ALL stale hooks at once. Related: STORY-1647 (hook template changes).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:27:25.717576851Z
+modified_at: 2026-10-11T20:27:25.717576851Z
+req_type: Bug
+tags:
+- capture
+- hooks
+- scaffold
+- ux
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
