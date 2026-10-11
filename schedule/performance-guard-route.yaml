@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-11T10:08:02.683705985Z
+last_run: 2026-10-11T16:21:20.586229144Z
 last_by:
   seat: advisor
-  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
   vendor: antigravity
 result: done
-note: '03:15 advisor: aida show ceiling breach (worst 27.9 s against 5 s); the proportion of 9.5% is within the 10% tolerance. This is a real regression under ADR-53, not a budget change. Filed BUG-1956 (likely contention with tonight''s cache rebuild / BUG-1940).'
-due_since: 2026-10-11T16:16:27.361287967Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Same trip as BUG-1956 (one 27.9s aida show call; 8.7% over the 1s budget, inside the 10% tolerance). Real outlier, not a budget change: ceiling stays per ADR-53. Tracked on BUG-1956.'
