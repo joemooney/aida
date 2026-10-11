@@ -19,11 +19,44 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:51.794153285Z
-modified_at: 2026-10-11T06:49:48.025782342Z
+modified_at: 2026-10-11T06:53:38.118412195Z
 req_type: Bug
 tags:
 - completion
 - pr-ship
+comments:
+- id: 01a129bd-0dc6-7f92-b49c-ad550c2ad0da
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    **Approach.** Replace the two-source id derivation in `pr_ship.rs` with a single `derive_squash_trailer(...)` that returns the ids AND their provenance (`TrailerSource::{Title, Branch, None}` plus human notes), and give it two suppression inputs: a PR-level "non-completing slice" declaration (new `aida pr ship --no-complete` flag OR a PR-body marker line `aida: no-complete` / `Non-completing slice`) and a per-spec `completion_held(id)` predicate (spec carries `closure:pending` or has open slice children via `aida_core::graph_walk::child_status_rollup`). The branch-name fallback is skipped for held specs; an explicit title trailer is still honoured (the merge-time closure hold keeps such a spec at Done). The existing `derive_squash_subject_spec_ids_resolving` / `derive_squash_subject_resolving` become thin wrappers so TASK-1600 behaviour and tests are unchanged.
+
+    **Files / functions.**
+    - `aida-cli-lib/src/pr_ship.rs`: `NO_COMPLETE_BODY_MARKERS`, `pr_body_declares_non_completing`, `TrailerSource`, `SquashTrailer`, `derive_squash_trailer`, `derive_squash_subject_with_trailer`, `spec_completion_hold_reason(store, id)`, `format_trailer_provenance`; `PrShipOptions.no_complete`.
+    - `aida-cli-lib/src/pr_cmd.rs`: `derive_pr_ship_squash_subject` returns `(Option<subject>, SquashTrailer)` and takes `no_complete`; step 3 prints `completion trailer: (IDS) — from PR title|branch name` or `none — <reason>` before the merge; the post-merge calibration/PrMerged credit uses the same derivation (new helper `ship_completion_trailer`) so a non-completing slice is not credited there either; `pr_ship_handler` gains `no_complete`.
+    - `aida-cli-lib/src/cli.rs`: `Ship { --no-complete }` (minimal clap edit); `aida ship` composition passes `false`.
+    - Docs: `OVERVIEW.md` "Completion intent" paragraph; `docs/cli/04-git-lifecycle.md` ship section gets a "Non-completing slices" paragraph.
+
+    **Tests (pr_ship.rs `#[cfg(test)]`).**
+    - `bug_1919_regression_marker_suppresses_branch_fallback` — title without id, branch `task-1538-x`, body `Non-completing slice` → subject has no trailer.
+    - `bug_1919_no_complete_flag_suppresses_every_source` — flag beats both a title trailer and the branch.
+    - `bug_1919_closure_pending_suppresses_branch_fallback` — `completion_held` true for TASK-1538 → branch yields no trailer, with a note naming the hold.
+    - `bug_1919_title_trailer_still_honoured` — explicit `(TASK-1538)` title trailer survives even when held and when the branch is neutral.
+    - `bug_1919_provenance_names_source` — `format_trailer_provenance` for title / branch / none.
+    - `bug_1919_body_marker_detection` — marker line forms, case-insensitive, not mid-prose.
+    - `bug_1919_hold_reason_reads_tag_and_open_children` — store fixture: `closure:pending` tag; open child; completed child only → `None`.
+
+    **Acceptance → check.**
+    1. Non-completing declaration (flag and/or body marker) adds no trailer from any source → flag/marker tests + ship wiring.
+    2. Branch fallback unused for `closure:pending` / open slice children; id traced in body only → `spec_completion_hold_reason` + closure-pending test; `--no-complete`/marker path leaves the body untouched.
+    3. Ship prints trailer + source before merging → `format_trailer_provenance` test + eprintln at step 3 ahead of `merge_change`.
+    4. Regression test as named above.
+
+    **Risks.** Threading one more bool through `pr_ship_handler` (already `too_many_arguments`); the `tests/task_140_squash_subject_tests.rs` file may call `derive_pr_ship_squash_subject` and needs its signature updated; built only on CI (no local compile), so a type slip shows up there.
+  created_at: 2026-10-11T06:53:38.118412195Z
+  modified_at: 2026-10-11T06:53:38.118412195Z
+  session_id: 01a129b988a3
 history:
 - id: 01a12638-b4f6-79a3-9136-4d928974533f
   author: joe
