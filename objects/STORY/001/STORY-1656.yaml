@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:59:40.157380366Z
-modified_at: 2026-10-11T07:12:45.842501810Z
+modified_at: 2026-10-11T07:45:45.103806420Z
 req_type: Story
 tags:
 - forge
@@ -51,6 +51,12 @@ comments:
   created_at: 2026-10-11T07:12:07.448218162Z
   modified_at: 2026-10-11T07:12:07.448218162Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129ec-c48f-7e52-b401-33a83c9b7ed7
+  author: joe
+  content: 'ADVISOR (overnight 00:45): left for the OPERATOR, not proxy-approved overnight. Outward-facing: it creates repos on external forges.'
+  created_at: 2026-10-11T07:45:45.103806420Z
+  modified_at: 2026-10-11T07:45:45.103806420Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
