@@ -1,0 +1,61 @@
+id: 01a12c98-e5fb-7c60-86a9-842e534f737d
+spec_id: STORY-1671
+agreed_id: STORY-1671
+title: Distill specs from the session transcript at session end or PreCompact; the curated store is the reviewed layer
+description: |
+  ## F6. Capture before compaction, and mine transcripts
+
+  **Seen:**
+  - This project's development happened almost entirely in conversation.
+  - The session was compacted, and compaction summaries drop detail.
+  - The transcript is the richest record of intent, and it is thrown away
+    semantically.
+
+  **Proposal:**
+  - A PreCompact hook runs a capture pass (`/aida-capture` in automatic mode)
+    before the context is summarized.
+  - `aida capture --transcript <jsonl>` mines a finished transcript for
+    decisions, requirement changes and rejected options, and proposes store
+    edits.
+
+  ## F26. Distill specs from the trajectory automatically; the curated store is the reviewed layer on top
+
+  **Seen (results-2026-10-11 §3 F-3):** AfterVibe's Prompt A.1, run once over our condensed development
+  transcript plus the code, gave a spec that regenerated to 97.7% discriminating. The hand-strengthened
+  store reached 93.9–95.5%. The distillation took 3.5 minutes; the store took ~75 minutes of agent work.
+
+  **Caveat:** one E2 regeneration only, and the distiller saw the tests.
+
+  **Proposal:**
+  - `aida distill --session <transcript> [--since <ts>]` runs a distillation step at session end (or at
+    PreCompact, F6) and files the result as a draft spec linked to the session's commits.
+  - The curated store (stories, decisions, contracts) stays the *reviewed* layer. A regeneration trial
+    compares the two, and any clause present only in the distilled spec is a capture gap.
+  - Because the transcript is the cheapest high-recall source and the store is the durable reviewed
+    one, use both.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:13:00.283963835Z
+modified_at: 2026-10-11T20:13:00.283963835Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
