@@ -11726,6 +11726,11 @@ mod task_1507_history_cache_tests;
 #[path = "tests/task_1508_history_source_tests.rs"]
 mod task_1508_history_source_tests;
 
+// trace:STORY-1650 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_1650_history_flow_tests.rs"]
+mod story_1650_history_flow_tests;
+
 // trace:BUG-1631 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1631_history_spec_id_tests.rs"]

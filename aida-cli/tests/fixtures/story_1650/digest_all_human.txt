@@ -1,0 +1,7 @@
+   ID       TYPE      STATUS     WHEN         TITLE
++  TASK-6   Task      Draft      03-05 17:00  Deferred task
++  STORY-5  Story     Completed  03-05 16:00  Archived story
++  TASK-4   Task      Approved   03-05 14:00  Filed approved
+−  BUG-3    Bug       (deleted)  03-04 13:30  
++  STORY-1  Story     Completed  03-04 13:00  Flowing story
++  TASK-2   Task      Draft      03-03 12:00  Renamed task

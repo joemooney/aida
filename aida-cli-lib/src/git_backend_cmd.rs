@@ -8451,6 +8451,7 @@ pub(crate) fn handle_git_backend_command(
             max_commits,
             events,
             full,
+            digest,
             id,
             r#type,
             author,
@@ -8594,31 +8595,58 @@ pub(crate) fn handle_git_backend_command(
             )?;
             let event_selector =
                 *shipped || *opened || to_status.is_some() || from_status.is_some();
+            // STORY-1650: a query with no SPEC-ID, no feed (`events`,
+            // `--full`, a custom layout) and no per-event flag (`--shipped`,
+            // `--status-changes`, `--comments`, `--oneline`) is the bare
+            // view: the status flow, or the digest with `--digest`.
+            // `--to`/`--from`/`--opened` narrow the flow as they narrow the
+            // feed; `--json` picks the flow's JSON.
+            // trace:STORY-1650 | ai:claude
+            if *digest && explicit_events {
+                anyhow::bail!(
+                    "invalid combination: --digest is the per-requirement view and the \
+                     `events` feed is the per-event view; pass one or the other"
+                );
+            }
+            let bare = requested_id.is_none()
+                && !explicit_events
+                && !*shipped
+                && !*status_changes
+                && !*comments
+                && !*oneline;
+            let bare_view = if *digest {
+                history::BareView::Digest
+            } else {
+                history::BareView::Flow
+            };
             // BUG-1635: per-event flags (`--status-changes`, `--comments`,
             // `--oneline`, `--json`) switch a multi-spec query to the events
             // feed instead of being silently ignored by the digest; with a
             // SPEC-ID they shape the status-progression view instead.
             // trace:BUG-1635 | ai:claude
-            let events = history::resolve_events_mode(
-                explicit_events,
-                requested_id.is_some(),
-                event_selector,
-                *status_changes,
-                *comments,
-                *oneline,
-                json,
-            );
+            let events = !bare
+                && history::resolve_events_mode(
+                    explicit_events,
+                    requested_id.is_some(),
+                    event_selector,
+                    *status_changes,
+                    *comments,
+                    *oneline,
+                    json,
+                );
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
             // BUG-1635: chosen by mode, not output format; see
             // `history::default_max_commits`. trace:BUG-1635 | ai:claude
+            // STORY-1650: the bare view's JSON (flow or digest) walks the
+            // same 250-commit window as its human and TOON output.
             let default_max = history::default_max_commits(
                 *limit,
                 explicit_events,
                 requested_id.is_some(),
-                json,
+                json && !bare,
                 event_selector,
                 *status_changes,
                 *comments,
@@ -8831,7 +8859,7 @@ pub(crate) fn handle_git_backend_command(
                 }
                 print!("{output}");
             } else {
-                history::run(store_path, &opts, json)?;
+                history::run(store_path, &opts, json, bare_view)?;
             }
         }
         Command::StateSnapshot {

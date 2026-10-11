@@ -279,6 +279,10 @@ fn history_limit_is_configurable() {
         v.as_array()
             .or_else(|| v.get("events").and_then(|e| e.as_array()))
             .or_else(|| v.get("rows").and_then(|e| e.as_array()))
+            // Bare `history` prints the status flow, or the digest when the
+            // history index cannot answer. trace:STORY-1650 | ai:claude
+            .or_else(|| v.get("transitions").and_then(|e| e.as_array()))
+            .or_else(|| v.get("history").and_then(|e| e.as_array()))
             .unwrap_or_else(|| panic!("unexpected history json shape: {stdout}"))
             .len()
     };

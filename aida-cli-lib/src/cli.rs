@@ -13181,20 +13181,26 @@ pub enum Command {
     },
 
     /// Project activity — what's been touched and how it stands now.
-    /// Default mode (no SPEC-ID) is a per-requirement digest sorted by
-    /// last-touch time, intended for "what was I up to last session?" Pass
-    /// a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
+    /// Default mode (no SPEC-ID) is the status flow: one line per status
+    /// change, newest first, each with its time, SPEC-ID, old → new status
+    /// and title (a spec filed in the window shows as `(new) → <status>`).
+    /// It reads the history index; when the index can't answer, you get the
+    /// per-spec digest instead, with a one-line note naming the cause and
+    /// the fix. `--digest` asks for that digest directly: one row per
+    /// requirement sorted by last-touch time, which was the default before
+    /// the status flow. Pass a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
     /// switch to that one spec's status-progression view instead — its
     /// status transitions in chronological order, each with a timestamp
     /// and old→new status, in human, TOON and JSON output alike. Add
     /// `--full` (or the `events` subcommand) for the complete edit/comment
     /// trail, not just status changes. Per-event flags (`--status-changes`,
-    /// `--comments`, `--oneline`, `--shipped`, `--json`) switch a
-    /// multi-spec query to the events feed. `--to`/`--from <STATUS>`
-    /// select status transitions by target and source status, and
-    /// `--opened` selects the specs filed; they always switch to the
-    /// events feed, like `--shipped`.
+    /// `--comments`, `--oneline`, `--shipped`) switch a multi-spec query to
+    /// the events feed. `--to`/`--from <STATUS>` select status transitions
+    /// by target and source status, and `--opened` selects the specs filed;
+    /// alone they narrow the status flow, and with a SPEC-ID or a per-event
+    /// flag they select from the events feed.
     // trace:FR-1-037 | ai:claude
+    // trace:STORY-1650 | ai:claude
     // trace:BUG-1635 | ai:claude
     // trace:TASK-1480 | ai:claude
     // trace:TASK-1512 | ai:claude
@@ -13232,20 +13238,21 @@ pub enum Command {
         #[clap(long, global = true, requires = "save_as_template")]
         force: bool,
 
-        /// Number of items to show. In digest mode (default) this caps
-        /// the number of distinct requirements; in events mode it
-        /// caps the number of decoded events. Default 20, configurable via
-        /// `[history] limit` in `.aida/config.toml` or env
-        /// `AIDA_HISTORY_LIMIT` (this flag beats env, which beats config).
+        /// Number of items to show. In the status flow (default) this caps
+        /// the number of status changes; with --digest it caps the number
+        /// of distinct requirements; in events mode it caps the number of
+        /// decoded events. Default 20, configurable via `[history] limit`
+        /// in `.aida/config.toml` or env `AIDA_HISTORY_LIMIT` (this flag
+        /// beats env, which beats config).
         // trace:STORY-1644 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, short = 'n', global = true)]
         limit: Option<usize>,
 
         /// Walk at most N commits on the orphan branch. Default 5x --limit
-        /// (at least 50) for --full/events and a bare --json with no
-        /// SPEC-ID; 250 for the digest, a single SPEC-ID, and any query with
-        /// --shipped, --to, --from, --opened, --status-changes, --comments
-        /// or --oneline (adding --json to those does not change it).
+        /// (at least 50) for --full/events; 250 for the status flow, the
+        /// digest, a single SPEC-ID, and any query with --shipped, --to,
+        /// --from, --opened, --status-changes, --comments or --oneline
+        /// (adding --json does not change it).
         // trace:BUG-1635 | ai:claude
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true)]
@@ -13270,6 +13277,22 @@ pub enum Command {
         // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         full: bool,
+
+        /// The per-requirement digest: one row per requirement touched in
+        /// the window, sorted by last-touch time, with its current status
+        /// ("what was I up to last session?"). This was the default before
+        /// the status flow; the output is unchanged. Honors --limit,
+        /// --since, --until, --author, --type and the archive/defer flags.
+        // trace:STORY-1650 | ai:claude
+        #[clap(
+            long,
+            conflicts_with_all = [
+                "spec", "id", "full", "events", "timeline", "status_changes",
+                "comments", "oneline", "shipped", "to", "from", "opened",
+                "template", "fields", "kind",
+            ]
+        )]
+        digest: bool,
 
         /// Only show entries for this requirement (accepts a SPEC-ID, an
         /// agreed short ID, or the raw UUID `aida show` prints — a UUID
@@ -13357,10 +13380,11 @@ pub enum Command {
         /// `--to approved` for what got approved. Accepts the spellings
         /// `aida edit --status` does (`in-progress`, `needs-attention`, any
         /// case) plus `accepted` for approved. With --from, both ends must
-        /// match. Implies events mode (as --shipped does). With
-        /// --status-changes it narrows the transitions; with --comments or
-        /// --opened the result is the union of those events and the
-        /// matching transitions.
+        /// match. Narrows the status flow; with --shipped, --status-changes
+        /// or --comments it narrows the events feed. With --status-changes
+        /// it narrows the transitions; with --comments or --opened the
+        /// result is the union of those events and the matching
+        /// transitions.
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true, value_name = "STATUS")]
         to: Option<String>,
@@ -13368,7 +13392,7 @@ pub enum Command {
         /// Only status transitions OUT OF this status, e.g. `--from
         /// in-progress --to approved` for work sent back from in progress.
         /// Alone it matches any transition leaving that status. Same
-        /// spellings and combination rules as --to; implies events mode.
+        /// spellings and combination rules as --to.
         /// `--from X --to X` is refused, since a transition always changes
         /// the status.
         // trace:TASK-1512 | ai:claude
@@ -13379,7 +13403,8 @@ pub enum Command {
         /// whatever status they were filed at (a spec filed straight as
         /// approved is included). Creation is not a status transition, so
         /// with --to/--from (or --status-changes/--comments) the result is
-        /// the union of both kinds of event. Implies events mode.
+        /// the union of both kinds of event. In the status flow each one
+        /// shows as `(new) → <status>`.
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true, visible_alias = "created")]
         opened: bool,
@@ -13406,10 +13431,14 @@ pub enum Command {
         /// Emit JSON (same shape as the MCP history tool): `count`,
         /// `events`, `window_exhausted`, `source`, `index_tip`. Each event
         /// row has `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`
-        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`).
-        /// Without a SPEC-ID this implies the full event feed; with one
-        /// (and no `--full`) it is the status progression, oldest first,
-        /// adding `view`, `id`, `title`, `current_status`, `order`.
+        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`) for
+        /// the events feed. Without a SPEC-ID it is the status flow:
+        /// `view`, `count`, `source`, `index_tip`, `window_exhausted` and
+        /// `transitions` rows (`when`, `id`, `from`, `to`, `title`, `kind`,
+        /// `author`, `sha`); with --digest, `view`, `count` and `history`
+        /// rows (`id`, `type`, `status`, `when`, `change`, `title`). With a
+        /// SPEC-ID (and no `--full`) it is the status progression, oldest
+        /// first, adding `view`, `id`, `title`, `current_status`, `order`.
         /// `--format json` is the same.
         // trace:BUG-1631 | ai:claude
         // trace:BUG-1635 | ai:claude
