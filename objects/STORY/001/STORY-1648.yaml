@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:20.116652715Z
-modified_at: 2026-10-10T18:22:20.116652715Z
+modified_at: 2026-10-11T07:11:57.146669234Z
 req_type: Story
 tags:
 - dev-tooling
@@ -29,6 +29,34 @@ tags:
 - main-checkout
 - related:STORY-1646
 - statusline
+comments:
+- id: 01a129cd-d2da-7fc2-83ed-d5f8a23c2722
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because it is read-only observability for a drift that has bitten the operator twice and that no hook can catch; it does not overlap STORY-1646 beyond sharing the trigger condition.
+
+    Problem: uncommitted edits and scratch files in the primary checkout are invisible until they leak into the live binary; the session-start hook and the status line say nothing about them.
+
+    Evidence path (verified):
+    - Today's primary checkout has 25 untracked files at root (`git status --porcelain | grep -c '^??'`: fix_*.py, *.log, story-1488.yaml and more), matching the description's claim.
+    - aida-core/templates/hooks/aida-session-context.sh (87 lines) prints only the role/queue/in-flight line (line 82); it never runs git status.
+    - Status line: aida-cli-lib/src/statusline_contract.rs:71 vcs_dirty already carries client-reported dirty state for the current cwd and renders a mark at line 132. A primary-checkout marker is a different signal (the primary root usually differs from cwd) and needs its own field.
+    - aida-cli-lib/src/doctor_cmd.rs has the doctor_check_*_light pattern (lines 960-1011) to extend.
+    - Relationship to STORY-1646: sibling by 1646's own "Split out" section; 1646 refuses promotion when dirty, 1648 makes dirty visible every session. No overlap.
+
+    Acceptance criteria:
+    1. Hook test over five fixtures: clean primary checkout prints no extra line; tracked-dirty prints `main checkout: N tracked changes, M untracked · on <branch> · <ahead/behind>`; untracked-only, off-main and behind-origin each print the documented variant.
+    2. The hook adds under 50 ms (timed in the test over a temp repo; one `git status --porcelain` plus rev-parse), and when run from a worktree it still reports the primary checkout located via `git rev-parse --git-common-dir`.
+    3. The status line renders a compact marker when the primary checkout is dirty and nothing when clean (contract test in statusline_contract.rs).
+    4. `aida doctor` lists drifting paths; untracked files get a best-effort session or lease attribution by mtime, otherwise are listed plainly; it never deletes (test asserts the temp tree is byte-identical after the run).
+    5. Template masters edited; `make check-templates` passes.
+
+    Scope / non-goals: no cleanup or deletion, no refusal (STORY-1647), no promotion gate (STORY-1646). Related: related:STORY-1646 related:STORY-1647 related:FAQ-27 related:FAQ-29.
+
+    Suggested size: S, or M if the doctor attribution is included.
+  created_at: 2026-10-11T07:11:57.146669234Z
+  modified_at: 2026-10-11T07:11:57.146669234Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
