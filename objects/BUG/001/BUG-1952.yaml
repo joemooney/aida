@@ -22,17 +22,25 @@ description: |
   - BUG-1947's live-process check, when it lands, is evaluated against the same resolved root.
 
   Found by the night-fable review sweep of worktree/session end paths. Related: BUG-56, BUG-61, BUG-483, BUG-694, BUG-734, BUG-1947. Size M.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T07:27:23.888391365Z
+modified_at: 2026-10-11T13:22:03.360338950Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - session-end
 - worktree
+history:
+- id: 01a12b20-a9e0-73b3-b17d-594a14e60951
+  author: joe
+  timestamp: 2026-10-11T13:22:03.360333592Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
