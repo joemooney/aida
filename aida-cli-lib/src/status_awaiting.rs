@@ -2918,11 +2918,13 @@ pub(crate) fn print_aida_dev_context(project_root: &std::path::Path) {
     let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
     // ADR-72: releases no longer gate on a cross-platform run.
     // trace:TASK-1723 | ai:claude
-    let cross_platform_ci = if commits_since_tag > 0 && CROSS_PLATFORM_WORKFLOW_SCHEDULED {
-        Some(cross_platform_ci_status(project_root))
-    } else {
-        None
-    };
+    // trace:BUG-1943 | ai:claude
+    let cross_platform_ci =
+        if commits_since_tag > 0 && cross_platform_workflow_scheduled(project_root) {
+            Some(cross_platform_ci_status(project_root))
+        } else {
+            None
+        };
     println!("  Running binary:     {}", build_banner());
     println!("  Workspace version:  v{}", workspace_version);
     println!("  Latest release tag: {}", latest_tag);
@@ -3219,20 +3221,59 @@ pub(crate) fn summarize_cross_platform_ci_runs(
     }
 }
 
-/// ADR-72: AIDA is Linux-only and `cross-platform.yml` is workflow_dispatch
-/// only, so there is no scheduled cross-platform run to be red. Its historical
-/// scheduled failures stay in `gh run list --event schedule` forever, so the
-/// red signal must be switched off here rather than left to age out. Flip this
-/// only together with a new operator decision that re-adds the schedule.
-// trace:TASK-1723 | ai:claude
-pub(crate) const CROSS_PLATFORM_WORKFLOW_SCHEDULED: bool = false;
+/// Whether the project's `.github/workflows/cross-platform.yml` declares a
+/// `schedule:` trigger. A dispatch-only (or absent) workflow has no nightly to
+/// be red, but its historical scheduled failures stay in
+/// `gh run list --event schedule` forever, so the nightly signal is gated on
+/// the workflow file itself rather than left to age out. Reading the file
+/// keeps every surface (awaiting, statusbar, doctor, status) in agreement and
+/// re-enables the signal automatically if a schedule is ever re-added.
+// trace:BUG-1943 | ai:claude
+pub(crate) fn cross_platform_workflow_scheduled(project_root: &std::path::Path) -> bool {
+    let path = project_root
+        .join(".github")
+        .join("workflows")
+        .join("cross-platform.yml");
+    std::fs::read_to_string(path)
+        .map(|raw| workflow_yaml_declares_schedule(&raw))
+        .unwrap_or(false)
+}
+
+/// Parse a GitHub Actions workflow and report whether its `on:` key includes
+/// `schedule`, in any of the three accepted shapes (scalar, list, mapping).
+/// An unparseable file counts as unscheduled: a broken workflow cannot run a
+/// nightly either.
+// trace:BUG-1943 | ai:claude
+pub(crate) fn workflow_yaml_declares_schedule(raw: &str) -> bool {
+    let Ok(doc) = serde_yaml::from_str::<serde_yaml::Value>(raw) else {
+        return false;
+    };
+    let Some(map) = doc.as_mapping() else {
+        return false;
+    };
+    // YAML 1.1 readers turn a bare `on` key into boolean true; accept both.
+    let on = map
+        .get(serde_yaml::Value::String("on".to_string()))
+        .or_else(|| map.get(serde_yaml::Value::Bool(true)));
+    match on {
+        Some(serde_yaml::Value::String(event)) => event == "schedule",
+        Some(serde_yaml::Value::Sequence(events)) => {
+            events.iter().any(|e| e.as_str() == Some("schedule"))
+        }
+        Some(serde_yaml::Value::Mapping(events)) => {
+            events.contains_key(serde_yaml::Value::String("schedule".to_string()))
+        }
+        _ => false,
+    }
+}
 
 // trace:STORY-1043 | ai:codex
 pub(crate) fn nightly_red_status(
     project_root: &std::path::Path,
 ) -> Option<awaiting_you::NightlyRedItem> {
     // trace:TASK-1723 | ai:claude
-    if !CROSS_PLATFORM_WORKFLOW_SCHEDULED {
+    // trace:BUG-1943 | ai:claude
+    if !cross_platform_workflow_scheduled(project_root) {
         return None;
     }
     let now = chrono::Utc::now();
@@ -3263,9 +3304,11 @@ pub(crate) struct NightlyRedCache {
 pub(crate) fn cached_nightly_red_status(
     project_root: &std::path::Path,
 ) -> Option<awaiting_you::NightlyRedItem> {
-    // A cache written before ADR-72 must not resurrect the red line.
+    // A cache written while the workflow was scheduled must not resurrect the
+    // red line once the schedule is gone.
     // trace:TASK-1723 | ai:claude
-    if !CROSS_PLATFORM_WORKFLOW_SCHEDULED {
+    // trace:BUG-1943 | ai:claude
+    if !cross_platform_workflow_scheduled(project_root) {
         return None;
     }
     let path = project_root
