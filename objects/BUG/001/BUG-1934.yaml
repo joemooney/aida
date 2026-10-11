@@ -8,11 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-11T07:11:15.294849710Z
+modified_at: 2026-10-11T07:11:21.198390046Z
 req_type: Bug
 tags:
 - review
 - security
+- triaged:night
 comments:
 - id: 01a129cd-2f5e-7a80-9aa1-8c854647255c
   author: night-fable
