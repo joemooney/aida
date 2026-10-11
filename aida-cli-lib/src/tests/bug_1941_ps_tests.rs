@@ -310,25 +310,143 @@ fn bug_1941_fresh_branch_commit_is_movement_without_a_pid() {
     assert_ne!(rows[0].state, LeaseState::Live);
     let ds = rows[0].dispatch.as_ref().map(|d| d.state);
     assert_eq!(ds, Some(DispatchState::Moving));
+    assert!(rows[0].pid.is_none());
     assert!(
-        ps_unattributed_movement_note(rows[0].state, ds).is_some(),
+        ps_unattributed_movement_note(rows[0].pid, ds).is_some(),
         "the human view must carry the same moving verdict"
     );
 }
 
 #[test]
+fn bug_1941_interrupted_lease_with_fresh_commit_stays_stopped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut l = lease(
+        "wave",
+        "TASK-1722",
+        tmp.path().to_path_buf(),
+        "task-1722-work",
+    );
+    l.interrupted_at = Some(chrono::Utc::now());
+    let probe = WorktreeGitProbe {
+        ahead_of_main: 2,
+        head_commit_age_secs: Some(60),
+        ..Default::default()
+    };
+    let rows = rows_for(&[l], &[], probe);
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        d.state,
+        DispatchState::Stopped,
+        "an interrupted drain wave reads stopped, not moving, despite a fresh commit"
+    );
+    assert!(!d.commit_movement);
+}
+
+#[test]
+fn bug_1941_pushed_branch_with_open_pr_and_fresh_commit_awaits_integration() {
+    let tmp = tempfile::tempdir().unwrap();
+    let l = lease(
+        "done",
+        "TASK-1722",
+        tmp.path().to_path_buf(),
+        "task-1722-work",
+    );
+    let probe = WorktreeGitProbe {
+        ahead_of_main: 2,
+        head_commit_age_secs: Some(60),
+        ..Default::default()
+    };
+    let mut rows = rows_for(&[l], &[], probe);
+    assert!(rows[0].pid.is_none());
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(d.state, DispatchState::Moving);
+    assert!(d.commit_movement, "the lift is remembered for the overlay");
+
+    // No integration standing: the commit-only movement stands.
+    assert!(!ps_apply_integration_standing(&mut rows[0], None));
+    assert_eq!(
+        rows[0].dispatch.as_ref().unwrap().state,
+        DispatchState::Moving
+    );
+
+    // Commit, push, exit with an open PR: awaiting integration wins.
+    let standing = crate::dispatch_health_ps::integration_standing(
+        true,
+        true,
+        Some("task-1722-work"),
+        "task-1722-work",
+        Some("https://github.com/o/r/pull/77#issuecomment-1"),
+    )
+    .expect("done + approved");
+    assert!(ps_apply_integration_standing(&mut rows[0], Some(&standing)));
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(d.state, DispatchState::AwaitingIntegration);
+    assert!(ps_unattributed_movement_note(rows[0].pid, Some(d.state)).is_none());
+}
+
+#[test]
+fn bug_1941_movement_from_fresh_files_is_not_reframed_by_standing() {
+    // Only the commit-only lift is overlay-eligible; a live-backed Moving row
+    // keeps its reading.
+    let tmp = tempfile::tempdir().unwrap();
+    let l = lease(
+        "live",
+        "TASK-1722",
+        tmp.path().to_path_buf(),
+        "task-1722-work",
+    );
+    let mut rows = rows_for(
+        &[l],
+        &[live_at(std::process::id(), tmp.path())],
+        WorktreeGitProbe {
+            ahead_of_main: 2,
+            head_commit_age_secs: Some(60),
+            ..Default::default()
+        },
+    );
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert!(!d.commit_movement);
+    let standing = crate::dispatch_health_ps::integration_standing(
+        true,
+        true,
+        Some("task-1722-work"),
+        "task-1722-work",
+        None,
+    );
+    let before = d.state;
+    ps_apply_integration_standing(&mut rows[0], standing.as_ref());
+    assert_eq!(rows[0].dispatch.as_ref().unwrap().state, before);
+}
+
+#[test]
+fn bug_1941_stale_row_with_occupant_pid_gets_no_unattributed_note() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut l = lease("stale", "TASK-1722", root.to_path_buf(), "task-1722-work");
+    l.active_pid = Some(DEAD_PID);
+    let probe = WorktreeGitProbe {
+        ahead_of_main: 2,
+        head_commit_age_secs: Some(60),
+        dirty: true,
+        dirty_newest_mtime_age_secs: Some(5),
+        ..Default::default()
+    };
+    let rows = rows_for(&[l], &[live_at(std::process::id(), root)], probe);
+    assert_eq!(rows[0].state, LeaseState::Stale, "its own pid is dead");
+    assert!(rows[0].pid.is_some(), "the occupant's pid is shown");
+    let ds = rows[0].dispatch.as_ref().map(|d| d.state);
+    assert!(
+        ps_unattributed_movement_note(rows[0].pid, ds).is_none(),
+        "a row showing a real pid must not claim no process is attributed"
+    );
+}
+
+#[test]
 fn bug_1941_movement_note_only_for_no_process_moving_rows() {
-    assert!(
-        ps_unattributed_movement_note(LeaseState::Dormant, Some(DispatchState::Moving)).is_some()
-    );
-    assert!(
-        ps_unattributed_movement_note(LeaseState::Stale, Some(DispatchState::Moving)).is_some()
-    );
-    assert!(ps_unattributed_movement_note(LeaseState::Live, Some(DispatchState::Moving)).is_none());
-    assert!(
-        ps_unattributed_movement_note(LeaseState::Dormant, Some(DispatchState::Stalled)).is_none()
-    );
-    assert!(ps_unattributed_movement_note(LeaseState::Dormant, None).is_none());
+    assert!(ps_unattributed_movement_note(None, Some(DispatchState::Moving)).is_some());
+    assert!(ps_unattributed_movement_note(Some(42), Some(DispatchState::Moving)).is_none());
+    assert!(ps_unattributed_movement_note(None, Some(DispatchState::Stalled)).is_none());
+    assert!(ps_unattributed_movement_note(None, None).is_none());
 }
 
 #[test]

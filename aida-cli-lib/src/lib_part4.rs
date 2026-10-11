@@ -5052,6 +5052,10 @@ pub(crate) struct PsDispatch {
     pub(crate) dirty: bool,
     pub(crate) ahead_of_main: u32,
     pub(crate) untracked_only: bool,
+    /// BUG-1941: `state` is `Moving` only because of a fresh commit on a
+    /// branch with no live process — the integration-standing overlay may
+    /// still reframe it as `awaiting-integration` (commit, push, exit).
+    pub(crate) commit_movement: bool,
 }
 
 /// TASK-1451: whether a live seat's resolved mail identity is a stable seat
@@ -5767,17 +5771,18 @@ pub(crate) fn ps_live_in_worktree<'a>(
 }
 
 /// BUG-1941: the note a row carries when its dispatch reads `moving` while no
-/// running process backs the lease (dormant / stale) — fresh files or a fresh
+/// running process backs the row (no pid shown) — fresh files or a fresh
 /// commit in the worktree. Without it the human view showed only "dormant"
 /// while the agent view said `moving` for the same row. `None` otherwise.
 // trace:BUG-1941 | ai:claude
 pub(crate) fn ps_unattributed_movement_note(
-    state: LeaseState,
+    pid: Option<u32>,
     dispatch: Option<dispatch_health_ps::DispatchState>,
 ) -> Option<&'static str> {
-    (!matches!(state, LeaseState::Live)
-        && dispatch == Some(dispatch_health_ps::DispatchState::Moving))
-    .then_some(
+    // Gated on the row having no pid, not on its lease state: a Stale lease
+    // backed by an occupant process (BUG-1941 occupant rule) shows that pid,
+    // and must not also claim no process is attributed.
+    (pid.is_none() && dispatch == Some(dispatch_health_ps::DispatchState::Moving)).then_some(
         "recent changes in this worktree, but no running process is attributed to this session",
     )
 }
@@ -5795,11 +5800,20 @@ pub(crate) fn ps_apply_integration_standing(
     let Some(dispatch) = row.dispatch.as_mut() else {
         return false;
     };
-    let next = dispatch_health_ps::apply_integration(dispatch.state, standing);
-    if next == dispatch.state {
+    // BUG-1941: commit-only movement is the no-process reading lifted by a
+    // fresh commit; a finished/approved spec's "commit, push, exit" end state
+    // is awaiting integration, not moving. trace:BUG-1941 | ai:claude
+    let base = if dispatch.commit_movement {
+        dispatch_health_ps::DispatchState::Stalled
+    } else {
+        dispatch.state
+    };
+    let next = dispatch_health_ps::apply_integration(base, standing);
+    if next == base {
         return false;
     }
     dispatch.state = next;
+    dispatch.commit_movement = false;
     dispatch.hint = Some(dispatch_health_ps::integration_hint(standing));
     true
 }
@@ -5820,11 +5834,12 @@ pub(crate) fn ps_overlay_integration_standing(project_root: &std::path::Path, ro
         .iter()
         .filter(|r| {
             r.dispatch.as_ref().is_some_and(|d| {
-                matches!(
-                    d.state,
-                    dispatch_health_ps::DispatchState::Stalled
-                        | dispatch_health_ps::DispatchState::Stopped
-                )
+                d.commit_movement
+                    || matches!(
+                        d.state,
+                        dispatch_health_ps::DispatchState::Stalled
+                            | dispatch_health_ps::DispatchState::Stopped
+                    )
             })
         })
         .filter_map(|r| r.spec.clone())
@@ -7170,13 +7185,22 @@ pub(crate) fn build_running_work(
                 // BUG-1941: a fresh commit on a branch ahead of main is
                 // movement; untracked-only scratch on a protected branch (the
                 // main checkout) is not salvageable work. trace:BUG-1941 | ai:claude
-                let ds = dispatch_health_ps::apply_commit_movement(
-                    ds,
-                    pid_alive,
-                    probe.ahead_of_main,
-                    probe.head_commit_age_secs,
-                    dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
-                );
+                // An interrupted drain wave stays `stopped` (TASK-1518) even
+                // with a fresh commit; the commit-only lift is remembered so
+                // the integration overlay can still read the row.
+                let before_commit_movement = ds;
+                let ds = if l.interrupted_at.is_some() {
+                    ds
+                } else {
+                    dispatch_health_ps::apply_commit_movement(
+                        ds,
+                        pid_alive,
+                        probe.ahead_of_main,
+                        probe.head_commit_age_secs,
+                        dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
+                    )
+                };
+                let commit_movement = ds != before_commit_movement;
                 let ds = if ds == dispatch_health_ps::DispatchState::Salvageable
                     && probe.untracked_records_only
                 {
@@ -7208,6 +7232,7 @@ pub(crate) fn build_running_work(
                     dirty: probe.dirty,
                     ahead_of_main: probe.ahead_of_main,
                     untracked_only: probe.untracked_only,
+                    commit_movement,
                 })
             };
             // TASK-1143: the worktree lock owner (if any) for this row, read
@@ -7904,7 +7929,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // BUG-1941: a no-process row whose dispatch reads `moving` says so,
             // so this view and the agent view agree. trace:BUG-1941 | ai:claude
             if let Some(note) =
-                ps_unattributed_movement_note(row.state, row.dispatch.as_ref().map(|d| d.state))
+                ps_unattributed_movement_note(row.pid, row.dispatch.as_ref().map(|d| d.state))
             {
                 println!(
                     "{}{} {}: {}",

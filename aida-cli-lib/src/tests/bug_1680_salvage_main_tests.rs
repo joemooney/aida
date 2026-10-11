@@ -419,6 +419,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement: false,
     });
 
     let mut row2 = mock_ps_row("sess-2", "harness-worktree", repo.to_path_buf());
@@ -429,6 +430,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement: false,
     });
 
     let mut row3 = mock_ps_row("sess-3", "harness-worktree", repo.to_path_buf());
@@ -439,6 +441,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement: false,
     });
 
     let input = vec![&row1, &row2, &row3];

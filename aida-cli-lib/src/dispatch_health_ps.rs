@@ -591,11 +591,15 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
         .or_else(|| git_stdout(worktree_path, &["rev-list", "--count", "main..HEAD"]))
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(0);
-    // BUG-1941: one `git log` call for both the subject and the committer
-    // time, so commit recency costs no extra process.
+    // BUG-1941: one `git log` call for both the subject and the commit
+    // time, so commit recency costs no extra process. AUTHOR time (%at), not
+    // committer time: an integrator rebasing a dead branch rewrites every
+    // committer date to "now", which would make abandoned work read as
+    // moving. The tradeoff: `commit --amend` keeps the original author date,
+    // so an agent that only amends reads as older than it is.
     // trace:BUG-1941 | ai:claude
     let (last_commit_subject, head_commit_age_secs) =
-        match git_stdout(worktree_path, &["log", "-1", "--format=%ct%x09%s"]) {
+        match git_stdout(worktree_path, &["log", "-1", "--format=%at%x09%s"]) {
             Some(line) => parse_commit_time_and_subject(&line, chrono::Utc::now().timestamp()),
             None => (None, None),
         };
@@ -631,7 +635,7 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     }
 }
 
-/// BUG-1941: split one `git log -1 --format=%ct%x09%s` line into the subject
+/// BUG-1941: split one `git log -1 --format=%at%x09%s` line into the subject
 /// and the commit's age in seconds relative to `now_secs`. A missing or
 /// unparsable timestamp yields no age (never "fresh"); a future timestamp
 /// (clock skew) is likewise unknown rather than age 0.
