@@ -153,7 +153,14 @@ fn faq_topics_counts_live_faqs_only() {
 
     // Acceptance 3: no FAQ topics yet — a one-line notice, exit 0.
     let empty = ok("aida faq topics (empty)", aida(&fx, &["faq", "topics"]));
-    assert_eq!(empty.trim(), "no FAQ topics", "{empty}");
+    // Agent (TOON) output appends the standard `cache:` footer, so pin the
+    // notice line and that nothing but the footer follows it.
+    let mut lines = empty.trim().lines();
+    assert_eq!(lines.next(), Some("no FAQ topics"), "{empty}");
+    assert!(
+        lines.all(|l| l == "cache:" || l.trim_start().starts_with("stale:")),
+        "{empty}"
+    );
 
     let live_a = add_faq(&fx, "How do I set up?", "setup,cli");
     let live_b = add_faq(&fx, "How do I list work?", "cli");
