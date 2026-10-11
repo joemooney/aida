@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:07:51.313331759Z
-modified_at: 2026-10-11T13:50:39.103505174Z
+modified_at: 2026-10-11T14:16:29.586042943Z
 req_type: Story
 tags:
 - factory:night
@@ -59,6 +59,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2522 at 6ece581138'
   created_at: 2026-10-11T13:50:36.404687778Z
   modified_at: 2026-10-11T13:50:36.404687778Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b52-8092-7620-89be-1ae06ec8d4aa
+  author: joe
+  content: 'FACTORY READY: PR #2522 green at 593ce126d7'
+  created_at: 2026-10-11T14:16:29.586042943Z
+  modified_at: 2026-10-11T14:16:29.586042943Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-63e0-7f22-b3a2-632db456439c
