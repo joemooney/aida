@@ -16,10 +16,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T07:11:58.880139810Z
+modified_at: 2026-10-11T07:12:06.320469237Z
 req_type: Bug
 tags:
 - hooks
+- triaged:night
 comments:
 - id: 01a129cd-d9a0-7fa2-b312-de463997e17c
   author: night-fable
