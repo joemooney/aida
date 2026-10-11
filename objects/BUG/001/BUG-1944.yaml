@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T14:19:17.748360528Z
+modified_at: 2026-10-11T14:48:59.870230436Z
 req_type: Bug
 tags:
 - auto-bump
@@ -41,6 +41,20 @@ comments:
   created_at: 2026-10-11T03:50:34.263156730Z
   modified_at: 2026-10-11T03:50:34.263156730Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a12b70-42de-7292-9f1a-2986ddec1e74
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at e9ef4c437b (fresh reviewer)
+    1. BLOCKER: live_work.rs:187 calls detect_open_pr_for_branch without with_forge_lookup_timeout (lib_part3.rs:4293), so `gh` can run unbounded once per spec branch. A slow forge then hangs `doctor --heal` while it holds the loaded store (doctor_cmd.rs:7299-7359). Wrap the call with a short ceiling so a timeout returns GhUnreachable, which means Keep.
+    2. MEDIUM: live_work.rs:83/86. When `git for-each-ref` fails it returns an empty list, which becomes NoLiveWork, and the spec reverts. A git failure must mean Keep.
+    3. LOW: pr_cmd.rs:5090 bumps only in `aida pr auto-queue-review`. Move the bump into try_auto_queue_pr_review so the session-end backup (lib_part3.rs:3991) and the orphan sweep (lib_part5.rs:686) bump as well.
+    4. LOW: live_work.rs:194 bump_spec_in_progress duplicates bump_spec_in_progress_at_lease_take (lib_part2.rs:4998); reuse one. Also, `mod live_work` breaks alphabetical order at lib.rs:92.
+    5. LOW (d): neither new call site has an end-to-end test. Not blocking, but add one if it's cheap.
+    Out of scope, noted for STORY-1653: evidence comes only from branches named after the spec, so work on a relay branch under another spec's lease (the TASK-1538 / slice-05 case) is neither bumped nor protected. Relay/driver attribution belongs to STORY-1653.
+    Verified: the only automatic InProgress→Approved writer is the doctor heal (doctor_cmd.rs:7346). (c) already handles Approved, and a new test pins that, including the gates. The lib_part4 edits are minimal.
+  created_at: 2026-10-11T14:48:59.870230436Z
+  modified_at: 2026-10-11T14:48:59.870230436Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a128e6-d6ea-78f0-884e-3cb09bf8043e
   author: joe
