@@ -70,6 +70,7 @@ mod digest_cmd;
 mod drain_failure_note;
 mod gitlab_mirror_link;
 mod graph_cmd;
+mod help;
 mod kernel;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
@@ -124,6 +125,7 @@ mod zen_cmd;
 use claim::*;
 use db_block::*;
 use drain_cmd::*;
+use help::*;
 use kernel::*;
 use mailbox_root::*;
 use mcp_cmd::*;

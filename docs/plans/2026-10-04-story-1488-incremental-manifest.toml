@@ -216,3 +216,16 @@ items = [
   "fn role_segment_text",
   "struct OrchestratorBadge",
 ]
+
+[module.help]
+purpose = "Tiered help, `aida help-all`, help topics and the user-guide opener (STORY-1488 slice 1)"
+items = [
+  "const GETTING_STARTED",
+  "fn command_groups",
+  "fn print_tiered_help",
+  "fn print_help_all",
+  "fn resolve_help_topic",
+  "fn print_help_topic",
+  "mod help_grouping_tests",
+  "fn open_user_guide",
+]
