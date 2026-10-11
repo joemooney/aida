@@ -808,3 +808,19 @@ items = [
   "fn handle_autopilot_challenge",
   "fn handle_intake_command",
 ]
+
+[module.pr_merge_gate]
+purpose = "Drain merge-approval gate, PR review-verdict stamping and spec-done-after-PR (STORY-1488 slice 1)"
+items = [
+  "fn verified_from_pr_ci_head",
+  "mod bug_1819_from_pr_ci_evidence_tests",
+  "fn pr_head_ref_best_effort",
+  "fn dispatched_branch_head_sha",
+  "fn drain_merge_approval_gate",
+  "fn drain_merge_match_head",
+  "fn stamp_pr_review_verdict",
+  "mod task_1448_drain_merge_approval_gate_tests",
+  "mod task_168_pr_verdict_metadata_tests",
+  "fn reviewer_wrote_message",
+  "fn ensure_spec_done_after_pr",
+]
