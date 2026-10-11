@@ -1,0 +1,30 @@
+id: 01a1295a-85f9-7090-9a6d-e89774297411
+spec_id: BUG-1946
+agreed_id: BUG-1946
+title: Launcher verbose-diagnostics test races presentation_env_tests on process env
+description: |
+  `agent_launcher_tests::verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner` (aida-cli-lib/src/tests/agent_launcher_tests.rs ~L615-636) renders the launch preview twice (`render_agent_launch_diagnostics`, then `render_agent_launch_noexec`) and asserts the bodies are equal. Both renders read the process env for the `presentation_env:` line (AIDA_OUTPUT_FORMAT / AIDA_GLYPHS). The test does not hold the `crate::test_env` env lock.
+
+  `presentation_env_tests` (tests/presentation_env_tests.rs ~L312, ~L364, ~L411) sets AIDA_OUTPUT_FORMAT=human and AIDA_GLYPHS=ascii process-wide via `EnvVarsGuard::apply`. If one of those tests runs between the two renders, the bodies differ: one says "presentation_env: none set in the launching shell", the other says "AIDA_OUTPUT_FORMAT, AIDA_GLYPHS stripped".
+
+  Repro (on the lib-split stack, where both test modules sit under the same parent module): `cargo test -p aida-cli-lib --lib agent_registry_root` fails 3/3. With `-- --test-threads=1` it passes, and the launcher tests alone pass. Under a full `cargo test --workspace` whether it fires depends on scheduling. It was green on several runs and then failed 2/2 once unrelated test modules were renamed.
+
+  Fix: have the test take the env lock for both renders, e.g. `crate::test_env::EnvVarsGuard::apply(&[("AIDA_OUTPUT_FORMAT", None), ("AIDA_GLYPHS", None), ...])` like `noexec_preview_shows_none_set_when_no_presentation_vars_are_present` does. This blocks the next lib.rs split slice (session_start.rs), which cannot be tagged green until it lands.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T05:06:00.825634058Z
+modified_at: 2026-10-11T05:06:00.825634058Z
+req_type: Bug
+tags:
+- flaky-test
+- test-isolation
+filed_at:
+  code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
+  branch: slice-10
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: 26c63616-b019-4504-a8d9-08023c744952
