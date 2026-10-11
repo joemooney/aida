@@ -17,12 +17,12 @@ description: |-
   - A contained headless session can Edit and Write files inside its lease worktree, and is denied outside it. An integration test drives real claude, or the closest available harness, through both cases.
   - The write boundary is derived from the worktree the session actually runs in (pool or named), never from a path that wasn't created.
   - Contained mode also grants what the AIDA CLI needs to write the store and cache (see the companion bug), or that bug is fixed first.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-11T17:59:58.339423613Z
+modified_at: 2026-10-11T18:22:14.462612065Z
 req_type: Bug
 tags:
 - contained
@@ -140,6 +140,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12c33-7cf6-71a0-b397-9d74d475266e
+  author: aida-reconcile
+  timestamp: 2026-10-11T18:22:14.262838683Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12c33-7dbe-7672-b435-99a09586135a
+  timestamp: 2026-10-11T18:22:14.462596908Z
+  agent: implementer
+  commit_sha: 3938d0a49164f5deee4337f5f33246d421466be0
+  summary: 'PR #2534 (advisor review, fresh reviewer subagent): the broken Edit(/**) is replaced by absolute //<worktree>/** rules for Edit/Write/MultiEdit/NotebookEdit, from the real worktree (cwd after the lease chdir), failing closed on inexpressible roots. Harness test contained_session_writes_inside_worktree_denied_one_level_above covers inside, one level above, ''..'' and a prefix sibling; the real-claude test is env-gated (AIDA_TEST_REAL_CLAUDE=1). pool_worktree_announcement_matches_rule_path covers the announced path. Narrows the posture.'
+  review_verdict: approved
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
@@ -148,3 +162,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: ce7b935f-d5da-41d3-94da-7ef94d2537e4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T18:22:14.262812484Z
+  completion_sha: 3938d0a49164f5deee4337f5f33246d421466be0

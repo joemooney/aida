@@ -16,12 +16,12 @@ description: |
   - A drift check (existing guard or a small test) fails if a docs/cli page cites `aida session <verb>` where `<verb>` is not in `aida session --help`.
 
   Found by the night-fable review sweep (docs-vs-CLI pass over docs/cli/01-12). Size S, docs only.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:22:42.037610572Z
-modified_at: 2026-10-11T17:33:21.473985740Z
+modified_at: 2026-10-11T18:22:14.465018476Z
 req_type: Bug
 tags:
 - docs
@@ -67,6 +67,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12c33-7dbe-7672-b435-99b0248b49be
+  author: aida-reconcile
+  timestamp: 2026-10-11T18:22:14.462616184Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12c33-7dc1-7301-a102-7738a7878a20
+  timestamp: 2026-10-11T18:22:14.465015972Z
+  agent: implementer
+  commit_sha: bfa8d7b83d1ea22acc7069d366db533064a0767a
+  summary: 'PR #2532 (advisor review, fresh reviewer subagent): ''session forget'' removed from 06-roles-sessions.md, ''usage unused'' now cites a duration in 08-reporting.md, both verified against the live --help. The new subcommand drift check catches the original citation on main and passes on the PR (819 citations). No SPEC IDs in user prose.'
+  review_verdict: approved
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
@@ -75,3 +89,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T18:22:14.462613064Z
+  completion_sha: bfa8d7b83d1ea22acc7069d366db533064a0767a
