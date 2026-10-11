@@ -1,5 +1,6 @@
 id: 01a1288d-3d27-7e33-92f9-fd1f668d6c4c
 spec_id: FAQ-1-269
+agreed_id: FAQ-33
 title: Why didn't my git push reach the GitLab mirror?
 description: |
   **The pre-push mirror hook only mirrors commits that origin has already accepted. On a plain `git push` it runs before origin confirms, so it skips the mirror. Use `aida push`, or run `aida remote mirror-sync` afterwards.**

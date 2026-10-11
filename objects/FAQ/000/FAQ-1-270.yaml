@@ -1,5 +1,6 @@
 id: 01a1288d-6a4f-74a1-a5bd-6f00582c8577
 spec_id: FAQ-1-270
+agreed_id: FAQ-38
 title: Can a relay's reviewer subagent approve the PR its implementer subagent wrote?
 description: |
   **Not once BUG-1918 lands. Approval authority is bound to session identity, and every subagent of one Claude process shares that identity (`CLAUDE_CODE_SESSION_ID` plus the harness process), so the approval counts as self-approval and `aida pr ship` refuses it.**

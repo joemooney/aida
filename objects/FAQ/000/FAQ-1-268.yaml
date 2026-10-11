@@ -1,5 +1,6 @@
 id: 01a1288d-20d6-7bc1-8644-0cbe29bba5ed
 spec_id: FAQ-1-268
+agreed_id: FAQ-34
 title: Why is a mirror hub (e.g. GitLab) behind or diverged from GitHub, and how do I fix it?
 description: |
   **Run `aida remote status` to see the drift, then `aida remote mirror-sync` for a hub that's simply behind, or `aida remote reconcile` for one that has diverged.**

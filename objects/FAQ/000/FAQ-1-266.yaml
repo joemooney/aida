@@ -1,5 +1,6 @@
 id: 01a1288c-e62a-75c0-a3ac-14d69f75b642
 spec_id: FAQ-1-266
+agreed_id: FAQ-39
 title: Does AIDA support Windows or macOS?
 description: |
   **No. AIDA supports Linux only, for the foreseeable future. Windows and macOS have no CI, no release binaries, and no fix work (ADR-72, 2026-10-10).**

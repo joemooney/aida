@@ -1,5 +1,6 @@
 id: 01a1288c-c5a3-7d22-963d-53e26f134d20
 spec_id: FAQ-1-265
+agreed_id: FAQ-37
 title: Why did a headless relay agent get "The user doesn't want to proceed ... STOP" when nobody rejected anything?
 description: |
   **Claude Code itself killed the subagent, not the operator. Headless `claude -p` stops background subagents 10 minutes after the orchestrator's turn ends, and the killed tool calls return Claude Code's standard rejection text.**

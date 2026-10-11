@@ -1,5 +1,6 @@
 id: 01a1288d-0025-7ca1-9958-d0a8339cf6f6
 spec_id: FAQ-1-267
+agreed_id: FAQ-35
 title: Why does aida pr list show a PR as Failing when the required Linux checks passed?
 description: |
   **Usually because a non-required check failed, such as the old path-filtered `Build (windows-latest)` run. `aida pr list` counts every check, while merging needs only `Build (ubuntu-latest)` and `merge-hold-gate`.**
