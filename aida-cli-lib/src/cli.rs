@@ -9627,19 +9627,26 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["json", "tree", "status"])]
         human: bool,
 
-        /// Order the results. `modified` (default) = freshest first; `heft` =
-        /// most graph-connected first (the deterministic in+out-degree weight),
-        /// so load-bearing specs surface at the top; `weight` = heaviest
-        /// user-set numeric weight/score first (unweighted specs sort last);
-        /// `created` = newest-created first; `completed` = most-recently-
-        /// completed first (specs with no completion date sort last);
-        /// `id` = alphabetical by requirement ID.
+        /// Order the results. `id` (default) = natural numeric ID order:
+        /// type prefix first (ADR, BUG, EPIC, FAQ, STORY, TASK, …), then each
+        /// number as an integer, so number 2 comes before 11 and 2 before
+        /// 1000 within a type; the agreed ID is the key when a spec has one,
+        /// and unpromoted node-aware IDs (prefix-node-seq) follow the agreed
+        /// IDs of their type. `modified` = freshest first; `heft` = most
+        /// graph-connected first (the deterministic in+out-degree weight), so
+        /// load-bearing specs surface at the top; `weight` = heaviest user-set
+        /// numeric weight/score first (unweighted specs sort last); `created`
+        /// = newest-created first; `completed` = most-recently-completed first
+        /// (specs with no completion date sort last). The default is
+        /// configurable via `[list] default_sort` in `.aida/config.toml`; an
+        /// explicit `--sort` always wins. Same order for humans and agents.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
         // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
         // trace:TASK-1587 | ai:antigravity — adds the `id` order.
-        #[clap(long, value_name = "ORDER", default_value = "modified")]
-        sort: String,
+        // trace:STORY-1644 | ai:claude — natural `id` default, configurable.
+        #[clap(long, value_name = "ORDER")]
+        sort: Option<String>,
 
         /// Only specs whose numeric weight/score is >= N. Specs with no
         /// weight set are excluded. Composes with every other filter.
@@ -9654,11 +9661,17 @@ pub enum Command {
         max_weight: Option<f64>,
 
         /// Cap the output at the first N rows, applied AFTER sorting — so
-        /// `--limit N` returns the N most-recent (with the default
-        /// `--sort modified`) or the N most-connected (`--sort heft`).
-        /// Composes with every filter; applies to both the human table and
-        /// `--json`. Omit for the full (filtered) listing.
+        /// `--limit N` returns the first N by ID (the default `--sort id`),
+        /// the N most-recent (`--sort modified`) or the N most-connected
+        /// (`--sort heft`). `--limit 0` = no cap. Composes with every filter;
+        /// applies to both the human table and `--json`. Omit for the full
+        /// (filtered) listing — except in agent mode (piped / non-TTY), where
+        /// the default table is capped at 100 rows with a notice naming what
+        /// was cut. That agent cap is configurable via `[list] agent_limit`
+        /// in `.aida/config.toml` (0 = unbounded) or env `AIDA_LIST_LIMIT`;
+        /// `--limit` / `--all` beat env, which beats config.
         // trace:TASK-900 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:STORY-1644 | ai:claude
         #[clap(long, value_name = "N")]
         limit: Option<usize>,
 
@@ -13221,9 +13234,12 @@ pub enum Command {
 
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
-        /// caps the number of decoded events.
-        #[clap(long, short = 'n', default_value = "20", global = true)]
-        limit: usize,
+        /// caps the number of decoded events. Default 20, configurable via
+        /// `[history] limit` in `.aida/config.toml` or env
+        /// `AIDA_HISTORY_LIMIT` (this flag beats env, which beats config).
+        // trace:STORY-1644 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, short = 'n', global = true)]
+        limit: Option<usize>,
 
         /// Walk at most N commits on the orphan branch. Default 5x --limit
         /// (at least 50) for --full/events and a bare --json with no
@@ -15386,8 +15402,9 @@ mod tests {
     }
 
     // trace:TASK-900 — the truncation semantics the list handler relies on:
-    // `Vec::truncate(N)` keeps the FIRST N of the already-sorted (recency-first)
-    // vector, i.e. the N most-recent. `N >= len` is a no-op (full listing).
+    // `Vec::truncate(N)` keeps the FIRST N of the already-sorted vector (here a
+    // recency-ordered stand-in, i.e. the N most-recent; the default list order
+    // is natural ID since STORY-1644). `N >= len` is a no-op (full listing).
     #[test]
     fn list_limit_truncates_to_n_most_recent() {
         // Stand-in for the recency-first `reqs` vector (freshest first).

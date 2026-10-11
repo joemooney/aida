@@ -2230,9 +2230,25 @@ pub(crate) fn handle_git_backend_command(
                 effective_status
             };
             // STORY-632: resolve the --sort order. Unknown values fall back to
-            // the default (freshest-first) with a stderr note rather than
-            // erroring the listing. trace:STORY-632 | ai:claude
-            let sort_order = match sort.to_ascii_lowercase().as_str() {
+            // the default with a stderr note rather than erroring the listing.
+            // trace:STORY-632 | ai:claude
+            //
+            // STORY-1644: the default is natural numeric `id` order for humans
+            // and agents alike; `[list] default_sort` overrides it and an
+            // explicit `--sort` always wins. trace:STORY-1644 | ai:claude
+            let list_project_root = find_project_root().ok();
+            let (sort_key, sort_config_warning) = crate::resolve_list_sort(
+                sort.as_deref(),
+                list_project_root
+                    .as_deref()
+                    .and_then(crate::read_list_default_sort)
+                    .as_deref(),
+            );
+            if let Some(w) = sort_config_warning {
+                eprintln!("{w}");
+            }
+            let mut sort_key = sort_key.to_ascii_lowercase();
+            let sort_order = match sort_key.as_str() {
                 "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
                 // trace:FR-283 | ai:claude — heaviest user-set weight first.
                 "weight" => aida_core::SortOrder::WeightDesc,
@@ -2240,13 +2256,16 @@ pub(crate) fn handle_git_backend_command(
                 "created" => aida_core::SortOrder::CreatedDesc,
                 "completed" => aida_core::SortOrder::CompletedDesc,
                 // trace:TASK-1587 | ai:antigravity
-                "id" => aida_core::SortOrder::IdAsc,
-                "modified" | "" => aida_core::SortOrder::ModifiedDesc,
+                "id" | "" => aida_core::SortOrder::IdAsc,
+                "modified" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', 'completed', or 'id'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected one of: {}); using '{}'",
+                        crate::LIST_SORT_VALUES.join(", "),
+                        crate::LIST_DEFAULT_SORT
                     );
-                    aida_core::SortOrder::ModifiedDesc
+                    sort_key = crate::LIST_DEFAULT_SORT.to_string();
+                    aida_core::SortOrder::IdAsc
                 }
             };
             // STORY-639: `--mine` resolves to the shell identity (the same
@@ -2347,8 +2366,14 @@ pub(crate) fn handle_git_backend_command(
                 let done_rows = backend.list_summaries(&done_filter)?;
                 let (rework_rows, ids) =
                     queue_cmd::select_done_rework_rows(done_rows, store_path.parent());
+                let folded_in = !rework_rows.is_empty();
                 reqs.extend(rework_rows);
                 rework_ids = ids;
+                // STORY-1644: keep the folded-in rows in natural ID order
+                // rather than appended at the end. trace:STORY-1644 | ai:claude
+                if folded_in && sort_order == aida_core::SortOrder::IdAsc {
+                    aida_core::sort_summaries_natural_id(&mut reqs);
+                }
             }
             // BUG-1535: never two rows under one id. A row whose displayed
             // (agreed) id also names another spec is shown by its native id
@@ -2547,9 +2572,9 @@ pub(crate) fn handle_git_backend_command(
 
             // TASK-900: cap the result at the first N rows AFTER the sort
             // (list_summaries already ordered by --sort; default is
-            // recency-first) and after the parent / meta / standing-type
-            // retain passes — so `--limit N` is the N most-recent of the
-            // fully-filtered set. Applied here, before the --short early
+            // natural ID order per STORY-1644) and after the parent / meta /
+            // standing-type retain passes — so `--limit N` is the first N of
+            // the fully-filtered set in the chosen order. Applied here, before the --short early
             // return and the json / table / tree rendering, so every output
             // shape sees the same bounded row set.
             // trace:TASK-900 | ai:claude
@@ -2563,7 +2588,18 @@ pub(crate) fn handle_git_backend_command(
             // enumerate every spec keep working, and the human TTY path is
             // untouched. An explicit `--limit`/`--all` always overrides.
             // trace:TASK-970
+            //
+            // STORY-1644: the agent cap is configurable — `--limit`/`--all`
+            // beat env `AIDA_LIST_LIMIT`, which beats `[list] agent_limit`,
+            // which beats the built-in 100 (0 = unbounded). `--limit 0` also
+            // means "no cap". trace:STORY-1644 | ai:claude
             let total_after_filters = reqs.len();
+            let agent_cap = crate::resolve_agent_list_limit(
+                std::env::var(crate::AGENT_LIST_LIMIT_ENV).ok().as_deref(),
+                list_project_root
+                    .as_deref()
+                    .and_then(crate::read_list_agent_limit),
+            );
             let agent_default_cap = agent_list_default_cap(
                 *limit,
                 *all,
@@ -2571,9 +2607,20 @@ pub(crate) fn handle_git_backend_command(
                 effective_json,
                 *tree,
                 agent_output_mode(),
+                agent_cap,
             );
-            if let Some(n) = limit.or(agent_default_cap) {
+            if let Some(n) = limit.filter(|n| *n > 0).or(agent_default_cap) {
                 reqs.truncate(n);
+            }
+            let rows_truncated = total_after_filters > reqs.len();
+            // STORY-1644: the machine JSON shape is a bare array (STORY-1352
+            // contract) and the agent cap never applies to it, so an explicit
+            // `--limit` cut is announced on stderr instead of reshaping stdout.
+            if effective_json && rows_truncated {
+                eprintln!(
+                    "note: truncated: true, total: {total_after_filters} — showing first {} by {sort_key}; `--limit 0` for all",
+                    reqs.len()
+                );
             }
 
             // TASK-743: --short emits one bare canonical spec ID per line —
@@ -2998,16 +3045,34 @@ pub(crate) fn handle_git_backend_command(
                 // explicit status filter relabels to plain "matched".
                 // trace:STORY-723 | ai:claude
                 let denom_label = list_count_denom_label(default_open_lens);
-                println!(
-                    "count: {} of {} {}",
-                    reqs.len(),
-                    total_after_filters,
-                    denom_label
-                );
+                // STORY-1644: truncation is never silent — when rows were cut
+                // the header names the order, what was hidden, and how to
+                // see it. trace:STORY-1644 | ai:claude
+                if rows_truncated {
+                    println!(
+                        "{}",
+                        crate::agent_list_truncation_header(
+                            reqs.len(),
+                            total_after_filters,
+                            denom_label,
+                            &sort_key,
+                        )
+                    );
+                } else {
+                    println!(
+                        "count: {} of {} {}",
+                        reqs.len(),
+                        total_after_filters,
+                        denom_label
+                    );
+                }
                 let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
                 println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
-                if agent_default_cap.is_some() && total_after_filters > reqs.len() {
-                    println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                if agent_default_cap.is_some() && rows_truncated {
+                    println!(
+                        "note: agent default cap {agent_cap} — set [list] agent_limit or {} (0 = unbounded), or pass `--all`",
+                        crate::AGENT_LIST_LIMIT_ENV
+                    );
                 }
                 // BUG-1737: the notes below enumerate what this view withheld,
                 // which made them read as the complete account — they were not.
@@ -3092,11 +3157,16 @@ pub(crate) fn handle_git_backend_command(
             // knows it's seeing a bounded slice and how to widen. Only fires on
             // the default table path (agent_default_cap is None for explicit
             // shapes and when nothing was trimmed). trace:TASK-970
-            if agent_default_cap.is_some() && total_after_filters > reqs.len() {
+            if agent_default_cap.is_some() && rows_truncated {
+                // trace:STORY-1644 | ai:claude
                 println!(
-                    "count: {} of {} (agent default cap — `aida list --all` or `--limit N` to widen)",
-                    reqs.len(),
-                    total_after_filters
+                    "{}",
+                    crate::agent_list_truncation_header(
+                        reqs.len(),
+                        total_after_filters,
+                        list_count_denom_label(default_open_lens),
+                        &sort_key,
+                    )
                 );
             }
 
@@ -8402,6 +8472,11 @@ pub(crate) fn handle_git_backend_command(
             timeline,
             cmd,
         } => {
+            // STORY-1644: `--limit` beats env `AIDA_HISTORY_LIMIT`, which beats
+            // `[history] limit`, which beats the built-in 20.
+            // trace:STORY-1644 | ai:claude
+            let limit_flag = *limit;
+            let limit = &crate::effective_history_limit(limit_flag);
             // trace:STORY-1477 | ai:codex
             use crate::history_layout::{Layout, Templates};
             // Reject even a parent-position --json before loading or mutating config.
@@ -8672,7 +8747,7 @@ pub(crate) fn handle_git_backend_command(
                     );
                 }
                 // A narrowed window would still print totals that look whole.
-                if *limit != history_timeline::HISTORY_DEFAULT_LIMIT {
+                if limit_flag.is_some_and(|n| n != history_timeline::HISTORY_DEFAULT_LIMIT) {
                     anyhow::bail!(
                         "`--timeline` covers a requirement's whole recorded life, so `--limit` \
                          does not apply to it"

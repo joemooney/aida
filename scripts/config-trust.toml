@@ -387,6 +387,11 @@ auto_after_days = "policy"
 
 [keys.worktree.list]
 show_hidden_hints = "policy"
+default_sort = "policy"
+agent_limit = "policy"
+
+[keys.worktree.history]
+limit = "policy"
 
 [keys.worktree.focus]
 out_of_scope = "policy"

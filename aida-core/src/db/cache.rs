@@ -392,11 +392,15 @@ pub enum SortOrder {
     /// modified_at DESC; unweighted rows sort last).
     // trace:FR-283 | ai:claude
     WeightDesc,
+    /// Natural numeric order by requirement ID (`FAQ-2` before `FAQ-11`;
+    /// agreed ID when present; node-aware IDs after agreed IDs of their
+    /// type) — see [`crate::id_order::natural_id_cmp`]. Applied in Rust after
+    /// the query (SQLite has no natural collation), then `limit` truncates.
+    // trace:TASK-1587 | ai:antigravity
+    // trace:STORY-1644 | ai:claude
+    IdAsc,
     /// Newest-created first by `created_at` DESC.
     // trace:TASK-1464 | ai:claude
-    /// Alphabetical by requirement ID.
-    // trace:TASK-1587 | ai:antigravity
-    IdAsc,
     CreatedDesc,
     /// Most-recently-completed first, ordered on the real `completed_at`
     /// timestamp (STORY-86, stamped by the Done->Completed auto-bump) rather
@@ -407,6 +411,25 @@ pub enum SortOrder {
     /// (SQLite orders NULLs last in DESC). Ties broken by `modified_at` DESC.
     // trace:TASK-1464 trace:TASK-1474 | ai:claude
     CompletedDesc,
+}
+
+/// Sort list rows in natural numeric ID order — the one ordering `aida list
+/// --sort id` uses on every output surface. The key is the agreed ID when
+/// present, else the spec ID, else the UUID.
+// trace:STORY-1644 | ai:claude
+pub fn sort_summaries_natural_id(rows: &mut Vec<RequirementSummary>) {
+    let mut keyed: Vec<(String, RequirementSummary)> = std::mem::take(rows)
+        .into_iter()
+        .map(|r| {
+            let uuid = r.id.to_string();
+            let key =
+                crate::id_order::list_sort_key(r.agreed_id.as_deref(), r.spec_id.as_deref(), &uuid)
+                    .to_string();
+            (key, r)
+        })
+        .collect();
+    keyed.sort_by(|(a, _), (b, _)| crate::id_order::natural_id_cmp(a, b));
+    rows.extend(keyed.into_iter().map(|(_, r)| r));
 }
 
 /// Filter passed to cache list queries. All fields are AND'd together;
@@ -2072,7 +2095,9 @@ impl Cache {
             // trace:TASK-1464 | ai:claude
             SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
             // trace:TASK-1587 | ai:antigravity
-            SortOrder::IdAsc => sql.push_str(" ORDER BY COALESCE(spec_id, id) ASC"),
+            // trace:STORY-1644 | ai:claude — natural order is applied in Rust
+            // below; the SQL order is only a stable starting point.
+            SortOrder::IdAsc => sql.push_str(" ORDER BY COALESCE(agreed_id, spec_id, id) ASC"),
             // trace:TASK-1474 | ai:claude — order on the real `completed_at`
             // timestamp (STORY-86); a Completed row that predates STORY-86
             // (completed_at never stamped) falls back to modified_at, same as
@@ -2084,7 +2109,10 @@ impl Cache {
                 " ORDER BY COALESCE(completed_at, CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
             ),
         }
-        if let Some(n) = filter.limit {
+        // STORY-1644: a natural ID sort must see every row before the limit
+        // cuts, so the LIMIT moves into Rust for that order.
+        let natural_id = matches!(filter.sort, SortOrder::IdAsc);
+        if let Some(n) = filter.limit.filter(|_| !natural_id) {
             sql.push_str(&format!(" LIMIT {}", n));
         }
 
@@ -2092,9 +2120,16 @@ impl Cache {
         let mut stmt = conn.prepare(&sql)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> =
             args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        let rows = stmt
+        let mut rows = stmt
             .query_map(param_refs.as_slice(), row_to_summary)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        if natural_id {
+            // trace:STORY-1644 | ai:claude
+            sort_summaries_natural_id(&mut rows);
+            if let Some(n) = filter.limit {
+                rows.truncate(n);
+            }
+        }
         Ok(rows)
     }
 
@@ -7163,5 +7198,69 @@ mod tests {
         assert_eq!(rows[0].spec_id.as_deref(), Some("A-1"));
         assert_eq!(rows[1].spec_id.as_deref(), Some("B-2"));
         assert_eq!(rows[2].spec_id.as_deref(), Some("C-3"));
+    }
+
+    // trace:STORY-1644 | ai:claude — natural numeric order, agreed ID as the
+    // key, node-aware IDs after agreed IDs of their type, and the limit
+    // applied AFTER the natural sort (not to SQLite's text order).
+    #[test]
+    fn list_summaries_id_sort_is_natural_and_limit_follows_sort() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        for id in [
+            "FAQ-11",
+            "FAQ-2",
+            "TASK-1000",
+            "FAQ-1-232",
+            "TASK-2",
+            "BUG-9",
+        ] {
+            store.requirements.push(sample_req(id, id));
+        }
+        // A promoted spec: node-aware spec_id, agreed FAQ-10 is the sort key.
+        let mut promoted = sample_req("FAQ-1-7", "promoted");
+        promoted.agreed_id = Some("FAQ-10".into());
+        store.requirements.push(promoted);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let display = |rows: &[RequirementSummary]| -> Vec<String> {
+            rows.iter()
+                .map(|r| {
+                    r.agreed_id
+                        .clone()
+                        .or_else(|| r.spec_id.clone())
+                        .unwrap_or_default()
+                })
+                .collect()
+        };
+        let all = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::IdAsc,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            display(&all),
+            [
+                "BUG-9",
+                "FAQ-2",
+                "FAQ-10",
+                "FAQ-11",
+                "FAQ-1-232",
+                "TASK-2",
+                "TASK-1000"
+            ]
+        );
+
+        let limited = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::IdAsc,
+                limit: Some(3),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(display(&limited), ["BUG-9", "FAQ-2", "FAQ-10"]);
     }
 }
