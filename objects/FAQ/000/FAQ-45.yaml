@@ -1,0 +1,41 @@
+id: 01a12b85-cfcb-72d1-b218-74cab77256ee
+spec_id: FAQ-45
+agreed_id: FAQ-45
+title: Why did the git guardrails hook block a command that only mentions a git push, with no reason given?
+description: |
+  **The `aida-git-guardrails` PreToolUse hook scans the whole command text, so a command that merely MENTIONS a git push operation (e.g. inside a heredoc of documentation or an FAQ body) can be blocked, with only "No stderr output" as the reason. That's BUG-1936. Until its fix lands, put such text in a file and pass the file.**
+
+  ## Why
+  The hook pattern-matches risky git operations to stop agents from pushing or force-pushing outside the reviewed path. It doesn't fully parse shell quoting, so text in a quoted string or heredoc looks like a command, and it reports the block on stdout instead of stderr.
+
+  ## How (workaround)
+  - Write the long text with your editor or the agent's file-writing tool, then pass it: `aida faq add ... --description-from-file body.md`, `aida comment add <ID> "$(cat body.md)"`, or `--body-file` for `aida mailbox send`.
+  - Don't try to slip past the hook (string splitting, variables, `--no-verify`). The hook is a safety control; route around the false positive only by moving prose out of the command line.
+
+  ## Caveat
+  BUG-1936's fix (PR #2518) was in review on 2026-10-11 under an advisor ruling: fail closed on unparseable text only for commands inspected as git, and always print the block reason on stderr. Once it merges, this FAQ should be updated or archived.
+
+  ## See also
+  BUG-1936, FAQ-40
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T15:12:32.203089775Z
+modified_at: 2026-10-11T15:12:32.203089775Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:ci
+filed_at:
+  code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:12:32.203128636Z
