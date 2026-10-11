@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-11T13:48:17.312514356Z
+modified_at: 2026-10-11T14:22:56.348459605Z
 req_type: Story
 tags:
 - cli
@@ -88,6 +88,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2520 at 8bec63c195'
   created_at: 2026-10-11T13:48:12.732187427Z
   modified_at: 2026-10-11T13:48:12.732187427Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b58-675c-7af1-9e2b-661ba8b6897e
+  author: joe
+  content: 'FACTORY READY: PR #2520 green at 87ad6d0ea2'
+  created_at: 2026-10-11T14:22:56.348459605Z
+  modified_at: 2026-10-11T14:22:56.348459605Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-5f13-79b1-9eb0-ebdaf6c760ed
