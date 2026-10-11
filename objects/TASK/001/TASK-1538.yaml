@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T12:37:55.828567714Z
+modified_at: 2026-10-11T13:59:45.742270062Z
 req_type: Task
 tags:
 - closure:pending
@@ -558,6 +558,12 @@ comments:
   created_at: 2026-10-11T12:37:55.828567714Z
   modified_at: 2026-10-11T12:37:55.828567714Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b43-2f4e-7a92-9235-859ab37f6db3
+  author: joe
+  content: 'RUN 8 READY FOR ADVISOR REVIEW: PR #2526 (branch slice-30, stacked on run 7 #2511: base slice-25 at 72d5ced220). Tags, each proven at its own SHA (warnings 0/0, cargo test --workspace 9992/9992, 8 ignored): slice-30-r1 rel_cards f846e78670 2120; slice-31-r1 requirements_cli e8645ba26a (move + inventory retarget) 2395; slice-32-r1 doctor_root 16c9711941 (move + inventory) 1998; slice-33-r1 human 07d0a021fc 2015; slice-34-r1 config_init d30a3705c0 (move with the 1n pub use shim + inventory) 1225; slice-35-r1 agent_config 2d2eaf3dcb (move + inventory) 534. 10287 lines moved. verify_stack slice-25..slice-30: 11 commits (6 MOVE, 4 RETARGET, 1 TOOLING), checks 1–8 PASS; check-ci-fast 21 gates pass. PLEASE REVIEW TWO POINTS. (1) Amendment 1n: validate_status_input and validate_priority_input are the first pub items to move, so lib.rs gains ''pub use config_init::{validate_priority_input, validate_status_input};'' inside the config_init MOVE. (2) Tooling 3e3df5af4e: verify_stack purity now accepts that shim line as wiring for the module being moved, and only that module (2 new unit tests, 33/33). Otherwise the shim would have to go in a retarget, and check 4 forbids retargets from touching lib.rs. The config-trust rows add no new channel or key; the lib.rs site count goes 31 to 26. Straddlers in these ranges (apply_agent_default_flags, gate_agent_bypass, write_global_agents_posture, grep_requirements) stay for the Q8 sweep. Still open: Q9 and the run-7 adr9 ruling.'
+  created_at: 2026-10-11T13:59:45.742270062Z
+  modified_at: 2026-10-11T13:59:45.742270062Z
+  session_id: 6d7f065f-cfb7-44d7-8b32-dd107e8c8e5e
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
