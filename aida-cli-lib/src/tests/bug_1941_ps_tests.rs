@@ -339,7 +339,7 @@ fn bug_1941_interrupted_lease_with_fresh_commit_stays_stopped() {
         DispatchState::Stopped,
         "an interrupted drain wave reads stopped, not moving, despite a fresh commit"
     );
-    assert!(!d.commit_movement);
+    assert_eq!(d.commit_movement_from, None);
 }
 
 #[test]
@@ -360,7 +360,12 @@ fn bug_1941_pushed_branch_with_open_pr_and_fresh_commit_awaits_integration() {
     assert!(rows[0].pid.is_none());
     let d = rows[0].dispatch.as_ref().unwrap();
     assert_eq!(d.state, DispatchState::Moving);
-    assert!(d.commit_movement, "the lift is remembered for the overlay");
+    assert_eq!(
+        d.commit_movement_from,
+        Some(DispatchState::Stalled),
+        "the lift is remembered for the overlay"
+    );
+    assert!(ps_integration_overlay_candidate(d));
 
     // No integration standing: the commit-only movement stands.
     assert!(!ps_apply_integration_standing(&mut rows[0], None));
@@ -385,6 +390,121 @@ fn bug_1941_pushed_branch_with_open_pr_and_fresh_commit_awaits_integration() {
 }
 
 #[test]
+fn bug_1941_lifted_salvageable_work_is_never_reframed_as_awaiting_integration() {
+    let tmp = tempfile::tempdir().unwrap();
+    let l = lease(
+        "dead",
+        "TASK-1722",
+        tmp.path().to_path_buf(),
+        "task-1722-work",
+    );
+    // Stale tracked changes (old mtime) plus a fresh commit, nothing running.
+    let probe = WorktreeGitProbe {
+        dirty: true,
+        dirty_newest_mtime_age_secs: Some(6 * 3600),
+        ahead_of_main: 2,
+        head_commit_age_secs: Some(60),
+        last_commit_subject: Some("wip".into()),
+        ..Default::default()
+    };
+    let mut rows = rows_for(&[l], &[], probe);
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(d.state, DispatchState::Moving);
+    assert_eq!(d.commit_movement_from, Some(DispatchState::Salvageable));
+    assert!(
+        !ps_integration_overlay_candidate(d),
+        "salvageable work is not an overlay candidate"
+    );
+    let standing = crate::dispatch_health_ps::integration_standing(
+        true,
+        true,
+        Some("task-1722-work"),
+        "task-1722-work",
+        Some("https://github.com/o/r/pull/77#issuecomment-1"),
+    );
+    assert!(standing.is_some());
+    assert!(!ps_apply_integration_standing(
+        &mut rows[0],
+        standing.as_ref()
+    ));
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_ne!(
+        d.state,
+        DispatchState::AwaitingIntegration,
+        "uncommitted work must never be hidden behind awaiting-integration"
+    );
+    assert_eq!(d.commit_movement_from, Some(DispatchState::Salvageable));
+}
+
+#[test]
+fn bug_1941_overlay_candidate_predicate() {
+    let d = |state, from| PsDispatch {
+        state,
+        hint: None,
+        dirty: false,
+        ahead_of_main: 0,
+        untracked_only: false,
+        commit_movement_from: from,
+    };
+    use DispatchState::*;
+    assert!(ps_integration_overlay_candidate(&d(Stalled, None)));
+    assert!(ps_integration_overlay_candidate(&d(Stopped, None)));
+    assert!(ps_integration_overlay_candidate(&d(Moving, Some(Stalled))));
+    assert!(!ps_integration_overlay_candidate(&d(Moving, None)));
+    assert!(!ps_integration_overlay_candidate(&d(
+        Moving,
+        Some(Salvageable)
+    )));
+    assert!(!ps_integration_overlay_candidate(&d(Salvageable, None)));
+    assert_eq!(
+        ps_integration_base_state(&d(Moving, Some(Stalled))),
+        Stalled
+    );
+    assert_eq!(ps_integration_base_state(&d(Moving, None)), Moving);
+}
+
+#[test]
+fn bug_1941_commit_age_uses_author_time_not_committer_time() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let git = |args: &[&str], envs: &[(&str, &str)]| {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .envs(envs.iter().copied())
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    git(&["init", "-q", "-b", "work"], &[]);
+    std::fs::write(dir.join("f.txt"), "x").unwrap();
+    git(&["add", "f.txt"], &[]);
+    let now = chrono::Utc::now().to_rfc3339();
+    git(
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-q",
+            "-m",
+            "rebased",
+        ],
+        &[
+            ("GIT_AUTHOR_DATE", "2020-01-01T00:00:00Z"),
+            ("GIT_COMMITTER_DATE", now.as_str()),
+        ],
+    );
+    let probe = crate::dispatch_health_ps::probe_worktree(dir);
+    let age = probe.head_commit_age_secs.expect("an age is read");
+    assert!(
+        age > 365 * 24 * 3600,
+        "a rebase (fresh committer, old author) must not read as a fresh commit: {age}s"
+    );
+}
+
+#[test]
 fn bug_1941_movement_from_fresh_files_is_not_reframed_by_standing() {
     // Only the commit-only lift is overlay-eligible; a live-backed Moving row
     // keeps its reading.
@@ -405,7 +525,7 @@ fn bug_1941_movement_from_fresh_files_is_not_reframed_by_standing() {
         },
     );
     let d = rows[0].dispatch.as_ref().unwrap();
-    assert!(!d.commit_movement);
+    assert_eq!(d.commit_movement_from, None);
     let standing = crate::dispatch_health_ps::integration_standing(
         true,
         true,

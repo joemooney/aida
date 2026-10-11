@@ -5052,10 +5052,12 @@ pub(crate) struct PsDispatch {
     pub(crate) dirty: bool,
     pub(crate) ahead_of_main: u32,
     pub(crate) untracked_only: bool,
-    /// BUG-1941: `state` is `Moving` only because of a fresh commit on a
-    /// branch with no live process — the integration-standing overlay may
-    /// still reframe it as `awaiting-integration` (commit, push, exit).
-    pub(crate) commit_movement: bool,
+    /// BUG-1941: when `state` is `Moving` only because a fresh commit lifted
+    /// a no-process reading, the reading it lifted (`Stalled` or
+    /// `Salvageable`); `None` otherwise. The integration-standing overlay
+    /// judges the row by THIS state, so a commit/push/exit row can still read
+    /// `awaiting-integration` while salvageable work is never reframed.
+    pub(crate) commit_movement_from: Option<dispatch_health_ps::DispatchState>,
 }
 
 /// TASK-1451: whether a live seat's resolved mail identity is a stable seat
@@ -5787,6 +5789,28 @@ pub(crate) fn ps_unattributed_movement_note(
     )
 }
 
+/// BUG-1941: the reading the integration-standing overlay judges a row by —
+/// the pre-lift state for a commit-only `Moving` row, the row's own state
+/// otherwise. Pure.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_integration_base_state(
+    dispatch: &PsDispatch,
+) -> dispatch_health_ps::DispatchState {
+    dispatch.commit_movement_from.unwrap_or(dispatch.state)
+}
+
+/// BUG-1681 / BUG-1941: is this row a candidate for the integration-standing
+/// overlay? Only a stalled/stopped reading — including one a fresh commit
+/// lifted to `Moving` — is; a `Salvageable` reading (lifted or not) keeps its
+/// urgency and is never looked up. Pure.
+// trace:BUG-1941 | ai:claude
+pub(crate) fn ps_integration_overlay_candidate(dispatch: &PsDispatch) -> bool {
+    matches!(
+        ps_integration_base_state(dispatch),
+        dispatch_health_ps::DispatchState::Stalled | dispatch_health_ps::DispatchState::Stopped
+    )
+}
+
 /// BUG-1681: re-read one row's dispatch verdict in the light of its
 /// integration standing, replacing the stalled/stopped reading (and its
 /// resume hint) with the actionless `awaiting-integration` note. Returns
@@ -5803,17 +5827,13 @@ pub(crate) fn ps_apply_integration_standing(
     // BUG-1941: commit-only movement is the no-process reading lifted by a
     // fresh commit; a finished/approved spec's "commit, push, exit" end state
     // is awaiting integration, not moving. trace:BUG-1941 | ai:claude
-    let base = if dispatch.commit_movement {
-        dispatch_health_ps::DispatchState::Stalled
-    } else {
-        dispatch.state
-    };
+    let base = ps_integration_base_state(dispatch);
     let next = dispatch_health_ps::apply_integration(base, standing);
     if next == base {
         return false;
     }
     dispatch.state = next;
-    dispatch.commit_movement = false;
+    dispatch.commit_movement_from = None;
     dispatch.hint = Some(dispatch_health_ps::integration_hint(standing));
     true
 }
@@ -5825,7 +5845,9 @@ pub(crate) fn ps_apply_integration_standing(
 /// agent that follows that hint redoes shipped work.
 ///
 /// Cost-gated: nothing is read unless some row actually classified
-/// stalled/stopped (the quiet case pays zero), and then only the cached
+/// stalled/stopped, or was stalled before a fresh commit lifted it to
+/// `moving` (BUG-1941; see [`ps_integration_overlay_candidate`]) — the quiet
+/// case pays zero — and then only the cached
 /// requirement lookup for those rows' specs plus their local review-verdict
 /// files. No forge call.
 // trace:BUG-1681 | ai:claude
@@ -5833,14 +5855,9 @@ pub(crate) fn ps_overlay_integration_standing(project_root: &std::path::Path, ro
     let candidates: Vec<String> = rows
         .iter()
         .filter(|r| {
-            r.dispatch.as_ref().is_some_and(|d| {
-                d.commit_movement
-                    || matches!(
-                        d.state,
-                        dispatch_health_ps::DispatchState::Stalled
-                            | dispatch_health_ps::DispatchState::Stopped
-                    )
-            })
+            r.dispatch
+                .as_ref()
+                .is_some_and(ps_integration_overlay_candidate)
         })
         .filter_map(|r| r.spec.clone())
         .collect();
@@ -7200,7 +7217,8 @@ pub(crate) fn build_running_work(
                         dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
                     )
                 };
-                let commit_movement = ds != before_commit_movement;
+                let commit_movement_from =
+                    (ds != before_commit_movement).then_some(before_commit_movement);
                 let ds = if ds == dispatch_health_ps::DispatchState::Salvageable
                     && probe.untracked_records_only
                 {
@@ -7232,7 +7250,7 @@ pub(crate) fn build_running_work(
                     dirty: probe.dirty,
                     ahead_of_main: probe.ahead_of_main,
                     untracked_only: probe.untracked_only,
-                    commit_movement,
+                    commit_movement_from,
                 })
             };
             // TASK-1143: the worktree lock owner (if any) for this row, read
