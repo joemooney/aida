@@ -16,11 +16,42 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-09T00:47:23.130722497Z
+modified_at: 2026-10-11T07:11:27.409878390Z
 req_type: Bug
 tags:
 - papercut
 - shell-wrapper
+comments:
+- id: 01a129cd-5eb1-7650-962e-3bce4f0f5870
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the wrapper's init arm still captures the child's whole stdout in a command substitution, so an interactive init runs with a piped stdout.
+
+    Problem
+    The `aida()` wrapper runs `aida init ...` inside `_aida_out=$(command aida "$@" ...)` to harvest the marker-delimited `cd` payload. The child therefore sees a non-TTY stdout: it auto-selects the agent (TOON) format, and any human prompt/progress is buffered in `_aida_out` until exit, so a prompt that waits on terminal stdin looks like a hang.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/dev_cmd.rs:1460-1476 — `"init"|"init "*)` arm; line 1475 `_aida_out=$(command aida "$@"; ...)` captures all stdout.
+    - aida-cli-lib/src/output_format.rs:20,32 — `stdout_is_tty = std::io::stdout().is_terminal()` feeds `resolve_agent_mode`; piped stdout with no pin selects the agent path.
+    - Recent touches (TASK-1716 #2456, BUG-1811 #2463, TASK-1720 #2471) hardened marker parsing but kept the capture, so the bug is still live.
+    - Not reproduced end-to-end tonight (needs a real TTY); the mechanism is unambiguous from the code.
+
+    Acceptance criteria
+    - In a real bash and zsh TTY, `aida init <DIR>` through the wrapper renders human output and shows prompts live (expect/pty test: prompt text appears on the terminal before the command exits).
+    - After a successful wrapped `aida init <DIR>`, the calling shell's `$PWD` is `<DIR>` (existing init-cd regression stays green).
+    - `aida init <DIR> --format toon` and `AIDA_OUTPUT_FORMAT=toon` through the wrapper still produce TOON (explicit pins win).
+    - `aida init <DIR> | cat` (captured by the caller, not the wrapper) still selects the non-interactive format.
+    - A wrapper test asserts the child's stdout is a TTY when the wrapper's stdout is a TTY (e.g. child runs `[ -t 1 ]` via a stub `aida`).
+    - Design hint: send the eval payload on a side channel (AIDA_SHELL_WRAPPER-advertised fd or temp file path in env) and leave stdout attached, rather than capturing stdout. TASK-1171/TASK-1174 own the eval-channel tests to extend.
+
+    Scope / non-goals
+    - Only the `init` arm and the eval-channel contract; do not change the general verb arm's marker protocol semantics.
+    - related:TASK-1171 related:TASK-1174 related:TASK-1716 related:STORY-764 related:BUG-707
+
+    Suggested size: M
+  created_at: 2026-10-11T07:11:27.409878390Z
+  modified_at: 2026-10-11T07:11:27.409878390Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: c67728c1dcaf8a577539d920bdc6a3c86126cebb
   branch: main
