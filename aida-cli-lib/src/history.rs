@@ -1816,13 +1816,10 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 /// The digest in the selected output: `--digest`, and the status flow's
 /// fallback when the history index cannot answer.
 ///
-/// OPEN DESIGN QUESTION (JSON): the digest had no JSON before the status
-/// flow (a bare `--json` was the events feed). This is the one seam where
-/// that is decided. Today (option B) JSON is [`digest_json`], the TOON
-/// digest's fields as JSON, for both `--digest --json` and the flow's JSON
-/// fallback. Option A would keep `--digest --json` as the old events-feed
-/// JSON by routing that caller to the events feed instead, and give the
-/// fallback its own answer here.
+/// JSON is [`digest_json`], the TOON digest's fields as JSON, for both
+/// `--digest --json` and the flow's JSON fallback. Before the status flow
+/// the digest had no JSON (a bare `--json` printed the events feed); that
+/// change is intentional and noted in the changelog.
 // trace:STORY-1650 | ai:claude
 pub(crate) fn run_digest_view(
     store_path: &Path,

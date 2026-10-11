@@ -432,8 +432,8 @@ fn digest_flag_json_projects_the_digest_rows() {
     assert_eq!(rows[1]["change"], "del");
 }
 
-/// Build the index the way the fallback note tells users to. Bare
-/// `aida history` never builds or catches it up itself.
+/// Build the index the way the not-built note tells users to. Bare
+/// `aida history` never builds it itself.
 fn warm(fx: &Fixture) {
     ok(
         "aida cache rebuild --history",
@@ -624,50 +624,100 @@ fn disabled_index_falls_back_to_the_digest_with_a_note() {
     assert!(stderr(&out).contains("aida cache rebuild --history"));
 }
 
+/// Mirrors `history_cache::FLOW_CATCH_UP_CAP` (not reachable from a
+/// black-box test): the largest gap bare `aida history` closes inline.
+const FLOW_CATCH_UP_CAP: usize = 16;
+
+/// Advance the store `n` commits past the index, flipping TASK-4 between
+/// Completed and Approved, a second apart after the fixture's last commit.
+fn advance(fx: &Fixture, n: usize) {
+    let store = fx.store();
+    for k in 0..n {
+        let t = format!("2025-03-06T15:{:02}:{:02}Z", k / 60, k % 60);
+        let status = if k % 2 == 0 { "Completed" } else { "Approved" };
+        write_obj(
+            &store,
+            "TASK",
+            "TASK-4",
+            TASK4_UUID,
+            "Task",
+            "Filed approved",
+            status,
+            &t,
+            &t,
+        );
+        commit_at(&store, "update TASK-4", &t);
+    }
+}
+
+fn notes(out: &Output) -> Vec<String> {
+    stderr(out)
+        .lines()
+        .filter(|l| l.starts_with("note:"))
+        .map(str::to_string)
+        .collect()
+}
+
+// trace:STORY-1650 | ai:claude
 #[test]
-fn stale_index_falls_back_to_the_digest_with_a_note() {
+fn small_gap_is_caught_up_inline_and_shows_the_flow() {
     let fx = init_fixture();
-    // Build the index at the current tip, then advance the store: bare
-    // `aida history` does not catch the index up, so it is behind HEAD.
     warm(&fx);
     assert!(history_db(&fx).exists(), "index built");
-    let store = fx.store();
-    let t6 = "2025-03-06T15:00:00Z";
-    write_obj(
-        &store,
-        "TASK",
-        "TASK-4",
-        TASK4_UUID,
-        "Task",
-        "Filed approved",
-        "Completed",
-        t6,
-        t6,
-    );
-    commit_at(&store, "update TASK-4", t6);
+    // One ordinary store commit (what any `aida edit` does) puts the index
+    // a commit behind HEAD; bare `aida history` closes that gap itself.
+    advance(&fx, 1);
     let out = aida(&fx, &["history", "--format", "human"], &[]);
-    let stdout = ok("aida history (stale index)", &out);
-    assert!(
-        stdout.starts_with(" ") || stdout.contains("ID"),
-        "digest header: {stdout}"
-    );
-    assert!(!stdout.contains("→"), "the digest, not the flow: {stdout}");
-    let err = stderr(&out);
-    let notes: Vec<&str> = err.lines().filter(|l| l.starts_with("note:")).collect();
-    assert_eq!(notes.len(), 1, "exactly one note line: {err}");
-    assert!(notes[0].contains("behind"), "{err}");
-    assert!(notes[0].contains("aida cache rebuild --history"), "{err}");
-    // Asking again still falls back: the fallback never indexes.
-    let again = aida(&fx, &["history", "--format", "human"], &[]);
-    assert!(stderr(&again).contains("behind"), "{}", stderr(&again));
-    // The note's fix works: after a rebuild the default serves the flow.
-    warm(&fx);
-    let out = aida(&fx, &["history", "--format", "human"], &[]);
-    let lines = flow_lines(&ok("aida history (rebuilt)", &out));
+    let lines = flow_lines(&ok("aida history (one commit behind)", &out));
     assert_eq!(
         lines[0],
         "2025-03-06 15:00 TASK-4 Approved → Completed Filed approved"
     );
+    assert!(notes(&out).is_empty(), "no fallback: {}", stderr(&out));
+    let status = ok("aida cache status", &aida(&fx, &["cache", "status"], &[]));
+    assert!(
+        status.contains("History status:   FRESH"),
+        "the index reached HEAD: {status}"
+    );
+}
+
+// trace:STORY-1650 | ai:claude
+#[test]
+fn far_behind_index_falls_back_with_a_cheap_refresh_note() {
+    let fx = init_fixture();
+    warm(&fx);
+    advance(&fx, FLOW_CATCH_UP_CAP + 1);
+    let out = aida(&fx, &["history", "--format", "human"], &[]);
+    let stdout = ok("aida history (far behind)", &out);
+    assert!(!stdout.contains("→"), "the digest, not the flow: {stdout}");
+    let found = notes(&out);
+    assert_eq!(found.len(), 1, "exactly one note line: {}", stderr(&out));
+    assert!(found[0].contains("behind"), "{found:?}");
+    assert!(
+        found[0].contains("`aida history events --limit 1`"),
+        "names the cheap refresh: {found:?}"
+    );
+    assert!(
+        !found[0].contains("rebuild"),
+        "not the full rebuild: {found:?}"
+    );
+    // Asking again still falls back: above the cap it does no catch-up.
+    let again = aida(&fx, &["history", "--format", "human"], &[]);
+    assert!(
+        notes(&again).iter().any(|n| n.contains("behind")),
+        "{}",
+        stderr(&again)
+    );
+    // The note's refresh works: one event view catches the index up and
+    // the default serves the flow again.
+    ok(
+        "aida history events --limit 1",
+        &aida(&fx, &["history", "events", "--limit", "1"], &[]),
+    );
+    let out = aida(&fx, &["history", "--format", "human"], &[]);
+    let lines = flow_lines(&ok("aida history (refreshed)", &out));
+    assert!(notes(&out).is_empty(), "{}", stderr(&out));
+    assert!(lines[0].contains("TASK-4"), "{lines:?}");
 }
 
 #[test]

@@ -355,7 +355,8 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
         )
     } else {
         format!(
-            "History status:   {} — it catches up on the next `aida history` query",
+            // trace:STORY-1650 | ai:claude
+            "History status:   {} — it catches up on the next `aida history events` query",
             "BEHIND".yellow()
         )
     });

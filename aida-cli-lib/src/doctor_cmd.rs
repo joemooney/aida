@@ -13039,8 +13039,9 @@ pub(crate) fn history_index_doctor_line(
             );
         }
         return format!(
+            // trace:STORY-1650 | ai:claude
             "history index behind the store{by}{running} — it catches up on the next \
-             `aida history` query."
+             `aida history events` query."
         );
     }
     if st.complete {

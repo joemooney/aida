@@ -106,7 +106,7 @@ fn with_index_on<T>(f: impl FnOnce() -> T) -> T {
 }
 
 /// Build the index to HEAD the way the event views and `aida cache
-/// rebuild --history` do; the flow itself never indexes.
+/// rebuild --history` do; the flow itself never builds or back-fills it.
 fn warm(store: &Path) {
     let db = history_cache::history_db_path(store);
     history_cache::test_support::index(store, &db, history_cache::Budget::unbounded()).unwrap();
@@ -253,18 +253,171 @@ fn story_1650_unbuilt_index_falls_back_without_building_it() {
     assert!(!db.exists(), "the flow never creates the index");
 }
 
+/// Advance the store `n` commits past the index, each moving TASK-2, a
+/// minute apart and after every earlier commit (no clock skew).
+fn advance(store: &Path, n: usize) {
+    for _ in 0..n {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(store)
+            .args(["rev-list", "--count", "HEAD"])
+            .output()
+            .unwrap();
+        let seq: usize = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+        let status = ["Completed", "Approved"][seq % 2];
+        write_spec(store, "TASK-2", "Filed approved", status);
+        commit(
+            store,
+            "update TASK-2",
+            &format!("2025-03-05T{:02}:{:02}:00Z", 10 + seq / 60, seq % 60),
+        );
+    }
+}
+
+/// Runs `f` with the flow catch-up cap overridden, and always clears it.
+fn with_flow_cap<T>(cap: usize, f: impl FnOnce() -> T) -> T {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            history_cache::set_flow_catch_up_cap(None);
+            history_cache::set_catch_up_chunk(None);
+        }
+    }
+    let _reset = Reset;
+    history_cache::set_flow_catch_up_cap(Some(cap));
+    f()
+}
+
+// trace:STORY-1650 | ai:claude
 #[test]
-fn story_1650_stale_index_falls_back_without_catching_up() {
+fn story_1650_small_gap_heals_inline_and_serves_the_flow() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
     warm(&store);
-    write_spec(&store, "TASK-2", "Filed approved", "Completed");
-    commit(&store, "update TASK-2", "2025-03-05T10:00:00Z");
-    assert_cheap_fallback(&store, IndexMiss::Behind);
-    // Still behind: nothing caught it up.
+    advance(&store, 1);
     let db = history_cache::history_db_path(&store);
     let st = history_cache::status_at(&store, &db);
-    assert_ne!(st.tip, st.head);
+    assert_eq!(st.lag, Some(1));
+    assert!(1 <= history_cache::FLOW_CATCH_UP_CAP);
+    with_index_on(|| {
+        let walks = git_walk_count();
+        let passes = history_cache::index_pass_count();
+        let answer = history_flow::answer(&store, &opts()).expect("caught up and served");
+        assert_eq!(
+            transitions(&answer.rows)[0],
+            (s("TASK-2"), Some(s("Approved")), s("Completed"))
+        );
+        assert_eq!(git_walk_count(), walks, "the catch-up never walks git");
+        assert_eq!(
+            history_cache::index_pass_count(),
+            passes + 1,
+            "exactly one bounded catch-up"
+        );
+        // Served from now on with no further indexing.
+        history_flow::answer(&store, &opts()).expect("served");
+        assert_eq!(history_cache::index_pass_count(), passes + 1);
+    });
+    let st = history_cache::status_at(&store, &db);
+    assert_eq!(st.tip, st.head, "the index reached HEAD");
+}
+
+// trace:STORY-1650 | ai:claude
+#[test]
+fn story_1650_gap_at_the_cap_heals_and_one_past_it_falls_back() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    let db = history_cache::history_db_path(&store);
+    with_flow_cap(2, || {
+        advance(&store, 2);
+        with_index_on(|| history_flow::answer(&store, &opts())).expect("a gap at the cap heals");
+        advance(&store, 3);
+        assert_eq!(history_cache::status_at(&store, &db).lag, Some(3));
+        assert_cheap_fallback(&store, IndexMiss::Behind);
+    });
+    // Still behind: nothing caught it up.
+    assert_eq!(history_cache::status_at(&store, &db).lag, Some(3));
+}
+
+/// The behind note's refresh (an event view) makes durable forward
+/// progress under the per-query budget: each run keeps at least one whole
+/// catch-up chunk even with no time left, so repeating it closes any gap,
+/// and the flow is then served.
+// trace:STORY-1650 | ai:claude
+#[test]
+fn story_1650_the_behind_refresh_closes_the_gap_run_by_run() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    let db = history_cache::history_db_path(&store);
+    with_flow_cap(1, || {
+        advance(&store, 6);
+        assert_cheap_fallback(&store, IndexMiss::Behind);
+        assert!(history_flow::fallback_note(IndexMiss::Behind).contains(history_flow::REFRESH));
+        // `aida history events --limit 1`, as the budgeted index sees it,
+        // with the budget already spent and two commits per chunk.
+        history_cache::set_catch_up_chunk(Some(2));
+        let mut feed = opts();
+        feed.events_mode = true;
+        feed.limit = 1;
+        let mut lags = vec![];
+        for _ in 0..3 {
+            history_cache::serve_at(&store, &db, &feed, std::time::Duration::ZERO).unwrap();
+            lags.push(history_cache::status_at(&store, &db).lag);
+        }
+        assert_eq!(lags, vec![Some(4), Some(2), None], "two commits per run");
+        let st = history_cache::status_at(&store, &db);
+        assert_eq!(st.tip, st.head);
+        with_index_on(|| history_flow::answer(&store, &opts())).expect("the flow is back");
+    });
+}
+
+/// The refresh command's own path (the events feed through the index)
+/// heals a gap above the cap, so the next bare query serves the flow.
+// trace:STORY-1650 | ai:claude
+#[test]
+fn story_1650_the_events_feed_heals_a_gap_above_the_cap() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    with_flow_cap(0, || {
+        advance(&store, 2);
+        assert_cheap_fallback(&store, IndexMiss::Behind);
+        with_index_on(|| {
+            let mut feed = opts();
+            feed.events_mode = true;
+            feed.limit = 1;
+            history::collect_event_records(&store, &feed).unwrap();
+            history_flow::answer(&store, &opts()).expect("the flow is back");
+        });
+    });
+}
+
+// trace:STORY-1650 | ai:claude
+#[test]
+fn story_1650_stalled_catch_up_falls_back_without_trying_again() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    advance(&store, 1);
+    let db = history_cache::history_db_path(&store);
+    history_cache::test_support::set_meta(&db, "catch_up_failures", "3");
+    assert_cheap_fallback(&store, IndexMiss::Stuck);
+    assert_eq!(history_cache::status_at(&store, &db).lag, Some(1));
+    assert!(history_flow::fallback_note(IndexMiss::Stuck).contains("aida cache rebuild --history"));
+}
+
+// trace:STORY-1650 | ai:claude
+#[test]
+fn story_1650_busy_index_falls_back_without_catching_up() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    advance(&store, 1);
+    let db = history_cache::history_db_path(&store);
+    let _held = history_cache::test_support::hold_lock(&db);
+    assert_cheap_fallback(&store, IndexMiss::Busy);
+    assert_eq!(history_cache::status_at(&store, &db).lag, Some(1));
 }
 
 #[test]
@@ -305,9 +458,27 @@ fn story_1650_misses_are_classified_from_the_index_status() {
         (
             HistoryCacheStatus {
                 head: Some(s("b")),
+                lag: Some(1),
                 ..base.clone()
             },
             IndexMiss::Behind,
+        ),
+        (
+            // HEAD does not descend from the tip: no incremental path.
+            HistoryCacheStatus {
+                head: Some(s("b")),
+                ..base.clone()
+            },
+            IndexMiss::Stuck,
+        ),
+        (
+            HistoryCacheStatus {
+                head: Some(s("b")),
+                lag: Some(1),
+                catch_up_stalled: true,
+                ..base.clone()
+            },
+            IndexMiss::Stuck,
         ),
         (
             HistoryCacheStatus {
@@ -351,6 +522,7 @@ fn story_1650_every_fallback_note_is_one_line_with_the_fix() {
         IndexMiss::Disabled,
         IndexMiss::NotBuilt,
         IndexMiss::Behind,
+        IndexMiss::Stuck,
         IndexMiss::Filling,
         IndexMiss::Busy,
         IndexMiss::Unreadable,
@@ -359,9 +531,17 @@ fn story_1650_every_fallback_note_is_one_line_with_the_fix() {
         let note = history_flow::fallback_note(miss);
         assert!(note.starts_with("note: "), "{note}");
         assert!(!note.contains('\n'), "{note}");
-        assert!(note.contains("aida cache rebuild --history"), "{note}");
+        // Behind names the cheap refresh, never the minutes-long rebuild;
+        // every other cause names the rebuild.
+        if miss == IndexMiss::Behind {
+            assert!(note.contains(history_flow::REFRESH), "{note}");
+            assert!(!note.contains("rebuild"), "{note}");
+        } else {
+            assert!(note.contains("aida cache rebuild --history"), "{note}");
+        }
         assert!(!note.contains("STORY-"), "no internal IDs: {note}");
     }
+    assert_eq!(history_flow::REFRESH, "aida history events --limit 1");
     assert!(history_flow::fallback_note(IndexMiss::Disabled).contains("AIDA_HISTORY_CACHE=0"));
     assert!(history_flow::fallback_note(IndexMiss::Behind).contains("behind"));
 }

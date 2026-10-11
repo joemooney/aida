@@ -89,6 +89,42 @@ const CATCH_UP_CHUNK: usize = 256;
 // trace:BUG-1923 | ai:claude
 const CATCH_UP_STALL_LIMIT: u32 = 3;
 
+/// Largest gap (commits between the index tip and HEAD) that bare
+/// `aida history`, the status flow, closes inline before it answers. A
+/// bigger gap is not caught up there: the flow falls back to the digest
+/// with a note naming a cheap refresh, so a far-behind index never makes
+/// the default view slower than the digest it replaces.
+///
+/// MEASURED (2026-10-11, `--profile agent` build, a clone of this repo's
+/// own store: ~46k commits, git 2.43, 6 cores under a load average of
+/// 6-13 from other agents; medians of 9-11 runs, each from the same
+/// index state with a non-empty WAL, as in steady use):
+///
+/// | gap (commits) | digest | catch-up + flow | flow, no gap |
+/// |---------------|--------|-----------------|--------------|
+/// | 1             | 140 ms | 151 ms          | 117 ms       |
+/// | 8             | 129 ms | 128 ms          |  88 ms       |
+/// | 16            | 132-167 ms | 132-174 ms  |  93-102 ms   |
+/// | 20            | 178 ms | 201 ms          | 129 ms       |
+/// | 24            | 184 ms | 290-330 ms      | 125-135 ms   |
+/// | 64            | 156 ms | 291 ms          | 101 ms       |
+/// | 128           | 174 ms | 362 ms          | 101 ms       |
+/// | 256           | 191 ms | 617 ms          | 114 ms       |
+///
+/// On the real store the digest takes ~165-175 ms. Up to 16 commits the
+/// catch-up plus flow stays within the digest's time; past ~20 it does
+/// not. Two fixes made those numbers possible: catch-up's `git log
+/// --topo-order` now runs without the commit-graph (a fixed ~110 ms), and
+/// the flow's catch-up connection uses `synchronous=NORMAL` like the
+/// indexer's own (SQLite's default FULL fsynced the WAL on both commits,
+/// ~40-50 ms each). A first write into an empty WAL still pays one fsync.
+// trace:STORY-1650 | ai:claude
+pub(crate) const FLOW_CATCH_UP_CAP: usize = 16;
+
+// One catch-up transaction covers the whole gap only while the cap is at
+// most a chunk; `catch_up` checks the budget only between chunks.
+const _: () = assert!(FLOW_CATCH_UP_CAP <= CATCH_UP_CHUNK);
+
 /// Meta key counting consecutive inline catch-ups that kept nothing.
 const CATCH_UP_FAILURES_KEY: &str = "catch_up_failures";
 
@@ -165,6 +201,29 @@ fn catch_up_chunk() -> usize {
 #[cfg(test)]
 pub(crate) fn set_catch_up_chunk(n: Option<usize>) {
     CATCH_UP_CHUNK_OVERRIDE.with(|c| c.set(n));
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: a flow catch-up cap other than [`FLOW_CATCH_UP_CAP`].
+    static FLOW_CATCH_UP_CAP_OVERRIDE: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The status flow's inline catch-up cap (tests may override it).
+// trace:STORY-1650 | ai:claude
+fn flow_catch_up_cap() -> usize {
+    #[cfg(test)]
+    if let Some(n) = FLOW_CATCH_UP_CAP_OVERRIDE.with(|c| c.get()) {
+        return n;
+    }
+    FLOW_CATCH_UP_CAP
+}
+
+/// Tests: set (or with `None`, clear) the flow catch-up cap.
+#[cfg(test)]
+pub(crate) fn set_flow_catch_up_cap(n: Option<usize>) {
+    FLOW_CATCH_UP_CAP_OVERRIDE.with(|c| c.set(n));
 }
 
 /// Tests: make the next catch-up fail.
@@ -610,28 +669,36 @@ struct LogStream {
 }
 
 impl LogStream {
-    fn spawn(store: &Path, extra: &[String], stdin_data: Option<String>) -> Result<Self> {
+    /// `git_config` is passed as `-c` options ahead of `log`.
+    fn spawn(
+        store: &Path,
+        git_config: &[&str],
+        extra: &[String],
+        stdin_data: Option<String>,
+    ) -> Result<Self> {
         let mut cmd = Command::new("git");
-        cmd.arg("-C")
-            .arg(store)
-            .args([
-                "log",
-                "--no-abbrev",
-                "--raw",
-                "--no-renames",
-                "--diff-merges=cc",
-                "--root",
-                "--no-color",
-                "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%s",
-            ])
-            .args(extra)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .stdin(if stdin_data.is_some() {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            });
+        cmd.arg("-C").arg(store);
+        for c in git_config {
+            cmd.arg("-c").arg(c);
+        }
+        cmd.args([
+            "log",
+            "--no-abbrev",
+            "--raw",
+            "--no-renames",
+            "--diff-merges=cc",
+            "--root",
+            "--no-color",
+            "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%s",
+        ])
+        .args(extra)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .stdin(if stdin_data.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        });
         let mut child = cmd.spawn().context("failed to run git log")?;
         let writer = match (stdin_data, child.stdin.take()) {
             (Some(data), Some(mut stdin)) => Some(std::thread::spawn(move || {
@@ -1353,8 +1420,15 @@ impl HistoryCache {
         }
         let range = format!("{tip}..{head}");
         let total = aida_core::git_ops::rev_list_count(store, &range)?;
+        // `--topo-order` over a short range pays a fixed ~110 ms with the
+        // commit-graph enabled (git 2.43, ~46k-commit store: 116 ms vs 5 ms
+        // for a 1-commit range, 129 ms vs 42 ms for 2000 commits); the
+        // output is identical, so catch-up reads commits without it. This
+        // is most of the cost of the status flow's inline catch-up.
+        // trace:STORY-1650 | ai:claude
         let mut stream = LogStream::spawn(
             store,
+            &["core.commitGraph=false"],
             &["--reverse".into(), "--topo-order".into(), range],
             None,
         )?;
@@ -1561,6 +1635,7 @@ impl HistoryCache {
             let stdin: String = chunk.iter().map(|r| format!("{}\n", r.sha)).collect();
             let mut stream = LogStream::spawn(
                 store,
+                &[],
                 &["--no-walk=unsorted".into(), "--stdin".into()],
                 Some(stdin),
             )?;
@@ -1916,8 +1991,13 @@ pub(crate) enum IndexMiss {
     /// No index has been built yet (first run, or after an upgrade
     /// changed the index format).
     NotBuilt,
-    /// The index holds an older store commit than HEAD.
+    /// The index holds an older store commit than HEAD, more commits back
+    /// than the flow catches up inline; an event view catches it up.
     Behind,
+    /// The index is behind HEAD and cannot catch up incrementally: inline
+    /// catch-up paused after repeated failures, or HEAD does not descend
+    /// from the indexed tip. Only a rebuild fixes it.
+    Stuck,
     /// The index is current but has not filled in enough older history to
     /// cover this query.
     Filling,
@@ -1940,7 +2020,12 @@ pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
     } else if st.indexer_running {
         IndexMiss::Busy
     } else if st.tip != st.head {
-        IndexMiss::Behind
+        // trace:STORY-1650 | ai:claude
+        if st.catch_up_stalled || st.lag.is_none() {
+            IndexMiss::Stuck
+        } else {
+            IndexMiss::Behind
+        }
     } else if !st.complete {
         IndexMiss::Filling
     } else {
@@ -1948,12 +2033,14 @@ pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
     }
 }
 
-/// Serve the status flow from the index as it stands. Unlike [`serve`]
-/// this does no indexing at all (no catch-up, no back-fill, and it never
-/// creates the index file) and has no git-walk fallback: on a miss the
-/// caller renders the digest at once, so the fallback costs no more than
-/// the digest does. The index keeps healing through the event views and
-/// `aida cache rebuild --history`.
+/// Serve the status flow from the index. It never creates the index
+/// file, never back-fills older history, and has no git-walk fallback: on
+/// a miss the caller renders the digest at once. The one piece of
+/// indexing it does is a bounded catch-up: when the index is behind HEAD
+/// by at most [`FLOW_CATCH_UP_CAP`] commits it appends them inline and
+/// answers, so ordinary store commits (`aida edit`, `aida add`) do not
+/// knock the default view back to the digest. A bigger gap misses as
+/// [`IndexMiss::Behind`], whose note names a cheap event-view refresh.
 // trace:STORY-1650 | ai:claude
 pub(crate) fn serve_flow(
     store: &Path,
@@ -1967,16 +2054,70 @@ pub(crate) fn serve_flow(
     if !db_path.is_file() {
         return Err(IndexMiss::NotBuilt);
     }
-    let answer = aida_core::git_ops::head_sha(store)
-        .and_then(|head| HistoryCache::open_existing(&db_path)?.query(opts, &head));
-    match answer {
-        Ok(Some(answer)) => Ok(answer),
-        Ok(None) => Err(classify_miss(&status_at(store, &db_path))),
-        Err(e) => {
+    let query = || {
+        aida_core::git_ops::head_sha(store)
+            .and_then(|head| HistoryCache::open_existing(&db_path)?.query(opts, &head))
+    };
+    let miss = |e: Option<anyhow::Error>| {
+        if let Some(e) = e {
             debug_log(&e);
-            Err(classify_miss(&status_at(store, &db_path)))
         }
+        classify_miss(&status_at(store, &db_path))
+    };
+    match query() {
+        Ok(Some(answer)) => return Ok(answer),
+        Ok(None) => {}
+        Err(e) => debug_log(&e),
     }
+    let st = status_at(store, &db_path);
+    let gap = match (classify_miss(&st), st.lag) {
+        (IndexMiss::Behind, Some(gap)) => gap,
+        (other, _) => return Err(other),
+    };
+    if gap > flow_catch_up_cap() {
+        return Err(IndexMiss::Behind);
+    }
+    if let Err(e) = flow_catch_up(store, &db_path, &st) {
+        return Err(miss(Some(e)));
+    }
+    match query() {
+        Ok(Some(answer)) => Ok(answer),
+        Ok(None) => Err(miss(None)),
+        Err(e) => Err(miss(Some(e))),
+    }
+}
+
+/// The flow's bounded catch-up: append `tip..head` (already known to be at
+/// most the cap, so one transaction) under the indexer lock and the stall
+/// guard. Busy (another process indexing) is not an error: the re-query
+/// then misses and is classified as such.
+// trace:STORY-1650 | ai:claude
+fn flow_catch_up(store: &Path, db_path: &Path, st: &HistoryCacheStatus) -> Result<()> {
+    let (Some(tip), Some(head)) = (st.tip.as_deref(), st.head.as_deref()) else {
+        return Ok(());
+    };
+    let Some(_lock) = IndexLock::try_acquire(db_path)? else {
+        return Ok(());
+    };
+    #[cfg(test)]
+    INDEX_PASSES.with(|c| c.set(c.get() + 1));
+    let mut cache = HistoryCache::open_existing(db_path)?;
+    // As the indexer's own `open` does: `open_existing` leaves SQLite's
+    // default FULL, which fsyncs the WAL on every commit (~40-50 ms each
+    // here, two commits per catch-up).
+    cache.conn.pragma_update(None, "synchronous", "NORMAL")?;
+    // Re-read under the lock: another process may have moved the tip.
+    if cache.meta("tip_sha")?.as_deref() != Some(tip) {
+        return Ok(());
+    }
+    let budget = budget_from(
+        std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
+            .ok()
+            .as_deref(),
+    );
+    cache.catch_up_guarded(store, tip, head, Budget::for_duration(budget))?;
+    cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
+    Ok(())
 }
 
 /// [`serve`] against an explicit index path and budget.

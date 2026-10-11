@@ -7,9 +7,12 @@
 //! prints the per-spec digest instead, with a one-line note on stderr
 //! naming the cause and the fix. It never falls back to the per-commit git
 //! walk: that walk takes seconds on a real store, and the default view has
-//! to stay fast. Nor does it build, catch up or back-fill the index: the
-//! fallback must cost no more than the digest. The event views and
-//! `aida cache rebuild --history` keep the index current.
+//! to stay fast. Nor does it build or back-fill the index. It catches the
+//! index up inline only when it is a few commits behind HEAD (at most
+//! `history_cache::FLOW_CATCH_UP_CAP`), which costs about what the digest
+//! does; a larger gap falls back with a note naming a cheap event-view
+//! refresh. The event views and `aida cache rebuild --history` keep the
+//! index current otherwise.
 // trace:STORY-1650 | ai:claude
 
 use crate::history::{self, Event, EventKind, HistoryOpts, HistoryOutput};
@@ -236,6 +239,12 @@ pub(crate) fn flow_json(answer: &FlowAnswer) -> JsonValue {
 
 /// The one-line stderr note printed when the flow falls back to the
 /// digest: what you are looking at, why, and how to get the flow back.
+/// The cheap refresh the behind note names: an event view, which catches
+/// the index up within the per-query indexing budget and always keeps at
+/// least one whole chunk, so each run moves the tip forward.
+// trace:STORY-1650 | ai:claude
+pub(crate) const REFRESH: &str = "aida history events --limit 1";
+
 pub(crate) fn fallback_note(miss: IndexMiss) -> String {
     const LEAD: &str = "note: showing the per-spec digest instead of status changes because";
     const FIX: &str = "run `aida cache rebuild --history` to see status changes";
@@ -245,7 +254,16 @@ pub(crate) fn fallback_note(miss: IndexMiss) -> String {
              unset it and {FIX}"
         ),
         IndexMiss::NotBuilt => format!("{LEAD} the history index has not been built yet; {FIX}"),
-        IndexMiss::Behind => format!("{LEAD} the history index is behind the store; {FIX}"),
+        // trace:STORY-1650 | ai:claude
+        // An event view catches the index up incrementally under its
+        // budget, a chunk or more per run; a rebuild would take minutes.
+        IndexMiss::Behind => format!(
+            "{LEAD} the history index is too far behind the store to catch up here; \
+             run `{REFRESH}` (again if this note persists) to see status changes"
+        ),
+        IndexMiss::Stuck => format!(
+            "{LEAD} the history index is behind the store and cannot catch up on its own; {FIX}"
+        ),
         IndexMiss::Filling => {
             format!("{LEAD} the history index has not reached this far back yet; {FIX}")
         }
