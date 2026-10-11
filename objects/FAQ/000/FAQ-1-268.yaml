@@ -1,0 +1,37 @@
+id: 01a1288d-20d6-7bc1-8644-0cbe29bba5ed
+spec_id: FAQ-1-268
+title: Why is a mirror hub (e.g. GitLab) behind or diverged from GitHub, and how do I fix it?
+description: |
+  **Run `aida remote status` to see the drift, then `aida remote mirror-sync` for a hub that's simply behind, or `aida remote reconcile` for one that has diverged.**
+
+  ## Why
+  Mirrors follow `origin`. A forge-side merge, or a store push from another clone, never fires the local pre-push mirror hook, so a hub can fall behind. A hub diverges when something commits to it directly. On 2026-10-09 a clone registered as node 11 against GitLab only, so GitLab's `aida-store` had 14 commits GitHub lacked, while GitHub had 438 GitLab lacked, and nothing reported it.
+
+  ## How
+  - `aida remote status`: per-branch drift for each hub. It exits non-zero when hubs disagree.
+  - `aida remote mirror-sync`: fast-forwards the hubs to origin's tips (never forces).
+  - `aida remote reconcile` (a dry run), then `--execute`: union-merges a diverged store and pushes it to every hub.
+
+  ## Caveat
+  BUG-1932 tracks surfacing divergence automatically.
+
+  ## See also
+  BUG-1932
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:21:40.054570618Z
+modified_at: 2026-10-11T01:21:40.054570618Z
+req_type: Faq
+tags:
+- audience:user
+- topic:sync
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
