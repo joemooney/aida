@@ -28,8 +28,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T04:14:37.105043879Z
-modified_at: 2026-10-11T07:13:45.891370705Z
+modified_at: 2026-10-11T07:14:17.649598989Z
 req_type: Bug
+tags:
+- triaged:night
 comments:
 - id: 01a129cf-7ba3-75f2-9396-34b4f029c47d
   author: night-fable
