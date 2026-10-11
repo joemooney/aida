@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T04:06:17.588332458Z
+modified_at: 2026-10-11T07:31:41.776620305Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -180,6 +180,12 @@ comments:
   created_at: 2026-10-11T04:06:17.588332458Z
   modified_at: 2026-10-11T04:06:17.588332458Z
   session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
+- id: 01a129df-e650-7991-96f2-37d96cabc126
+  author: night-fable
+  content: 'SWEEP FINDINGS (night) for PR #2485 @ 3fcaa2488a are posted on STORY-1659 (the review spec): 5 items, the first two substantive (ledger append is two syscalls and can interleave under concurrent claims; receipts/grants resolve from the per-user home so a ship from another host or a contained session refuses an honest approval), three test-coverage gaps. Not filed as bugs since none exist on main.'
+  created_at: 2026-10-11T07:31:41.776620305Z
+  modified_at: 2026-10-11T07:31:41.776620305Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
