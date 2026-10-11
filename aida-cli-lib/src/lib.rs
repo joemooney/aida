@@ -123,6 +123,8 @@ mod supervisor;
 // trace:STORY-1218 | ai:claude
 mod schedule_driver;
 mod shift;
+// trace:STORY-1649 | ai:claude
+mod shipped_linkage;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;

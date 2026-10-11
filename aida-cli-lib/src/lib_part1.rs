@@ -16754,6 +16754,10 @@ pub(crate) fn edit_requirement_cli(
 
     // Update status
     let mut left_needs_attention = false;
+    // STORY-1649: captured against the pre-edit status so the completion
+    // linkage warning fires only on the into-Completed transition.
+    // trace:STORY-1649 | ai:claude
+    let mut into_completed = false;
     if let Some(status_str) = status {
         let new_status = match status_str.to_lowercase().as_str() {
             "draft" => RequirementStatus::Draft,
@@ -16787,6 +16791,8 @@ pub(crate) fn edit_requirement_cli(
                 format!("{:?}", new_status),
             ));
             let prior = req.status.clone();
+            into_completed = !matches!(prior, RequirementStatus::Completed)
+                && matches!(new_status, RequirementStatus::Completed);
             req.status = new_status;
             // trace:TASK-1600 | ai:codex
             completion::record_reopen(req, &prior, Some(&queue_cmd::requeue_project_root(storage)));
@@ -16926,6 +16932,17 @@ pub(crate) fn edit_requirement_cli(
     // and the status change through the one shared history helper.
     // trace:BUG-1637 | ai:claude
     record_edit_changes(req, &get_default_author(), &changes);
+    // STORY-1649: computed while `req` is still borrowed, printed after the
+    // save so the warning never precedes the success line.
+    // trace:STORY-1649 | ai:claude
+    let completion_warning = if into_completed {
+        crate::shipped_linkage::completion_linkage_warning(
+            &queue_cmd::requeue_project_root(storage),
+            req,
+        )
+    } else {
+        None
+    };
 
     // Save changes
     storage.save(&store)?;
@@ -16935,6 +16952,9 @@ pub(crate) fn edit_requirement_cli(
         spec_id,
         changes.len()
     );
+    if let Some(text) = completion_warning {
+        eprintln!("{} {text}", "Warning:".yellow().bold());
+    }
     // BUG-1770: say what the tag flags did on the success path too — a caller
     // who removes two tags and mistypes one must not see only "Updated".
     // trace:BUG-1770 | ai:claude

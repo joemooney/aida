@@ -136,7 +136,14 @@ fn fixture() -> Fixture {
 /// panic instead of hanging the suite.
 // trace:BUG-1594 | ai:claude
 fn run_bounded(fx: &Fixture, args: &[&str], budget: Duration) -> (Output, Duration) {
-    let mut child = aida_command(&fx.repo, &fx.home, &fx.gh)
+    run_bounded_with(aida_command(&fx.repo, &fx.home, &fx.gh), args, budget)
+}
+
+/// [`run_bounded`] over a caller-prepared command (extra env, same budget
+/// discipline).
+// trace:STORY-1649 | ai:claude
+fn run_bounded_with(mut command: Command, args: &[&str], budget: Duration) -> (Output, Duration) {
+    let mut child = command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -178,6 +185,35 @@ fn bug_1594_show_with_hung_forge_finishes_in_budget_and_says_timed_out() {
     assert!(stdout.contains("timed out"), "{stdout}");
     assert!(stdout.contains("state unknown"), "{stdout}");
     assert!(!stdout.contains("no PR opened yet"), "{stdout}");
+}
+
+// STORY-1649: the default TOON `aida show` path now carries one `linkage:`
+// line. It must come from the cheap default-branch scan — never the full
+// `--all` walk or the forge lookup — so with the same hung `gh` the TOON
+// read stays inside the BUG-1594 budget and still prints the line.
+// trace:STORY-1649 | ai:claude
+#[test]
+fn bug_1594_toon_show_default_path_with_linkage_stays_in_budget() {
+    let fx = fixture();
+    let budget = Duration::from_secs(30);
+    let mut command = aida_command(&fx.repo, &fx.home, &fx.gh);
+    command.env("AIDA_AGENT_OUTPUT", "toon");
+    let (out, elapsed) = run_bounded_with(command, &["show", "TASK-1"], budget);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "stdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(elapsed < budget, "took {elapsed:?}");
+    let line = stdout
+        .lines()
+        .find(|l| l.starts_with("linkage:"))
+        .unwrap_or_else(|| panic!("TOON show must print a linkage line:\n{stdout}"));
+    // TASK-1's commit is on the feature branch, not main: honest `false`,
+    // and nothing from the hung forge lookup leaks into the line.
+    assert!(line.contains("shipped=false"), "{line}");
+    assert!(!line.contains("timed out"), "{line}");
 }
 
 #[test]

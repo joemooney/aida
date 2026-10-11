@@ -1,0 +1,357 @@
+//! STORY-1649: the cheap "where did this spec ship?" read against the default
+//! branch, and its two consumers — the one-line `linkage:` scalar on the TOON
+//! `aida show` surface, and the warning `aida edit --status completed` prints
+//! when a code spec is completed with no shipped commit.
+//!
+//! Deliberately NOT `collect_git_linkage`: that walks every ref (`git log
+//! --all`, ~0.6s on a 70k-commit repo) and, for in-flight work, up to twenty
+//! `git branch --contains` calls. The default TOON read path has a latency
+//! contract (BUG-1480, BUG-1594), so this scan looks only at the default branch
+//! refs — the remote-tracking `origin/<default>` first, then the local
+//! `<default>` — which is one bounded `git log <ref> --grep` plus one
+//! fixed-string `git grep` per ref (~65 ms + ~70 ms measured on this repo).
+//!
+//! The corroboration rule is the doctor's `completed-without-commit` rule
+//! (TASK-673 / TASK-1089): a commit on the default branch whose message names
+//! the spec (plan commits and `update SPEC` bookkeeping excluded, via the same
+//! `referenced_spec_ids_from_messages` the scan uses), OR a tracked file at
+//! that ref carrying a `trace:SPEC-ID` comment. Sharing the message filter is
+//! what keeps the completion warning and `aida doctor` from disagreeing (AC5).
+//!
+//! Advisor amendment A1: `gh pr merge` lands on the remote first; the local
+//! default branch is often stale when the agent runs `--status completed`.
+//! Both refs are consulted, and when neither carries the spec the warning says
+//! to `git fetch` rather than asserting nothing shipped.
+// trace:STORY-1649 | ai:claude
+
+use crate::*;
+
+/// The default-branch refs a linkage scan consults, in scan order:
+/// remote-tracking first (the merged-on-GitHub truth), local second.
+// trace:STORY-1649 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct DefaultBranchRefs {
+    /// `origin/<default>`, when that remote-tracking ref exists.
+    pub(crate) remote: Option<String>,
+    /// Local `<default>`, when that branch exists.
+    pub(crate) local: Option<String>,
+}
+
+impl DefaultBranchRefs {
+    /// Scan order: remote-tracking ref, then local.
+    pub(crate) fn in_scan_order(&self) -> Vec<String> {
+        self.remote
+            .iter()
+            .chain(self.local.iter())
+            .cloned()
+            .collect()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.remote.is_none() && self.local.is_none()
+    }
+}
+
+/// What the default branch says about one spec.
+// trace:STORY-1649 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct DefaultBranchLinkage {
+    /// Every ref consulted, in scan order.
+    pub(crate) scanned_refs: Vec<String>,
+    /// The first ref that corroborated the spec (commit or trace comment).
+    pub(crate) found_on: Option<String>,
+    /// `(short_sha, subject)` of the referencing commits on `found_on`,
+    /// newest first. Empty when nothing corroborated the spec.
+    pub(crate) commits: Vec<(String, String)>,
+    /// Distinct tracked files at `found_on` carrying a `trace:SPEC-ID` comment.
+    pub(crate) trace_files: usize,
+    /// PR number parsed from the newest squash-merge subject (`(#NN)`).
+    pub(crate) shipped_pr: Option<u64>,
+}
+
+impl DefaultBranchLinkage {
+    /// The doctor's corroboration rule: a referencing commit or a tracked
+    /// trace comment on the default branch.
+    pub(crate) fn corroborated(&self) -> bool {
+        self.found_on.is_some()
+    }
+}
+
+fn git_out(project_root: &std::path::Path, args: &[&str]) -> Option<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+}
+
+fn ref_exists(project_root: &std::path::Path, full_ref: &str) -> bool {
+    git_out(
+        project_root,
+        &["rev-parse", "--verify", "--quiet", full_ref],
+    )
+    .is_some()
+}
+
+/// Resolve the default branch the way the doctor scan does
+/// (`resolve_default_branch_ref`: `origin/HEAD`, then `init.defaultBranch`,
+/// then `main`/`master`), then expand it to BOTH the remote-tracking and the
+/// local form of that name, keeping only the refs that exist.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn default_branch_refs(project_root: &std::path::Path) -> DefaultBranchRefs {
+    let Some(resolved) = resolve_default_branch_ref(project_root) else {
+        return DefaultBranchRefs::default();
+    };
+    let name = resolved
+        .strip_prefix("origin/")
+        .unwrap_or(resolved.as_str())
+        .to_string();
+    let remote_short = format!("origin/{name}");
+    let remote =
+        ref_exists(project_root, &format!("refs/remotes/{remote_short}")).then_some(remote_short);
+    let local = ref_exists(project_root, &format!("refs/heads/{name}")).then_some(name);
+    DefaultBranchRefs { remote, local }
+}
+
+/// Upper-cased spec ids named by trace tokens on one line, with any
+/// criterion suffix (`.A1`) dropped — the same token shape the doctor's
+/// `git grep -o` regex yields, so a criterion-suffixed trace comment
+/// corroborates its spec here exactly as it does there.
+// trace:STORY-1649 | ai:claude
+fn trace_tokens(line: &str) -> Vec<String> {
+    line.split("trace:")
+        .skip(1)
+        .filter_map(|rest| {
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+                .unwrap_or(rest.len());
+            let token = &rest[..end];
+            let first_alpha = token
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic());
+            (first_alpha && token.contains('-')).then(|| token.to_ascii_uppercase())
+        })
+        .collect()
+}
+
+/// Referencing commits on `git_ref` — `(short_sha, subject)`, newest first —
+/// by the doctor's message rule. The `-F --grep` is only a prefilter (it
+/// also matches `TASK-10` for `TASK-1`); every candidate message is then run
+/// through `referenced_spec_ids_from_messages`, which applies the exact-token
+/// match and the plan-commit / bookkeeping exclusions the scan applies.
+// trace:STORY-1649 | ai:claude
+fn referencing_commits_on_ref(
+    project_root: &std::path::Path,
+    git_ref: &str,
+    wanted: &HashSet<String>,
+) -> Vec<(String, String)> {
+    let mut args: Vec<&str> = vec!["log", git_ref, "-F", "--pretty=format:%h%x1f%s%x1f%B%x1e"];
+    for id in wanted {
+        args.push("--grep");
+        args.push(id.as_str());
+    }
+    let Some(log) = git_out(project_root, &args) else {
+        return Vec::new();
+    };
+    log.split('\u{1e}')
+        .filter_map(|record| {
+            let record = record.trim_start_matches(['\n', '\r']);
+            if record.is_empty() {
+                return None;
+            }
+            let mut parts = record.splitn(3, '\u{1f}');
+            let short = parts.next()?.to_string();
+            let subject = parts.next()?.to_string();
+            let body = parts.next().unwrap_or("");
+            let referenced = referenced_spec_ids_from_messages(std::iter::once(body));
+            referenced
+                .iter()
+                .any(|id| wanted.contains(id))
+                .then_some((short, subject))
+        })
+        .collect()
+}
+
+/// Distinct tracked files at `git_ref` whose content carries a trace token
+/// for a wanted id (exact token: a longer id that merely shares the prefix,
+/// like `TASK-10` for `TASK-1`, does not count).
+// trace:STORY-1649 | ai:claude
+fn trace_files_on_ref(
+    project_root: &std::path::Path,
+    git_ref: &str,
+    wanted: &HashSet<String>,
+) -> usize {
+    let mut args: Vec<String> = vec!["grep".into(), "-I".into(), "-F".into()];
+    for id in wanted {
+        args.push("-e".into());
+        args.push(format!("trace:{id}"));
+    }
+    args.push(git_ref.to_string());
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let Some(hits) = git_out(project_root, &arg_refs) else {
+        return 0;
+    };
+    let prefix = format!("{git_ref}:");
+    let mut files: HashSet<String> = HashSet::new();
+    for line in hits.lines() {
+        let Some(rest) = line.strip_prefix(&prefix) else {
+            continue;
+        };
+        let Some((path, content)) = rest.split_once(':') else {
+            continue;
+        };
+        if trace_tokens(content).iter().any(|t| wanted.contains(t)) {
+            files.insert(path.to_string());
+        }
+    }
+    files.len()
+}
+
+/// The cheap scan: consult the default-branch refs in order and stop at the
+/// first one that corroborates any of `ids`.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn scan_default_branch_linkage(
+    project_root: &std::path::Path,
+    ids: &[String],
+) -> DefaultBranchLinkage {
+    let refs = default_branch_refs(project_root);
+    let wanted: HashSet<String> = ids
+        .iter()
+        .map(|id| id.trim().to_ascii_uppercase())
+        .filter(|id| !id.is_empty())
+        .collect();
+    let mut out = DefaultBranchLinkage {
+        scanned_refs: refs.in_scan_order(),
+        ..Default::default()
+    };
+    if wanted.is_empty() {
+        return out;
+    }
+    for git_ref in refs.in_scan_order() {
+        let commits = referencing_commits_on_ref(project_root, &git_ref, &wanted);
+        let trace_files = trace_files_on_ref(project_root, &git_ref, &wanted);
+        if commits.is_empty() && trace_files == 0 {
+            continue;
+        }
+        out.shipped_pr = commits
+            .iter()
+            .find_map(|(_, subject)| parse_squash_pr_number(subject));
+        out.commits = commits;
+        out.trace_files = trace_files;
+        out.found_on = Some(git_ref);
+        break;
+    }
+    out
+}
+
+/// The ids git may know a spec by: its display id plus the agreed / origin
+/// ids, deduplicated — the same set `aida show --format json` scans.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn spec_lookup_ids(req: &aida_core::Requirement) -> Vec<String> {
+    let mut ids = vec![req.display_id()];
+    for extra in [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        if !ids.iter().any(|id| id == extra) {
+            ids.push(extra.to_string());
+        }
+    }
+    ids
+}
+
+/// Render the one-line TOON `linkage` value. Bare tokens only (no colon or
+/// comma) so `toon::scalar` emits it unquoted and an agent can split on
+/// whitespace.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
+    if linkage.scanned_refs.is_empty() {
+        return "unknown (no default branch found)".to_string();
+    }
+    let mut parts: Vec<String> = vec![format!("shipped={}", linkage.corroborated())];
+    if let Some(pr) = linkage.shipped_pr {
+        parts.push(format!("shipped_pr={pr}"));
+    }
+    if let Some((short, _)) = linkage.commits.first() {
+        parts.push(format!("commit={short}"));
+    }
+    parts.push(format!("commits={}", linkage.commits.len()));
+    parts.push(format!("files={}", linkage.trace_files));
+    match linkage.found_on.as_deref() {
+        Some(found) => parts.push(format!("on={found}")),
+        None => parts.push(format!("checked={}", linkage.scanned_refs.join("+"))),
+    }
+    if !linkage.corroborated() {
+        parts.push("detail=--format json".to_string());
+    }
+    parts.join(" ")
+}
+
+/// The `linkage:` scalar for the TOON `aida show` surface (AC1). The caller
+/// skips this entirely under `--no-git` (AC2).
+// trace:STORY-1649 | ai:claude
+pub(crate) fn toon_show_linkage_line(project_root: &std::path::Path, ids: &[String]) -> String {
+    let linkage = scan_default_branch_linkage(project_root, ids);
+    crate::toon::scalar("linkage", &render_toon_linkage(&linkage))
+}
+
+/// The tag that opts a Completed spec out of the completed-without-commit
+/// rule — named in the warning so the agent knows how to silence it.
+// trace:STORY-1649 | ai:claude
+pub(crate) const COMPLETED_NO_CODE_OPT_OUT_TAG: &str = "doctor:no-code";
+
+/// The warning text for a spec that just reached Completed while the default
+/// branch carries no commit or trace comment for it — or `None` when the
+/// rule does not apply (non-code type, `doctor:no-code` opt-out, no default
+/// branch to check) or the spec is corroborated on either ref (AC3/AC4/A1).
+///
+/// Warn only, never refuse: work can legitimately complete outside this
+/// repo. The text names the spec, the refs checked, the `git fetch` hint for
+/// a merge that landed remotely, and the opt-out tag.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn completion_linkage_warning(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+) -> Option<String> {
+    if !completed_without_commit_expects_code(&req.req_type) {
+        return None;
+    }
+    if completed_without_commit_opted_out(&req.tags) {
+        return None;
+    }
+    let ids = spec_lookup_ids(req);
+    let linkage = scan_default_branch_linkage(project_root, &ids);
+    if linkage.scanned_refs.is_empty() || linkage.corroborated() {
+        return None;
+    }
+    let spec_id = req.display_id();
+    let refs = linkage.scanned_refs.join(" or ");
+    Some(format!(
+        "{spec_id} is Completed, but no commit referencing it was found on {refs} \
+         (and no tracked `trace:{spec_id}` comment). If its PR merged on the remote, \
+         run `git fetch` and check `aida show {spec_id}`. If the work legitimately \
+         landed outside this repo, opt out with `aida edit {spec_id} --add-tag \
+         {COMPLETED_NO_CODE_OPT_OUT_TAG}`. `aida doctor --category \
+         completed-without-commit` applies the same rule."
+    ))
+}
+
+/// Print [`completion_linkage_warning`] to stderr, if any. Shared by the
+/// canonical and legacy `aida edit` paths so both say the same thing.
+// trace:STORY-1649 | ai:claude
+pub(crate) fn warn_if_completed_without_shipped_commit(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+) {
+    if let Some(text) = completion_linkage_warning(project_root, req) {
+        eprintln!("{} {text}", "Warning:".yellow().bold());
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/story_1649_shipped_linkage_tests.rs"]
+mod story_1649_shipped_linkage_tests;
