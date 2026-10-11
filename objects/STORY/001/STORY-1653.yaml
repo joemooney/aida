@@ -45,13 +45,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-10T23:53:44.846371229Z
+modified_at: 2026-10-11T02:59:37.018099062Z
 req_type: Story
 tags:
 - leases
 - observability
 - ps
 - relay
+comments:
+- id: 01a128e6-cdba-7123-9faa-a9d1063817ff
+  author: joe
+  content: |-
+    ADVISOR AMENDMENT 2026-10-10 20:00 (operator-agreed): the driver column IS the in-progress substate.
+    1. Derived, never stored. Don't add an InProgress substatus field or enum to the spec. Compute it every time from the driver registry, leases plus the owning pid, and branch activity. A stored substate would drift the same way the main status did tonight: STORY-1644 put back to Approved under live work, TASK-1723 never moved to in-progress, and ps calling a committing lease 'stalled' (BUG-1941).
+    2. Display: show it beside the status wherever an in-progress spec is listed, not only behind --driver. aida list shows e.g. 'In Progress · relay:lib-split' / 'In Progress · agent:01a128c0' / 'In Progress · queued (batch:next)' / 'In Progress · idle 26h'. Idle shows the time since last activity. Keep --driver as the filter. TOON/JSON keep driver and driver_kind as separate fields.
+    3. Wording: 'idle' (nothing will pick it up) is the operator-facing term. Don't use 'inactive', 'dormant' or 'stalled' for driven specs.
+    4. Relay contract (paired with aida-relay BUG-90, ruled the same day): the relay calls 'aida driver register --kind relay --run <BUG-84 run id> ...' at startup, refreshes it per session, deregisters on exit, and exports AIDA_RELAY_RUN to its sessions. worktree add/claim/session start read that variable and record the relay as the lease's driver.
+    5. Pair with BUG-1944. Status transitions (start of work → InProgress, no revert while a PR is open, merge completes Approved specs) are the other half. With both, the status says what stage the work is at and the driver says whether anything is working it.
+    Batch: next, together with BUG-1944 and aida-relay BUG-90.
+  created_at: 2026-10-11T02:59:37.018099062Z
+  modified_at: 2026-10-11T02:59:37.018099062Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a1283c-a28e-72a3-91be-5fa6ae98d1bc
   author: joe
