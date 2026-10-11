@@ -13,11 +13,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:23.618102809Z
-modified_at: 2026-10-11T01:25:23.618102809Z
+modified_at: 2026-10-11T07:12:08.466123919Z
 req_type: Bug
 tags:
 - ci
 - docs
+comments:
+- id: 01a129cd-ff12-7f60-aea0-9423b498b2d4
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the CLI-manual drift guard is tiered "full" by design and the fast tier deliberately stubs `aida` to fail, so a doc citation of a hidden flag cannot be caught before push today.
+
+    Problem
+    `make check-ci-fast` is presented as the pre-push gate, but the CLI-manual drift guard (completeness + --flag citation check) needs a built `aida` binary and is classified full-tier, so docs/cli drift only surfaces in CI (~15 min later).
+
+    Evidence path (verified on main)
+    - scripts/ci-gate-tiers.toml:73-74 — "Minimal aida-cli build for docs-only guards" = "full", "CLI-manual drift-guard (every command documented)" = "full".
+    - scripts/check-ci-gates.py:173-197 — the fast tier puts a stub `aida` on PATH that exits non-zero, by design ("The fast tier promises no cargo build").
+    - docs/cli/verify-manual.py:66-67, :95, :113 — resolves commands and flags by shelling out to `aida help-all` and `aida <cmd> --help`; no static fallback.
+    - .github/workflows/ci.yml:403-406 — CI runs it after a cargo build with target/debug on PATH.
+    - `make check-ci-list` output confirms: "CLI-manual drift-guard ... [full]".
+
+    Acceptance criteria
+    - `make check-ci-fast` runs verify-manual.py when an existing target/debug/aida or target/release/aida is present, printing a one-line "using <path> built at <mtime> (may be stale)" warning; with no binary it prints a SKIP line naming the reason (keeps the no-build promise).
+    - Alternatively/additionally: verify-manual.py gains `--static` that parses `#[arg(long = ...)]`/`hide = true` from aida-cli-lib/src/cli.rs and fails on a cited hidden/unknown flag with no binary; the fast tier runs that.
+    - Regression: re-adding a citation of a hidden flag to docs/cli/11-dev.md makes `make check-ci-fast` exit non-zero locally.
+    - `make check-ci-audit` stays green (tier table and CI agree); scripts/ci-gate-tiers.toml documents the new tier decision.
+    - CLAUDE.md "PRE-PUSH GATE" wording stays true (no cargo build introduced into the fast tier).
+
+    Scope / non-goals
+    - Not making the fast tier build anything; opportunistic reuse of an existing binary or a static parse only.
+    - related:TASK-1555 related:STORY-597 related:TASK-1251 related:TASK-1447
+
+    Suggested size: S
+  created_at: 2026-10-11T07:12:08.466123919Z
+  modified_at: 2026-10-11T07:12:08.466123919Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
