@@ -12,6 +12,7 @@
 #![recursion_limit = "256"]
 
 mod advisor;
+mod advisor_cmd_root;
 mod advisor_code_gate;
 mod advisor_watch;
 mod agent_launch_prompt;
@@ -135,6 +136,7 @@ mod token_ledger;
 mod tui_entry;
 mod usage_mcp_helpers;
 mod zen_cmd;
+use advisor_cmd_root::*;
 use agent_registry_root::*;
 use brief::*;
 use claim::*;
