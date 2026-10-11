@@ -1,0 +1,28 @@
+id: 01a128a8-ac35-77d2-9241-ad181c5be8f3
+spec_id: BUG-1940
+agreed_id: BUG-1940
+title: aida cache rebuild fails with 'database disk image is malformed' instead of rebuilding when cache.db is corrupt
+description: |-
+  2026-10-10 18:50: with a corrupt .aida/cache.db (broken requirements_fts table; integrity_check: 'vtable constructor failed: requirements_fts'), both aida cache rebuild and aida cache verify exit with error "database disk image is malformed". The documented recovery path can't recover from the one failure it most needs to handle. Every aida read command fails the same way until someone moves the file by hand (mv .aida/cache.db{,-wal,-shm} aside) and runs rebuild again; after that, rebuild succeeds (5006 specs, verify clean).
+
+  Expected: rebuild doesn't depend on the old file being readable. On an open/integrity failure it moves cache.db, -wal and -shm into a quarantine path, prints that it did so, and builds from the git store. Read commands that hit SQLITE_CORRUPT should print the one-line fix (aida cache rebuild) instead of the raw sqlite error.
+
+  Recurrence evidence for the underlying corruption is on STORY-1484.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:51:45.205677811Z
+modified_at: 2026-10-11T01:51:45.205677811Z
+req_type: Bug
+tags:
+- cache
+- recovery
+filed_at:
+  code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
