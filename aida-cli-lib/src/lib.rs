@@ -75,6 +75,7 @@ mod kernel;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
 mod mailbox_root;
+mod memory_doc;
 mod output_format;
 mod project_capabilities;
 mod protocol_gate;
@@ -130,6 +131,7 @@ use help::*;
 use kernel::*;
 use mailbox_root::*;
 use mcp_cmd::*;
+use memory_doc::*;
 use orchestrator_cmd::*;
 use output_format::*;
 use pr_cmd::*;
