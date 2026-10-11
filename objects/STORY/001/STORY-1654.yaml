@@ -1,0 +1,45 @@
+id: 01a12870-f983-7411-91bc-60bd79cfc679
+spec_id: STORY-1654
+agreed_id: STORY-1654
+title: Relay/orchestrator reviewers run as separate processes with their own identity, so BUG-1918's same-session self-approval gate does not stop relay merges
+description: |
+  Blocks merging BUG-1918 (PR #2485). Operator decision 2026-10-10.
+
+  ## Problem
+  BUG-1918 binds approval authority to identity, and identity is per Claude session: CLAUDE_CODE_SESSION_ID plus the nearest Claude-harness process. Relay and orchestrator sessions run the implementer AND the reviewer as Agent-tool subagents of one orchestrator process. Both share that session id and harness, so after BUG-1918 every approval a relay records for its own implementer's PR is (correctly) refused at `aida pr ship` as AuthorSession. Merging BUG-1918 as things stand would stop all relay merges.
+
+  ## Want
+  The orchestrator launches each reviewer as a SEPARATE process with its own identity, never as an in-process subagent of the session that implemented the work. Options to evaluate, pick one and document it:
+  1. `aida queue work PR-<n>` (or `aida agent new --spec ... --role reviewer`) launching a fresh `claude -p` reviewer session with its own lease, session id and reviewer seat grant; the orchestrator waits on it (Bash, not the Agent tool).
+  2. A dedicated reviewer relay (its own aida-relay instance and seat) that drains `Review PR-<n>` stories routed to the reviewer role.
+  The reviewer must record its verdict via `aida review record` from its own reviewer seat, so the BUG-1918 attestation (identity + grant) validates at ship.
+
+  Also: implementers must not hold a reviewer grant, and the orchestrator must not record verdicts itself.
+
+  ## Where
+  Orchestrator/drain/burndown skill templates in aida-core/templates (aida-orchestrate, aida-drain-queue, aida-burndown, aida-review), the relay prompts under .aida/handoff/*/relay-prompt*.md, and, if needed, aida-relay (cross-reference the aida-relay repo if it needs a flag or mode).
+
+  ## Acceptance
+  - An end-to-end relay run against a build that includes PR #2485: implementer subagent → separate reviewer process → `aida review record` → `aida pr ship` succeeds with no override. The same flow with an in-process reviewer subagent is refused as AuthorSession, which proves the gate is live.
+  - The skills and relay prompts no longer instruct an in-process reviewer subagent.
+  - The throughput cost is measured: wall-clock per review, before and after.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T00:50:54.979925474Z
+modified_at: 2026-10-11T00:50:54.979925474Z
+req_type: Story
+tags:
+- batch:next
+- relay
+- review
+- security
+filed_at:
+  code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
