@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:03:46.189565859Z
-modified_at: 2026-10-11T00:10:14.051306899Z
+modified_at: 2026-10-11T00:42:34.245213063Z
 req_type: Story
 tags:
 - aida-capture
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-10-10T15:39:28.180840950Z
   modified_at: 2026-10-10T15:39:28.180840950Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12869-5585-7950-b6ae-665b3bb2ef0e
+  author: joe
+  content: 'Fresh review APPROVE on PR #2486 @ 44292f56d3. Minor follow-ups (non-blocking): (1) aida-capture.md:83/:178 pre-existing ''aida list --search'' is not a valid flag — should be ''aida search "<kw>"''; (2) :168 ''(until BUG-1921 lands)'' leaks an internal ID into a shipped skill — reword; (3) Step 5 topic-tag vocabulary assumes the convention FAQ exists — add fallback for projects without one; (4) frontmatter description could mention FAQ candidates.'
+  created_at: 2026-10-11T00:42:34.245213063Z
+  modified_at: 2026-10-11T00:42:34.245213063Z
+  session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
 history:
 - id: 01a1284b-baa3-78a2-9911-59626e71d791
   author: aida-session-start
