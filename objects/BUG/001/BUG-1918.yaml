@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-10T19:49:56.081716893Z
+modified_at: 2026-10-11T00:09:06.573964885Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-10-10T19:49:56.081716893Z
   modified_at: 2026-10-10T19:49:56.081716893Z
   session_id: a99f3276-cca0-4068-85ae-802f0ecc9fb4
+- id: 01a1284a-b30d-7682-b745-7bd4a6b7858b
+  author: joe
+  content: Commit 7cad9ce231 references this requirement
+  created_at: 2026-10-11T00:09:06.573964885Z
+  modified_at: 2026-10-11T00:09:06.573964885Z
+  session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
