@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T07:45:53.123008110Z
+modified_at: 2026-10-11T07:48:16.084852708Z
 req_type: Bug
 tags:
 - papercut
@@ -59,6 +59,47 @@ comments:
   created_at: 2026-10-11T07:41:51.839064264Z
   modified_at: 2026-10-11T07:41:51.839064264Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a129ef-1254-74e0-a8c7-19fd3a5efb94
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    Root cause
+    The `aida()` wrapper's `"init"|"init "*)` arm (aida-cli-lib/src/dev_cmd.rs) runs `_aida_out=$(command aida "$@" ...)` to harvest the marker-delimited `cd` block. The child therefore sees a piped stdout: `output_format::agent_output_mode` (`stdout_is_tty = stdout().is_terminal()`) auto-selects TOON, and with human output pinned every prompt/progress line is buffered in `_aida_out` until exit, so a prompt waiting on terminal stdin looks hung.
+
+    Approach (per triage design hint: side channel, stdout stays attached)
+    - Wrapper init arm: `mktemp` a private file, run `AIDA_INIT_CD_FILE=<file> command aida "$@"` with stdout/stderr/stdin untouched, then read the file, validate it with the same exactly-one-marker-pair discipline the verb arm uses, eval ONLY the block, and `rm -f` the file. No `$(...)` around the child. If mktemp fails, fall back to a plain pass-through (binary prints the copy-paste `cd` hint).
+    - Capability token: the wrapper stops advertising `init-cd` and advertises `init-cd-file` instead. An OLD binary under the NEW wrapper then prints the plain hint rather than inert marker noise on the terminal; a NEW binary under an OLD wrapper (still advertising `init-cd`, still capturing) keeps getting the stdout marker block, byte-identical to today.
+    - Binary (`init_bootstrap::emit_enter_dir`): precedence is `AIDA_INIT_CD_FILE` (write `#aida:eval:begin / cd '<abs>' / #aida:eval:end` to the file, print a short human line) > `init-cd` cap (legacy stdout markers) > plain hint. Constants + file writer live in `shell_eval.rs`.
+    - Format selection is untouched: with stdout attached, the existing TTY/`--format`/`AIDA_OUTPUT_FORMAT`/`AIDA_AGENT_OUTPUT` precedence applies to the child exactly as if the wrapper were absent; `aida init x | cat` still presents a pipe to the child.
+
+    Files
+    - aida-cli-lib/src/dev_cmd.rs (SHELL_HELPERS init arm + capability list)
+    - aida-cli-lib/src/shell_eval.rs (INIT_CD_FILE_ENV, INIT_CD_FILE_CAP, write_init_cd_file)
+    - aida-cli-lib/src/init_bootstrap.rs (emit_enter_dir)
+    - aida-cli-lib/src/tests/story_780_init_bootstrap_tests.rs (template pins, file-writer unit tests)
+    - aida-cli-lib/src/tests/task_1171_eval_channel_tests.rs (real-shell matrix: init stdout is a TTY-equivalent / not captured, cd applies from the side channel, failure path, legacy-binary skew, bogus file content never eval'd)
+
+    Tests (real bash, zsh when present, via shell_wrapper_harness)
+    - stub `aida init` writes `[ -t 1 ]`-style evidence: compare `readlink /proc/self/fd/1` inside the child to the wrapper's own fd 1 (same target => not captured); stub prints prose that must appear immediately/verbatim on stdout.
+    - stub writes a marked `cd` block to `$AIDA_INIT_CD_FILE`; after the wrapper returns `$PWD` is the target and the temp file is gone.
+    - failing init: no cd, status propagates, prose on the original streams.
+    - stub with markers on stdout only (old binary shape): nothing eval'd, markers displayed as-is (display-only skew contract).
+    - malformed file (no markers / duplicated pair): not eval'd.
+    - `bash -n` + shellcheck on the rendered wrapper locally.
+
+    Acceptance mapping
+    - human rendering preserved -> child stdout is the terminal (no capture)
+    - prompts visible / no deadlock -> no capture; stdin/stdout/stderr pass through
+    - `init <DIR>` still cds -> marker-delimited block via AIDA_INIT_CD_FILE, eval'd on exit 0
+    - explicit `--format`/env pins authoritative -> untouched binary logic, now sees the real TTY state
+    - piped wrapper output stays non-interactive -> the child inherits the caller's pipe
+    - Bash + Zsh regression -> wrapper_shells() matrix
+
+    Not compiled locally (factory rule); CI builds and runs the Rust tests.
+  created_at: 2026-10-11T07:48:16.084852708Z
+  modified_at: 2026-10-11T07:48:16.084852708Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129e8-9016-7d23-a79d-bdb8b8d5b999
   author: joe
