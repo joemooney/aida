@@ -252,15 +252,17 @@ that corpus is the *memory curator* responsibility, seen from the drain side.
 
 ### feedback_advisor_role_for_queue_after_647
 
-TASK-647 (ADR-3 intake-triage, merged 2026-06-04) shipped a hard advisor-gate: producing an `approved`+ spec or running `aida queue add` requires **advisor authority** = `AIDA_SESSION_ROLE=advisor` OR an interactive TTY. The Bash-tool / headless context is non-TTY, and the loop's default role is `implementer`, so plain `aida queue add ...` and `aida add --status approved` now error with "needs advisor authority".
+TASK-647 (ADR-3 intake-triage, merged 2026-06-04) shipped a hard advisor-gate: producing an `approved`+ spec or running `aida queue add` requires **advisor authority**. The Bash-tool / headless context has none by default (the default seat is `implementer`), so plain `aida queue add ...` and `aida add --status approved` error with "needs advisor authority".
 
 **Why:** queuing work for execution and approving specs are intake-triage decisions the advisor owns; the gate is substrate-as-bouncer (see [[feedback_substrate_as_bouncer_not_rules]]), deliberately un-bypassable by `--status approved`.
 
-**How to apply:** for the grooming/queuing half of the loop, prefix with the advisor hat:
-- `AIDA_SESSION_ROLE=advisor aida queue add <ID> --for implementer`
-- `AIDA_SESSION_ROLE=advisor aida add --status approved ...` (filing groomed specs)
+**How to apply (current, ADR-66 — accepted 2026-10-04):** advisor authority is a validated session grant minted by a human at an interactive TTY, never an environment variable. `AIDA_SESSION_ROLE` is a display/routing hint only; prefixing a command with it changes nothing the gate reads, and `aida queue add` / `aida add --status approved` resolve the grant on every call (CLI and MCP alike — the MCP `queue_add` refusal is the same gate, not a CLI-only check). For the grooming/queuing half of the loop:
+- at your terminal, `eval "$(aida role enter advisor)"`, then run `aida queue add <ID> --for implementer` / `aida add --status approved ...` in that shell; or
+- for an agent loop that must queue headlessly, launch it from a seat entered with `--delegate-seat advisor` (or the dispatch-capable seat it needs) so the launcher issues it a child grant; the grant, not the role label, is what the gate accepts.
 
-NOT gated (no prefix needed): `aida queue remove`, `aida edit` for execution flips (Approved→InProgress→Done), `aida show/list/pull`, and the internal orchestrator (`storage.queue_add()` bypasses the CLI gate). MCP `add_requirement` always lands draft regardless of role. The loop legitimately wears both hats — advisor when refilling the queue, implementer when working it.
+NOT gated: `aida queue remove`, `aida edit` for execution flips (Approved→InProgress→Done), `aida show/list/pull`. MCP `add_requirement` always lands draft regardless of role. The loop legitimately wears both hats — advisor when refilling the queue, implementer when working it — but each hat is a grant, and the roster caps which ones you may hold.
+
+**Historical (pre-ADR-66, 2026-06-04 to 2026-10-04):** the original form of this lesson recommended `AIDA_SESSION_ROLE=advisor aida queue add ...` / `AIDA_SESSION_ROLE=advisor aida add --status approved ...` and noted that an interactive TTY alone also conferred advisor authority and that the internal orchestrator (`storage.queue_add()`) bypassed the CLI gate. Under STORY-1473 / ADR-66 all three ambient paths were removed in favour of the validated grant; the recipes above are kept only as provenance for why the gate exists. Do not follow them.
 
 ### feedback_advisor_triage_mailbox_regularly
 
