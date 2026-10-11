@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T06:43:10.568249188Z
+modified_at: 2026-10-11T07:00:41.538046379Z
 req_type: Task
 tags:
 - closure:pending
@@ -411,6 +411,25 @@ comments:
   created_at: 2026-10-11T06:43:10.568249188Z
   modified_at: 2026-10-11T06:43:10.568249188Z
   session_id: 26c63616-b019-4504-a8d9-08023c744952
+- id: 01a129c3-83c2-7ce2-877a-bdbeeea8b01b
+  author: joe
+  content: |-
+    ADVISOR REVIEW: run 4 (PR #2494), 2026-10-11 00:15. VERDICT: APPROVED on content at 2d74292d99 (slice-13..15-r1). Merge is BLOCKED on a mechanical rebase (below).
+    - verify_stack.py (origin/main 9a503bd574, which includes the intact-block check) 15cb84f815..2d74292d99: 5 commits (3 MOVE, 2 RETARGET), checks 1–8 PASS. The tags are annotated with numeric proofs (store_push_pull 3508, plan_intent 2209, zen_drive_root 1151).
+    - Retargets are legitimate. 10bd228fc2 and 2d74292d99 move config-trust reader sites as the code moves. The trace-header ALLOW_LIST key follows run_do_drive (1l). The bug_1683_live_drain_lock include_str corpus += zen_drive_root.rs is a scan guard following moved code, as signed amendment 1e allows.
+    - Why it can't merge as-is: the PR base is still slice-10, because run 3 was rebase-merged, so GitHub never retargeted. As a result, only merge-hold-gate ran, and there's NO Build. Trial rebase: `git rebase --onto origin/main 15cb84f815 slice-13` is clean, the 6 run-3 commits drop out, and the tree delta vs the old head is exactly the TASK-1722 files. verify_stack origin/main..rebased fails ONLY check 6 (tags point at the old SHAs).
+    - REQUIRED (lib-split relay): rebase as above; --force-with-lease push; re-cut annotated slice-13-r2/14-r2/15-r2 at the new SHAs with fresh numeric proofs; `gh pr edit 2494 --base main`; wait for green Build; then request merge. I'll merge on green with --match-head-commit.
+
+    BOUNDARY RULINGS (against the signed STORY-1488 map; the principle is that ranges own lines and pure-move beats domain tidiness):
+    - Q1 pr_merge_gate / bug_1819 items: BY RANGE. verified_from_pr_ci_head and mod bug_1819_from_pr_ci_evidence_tests move with pr_merge_gate, and the lib_part5 from-pr caller reaches them via pub(crate). Re-homing by caller is a post-split cleanup and not part of this protocol.
+    - Q2 USER_AIDA_INSTRUCTIONS_BEGIN/END: they go with the module that receives the STORY-831 user_aida_* functions directly below them (user_aida_awareness_snippet / checksum / render_user_aida_instructions_block, their only production users). In the signed map that is scaffold_init. If the map actually puts those fns in agent_config, the consts follow the fns.
+    - Q3 advisor_cmd_root second range: CONFIRMED as you proposed. advisor_cmd_root takes only AdvisorPass + effective_calibration_mode. The ~20 interleaved post-signoff items stay with RealPhaseDriver's eventual module. Non-contiguous blocks are fine because the checker allows block reordering.
+    - Q4 handle_autopilot_command: owner is autopilot_intake (it is the autopilot dispatcher and sits on the boundary). Unblock autopilot_intake.
+    - Q5 plan_followups / private thread_local!: none of (a)–(c). Before the next move run, land ONE tiny standalone PR off main (not in the slice stack, normal commit format with (TASK-1538)) that adds pub(crate) to all three column-0 thread_local! hooks in lib_part3: FORGE_LOOKUP_TIMEOUT (L4279), FOLLOWUP_ADD_HOOK (L6627), STATUS_WRITE_RACE_HOOK (L9259). This completes the Q2-era visibility pass for macro-declared items, so the later moves stay pure and verify_stack needs no new allowance. The function-local statics (CACHE, WARNED, PROCESS_ONCE) are unaffected. Request advisor review on it like a run; it merges first, and then plan_followups goes into the next run.
+    - Run-size rule: the >3-unreviewed-runs / 8–12k-lines-per-run prompt edit stands for the restarted relay.
+  created_at: 2026-10-11T07:00:41.538046379Z
+  modified_at: 2026-10-11T07:00:41.538046379Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
