@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:04.928345393Z
-modified_at: 2026-10-11T01:51:11.505824133Z
+modified_at: 2026-10-11T07:13:53.715237933Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,29 @@ relationships:
   target_id: 01a12638-4641-72d2-bb74-0e27bab40dc6
   created_at: 2026-10-11T01:51:11.505821581Z
   created_by: joe
+comments:
+- id: 01a129cf-9a33-7681-b753-03147a4df3ce
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because this is live review work for PR #2485 (BUG-1918), which is open, mergeable in CI terms, and carries an advisor REQUEST CHANGES plus an operator hold that the reviewer must verify were addressed.
+
+    Problem: auto-filed review item for PR #2485 (branch bug-1918-work to main, +4304/-198 across 31 files) binding review approval authority to session identity instead of a recorded_by substring match.
+
+    Evidence path: `gh pr view 2485` shows state OPEN, Build and merge-hold-gate SUCCESS, no GitHub review, two PR comments. Comment 2026-10-11T00:50Z: operator HOLD, not mergeable until relay reviewers run as separate processes (STORY-1654, Approved). Comment 2026-10-11T01:10Z: advisor REQUEST CHANGES at 86a01af23f with blocking normal-path holes, including an empty identity failing open (identities_overlap([], x) is false) and authors being able to opt out via the lifecycle:no-review tag. BUG-1918 is in-progress; BUG-1934 (grant env trust) is Draft and explicitly out of this PR's threat model.
+
+    What the reviewer must check (read-only, `gh pr diff 2485`):
+    1. Every BLOCKING item in the 2026-10-11T01:10Z advisor comment has a commit after 86a01af23f and a test in aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs: empty identity refused at record and at ship; lifecycle:no-review cannot be self-applied by the author to bypass review; the drain_merge_match_head bypass either routes through approval_authority_refusal or is filed as a same-batch follow-up named in the PR body.
+    2. The threat model is stated in review_authority.rs module docs and the PR body (normal-path self-approval is stopped; same-user forgery is out of scope, tracked by BUG-1934).
+    3. Operator hold: STORY-1654 must have landed or the operator must have lifted the hold explicitly; otherwise request changes and do not ship.
+    4. BUG-1918's own acceptance criteria (via `aida review prompt --pr 2485`) each map to a test.
+    5. Template mirrors (aida-core/templates/commands and skills for drain-queue and fasttrack) are edited in the template master and `make check-templates` passes.
+
+    Scope: review work only; no acceptance criteria for the code change are invented here. Related: related:BUG-1918 related:STORY-1654 related:BUG-1934 related:BUG-1802.
+
+    Suggested size: M (large diff, authority-sensitive).
+  created_at: 2026-10-11T07:13:53.715237933Z
+  modified_at: 2026-10-11T07:13:53.715237933Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
