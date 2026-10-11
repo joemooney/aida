@@ -4336,6 +4336,10 @@ pub(crate) fn run() -> Result<()> {
             crate::cli::IdentityCommand::Check => {
                 return identity_gate::handle_identity_check(&project_root);
             }
+            // BUG-1926: `project_root` here is the checkout being pushed
+            // from (possibly the `.aida-store` worktree); the handler resolves
+            // the governing allowlist from the owning project itself.
+            // trace:BUG-1926 | ai:claude
             crate::cli::IdentityCommand::CheckPush { pushed_remote } => {
                 return identity_gate::handle_identity_check_push(&project_root, pushed_remote);
             }
