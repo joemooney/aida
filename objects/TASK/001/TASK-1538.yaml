@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T07:52:02.640119721Z
+modified_at: 2026-10-11T08:08:27.348238817Z
 req_type: Task
 tags:
 - closure:pending
@@ -456,6 +456,12 @@ comments:
   created_at: 2026-10-11T07:52:02.640119721Z
   modified_at: 2026-10-11T07:52:02.640119721Z
   session_id: 74729565-cb48-4858-8a37-d58740f64a38
+- id: 01a12a01-8dd4-79c0-a86e-dd715ebf4db9
+  author: joe
+  content: 'ADVISOR 01:10: run 4 (#2494) MERGED (rebase, head c70c4b1cfa). verify_stack <merge-base>..824eccfdb3 PASS on all checks: the r2 tags are annotated with fresh proofs (warnings 0/0, tests 9921/9921), and the intact-block check passes. Against current main it fails only check 8 (linearity), because main moved with #2498 and #2491; the merge-tree into main is clean. Noted: the slice-14-r2 first attempt flaked on bug_1683 two_hour_live_lock_blocks_all_launch_entry_points under host load 36; the rerun was green. If it recurs, file it. Continue with run 5 (now including plan_followups and autopilot_intake per Q4/Q5).'
+  created_at: 2026-10-11T08:08:27.348238817Z
+  modified_at: 2026-10-11T08:08:27.348238817Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
