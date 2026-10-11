@@ -8833,14 +8833,26 @@ pub(crate) fn dispatched_branch_head_sha(
 /// TASK-1448: the drain merge phase's approval-covers-head gate. `Err` is a
 /// shelvable, never-retried `StaleApproval` failure carrying the same
 /// refusal text `aida pr ship` prints — the drain parks the spec and moves
-/// on rather than exiting. Pure over the verdicts + head so every branch is
-/// testable without a forge.
-// trace:TASK-1448 | ai:claude
+/// on rather than exiting. Pure over the verdicts + policy + head so every
+/// branch is testable without a forge.
+///
+/// BUG-1918: approval AUTHORITY is checked first, exactly as `aida pr ship`
+/// checks it — no approval, an unattested one, or one recorded by an author
+/// session shelves the spec; the drain's own provenance-stamped verdict is
+/// not an approval.
+// trace:TASK-1448 trace:BUG-1918 | ai:claude
 pub(crate) fn drain_merge_approval_gate(
     candidates: &[review_verdict::RecordedVerdict],
+    policy: &pr_ship::ShipApprovalPolicy,
     head_sha: Option<&str>,
     pr: u64,
 ) -> Result<(), auto_complete::PhaseFailure> {
+    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::StaleApproval,
+            pr_ship::approval_authority_refusal_message(pr, &refusal),
+        ));
+    }
     match pr_ship::approval_head_refusal(candidates, head_sha) {
         None => Ok(()),
         Some(refusal) => Err(auto_complete::PhaseFailure::of(
@@ -8918,13 +8930,45 @@ mod task_1448_drain_merge_approval_gate_tests {
     const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
+    /// An attested, independent human-at-TTY approval (BUG-1918), so these
+    /// tests reach the head-coverage gate behind the authority gate.
     fn approval(sha: Option<&str>) -> review_verdict::RecordedVerdict {
         review_verdict::RecordedVerdict {
             kind: review_verdict::VerdictKind::Approved,
             raw: "approved".into(),
             reviewed_sha: sha.map(str::to_string),
+            recorded_at: Some("2026-09-23T00:00:00Z".into()),
+            attestation: Some(review_verdict::RecorderAttestation {
+                sha: sha.unwrap_or(HEAD).into(),
+                human_at_tty: true,
+                receipt_id: Some("rcpt".into()),
+                identity: vec!["session:independent-reviewer".into()],
+                ..Default::default()
+            }),
             ..Default::default()
         }
+    }
+
+    fn policy(verdicts: &[review_verdict::RecordedVerdict]) -> pr_ship::ShipApprovalPolicy {
+        let mut p = pr_ship::ShipApprovalPolicy {
+            reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        };
+        for v in verdicts {
+            if let Some(a) = v.attestation.as_ref() {
+                if let Some(k) = a.authority_key(v.recorded_at.as_deref()) {
+                    p.verified_authority.insert(k, a.identity.clone());
+                }
+            }
+        }
+        p
+    }
+
+    fn gate(
+        v: &[review_verdict::RecordedVerdict],
+        head: Option<&str>,
+    ) -> Result<(), auto_complete::PhaseFailure> {
+        drain_merge_approval_gate(v, &policy(v), head, 5)
     }
 
     fn assert_shelves(result: Result<(), auto_complete::PhaseFailure>) -> String {
@@ -8937,26 +8981,23 @@ mod task_1448_drain_merge_approval_gate_tests {
             0,
             3
         ));
-        assert!(
-            failure.reason.contains("Re-review the current head"),
-            "{}",
-            failure.reason
-        );
         failure.reason
+    }
+
+    fn assert_shelves_stale(result: Result<(), auto_complete::PhaseFailure>) -> String {
+        let reason = assert_shelves(result);
+        assert!(reason.contains("Re-review the current head"), "{reason}");
+        reason
     }
 
     #[test]
     fn approval_at_head_lets_the_drain_merge() {
-        assert!(drain_merge_approval_gate(&[approval(Some(HEAD))], Some(HEAD), 5).is_ok());
+        assert!(gate(&[approval(Some(HEAD))], Some(HEAD)).is_ok());
     }
 
     #[test]
     fn approval_behind_head_shelves() {
-        let reason = assert_shelves(drain_merge_approval_gate(
-            &[approval(Some(OLD))],
-            Some(HEAD),
-            5,
-        ));
+        let reason = assert_shelves_stale(gate(&[approval(Some(OLD))], Some(HEAD)));
         assert!(
             reason.contains(&OLD[..12]) && reason.contains(&HEAD[..12]),
             "{reason}"
@@ -8965,12 +9006,40 @@ mod task_1448_drain_merge_approval_gate_tests {
 
     #[test]
     fn approval_without_sha_shelves() {
-        assert_shelves(drain_merge_approval_gate(&[approval(None)], Some(HEAD), 5));
+        // No reviewed sha: the attestation cannot authorize it either.
+        assert_shelves(gate(&[approval(None)], Some(HEAD)));
     }
 
     #[test]
     fn unreadable_head_shelves() {
-        assert_shelves(drain_merge_approval_gate(&[approval(Some(HEAD))], None, 5));
+        assert_shelves_stale(gate(&[approval(Some(HEAD))], None));
+    }
+
+    /// BUG-1918: the drain routes through the same authority gate as `aida pr
+    /// ship` — no approval, the drain's own unattested provenance stamp, or
+    /// an author session's approval all shelve.
+    // trace:BUG-1918 | ai:claude
+    #[test]
+    fn drain_merge_refuses_without_an_attested_independent_approval() {
+        let reason = assert_shelves(gate(&[], Some(HEAD)));
+        assert!(reason.contains("no approval recorded"), "{reason}");
+        let stamped = review_verdict::RecordedVerdict {
+            kind: review_verdict::VerdictKind::Approved,
+            raw: "approved".into(),
+            reviewed_sha: Some(HEAD.into()),
+            recorded_by: Some("aida drain reviewer".into()),
+            ..Default::default()
+        };
+        let reason = assert_shelves(gate(&[stamped], Some(HEAD)));
+        assert!(reason.contains("no verified reviewer identity"), "{reason}");
+        let v = [approval(Some(HEAD))];
+        let mut by_author = policy(&v);
+        by_author.author_sessions = vec![pr_ship::AuthorSession {
+            label: "lease l on TASK-1".into(),
+            tokens: vec!["session:independent-reviewer".into()],
+        }];
+        let reason = assert_shelves(drain_merge_approval_gate(&v, &by_author, Some(HEAD), 5));
+        assert!(reason.contains("cannot approve its own work"), "{reason}");
     }
 
     #[test]

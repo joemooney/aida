@@ -15415,14 +15415,71 @@ pub(crate) fn handle_review_record_at(
     // BUG-1802: bind recording identity and enforce policy.
     // trace:BUG-1802 | ai:antigravity
     let recorded_by = review_recorded_by(&project_root);
-    #[cfg(not(test))]
-    if recorded_by == "aida review record (operator)" {
-        crate::seat_authority::require_direct_human()
-            .context("aida review record attribution fallback")?;
-    }
+    // BUG-1918: operator attribution stays behind the human-at-TTY floor
+    // (BUG-1693); the outcome is stamped into the attestation below so the
+    // ship gate can tell a floor-passed human from an unattested label.
+    // trace:BUG-1918 | ai:claude
+    let human_at_tty = recorded_by == REVIEW_OPERATOR_RECORDED_BY && review_operator_tty_floor()?;
     if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
     }
+    // BUG-1918: an approval is refused when THIS session is bound to
+    // authoring the work under review — by a lease it holds or once held, its
+    // agent session id, or its agent process — identity that persists across
+    // shell calls and lease release, never free-text labels.
+    // trace:BUG-1918 | ai:claude
+    let recorder_grant = crate::seat_authority::current_grant(&project_root);
+    let recorder = review_authority::RecorderIdentity::current(
+        &project_root,
+        &review_authority::visible_leases(&project_root),
+    );
+    let approving = kind == review_verdict::VerdictKind::Approved;
+    if approving {
+        // BUG-1918: an approval must name WHO recorded it — a session id or a
+        // process — or the ship gate can never tell it from the author's.
+        anyhow::ensure!(
+            review_authority::has_identity_anchor(&recorder.tokens),
+            "refused: this session has no identity AIDA can bind an approval to (no agent \
+             session id and no process ancestry) — record the approval from a reviewer seat \
+             or a terminal session"
+        );
+        review_authority::warn_on_ledger_read(&project_root);
+        // BUG-1918: a PR-keyed review (recorded from anywhere, e.g. main) is
+        // about the PR's head branch and the specs it ships — resolved from
+        // the forge as the ship gate does, never from the recorder's cwd.
+        let (subjects, author_branch) = review_subject(spec, pr, branch.as_deref(), |n| {
+            review_pr_subject_from_forge(&project_root, n)
+        })?;
+        let authors = review_recorder_authors(&project_root, &subjects, author_branch.as_deref());
+        if let Some(refusal) = review_author_refusal(&authors, &recorder, !subjects.is_empty()) {
+            anyhow::bail!(refusal);
+        }
+    }
+    // BUG-1918: a human who passed the TTY floor leaves a receipt in the
+    // user's AIDA home; the ship gate re-reads it instead of trusting the
+    // `human_at_tty` flag stored beside the verdict.
+    // trace:BUG-1918 | ai:claude
+    let receipt_id = if human_at_tty && approving {
+        Some(
+            review_authority::write_human_receipt(
+                resolved_sha.as_deref().unwrap_or_default(),
+                spec,
+                &recorder.tokens,
+            )
+            .context("could not write the human-review receipt")?,
+        )
+    } else {
+        None
+    };
+    let attestation = serde_json::to_value(review_verdict::RecorderAttestation {
+        sha: resolved_sha.clone().unwrap_or_default(),
+        seat: recorder_grant.as_ref().map(|g| g.seat.clone()),
+        grant_id: recorder_grant.as_ref().map(|g| g.id.clone()),
+        human_at_tty,
+        identity: recorder.tokens.clone(),
+        receipt_id,
+    })
+    .context("could not serialize the review recorder attestation")?;
 
     // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
     // standing marker (its text and who placed it) and any prior verdict
@@ -15521,6 +15578,11 @@ pub(crate) fn handle_review_record_at(
     )
     .with_context(|| "could not write the review verdict")?;
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
+    // trace:BUG-1918 | ai:claude
+    verdict_obj.insert(
+        review_verdict::ATTESTATION_KEY.to_string(),
+        attestation.clone(),
+    );
     review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
     // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
@@ -15647,6 +15709,11 @@ pub(crate) fn handle_review_record_at(
         // The two artifacts describe the same act of review, so retain the
         // spec record's timestamp byte-for-byte while preserving any displaced
         // PR-keyed round through the shared writer above.
+        // trace:BUG-1918 | ai:claude
+        handshake_obj.insert(
+            review_verdict::ATTESTATION_KEY.to_string(),
+            attestation.clone(),
+        );
         handshake_obj.insert(
             "mode".to_string(),
             serde_json::Value::String("orchestrator-phase-3".to_string()),
@@ -15729,17 +15796,31 @@ mod story_1405_review_marker_tests {
             review_marker::MergeGate::UnderReview(_)
         ));
 
-        handle_review_record_at(
-            root.path().to_path_buf(),
-            "BUG-14051",
-            "approved",
-            Some("abc1234"),
-            Some("bug-14051-work"),
-            Some("looks right"),
-            &[],
-            &[],
-            Some(14051),
-        )
+        // BUG-1918: a PR approval resolves the PR's subject through the forge.
+        let subject = ReviewPrSubject {
+            head_ref: "bug-14051-work".into(),
+            commit_subjects: vec![],
+        };
+        // BUG-1918: an approval must name its recorder (here, a session id).
+        let reviewer = review_authority::IdentitySource {
+            session_ids: vec!["independent-reviewer".into()],
+            ..Default::default()
+        };
+        with_review_pr_subject(subject, || {
+            review_authority::with_identity_source(reviewer, || {
+                handle_review_record_at(
+                    root.path().to_path_buf(),
+                    "BUG-14051",
+                    "approved",
+                    Some("abc1234"),
+                    Some("bug-14051-work"),
+                    Some("looks right"),
+                    &[],
+                    &[],
+                    Some(14051),
+                )
+            })
+        })
         .expect("recording an approval must succeed");
 
         assert!(review_marker::read(root.path(), 14051).is_none());
@@ -15849,8 +15930,229 @@ pub(crate) fn review_recorded_by_from(
         (Some(name), Some(kind)) => format!("{name} ({kind} {role_disp} seat)"),
         (Some(name), None) => format!("{name} ({role_disp} seat)"),
         (None, Some(kind)) => format!("{kind} {role_disp} seat"),
-        (None, None) => "aida review record (operator)".to_string(),
+        (None, None) => REVIEW_OPERATOR_RECORDED_BY.to_string(),
     }
+}
+
+/// The `recorded_by` label of a verdict with no agent identity behind it.
+pub(crate) const REVIEW_OPERATOR_RECORDED_BY: &str = "aida review record (operator)";
+
+/// BUG-1918 / BUG-1693: the human-at-TTY floor for operator attribution.
+/// Returns whether a human was proven present; refuses otherwise. Under
+/// `cfg(test)` no TTY exists, so it proves nothing (`false`) — a test-written
+/// operator approval is therefore never attested as human.
+// trace:BUG-1918 | ai:claude
+fn review_operator_tty_floor() -> Result<bool> {
+    #[cfg(not(test))]
+    {
+        crate::seat_authority::require_direct_human()
+            .context("aida review record attribution fallback")?;
+        Ok(true)
+    }
+    #[cfg(test)]
+    {
+        Ok(false)
+    }
+}
+
+/// BUG-1918: the spec ids a review is ABOUT — the verdict key (unless it is
+/// a `PR-N` key) plus any spec id named by the reviewed branch.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_subject_spec_ids(spec: &str, branch: Option<&str>) -> Vec<String> {
+    let key = spec.trim().to_ascii_uppercase();
+    let mut ids: Vec<String> = Vec::new();
+    if !key.is_empty() && !key.starts_with("PR-") {
+        ids.push(key);
+    }
+    if let Some(b) = branch {
+        ids.extend(
+            pr_ship::extract_spec_ids_from_text(b)
+                .into_iter()
+                .map(|id| id.to_ascii_uppercase()),
+        );
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// BUG-1918: what the forge says a PR is — its head branch and the subjects
+/// of the commits it adds — for resolving a PR-keyed review's subject.
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ReviewPrSubject {
+    pub(crate) head_ref: String,
+    pub(crate) commit_subjects: Vec<String>,
+}
+
+/// The PR number a review is about: `--pr`, else a `PR-N` verdict key.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_pr_number(spec: &str, pr: Option<u64>) -> Option<u64> {
+    pr.or_else(|| {
+        let key = spec.trim().to_ascii_uppercase();
+        key.strip_prefix("PR-")?.parse().ok()
+    })
+}
+
+/// BUG-1918: the spec ids and head branch an approval is checked against.
+/// For a PR (`--pr N` or a `PR-N` key) both come from `resolve_pr` — the
+/// PR's head branch, the spec ids it and the PR's commit trailers name, plus
+/// a non-PR key — and an unresolvable PR refuses: non-authorship cannot be
+/// established without knowing what the PR ships. Otherwise the key and the
+/// reviewed branch decide ([`review_subject_spec_ids`]).
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_subject(
+    spec: &str,
+    pr: Option<u64>,
+    branch: Option<&str>,
+    resolve_pr: impl FnOnce(u64) -> Result<ReviewPrSubject>,
+) -> Result<(Vec<String>, Option<String>)> {
+    let Some(n) = review_pr_number(spec, pr) else {
+        return Ok((
+            review_subject_spec_ids(spec, branch),
+            branch.map(str::to_string),
+        ));
+    };
+    let subject = resolve_pr(n).map_err(|e| {
+        anyhow::anyhow!(
+            "refused: could not resolve PR-{n}'s head branch and specs ({e:#}), so this approval \
+             cannot be checked against the work's authors — retry once the forge is reachable"
+        )
+    })?;
+    let head = subject.head_ref.trim();
+    anyhow::ensure!(
+        !head.is_empty(),
+        "refused: the forge returned no head branch for PR-{n}, so this approval cannot be \
+         checked against the work's authors"
+    );
+    let mut ids = review_subject_spec_ids(spec, Some(head));
+    for s in &subject.commit_subjects {
+        ids.extend(
+            pr_ship::extract_trailing_spec_ids_from_subject(s)
+                .into_iter()
+                .map(|id| id.to_ascii_uppercase()),
+        );
+    }
+    ids.sort();
+    ids.dedup();
+    Ok((ids, Some(head.to_string())))
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_REVIEW_PR_SUBJECT: std::cell::RefCell<Option<ReviewPrSubject>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` with `subject` as what the forge reports for any PR (tests only).
+// trace:BUG-1918 | ai:claude
+#[cfg(test)]
+pub(crate) fn with_review_pr_subject<R>(subject: ReviewPrSubject, f: impl FnOnce() -> R) -> R {
+    struct Reset(Option<ReviewPrSubject>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            TEST_REVIEW_PR_SUBJECT.with(|s| *s.borrow_mut() = prev);
+        }
+    }
+    let prev = TEST_REVIEW_PR_SUBJECT.with(|s| s.borrow_mut().replace(subject));
+    let _reset = Reset(prev);
+    f()
+}
+
+/// BUG-1918: [`ReviewPrSubject`] read from the project's forge and the local
+/// object store (commit subjects best effort: a range not fetched locally
+/// leaves the head branch to decide).
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_pr_subject_from_forge(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<ReviewPrSubject> {
+    #[cfg(test)]
+    {
+        let _ = project_root;
+        TEST_REVIEW_PR_SUBJECT
+            .with(|s| s.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("no forge under test (PR-{n})"))
+    }
+    #[cfg(not(test))]
+    {
+        let info = crate::pr_cmd::fetch_change_info_via_resolved_forge(
+            project_root,
+            n,
+            crate::forge::resolve_open_change_forge_kind(project_root),
+        )?;
+        let commit_subjects = [format!("origin/{}", info.base_ref), info.base_ref.clone()]
+            .iter()
+            .find_map(|base| {
+                let out = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args([
+                        "log",
+                        "--format=%s",
+                        &format!("{base}..{}", info.head_oid),
+                        "--",
+                    ])
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())?;
+                Some(
+                    String::from_utf8_lossy(&out.stdout)
+                        .lines()
+                        .map(str::to_string)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .unwrap_or_default();
+        Ok(ReviewPrSubject {
+            head_ref: info.head_ref,
+            commit_subjects,
+        })
+    }
+}
+
+/// BUG-1918: the author sessions an approval recorded from `project_root` is
+/// checked against — authoring leases (live, or durably recorded when taken)
+/// on `subject_ids` or on the reviewed `branch`. With no subject spec
+/// resolvable, every live authoring lease and every authorship-ledger record
+/// counts: non-authorship cannot be established, so the check fails closed.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_recorder_authors(
+    project_root: &std::path::Path,
+    subject_ids: &[String],
+    branch: Option<&str>,
+) -> Vec<pr_ship::AuthorSession> {
+    if subject_ids.is_empty() {
+        return review_authority::all_author_sessions(project_root);
+    }
+    review_authority::author_sessions_at(project_root, subject_ids, branch)
+}
+
+/// BUG-1918: refuse an approval whose recorder shares an identity with one of
+/// the work's author sessions — the same lease, the same agent session id,
+/// the same agent process, or the shell that took the lease. Identity, never
+/// the free-text `recorded_by` label, decides.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn review_author_refusal(
+    authors: &[pr_ship::AuthorSession],
+    recorder: &review_authority::RecorderIdentity,
+    subject_resolved: bool,
+) -> Option<String> {
+    let author = authors
+        .iter()
+        .find(|a| review_authority::identities_overlap(&a.tokens, &recorder.tokens))?;
+    Some(if subject_resolved {
+        format!(
+            "refused: this session is the one that claimed or implemented the work ({}) — a session cannot approve its own work; record the approval from an independent reviewer session",
+            author.label
+        )
+    } else {
+        format!(
+            "refused: this session claimed or implemented work ({}) and the review's subject could not be resolved, so non-authorship cannot be established — record the approval from an independent reviewer session",
+            author.label
+        )
+    })
 }
 
 #[cfg(test)]

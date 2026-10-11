@@ -73,7 +73,9 @@ non-integrity phases during `aida queue work --auto-complete`:
 - `lifecycle:no-ci-wait` — do not wait for CI to become terminal after the PR
   opens. CI still runs on GitHub; the orchestrator just continues while it is
   in progress.
-- `lifecycle:no-review` — skip the phase-3 reviewer model session.
+- `lifecycle:no-review` — skip the phase-3 reviewer model session. Merging
+  still needs an approval from a session that did not author the work; no
+  tag opts a PR out of that.
 - `lifecycle:no-build` — skip the final local build verification.
 - `lifecycle:no-preflight` — skip the local CI-parity guards before the
   implementer branch is published. Use only when the change is genuinely

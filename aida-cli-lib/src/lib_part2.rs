@@ -3957,24 +3957,34 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             } else {
                 None
             };
-            session_start(
-                owns,
-                branch.as_deref(),
-                base.as_deref(),
-                *reuse_branch,
-                path.as_deref(),
-                forge.as_deref(),
-                branch_style,
-                *launch,
-                title.clone(),
-                !*no_title,
-                name.clone(),
-                mode.mode.as_deref(),
-                mode.contained,
-                role.clone(),
-                *force_claim,
-                use_pool,
-            )
+            let start = || {
+                session_start(
+                    owns,
+                    branch.as_deref(),
+                    base.as_deref(),
+                    *reuse_branch,
+                    path.as_deref(),
+                    forge.as_deref(),
+                    branch_style,
+                    *launch,
+                    title.clone(),
+                    !*no_title,
+                    name.clone(),
+                    mode.mode.as_deref(),
+                    mode.contained,
+                    role.clone(),
+                    *force_claim,
+                    use_pool,
+                )
+            };
+            // BUG-1918: `--launch` claims FOR the agent it starts; without
+            // it, the caller is the one who will work the lease.
+            // trace:BUG-1918 | ai:claude
+            if *launch {
+                review_authority::as_launcher(start)
+            } else {
+                start()
+            }
         }
         SessionCommand::HarnessWorktreeRegister {
             agent_id,
@@ -6420,6 +6430,11 @@ pub(crate) fn agent_new_bg_dispatch(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
+    // BUG-1918: the backgrounded worker carries its lease id too.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
 
     let output = command
         .output_retrying_etxtbsy()
@@ -6474,6 +6489,14 @@ pub(crate) fn agent_new_bg_dispatch(
                 }
             });
             manifest.claude_session_id = Some(sid.clone());
+            // BUG-1918: the backgrounded agent — not this launcher — works
+            // the lease; record its session id as one of the lease's authors.
+            // trace:BUG-1918 | ai:claude
+            review_authority::record_lease_identity(
+                &plan.project_root,
+                lease_id,
+                &[format!("session:{sid}")],
+            );
             if let Err(err) = session_manifest::save(&manifest_path, &manifest) {
                 eprintln!(
                     "  {} couldn't record claude sessionId on lease manifest: {err}",
@@ -7862,31 +7885,35 @@ pub(crate) fn prepare_agent_launch(
             let previous_cwd = std::env::current_dir()?;
             std::env::set_current_dir(project_root)
                 .with_context(|| format!("failed to cd to {}", project_root.display()))?;
-            let start_result = session_start(
-                &spec,
-                /* branch */ None,
-                /* base */ None,
-                /* reuse_branch */ false,
-                /* explicit_path */ None,
-                /* forge_override */ None,
-                /* branch_style */ "auto",
-                /* launch_claude */ false,
-                /* launch_title */ None,
-                /* launch_set_title */ false,
-                /* launch_name */ None,
-                // STORY-495: inert here (launch_claude=false). The agent-new
-                // launch path injects its own posture via `config.default_args`.
-                /* launch_permission_mode */
-                None,
-                /* launch_contained */
-                false,
-                role.clone(),
-                /* force_claim */ false,
-                // STORY-714: config-driven (no per-command flag on this path
-                // yet) — [worktree_pool] enabled decides.
-                /* use_pool */
-                None,
-            );
+            // BUG-1918: `agent new` claims FOR the agent it launches.
+            // trace:BUG-1918 | ai:claude
+            let start_result = review_authority::as_launcher(|| {
+                session_start(
+                    &spec,
+                    /* branch */ None,
+                    /* base */ None,
+                    /* reuse_branch */ false,
+                    /* explicit_path */ None,
+                    /* forge_override */ None,
+                    /* branch_style */ "auto",
+                    /* launch_claude */ false,
+                    /* launch_title */ None,
+                    /* launch_set_title */ false,
+                    /* launch_name */ None,
+                    // STORY-495: inert here (launch_claude=false). The agent-new
+                    // launch path injects its own posture via `config.default_args`.
+                    /* launch_permission_mode */
+                    None,
+                    /* launch_contained */
+                    false,
+                    role.clone(),
+                    /* force_claim */ false,
+                    // STORY-714: config-driven (no per-command flag on this path
+                    // yet) — [worktree_pool] enabled decides.
+                    /* use_pool */
+                    None,
+                )
+            });
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
                 .with_context(|| format!("failed to restore cwd to {}", previous_cwd.display()))?;
@@ -9237,11 +9264,22 @@ pub(crate) fn run_tracked_agent(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
+    // BUG-1918: the worker carries its lease id, so it stays its lease's
+    // author after it leaves the worktree or the lease is released.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
 
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
+    // BUG-1918: this launcher made the claim; record the worker it spawned.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::record_launched_worker(&plan.project_root, lease_id, child_pid);
+    }
     let terminal = agent_registry::current_terminal_identity();
     let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
     let mut title_restore = None;
@@ -10272,6 +10310,9 @@ pub(crate) fn session_harness_worktree_register(
         &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
+    // BUG-1918: durable record of who is authoring this worktree's work.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
     println!(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
@@ -10286,6 +10327,14 @@ pub(crate) fn session_harness_worktree_register(
         println!(
             "adopted spec lease {adopted} for this subagent (its worktree is this subagent's cwd)"
         );
+        // BUG-1918: the adopting subagent now authors that spec's work.
+        // trace:BUG-1918 | ai:claude
+        if let Some(spec_lease) = list_leases(&project_root)
+            .into_iter()
+            .find(|l| l.id == adopted)
+        {
+            review_authority::record_authoring_lease(&project_root, &spec_lease);
+        }
     }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
     // now working that spec — flip Approved → In Progress at lease-take (the
@@ -15740,6 +15789,9 @@ pub(crate) fn session_start(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // BUG-1918: durable record of who claimed this spec, surviving release.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
 
     // BUG-379: atomic-enough with the lease just persisted, bump
     // Approved → InProgress. Idempotent — if the spec already moved
@@ -15978,6 +16030,9 @@ pub(crate) fn session_start(
         );
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
+        // BUG-1918: the exec'd worker carries its lease id.
+        // trace:BUG-1918 | ai:claude
+        review_authority::export_worker_session_env(&id);
         // TASK-31: pass a display name to claude so the /resume picker and
         // terminal title can distinguish concurrent worktrees. Explicit
         // --name wins; otherwise derive from scope+branch+role.

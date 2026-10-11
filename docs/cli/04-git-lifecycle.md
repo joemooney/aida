@@ -75,12 +75,12 @@ or forced completion is needed for an ID remapping.
 **Mental model.** `aida pr` is a small family of *PR lifecycle actions*, not a single command. The headline subcommands: `ship` (the fast path — create-if-needed → watch CI → squash-merge → pull → cleanup, in one call) and `auto-queue-review` (files the reviewer story the moment the PR opens, while context is fresh). Think of it as "the things that should happen at PR boundaries, automated."
 
 **Reach for it when**
-- `aida pr ship` — you have **human-pre-approved** work that needs *no* orchestrator review phase: docs PRs, master-signed architecture work, recovery merges. It's the direct-publish counterpart to the full reviewed pipeline.
+- `aida pr ship` — you have **already-approved** work (an independent approval is recorded on the PR head) that needs *no* orchestrator review phase: docs PRs, master-signed architecture work, recovery merges. It's the direct-publish counterpart to the full reviewed pipeline.
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 
-**Don't reach for it when** — the work needs **review**. `aida pr ship` *skips* the reviewer phase by design; for work that should be reviewed, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead. Shipping unreviewed code is the right tool only when a human already approved it.
+**Don't reach for it when** — the work has not been **reviewed** yet. `aida pr ship` does not run a reviewer phase; it merges only when an approval of the PR head has already been recorded by a session that did not author the work, and refuses otherwise. For work that still needs review, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 

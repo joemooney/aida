@@ -106,7 +106,7 @@ phases short-circuit:
 
 | Category | Phases | Reviewer |
 |---|---|---|
-| **fasttrack** (`lifecycle:no-review`) | implementer → CI → ~~review~~ → merge | **none — CI is the only gate** |
+| **fasttrack** (`lifecycle:no-review`) | implementer → CI → ~~review phase~~ → approval gate → merge | **no reviewer model phase — but the merge still needs an independent approval at head** |
 | **default** | implementer → CI → review → merge (or punt) | reviewer phase (cold-boot under `--no-human`) |
 
 **Integrity gates never skip in either** — CI must be green before merge, and
@@ -131,8 +131,10 @@ the interactive path ("punt out of the lane if it turns out non-trivial").
 
 **The honest gap.** The *only* thing distinguishing "safe to fasttrack" from
 "needs review" today is the **tag a human/advisor put on the spec at filing**.
-There is no automatic triviality classifier — a spec mis-tagged `no-review` that
-isn't actually trivial has only CI plus the implementer's punt as a safety net.
+There is no automatic triviality classifier. A mis-tagged spec still cannot
+merge on CI alone: every merge path (`aida pr ship`, the drain,
+`aida release --after-pr`, burndown) requires an attested approval by a
+session that did not author the work, and no tag opts out of it.
 Keep `lifecycle:no-review` a *deliberate* tag on genuinely-cosmetic work, never a
 default.
 

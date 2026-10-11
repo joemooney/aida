@@ -2692,20 +2692,18 @@ fn fixture_repo_and_store_with_inprogress_spec(
 // ── TASK-1458: the REAL drain merge() pins the forge merge to the approved head ──
 // trace:TASK-1458 | ai:claude
 
+/// A GitHub-origin repo with two commits, and a fake `gh` that reports the
+/// newer one as PR-77's head and records every argv. Returns (tempdir, root,
+/// fake-gh path, argv log path, head sha, older sha). BUG-1918: the reviewed
+/// commits are real, so the gate can date them.
 #[cfg(unix)]
-const T1458_HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-/// A GitHub-origin repo, a fake `gh` that reports `T1458_HEAD` as PR-77's head
-/// and records every argv, and a PR-77 verdict approved at `reviewed_sha`.
-/// Returns (tempdir, root, fake-gh path, argv log path).
-#[cfg(unix)]
-fn t1458_fixture(
-    reviewed_sha: &str,
-) -> (
+fn t1458_fixture() -> (
     tempfile::TempDir,
     std::path::PathBuf,
     std::path::PathBuf,
     std::path::PathBuf,
+    String,
+    String,
 ) {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("repo");
@@ -2720,6 +2718,10 @@ fn t1458_fixture(
             "https://github.com/acme/repo.git",
         ],
     );
+    write_commit(&root, "a.txt", "a", "older");
+    let older = git(&root, &["rev-parse", "HEAD"]);
+    write_commit(&root, "a.txt", "b", "head");
+    let head = git(&root, &["rev-parse", "HEAD"]);
     let bin = tmp.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let calls = tmp.path().join("gh-calls");
@@ -2739,11 +2741,41 @@ echo "unexpected gh call: $*" >&2
 exit 2
 "#,
             calls = calls.display(),
-            head = T1458_HEAD,
+            head = head,
         ),
     );
-    crate::review_verdict::record_verdict(
-        &root,
+    (tmp, root, gh, calls, head, older)
+}
+
+/// Run the drain merge for PR-77 with an approval at `reviewed_sha` recorded
+/// by an independent reviewer seat (BUG-1918: the drain judges approval
+/// authority before it merges).
+#[cfg(unix)]
+fn t1458_run_merge(
+    root: &std::path::Path,
+    gh: &std::path::Path,
+    reviewed_sha: &str,
+) -> Result<(), PhaseFailure> {
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let path = path.to_string_lossy().into_owned();
+    let gh = gh.to_string_lossy().into_owned();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "reviewer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh.as_str())),
+            ("PATH", Some(path.as_str())),
+        ],
+    );
+    let grant = crate::seat_authority::current_grant(root).expect("reviewer seat");
+    let verdict = crate::review_verdict::record_verdict(
+        root,
         "PR-77",
         Some("approved"),
         Some(reviewed_sha),
@@ -2753,23 +2785,18 @@ exit 2
         "test",
     )
     .unwrap();
-    (tmp, root, gh, calls)
-}
-
-#[cfg(unix)]
-fn t1458_run_merge(root: &std::path::Path, gh: &std::path::Path) -> Result<(), PhaseFailure> {
-    let inherited = std::env::var_os("PATH").unwrap_or_default();
-    let path = std::env::join_paths(
-        std::iter::once(gh.parent().unwrap().to_path_buf())
-            .chain(std::env::split_paths(&inherited)),
-    )
-    .unwrap();
-    let path = path.to_string_lossy().into_owned();
-    let gh = gh.to_string_lossy().into_owned();
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_TEST_GH_BINARY", gh.as_str()),
-        ("PATH", path.as_str()),
-    ]);
+    let mut body: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&verdict).unwrap()).unwrap();
+    body[crate::review_verdict::ATTESTATION_KEY] =
+        serde_json::to_value(crate::review_verdict::RecorderAttestation {
+            sha: reviewed_sha.to_string(),
+            seat: Some(grant.seat.clone()),
+            grant_id: Some(grant.id.clone()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        })
+        .unwrap();
+    std::fs::write(&verdict, serde_json::to_string_pretty(&body).unwrap()).unwrap();
     let mut d = driver(root, "TASK-1458");
     d.pr_number = Some(77);
     d.merge()
@@ -2787,11 +2814,11 @@ fn t1458_merge_argv(calls: &std::path::Path) -> Option<String> {
 #[cfg(unix)]
 #[test]
 fn task_1458_drain_merge_passes_the_approved_head_as_match_head_commit() {
-    let (_tmp, root, gh, calls) = t1458_fixture(&T1458_HEAD[..12]);
-    t1458_run_merge(&root, &gh).expect("an approval at the head merges");
+    let (_tmp, root, gh, calls, head, _) = t1458_fixture();
+    t1458_run_merge(&root, &gh, &head[..12]).expect("an approval at the head merges");
     let argv = t1458_merge_argv(&calls).expect("gh pr merge was called");
     assert!(
-        argv.contains(&format!("--match-head-commit {T1458_HEAD}")),
+        argv.contains(&format!("--match-head-commit {head}")),
         "the merge must be pinned to the full approved head: {argv}"
     );
 }
@@ -2799,8 +2826,8 @@ fn task_1458_drain_merge_passes_the_approved_head_as_match_head_commit() {
 #[cfg(unix)]
 #[test]
 fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
-    let (_tmp, root, gh, calls) = t1458_fixture("08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-    let failure = t1458_run_merge(&root, &gh).expect_err("a stale approval shelves");
+    let (_tmp, root, gh, calls, _, older) = t1458_fixture();
+    let failure = t1458_run_merge(&root, &gh, &older).expect_err("a stale approval shelves");
     assert_eq!(failure.kind, FailureKind::StaleApproval);
     assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
 }

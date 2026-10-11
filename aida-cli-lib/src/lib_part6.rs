@@ -13832,13 +13832,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 .map(|status| status.head_sha.trim().to_string())
                 .filter(|sha| !sha.is_empty())
         });
-        let candidates = pr_ship::merge_gate_verdict_candidates(
+        // BUG-1918: the same authority policy `aida pr ship` applies — the
+        // PR's authors resolved from the spec, its head branch, and what the
+        // forge says it ships — checked before head coverage.
+        // trace:BUG-1918 | ai:claude
+        let (candidates, approval_policy) = crate::pr_cmd::merge_approval_inputs(
             &[self.project_root.as_path(), lease_root.as_path()],
+            &lease_root,
             pr as u64,
             std::slice::from_ref(&self.spec),
+            self.branch.as_deref(),
             head_sha.as_deref(),
         );
-        drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
+        drain_merge_approval_gate(
+            &candidates,
+            &approval_policy,
+            head_sha.as_deref(),
+            pr as u64,
+        )?;
         // TASK-1458: pin the merge to the approved head the gate just
         // verified, so a push landing between this check and the merge is
         // refused by the forge rather than merged unreviewed.
