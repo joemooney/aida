@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T10:56:06.109638747Z
+modified_at: 2026-10-11T12:04:33.927225780Z
 req_type: Task
 tags:
 - closure:pending
@@ -528,6 +528,12 @@ comments:
   content: 'QUESTION Q9 (blocks phase_driver only; run 7 goes ahead without it). At the signed ranges, phase_driver.rs comes to 36 items and 6593 lines, over the 6000-line V7 cap; the map estimated 5.4k. That count applies Q3 (the advisor second range''s post-signoff items and the old 103864-104189 RealPhaseDriver block) and Q7 (the 14-line post-signoff block), plus git_capture by decl line (Q8). Breakdown in current lib_part6: config/struct/gate helpers/ResumeEntry and sandwiched NEW items ~610; the three inherent impl RealPhaseDriver blocks 1619+362+14; missing_implementer_worktree_push_gate 37; the single impl auto_complete::PhaseDriver for RealPhaseDriver at 3773 lines; the ci-fix/AutonomyMode tail ~250. Options: (a) two modules. phase_driver.rs (~2.8k) takes the struct, config, inherent impls, ci-fix tail and AutonomyMode. A new phase_driver_trait.rs (~3.8k) takes only the PhaseDriver trait impl, so both are pure moves. The map''s retargets (bug_1186_reviewer_seat_tests.rs:87; headless_hint_tests.rs:139/:155, whose AIDA_HEADLESS/spawn sites sit in the trait impl) would point at whichever file holds the scanned code. (b) A cap exception for phase_driver.rs. (c) Leave the trait impl in lib_part6 until slice 2. I recommend (a). The trait impl alone fits the cap, and the module name is the only addition to the map.'
   created_at: 2026-10-11T10:56:06.109638747Z
   modified_at: 2026-10-11T10:56:06.109638747Z
+  session_id: 74729565-cb48-4858-8a37-d58740f64a38
+- id: 01a12ad9-b807-72b0-ac06-8f0797047996
+  author: joe
+  content: 'RUN 7 READY FOR ADVISOR REVIEW: PR #2511 (branch slice-25, base origin/main 5ca72fd2b9). Tags slice-25-r1 orchestrator_leases 6ae68f0c6e 2247; slice-26-r1 upgrade_release 2893575393 (move 4974acdac1 + retarget) 2072; slice-27-r1 findings_gate 2ae4861ec9 2129; slice-28-r1 questions 0d0a752b68 2635; slice-29-r1 session_end 72d5ced220 1760. Each is proven at its own SHA: warnings 0/0, cargo test --workspace 9992/9992 (8 ignored). 10843 lines moved. verify_stack origin/main..slice-25 checks 1–8 PASS; check-ci-fast 21 gates pass. PLEASE RULE ON THE RETARGET: the signed map puts old L1132–2282 in upgrade_release, including the inline #[cfg(all(test, unix))] mod bug_1265_finish_ci_tests. Its harness calls orchestrate_with_resume (the ''L1755 is a test'' call in 1k). The line-based adr9 scanner can''t tell test code from production, so the retarget adds src/upgrade_release.rs to ENGINE_CALLER_ALLOWLIST with a test-only comment. The production call stays for 1k''s drain_gate retarget. Ownership notes: Q7 block in orchestrator_leases. Shared-endpoint tie-break (ranges are written end-to-start, so a shared line belongs to the range that starts there): ShaMatch and handle_release go to upgrade_release, and pr_lookup_from_change_lookup goes to pr_lookup (left in place). Straddlers are unchanged and wait for the Q8 sweep. phase_driver is still waiting on Q9.'
+  created_at: 2026-10-11T12:04:33.927225780Z
+  modified_at: 2026-10-11T12:04:33.927225780Z
   session_id: 74729565-cb48-4858-8a37-d58740f64a38
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
