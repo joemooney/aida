@@ -274,6 +274,15 @@ a partial-work PR with a neutral branch can ship without completing its owner.
 When a title is present, an older branch-head trailer cannot supply missing
 credits. When the title is empty, the branch-head subject supplies the title.
 
+One PR of a multi-PR spec can declare itself a non-completing slice —
+`aida pr ship --no-complete`, or a PR-body line `aida: no-complete` /
+`Non-completing slice` — and ship then writes no completing trailer from any
+source; the spec id stays traced in the PR body only. The branch-name recovery
+is also skipped on its own for a spec that carries `closure:pending` or still
+has open slice children (an explicit title trailer remains a deliberate
+directive). Ship prints the derived trailer and its source — PR title, branch
+name, or none with the reason — before it merges.
+
 Status edits and CLI/MCP rework record the code-repository HEAD when a spec
 leaves Done or Completed for further work. Live auto-bump and manual
 `reconcile-status` reject commits equal to or ancestral to that reopen marker,

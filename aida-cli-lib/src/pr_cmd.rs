@@ -39,6 +39,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             override_stale_check,
             override_stale_approval,
             wait,
+            no_complete,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -51,6 +52,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *override_stale_check,
             *override_stale_approval,
             *wait,
+            *no_complete,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
@@ -1424,6 +1426,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 false,                 // override_stale_check — not exposed on `aida ship` yet
                 false, // override_stale_approval — not exposed on `aida ship` (TASK-1448)
                 None,  // wait — not exposed on `aida ship`
+                false, // no_complete — not exposed on `aida ship` (BUG-1919)
             )
         }
     }
@@ -1750,6 +1753,7 @@ pub(crate) fn pr_ship_handler(
     override_stale_check: bool,
     override_stale_approval: bool,
     wait: Option<u64>,
+    no_complete: bool,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -2480,8 +2484,16 @@ pub(crate) fn pr_ship_handler(
             pr_number,
             if delete_branch { ", delete-branch" } else { "" }
         );
-        let explicit_squash_subject =
-            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch)?;
+        // BUG-1919: say which ids the squash subject will carry and where
+        // they came from (title / branch / none) BEFORE the merge, so a
+        // branch-name fallback can never complete a spec silently.
+        // trace:BUG-1919 | ai:claude
+        let (explicit_squash_subject, completion_trailer) =
+            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch, no_complete)?;
+        eprintln!(
+            "  step 3: {}",
+            pr_ship::format_trailer_provenance(&completion_trailer)
+        );
         if let Some(subject) = &explicit_squash_subject {
             eprintln!(
                 "  step 3: preserving spec ID in squash subject: {}",
@@ -2817,14 +2829,16 @@ pub(crate) fn pr_ship_handler(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
-        // Use the same store-qualified completion intent as the squash subject.
+        // Use the same store-qualified completion intent as the squash subject
+        // — including BUG-1919's non-completing / closure-held suppression, so
+        // a slice PR is not credited as a ship of its parent either.
         // trace:TASK-1600 | ai:codex
+        // trace:BUG-1919 | ai:claude
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
-                pr_ship::derive_squash_subject_spec_ids_resolving(&pr_meta.title, &branch, |id| {
-                    matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
-                })
+                ship_completion_trailer(&store, &pr_meta.title, &branch, &pr_meta.body, no_complete)
+                    .ids
             })
             .unwrap_or_default();
         pr_merged_spec_ids = spec_ids.clone();
@@ -3605,11 +3619,19 @@ pub(crate) fn branch_head_commit_message(
 /// Return an explicit `gh pr merge --subject` value when GitHub's default
 /// branch-head squash subject would drop spec IDs or a better PR title.
 // trace:SPEC-410 TASK-142 | ai:codex
+///
+/// BUG-1919: also returns the completing trailer with its provenance, so the
+/// caller can print where it came from (title / branch / withheld) before the
+/// merge. `no_complete` is the `--no-complete` flag; the PR body's
+/// non-completing marker and a closure-held spec (`closure:pending` or open
+/// slice children) withhold the branch-name fallback inside the derivation.
+// trace:BUG-1919 | ai:claude
 pub(crate) fn derive_pr_ship_squash_subject(
     project_root: &std::path::Path,
     pr_number: u64,
     branch: &str,
-) -> Result<Option<String>> {
+    no_complete: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
     // TASK-140: compare against the PR BRANCH's head commit, NOT the local cwd
     // HEAD. `aida pr ship` frequently runs from the main worktree, where HEAD is
     // main's tip. TASK-142: prefer the PR title as the explicit squash subject
@@ -3627,19 +3649,51 @@ pub(crate) fn derive_pr_ship_squash_subject(
     // trace:TASK-1600 | ai:codex
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
-    let normalized =
-        pr_ship::derive_squash_subject_resolving(&pr.title, branch, &pr.body, &commit_msg, |id| {
-            matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
-        })
-        .unwrap_or_default();
-    if normalized.is_empty() {
-        return Ok(None);
+    let (normalized, trailer) = pr_ship::derive_squash_subject_with_trailer(
+        &pr.title,
+        branch,
+        &pr.body,
+        &commit_msg,
+        no_complete,
+        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| pr_ship::spec_completion_hold_reason(&store, id),
+    )
+    .unwrap_or_else(|| {
+        (
+            String::new(),
+            pr_ship::SquashTrailer {
+                ids: Vec::new(),
+                source: pr_ship::TrailerSource::None,
+                notes: Vec::new(),
+            },
+        )
+    });
+    if normalized.is_empty() || normalized == current_subject {
+        return Ok((None, trailer));
     }
-    if normalized == current_subject {
-        Ok(None)
-    } else {
-        Ok(Some(normalized))
-    }
+    Ok((Some(normalized), trailer))
+}
+
+/// BUG-1919: the one store-qualified completion-trailer derivation the ship
+/// path uses for the post-merge credit (calibration slots, the `PrMerged`
+/// event), so it cannot disagree with the squash subject about which specs
+/// the PR completed. Resolution and closure-hold both read `store`.
+// trace:BUG-1919 | ai:claude
+pub(crate) fn ship_completion_trailer(
+    store: &aida_core::RequirementsStore,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    no_complete: bool,
+) -> pr_ship::SquashTrailer {
+    pr_ship::derive_squash_trailer(
+        pr_title,
+        branch,
+        pr_body,
+        no_complete,
+        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| pr_ship::spec_completion_hold_reason(store, id),
+    )
 }
 
 #[cfg(test)]

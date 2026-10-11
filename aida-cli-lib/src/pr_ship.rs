@@ -318,10 +318,11 @@ pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
 }
 
 /// Derive completion intent from an explicit title trailer, then the branch.
-/// PR body prose and mid-title references are never completion directives.
+/// PR body prose and mid-title references are never completion directives;
+/// a body non-completing marker withholds completion from every source (BUG-1919).
 // trace:SPEC-410 TASK-1600 | ai:codex
-pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, _pr_body: &str) -> Vec<String> {
-    derive_squash_subject_spec_ids_resolving(pr_title, branch, |_| true)
+pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, pr_body: &str) -> Vec<String> {
+    derive_squash_trailer(pr_title, branch, pr_body, false, |_| true, |_| None).ids
 }
 
 // trace:TASK-1600 | ai:codex
@@ -330,16 +331,190 @@ pub(crate) fn derive_squash_subject_spec_ids_resolving(
     branch: &str,
     resolves: impl Fn(&str) -> bool,
 ) -> Vec<String> {
-    for ids in [
-        extract_trailing_spec_ids_from_subject(pr_title),
-        extract_spec_ids_from_text(branch),
-    ] {
-        let ids: Vec<String> = ids.into_iter().filter(|id| resolves(id)).collect();
-        if !ids.is_empty() {
-            return ids;
+    derive_squash_trailer(pr_title, branch, "", false, resolves, |_| None).ids
+}
+
+/// BUG-1919: PR-body lines that declare the PR a non-completing slice of a
+/// multi-PR spec. A whole line (after stripping list/emphasis markup and
+/// trailing punctuation, case-insensitively) must equal one of these or start
+/// with one followed by a non-word character; a mid-prose mention stays
+/// descriptive, exactly as TASK-1600 keeps body ids descriptive.
+// trace:BUG-1919 | ai:claude
+pub const NO_COMPLETE_BODY_MARKERS: &[&str] = &["aida: no-complete", "non-completing slice"];
+
+/// BUG-1919: does the PR body carry a [`NO_COMPLETE_BODY_MARKERS`] line?
+// trace:BUG-1919 | ai:claude
+pub fn pr_body_declares_non_completing(pr_body: &str) -> bool {
+    pr_body.lines().any(|raw| {
+        let line = raw
+            .trim()
+            .trim_start_matches(|c: char| matches!(c, '-' | '*' | '>' | '+') || c.is_whitespace())
+            .trim_matches(|c: char| matches!(c, '*' | '_' | '`'))
+            .trim_end_matches(|c: char| matches!(c, '.' | ':' | ';' | '!'))
+            .trim()
+            .to_ascii_lowercase();
+        NO_COMPLETE_BODY_MARKERS.iter().any(|&marker| {
+            line == marker
+                || line
+                    .strip_prefix(marker)
+                    .and_then(|rest| rest.chars().next())
+                    .is_some_and(|c| !c.is_alphanumeric())
+        })
+    })
+}
+
+/// BUG-1919: where a squash subject's completing trailer came from, so ship
+/// can say so before it merges.
+// trace:BUG-1919 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrailerSource {
+    /// An explicit trailing `(SPEC-ID)` group on the PR title.
+    Title,
+    /// Recovered from the branch name because the title carried no trailer.
+    Branch,
+    /// No trailer: nothing resolvable, or completion was withheld.
+    None,
+}
+
+/// BUG-1919: the completing trailer `aida pr ship` will write, with its
+/// provenance and the reasons any candidate id was withheld.
+// trace:BUG-1919 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SquashTrailer {
+    pub ids: Vec<String>,
+    pub source: TrailerSource,
+    /// Human-readable reasons shown to the operator (a non-completing
+    /// declaration, a branch-name id whose spec is closure-held, ...).
+    pub notes: Vec<String>,
+}
+
+impl SquashTrailer {
+    fn none(notes: Vec<String>) -> Self {
+        SquashTrailer {
+            ids: Vec::new(),
+            source: TrailerSource::None,
+            notes,
         }
     }
-    Vec::new()
+}
+
+/// BUG-1919: derive the completing trailer from the title, then the branch
+/// name, with two ways to withhold completion:
+///
+/// - the PR declares itself a non-completing slice (`no_complete`, the
+///   `--no-complete` flag, or a [`NO_COMPLETE_BODY_MARKERS`] line in the
+///   body) — then no source grants a trailer; the spec is traced in the PR
+///   body only;
+/// - `completion_held(id)` names a reason the spec must stay open (it
+///   carries `closure:pending` or has open slice children) — then the
+///   branch-name fallback is skipped for that id. An explicit title trailer
+///   is still honoured: it is a deliberate directive, and the merge-time
+///   closure hold keeps such a spec at Done rather than Completed.
+///
+/// `resolves` keeps TASK-1600's rule: only ids that resolve unambiguously in
+/// the store can carry completion authority.
+// trace:BUG-1919 | ai:claude
+pub(crate) fn derive_squash_trailer(
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    no_complete: bool,
+    resolves: impl Fn(&str) -> bool,
+    completion_held: impl Fn(&str) -> Option<String>,
+) -> SquashTrailer {
+    if no_complete || pr_body_declares_non_completing(pr_body) {
+        let how = if no_complete {
+            "`--no-complete`"
+        } else {
+            "PR-body marker"
+        };
+        return SquashTrailer::none(vec![format!(
+            "non-completing slice ({how}) — no spec is completed by this merge; \
+             the spec id is traced in the PR body only"
+        )]);
+    }
+    let title_ids: Vec<String> = extract_trailing_spec_ids_from_subject(pr_title)
+        .into_iter()
+        .filter(|id| resolves(id))
+        .collect();
+    if !title_ids.is_empty() {
+        return SquashTrailer {
+            ids: title_ids,
+            source: TrailerSource::Title,
+            notes: Vec::new(),
+        };
+    }
+    let mut notes = Vec::new();
+    let mut branch_ids = Vec::new();
+    for id in extract_spec_ids_from_text(branch)
+        .into_iter()
+        .filter(|id| resolves(id))
+    {
+        match completion_held(&id) {
+            Some(reason) => notes.push(format!(
+                "branch-name fallback withheld for {id}: {reason} — traced in the PR body only; \
+                 add an explicit `({id})` title trailer to complete it deliberately"
+            )),
+            None => branch_ids.push(id),
+        }
+    }
+    if branch_ids.is_empty() {
+        SquashTrailer::none(notes)
+    } else {
+        SquashTrailer {
+            ids: branch_ids,
+            source: TrailerSource::Branch,
+            notes,
+        }
+    }
+}
+
+/// BUG-1919: the reason `spec` must not be completed by a branch-name
+/// fallback, or `None` when nothing holds it: the spec carries the
+/// `closure:pending` tag, or its slice subtree still has open children
+/// (anything not Completed / Rejected / Superseded / Deferred — the same
+/// open denominator the epic rollup uses). An id that does not resolve
+/// yields `None`; `resolves` already filters those out.
+// trace:BUG-1919 | ai:claude
+pub(crate) fn spec_completion_hold_reason(
+    store: &aida_core::RequirementsStore,
+    spec: &str,
+) -> Option<String> {
+    let req = store.get_requirement_unambiguous(spec).ok().flatten()?;
+    let tag = aida_core::pickability::CLOSURE_PENDING_TAG;
+    if req.tags.iter().any(|t| t.trim().eq_ignore_ascii_case(tag)) {
+        return Some(format!("the spec carries the `{tag}` tag"));
+    }
+    let rollup = aida_core::graph_walk::child_status_rollup(store, req.id);
+    let open = rollup
+        .total
+        .saturating_sub(rollup.completed + rollup.rejected + rollup.superseded + rollup.deferred);
+    if open > 0 {
+        return Some(format!(
+            "{open} of {} slice child(ren) still open",
+            rollup.total
+        ));
+    }
+    None
+}
+
+/// BUG-1919: the one-line (plus notes) provenance ship prints before the
+/// merge: which ids the squash subject will carry and where they came from.
+// trace:BUG-1919 | ai:claude
+pub fn format_trailer_provenance(trailer: &SquashTrailer) -> String {
+    let joined = trailer.ids.join(" ");
+    let mut out = match trailer.source {
+        TrailerSource::Title => format!("completion trailer ({joined}) — from the PR title"),
+        TrailerSource::Branch => format!("completion trailer ({joined}) — from the branch name"),
+        TrailerSource::None => {
+            "completion trailer: none — this merge completes no spec".to_string()
+        }
+    };
+    for note in &trailer.notes {
+        out.push_str("\n    ");
+        out.push_str(note);
+    }
+    out
 }
 
 /// Ensure the squash subject carries every derived spec ID exactly once.
@@ -396,10 +571,35 @@ pub fn derive_squash_subject(
 pub(crate) fn derive_squash_subject_resolving(
     pr_title: &str,
     branch: &str,
-    _pr_body: &str,
+    pr_body: &str,
     branch_head_commit_message: &str,
     resolves: impl Fn(&str) -> bool,
 ) -> Option<String> {
+    derive_squash_subject_with_trailer(
+        pr_title,
+        branch,
+        pr_body,
+        branch_head_commit_message,
+        false,
+        resolves,
+        |_| None,
+    )
+    .map(|(subject, _)| subject)
+}
+
+/// BUG-1919: [`derive_squash_subject_resolving`] with the suppression inputs
+/// and the trailer's provenance returned alongside the subject, so ship can
+/// print where the completing trailer came from before it merges.
+// trace:BUG-1919 | ai:claude
+pub(crate) fn derive_squash_subject_with_trailer(
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    branch_head_commit_message: &str,
+    no_complete: bool,
+    resolves: impl Fn(&str) -> bool,
+    completion_held: impl Fn(&str) -> Option<String>,
+) -> Option<(String, SquashTrailer)> {
     let title = derive_pr_title_from_commit(pr_title);
     let base = if title.is_empty() {
         derive_pr_title_from_commit(branch_head_commit_message)
@@ -409,9 +609,19 @@ pub(crate) fn derive_squash_subject_resolving(
     if base.is_empty() {
         return None;
     }
-    let ids = derive_squash_subject_spec_ids_resolving(&base, branch, resolves);
+    let trailer = derive_squash_trailer(
+        &base,
+        branch,
+        pr_body,
+        no_complete,
+        resolves,
+        completion_held,
+    );
     let clean_base = without_spec_trailer(&base);
-    Some(squash_subject_with_spec_ids(&clean_base, &ids))
+    Some((
+        squash_subject_with_spec_ids(&clean_base, &trailer.ids),
+        trailer,
+    ))
 }
 
 fn without_spec_trailer(subject: &str) -> String {
@@ -2846,6 +3056,290 @@ mod tests {
             derive_squash_subject_resolving("fix: prose", "task-1600", "TASK-1599", "", resolves),
             Some("fix: prose (TASK-1600)".into())
         );
+    }
+
+    /// BUG-1919 regression: the #2477 shape — a slice-convention title with
+    /// no id, branch `task-1538-x`, and a non-completing marker in the body —
+    /// must land with NO completing trailer from any source.
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_regression_marker_suppresses_branch_fallback() {
+        let title = "[AI:antigravity] refactor(cli-lib): extract output_format.rs";
+        let body = "Pure move of output_format.rs.\n\nNon-completing slice\n\nTraces TASK-1538.";
+        let (subject, trailer) = derive_squash_subject_with_trailer(
+            title,
+            "task-1538-x",
+            body,
+            "old head (TASK-1538)",
+            false,
+            |_| true,
+            |_| None,
+        )
+        .unwrap();
+        assert_eq!(subject, title);
+        assert!(trailer.ids.is_empty());
+        assert_eq!(trailer.source, TrailerSource::None);
+        assert!(
+            trailer.notes[0].contains("PR-body marker"),
+            "{:?}",
+            trailer.notes
+        );
+        assert!(extract_trailing_spec_ids_from_subject(&subject).is_empty());
+        // The public precedence helper (drain-side calibration) agrees.
+        assert!(derive_squash_subject_spec_ids(title, "task-1538-x", body).is_empty());
+        // Without the marker the branch fallback still fires (TASK-1600 shape).
+        assert_eq!(
+            derive_squash_subject_spec_ids(title, "task-1538-x", "Traces TASK-1538."),
+            vec!["TASK-1538".to_string()]
+        );
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_no_complete_flag_suppresses_every_source() {
+        let trailer = derive_squash_trailer(
+            "fix: prose (TASK-1538)",
+            "task-1538-x",
+            "",
+            true,
+            |_| true,
+            |_| None,
+        );
+        assert!(trailer.ids.is_empty());
+        assert_eq!(trailer.source, TrailerSource::None);
+        assert!(
+            trailer.notes[0].contains("`--no-complete`"),
+            "{:?}",
+            trailer.notes
+        );
+        assert_eq!(
+            derive_squash_subject_with_trailer(
+                "fix: prose (TASK-1538)",
+                "task-1538-x",
+                "",
+                "",
+                true,
+                |_| true,
+                |_| None,
+            )
+            .map(|(subject, _)| subject),
+            Some("fix: prose".into())
+        );
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_closure_pending_suppresses_branch_fallback() {
+        let held = |id: &str| {
+            (id == "TASK-1538").then(|| "the spec carries the `closure:pending` tag".to_string())
+        };
+        let trailer = derive_squash_trailer("fix: prose", "task-1538-x", "", false, |_| true, held);
+        assert!(trailer.ids.is_empty());
+        assert_eq!(trailer.source, TrailerSource::None);
+        assert_eq!(trailer.notes.len(), 1);
+        assert!(
+            trailer.notes[0].contains("TASK-1538"),
+            "{:?}",
+            trailer.notes
+        );
+        assert!(
+            trailer.notes[0].contains("closure:pending"),
+            "{:?}",
+            trailer.notes
+        );
+        assert_eq!(
+            derive_squash_subject_with_trailer(
+                "fix: prose",
+                "task-1538-x",
+                "",
+                "",
+                false,
+                |_| true,
+                held
+            )
+            .map(|(subject, _)| subject),
+            Some("fix: prose".into())
+        );
+        // A held id never blocks an unheld sibling on the same branch name.
+        let trailer = derive_squash_trailer(
+            "fix: prose",
+            "task-1538-task-1601",
+            "",
+            false,
+            |_| true,
+            held,
+        );
+        assert_eq!(trailer.ids, vec!["TASK-1601".to_string()]);
+        assert_eq!(trailer.source, TrailerSource::Branch);
+        assert_eq!(trailer.notes.len(), 1);
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_title_trailer_still_honoured() {
+        let held = |_: &str| Some("the spec carries the `closure:pending` tag".to_string());
+        // An explicit title trailer is a deliberate directive even when the
+        // spec is closure-held (the merge-time hold keeps it at Done).
+        let trailer = derive_squash_trailer(
+            "fix: prose (TASK-1538)",
+            "neutral-branch",
+            "",
+            false,
+            |_| true,
+            held,
+        );
+        assert_eq!(trailer.ids, vec!["TASK-1538".to_string()]);
+        assert_eq!(trailer.source, TrailerSource::Title);
+        assert!(trailer.notes.is_empty());
+        // ... and the plain branch recovery still works when nothing holds it.
+        let trailer =
+            derive_squash_trailer("fix: prose", "task-1538-x", "", false, |_| true, |_| None);
+        assert_eq!(trailer.ids, vec!["TASK-1538".to_string()]);
+        assert_eq!(trailer.source, TrailerSource::Branch);
+        // TASK-1600: an unresolvable title id still falls through to the branch.
+        let trailer = derive_squash_trailer(
+            "fix: prose (SLICE-1)",
+            "task-1538-x",
+            "",
+            false,
+            |id| id == "TASK-1538",
+            |_| None,
+        );
+        assert_eq!(trailer.ids, vec!["TASK-1538".to_string()]);
+        assert_eq!(trailer.source, TrailerSource::Branch);
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_provenance_names_source() {
+        let title = derive_squash_trailer(
+            "fix: x (TASK-1538)",
+            "neutral",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert_eq!(
+            format_trailer_provenance(&title),
+            "completion trailer (TASK-1538) — from the PR title"
+        );
+        let branch = derive_squash_trailer("fix: x", "task-1538-x", "", false, |_| true, |_| None);
+        assert_eq!(
+            format_trailer_provenance(&branch),
+            "completion trailer (TASK-1538) — from the branch name"
+        );
+        let none = derive_squash_trailer("fix: x", "neutral", "", false, |_| true, |_| None);
+        assert_eq!(
+            format_trailer_provenance(&none),
+            "completion trailer: none — this merge completes no spec"
+        );
+        let withheld = derive_squash_trailer(
+            "fix: x",
+            "task-1538-x",
+            "",
+            false,
+            |_| true,
+            |_| Some("1 of 45 slice child(ren) still open".to_string()),
+        );
+        let text = format_trailer_provenance(&withheld);
+        assert!(text.starts_with("completion trailer: none"), "{text}");
+        assert!(text.contains("\n    branch-name fallback withheld for TASK-1538: 1 of 45 slice child(ren) still open"), "{text}");
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_body_marker_detection() {
+        for body in [
+            "aida: no-complete",
+            "AIDA: No-Complete",
+            "- aida: no-complete",
+            "**Non-completing slice**",
+            "Non-completing slice.",
+            "Non-completing slice (3 of 45): pure move",
+            "intro\n\n> aida: no-complete — slice 1\n\nmore",
+        ] {
+            assert!(pr_body_declares_non_completing(body), "{body:?}");
+        }
+        for body in [
+            "",
+            "This is not a non-completing slice of anything.",
+            "Non-completing slices are documented in OVERVIEW.md",
+            "see aida: no-complete in the docs",
+            "aida: no-completeness",
+        ] {
+            assert!(!pr_body_declares_non_completing(body), "{body:?}");
+        }
+    }
+
+    fn bug_1919_req(spec_id: &str, status: aida_core::RequirementStatus) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(format!("title {spec_id}"), String::new());
+        r.spec_id = Some(spec_id.to_string());
+        r.req_type = aida_core::RequirementType::Task;
+        r.status = status;
+        r
+    }
+
+    fn bug_1919_link(parent: &mut aida_core::Requirement, child: &mut aida_core::Requirement) {
+        let rel = |rel_type, target_id| aida_core::Relationship {
+            rel_type,
+            target_id,
+            created_at: None,
+            created_by: None,
+        };
+        let (parent_id, child_id) = (parent.id, child.id);
+        parent
+            .relationships
+            .push(rel(aida_core::RelationshipType::Parent, child_id));
+        child
+            .relationships
+            .push(rel(aida_core::RelationshipType::Child, parent_id));
+    }
+
+    // trace:BUG-1919 | ai:claude
+    #[test]
+    fn bug_1919_hold_reason_reads_tag_and_open_children() {
+        use aida_core::RequirementStatus as S;
+        let mut parent = bug_1919_req("TASK-1538", S::InProgress);
+        let mut open_child = bug_1919_req("TASK-1601", S::Approved);
+        let mut done_child = bug_1919_req("TASK-1602", S::Completed);
+        bug_1919_link(&mut parent, &mut open_child);
+        bug_1919_link(&mut parent, &mut done_child);
+        let store = aida_core::RequirementsStore {
+            requirements: vec![parent, open_child, done_child],
+            ..Default::default()
+        };
+        let reason = spec_completion_hold_reason(&store, "TASK-1538").expect("open child holds");
+        assert!(
+            reason.contains("1 of 2 slice child(ren) still open"),
+            "{reason}"
+        );
+        // The children themselves are leaves: nothing holds them.
+        assert_eq!(spec_completion_hold_reason(&store, "TASK-1601"), None);
+        // An unknown id is never held (resolution is the caller's filter).
+        assert_eq!(spec_completion_hold_reason(&store, "TASK-9999"), None);
+
+        // Every child completed ⇒ no hold.
+        let mut parent = bug_1919_req("TASK-1538", S::InProgress);
+        let mut done_child = bug_1919_req("TASK-1602", S::Completed);
+        bug_1919_link(&mut parent, &mut done_child);
+        let store = aida_core::RequirementsStore {
+            requirements: vec![parent, done_child],
+            ..Default::default()
+        };
+        assert_eq!(spec_completion_hold_reason(&store, "TASK-1538"), None);
+
+        // The closure:pending tag holds a spec with no children at all.
+        let mut tagged = bug_1919_req("TASK-1538", S::InProgress);
+        tagged
+            .tags
+            .insert(aida_core::pickability::CLOSURE_PENDING_TAG.to_string());
+        let store = aida_core::RequirementsStore {
+            requirements: vec![tagged],
+            ..Default::default()
+        };
+        let reason = spec_completion_hold_reason(&store, "TASK-1538").expect("tag holds");
+        assert!(reason.contains("closure:pending"), "{reason}");
     }
 
     #[test]
