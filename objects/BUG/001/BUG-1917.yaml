@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. Each flag's help text describes what it does (`--code-only` pushes only the code branch; `--store-only` only syncs the store).
   2. A test pins help text to behaviour, e.g. by asserting each flag's description names the leg it pushes.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:49:05.302626163Z
-modified_at: 2026-10-11T08:10:08.009424060Z
+modified_at: 2026-10-11T10:47:41.090823465Z
 req_type: Bug
 tags:
 - cli
@@ -114,6 +114,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12a93-5520-7430-802a-eacec5ff1b6f
+  author: aida-auto-bump
+  timestamp: 2026-10-11T10:47:41.088662169Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12a93-5522-7d40-b9e0-be7a785a80f6
+  timestamp: 2026-10-11T10:47:41.090822656Z
+  agent: implementer
+  commit_sha: a110671f7db4ba946e3af80f9f0f124aed359cf1
+  summary: Completed via merge a110671f
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
@@ -122,3 +135,7 @@ filed_at:
   aida_build_sha: 430dc01de4
   vendor: antigravity
   session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T10:47:41.088658290Z
+  completion_sha: a110671f7db4ba946e3af80f9f0f124aed359cf1
