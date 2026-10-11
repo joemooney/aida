@@ -14,10 +14,39 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:47:04.707704853Z
-modified_at: 2026-10-10T14:47:04.707704853Z
+modified_at: 2026-10-11T07:13:58.790174855Z
 req_type: Bug
 tags:
 - attribution
+comments:
+- id: 01a129cf-ae06-7df1-ab3e-0eacdaad6392
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because `detect_agent_type` checks any `GEMINI_*` variable before any `CLAUDE*` variable, so a Claude Code session with GEMINI_API_KEY exported is stamped antigravity; the faq-help half is already fixed for `add` but not `edit`.
+
+    Problem
+    Filing attribution (`filed_at ... <vendor> session <id>`) comes from an env-prefix scan whose order is CODEX_ > ANTIGRAVITY_/GEMINI_ > CLAUDE*. An API key (`GEMINI_API_KEY`) is a weak signal that outranks the live-session signal.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/agent_registry.rs:1777-1791 `detect_agent_type()`: line 1784 `k.starts_with("ANTIGRAVITY_") || k.starts_with("GEMINI_")` returns "antigravity" before line 1787's `k.starts_with("CLAUDE")`. Hypothesis in the description confirmed.
+    - aida-cli-lib/src/lib_part1.rs:799-806 `register_filing_identity()` feeds that vendor into `aida_core::provenance::ToolIdentity`.
+    - Second half: aida-cli-lib/src/cli.rs:9214 — `aida add --type` help already lists `faq` (landed in STORY-1642, #2484). aida-cli-lib/src/cli.rs:10050 — `aida edit --type` help still omits `faq`. Narrow that acceptance line to `edit`.
+
+    Acceptance criteria
+    - Unit test `detect_agent_type_prefers_live_session_over_api_key`: env has `CLAUDECODE=1` (or `CLAUDE_CODE_SESSION_ID`) and `GEMINI_API_KEY` → "claude".
+    - Unit test: `ANTIGRAVITY_SESSION_ID`-style var plus `ANTHROPIC_API_KEY` → "antigravity" (symmetry: API keys never decide).
+    - `AIDA_AGENT_TYPE` still wins over everything (existing behaviour, keep a test).
+    - Rule documented in the fn doc: precedence = explicit override > session/tool markers (CODEX_*, ANTIGRAVITY_*, CLAUDECODE/CLAUDE_CODE_*) > nothing; bare `*_API_KEY` names are excluded from the scan.
+    - `aida edit --type` help enumerates `faq` (cli.rs:10050).
+
+    Scope / non-goals
+    - Do not re-stamp already-filed specs; do not change `filed_at` format.
+    - related:CR-8 related:STORY-1642 related:TASK-1614
+
+    Suggested size: S
+  created_at: 2026-10-11T07:13:58.790174855Z
+  modified_at: 2026-10-11T07:13:58.790174855Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
