@@ -3822,7 +3822,7 @@ pub(crate) fn auto_complete_phase1_target_status(
 /// Registration and the status bump share one checked entry point, so an
 /// ownership failure cannot leave Approved work InProgress without a lease.
 // trace:TASK-1603 | ai:codex
-fn prepare_registered_auto_complete_phase1(
+pub(crate) fn prepare_registered_auto_complete_phase1(
     storage: &Storage,
     project_root: &std::path::Path,
     spec: &str,
