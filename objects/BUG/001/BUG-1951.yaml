@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T13:59:28.655954702Z
+modified_at: 2026-10-11T14:18:41.734362569Z
 req_type: Bug
 tags:
 - cache
@@ -57,6 +57,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2525 at 404d0ff3a7'
   created_at: 2026-10-11T13:59:27.833729524Z
   modified_at: 2026-10-11T13:59:27.833729524Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b54-84c6-7523-952e-d5ef19998988
+  author: joe
+  content: 'FACTORY READY: PR #2525 green at 404d0ff3a7'
+  created_at: 2026-10-11T14:18:41.734362569Z
+  modified_at: 2026-10-11T14:18:41.734362569Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a12b20-aedd-7960-b763-69719233e3e2
