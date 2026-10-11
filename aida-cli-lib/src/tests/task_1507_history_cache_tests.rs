@@ -3654,6 +3654,18 @@ mod bug_1923 {
             );
             let lag = history_cache::status_at(&fx.store, &fx.db).lag;
             assert!(lag.is_none_or(|l| l < gap), "lag shrinks: {lag:?}");
+            // trace:BUG-1942 | ai:claude
+            // Ancestor-complete after every call: the index holds exactly
+            // the commits reachable from its tip.
+            let reachable: i64 = fx
+                .git(&["rev-list", "--count", &tip])
+                .trim()
+                .parse()
+                .unwrap();
+            assert_eq!(
+                commits, reachable,
+                "query {calls}: indexed commits match `rev-list --count` of the tip"
+            );
             prev_tip = tip;
             prev_commits = commits;
         }
@@ -3715,6 +3727,152 @@ mod bug_1923 {
         let st = history_cache::status_at(&fx.store, &fx.db);
         assert!(!st.catch_up_stalled && st.lag.is_none());
         assert_parity(&fx, &opts(), "after the rebuild");
+    }
+
+    /// An index at `old` with HEAD three commits on, paused by three failed
+    /// inline catch-ups in a row. Returns (fixture, old tip).
+    // trace:BUG-1942 | ai:claude
+    fn stalled_three_behind() -> (Fixture, String) {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Cool-down");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let old = fx.head();
+        for st in ["Approved", "Done", "Draft"] {
+            s.status = st.into();
+            fx.put(&s);
+            fx.commit("update STORY-1");
+        }
+        for _ in 0..3 {
+            history_cache::fail_next_catch_up();
+            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        }
+        assert!(history_cache::status_at(&fx.store, &fx.db).catch_up_stalled);
+        (fx, old)
+    }
+
+    fn rfc3339_ago(secs: i64) -> String {
+        (chrono::Utc::now() - chrono::Duration::seconds(secs))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_catch_up_skips_inside_cooldown() {
+        let (fx, old) = stalled_three_behind();
+        let stalled_at = test_support::meta(&fx.db, "catch_up_stalled_at");
+        assert!(stalled_at.is_some(), "the third failure stamps the pause");
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert_eq!(st.catch_up_stalled_at, stalled_at);
+        assert!(st.catch_up_next_retry_at.is_some());
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(lines.contains("History catch-up: paused since"), "{lines}");
+        assert!(lines.contains("retries after"), "{lines}");
+
+        let commits = test_support::commit_count(&fx.db);
+        for _ in 0..2 {
+            let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            assert!(got.is_none(), "paused: the git walk answers");
+        }
+        // No attempt ran and nothing was written.
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(test_support::commit_count(&fx.db), commits);
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("3")
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_stalled_at"),
+            stalled_at
+        );
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_catch_up_retries_after_cooldown() {
+        let (fx, _old) = stalled_three_behind();
+        test_support::set_meta(&fx.db, "catch_up_stalled_at", &rfc3339_ago(2 * 3600));
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled, "still paused until a query retries");
+
+        // No rebuild: the next budgeted query retries, keeps the gap and
+        // clears the pause.
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_some(), "served from the caught-up index");
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(fx.head().as_str())
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+        assert_eq!(test_support::meta(&fx.db, "catch_up_stalled_at"), None);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(!st.catch_up_stalled && st.lag.is_none());
+        assert_eq!(st.catch_up_stalled_at, None);
+        assert_eq!(st.catch_up_next_retry_at, None);
+        assert_parity(&fx, &opts(), "after the cool-down retry");
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_a_failed_retry_restarts_the_cooldown() {
+        let (fx, old) = stalled_three_behind();
+        let stale = rfc3339_ago(2 * 3600);
+        test_support::set_meta(&fx.db, "catch_up_stalled_at", &stale);
+
+        history_cache::fail_next_catch_up();
+        assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("4")
+        );
+        let restamped = test_support::meta(&fx.db, "catch_up_stalled_at").unwrap();
+        assert_ne!(restamped, stale, "the failed retry restarts the cool-down");
+
+        // Inside the new cool-down: no attempt.
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_none());
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("4")
+        );
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_paused_index_without_a_stamp_retries_on_the_next_query() {
+        // An index paused before the cool-down existed has a count but no
+        // stamp; it must not stay paused until a rebuild.
+        let (fx, _old) = stalled_three_behind();
+        assert!(test_support::meta(&fx.db, "catch_up_stalled_at").is_some());
+        test_support::delete_meta(&fx.db, "catch_up_stalled_at");
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled && st.catch_up_next_retry_at.is_none());
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(lines.contains("retries on the next"), "{lines}");
+        assert!(
+            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_hint_is_silent_off_a_terminal() {
+        assert_eq!(history_cache::stalled_hint_message(false), None);
+        let hint = history_cache::stalled_hint_message(true).unwrap();
+        assert!(hint.contains("aida cache rebuild --history"), "{hint}");
+        assert!(hint.contains("retries"), "{hint}");
+        assert!(!hint.contains("BUG-"), "{hint}");
     }
 
     #[test]
