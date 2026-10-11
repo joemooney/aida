@@ -13,11 +13,40 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:08.306254718Z
-modified_at: 2026-10-11T01:25:08.306254718Z
+modified_at: 2026-10-11T07:11:48.081763565Z
 req_type: Bug
 tags:
 - ci
 - cli
+comments:
+- id: 01a129cd-af71-7fe3-bff8-7c281f3c596a
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because pr_list.rs treats any FAILURE conclusion as "Failing" without consulting the ci_gate informational config, and emits one row per spec id found in the title.
+
+    Problem
+    `aida pr list` computes its CI column from the raw statusCheckRollup, so a red informational/path-filtered check reads as "Failing" even when every required check is green. A PR whose title names two spec IDs is printed twice.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/pr_list.rs:120-137 — loops every rollup check; any conclusion FAILURE/TIMED_OUT/ACTION_REQUIRED sets has_failure => "Failing". No workflow/check-name filtering.
+    - aida-cli-lib/src/ci_gate.rs:57-62, :74-75, :145-149 — the informational_workflows / informational_checks config and its matcher already exist (BUG-1191) but pr_list.rs never calls into them.
+    - aida-cli-lib/src/pr_list.rs:155-166 — `for spec in specs { entries.push(...) }` emits one PrListEntry per extracted spec id (same for the GitLab branch).
+    - Note: TASK-1723 / ADR-72 just removed the Windows/macOS legs (commit c6c0d9c3b2), so the specific #2483 trigger is gone, but any informational check (e.g. nightly) still reproduces the logic bug.
+
+    Acceptance criteria
+    - Unit test pr_list::ci_column_ignores_informational_checks: a rollup with one FAILURE whose workflowName matches ci_gate informational_workflows and all required checks SUCCESS yields ci == "Passing" (or "Passing (1 informational red)").
+    - Unit test pr_list::ci_column_fails_on_required_red: a FAILURE on a non-informational check still yields "Failing".
+    - Unit test pr_list::multi_spec_pr_is_one_row: a PR titled with two IDs produces one entry whose spec_id lists both (e.g. "ADR-72,TASK-1723"); `--json` output shape documented.
+    - `aida pr list` human table prints one row per PR; docs/cli entry for `aida pr list` updated.
+
+    Scope / non-goals
+    - Do not re-implement check classification; reuse ci_gate's matcher. Reading branch-protection required checks via the API is optional (would cost one extra call per PR).
+    - related:BUG-1191 related:ADR-39 related:TASK-1589 related:TASK-1583
+
+    Suggested size: S
+  created_at: 2026-10-11T07:11:48.081763565Z
+  modified_at: 2026-10-11T07:11:48.081763565Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
