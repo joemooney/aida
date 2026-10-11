@@ -1,14 +1,14 @@
 ┌─────────────┬───────────────────────────────┬────────────────────────────────┐
-│             │ aida queue work               │ aida drain start               │
-│             │ --auto-complete               │                                │
+│             │ `aida queue work              │ `aida drain start`             │
+│             │ --auto-complete`              │                                │
 ├─────────────┼───────────────────────────────┼────────────────────────────────┤
-│ No selector │ The head of your role's       │ The whole queue (--drain):     │
+│ No selector │ The head of your role's       │ The whole queue (`--drain`):   │
 │             │ queue: one spec               │ every spec that can run        │
 │             │                               │ unattended, skipping blocked,  │
 │             │                               │ human-only or in-flight ones   │
 │ Sessions    │ Interactive by default: you   │ Headless by default            │
-│             │ can talk to each phase's      │ (--no-human=both)              │
+│             │ can talk to each phase's      │ (`--no-human=both`)            │
 │             │ session                       │                                │
-│ Stopping    │ Ctrl-C, or the budgets        │ Those budgets, plus aida drain │
-│             │ (--max, --max-failures)       │ stop                           │
+│ Stopping    │ Ctrl-C, or the budgets        │ Those budgets, plus `aida      │
+│             │ (`--max`, `--max-failures`)   │ drain stop`                    │
 └─────────────┴───────────────────────────────┴────────────────────────────────┘

@@ -186,13 +186,54 @@ fn aida_at_tty(fx: &Fixture, cols: u16, envs: &[(&str, &str)], args: &[&str]) ->
     let mut child = pair.slave.spawn_command(cmd).expect("spawn in pty");
     drop(pair.slave);
     let mut reader = pair.master.try_clone_reader().expect("pty reader");
+    // Read on a thread so a child that never exits cannot hang the suite. The
+    // reader streams chunks back; EIO at child exit ends the read on Linux.
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    let deadline = std::time::Instant::now() + PTY_TIMEOUT;
     let mut raw = Vec::new();
-    // EIO at child exit ends the read on Linux; keep whatever arrived.
-    let _ = reader.read_to_end(&mut raw);
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match rx.recv_timeout(left) {
+            Ok(chunk) => raw.extend_from_slice(&chunk),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                let _ = child.kill();
+                panic!(
+                    "aida {args:?} at a tty did not finish within {PTY_TIMEOUT:?}; partial output:\n{}",
+                    String::from_utf8_lossy(&raw)
+                );
+            }
+        }
+    }
     let status = child.wait().expect("wait");
     let text = String::from_utf8_lossy(&raw).replace("\r\n", "\n");
     assert!(status.success(), "aida {args:?} at a tty failed:\n{text}");
     text
+}
+
+const PTY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// True when every line of `expected` appears in `actual`, in order. A PTY
+/// merges stdout and stderr, so a stray stderr hint may be interleaved;
+/// this still proves the stdout content is unchanged and in place.
+fn lines_in_order(expected: &str, actual: &str) -> bool {
+    let mut actual_lines = actual.lines();
+    expected
+        .lines()
+        .all(|want| actual_lines.any(|got| got == want))
 }
 
 /// The rendered table box, if any: the lines from `┌` to `└`.
@@ -261,7 +302,8 @@ fn tty_human_output_renders_markdown_to_the_terminal_width() {
         assert!(!out.contains("## Where"), "heading marker left in:\n{out}");
         assert!(out.contains("Where they differ\n────"), "{out}");
         assert!(out.contains("• one item"), "{out}");
-        assert!(out.contains("Comment with emphasis and code."), "{out}");
+        // Under NO_COLOR inline code keeps its backticks; emphasis markers go.
+        assert!(out.contains("Comment with emphasis and `code`."), "{out}");
         assert!(!out.contains('\x1b'), "NO_COLOR must drop styling:\n{out}");
         let table = table_lines(&out);
         assert!(table.len() > 3, "no table drawn at {cols} cols:\n{out}");
@@ -289,12 +331,25 @@ fn raw_at_a_tty_restores_the_unrendered_human_output() {
         &aida_with(&fx, &[], &["show", &id, "--format", "human"]),
     );
     let raw_flag = aida_at_tty(&fx, 80, &[("NO_COLOR", "1")], &["show", &id, "--raw"]);
-    assert_eq!(raw_flag, piped);
     let raw_env = aida_at_tty(
         &fx,
         80,
         &[("NO_COLOR", "1"), ("AIDA_MARKDOWN", "raw")],
         &["show", &id],
     );
-    assert_eq!(raw_env, piped);
+    for (label, out) in [("--raw", &raw_flag), ("AIDA_MARKDOWN=raw", &raw_env)] {
+        assert!(
+            out.contains(DESCRIPTION.trim_end()),
+            "{label}: description source not verbatim:\n{out}"
+        );
+        assert!(
+            out.contains(COMMENT),
+            "{label}: comment source not verbatim:\n{out}"
+        );
+        assert!(!out.contains('┌'), "{label}: rendered table leaked:\n{out}");
+        assert!(
+            lines_in_order(&piped, out),
+            "{label}: output differs from piped human output\n--- piped ---\n{piped}\n--- tty ---\n{out}"
+        );
+    }
 }

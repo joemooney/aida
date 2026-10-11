@@ -32,6 +32,9 @@ pub(crate) const MARKDOWN_ENV: &str = "AIDA_MARKDOWN";
 /// fitting stop being useful, so the layout simply overflows.
 const MIN_WIDTH: usize = 20;
 
+/// Narrowest body a list item is wrapped to, however deep the nesting.
+const MIN_LIST_BODY: usize = 12;
+
 /// Why rendering was refused. The caller prints the raw source instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MarkdownRenderError {
@@ -164,6 +167,8 @@ enum Block {
     Heading(u8, Inlines),
     Para(Inlines),
     Code(String),
+    /// A raw HTML block, shown as written in a code gutter.
+    Html(String),
     Quote(Vec<Block>),
     List {
         start: Option<u64>,
@@ -224,7 +229,13 @@ fn heading_level(level: HeadingLevel) -> u8 {
 
 /// True when a fenced block's source span ends without its closing fence.
 fn fence_is_unclosed(span: &str) -> bool {
-    let lines: Vec<&str> = span.trim_end_matches(['\n', '\r']).lines().collect();
+    // A fence inside a blockquote carries the `>` markers on every line of
+    // its source span; compare the fence text without them.
+    let lines: Vec<&str> = span
+        .trim_end_matches(['\n', '\r'])
+        .lines()
+        .map(strip_quote_markers)
+        .collect();
     let Some(first) = lines.first() else {
         return true;
     };
@@ -241,11 +252,28 @@ fn fence_is_unclosed(span: &str) -> bool {
     !(last.chars().all(|c| c == fence_char) && last.chars().count() >= open_len)
 }
 
+/// Strip leading whitespace and blockquote `>` markers from a source line.
+fn strip_quote_markers(line: &str) -> &str {
+    let mut rest = line.trim_start();
+    while let Some(after) = rest.strip_prefix('>') {
+        rest = after.trim_start();
+    }
+    rest
+}
+
 struct Builder {
     stack: Vec<Frame>,
     style: Style,
     /// Destination URLs of open links, so the URL can follow the link text.
     links: Vec<(String, usize)>,
+    /// Nesting depth of each span style, so `*a *b* c*`-style nesting only
+    /// clears the style when the outermost span closes.
+    italic_depth: usize,
+    bold_depth: usize,
+    strike_depth: usize,
+    /// Source offset where the last raw-HTML event ended, so consecutive
+    /// lines of one HTML block merge into a single block.
+    last_html_end: Option<usize>,
 }
 
 impl Builder {
@@ -312,6 +340,29 @@ impl Builder {
         }
     }
 
+    fn container_accepts_html(&self) -> bool {
+        matches!(
+            self.stack.last(),
+            Some(Frame::Root(_)) | Some(Frame::Quote(_)) | Some(Frame::Footnote(_))
+        )
+    }
+
+    /// Append to the HTML block that ends the current container. False when
+    /// the container's last block is not HTML.
+    fn append_html(&mut self, text: &str) -> bool {
+        let blocks = match self.stack.last_mut() {
+            Some(Frame::Root(v)) | Some(Frame::Quote(v)) | Some(Frame::Footnote(v)) => v,
+            _ => return false,
+        };
+        match blocks.last_mut() {
+            Some(Block::Html(buf)) => {
+                buf.push_str(text);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn pop(&mut self) -> Result<Frame, MarkdownRenderError> {
         self.stack
             .pop()
@@ -355,9 +406,18 @@ impl Builder {
             }),
             Tag::TableHead | Tag::TableRow => {}
             Tag::TableCell => self.stack.push(Frame::Cell(Vec::new())),
-            Tag::Emphasis => self.style.italic = true,
-            Tag::Strong => self.style.bold = true,
-            Tag::Strikethrough => self.style.strike = true,
+            Tag::Emphasis => {
+                self.italic_depth += 1;
+                self.style.italic = true;
+            }
+            Tag::Strong => {
+                self.bold_depth += 1;
+                self.style.bold = true;
+            }
+            Tag::Strikethrough => {
+                self.strike_depth += 1;
+                self.style.strike = true;
+            }
             Tag::Link(_, url, _) => {
                 let at = self.inline_len();
                 self.links.push((url.to_string(), at));
@@ -465,15 +525,18 @@ impl Builder {
                 _ => Err(MarkdownRenderError::Structure("cell end")),
             },
             Tag::Emphasis => {
-                self.style.italic = false;
+                self.italic_depth = self.italic_depth.saturating_sub(1);
+                self.style.italic = self.italic_depth > 0;
                 Ok(())
             }
             Tag::Strong => {
-                self.style.bold = false;
+                self.bold_depth = self.bold_depth.saturating_sub(1);
+                self.style.bold = self.bold_depth > 0;
                 Ok(())
             }
             Tag::Strikethrough => {
-                self.style.strike = false;
+                self.strike_depth = self.strike_depth.saturating_sub(1);
+                self.style.strike = self.strike_depth > 0;
                 Ok(())
             }
             Tag::Link(..) | Tag::Image(..) => {
@@ -512,6 +575,10 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
         stack: vec![Frame::Root(Vec::new())],
         style: Style::default(),
         links: Vec::new(),
+        italic_depth: 0,
+        bold_depth: 0,
+        strike_depth: 0,
+        last_html_end: None,
     };
     for (event, range) in Parser::new_ext(src, options).into_offset_iter() {
         match event {
@@ -533,15 +600,17 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
                 b.push_inline(Inline::Text(t.to_string(), style))?;
             }
             Event::Html(t) => {
-                // Raw HTML is shown as written. Inside a code frame it is code.
-                let text = t.trim_end_matches('\n').to_string();
-                if matches!(
-                    b.stack.last(),
-                    Some(Frame::Root(_)) | Some(Frame::Quote(_)) | Some(Frame::Footnote(_))
-                ) {
-                    b.push_block(Block::Code(format!("{text}\n")))?;
+                // Raw HTML is shown as written. pulldown-cmark emits an HTML
+                // block one line per event; events that abut in the source
+                // are one block and are merged into a single gutter block.
+                let contiguous = b.last_html_end == Some(range.start);
+                b.last_html_end = Some(range.end);
+                if b.container_accepts_html() {
+                    if !(contiguous && b.append_html(&t)) {
+                        b.push_block(Block::Html(t.to_string()))?;
+                    }
                 } else {
-                    b.text(&text)?;
+                    b.text(t.trim_end_matches('\n'))?;
                 }
             }
             Event::FootnoteReference(label) => b.text(&format!("[^{label}]"))?,
@@ -648,6 +717,15 @@ impl Ctx {
                     segments.push(Vec::new());
                 }
                 Inline::Text(text, style) => {
+                    // Without styling, inline code keeps its backticks so it
+                    // still reads as code.
+                    let quoted;
+                    let text = if style.code && !self.styled {
+                        quoted = format!("`{text}`");
+                        &quoted
+                    } else {
+                        text
+                    };
                     let style = merge(*style, extra);
                     let mut piece = String::new();
                     for ch in text.chars() {
@@ -733,7 +811,7 @@ impl Ctx {
                 }
                 lines
             }
-            Block::Code(code) => {
+            Block::Code(code) | Block::Html(code) => {
                 let gutter = self.dim("│");
                 let body = code.strip_suffix('\n').unwrap_or(code);
                 body.split('\n')
@@ -781,11 +859,13 @@ impl Ctx {
                 Some(s) => format!("{}.", s + i as u64),
                 None => "•".to_string(),
             };
-            let mut body_width = width.saturating_sub(marker_width).max(1);
+            // Deeply nested lists keep a readable floor and overflow the
+            // terminal rather than wrapping a word per line.
+            let mut body_width = width.saturating_sub(marker_width).max(MIN_LIST_BODY);
             let mut task_prefix = String::new();
             if let Some(done) = item.task {
                 task_prefix = if done { "[x] " } else { "[ ] " }.to_string();
-                body_width = body_width.saturating_sub(4).max(1);
+                body_width = body_width.saturating_sub(4).max(MIN_LIST_BODY);
             }
             let body = self.render_blocks(&item.blocks, body_width, false);
             let indent = " ".repeat(marker_width + task_prefix.width());

@@ -104,6 +104,8 @@ fn closed_fences_are_not_malformed() {
         "~~~~\ncode\n~~~~",
         "```\n```",
         "  ```\n  x\n  ```\n",
+        "> ```\n> code\n> ```\n\nafter",
+        "> > ~~~\n> > code\n> > ~~~\n",
     ] {
         assert!(render_markdown(src, 80, false).is_ok(), "{src:?}");
     }
@@ -143,4 +145,48 @@ fn render_decision_only_at_a_tty_and_not_raw() {
     assert!(!markdown_render_decision(true, None, true), "--raw");
     assert!(!markdown_render_decision(false, Some("raw"), true));
     assert!(!markdown_render_decision(false, Some(" RAW "), true));
+}
+
+#[test]
+fn unstyled_inline_code_keeps_its_backticks() {
+    assert_eq!(
+        plain("run `aida drain stop` now", 80),
+        "run `aida drain stop` now"
+    );
+    // Styled output marks code with colour instead of backticks.
+    assert!(!styled("run `x` now", 80).contains('`'));
+}
+
+#[test]
+fn multi_line_html_block_is_one_gutter_block() {
+    let out = plain(
+        "<details>\n<summary>More</summary>\nbody\n</details>\n\nafter",
+        80,
+    );
+    assert_eq!(
+        out,
+        "  │ <details>\n  │ <summary>More</summary>\n  │ body\n  │ </details>\n\nafter"
+    );
+}
+
+#[test]
+fn nested_emphasis_keeps_the_outer_style_until_it_closes() {
+    // `*a _b_ c*`: italic must still be on for "c" after the inner span closes.
+    let out = styled("*a _b_ c*", 80);
+    assert!(out.ends_with("\x1b[3mc\x1b[0m"), "{out:?}");
+    let out = styled("**a __b__ c**", 80);
+    assert!(out.ends_with("\x1b[1mc\x1b[0m"), "{out:?}");
+}
+
+#[test]
+fn deeply_nested_lists_keep_a_readable_body_width() {
+    let mut src = String::new();
+    for depth in 0..12 {
+        src.push_str(&"  ".repeat(depth));
+        src.push_str("- several words in this item\n");
+    }
+    let out = plain(&src, 20);
+    // Every item, however deep, wraps to at most three lines (a 12-column
+    // body) instead of being split a character at a time.
+    assert!(out.lines().count() <= 12 * 3, "{out}");
 }
