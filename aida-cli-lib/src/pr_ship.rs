@@ -3161,9 +3161,11 @@ mod tests {
             Some("fix: prose".into())
         );
         // A held id never blocks an unheld sibling on the same branch name.
+        // (`/`-separated: the SPEC-410 extractor reads a hyphen-joined pair as
+        // one id, so a hyphen here would not exercise two ids at all.)
         let trailer = derive_squash_trailer(
             "fix: prose",
-            "task-1538-task-1601",
+            "task-1538/task-1601",
             "",
             false,
             |_| true,
