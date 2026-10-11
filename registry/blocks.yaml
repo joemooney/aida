@@ -855,3 +855,11 @@ blocks:
   range_end: 600
   next: 501
   allocated_at: 2026-10-09T20:10:34.105338884Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: FAQ
+  range_start: 40
+  range_end: 139
+  next: 40
+  allocated_at: 2026-10-11T13:26:39.577344132Z
