@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:27:17.703282889Z
-modified_at: 2026-10-11T06:54:10.969828695Z
+modified_at: 2026-10-11T06:59:10.997055889Z
 req_type: Bug
 comments:
 - id: 01a129bd-8e19-7702-8b09-5700b4502760
@@ -39,6 +39,12 @@ comments:
   created_at: 2026-10-11T06:54:10.969828695Z
   modified_at: 2026-10-11T06:54:10.969828695Z
   session_id: 01a129bb7d82
+- id: 01a129c2-2215-7c53-b8ed-4931977bd8ce
+  author: joe
+  content: Commit 9116ba7f23 references this requirement
+  created_at: 2026-10-11T06:59:10.997055889Z
+  modified_at: 2026-10-11T06:59:10.997055889Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129bb-7fda-72e1-b287-631139fea06c
   author: aida-session-start
