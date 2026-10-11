@@ -8,8 +8,40 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T02:06:28.557834609Z
+modified_at: 2026-10-11T07:13:00.793876878Z
 req_type: Bug
+comments:
+- id: 01a129ce-cb79-7110-80e7-885878490146
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the stall guard on main is permanent-until-rebuild and the hint has no TTY check; STORY-1661 (background indexer) is complementary, not a replacement, since a detached budgeted catch-up would hit the same counter.
+
+    Problem
+    After CATCH_UP_STALL_LIMIT (3) consecutive zero-progress inline attempts the history index never retries on its own, so transient interruptions permanently demote `aida history` to the git walk; the stall hint is gated only by a per-process static, so it repeats in every short-lived process.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/history_cache.rs:87-90 — CATCH_UP_STALL_LIMIT = 3, CATCH_UP_FAILURES_KEY meta.
+    - :1255-1280 catch_up_guarded(): `if failures >= CATCH_UP_STALL_LIMIT { stalled_hint(); return Ok(()) }` — no timestamp, no cool-down, no retry; only an unbounded budget (rebuild) bypasses it. The counter is cleared only in finish_append when a chunk is kept.
+    - :1846-1856 stalled_hint(): `static SHOWN: AtomicBool` only; no `std::io::stderr().is_terminal()` check.
+    - :2091-2094 — `aida cache status` exposes catch_up_stalled, so the state is observable for a test.
+    - Item (2) nuance: the only caller of history_cache::serve is history.rs:1341 (`aida history`); no template hook or statusline invokes `aida history` (rg over aida-core/templates/hooks finds none), so "statusline/hooks print it every call" is unverified; the per-process repeat for scripted/agent callers is real.
+    - Item (3): the far-behind regression test lives in the BUG-1923 test set (history_cache.rs tests, commit 392438a12e).
+
+    Acceptance criteria
+    - Unit test history_cache::stalled_catch_up_retries_after_cooldown: with failures == 3 and a stored stalled_at older than the cool-down (e.g. 1h, or gap > 1 chunk), catch_up_guarded runs catch_up again and clears the counter on a kept chunk.
+    - Unit test history_cache::stalled_catch_up_skips_inside_cooldown: within the cool-down, no catch_up call and no extra writes.
+    - stalled_hint is silent when stderr is not a terminal (test via an injected `is_tty` flag) and `aida history --json` never carries it.
+    - The far-behind regression test asserts, after each bounded call, that the indexed commit count equals `git rev-list --count <tip>`.
+    - `aida cache status` shows stalled_at / next_retry_at alongside catch_up_stalled.
+
+    Scope / non-goals
+    - Not moving catch-up off the hot path (that is STORY-1661); keep the budget semantics from BUG-1923.
+    - related:BUG-1923 related:STORY-1661 related:STORY-1650
+
+    Suggested size: S
+  created_at: 2026-10-11T07:13:00.793876878Z
+  modified_at: 2026-10-11T07:13:00.793876878Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 392438a12ee4539e011144313eb625fd543cd6f1
   branch: main
