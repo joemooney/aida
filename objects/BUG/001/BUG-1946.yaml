@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:06:00.825634058Z
-modified_at: 2026-10-11T07:16:51.596549106Z
+modified_at: 2026-10-11T15:16:55.987366874Z
 req_type: Bug
 tags:
 - flaky-test
@@ -67,6 +67,12 @@ comments:
   created_at: 2026-10-11T07:15:48.175203245Z
   modified_at: 2026-10-11T07:15:48.175203245Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a12b89-d633-76b0-844a-d3fda8e27817
+  author: joe
+  content: Closed as duplicate of BUG-1948 (same verbose-diagnostics env race). Operator ruling 2026-10-11 via advisor.
+  created_at: 2026-10-11T15:16:55.987366874Z
+  modified_at: 2026-10-11T15:16:55.987366874Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 filed_at:
   code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
   branch: slice-10
