@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:58.831939233Z
-modified_at: 2026-10-11T13:18:06.119382041Z
+modified_at: 2026-10-11T13:26:24.378986590Z
 req_type: Bug
 tags:
 - docs
@@ -68,6 +68,12 @@ comments:
   content: 'FACTORY PLAN (night): (1) Text fix: replace both ''aida list --search'' lines in aida-core/templates/skills/aida-capture.md with ''aida search "<keyword>"''; sync-templates + check-templates (docs/book is untracked/generated; repository guide only has the gh flag, left alone). (2) Lint: new scripts/check-template-commands.py extracts every ''aida ...'' line inside fenced code blocks of aida-core/templates/**/*.md, resolves the longest subcommand path via ''aida <path> --help'', and fails on any --flag not in that command''s --help (unknown top-level commands also fail). Fixture test tests/test_check_template_commands.py: a temp template with ''aida list --search x'' fails, ''aida search x'' passes (skips if no aida binary). Wire into CI after the minimal aida-cli build (PATH=target/debug). Risks: noise from pre-existing invented flags in other templates — will fix the templates if real, or use an inline ignore marker. (3) Update FAQ-30. Acceptance: rg clean, lint exists and fails on fixture.'
   created_at: 2026-10-11T13:18:06.119382041Z
   modified_at: 2026-10-11T13:18:06.119382041Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b24-a57a-7432-96e1-ce05f6ffd5c5
+  author: joe
+  content: 'FACTORY DRAFT: PR #2514 at f0bee23bbb'
+  created_at: 2026-10-11T13:26:24.378986590Z
+  modified_at: 2026-10-11T13:26:24.378986590Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-35fd-7b10-9dab-cc58cae6174e
