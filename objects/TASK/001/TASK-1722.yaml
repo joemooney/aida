@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:53:49.824465012Z
-modified_at: 2026-10-11T02:17:23.386223865Z
+modified_at: 2026-10-11T02:34:57.996036709Z
 req_type: Task
 tags:
 - refactor
@@ -197,6 +197,12 @@ comments:
   created_at: 2026-10-11T02:16:31.759469179Z
   modified_at: 2026-10-11T02:16:31.759469179Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a128d0-3c4c-71d3-a517-c4306645c0ff
+  author: joe
+  content: 'PR #2483 ready for advisor review at 568ddc3178746f80eacaab4b0d66c5898acd8890. All 9 items from the 2026-10-10 17:20 verdict addressed in one fix commit on top of ee5cb6be52 (no force-push; the earlier ''wip: salvage'' commit held only a scratch pr_body.txt and was dropped). Adversarial fixtures added as tests (24 total, in make check-ci-fast): placeholder tag (TODO/TBD/?) FAILs; letter placeholders A/A, N/N FAIL; V7 size mismatch FAILs; V7 missing module FAILs; ''chore: delete lib_part leftovers (TASK-9)'' + evil lib.rs edit FAILs (class+spec-id); a diff-detected final slice with a code edit FAILs purity, and a pure one PASSes with its spec ID; unknown flag exits 2; 1-commit range prints ''1 commit(s)'' with a per-check tally (no canned 9/9); retarget not after a MOVE FAILs; use crate::* outside the new module is residue; a manifest at another path is outside the move set; SPIKE/ADR IDs caught. --build is real: detached temp worktree per MOVE/final commit, one temp CARGO_TARGET_DIR per run, NOTE 9/FAIL 9 per commit, cleanup verified (smoke-tested with a stub cargo for pass and fail, not a real cargo build). New rule worth flagging: every MOVE must be covered by a slice tag (else FAIL 6). Against the approved round-2 stack fe6723558e..fcc61390e1, checks 1-5 and 7-8 PASS and check 6 FAILs on slice-00-r6 only. Its annotation is ''slice-00 rework'' with no V3/V4 numbers, so the stricter numeric rule is working as intended. slice-01..04 tags pass with their real sizes. make check-ci-fast green.'
+  created_at: 2026-10-11T02:34:57.996036709Z
+  modified_at: 2026-10-11T02:34:57.996036709Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
 history:
 - id: 01a12798-32cd-7a00-93a3-e533eb0de4ae
   author: joe
