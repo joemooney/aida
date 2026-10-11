@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-11T07:45:15.923274462Z
+modified_at: 2026-10-11T15:21:23.834061165Z
 req_type: Epic
 tags:
 - architecture
@@ -1185,6 +1185,12 @@ comments:
   created_at: 2026-10-11T07:45:15.923274462Z
   modified_at: 2026-10-11T07:45:15.923274462Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-ec7a-7312-8e40-b81d544b597b
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): ACCEPTED as the owning container (epic status is a rollup, so this is recorded here, not as a status). No child may be queued or dispatched until: (1) a canonical ADR is filed from EPIC74_ADR_DRAFT_V4.md; (2) the V4 child-acceptance amendment is applied to STORY-1481/1482/1483 (their text still specifies ''aida lane'', a lane seat and lane status, which the 2026-10-08 decision rejected); (3) slices 2-3 wait for EPIC-76''s common publisher. Slice 1 (main-line exclusion) may start once (1) and (2) are done, guided lane.'
+  created_at: 2026-10-11T15:21:23.834061165Z
+  modified_at: 2026-10-11T15:21:23.834061165Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
