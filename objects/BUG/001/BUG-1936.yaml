@@ -11,12 +11,12 @@ description: |
   Want: the guardrail matches only actual git invocations (the command word and its arguments after shell parsing), not words inside quoted arguments, heredoc bodies, or other commands' arguments. When it blocks, it says why on stderr.
 
   Acceptance: `aida add --description "mentions a force push"` and a heredoc containing that text are allowed; a real force push is still refused with a stated reason.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T07:48:07.192024968Z
+modified_at: 2026-10-11T13:23:33.587546757Z
 req_type: Bug
 tags:
 - hooks
@@ -66,6 +66,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b22-0a53-7940-aaf1-d901791d424f
+  author: aida-session-start
+  timestamp: 2026-10-11T13:23:33.587546053Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
