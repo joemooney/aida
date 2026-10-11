@@ -1069,39 +1069,6 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
-/// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
-/// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
-/// git adds when grepping a tree; we locate the last `trace:` and read the id
-/// after it. Returns the id upper-cased, or None if the token is malformed.
-/// trace:TASK-673 | ai:claude
-pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
-    let idx = line.rfind("trace:")?;
-    let rest = &line[idx + "trace:".len()..];
-    let spec_end = rest
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
-        .unwrap_or(rest.len());
-    let spec = &rest[..spec_end];
-    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'), optionally followed
-    // by a criterion suffix (`.A1`, `.AC3`, `.ac1a2b3`). Guard against a bare
-    // word or a leading digit so non-spec `trace:` strings don't pollute the set.
-    // trace:TASK-1246 | ai:codex
-    let first_alpha = spec.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
-    if !first_alpha || !spec.contains('-') {
-        return None;
-    }
-    if rest[spec_end..].starts_with('.') {
-        let suffix_rest = &rest[spec_end + 1..];
-        let suffix_end = suffix_rest
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
-            .unwrap_or(suffix_rest.len());
-        let suffix = &suffix_rest[..suffix_end];
-        if criterion_trace_suffix(suffix) {
-            return Some(format!("{spec}.{suffix}").to_ascii_uppercase());
-        }
-    }
-    Some(spec.to_ascii_uppercase())
-}
-
 pub(crate) fn criterion_trace_suffix(suffix: &str) -> bool {
     if suffix.is_empty()
         || !suffix
@@ -1329,82 +1296,6 @@ pub(crate) fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bo
         req.req_type,
         aida_core::RequirementType::Story | aida_core::RequirementType::Bug
     ) && extract_acceptance_section(&req.description).is_none()
-}
-
-/// Recurse into source files looking for trace comments. Skips the
-/// usual "don't grep here" directories.
-// trace:EPIC-19 | ai:claude
-pub(crate) fn walk_source_for_traces(
-    root: &std::path::Path,
-    re: &regex::Regex,
-    out: &mut std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>>,
-) {
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        // Skip noise dirs.
-        if path.is_dir() {
-            if matches!(
-                name,
-                ".git"
-                    | ".aida-store"
-                    | ".aida"
-                    | "target"
-                    | "node_modules"
-                    | "dist"
-                    | "build"
-                    | ".cache"
-                    | ".venv"
-                    | "venv"
-            ) {
-                continue;
-            }
-            walk_source_for_traces(&path, re, out);
-            continue;
-        }
-        // Read text-like files only. trace:EPIC-19 | ai:claude
-        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        let probably_text = matches!(
-            ext,
-            "rs" | "py"
-                | "ts"
-                | "tsx"
-                | "js"
-                | "jsx"
-                | "go"
-                | "java"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "cs"
-                | "rb"
-                | "sh"
-                | "md"
-                | "toml"
-                | "yaml"
-                | "yml"
-                | "json"
-        );
-        if !probably_text {
-            continue;
-        }
-        let Ok(content) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        for (lineno, line) in content.lines().enumerate() {
-            for cap in re.captures_iter(line) {
-                if let Some(m) = cap.get(1) {
-                    out.entry(m.as_str().to_string())
-                        .or_default()
-                        .push((path.clone(), lineno + 1));
-                }
-            }
-        }
-    }
 }
 
 // ----------------------------------------------------------------------------
