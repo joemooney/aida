@@ -1,0 +1,20 @@
+id: 01a12b7f-59dc-7612-8e54-88d013a11b9d
+spec_id: BUG-1964
+agreed_id: BUG-1964
+title: 'Flaky: task_1507_inconsistent_index_resets_instead_of_wedging fails under full-workspace load'
+description: 'Seen 2026-10-11 during a TASK-1538 lib-split proof: cargo test --workspace at f5bb1a3c72 failed with 1/7972 lib tests at aida-cli-lib/src/tests/task_1507_history_cache_tests.rs:2239 (''the inconsistent catch-up falls back'': history_cache::serve_at returned Ok after the planted side-commit tip). The same test passed at four neighbouring SHAs and passed 5/5 in isolation (0.3-0.9s). The commit only moves session_end code and touches no history_cache code, so the failure looks timing- or load-dependent, like BUG-1643. Repro: run the full aida-cli-lib lib suite while another cargo test --workspace is running.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T15:05:28.796633389Z
+modified_at: 2026-10-11T15:05:28.796633389Z
+req_type: Bug
+filed_at:
+  code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
