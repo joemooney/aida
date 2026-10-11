@@ -10,6 +10,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// BUG-1918: the fake forge's PR head. A real-length hex sha, so the
+/// fixture's approval can be checked against it.
+// trace:BUG-1918 | ai:claude
+const HEAD_SHA: &str = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12";
+
 fn git(repo: &Path, args: &[&str]) {
     let out = Command::new("git")
         .current_dir(repo)
@@ -78,13 +83,13 @@ elif [ "$1 $2" = "pr list" ]; then
   printf '%s\n' '[{"number":1287,"url":"https://github.test/pull/1287","headRefName":"task-1287-fixture","baseRefName":"main","title":"fixture"}]'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title.*mergedAt'; then
   if [ -f "$state/merged" ]; then
-    printf '%s\n' '{"state":"MERGED","title":"fixture","mergedAt":"2026-10-06T13:42:00Z","baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
+    printf '%s\n' '{"state":"MERGED","title":"fixture","mergedAt":"2026-10-06T13:42:00Z","baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
     exit 0
   fi
-  printf '%s\n' '{"state":"OPEN","title":"fixture","mergedAt":null,"baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
+  printf '%s\n' '{"state":"OPEN","title":"fixture","mergedAt":null,"baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,mergeable,reviewDecision,headRefOid'; then
   # trace:TASK-1606 | ai:codex — preflight now reads forge mergeability.
-  printf 'OPEN\tMERGEABLE\t\tabc\n'
+  printf 'OPEN\tMERGEABLE\t\tab12cd34ef56ab12cd34ef56ab12cd34ef56ab12\n'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; then
   test -f "$state/label" && printf '%s\n' true || printf '%s\n' false
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
@@ -127,13 +132,44 @@ fi
         permissions.set_mode(0o755);
         std::fs::set_permissions(&gh, permissions).unwrap();
 
-        Self {
+        let fixture = Self {
             _temp: temp,
             repo,
             home,
             bin,
             state,
-        }
+        };
+        fixture.approve_at_head();
+        fixture
+    }
+
+    /// BUG-1918: `aida pr ship` refuses a PR with no approval from an
+    /// independent, re-validated recorder. These tests exercise the hold and
+    /// CI paths behind that gate, so the fixture carries what
+    /// `aida review record` leaves after a human approved at a terminal: a
+    /// human-review receipt in the (fixture) AIDA home and an attested
+    /// verdict at the head.
+    // trace:BUG-1918 | ai:claude
+    fn approve_at_head(&self) {
+        let receipt_id = "0b0e1d2c-3f4a-4b5c-8d6e-7f8091a2b3c4";
+        let receipts = self.home.join(".aida/review-receipts");
+        std::fs::create_dir_all(&receipts).unwrap();
+        std::fs::write(
+            receipts.join(format!("{receipt_id}.json")),
+            format!(
+                r#"{{"id":"{receipt_id}","sha":"{HEAD_SHA}","subject":"PR-1287","recorded_at":"2026-10-06T13:00:00Z"}}"#
+            ),
+        )
+        .unwrap();
+        let verdicts = self.repo.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&verdicts).unwrap();
+        std::fs::write(
+            verdicts.join("PR-1287.json"),
+            format!(
+                r#"{{"verdict":"approved","reviewed_sha":"{HEAD_SHA}","recorded_at":"2026-10-06T13:00:00Z","recorded_by":"aida review record (operator)","recorder_attestation":{{"sha":"{HEAD_SHA}","human_at_tty":true,"receipt_id":"{receipt_id}","identity":["session:fixture-reviewer"],"author_check_passed":true}}}}"#
+            ),
+        )
+        .unwrap();
     }
 
     fn ship_command(&self) -> Command {
@@ -203,7 +239,7 @@ case "$*" in
     printf '%s\n' merge >> "$state/events"
     printf '%s\n' '{"state":"merged"}' ;;
   *"merge_requests/1287"*)
-    printf '%s\n' '{"iid":1287,"state":"opened","detailed_merge_status":"mergeable","title":"fixture","source_branch":"task-1287-fixture","target_branch":"main","sha":"abc","web_url":"https://gitlab.test/merge_requests/1287"}' ;;
+    printf '%s\n' '{"iid":1287,"state":"opened","detailed_merge_status":"mergeable","title":"fixture","source_branch":"task-1287-fixture","target_branch":"main","sha":"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12","web_url":"https://gitlab.test/merge_requests/1287"}' ;;
   *"merge_requests"*) printf '%s\n' '[]' ;;
   *) printf 'unexpected fake glab call: %s\n' "$*" >&2; exit 2 ;;
 esac

@@ -271,6 +271,45 @@ pub(crate) fn revoke_current() -> Result<bool> {
     Ok(true)
 }
 
+/// BUG-1918: did grant `id` authorize seat `seat` at instant `at`? Re-read
+/// from the grant store — never trusted from a recorded copy. The grant (and
+/// its parent, for a delegated child) must exist, carry exactly that seat,
+/// have been issued before `at`, not expired or been revoked by `at`, and the
+/// seat must still be allowed by the roster. An implementer seat never
+/// authorizes an approval.
+// trace:BUG-1918 | ai:claude
+pub(crate) fn grant_authorized_at(
+    project_root: &Path,
+    id: &str,
+    seat: &str,
+    at: DateTime<Utc>,
+) -> bool {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    if seat.is_empty() || seat == "implementer" {
+        return false;
+    }
+    let valid_at = |g: &SeatGrant| {
+        g.issued_at <= at && at < g.expires_at && g.revoked_at.is_none_or(|r| r > at)
+    };
+    let Ok(grant) = read_grant(id) else {
+        return false;
+    };
+    if aida_core::team::canonical_role(&grant.seat) != seat
+        || !valid_at(&grant)
+        || !roster_allows(project_root, &grant.principal, &seat)
+    {
+        return false;
+    }
+    match &grant.parent_grant_id {
+        None => true,
+        Some(parent_id) => read_grant(parent_id).is_ok_and(|parent| {
+            valid_at(&parent)
+                && parent.principal == grant.principal
+                && parent.delegable_seats.iter().any(|s| s == &grant.seat)
+        }),
+    }
+}
+
 pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
     &grant.id
 }

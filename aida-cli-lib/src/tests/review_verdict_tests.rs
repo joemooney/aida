@@ -23,6 +23,7 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         recorded_by: None,
         closed_by_merge: None,
         closed_at: None,
+        attestation: None,
     }
 }
 

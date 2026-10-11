@@ -310,6 +310,8 @@ mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
+// trace:BUG-1918 | ai:claude — who may approve: recorder/author identity + authority re-validation.
+mod review_authority;
 // trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
 mod review_marker;
 // trace:STORY-1417 | ai:claude
