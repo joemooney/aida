@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T07:41:09.526501999Z
+modified_at: 2026-10-11T07:41:51.839064264Z
 req_type: Bug
 tags:
 - papercut
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-10-11T07:11:27.409878390Z
   modified_at: 2026-10-11T07:11:27.409878390Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129e9-355f-7db1-922f-5811dc15459f
+  author: joe
+  content: 'ADVISOR (overnight 00:45): APPROVED per the product triage. It''s concrete and bounded, with no architecture fork, so it''s factory-eligible.'
+  created_at: 2026-10-11T07:41:51.839064264Z
+  modified_at: 2026-10-11T07:41:51.839064264Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a129e8-9016-7d23-a79d-bdb8b8d5b999
   author: joe
