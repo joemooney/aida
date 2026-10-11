@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:47:04.707704853Z
-modified_at: 2026-10-11T13:44:06.662498479Z
+modified_at: 2026-10-11T14:46:38.298532843Z
 req_type: Bug
 tags:
 - attribution
@@ -73,6 +73,17 @@ comments:
   created_at: 2026-10-11T13:44:06.662498479Z
   modified_at: 2026-10-11T13:44:06.662498479Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b6e-19da-7560-bde6-8c3a30f803fa
+  author: joe
+  content: |-
+    REVIEW (merge): REQUEST CHANGES at 39467642d2425ccc6936a23f633c81af50578e8d
+
+    1. `aida-cli-lib/src/cli.rs:~10133`: the acceptance item "faq is listed in `aida edit --type` help" has no test that would fail without the change. Add a unit test next to the existing help tests (around cli.rs:15686) that uses `find_subcommand_help(&mut cmd, &["edit"])` (or the `type` arg get_help()) and asserts the text contains `faq`.
+
+    The rest (live-session markers outrank API keys; override; doc rule) is approved.
+  created_at: 2026-10-11T14:46:38.298532843Z
+  modified_at: 2026-10-11T14:46:38.298532843Z
+  session_id: 268d52ff-fd05-4376-91d6-c472ac1d6f52
 history:
 - id: 01a129ed-727c-7c03-ab2f-96c425625e17
   author: joe
