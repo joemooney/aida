@@ -28,13 +28,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-11T00:50:54.979925474Z
+modified_at: 2026-10-11T01:25:33.483467282Z
 req_type: Story
 tags:
 - batch:next
 - relay
 - review
 - security
+comments:
+- id: 01a12890-b0ab-7ae1-9cbf-1591cbac951b
+  author: joe
+  content: 'Session note 2026-10-10: the same-session identity problem also shows up in hooks. An implementer subagent launched by the advisor session (TASK-1723) was blocked by the advisor code guard because it inherits the advisor seat, and had to retry its write. Whatever STORY-1654 picks for separate reviewer processes, apply the same rule to implementers launched from an advisor session: a separate process with its own seat.'
+  created_at: 2026-10-11T01:25:33.483467282Z
+  modified_at: 2026-10-11T01:25:33.483467282Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
