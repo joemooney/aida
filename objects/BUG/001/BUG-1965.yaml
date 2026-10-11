@@ -1,0 +1,20 @@
+id: 01a12b88-d79e-7461-8c94-b27f82ec712f
+spec_id: BUG-1965
+agreed_id: BUG-1965
+title: 'Flaky: reader_incremental_lock_error_does_not_full_rebuild (aida-core cached_git_backend) fails under load'
+description: 'Seen 2026-10-11 during a TASK-1538 lib-split proof (cargo test --workspace at da0202019d, with a second workspace test run in parallel): aida-core/src/db/cached_git_backend.rs:3804 assert_eq!(counts.get("write_attempt"), Some(&1)) got None. The commit only moves aida-cli-lib code. test_counts() looks like shared counter state, so a concurrent test or a slow lock path can change what the assertion sees. Isolate the counters per test (thread-local or scoped), or serialise the tests that read them.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T15:15:50.814508895Z
+modified_at: 2026-10-11T15:15:50.814508895Z
+req_type: Bug
+filed_at:
+  code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4cced67be8
+  vendor: antigravity
+  session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
