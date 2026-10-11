@@ -555,6 +555,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1648: primary-checkout drift — one `git status` in the main
+    // worktree, plus lease reads for best-effort attribution. Report-only:
+    // it lists paths and never deletes. Kept off the hot
+    // `collect_doctor_findings` path like the other git-probing categories.
+    // trace:STORY-1648 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::main_checkout_drift::CATEGORY,
+    )? {
+        findings.extend(crate::main_checkout_drift::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
     // the same tip on every configured remote? Uses cheap `ls-remote` (refs
     // only, no object transfer), so it is kept OUT of the hot

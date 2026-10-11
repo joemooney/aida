@@ -289,6 +289,8 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
+mod main_checkout_drift;
 mod maintenance_schedule;
 mod manual;
 mod mcp;

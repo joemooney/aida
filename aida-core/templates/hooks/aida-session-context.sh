@@ -84,4 +84,51 @@ if [ -n "$queue_lines" ]; then
     printf '%s\n' "$queue_lines"
 fi
 
+# Primary-checkout drift: one extra line when the PRIMARY checkout (the main
+# worktree, located via --git-common-dir so a session in a linked worktree
+# still sees it) has uncommitted tracked edits, untracked files, an off-main
+# HEAD, or has diverged from its upstream. Silent when clean. Cost: one
+# rev-parse plus one `git status` that takes no index lock. Read-only.
+# Opt out with AIDA_MAIN_CHECKOUT_DRIFT=off. The wording mirrors
+# `summary_line` in aida-cli-lib/src/main_checkout_drift.rs.
+# trace:STORY-1648 | ai:claude
+main_checkout_drift_line() {
+    [ "${AIDA_MAIN_CHECKOUT_DRIFT:-on}" = "off" ] && return 0
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
+    # Only a normal `<checkout>/.git` layout has a primary checkout to report
+    # (a bare repo or a submodule's modules/ dir does not).
+    case "$common_dir" in
+        .git | */.git) ;;
+        *) return 0 ;;
+    esac
+    primary=$(cd "$common_dir/.." 2>/dev/null && pwd -P) || return 0
+    git --no-optional-locks -C "$primary" status --porcelain=v2 --branch 2>/dev/null |
+        awk '
+            /^# branch\.head / { head = substr($0, 15) }
+            /^# branch\.upstream / { up = substr($0, 19) }
+            /^# branch\.ab / { a = substr($3, 2) + 0; b = substr($4, 2) + 0 }
+            /^[12u] / { t++ }
+            /^\? / { u++ }
+            END {
+                if (head == "") exit
+                t += 0; u += 0; a += 0; b += 0
+                ondef = (head == "main" || head == "master")
+                if (t == 0 && u == 0 && ondef && a == 0 && b == 0) exit
+                label = (head == "(detached)") ? "detached HEAD" : head
+                if (up == "") {
+                    sync = "no upstream"
+                } else {
+                    remote = up; sub(/\/.*/, "", remote)
+                    sync = ""
+                    if (a > 0) sync = a " ahead"
+                    if (b > 0) sync = (sync == "" ? "" : sync ", ") b " behind"
+                    sync = (sync == "") ? "up to date with " remote : sync " " remote
+                }
+                printf "main checkout: %d tracked change%s, %d untracked · on %s · %s\n", \
+                    t, (t == 1 ? "" : "s"), u, label, sync
+            }'
+    return 0
+}
+main_checkout_drift_line
+
 exit 0

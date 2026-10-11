@@ -2710,6 +2710,18 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "identity",
     ),
+    // STORY-1648: uncommitted edits, untracked files, an off-main HEAD, or
+    // origin divergence in the primary checkout. Report-only.
+    // trace:STORY-1648 | ai:claude
+    (
+        &[
+            "main-checkout-drift",
+            "main-checkout",
+            "primary-checkout",
+            "checkout-drift",
+        ],
+        "main-checkout-drift",
+    ),
 ];
 
 /// `id-collisions` doctor findings: one per id that resolves to more than one
