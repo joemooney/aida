@@ -1,0 +1,35 @@
+id: 01a128b1-42b1-7483-8d6d-0c82cff167cd
+spec_id: BUG-1941
+agreed_id: BUG-1941
+title: 'aida ps: false ''Salvageable'' on the live main checkout (BUG-1680 regression), lease-birth start time beside pid elapsed, and unrelated main-checkout processes merged into one ''subagent'' row'
+description: |-
+  Observed 2026-10-10 18:59 by the operator and the advisor, aida 0.15.0 (fe6723558e). Three defects in the default aida ps view:
+
+  1. FALSE SALVAGEABLE (regression of BUG-1680). It lists 'harness-worktree /home/joe/ai/aida — dead process, uncommitted work on main ... then: aida agent new claude --cwd /home/joe/ai/aida'. In fact three Claude processes were alive with that cwd (pids 607926, 1111710, 2794487), one of them the advisor session running the command. The 'uncommitted work' was only untracked scratch files (ci.log, fix_*.py, ps_all.txt, ...). Suggesting a salvage or a new agent on main is wrong. The view also contradicts itself: the section is headed 'hidden behind the stale-session count above' but is shown anyway, and aida ps --all reports salvageable[0] for the same state.
+
+  2. INCONSISTENT START VS ELAPSED. The harness-worktree row shows started 'Jun-26 11:55' next to elapsed '4h 14m', with the note 'adopted — lease born 2551h 3m ago, current pid up 4h 14m'. The started column shows the adopted lease's birth time while elapsed shows the current pid's uptime. Both columns should describe the same thing, the live process, with lease age in the note only.
+
+  3. UNRELATED PROCESSES MERGED INTO ONE ROW. Every process in the main checkout is grouped under one generic harness-worktree lease labelled role 'subagent' ('(2 sessions)' in the default view, '(3 sessions)' with --all). That group mixed the operator-attended advisor and two autonomous claude -p relays, none of which are subagents. The pid shown changes from run to run (607926 at 18:31, 1111710 at 18:59, 2794487 under --all), depending on which member gets picked.
+
+  Also seen: the BUG-1918 and BUG-1921 sessions were human 'dormant' with pid '-' and no worktree change in 10+ minutes, while the TOON view gave dispatch_state 'moving' for the same rows. Tied to STORY-1653 (show who is driving each spec).
+
+  Acceptance: (a) never show Salvageable for a cwd that has a live process, and treat untracked-only changes on the main checkout as not salvageable; human and --all views agree. (b) started and elapsed refer to the same process. (c) different processes in the main checkout get separate rows with their real roles (or at least are not labelled subagent), and the pid is chosen deterministically. (d) dispatch_state agrees with the dormant/stalled label.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T02:01:08.017370724Z
+modified_at: 2026-10-11T02:01:08.017370724Z
+req_type: Bug
+tags:
+- ps
+- regression
+- sessions
+filed_at:
+  code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
