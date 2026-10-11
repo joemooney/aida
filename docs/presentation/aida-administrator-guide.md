@@ -119,7 +119,8 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[orchestrator]` | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` |
 | `[advisor]` | `calibration_mode` (off/on), fork settings for the headless advisor tier |
 | `[archive]` | `auto_after_days` — opt-in auto-archive sweep on pull |
-| `[list]` | `show_hidden_hints` — footer the archived/deferred hidden-count nudges on the default `aida list` view (default `false` = quiet) |
+| `[list]` | `show_hidden_hints` — footer the archived/deferred hidden-count nudges on the default `aida list` view (default `false` = quiet); `default_sort` — order when no `--sort` is given (default `id`, natural numeric); `agent_limit` — agent-mode row cap for a bare `aida list` (default 100, 0 = unbounded, env `AIDA_LIST_LIMIT`) |
+| `[history]` | `limit` — default row count for `aida history` (default 20, env `AIDA_HISTORY_LIMIT`) |
 | `[ultraplan]` | `mode` (never / on-demand / suggested), `suggest_threshold` (`spec-thinness` default, or legacy `acceptance-bullets>N`) — whether pickup nudges `aida ultraplan` for under-specified specs (design-less, not just long) |
 | `[telemetry]` | `enabled` — local usage log on/off |
 | `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes`, `ci_auto_fix` (N in-drain fix cycles on red CI before shelve; also arms the merge-conflict rebase; default 0 = off) |

@@ -856,7 +856,22 @@ pub(crate) const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "featu
 // `count: N of M` header + a widen hint. The human TTY path is unbounded
 // (no surprise cap); an explicit `--limit`/`--all` always overrides.
 // trace:TASK-970
-pub(crate) const AGENT_LIST_DEFAULT_LIMIT: usize = 30;
+// STORY-1644: raised 30 → 100 and made configurable (`[list] agent_limit`,
+// env `AIDA_LIST_LIMIT`, 0 = unbounded); see `resolve_agent_list_limit`.
+// trace:STORY-1644 | ai:claude
+pub(crate) const AGENT_LIST_DEFAULT_LIMIT: usize = 100;
+
+/// STORY-1644: the env var that overrides `[list] agent_limit`.
+pub(crate) const AGENT_LIST_LIMIT_ENV: &str = "AIDA_LIST_LIMIT";
+
+/// STORY-1644: the built-in `aida list` sort when neither `--sort` nor
+/// `[list] default_sort` names one — natural numeric ID order.
+pub(crate) const LIST_DEFAULT_SORT: &str = "id";
+
+/// STORY-1644: every `--sort` / `[list] default_sort` value `aida list`
+/// understands (`centrality` is a hidden alias of `heft`).
+pub(crate) const LIST_SORT_VALUES: &[&str] =
+    &["id", "modified", "created", "heft", "weight", "completed"];
 
 // TASK-970: number of queued items the content-first bare `aida` (agent mode)
 // lists beneath the status snapshot. trace:TASK-970
@@ -2207,6 +2222,10 @@ pub(crate) fn list_hidden_hint_lines(
 #[path = "tests/bug_783_list_hidden_hints_tests.rs"]
 mod bug_783_list_hidden_hints_tests;
 
+#[cfg(test)]
+#[path = "tests/story_1644_list_sort_cap_tests.rs"]
+mod story_1644_list_sort_cap_tests;
+
 /// Render the agent-mode (TOON) error block for `err`, whose Debug-formatted
 /// text is `msg`. A typed error that carries its own help list renders every
 /// item, so multi-line guidance survives; anything else keeps the TASK-972
@@ -2266,6 +2285,10 @@ pub(crate) fn extract_aida_suggestion(msg: &str) -> Option<String> {
 /// `--limit`/`--all`, the machine shapes (`--short`/`--json`), the grouped
 /// `--tree` view, and the human TTY path all bypass it.
 // trace:TASK-970
+///
+/// STORY-1644: `cap` is the resolved agent cap ([`resolve_agent_list_limit`]);
+/// `0` means unbounded, so no cap applies.
+// trace:STORY-1644 | ai:claude
 pub(crate) fn agent_list_default_cap(
     limit: Option<usize>,
     all: bool,
@@ -2273,12 +2296,80 @@ pub(crate) fn agent_list_default_cap(
     json: bool,
     tree: bool,
     agent_mode: bool,
+    cap: usize,
 ) -> Option<usize> {
-    if limit.is_none() && !all && !short && !json && !tree && agent_mode {
-        Some(AGENT_LIST_DEFAULT_LIMIT)
+    if limit.is_none() && !all && !short && !json && !tree && agent_mode && cap > 0 {
+        Some(cap)
     } else {
         None
     }
+}
+
+/// STORY-1644: resolve the agent-mode `aida list` row cap from the env value
+/// (`AIDA_LIST_LIMIT`) and the `[list] agent_limit` config value. Env beats
+/// config beats [`AGENT_LIST_DEFAULT_LIMIT`]; `0` = unbounded. A value that
+/// isn't a non-negative integer is ignored (falls through to the next
+/// source). The `--limit` / `--all` flags beat all of these and are applied
+/// by the caller.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn resolve_agent_list_limit(env: Option<&str>, config: Option<i64>) -> usize {
+    if let Some(n) = env.and_then(|v| v.trim().parse::<usize>().ok()) {
+        return n;
+    }
+    match config {
+        Some(n) if n >= 0 => n as usize,
+        _ => AGENT_LIST_DEFAULT_LIMIT,
+    }
+}
+
+/// STORY-1644: resolve the `aida list` sort key. An explicit `--sort` always
+/// wins; else a recognised `[list] default_sort`; else
+/// [`LIST_DEFAULT_SORT`]. An unrecognised config value is ignored with a
+/// returned warning so the caller can print it.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn resolve_list_sort(
+    flag: Option<&str>,
+    config: Option<&str>,
+) -> (String, Option<String>) {
+    if let Some(f) = flag {
+        return (f.to_string(), None);
+    }
+    match config.map(|c| c.trim().to_ascii_lowercase()) {
+        Some(c) if LIST_SORT_VALUES.contains(&c.as_str()) || c == "centrality" => (c, None),
+        Some(c) => (
+            LIST_DEFAULT_SORT.to_string(),
+            Some(format!(
+                "warning: unknown [list] default_sort '{c}' in .aida/config.toml (expected one of: {}); using '{LIST_DEFAULT_SORT}'",
+                LIST_SORT_VALUES.join(", ")
+            )),
+        ),
+        None => (LIST_DEFAULT_SORT.to_string(), None),
+    }
+}
+
+/// STORY-1644: the one-line truncation notice for the agent-mode cap. Says
+/// what was cut, in what order, and how to see the rest — never silent.
+/// e.g. `count: 100 of 142 open — showing first 100 by id; newest hidden:
+/// --sort modified, or --limit 0`.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn agent_list_truncation_header(
+    shown: usize,
+    total: usize,
+    denom_label: &str,
+    sort: &str,
+) -> String {
+    let (hidden, widen) = match sort {
+        "id" => ("newest", "--sort modified, or --limit 0"),
+        "modified" => ("least recently modified", "--limit 0"),
+        "created" => ("oldest", "--limit 0"),
+        "completed" => ("least recently completed", "--limit 0"),
+        "heft" | "centrality" => ("least connected", "--limit 0"),
+        "weight" => ("lightest", "--limit 0"),
+        _ => ("rest", "--limit 0"),
+    };
+    format!(
+        "count: {shown} of {total} {denom_label} — showing first {shown} by {sort}; {hidden} hidden: {widen}"
+    )
 }
 
 // ── TASK-964: TOON agent-output renderers (AXI #1 token-efficient output +
@@ -6027,7 +6118,7 @@ pub(crate) fn run() -> Result<()> {
                 since.as_deref(),
                 until.as_deref(),
                 author.as_deref(),
-                *limit,
+                effective_history_limit(*limit),
             )?;
         }
         Command::History { .. } => {
@@ -17567,6 +17658,91 @@ pub(crate) fn read_list_show_hidden_hints(project_root: &std::path::Path) -> boo
         .and_then(|t| t.get("show_hidden_hints"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// STORY-1644: read a `[section] key` value from `.aida/config.toml` via the
+/// shared [`crate::kernel::read_project_config_value`] loader. Missing config
+/// file / key / unparseable TOML → `None`.
+// trace:STORY-1644 | ai:claude
+fn project_config_key(
+    project_root: &std::path::Path,
+    section: &str,
+    key: &str,
+) -> Option<toml::Value> {
+    crate::kernel::read_project_config_value(project_root)?
+        .get(section)?
+        .get(key)
+        .cloned()
+}
+
+/// STORY-1644: read `[list] default_sort` (the `aida list` order when no
+/// `--sort` is passed). `None` when unset.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn read_list_default_sort(project_root: &std::path::Path) -> Option<String> {
+    project_config_key(project_root, "list", "default_sort")
+        .and_then(|v| v.as_str().map(str::to_string))
+}
+
+/// STORY-1644: read `[list] agent_limit` (the agent-mode `aida list` row
+/// cap; 0 = unbounded). `None` when unset or not an integer.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn read_list_agent_limit(project_root: &std::path::Path) -> Option<i64> {
+    project_config_key(project_root, "list", "agent_limit").and_then(|v| v.as_integer())
+}
+
+/// STORY-1644: read `[history] limit` (the `aida history` default row
+/// count). `None` when unset or not a positive integer.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn read_history_limit(project_root: &std::path::Path) -> Option<i64> {
+    project_config_key(project_root, "history", "limit")
+        .and_then(|v| v.as_integer())
+        .filter(|n| *n > 0)
+}
+
+/// STORY-1644: resolve `aida history`'s row count: an explicit `--limit`
+/// wins, then env `AIDA_HISTORY_LIMIT`, then `[history] limit`, then the
+/// built-in default. Non-positive / unparseable env values are ignored.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn resolve_history_limit(
+    flag: Option<usize>,
+    env: Option<&str>,
+    config: Option<i64>,
+    default: usize,
+) -> usize {
+    if let Some(n) = flag {
+        return n;
+    }
+    if let Some(n) = env
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+    {
+        return n;
+    }
+    match config {
+        Some(n) if n > 0 => n as usize,
+        _ => default,
+    }
+}
+
+/// STORY-1644: `aida history`'s effective row count for this invocation —
+/// [`resolve_history_limit`] over the flag, `AIDA_HISTORY_LIMIT`, and the
+/// project's `[history] limit`.
+// trace:STORY-1644 | ai:claude
+pub(crate) fn effective_history_limit(flag: Option<usize>) -> usize {
+    let env = std::env::var("AIDA_HISTORY_LIMIT").ok();
+    let config = if flag.is_some() {
+        None
+    } else {
+        find_project_root()
+            .ok()
+            .and_then(|root| read_history_limit(&root))
+    };
+    resolve_history_limit(
+        flag,
+        env.as_deref(),
+        config,
+        crate::history_timeline::HISTORY_DEFAULT_LIMIT,
+    )
 }
 
 /// STORY-717: read `[focus] out_of_scope` from `.aida/config.toml`. Governs the
