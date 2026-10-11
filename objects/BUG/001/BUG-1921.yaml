@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:51:42.890900204Z
-modified_at: 2026-10-11T01:52:29.594715289Z
+modified_at: 2026-10-11T02:38:17.209553496Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -31,6 +31,18 @@ relationships:
   target_id: 01a128a8-5ef1-7840-a390-188db4c42ea7
   created_at: 2026-10-11T01:51:37.372306468Z
   created_by: joe
+comments:
+- id: 01a128d3-4679-7163-ab47-1fbeab6f0eef
+  author: joe
+  content: |-
+    Fresh review of PR #2489 at 0caeb65860: APPROVE. Non-blocking follow-ups:
+    (1) The rollback restores blocks.yaml from HEAD instead of from a copy taken before the claim, so it can discard uncommitted dispense-pointer edits (db_block.rs ~1337).
+    (2) The claim-commit check matches on the exact subject; a hook that rewrites it would defeat it. A trailer marker or comparing commit ids would be safer.
+    (3) If HEAD has no registry/blocks.yaml, the checkout fails silently.
+    (4) A rejected push runs reset --hard HEAD~1, which discards uncommitted store changes. This predates the PR, but a first add can now reach it.
+  created_at: 2026-10-11T02:38:17.209553496Z
+  modified_at: 2026-10-11T02:38:17.209553496Z
+  session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
 history:
 - id: 01a1264c-c714-7d90-ba47-ab9daf1e1a01
   author: joe
