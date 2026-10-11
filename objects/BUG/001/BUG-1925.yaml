@@ -20,13 +20,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:40:19.364053755Z
-modified_at: 2026-10-10T21:45:44.313482568Z
+modified_at: 2026-10-11T00:03:13.314689425Z
 req_type: Bug
 tags:
 - batch:history-2026-10-10
 - hooks
 - performance
 - templates
+comments:
+- id: 01a12845-4f22-7372-b23d-2ab62e07baf4
+  author: joe
+  content: 'Advisor 2026-10-10 17:03: operator ordered the Windows build on PR #2482 cancelled (run 38094572735). Per ADR-72 (Linux-only, supersedes ADR-65), Windows/macOS results are ignored. Do NOT re-run it or wait on it; the cancelled check is non-required. Required checks (Build (ubuntu-latest), merge-hold-gate) are green. Merge readiness now hinges only on the review verdict.'
+  created_at: 2026-10-11T00:03:13.314689425Z
+  modified_at: 2026-10-11T00:03:13.314689425Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a1278c-bf3b-7233-bbcd-54f7523e666a
   author: joe
