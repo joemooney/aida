@@ -15730,6 +15730,36 @@ mod tests {
         );
     }
 
+    // BUG-1920: `aida edit --type` must list `faq` among the accepted types.
+    // Checks the `--type` arg's own help (not the whole subcommand help) so a
+    // stray `faq` elsewhere in `aida edit --help` cannot satisfy it.
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn edit_type_help_lists_faq() {
+        let cmd = <Cli as clap::CommandFactory>::command();
+        let edit = cmd
+            .get_subcommands()
+            .find(|s| s.get_name() == "edit")
+            .expect("`edit` subcommand exists");
+        let type_arg = edit
+            .get_arguments()
+            .find(|a| a.get_long() == Some("type"))
+            .expect("`aida edit` has a --type flag");
+        let help = type_arg
+            .get_long_help()
+            .or_else(|| type_arg.get_help())
+            .map(|h| h.to_string())
+            .unwrap_or_default();
+        let types: Vec<&str> = help
+            .split(|c: char| c == ',' || c == ':' || c.is_whitespace())
+            .map(str::trim)
+            .collect();
+        assert!(
+            types.contains(&"faq"),
+            "`aida edit --type` help no longer lists faq; got:\n{help}"
+        );
+    }
+
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
     // trace:TASK-185 | ai:claude
     fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
