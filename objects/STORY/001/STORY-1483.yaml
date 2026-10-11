@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:55:24.499361019Z
-modified_at: 2026-09-29T06:28:25.428007975Z
+modified_at: 2026-10-11T07:02:01.432574607Z
 req_type: Story
 tags:
 - lanes
@@ -59,4 +59,38 @@ comments:
   created_at: 2026-09-29T06:28:25.428007975Z
   modified_at: 2026-09-29T06:28:25.428007975Z
   session_id: 01a0eb4e-6ae3-7cd1-bc89-0fd039463774
+- id: 01a129c4-bbd8-7353-9fca-c18705a8dba3
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided; blocked by STORY-1482 (which is blocked by STORY-1481); EPIC-74 V4 marks 1483 AC3 as an UNSIGNED extension.
+
+    ## Approach
+    Three small pieces once 1481/1482 exist. (1) Sync: merge the parent branch into the target branch using existing git_ops (`pull_rebase_auto_merge`-style conflict detection, git_ops.rs:395; `rebase_in_progress` 494) — default merge, `--rebase` opt-in, stop on conflict with guidance, no auto-resolve. (2) Drift: `git rev-list --count <target>..<parent>` already wrapped at git_ops.rs:1181; surface commits-behind in `handle_status_command` (status_cmd.rs:1612) inside the target worktree and in the list view, warning above `[lane] drift_warn_commits` (config key name follows the final vocabulary). (3) Land: one target→parent PR through the normal `aida pr` path with `base = parent`; on merge, promote the subtree's Done specs to Completed and deactivate the declaration. The V4 amendment says the landing must bind a squash/first-parent result tree and verified coverage before promotion, and a closed-unmerged PR preserves isolation — so promotion runs from merge evidence (`auto_bump_done_to_completed_with` step pattern, lib_part4.rs:16529), never from the PR being opened.
+
+    ## Files and functions
+    - aida-cli-lib/src/ (new) lane_sync or target_branch.rs — `sync_from_parent(root, target, parent, rebase: bool) -> SyncOutcome {Clean, Conflict(paths), NoOp}`.
+    - aida-core/src/git_ops.rs:1181 — reuse the rev-list count helper for `commits_behind(target, parent)`.
+    - aida-cli-lib/src/status_cmd.rs:1612 `handle_status_command` — drift line + threshold warning; list surface for open declarations.
+    - aida-cli-lib/src/pr_cmd.rs / forge.rs:216 `create_cmd_for_branch(branch, base)` — land = PR with base=parent; implementer cannot self-merge (existing merge-hold floors).
+    - aida-cli-lib/src/lib_part4.rs:16529 — `promote_landed_subtree(epic)` invoked when the land PR's merge SHA is on the default branch; clears the declaration last.
+
+    ## Tests (named)
+    - sync_merges_parent_cleanly / sync_stops_on_conflict_without_resolving
+    - drift_warning_above_threshold_in_status
+    - land_pr_targets_parent_branch
+    - land_merge_promotes_done_subtree_to_completed_and_clears_declaration
+    - land_pr_closed_unmerged_keeps_isolation_and_done_in_lane
+
+    ## Risks
+    - Shared-branch rebase rewrites peers' history; keep merge default.
+    - Promotion must be idempotent across clones (pull auto-bump on other clones will also see the merge).
+
+    ## Acceptance check
+    - AC1 → sync tests. AC2 → drift test. AC3 → land + promotion test. AC4 → closed-unmerged test.
+
+    ## Gate before implementation
+    STORY-1482 Completed; EPIC-74 ADR; advisor signoff for the 1483 AC3 landing extension (currently UNSIGNED per the V4 independent review).
+  created_at: 2026-10-11T07:02:01.432574607Z
+  modified_at: 2026-10-11T07:02:01.432574607Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 execution_mode: guided
