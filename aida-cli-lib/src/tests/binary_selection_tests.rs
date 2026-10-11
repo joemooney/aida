@@ -417,7 +417,7 @@ fn activate_hint_for_rebuild_gives_the_build_command() {
     let h = crate::dev_cmd::activate_marker_hint("↻", Some("debug")).expect("should hint");
     assert!(h.contains('↻'), "{h}");
     assert!(h.contains("no build matches HEAD"), "{h}");
-    assert!(h.contains("make build-fast"), "must give the remedy: {h}");
+    assert!(h.contains("aida dev build"), "must give the remedy: {h}");
     // Nothing to flip to, so it must not offer a switch.
     assert!(
         !h.contains("activate debug"),

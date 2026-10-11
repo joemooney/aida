@@ -79,7 +79,7 @@ fn decide_warns_by_default_and_refuses_under_require_head() {
     match decide(&stale, true) {
         GateDecision::Refuse(msg) => {
             assert!(msg.contains("is behind main HEAD"), "{msg}");
-            assert!(msg.contains("make build-fast"), "{msg}");
+            assert!(msg.contains("aida dev build"), "{msg}");
         }
         other => panic!("expected refuse, got {other:?}"),
     }
@@ -93,7 +93,7 @@ fn decide_unknown_never_passes_silently() {
     assert!(matches!(decide(&unknown, false), GateDecision::Warn(m) if m.contains("no sha")));
     match decide(&unknown, true) {
         GateDecision::Refuse(msg) => {
-            assert!(msg.contains("no sha") && msg.contains("make build-fast"));
+            assert!(msg.contains("no sha") && msg.contains("aida dev build"));
         }
         other => panic!("expected refuse, got {other:?}"),
     }
@@ -207,7 +207,7 @@ fn staleness_warning_only_for_behind_builds() {
         kind: ShaMatch::Ancestor,
     };
     let line = staleness_warning(&behind).expect("behind warns");
-    assert!(line.contains("behind main HEAD") && line.contains("make build-fast"));
+    assert!(line.contains("behind main HEAD") && line.contains("aida dev build"));
 
     let diverged = Freshness::Stale {
         binary_sha: "abc1234".into(),

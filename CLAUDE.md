@@ -21,12 +21,20 @@ needed.
 
 ## Develop AIDA itself
 
-Use `aida dev activate` so `aida` resolves to this checkout, and
-`aida dev deactivate` to return to the released binary. Common checks:
+There is ONE live dev binary: `~/.local/bin/{aida,aida-server}` link into
+`~/.local/share/aida/live/`, outside `target/`, so `cargo clean` or a raw build
+never touches it. `aida dev build` is the only build command: incremental
+`--profile agent` build, smoke test, then (primary checkout, clean `main` ==
+`origin/main` only) atomic promote with the old pair kept in `live/prev/`. In a
+worktree it builds and smoke-tests only; try that build with
+`aida dev activate auto`. `--clean` (or `--clean=full`) fixes a corrupt
+incremental cache, `aida dev rollback` restores the previous pair, `aida dev
+status` shows live / previous / latest-built SHAs, and `--install-links` sets up
+the PATH links once. Common checks:
 
 ```bash
 make check-ci-fast        # PRE-PUSH GATE: every CI gate needing no build (~90s)
-make build-fast
+aida dev build            # build + smoke test (+ promote from clean main)
 cargo test --workspace
 make check-ci             # the rest of CI's gates, locally, in CI's order
 ```

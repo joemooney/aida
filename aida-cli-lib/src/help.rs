@@ -196,7 +196,7 @@ pub(crate) fn command_groups() -> &'static [(&'static str, &'static [(&'static s
             &[
                 (
                     "dev",
-                    "Activate dev binary, run dev servers, install shell helpers",
+                    "Build/promote the live dev binary, activate builds, run dev servers",
                 ),
                 (
                     "help-all",

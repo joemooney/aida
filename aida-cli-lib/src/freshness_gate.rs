@@ -32,7 +32,7 @@
 //!   needs no override.
 //! - `--require-head` (or `[drain] require_head = true` in
 //!   `.aida/config.toml`) turns the warning into a REFUSAL naming the one fix:
-//!   `make build-fast`, then rerun. Unknown never passes silently under it.
+//!   `aida dev build`, then rerun. Unknown never passes silently under it.
 //!
 //! Build-and-re-exec (the spec's full shape) is DEFERRED: refusal under
 //! `--require-head` is the safe minimum, and a failed build would need its own
@@ -203,11 +203,11 @@ pub(crate) fn decide(freshness: &Freshness, require_head: bool) -> GateDecision 
             "refusing to launch the drain: {problem}.\n  \
              --require-head is set (flag or `[drain] require_head`), and a wave pins its \
              launching binary.\n  \
-             Fix: run `make build-fast`, then rerun this command."
+             Fix: run `aida dev build`, then rerun this command."
         ))
     } else {
         GateDecision::Warn(format!(
-            "{problem}; the wave will run this build (run `make build-fast` to pick up HEAD, \
+            "{problem}; the wave will run this build (run `aida dev build` to pick up HEAD, \
              or pass --require-head to refuse instead)"
         ))
     }
@@ -259,7 +259,7 @@ pub(crate) fn staleness_warning(freshness: &Freshness) -> Option<String> {
             branch,
             kind: ShaMatch::Ancestor,
         } => Some(format!(
-            "your dev aida binary (build {}) is behind {branch} HEAD ({}) — run `make build-fast`",
+            "your dev aida binary (build {}) is behind {branch} HEAD ({}) — run `aida dev build`",
             short(binary_sha),
             short(head_sha)
         )),

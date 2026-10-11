@@ -114,7 +114,10 @@ build-release: ## Build all packages (release mode, optimized)
 # sccache rejects incremental compilation, including when configured globally
 # through Cargo's build.rustc-wrapper. Disable the wrapper for this target.
 # trace:BUG-1684 | ai:codex
-build-fast: ensure-agent-skill-hooks ## Build all packages (release + incremental — for iteration, NOT shipping)
+# Build-only: it never changes the live binary in ~/.local/share/aida/live.
+# `aida dev build` runs this same build, smoke-tests it, and promotes it.
+# trace:STORY-1646 | ai:claude
+build-fast: ensure-agent-skill-hooks ## Build target/agent only (incremental; never promotes). Live binary: `aida dev build`
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
 		aida dev build-guard agent $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
