@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-11T19:16:07.943745088Z
+modified_at: 2026-10-11T20:14:33.495324529Z
 req_type: Bug
 tags:
 - contained
@@ -20,6 +20,12 @@ comments:
   content: 'ADVISOR: also carry the factory''s handoff note: the warm pool still overrides an explicit --path (PR #2534 fixed only the announcement and the boundary). Confirm, and decide whether that''s in this bug or a separate one.'
   created_at: 2026-10-11T19:16:07.943745088Z
   modified_at: 2026-10-11T19:16:07.943745088Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12c9a-5217-7941-a228-2189f8559844
+  author: joe
+  content: 'ADVISOR 13:20: item 1 DONE. The real-claude boundary test passes (see BUG-1928). NEW required fix for item 1: the test must give the claude child the operator''s real home, or it can''t authenticate (test_home.rs redirects HOME for the whole lib test binary). Take the real home from the AIDA_LIB_TEST_REAL_HOMES fence (or a dedicated accessor in test_home.rs) and .env("HOME", real) on the claude Command only. Acceptance: AIDA_TEST_REAL_CLAUDE=1 cargo test ... real_claude_contained passes with no wrapper.'
+  created_at: 2026-10-11T20:14:33.495324529Z
+  modified_at: 2026-10-11T20:14:33.495324529Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
