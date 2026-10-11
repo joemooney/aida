@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:25:26.854357322Z
-modified_at: 2026-10-11T08:03:27.828850872Z
+modified_at: 2026-10-11T08:04:22.370891329Z
 req_type: Story
 tags:
 - batch:history-2026-10-10
@@ -58,6 +58,12 @@ comments:
   created_at: 2026-10-11T06:27:06.043594451Z
   modified_at: 2026-10-11T06:27:06.043594451Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a129fd-d0e2-7170-bc0f-6fc18f8acc33
+  author: joe
+  content: 'MERGED 2026-10-11 01:03 (night orchestrator): PR #2491 squash-merged as 36c906f453 at head ad6b4ad602, after green CI and an APPROVE fresh review that covered the operator checklist: the 8 earlier findings resolved, STORY-1644 test not weakened, the templates --full change legitimate, goldens independent of the git version. FLOW_CATCH_UP_CAP=16, set from measurement. Review minors filed as BUG-1954.'
+  created_at: 2026-10-11T08:04:22.370891329Z
+  modified_at: 2026-10-11T08:04:22.370891329Z
+  session_id: a47a8d85-4c7b-44ec-a11d-11e90391d64d
 history:
 - id: 01a12787-3037-7b63-aef6-030b51d0f49c
   author: joe
