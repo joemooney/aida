@@ -16,17 +16,26 @@ description: |-
   (b) Bulk session end (any loop or script) is safe by default, because (a) applies per session.
   (c) Releasing a lease never reverts the spec status while its branch has an open PR (shared with BUG-1944 a).
   (d) A test with a fake live process inside the worktree.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:15:16.929822029Z
-modified_at: 2026-10-11T05:15:16.929822029Z
+modified_at: 2026-10-11T06:27:59.489117229Z
 req_type: Bug
 tags:
+- batch:night-2026-10-10
 - data-safety
 - sessions
 - worktree
+history:
+- id: 01a129a5-9381-7d03-a327-42ae5b997c03
+  author: joe
+  timestamp: 2026-10-11T06:27:59.489107216Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b01c8752e723bd4687af197177043859bdec05ae
   branch: main
