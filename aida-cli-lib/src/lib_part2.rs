@@ -1028,6 +1028,13 @@ pub(crate) struct SessionLease {
     // trace:TASK-1518 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) interrupted_reason: Option<String>,
+    /// The driver this lease's session works for (`relay:<run>`, ...), read
+    /// from `AIDA_RELAY_RUN` / `AIDA_DRIVER` when the lease was minted. Lets
+    /// a lease whose own process is gone read as driven while its driver is
+    /// live. Optional; older leases parse without it.
+    // trace:STORY-1653 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) driver: Option<String>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -1155,6 +1162,7 @@ pub(crate) fn session_harness_worktree_register(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;

@@ -121,6 +121,8 @@ pub(crate) fn command_groups() -> &'static [(&'static str, &'static [(&'static s
                 ("mailbox", "Inter-agent peer↔peer messaging"),
                 ("node", "Per-clone node identity"),
                 ("advisor", "Live-advisor registration"),
+                // trace:STORY-1653 | ai:claude
+                ("driver", "Relay / drain / agent driver registry"),
             ],
         ),
         (

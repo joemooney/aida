@@ -49,6 +49,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 

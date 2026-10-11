@@ -31,6 +31,7 @@ fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     };
     std::fs::write(
         dir.join(format!("{}.toml", id)),

@@ -9550,6 +9550,13 @@ pub enum Command {
         #[clap(long, alias = "tag")]
         tags: Option<String>,
 
+        /// Show only in-progress specs whose derived driver is this kind:
+        /// relay, drain, agent, queued or idle. The driver is shown beside
+        /// the status of every in-progress row.
+        // trace:STORY-1653 | ai:claude
+        #[clap(long, value_name = "KIND")]
+        driver: Option<String>,
+
         /// Show only machine-filed auto-complete failure drafts. Plain
         /// `aida list --status draft` shows human-filed drafts so advisor
         /// grooming is not dominated by orchestrator records. Machine drafts
@@ -11843,6 +11850,14 @@ pub enum Command {
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
+
+    /// Register, refresh, deregister and list drivers — long-running relays,
+    /// drains and agents that work in-progress specs. `aida ps` and
+    /// `aida list` show the driver beside each in-progress spec's status.
+    /// Operator/developer surface.
+    // trace:STORY-1653 | ai:claude
+    #[clap(subcommand)]
+    Driver(crate::driver_cmd::DriverCommand),
 
     /// Diagnose and heal AIDA multi-agent state drift. Report-only by
     /// design: exit 0 means the scan RAN, not that it found nothing —

@@ -2097,6 +2097,7 @@ pub(crate) fn session_start(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.

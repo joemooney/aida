@@ -195,6 +195,27 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 
 ---
 
+### `aida driver`
+
+**One line** — register the long-running loops (relays, drains, headless agents) that work in-progress specs, so every view can say *who* is driving each one.
+
+**Mental model.** A spec's status says *what stage* it is at; it does not say whether anything is working it right now. A session lease answers that for one interactive seat, but a relay that cycles through a batch of specs outlives every child it spawns, so a dead child pid used to make a perfectly healthy spec look abandoned. The driver registry fixes that. A driver writes a small record under `.aida/drivers/` with its pid and, optionally, the tag selector it works through (`batch:next`). From that registry, the leases, the live drain lock and the spec's batch tags, AIDA *derives* one driver per in-progress spec on every read, and never stores it on the spec. The readings are `relay:<run>`, `drain:<pid>`, `agent:<session>`, `queued (batch:X)` (in a batch whose driver is not running) or `idle <age>` (nothing is working it). `aida ps` and `aida list` print the driver beside the status (`In Progress · relay:lib-split`), and their JSON/TOON carry it as separate `driver` and `driver_kind` fields. A spec a live driver covers is never framed as stalled or orphaned, even when its own lease pid has exited.
+
+**Reach for it when** — you are writing or running a loop that drives specs without a human seat. Call `aida driver register` when it starts and again on every iteration (each call refreshes the heartbeat), and call `aida driver deregister` when it exits cleanly. Export `AIDA_RELAY_RUN=<run>` (or `AIDA_DRIVER=<kind>:<id>`) in the loop's environment, and every worktree, claim and session it starts records that driver on its lease, so the attribution survives even when no batch tag links them. Use `aida driver list` to see what is registered and which records are still live.
+
+**Don't reach for it when** — you are an interactive seat working one spec. Your session lease already makes you `agent:<session>`, so there is nothing to register. Nor is it a cleanup tool: a dead driver's record is harmless (it simply reads as not live), readers never delete it, and `deregister` only removes the record you name.
+
+**Key options (rationale only).**
+- `register --tag` — the selector that links a relay to the specs it will work. An in-progress spec carrying that tag resolves to the relay while it is live, and to `queued (batch:X)` once it is not.
+- `register --pid` — the driver's own long-lived pid, which defaults to the invoking shell. A record is live only while that pid is alive *and* its heartbeat is fresh (15 minutes by default, `--ttl` to override), so a recycled pid or a wedged loop both age out on their own.
+- `list` — every record with its live/not-live reading and heartbeat age. A record that reads not live is a driver that exited or stopped heartbeating; its specs fall back to `queued` or `idle` in the other views.
+
+**Gotchas.** The driver is an operator/developer surface: the record is local runtime state, not synced across clones. "Idle" is measured from the newer of the lease start and the spec's last modification; branch commits do not count yet.
+
+**Chains with** — `aida ps` and `aida list` show the derived driver; `aida session start` and `aida worktree add` stamp the lease from `AIDA_RELAY_RUN`/`AIDA_DRIVER`.
+
+---
+
 ## Where to go next
 
 You now own the seat model and the coordination substrates: who's wearing which hat, who holds which scoped work, and how agents are launched and talk to each other. Next:
