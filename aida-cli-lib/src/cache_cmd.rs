@@ -334,6 +334,10 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
     if st.indexer_running {
         out.push("History indexer:  running now".to_string());
     }
+    // trace:BUG-1923 | ai:claude
+    if let Some(lag) = st.lag {
+        out.push(format!("History lag:      {lag} commit(s) behind HEAD"));
+    }
     let fresh = st.tip.is_some() && st.tip == st.head;
     out.push(if fresh && st.complete {
         format!("History status:   {}", "FRESH".green())
@@ -342,6 +346,12 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
             "History status:   {} — recent history is served from the index; \
              older queries read git directly until it finishes",
             "FILLING".yellow()
+        )
+    } else if st.catch_up_stalled {
+        format!(
+            "History status:   {} — catching up stalled; `aida history` reads git \
+             directly until `aida cache rebuild --history` brings it up to date",
+            "BEHIND".yellow()
         )
     } else {
         format!(

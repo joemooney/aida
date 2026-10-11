@@ -74,9 +74,20 @@ const BUDGETED_BACKFILL_CHUNK: usize = 128;
 /// Back-fill chunk size for an explicit, unbudgeted full build.
 const FULL_BUILD_CHUNK: usize = 2000;
 
-/// How many candidate chunk boundaries a budgeted catch-up probes before
-/// giving up and rolling back (only merges can make a boundary invalid).
-const MAX_BOUNDARY_PROBES: usize = 32;
+/// Catch-up chunk size: commits appended per transaction before the next
+/// boundary commit. A budgeted call always keeps at least one chunk, so a
+/// budget spent on start-up still moves the tip forward (BUG-1923).
+// trace:BUG-1923 | ai:claude
+const CATCH_UP_CHUNK: usize = 256;
+
+/// Consecutive inline catch-ups that kept nothing (an error, or a process
+/// killed mid-chunk) after which queries stop paying the budget for it and
+/// print a hint to rebuild instead.
+// trace:BUG-1923 | ai:claude
+const CATCH_UP_STALL_LIMIT: u32 = 3;
+
+/// Meta key counting consecutive inline catch-ups that kept nothing.
+const CATCH_UP_FAILURES_KEY: &str = "catch_up_failures";
 
 /// Short retry ladder for a busy database. A reader never waits long: it
 /// falls back to the git walk instead.
@@ -130,23 +141,33 @@ thread_local! {
 
 #[cfg(test)]
 thread_local! {
-    /// Tests: how many catch-up boundary probes (`rev-list --count`) ran.
-    static BOUNDARY_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: a catch-up chunk size other than [`CATCH_UP_CHUNK`].
+    static CATCH_UP_CHUNK_OVERRIDE: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+    /// Tests: make the next catch-up fail before it appends anything.
+    static FAIL_NEXT_CATCH_UP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Count one catch-up boundary probe (tests read the count). Always true,
-/// so it can sit in a condition chain.
-// trace:TASK-1507 | ai:claude
-fn count_boundary_probe() -> bool {
+/// The catch-up chunk size (tests may override it).
+// trace:BUG-1923 | ai:claude
+fn catch_up_chunk() -> usize {
     #[cfg(test)]
-    BOUNDARY_PROBES.with(|c| c.set(c.get() + 1));
-    true
+    if let Some(n) = CATCH_UP_CHUNK_OVERRIDE.with(|c| c.get()) {
+        return n.max(1);
+    }
+    CATCH_UP_CHUNK
 }
 
-/// Tests: take (and reset) the boundary-probe count.
+/// Tests: set (or with `None`, clear) the catch-up chunk size.
 #[cfg(test)]
-pub(crate) fn take_boundary_probes() -> usize {
-    BOUNDARY_PROBES.with(|c| c.replace(0))
+pub(crate) fn set_catch_up_chunk(n: Option<usize>) {
+    CATCH_UP_CHUNK_OVERRIDE.with(|c| c.set(n));
+}
+
+/// Tests: make the next catch-up fail.
+#[cfg(test)]
+pub(crate) fn fail_next_catch_up() {
+    FAIL_NEXT_CATCH_UP.with(|c| c.set(true));
 }
 
 #[cfg(test)]
@@ -1063,6 +1084,13 @@ pub(crate) struct HistoryCacheStatus {
     pub(crate) updated_at: Option<String>,
     pub(crate) last_reset_reason: Option<String>,
     pub(crate) indexer_running: bool,
+    /// Commits in `tip..head` when the tip is behind HEAD on its line;
+    /// `None` when fresh, unknown, or not an ancestor of HEAD.
+    // trace:BUG-1923 | ai:claude
+    pub(crate) lag: Option<usize>,
+    /// True when inline catch-up has paused after repeated attempts that
+    /// kept nothing; queries read git until a rebuild.
+    pub(crate) catch_up_stalled: bool,
 }
 
 /// Outcome of an explicit full build.
@@ -1185,7 +1213,7 @@ impl HistoryCache {
                         != recorded
                 };
                 if aida_core::git_ops::is_ancestor(store, &tip, head)? {
-                    let _ = self.catch_up(store, &tip, head, budget)?;
+                    self.catch_up_guarded(store, &tip, head, budget)?;
                 } else if aida_core::git_ops::is_ancestor(store, head, &tip)? {
                     // trace:TASK-1507 | ai:claude
                     // A reader behind the shared index: fall back, no reset.
@@ -1213,6 +1241,42 @@ impl HistoryCache {
         if self.meta("complete")?.as_deref() != Some("1") && !budget.expired() {
             self.backfill(store, budget)?;
         }
+        Ok(())
+    }
+
+    /// Inline catch-up with a stall guard. Each budgeted attempt is counted
+    /// in its own write before it starts, and any chunk it keeps clears the
+    /// count (in [`Self::finish_append`]). After [`CATCH_UP_STALL_LIMIT`]
+    /// attempts in a row that kept nothing (each failed or was killed
+    /// before its first chunk), queries stop paying for catch-up and print
+    /// a one-line hint to rebuild instead; the git walk still answers them.
+    /// An unbounded caller (rebuild) always runs.
+    // trace:BUG-1923 | ai:claude
+    fn catch_up_guarded(
+        &mut self,
+        store: &Path,
+        tip: &str,
+        head: &str,
+        budget: Budget,
+    ) -> Result<()> {
+        if budget.is_unbounded() {
+            self.catch_up(store, tip, head, budget)?;
+            return Ok(());
+        }
+        let failures: u32 = self
+            .meta(CATCH_UP_FAILURES_KEY)?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        if failures >= CATCH_UP_STALL_LIMIT {
+            stalled_hint();
+            return Ok(());
+        }
+        Self::set_meta(
+            &self.conn,
+            CATCH_UP_FAILURES_KEY,
+            &(failures + 1).to_string(),
+        )?;
+        self.catch_up(store, tip, head, budget)?;
         Ok(())
     }
 
@@ -1262,10 +1326,26 @@ impl HistoryCache {
     }
 
     /// Append `tip..head`, oldest first. Returns whether it reached `head`.
-    /// Under a budget it commits only at a boundary commit `C` whose
+    ///
+    /// It commits in chunks, each ending at a boundary commit `C` whose
     /// ancestors in the range are exactly the rows indexed so far, so the
     /// indexed set stays ancestor-closed and `tip_sha` stays meaningful.
+    /// The budget is checked only after a chunk is committed, so every call
+    /// keeps at least one chunk (or the whole gap, if smaller): a budget
+    /// spent before the first commit is decoded still moves the tip a
+    /// chunk forward, and an interrupted call keeps the chunks before it.
+    ///
+    /// Boundaries are found in-process. `--reverse --topo-order` lists every
+    /// in-range ancestor of a commit before it, so `C` is a boundary exactly
+    /// when it is the only commit appended so far with no appended child,
+    /// and it descends from the old tip (B4). No git probe is needed, which
+    /// replaces the old probe limit (N6) and merge-only probing (B6).
+    // trace:BUG-1923 | ai:claude
     fn catch_up(&mut self, store: &Path, tip: &str, head: &str, budget: Budget) -> Result<bool> {
+        #[cfg(test)]
+        if FAIL_NEXT_CATCH_UP.with(|c| c.replace(false)) {
+            anyhow::bail!("test: catch-up failed");
+        }
         let range = format!("{tip}..{head}");
         let total = aida_core::git_ops::rev_list_count(store, &range)?;
         let mut stream = LogStream::spawn(
@@ -1274,17 +1354,20 @@ impl HistoryCache {
             None,
         )?;
         let mut blobs = BlobReader::spawn(store)?;
-        let tx = self.conn.transaction()?;
+        let chunk = catch_up_chunk();
+        let mut tx = self.conn.transaction()?;
         let mut next_seq: i64 =
             tx.query_row("SELECT COALESCE(MAX(seq) + 1, 0) FROM commits", [], |r| {
                 r.get(0)
             })?;
         let mut indexed = 0usize;
-        let mut probes = 0usize;
+        // Appended commits with no appended child yet, and appended commits
+        // that descend from the old tip.
+        let mut heads: HashSet<String> = HashSet::new();
+        let mut descends: HashSet<String> = HashSet::new();
+        // Per uncommitted chunk.
+        let mut pending = 0usize;
         let mut new_root = false;
-        // Descendants of the old tip in the range, computed once the probe
-        // limit is hit (N6).
-        let mut descendants: Option<HashSet<String>> = None;
         let mut seen: Vec<(String, i64, Vec<String>)> = Vec::new();
         while let Some(raw) = stream.next_commit()? {
             let dec = decode_commit(&raw, &mut blobs)?;
@@ -1294,60 +1377,14 @@ impl HistoryCache {
             seen.push((raw.sha.clone(), raw.commit_ts, raw.parents.clone()));
             next_seq += 1;
             indexed += 1;
+            pending += 1;
             new_root |= raw.parents.is_empty();
-            if indexed < total && budget.expired() {
-                if probes >= MAX_BOUNDARY_PROBES {
-                    // trace:TASK-1507 | ai:claude
-                    // N6: no valid boundary within the probe limit (a long
-                    // side branch). Rather than roll back and redo the same
-                    // work next time, keep appending past the budget and
-                    // probe only descendants of the old tip, the only
-                    // commits that can be a boundary (normally the merge).
-                    if descendants.is_none() {
-                        let range = format!("{tip}..{head}");
-                        descendants = Some(
-                            git_lines(store, &["rev-list", "--ancestry-path", &range])?
-                                .into_iter()
-                                .collect(),
-                        );
-                    }
-                    let is_desc = descendants.as_ref().is_some_and(|d| d.contains(&raw.sha));
-                    // B6: probe only merges. Every earlier descendant was
-                    // already probed (the budget had expired), so a valid
-                    // non-merge boundary's parent, appended just before it,
-                    // would have been valid first. Probing every descendant
-                    // made this path quadratic.
-                    if is_desc
-                        && raw.parents.len() > 1
-                        && count_boundary_probe()
-                        && aida_core::git_ops::rev_list_count(
-                            store,
-                            &format!("{tip}..{}", raw.sha),
-                        )? == indexed
-                    {
-                        record_skew_for(&tx, store, &seen)?;
-                        Self::finish_append(&tx, &raw, new_root.then_some(store))?;
-                        tx.commit()?;
-                        return Ok(false);
-                    }
-                    continue;
-                }
-                probes += 1;
-                count_boundary_probe();
-                // trace:TASK-1507 | ai:claude
-                // B4: the batch must also descend from the old tip, or the
-                // new tip could land on a side branch whose ancestors are
-                // not exactly the indexed rows.
-                let closed =
-                    aida_core::git_ops::rev_list_count(store, &format!("{tip}..{}", raw.sha))?
-                        == indexed
-                        && aida_core::git_ops::is_ancestor(store, tip, &raw.sha)?;
-                if closed {
-                    record_skew_for(&tx, store, &seen)?;
-                    Self::finish_append(&tx, &raw, new_root.then_some(store))?;
-                    tx.commit()?;
-                    return Ok(false);
-                }
+            for p in &raw.parents {
+                heads.remove(p);
+            }
+            heads.insert(raw.sha.clone());
+            if raw.parents.iter().any(|p| p == tip || descends.contains(p)) {
+                descends.insert(raw.sha.clone());
             }
             if indexed == total {
                 if raw.sha != head {
@@ -1360,6 +1397,19 @@ impl HistoryCache {
                 Self::finish_append(&tx, &raw, new_root.then_some(store))?;
                 tx.commit()?;
                 return Ok(true);
+            }
+            let boundary = heads.len() == 1 && descends.contains(&raw.sha);
+            if pending >= chunk && boundary {
+                record_skew_for(&tx, store, &seen)?;
+                Self::finish_append(&tx, &raw, new_root.then_some(store))?;
+                tx.commit()?;
+                if budget.expired() {
+                    return Ok(false);
+                }
+                tx = self.conn.transaction()?;
+                pending = 0;
+                new_root = false;
+                seen.clear();
             }
         }
         Err(inconsistent(format!(
@@ -1374,6 +1424,8 @@ impl HistoryCache {
         Self::set_meta(tx, "last_append_at", &now)?;
         Self::set_meta(tx, "updated_at", &now)?;
         Self::set_meta(tx, "indexer_pid", &std::process::id().to_string())?;
+        // trace:BUG-1923 | ai:claude
+        tx.execute("DELETE FROM meta WHERE key = ?1", [CATCH_UP_FAILURES_KEY])?;
         if let Some(store) = roots_from {
             // A sync joined another root into the store's history.
             let roots = aida_core::git_ops::root_commits(store, &newest.sha)?.join(",");
@@ -1733,10 +1785,14 @@ impl HistoryCache {
         }
         // R3: a child older than its parent reorders git's walk (and stops
         // its `--since`) anywhere in [child_ts, parent_ts].
-        let lower = [boundary.map(|b| b.0), since_ts]
-            .into_iter()
-            .flatten()
-            .min();
+        //
+        // Only the served window matters: when the answer is cut at the
+        // limit, ties and skew below the cut boundary cannot hide or
+        // reorder a commit above it (an edge that could has parent_ts at or
+        // above the boundary), so `--since` must not widen the check to
+        // its whole span. Uncut, the lower edge is `since` itself.
+        // trace:BUG-1923 | ai:claude
+        let lower = boundary.map(|b| b.0).or(since_ts);
         let skewed: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM skew WHERE ?1 IS NULL OR parent_ts >= ?1)",
             [lower],
@@ -1782,6 +1838,19 @@ fn debug_log(err: &anyhow::Error) {
         && !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed)
     {
         eprintln!("history index unavailable, reading git history directly: {err:#}");
+    }
+}
+
+/// Tell the user (once per process) that inline catch-up is paused.
+// trace:BUG-1923 | ai:claude
+fn stalled_hint() {
+    static SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !SHOWN.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        eprintln!(
+            "note: the history index has fallen behind the store and is not catching up; \
+             run `aida cache rebuild --history` to bring it up to date \
+             (until then `aida history` reads git directly)"
+        );
     }
 }
 
@@ -2018,6 +2087,16 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
         st.last_reset_reason = cache.meta("last_reset_reason")?;
         st.commits = cache.count("commits")?;
         st.events = cache.count("events")?;
+        // trace:BUG-1923 | ai:claude
+        st.catch_up_stalled = cache
+            .meta(CATCH_UP_FAILURES_KEY)?
+            .and_then(|v| v.parse::<u32>().ok())
+            .is_some_and(|n| n >= CATCH_UP_STALL_LIMIT);
+        if let (Some(tip), Some(head)) = (&st.tip, &st.head) {
+            if tip != head && aida_core::git_ops::is_ancestor(store, tip, head).unwrap_or(false) {
+                st.lag = aida_core::git_ops::rev_list_count(store, &format!("{tip}..{head}")).ok();
+            }
+        }
         st.floor_commit_at = cache
             .conn
             .query_row(

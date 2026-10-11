@@ -13027,8 +13027,19 @@ pub(crate) fn history_index_doctor_line(
     }
     let fresh = st.tip.is_some() && st.tip == st.head;
     if !fresh {
+        // trace:BUG-1923 | ai:claude
+        let by = st
+            .lag
+            .map(|n| format!(" by {n} commit(s)"))
+            .unwrap_or_default();
+        if st.catch_up_stalled {
+            return format!(
+                "history index behind the store{by}{running} and not catching up — \
+                 run `aida cache rebuild --history`."
+            );
+        }
         return format!(
-            "history index behind the store{running} — it catches up on the next \
+            "history index behind the store{by}{running} — it catches up on the next \
              `aida history` query."
         );
     }

@@ -662,8 +662,11 @@ fn history_cache_budgeted_catch_up_commits_only_an_ancestor_closed_prefix() {
         fx.put(&s);
         added.push(fx.commit("update STORY-12"));
     }
-    // A zero budget indexes one commit, then must stop at a valid boundary.
+    // A zero budget keeps one chunk (here one commit), then must stop at a
+    // valid boundary.
+    history_cache::set_catch_up_chunk(Some(1));
     test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+    history_cache::set_catch_up_chunk(None);
     let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
     assert_ne!(tip, fx.head(), "a zero budget cannot reach HEAD");
     assert_ne!(tip, old_tip, "the first commit is kept, not rolled back");
@@ -2168,7 +2171,9 @@ fn task_1507_budgeted_catch_up_never_moves_the_tip_onto_a_side_branch() {
     let old_tip = fx.head();
     history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
     fx.git(&["checkout", "-q", "aida-store"]);
+    history_cache::set_catch_up_chunk(Some(1));
     test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+    history_cache::set_catch_up_chunk(None);
     let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
     let is_anc = |a: &str, b: &str| {
         Command::new("git")
@@ -3275,9 +3280,11 @@ mod sweep {
 
     #[test]
     fn task_1507_long_side_branch_commits_at_the_merge_before_head() {
-        // T4: the N6 path's own commit: the first zero-budget call must
-        // stop AT the merge (not roll back, not only reach HEAD).
+        // T4: with one-commit chunks, the first zero-budget call must stop
+        // AT the merge (the first boundary; not roll back, not only reach
+        // HEAD).
         let (d, m, h) = long_side_then_more(60, 5);
+        history_cache::set_catch_up_chunk(Some(1));
         test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
         assert_eq!(
             test_support::meta(&d.fx.db, "tip_sha").as_deref(),
@@ -3288,6 +3295,7 @@ mod sweep {
             test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO))
                 .unwrap();
         }
+        history_cache::set_catch_up_chunk(None);
         assert_eq!(
             test_support::meta(&d.fx.db, "tip_sha").as_deref(),
             Some(h.as_str())
@@ -3295,7 +3303,7 @@ mod sweep {
         assert_parity(&d.fx, &opts(), "after the long side branch");
     }
 
-    fn fast_import(store: &Path, stream: &str) {
+    pub(super) fn fast_import(store: &Path, stream: &str) {
         use std::io::Write;
         let mut ch = Command::new("git")
             .arg("-C")
@@ -3316,8 +3324,8 @@ mod sweep {
     fn task_1507_catch_up_past_the_probe_cap_probes_only_merges() {
         // B6: HEAD fast-forwards to another hub's merge whose FIRST parent
         // forked before our tip. Reverse topo lists that foreign line, then
-        // K of our descendants that can never be a boundary. Past the probe
-        // cap only merges are probed, so the cost stays bounded.
+        // K of our descendants that can never be a boundary. The boundary
+        // rule needs no git probe, so this is one pass to HEAD.
         const K: usize = 500;
         let fx = Fixture::new();
         let mut s = String::new();
@@ -3368,17 +3376,11 @@ mod sweep {
         fx.git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
         history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
         fx.git(&["update-ref", "refs/heads/aida-store", &head]);
-        history_cache::take_boundary_probes();
         test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
-        let probes = history_cache::take_boundary_probes();
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
             Some(head.as_str()),
             "one zero-budget call reaches HEAD"
-        );
-        assert!(
-            probes <= 40,
-            "{probes} boundary probes for {K} non-boundary descendants"
         );
     }
 }
@@ -3463,4 +3465,312 @@ fn spec_441_far_future_until_parity() {
     assert_eq!(events_since.len(), 1);
     assert_eq!(events_since[0].spec_id, "FR-2");
     assert_parity(&fx, &o_since, "since exact 2026 timestamp");
+}
+
+/// BUG-1923: a history index thousands of commits behind HEAD must catch
+/// up in bounded, durable steps under a budget, report its lag, and stop
+/// paying for inline catch-up that keeps failing.
+// trace:BUG-1923 | ai:claude
+mod bug_1923 {
+    use super::*;
+
+    const SPEC_IDS: [&str; 5] = ["FR-1", "FR-2", "STORY-3", "BUG-4", "EPIC-5"];
+
+    /// A fast-import stream builder: every commit edits one spec (so it
+    /// decodes to an event) at a unique, increasing time (no ties, no skew,
+    /// so the index serves every window once it is fresh).
+    struct Stream {
+        s: String,
+        mark: usize,
+        t: i64,
+        specs: BTreeMap<&'static str, Spec>,
+    }
+
+    impl Stream {
+        fn new() -> Self {
+            let specs = SPEC_IDS
+                .iter()
+                .zip(["Functional", "Functional", "Story", "Bug", "Epic"])
+                .map(|(id, ty)| (*id, Spec::new(id, ty, "synthetic")))
+                .collect();
+            Stream {
+                s: String::new(),
+                mark: 0,
+                t: BASE_TS,
+                specs,
+            }
+        }
+
+        fn blob(&mut self, id: &'static str) -> String {
+            let rel = aida_core::object_store::relative_object_path(id).unwrap();
+            let y = self.specs[id].yaml();
+            format!("M 644 inline {}\ndata {}\n{y}\n", rel, y.len())
+        }
+
+        /// A commit on `branch` with `parents`, editing spec `id` (and
+        /// writing `carry` unchanged, so a merge keeps the side's version).
+        fn commit(
+            &mut self,
+            branch: &str,
+            parents: &[usize],
+            id: &'static str,
+            carry: &[&'static str],
+        ) -> usize {
+            self.mark += 1;
+            self.t += 1;
+            let n = self.mark;
+            self.specs.get_mut(id).unwrap().description = format!("v{n}");
+            self.s.push_str(&format!(
+                "commit refs/heads/{branch}\nmark :{n}\ncommitter a <a@b> {} +0000\ndata 3\nc{}\n",
+                self.t,
+                n % 10
+            ));
+            if let Some(p) = parents.first() {
+                self.s.push_str(&format!("from :{p}\n"));
+            }
+            for p in parents.iter().skip(1) {
+                self.s.push_str(&format!("merge :{p}\n"));
+            }
+            for c in carry.iter().chain([&id]) {
+                let b = self.blob(c);
+                self.s.push_str(&b);
+            }
+            n
+        }
+    }
+
+    /// A store whose HEAD is more than 3,000 commits past an indexed tip,
+    /// with merges in the gap: short side branches forked after the tip,
+    /// and one side forked BEFORE the tip (the shape that has no chunk
+    /// boundary until its merge). Returns (fixture, old tip, head).
+    fn far_behind() -> (Fixture, String, String) {
+        let fx = Fixture::new();
+        let mut st = Stream::new();
+        let mut main = 0usize;
+        let mut fork_before = 0usize;
+        for i in 0..20 {
+            let parents: Vec<usize> = if main == 0 { vec![] } else { vec![main] };
+            // The root commit adds every spec, so later edits are changes.
+            let carry: Vec<&'static str> = if i == 0 {
+                SPEC_IDS[1..].to_vec()
+            } else {
+                vec![]
+            };
+            main = st.commit("aida-store", &parents, "FR-1", &carry);
+            if i == 10 {
+                fork_before = main;
+            }
+        }
+        let old_tip_mark = main;
+        st.s.push_str(&format!("reset refs/tags/OLD\nfrom :{old_tip_mark}\n"));
+        // The side forked before the old tip, committed now (later times).
+        let mut early = fork_before;
+        for _ in 0..5 {
+            early = st.commit("early", &[early], "EPIC-5", &[]);
+        }
+        let mut n = 0usize;
+        while n < 3_100 {
+            main = st.commit("aida-store", &[main], SPEC_IDS[n % 3], &[]);
+            n += 1;
+            if n % 400 == 0 {
+                // A short side branch merged two main commits later.
+                let mut side = main;
+                for _ in 0..3 {
+                    side = st.commit("side", &[side], "BUG-4", &[]);
+                }
+                for _ in 0..2 {
+                    main = st.commit("aida-store", &[main], "FR-1", &[]);
+                    n += 1;
+                }
+                main = st.commit("aida-store", &[main, side], "FR-2", &["BUG-4"]);
+                n += 1;
+            }
+            if n == 1_500 {
+                main = st.commit("aida-store", &[main, early], "FR-2", &["EPIC-5"]);
+                n += 1;
+            }
+        }
+        sweep::fast_import(&fx.store, &st.s);
+        fx.git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+        let head = fx.git(&["rev-parse", "aida-store"]).trim().to_string();
+        let old = fx.git(&["rev-parse", "OLD"]).trim().to_string();
+        (fx, old, head)
+    }
+
+    fn is_ancestor(fx: &Fixture, a: &str, b: &str) -> bool {
+        Command::new("git")
+            .arg("-C")
+            .arg(&fx.store)
+            .args(["merge-base", "--is-ancestor", a, b])
+            .status()
+            .unwrap()
+            .success()
+    }
+
+    #[test]
+    fn bug_1923_far_behind_index_reaches_head_in_bounded_budgeted_queries() {
+        let (fx, old, head) = far_behind();
+        let gap: usize = fx
+            .git(&["rev-list", "--count", &format!("{old}..{head}")])
+            .trim()
+            .parse()
+            .unwrap();
+        let merges: usize = fx
+            .git(&["rev-list", "--merges", "--count", &format!("{old}..{head}")])
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(gap >= 3_000, "fixture gap {gap}");
+        assert!(merges >= 5, "fixture merges {merges}");
+
+        // A complete index at the old tip, then HEAD moves on.
+        fx.git(&["update-ref", "refs/heads/aida-store", &old]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        fx.git(&["update-ref", "refs/heads/aida-store", &head]);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert_eq!(st.lag, Some(gap), "status reports the lag");
+
+        // Budgeted queries (a zero budget: everything past start-up is
+        // over budget) must each keep durable progress and reach HEAD in
+        // a bounded number of calls. The old code kept one commit per call.
+        let bound = gap.div_ceil(256) + 3;
+        let mut prev_tip = old.clone();
+        let mut prev_commits = test_support::commit_count(&fx.db);
+        let mut calls = 0;
+        while test_support::meta(&fx.db, "tip_sha").as_deref() != Some(head.as_str()) {
+            calls += 1;
+            assert!(calls <= bound, "not at HEAD after {bound} budgeted queries");
+            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
+            let commits = test_support::commit_count(&fx.db);
+            assert!(
+                commits > prev_commits && tip != prev_tip,
+                "query {calls} kept no progress ({prev_commits} -> {commits} commits)"
+            );
+            assert!(
+                is_ancestor(&fx, &prev_tip, &tip),
+                "query {calls}: the tip moved off its line"
+            );
+            let lag = history_cache::status_at(&fx.store, &fx.db).lag;
+            assert!(lag.is_none_or(|l| l < gap), "lag shrinks: {lag:?}");
+            prev_tip = tip;
+            prev_commits = commits;
+        }
+        assert!(calls >= 2, "the fixture should need more than one query");
+        assert_eq!(history_cache::status_at(&fx.store, &fx.db).lag, None);
+        assert_parity(&fx, &opts(), "caught up from far behind");
+    }
+
+    #[test]
+    fn bug_1923_repeated_catch_up_failures_pause_inline_catch_up_until_rebuild() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Stall");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let old = fx.head();
+        for st in ["Approved", "Done", "Draft"] {
+            s.status = st.into();
+            fx.put(&s);
+            fx.commit("update STORY-1");
+        }
+        let failures = || test_support::meta(&fx.db, "catch_up_failures");
+
+        // Three failed attempts in a row pause inline catch-up.
+        for n in 1..=3 {
+            history_cache::fail_next_catch_up();
+            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert_eq!(failures(), Some(n.to_string()));
+        }
+        assert_eq!(failures().as_deref(), Some("3"));
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled);
+        assert_eq!(st.lag, Some(3));
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(
+            lines.contains("History lag:      3 commit(s) behind HEAD"),
+            "{lines}"
+        );
+        assert!(lines.contains("stalled"), "{lines}");
+        assert!(lines.contains("aida cache rebuild --history"), "{lines}");
+        assert!(!lines.contains("BUG-1923"), "{lines}");
+        let doctor = crate::doctor_cmd::history_index_doctor_line(&st, true);
+        assert!(doctor.contains("by 3 commit(s)"), "{doctor}");
+        assert!(doctor.contains("not catching up"), "{doctor}");
+
+        // Paused: a budgeted query no longer tries (no failure injected,
+        // yet nothing moves) and falls back to the walk.
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_none());
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(failures().as_deref(), Some("3"));
+
+        // A rebuild clears the pause and the index serves again.
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        assert_eq!(failures(), None);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(!st.catch_up_stalled && st.lag.is_none());
+        assert_parity(&fx, &opts(), "after the rebuild");
+    }
+
+    #[test]
+    fn bug_1923_a_kept_chunk_clears_the_failure_count() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Clear");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        s.status = "Approved".into();
+        fx.put(&s);
+        fx.commit("update STORY-1");
+        for _ in 0..2 {
+            history_cache::fail_next_catch_up();
+            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+        }
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("2")
+        );
+        assert!(
+            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+    }
+
+    #[test]
+    fn bug_1923_capped_since_query_ignores_a_merge_tie_below_the_cut() {
+        // A same-second tie inside a merge's region (B2/B3) at +300, newer
+        // commits above it, and `--since` below the tie. A cut window that
+        // ends above the tie must be served: the tie cannot reorder it.
+        let mut fx = Fixture::new();
+        build_dated_merge(&mut fx, &[300], &[300], 600, &[700, 800, 900]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let since = Some(rfc3339(BASE_TS + 100));
+        let check = |o: &HistoryOpts, label: &str| {
+            let (walk, _, x) = collect_filtered_events_git(&fx.store, o).unwrap();
+            let got = test_support::query_only(&fx.store, &fx.db, o)
+                .unwrap()
+                .unwrap_or_else(|| panic!("[{label}] did not serve"));
+            assert_same(&got, &(walk, x), label);
+        };
+        let mut o = opts();
+        o.since = since.clone();
+        o.max_commits = 2;
+        check(&o, "--max-commits cut above the tie, --since below it");
+        let mut o = opts();
+        o.since = since.clone();
+        o.limit = 1;
+        check(&o, "-n cut above the tie, --since below it");
+        // Uncut, the window reaches the tie, which still falls back.
+        let mut o = opts();
+        o.since = since;
+        assert!(test_support::query_only(&fx.store, &fx.db, &o)
+            .unwrap()
+            .is_none());
+    }
 }
