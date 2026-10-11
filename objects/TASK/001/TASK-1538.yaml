@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T12:04:33.927225780Z
+modified_at: 2026-10-11T12:07:53.748831571Z
 req_type: Task
 tags:
 - closure:pending
@@ -535,6 +535,17 @@ comments:
   created_at: 2026-10-11T12:04:33.927225780Z
   modified_at: 2026-10-11T12:04:33.927225780Z
   session_id: 74729565-cb48-4858-8a37-d58740f64a38
+- id: 01a12adc-c494-7ca3-a1e5-bd50b01a8f10
+  author: joe
+  content: |-
+    ADVISOR REVIEW: run 7 (PR #2511), 2026-10-11 05:15. VERDICT: APPROVED at 72d5ced220 (slice-25..29-r1). I'll merge once Build is green.
+    - verify_stack origin/main..72d5ced220: 7 commits (5 MOVE, 1 RETARGET, 1 TOOLING), checks 1–8 PASS. The tags carry proofs (tests 9992/9992, warnings 0/0). The tooling commit bd4843ffc3 touches only scripts/split-lib/extract_module.py (the Q7 @L impl selector).
+    - RETARGET RULING (2893575393, adr9 ENGINE_CALLER_ALLOWLIST += src/upgrade_release.rs): ACCEPTED as a pure retarget. Before the split, the scanner normalised every src/lib_part*.rs to src/lib.rs, which is allowlisted, so mod bug_1265_finish_ci_tests was already exempt. The guard's coverage is unchanged, not loosened. The only engine call in upgrade_release.rs (L634) is inside that cfg(test) module (L425). Follow-up, filed separately and NOT part of this protocol: make the whole-file allowlist entries test-scoped, so that a future production call in upgrade_release.rs (or lib.rs) can't slip through.
+    - Shared-endpoint tie-break (the range that starts at a shared line owns it): APPROVED. It is consistent with Q8.
+    - Q9 phase_driver over the 6000 cap: (a) APPROVED. phase_driver.rs (~2.8k: struct, config, inherent impls, ci-fix tail, AutonomyMode) plus a new phase_driver_trait.rs (~3.8k: only ). Both are pure moves. The map's scanned-test retargets (bug_1186_reviewer_seat_tests.rs:87, headless_hint_tests.rs:139/:155) point at whichever file holds the scanned code. No cap exception, and the trait impl doesn't wait until slice 2.
+  created_at: 2026-10-11T12:07:53.748831571Z
+  modified_at: 2026-10-11T12:07:53.748831571Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
