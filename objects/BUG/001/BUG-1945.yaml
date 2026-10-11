@@ -1,0 +1,40 @@
+id: 01a1292b-7831-72d3-99ac-7803fe32b513
+spec_id: BUG-1945
+agreed_id: BUG-1945
+title: History digest sorts mixed-format timestamps as strings, so order depends on git version
+description: |
+  ## Problem
+
+  The `aida history --digest` view (and the old default `aida history`) orders rows by comparing last-touch timestamps as strings. The two sources of that timestamp use different formats:
+
+  - A live spec's last touch comes from its `modified_at` YAML field, written as `...Z`.
+  - A deleted spec's last touch comes from git's `%aI` author date. Older git prints UTC as `+00:00`, newer git prints `Z`.
+
+  A string sort over mixed `Z` and `+00:00` values does not order equal or near-equal instants consistently. When a live spec and a deleted spec share a timestamp, their order depends on the installed git version. Non-UTC offsets compare wrongly in any case: `2025-03-04T06:00:00-07:00` sorts before `2025-03-04T12:00:00Z`, but it is the later instant.
+
+  Found while writing the black-box goldens for the status-flow default. A fixture with a spec edited and another deleted in the same commit sorted differently in CI than locally. The fixture was changed to avoid the tie. The sort itself was deliberately left alone, because the digest output must stay byte-identical in that change.
+
+  ## Fix direction
+
+  Parse both timestamps to a UTC instant before comparing, with a stable tie-break (e.g. spec ID). Render them unchanged.
+
+  ## Acceptance
+
+  - The digest orders rows by instant, regardless of offset format.
+  - Ties break deterministically and do not depend on the git version.
+  - A test covers a live and a deleted spec at the same instant, and a non-UTC offset.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T04:14:37.105043879Z
+modified_at: 2026-10-11T04:14:37.105043879Z
+req_type: Bug
+filed_at:
+  code_sha: 5cc5fa7934093ae52269643aa0972efd2b7352e5
+  branch: story-1650-work
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: ba0773e5-a9ac-4500-9776-22fe6fee4671
