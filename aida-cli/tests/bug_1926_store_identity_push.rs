@@ -191,6 +191,27 @@ fn remote_has_store_branch(f: &Fixture) -> bool {
         .success()
 }
 
+/// Restores the captured process environment variables on drop (including
+/// during a panic unwind).
+struct EnvGuard(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+impl EnvGuard {
+    fn capture(keys: &[&'static str]) -> Self {
+        EnvGuard(keys.iter().map(|k| (*k, std::env::var_os(k))).collect())
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        for (key, value) in &self.0 {
+            match value {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+}
+
 fn lock() -> std::sync::MutexGuard<'static, ()> {
     ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -269,9 +290,15 @@ fn git_ops_push_from_store_root_is_gated_by_project_allowlist() {
     store_commit_as(&forbidden, FORBIDDEN);
     store_commit_as(&allowed, ALLOWED);
 
-    // git_ops::push spawns git with the process environment.
-    let saved_home = std::env::var_os("HOME");
-    let saved_path = std::env::var_os("PATH");
+    // git_ops::push spawns git with the process environment; the guard
+    // restores every variable it touches even if a push panics.
+    let env = EnvGuard::capture(&[
+        "HOME",
+        "PATH",
+        "GIT_CONFIG_NOSYSTEM",
+        "AIDA_TELEMETRY",
+        "AIDA_STORE",
+    ]);
     std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
     std::env::set_var("AIDA_TELEMETRY", "0");
     std::env::remove_var("AIDA_STORE");
@@ -283,13 +310,7 @@ fn git_ops_push_from_store_root_is_gated_by_project_allowlist() {
     std::env::set_var("HOME", &allowed.home);
     std::env::set_var("PATH", &allowed.path_with_aida);
     let accepted = aida_core::git_ops::push(&allowed.store, "origin", "aida-store");
-
-    if let Some(h) = saved_home {
-        std::env::set_var("HOME", h);
-    }
-    if let Some(p) = saved_path {
-        std::env::set_var("PATH", p);
-    }
+    drop(env);
 
     assert!(
         !matches!(refused, Ok(true)),
