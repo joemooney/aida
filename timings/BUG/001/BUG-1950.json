@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1950",
+  "publishes": [
+    {
+      "at": "2026-10-11T18:22:15.842318851Z",
+      "closed_by": "reconcile-status"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T15:17:38.142131773Z",
+      "spec": "BUG-1950",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T16:56:31.022995238Z",
+      "spec": "BUG-1950",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T18:19:47.550960543Z",
+      "spec": "BUG-1950",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "f3fd87d76fab7d715595988457577deed22bceb7"
+      }
+    },
+    {
+      "ts": "2026-10-11T18:22:15.829771106Z",
+      "spec": "BUG-1950",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "34e3fe48e1cc0095a3fbfa2aeebd74fd95a32157",
+        "pr": 2533,
+        "closed_by": "reconcile-status"
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1656",
+  "publishes": [
+    {
+      "at": "2026-10-11T18:22:15.880708003Z",
+      "closed_by": "reconcile-status"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T15:21:04.500880790Z",
+      "spec": "STORY-1656",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T17:13:20.341908287Z",
+      "spec": "STORY-1656",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T18:18:40.510461363Z",
+      "spec": "STORY-1656",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "050e9e666cb69b210bd5f638078ed0ec4e5efcbe"
+      }
+    },
+    {
+      "ts": "2026-10-11T18:22:15.868216793Z",
+      "spec": "STORY-1656",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b7ae787e2a662a71b0e2759eafedf6a56aa6dc25",
+        "pr": 2536,
+        "closed_by": "reconcile-status"
+      }
+    }
+  ]
+}
