@@ -1,0 +1,36 @@
+id: 01a12ca7-0e16-7ba0-b7eb-9e171b1503cb
+spec_id: FAQ-50
+agreed_id: FAQ-50
+title: Why did the runaway-seat watchdog flag my cron as a mail poll?
+description: |
+  **Its prompt mentioned the mailbox. A `CronCreate`, `ScheduleWakeup` or `/loop` prompt containing "mailbox", "inbox" or "mail tick" counts as a model-side mail poll, which has been forbidden since BUG-1589. Mail reaches the seat through the prompt hook, so leave those words out.**
+
+  ## Why
+  `aida doctor check runaway-seats` (`runaway_seats.rs`, `mentions_mailbox`) scans session transcripts. Any scheduling tool call whose prompt contains those words is flagged `mail-poll-setup`, and the `watchdog-route` job is routed to the advisor seat.
+
+  ## How
+  Delete the cron (`CronDelete`) and re-create it with a prompt that does the real checks (CI, `aida schedule due --seat <seat>`, PR states) and never mentions mail. Close the routed job with `aida schedule done watchdog-route --note "..."`.
+
+  ## See also
+  BUG-1589
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:28:28.054679185Z
+modified_at: 2026-10-11T20:28:28.054679185Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:relay
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T20:28:28.054712658Z
