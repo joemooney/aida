@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'No live trip: the watchdog ran ok at 2026-10-11 02:14Z, its schedule record has no failure_trips, and the route came from a trip 10 days ago. No seat is running away now (aida ps: every implementer seat is dormant, with no wake loops). Nothing to stop.'
+due_since: 2026-10-11T07:51:26.307663571Z
+due_reason: on CronJobFailed:watchdog
