@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1923",
+  "publishes": [
+    {
+      "at": "2026-10-11T02:06:02.319722078Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T20:35:33.064542162Z",
+      "spec": "BUG-1923",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T00:16:49.783575866Z",
+      "spec": "BUG-1923",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T01:07:28.425443571Z",
+      "spec": "BUG-1923",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1923",
+        "branch": "bug-1923-work",
+        "first_seen": "2026-10-11T01:07:28.361811957+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:44:21.531627987Z",
+      "spec": "BUG-1923",
+      "seat": "integrator",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T02:06:02.303957152Z",
+      "spec": "BUG-1923",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "392438a12ee4539e011144313eb625fd543cd6f1",
+        "pr": 2488,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
