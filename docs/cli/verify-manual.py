@@ -27,6 +27,7 @@ can backlink to its shaping spec(s) without the breadcrumb leaking into visible 
 
 Usage: python3 docs/cli/verify-manual.py            # all chapters
        python3 docs/cli/verify-manual.py 04-git*.md # one chapter
+       python3 docs/cli/verify-manual.py --static   # no-build hidden-flag check
 """
 import functools
 import glob
@@ -382,7 +383,226 @@ def reflection_misses(spec_deltas, manual_text, top_level_cmds):
     return misses
 
 
+# --- static hidden-flag guard (BUG-1937) -----------------------------------
+# trace:BUG-1937 | ai:claude
+#
+# Everything above shells out to a built `aida`, so the pre-push tier (which
+# promises no cargo build) cannot run it. `--static` is the no-build slice of
+# the flag-accuracy check: it reads the clap attributes straight from the Rust
+# source and fails on a manual citation of a long flag that exists ONLY as a
+# hidden flag or hidden alias. That's exactly how a hidden flag's doc citation
+# reached CI. It's deliberately conservative: a flag that is visible on ANY command
+# is never reported, so a wrong guess about which command a citation belongs
+# to cannot produce a false failure. The full binary-backed guard still runs in
+# CI and remains the authority on per-command accuracy.
+REPO_ROOT = os.path.dirname(os.path.dirname(CLI_DIR))
+CLAP_SOURCE_DIRS = ("aida-cli-lib/src", "aida-cli/src")
+CLAP_ATTR_RE = re.compile(r"#\[(?:clap|arg)\(")
+STRING_LIT_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+EXTERNAL_TOOL_RE = re.compile(r"(?:git|cargo|python3?|bash|gh|glab)\b")
+FIELD_RE = re.compile(r"(?:pub(?:\([^)]*\))?\s+)?(?:r#)?([a-z_][a-z0-9_]*)\s*:(?!:)")
+
+
+def _skip_string(text, i):
+    """Index just past the string literal opening at text[i] == '"'."""
+    i += 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == '"':
+            return i + 1
+        i += 1
+    return i
+
+
+def _balanced_end(text, i, open_ch, close_ch):
+    """Index just past the delimiter that closes text[i] == open_ch."""
+    depth = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '"':
+            i = _skip_string(text, i)
+            continue
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return i
+
+
+def _attached_field(text, i):
+    """(field_start, field_name) of the item an attribute ending at i decorates.
+
+    Skips whitespace, comments and further attributes. Returns (None, None)
+    when the next item is not a named struct field (an enum variant, a struct).
+    """
+    while i < len(text):
+        if text[i].isspace():
+            i += 1
+        elif text.startswith("//", i):
+            nl = text.find("\n", i)
+            i = len(text) if nl < 0 else nl + 1
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+        elif text.startswith("#[", i):
+            i = _balanced_end(text, i + 1, "[", "]")
+        else:
+            m = FIELD_RE.match(text, i)
+            if m:
+                return i, m.group(1)
+            return None, None
+    return None, None
+
+
+def clap_long_flags(text):
+    """Return (visible, hidden) sets of `--long` flag names declared in text.
+
+    A field's clap/arg attributes are merged before classifying, so
+    `#[clap(long)] #[clap(hide = true)]` on one field reads as hidden. Clap
+    `alias`/`aliases` are hidden by clap itself; `visible_alias(es)` are shown.
+    """
+    # trace:BUG-1937 | ai:claude
+    per_field = {}
+    for m in CLAP_ATTR_RE.finditer(text):
+        paren = m.end() - 1
+        end = _balanced_end(text, paren, "(", ")")
+        body = text[paren + 1 : end - 1]
+        start, name = _attached_field(text, end + 1)
+        if start is None:
+            continue
+        entry = per_field.setdefault(start, [name, []])
+        entry[1].append(body)
+
+    visible, hidden = set(), set()
+    for name, bodies in per_field.values():
+        raw = " , ".join(bodies)
+        bare = STRING_LIT_RE.sub('""', raw)
+        is_hidden = bool(re.search(r"\bhide\s*=\s*true\b", bare))
+        longs = set()
+        explicit = re.findall(r'\blong\s*=\s*"([^"]+)"', raw)
+        longs.update(explicit)
+        if re.search(r"\blong\b(?!\s*=)", bare):
+            longs.add(name.replace("_", "-"))
+        aliases = set()
+        for am in re.finditer(r'(?<![\w])alias\s*=\s*"([^"]+)"', raw):
+            aliases.add(am.group(1))
+        for am in re.finditer(r"(?<![\w])aliases\s*=\s*\[([^\]]*)\]", raw):
+            aliases.update(re.findall(r'"([^"]+)"', am.group(1)))
+        shown_aliases = set()
+        for am in re.finditer(r'\bvisible_alias\s*=\s*"([^"]+)"', raw):
+            shown_aliases.add(am.group(1))
+        for am in re.finditer(r"\bvisible_aliases\s*=\s*\[([^\]]*)\]", raw):
+            shown_aliases.update(re.findall(r'"([^"]+)"', am.group(1)))
+        if not longs:
+            continue  # positional / short-only / flatten: no long flag to cite
+        (hidden if is_hidden else visible).update("--" + f for f in longs)
+        hidden.update("--" + a for a in aliases)
+        (hidden if is_hidden else visible).update("--" + a for a in shown_aliases)
+    return visible, hidden
+
+
+def clap_source_files(root=REPO_ROOT):
+    """Non-test Rust sources that can declare `aida` CLI flags."""
+    files = []
+    for rel in CLAP_SOURCE_DIRS:
+        base = os.path.join(root, rel)
+        for dirpath, dirnames, fnames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d != "tests"]
+            for fn in fnames:
+                if fn.endswith(".rs") and not fn.endswith("tests.rs"):
+                    files.append(os.path.join(dirpath, fn))
+    return sorted(files)
+
+
+def static_flag_citations(files):
+    """Every `--flag` cited inside a `### `aida <cmd>`` section.
+
+    Same section scoping as parse_chapters: a `## ` heading or `---` rule ends a
+    command's scope, and flags inside a git/cargo/python/bash/gh/glab span
+    belong to that tool. Flags are taken from backtick spans and from bare
+    `aida ...` prose, a superset of what the full guard checks.
+    """
+    # trace:BUG-1937 | ai:claude
+    cites = []
+    for f in files:
+        with open(f) as fh:
+            cur = None
+            for line_no, line in enumerate(fh, 1):
+                m = ENTRY_RE.match(line)
+                if m:
+                    cur = m.group(1)
+                    continue
+                if line.startswith("## ") or line.startswith("---"):
+                    cur = None
+                if not cur:
+                    continue
+                flags = []
+                outside = line
+                for bm in re.finditer(r"`([^`]+)`", line):
+                    span = bm.group(1)
+                    outside = outside.replace(bm.group(0), " ", 1)
+                    if EXTERNAL_TOOL_RE.match(span):
+                        continue
+                    flags.extend(re.findall(r"--[a-z][a-z0-9-]*", span))
+                for cm in AIDA_CMD_RE.finditer(outside):
+                    flags.extend(re.findall(r"--[a-z][a-z0-9-]*", cm.group(0)))
+                for flag in flags:
+                    cites.append({"flag": flag, "parent": cur, "file": f, "line": line_no})
+    return cites
+
+
+def static_hidden_flag_misses(cites, visible, hidden):
+    """Citations of a flag that exists only hidden (never visible anywhere)."""
+    hidden_only = hidden - visible
+    return [c for c in cites if c["flag"] in hidden_only]
+
+
+def main_static(files):
+    # trace:BUG-1937 | ai:claude
+    visible, hidden = set(), set()
+    sources = clap_source_files()
+    for src in sources:
+        with open(src, encoding="utf-8") as fh:
+            v, h = clap_long_flags(fh.read())
+        visible |= v
+        hidden |= h
+    if not visible:
+        print(f"FAIL static flags — no clap long flags parsed from {', '.join(CLAP_SOURCE_DIRS)}")
+        return 1
+    misses = static_hidden_flag_misses(static_flag_citations(files), visible, hidden)
+    if misses:
+        print(
+            f"FAIL static flags — {len(misses)} cited --flag token(s) are hidden from "
+            "`--help` (hide = true or a hidden alias) and visible on no command:"
+        )
+        for cite in misses[:80]:
+            loc = f"{os.path.basename(cite['file'])}:{cite['line']}"
+            print(f"    {loc} `{cite['flag']}` cited under `aida {cite['parent']}`")
+        print("    Fix: drop the citation, or unhide the flag if users should see it.")
+        return 1
+    print(
+        f"OK static flags — no manual citation of a hidden-only flag "
+        f"({len(visible)} visible / {len(hidden - visible)} hidden-only long flags parsed "
+        f"from {len(sources)} source files)"
+    )
+    return 0
+
+
 def main():
+    # trace:BUG-1937 | ai:claude
+    if "--static" in sys.argv[1:]:
+        names = [a for a in sys.argv[1:] if a != "--static"]
+        files = (
+            [os.path.join(CLI_DIR, a) for a in names]
+            if names
+            else sorted(glob.glob(os.path.join(CLI_DIR, "[0-9][0-9]-*.md")))
+        )
+        sys.exit(main_static(files))
     files = (
         [os.path.join(CLI_DIR, a) for a in sys.argv[1:]]
         if len(sys.argv) > 1

@@ -413,6 +413,14 @@ jobs:
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
 
+      # No-build slice of the drift guard above: fails on a manual citation of
+      # a flag that clap hides from --help, read from the Rust source, so the
+      # pre-push tier catches it without a binary. trace:BUG-1937 | ai:claude
+      - name: CLI-manual hidden-flag guard (static, no build)
+        run: |
+          python3 -m unittest tests/test_verify_manual.py
+          python3 docs/cli/verify-manual.py --static
+
       # trace:STORY-1352 | ai:codex
       #
       # TASK-1447: NOT gated on full_ci — same "Minimal aida-cli build" step

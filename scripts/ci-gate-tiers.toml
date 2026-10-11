@@ -73,6 +73,10 @@
 "Run ~/.aida home-guard self-test" = "fast"
 "Minimal aida-cli build for docs-only guards" = "full"
 "CLI-manual drift-guard (every command documented)" = "full"
+# The drift guard needs a built binary; this static slice parses clap attributes
+# from source, so the pre-push tier still catches a hidden-flag doc citation.
+# trace:BUG-1937 | ai:claude
+"CLI-manual hidden-flag guard (static, no build)" = "fast"
 "Monitor contract drift guard" = "full"
 # Runs target/debug/aida --help per template command. trace:BUG-1922 | ai:claude
 "Template command lint" = "full"
