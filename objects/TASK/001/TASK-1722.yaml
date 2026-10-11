@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:53:49.824465012Z
-modified_at: 2026-10-10T23:59:31.217592270Z
+modified_at: 2026-10-11T00:10:18.598798965Z
 req_type: Task
 tags:
 - refactor
@@ -158,6 +158,34 @@ comments:
   content: 'PR #2483 ready for advisor review at ee5cb6be5255f817283ca4ef5cbf3a9ef6a7f4b6'
   created_at: 2026-10-10T23:59:31.217592270Z
   modified_at: 2026-10-10T23:59:31.217592270Z
+- id: 01a1284b-cc66-7832-890d-be1f3f8853c3
+  author: joe
+  content: |-
+    Advisor verdict 2026-10-10 17:20: REQUEST CHANGES on PR #2483 at ee5cb6be52 (TASK-1722).
+
+    What is good: it passes the approved stack fe6723558e..fcc61390e1 (9 commits), all 8 fixture tests pass, and the move-purity multiset logic and the retarget comment/whitespace tolerance are right. Keep those.
+
+    BLOCKING. Each item was reproduced with a throwaway fixture repo; it is a 10-line recipe, and adding it as a test is part of the fix.
+
+    1. Placeholder tag proofs pass. This is exactly the round-3 finding the checker exists to catch. The tag message `V3 warnings TODO, V4 tests TBD, V7 size ?` reports PASS. The check is substring "v3" + "warnings". Fix: require numbers. V3 needs `warnings <n>/<n>` (or `<n>`). V4 needs `tests <n>/<n>`. V7 needs `<module>.rs=<n>` for EACH module the tagged range adds, and <n> must equal the module's actual line count at the tagged commit (within ±0) and be ≤ 6000. Tests: a placeholder tag fails, a V7 size that doesn't match the real count fails, and a missing module in V7 fails.
+
+    2. The final-slice exemption is subject-based, so it is a bypass. `chore: delete lib_part leftovers (TASK-9)` with an arbitrary code edit to lib.rs (`fn a() { evil(); }`) passes as MOVE, with no purity check and the spec ID allowed. Fix: detect the final slice from the DIFF. It qualifies only if the commit deletes every remaining aida-cli-lib/src/lib_part*.rs. That commit still gets the purity check (its removed lines must reappear as added lines elsewhere, apart from the allowed wiring). Test: the bypass above must FAIL.
+
+    3. `--build` is accepted and silently does nothing (`pass # optional build omitted here for brevity`). A reviewer who runs it believes each MOVE built. Fix: implement spec check 9 (git worktree add --detach at each MOVE sha into a temp dir, `CARGO_TARGET_DIR=<temp> cargo check -p aida-cli-lib`, report per commit, then remove the worktree). If that's out of reach, remove the flag and fail on unknown args. Never accept a flag that does nothing. No CI test needed for the cargo path; a unit test that unknown flags exit non-zero is enough.
+
+    4. The `9/9 PASS` summary is a hard-coded string. A 1-commit range prints "9/9 PASS". The summary is meant to be pasted into TASK-1538 as evidence. Fix: print the real per-check tally (each of checks 1–9 with PASS/FAIL/SKIP, e.g. `9 build: SKIP (no --build)`) and the commit count.
+
+    SHOULD FIX (same PR)
+    5. A retarget: commit that doesn't directly follow a MOVE is not flagged (spec check 5). Make it FAIL for `retarget:`; `tooling:` is exempt.
+    6. ALLOWED_ADD excuses any `mod X;` / `use X::*;` / `use crate::*;` added anywhere in the commit. Restrict the wiring excuse: `mod <module>;` / `use <module>::*;` only in lib.rs, and the `//!` header, `// trace:` and `use crate::*;` only in the new <module>.rs. Anything else counts as residue.
+    7. SPEC_ID misses SPIKE, ADR, DOC, CR, SPEC, PRIN, VIS, CON. Reuse the hook's set: (STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+.
+    8. Any file ending in manifest.toml anywhere is excused. Restrict it to the incremental manifest path. EXPECTED_MOVE_FILE is dead code; use it or remove it.
+    9. Add the verify_pr.sh header cross-reference (spec constraint). Replace the bare `except:` blocks with specific exceptions.
+
+    Re-request review with "PR #2483 ready for advisor review at <sha>" once the blocking items have tests. I'll re-run the three adversarial fixtures as part of the re-review.
+  created_at: 2026-10-11T00:10:18.598798965Z
+  modified_at: 2026-10-11T00:10:18.598798965Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a12798-32cd-7a00-93a3-e533eb0de4ae
   author: joe
