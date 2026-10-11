@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-11T18:22:14.462612065Z
+modified_at: 2026-10-11T20:14:32.439277122Z
 req_type: Bug
 tags:
 - contained
@@ -125,6 +125,12 @@ comments:
   created_at: 2026-10-11T17:59:58.339423613Z
   modified_at: 2026-10-11T17:59:58.339423613Z
   session_id: 3349aec6-83dd-4955-839e-627cfae55679
+- id: 01a12c9a-4df7-7a03-aaef-9c4585f31eed
+  author: joe
+  content: 'REAL-CLAUDE RESULT (advisor, 2026-10-11 13:20, main at 18428db14c): real_claude_contained_session_write_boundary PASSES against real Claude Code (haiku): Write inside the worktree allowed, Write one level above denied, using the generated //<abs>/** rules under --permission-mode dontAsk. Caveat: as written the test can NEVER pass inside the lib test binary, because test_home.rs (BUG-1642) points HOME at /tmp/aida-lib-test-home-<pid> and the claude child inherits it, so it reports ''Not logged in''. It passed with AIDA_TEST_CLAUDE_BIN pointing at a wrapper that restores the real HOME just for the claude exec. Fix tracked on BUG-1971.'
+  created_at: 2026-10-11T20:14:32.439277122Z
+  modified_at: 2026-10-11T20:14:32.439277122Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-83d7-70c1-a870-4853ee25287b
   author: joe
