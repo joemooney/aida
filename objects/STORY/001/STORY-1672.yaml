@@ -1,0 +1,50 @@
+id: 01a12c99-0940-7e90-a3dc-4f96a984ae1e
+spec_id: STORY-1672
+agreed_id: STORY-1672
+title: Lint unexplained constants in traced code and report trace coverage as a gap detector
+description: |
+  ## F7. Lint for unexplained constants
+
+  **Seen:**
+  - Thresholds (io-full 15, cpu 40, heat levels), sizes (4 GiB shm, 8 GiB
+    MemAvailable, 50 MB rotation), widths and timeouts are scattered through the
+    code.
+  - Only some appear in specs.
+
+  **Proposal:**
+  - `aida lint constants` extracts numeric literals from traced code regions and
+    reports those not mentioned in the traced spec or a linked decision row.
+  - Each one becomes either a recorded fact or an explicit "arbitrary" note.
+
+  ## F8. Trace coverage as a gap detector
+
+  **Idea:**
+  - Code outside any `trace:` region is behavior no spec claims.
+  - Report trace coverage per file. An untraced function is the cheapest pointer
+    to unspecified semantics.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:13:09.312319606Z
+modified_at: 2026-10-11T20:13:09.312319606Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
