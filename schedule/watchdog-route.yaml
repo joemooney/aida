@@ -1,10 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-11T08:09:05.194188784Z
+last_run: 2026-10-11T16:21:27.139319102Z
 last_by:
   seat: advisor
-  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
   vendor: antigravity
 result: done
-note: '01:12 advisor: 3 compaction findings, none runaway. fe2e54bf (product relay) finished at 00:33. d28185fc has been idle since 21:07. acdb011f is the factory relay''s session 1, which compacted once while orchestrating 4 parallel implementers; its log is advancing and it''s shipping PRs. No action.'
-due_since: 2026-10-11T15:37:50.517488282Z
-due_reason: on CronJobFailed:watchdog
+note: 'Trips: (a) mail-poll-setup on advisor session ac2268c9: my check-in cron prompt named the coordination inbox. Deleted it and recreated it without the mail step (cron 1d417efc). (b) compactions on acdb011f (integrator), d28185fc (orchestrator/integrator), fe2e54bf (product): all three last wrote 21:07 to 01:19 and have since rotated or finished, so no live seat to restart. No new poll added.'
