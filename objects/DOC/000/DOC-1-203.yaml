@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T13:01:08.115311769Z
+modified_at: 2026-10-11T15:21:52.238088623Z
 req_type: Doc
 tags:
 - factory:night
@@ -278,6 +278,28 @@ comments:
   created_at: 2026-10-11T13:01:05.906340927Z
   modified_at: 2026-10-11T13:01:05.906340927Z
   session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b8e-5b6e-7b21-b5a6-4b09c64dd84f
+  author: joe
+  content: |-
+    REWORK BRIEF (advisor, 2026-10-11, operator-approved). Source verdict: DOC-6 comment[9], REVIEW round 3, REQUEST CHANGES at b6c5f95c13 (PR #2499, branch doc-6-b3-docs). Verified against origin/doc-6-b3-docs and main.
+
+    WHAT FAILED: every review round found another over-general sentence in docs/cli/06-roles-sessions.md about how launched agents get authority. The problem is the sentence shape, not any single sentence. Stop qualifying universal claims. Replace them with a per-launcher table.
+
+    REQUIRED CHANGE:
+    1. In "### Entering seats and delegating child seats" (Mental model paragraph), and in the "### aida role" section (the Don't-reach-for-it paragraph and the "Chains with" paragraph), DELETE the universal launch claims:
+       - "A launch that names no child seat issues no grant: the launched agent inherits the parent's grant as-is." This is FALSE for `aida agent new`: agent_launch.rs:2566 and :4353 env_remove AIDA_SESSION_GRANT. Inheritance only happens on the session paths (session.rs:938/950, :4407/4414).
+       - "...otherwise the launching shell's own grant, inherited unchanged" and "A launch that does not request a seat ... the agent inherits the launching shell's grant." These have the same defect.
+    2. Add ONE small table, "How each launcher sets the agent's grant", with these rows: `role enter` (mints a direct grant: TTY plus roster), `role add` (also mints a direct grant: role_cmd.rs:511 issue_direct), `session new`, `session resume`, `agent new`, `queue work` / drain. Each row gives: with a seat requested, and with no seat requested (child grant / inherits parent env grant / none: grant env removed). Fill every cell from the code, citing file:line in the PR body, not in the doc.
+    3. Fix "enter is the only place a direct grant is minted" (in the `enter` / `end` key-options bullet). `role add` also mints one. Point at the table instead.
+    4. "two documented exceptions" (aida role, Mental model): drop the count. Either list the exceptions without a number, including `--force` on enforce_team_gate / enforce_protected_spec_gate (role.rs:1343) and the human-at-TTY escalation clear (requeue.rs:95, integrity_floor_authority_from), or say "with a few documented exceptions" and link them.
+    5. Keep the round-2 fixes: "require an interactive TTY (a terminal check, not proof that a human is typing)" and "children cannot delegate onward" (issue_child always sets delegable_seats empty).
+
+    PROOF OF FIX: no sentence in the two sections makes an unqualified "always" / "only" / "any launch" claim about grants. Every table cell traces to a code site listed in the PR body. make check-ci-fast is green. One more fresh review round. If round 4 still fails, the advisor will merge the passed parts and cut the section rather than run round 5.
+
+    Merging #2499 does not complete DOC-6 (aida: no-complete). Leave that as is.
+  created_at: 2026-10-11T15:21:52.238088623Z
+  modified_at: 2026-10-11T15:21:52.238088623Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
