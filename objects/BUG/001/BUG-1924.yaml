@@ -8,12 +8,12 @@ description: |-
   Fix: derive the displayed role from the validated grant, not the label. When the label is set but there's no valid grant (missing, expired or revoked), show e.g. 'role:advisor (no grant)' in a warning colour. Do the same in the SessionStart hook banner, which also printed 'role: advisor'. Update the shipped statusline snippet/template to use aida statusline's role field instead of $AIDA_SESSION_ROLE.
 
   Acceptance: with AIDA_SESSION_ROLE=advisor and no AIDA_SESSION_GRANT, both the statusline and the SessionStart banner show the role as ungranted. With a valid grant they show it as today. Test both cases.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:32:21.773236209Z
-modified_at: 2026-10-11T19:10:59.122998616Z
+modified_at: 2026-10-11T19:25:41.436454211Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -41,6 +41,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12c6d-94b4-7440-a256-f093b90a63be
+  author: aida-auto-bump
+  timestamp: 2026-10-11T19:25:41.428699567Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12c6d-94bc-7252-96e6-0299b392df07
+  timestamp: 2026-10-11T19:25:41.436451685Z
+  agent: implementer
+  commit_sha: 18428db14cad4164704357aa5006bb5482039c62
+  summary: Completed via merge 18428db1
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
@@ -49,3 +62,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T19:25:41.428685053Z
+  completion_sha: 18428db14cad4164704357aa5006bb5482039c62
