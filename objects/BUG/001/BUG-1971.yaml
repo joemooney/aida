@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-11T18:18:10.341676814Z
+modified_at: 2026-10-11T19:16:07.943745088Z
 req_type: Bug
 tags:
 - contained
 - follow-up:advisor-review
 - sandbox
+comments:
+- id: 01a12c64-d487-7803-b1bb-2e20a4354b6d
+  author: joe
+  content: 'ADVISOR: also carry the factory''s handoff note: the warm pool still overrides an explicit --path (PR #2534 fixed only the announcement and the boundary). Confirm, and decide whether that''s in this bug or a separate one.'
+  created_at: 2026-10-11T19:16:07.943745088Z
+  modified_at: 2026-10-11T19:16:07.943745088Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
