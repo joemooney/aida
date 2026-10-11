@@ -1,0 +1,33 @@
+id: 01a1289a-5259-7e20-8ce8-dcc4d0fb5e79
+spec_id: BUG-1939
+agreed_id: BUG-1939
+title: Flaky aida-core test a_forked_child_holds_the_lock_past_its_guard_until_exec fails CI with WouldBlock on a lock that has no recorded holders
+description: |-
+  Seen on PR #2488 (BUG-1923), CI run 38100750183 (Linux), 2026-10-11 01:12Z. The PR only touches aida-cli-lib history/cache/doctor files and doesn't touch aida-core, so this is not the PR's fault. main's CI was green at 3bb1454cf0 and 67fae0243e.
+
+  Panic at aida-core/src/db/cache_refresh.rs:733:
+  sidecar=/tmp/.tmpXXX/cache.db.refresh.lock registry_entry=None direct_flock=Some((WouldBlock, Some(11))) holders=[] own_fds=[]
+  test result: FAILED. 1322 passed; 1 failed (aida-core --lib).
+
+  The diagnostics show a direct flock returning WouldBlock while neither the in-process registry nor the holder scan finds any holder. That points to a race between the forked child releasing the lock (exec/exit) and the parent's probe, or to a holder the scan can't see. Same family as BUG-1729 and BUG-1736, which made earlier refresh-lock tests wait out contended flocks. This test seems to need the same bounded wait-for-release, or a deterministic handshake with the child.
+
+  Acceptance: the test is deterministic under parallel cargo test on a loaded host (for example, 200 iterations with stress), and asserts the real invariant instead of timing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:36:04.697193014Z
+modified_at: 2026-10-11T01:36:04.697193014Z
+req_type: Bug
+tags:
+- cache
+- ci
+- flaky-test
+filed_at:
+  code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
