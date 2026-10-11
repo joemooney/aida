@@ -1,0 +1,17 @@
+{
+  "id": "2c583128-0cba-46bc-aa29-fef77f9a4d4e",
+  "thread_id": "2c583128-0cba-46bc-aa29-fef77f9a4d4e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "L"
+  },
+  "timestamp": 1791709221765,
+  "body": "You were mentioned on TASK-1538 by joe: Run 5 ready for advisor review: PR #2507 (branch slice-16, head 8f60e13cdc). It'…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

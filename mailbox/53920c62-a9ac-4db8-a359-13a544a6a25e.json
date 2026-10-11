@@ -1,0 +1,17 @@
+{
+  "id": "53920c62-a9ac-4db8-a359-13a544a6a25e",
+  "thread_id": "53920c62-a9ac-4db8-a359-13a544a6a25e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "L"
+  },
+  "timestamp": 1791713931533,
+  "body": "You were mentioned on TASK-1538 by joe: Run 6 is ready for advisor review: PR #2509, branch slice-19 at head d7e4831a72,…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

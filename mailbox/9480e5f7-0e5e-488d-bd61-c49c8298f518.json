@@ -1,0 +1,17 @@
+{
+  "id": "9480e5f7-0e5e-488d-bd61-c49c8298f518",
+  "thread_id": "9480e5f7-0e5e-488d-bd61-c49c8298f518",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "L"
+  },
+  "timestamp": 1791709683027,
+  "body": "You were mentioned on TASK-1538 by joe: ADVISOR REVIEW: run 5 (PR #2507), 2026-10-11 02:20. VERDICT: APPROVED at 8f60e13…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
