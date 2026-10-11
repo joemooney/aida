@@ -5516,7 +5516,12 @@ pub(crate) fn export_coordinating_bin_env() {
         .is_some_and(|_| aida_bin::has_aida_ancestor());
     let resolution = aida_bin::process();
     if let Some(ambient_override) = ambient_override.as_ref() {
-        if !has_aida_parent {
+        // An extension calling back through the `AIDA_BIN` it was handed
+        // names this very binary: nothing is being declined, so stay quiet.
+        // trace:STORY-1641 | ai:claude
+        let names_self =
+            external_cmd::same_binary(ambient_override, &aida_bin::running_executable_fallback());
+        if !has_aida_parent && !names_self {
             match &resolution {
                 Ok(resolved) => eprintln!(
                     "AIDA_BIN={} is set but was not honored because no AIDA parent was found; using {} ({})",

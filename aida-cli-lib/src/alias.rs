@@ -242,6 +242,29 @@ pub fn registry() -> Vec<AliasGroup> {
         });
     }
 
+    // Installed git-style extensions (`aida-<name>` on PATH), marked
+    // `external` with the resolved path. Like user aliases they are shown to
+    // every caller; unlike user aliases every caller can run them.
+    // trace:STORY-1641 | ai:claude
+    let externals = crate::external_cmd::discover();
+    if !externals.is_empty() {
+        groups.push(AliasGroup {
+            surface: "External commands".to_string(),
+            about: "`aida-<name>` programs found on PATH; run as `aida <name>`".to_string(),
+            rows: externals
+                .iter()
+                .map(|e| {
+                    let path = e.path.display().to_string();
+                    row(
+                        &format!("aida {}", e.name),
+                        &path,
+                        &format!("[external] {path}"),
+                    )
+                })
+                .collect(),
+        });
+    }
+
     groups
 }
 

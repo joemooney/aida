@@ -238,6 +238,8 @@ mod monitor_contract;
 mod help_next;
 // trace:TASK-1098 | ai:claude — clap-derived `aida help commands` catalog.
 mod help_catalog;
+// trace:STORY-1641 | ai:claude — git-style external `aida-<name>` subcommands.
+mod external_cmd;
 mod import_export_cmd;
 mod import_plan_cmd;
 mod interview;
