@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:25:26.854357322Z
-modified_at: 2026-10-11T05:39:45.637136462Z
+modified_at: 2026-10-11T06:27:06.043594451Z
 req_type: Story
 tags:
 - batch:history-2026-10-10
@@ -46,6 +46,17 @@ comments:
   created_at: 2026-10-11T05:39:45.637136462Z
   modified_at: 2026-10-11T05:39:45.637136462Z
   session_id: ba0773e5-a9ac-4500-9776-22fe6fee4671
+- id: 01a129a4-c2bb-7832-8c96-ea50e774a62e
+  author: joe
+  content: |-
+    OPERATOR DECISIONS 2026-10-10 23:28 (advisor-recommended, operator-selected):
+    1. JSON: OPTION B. '--digest --json' and the JSON fallback both emit the new digest projection {view,count,history:[{id,type,status,when,change,title}]}, mirroring TOON. Human and TOON stay byte-identical with goldens. JSON intentionally changes; note it in the PR body and the release notes. Don't keep the old events-feed JSON under --digest.
+    2. CATCH-UP: a BOUNDED inline catch-up plus a cheap-refresh note. On the bare flow path, catch up inline only when the gap is at or below a cap. Set the cap from a measurement on this store, so that catching up from cap-many commits plus rendering stays within the digest's current time (~234 ms here). Record the measured numbers in a code comment and the PR body, and make the cap a named constant. Above the cap: no catch-up; fall back to the digest with a one-line 'behind' note naming a CHEAP refresh, not the 5½-minute 'cache rebuild --history'. Verify the suggested command makes forward progress under BUG-1923's budgeted catch-up. Tests: a small gap heals inline and shows the flow; a gap above the cap falls back with the note and stays within budget.
+    3. Background indexing is a follow-up, filed as STORY-1661; not in this PR.
+    Next: the same implementer, in the existing worktree aida-story1650, applies 1 and 2. Then a FRESH reviewer at the new head also checks the 7 earlier findings, that the edit to STORY-1644's history_limit_is_configurable test isn't a weakening, the test_history_templates.py --full change, and that the goldens don't depend on the git version.
+  created_at: 2026-10-11T06:27:06.043594451Z
+  modified_at: 2026-10-11T06:27:06.043594451Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a12787-3037-7b63-aef6-030b51d0f49c
   author: joe
