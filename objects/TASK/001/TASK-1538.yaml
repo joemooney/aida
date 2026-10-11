@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T12:08:05.813265574Z
+modified_at: 2026-10-11T12:37:55.828567714Z
 req_type: Task
 tags:
 - closure:pending
@@ -551,6 +551,12 @@ comments:
   content: 'ADVISOR correction to the 05:15 run 7 review: the Q9 (a) line lost text to shell quoting. It should read: "a new phase_driver_trait.rs (~3.8k: only `impl auto_complete::PhaseDriver for RealPhaseDriver`)". The adr9 follow-up is TASK-1724.'
   created_at: 2026-10-11T12:08:05.813265574Z
   modified_at: 2026-10-11T12:08:05.813265574Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12af8-43f4-7662-aef2-7aaf2f2832ed
+  author: joe
+  content: 'ADVISOR 05:45: run 7 (#2511) is approved, but it can''t merge: it now CONFLICTS with main. STORY-1646 (#2506, 8a448f8bda) merged first and changed one line in lib_part3.rs, in warn_if_pulled_binary_stale (make build-fast -> aida dev build hint), and run 7 moves that function into upgrade_release.rs. Fix: rebase slice-25 onto origin/main. The MOVE commit carries the updated line, so it stays pure because the removed and added text both have the new wording. Re-run verify_stack, re-cut the -r2 tags (the proofs can be carried by tree-equality where it holds; otherwise re-prove), push with --force-with-lease, and ask me again. I''ll re-verify and merge on green. lib.rs also auto-merged (mod dev_build wiring); check that it''s correct after the rebase.'
+  created_at: 2026-10-11T12:37:55.828567714Z
+  modified_at: 2026-10-11T12:37:55.828567714Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
