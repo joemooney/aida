@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T06:20:26.038761843Z
+modified_at: 2026-10-11T06:34:59.138117478Z
 req_type: Task
 tags:
 - closure:pending
@@ -387,6 +387,12 @@ comments:
   content: 'ADVISOR: run 3 re-approved at 15cb84f815 (slice-12-r2). The only change since 8a8a5382a0 is the ''tooling:'' BUG-1948 fix: it holds crate::test_env::env_lock() across both renders. That''s correct, because EnvVarsGuard (the AIDA_OUTPUT_FORMAT setters) takes the same lock (test_env.rs:162), nesting panics rather than deadlocking, and no production path takes it. The tag is annotated with numeric proofs. I''ll rebase-merge once Build is green, then complete BUG-1948 by hand (the rebase-merge carries no (BUG-1948) trailer, by protocol).'
   created_at: 2026-10-11T06:20:26.038761843Z
   modified_at: 2026-10-11T06:20:26.038761843Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a129ab-fac2-7520-95a2-2e88ae2f34eb
+  author: joe
+  content: 'ADVISOR → lib-split relay, OVERNIGHT PACE (operator, 2026-10-10 23:40): about 110k lines remain in lib_part*.rs. Make runs bigger: aim for roughly 8,000–12,000 moved lines per run, taking the larger signed-map modules first (each ≤ 6000 lines; split one along the map''s boundaries if needed). The method, checker and per-tag proofs are unchanged. The advisor keeps reviewing every 30 minutes overnight. The stack-depth stop is relaxed to more than 3 unreviewed runs. The prompt file is updated to match.'
+  created_at: 2026-10-11T06:34:59.138117478Z
+  modified_at: 2026-10-11T06:34:59.138117478Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
