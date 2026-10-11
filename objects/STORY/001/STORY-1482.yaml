@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:57.585048437Z
-modified_at: 2026-09-29T06:28:24.403199005Z
+modified_at: 2026-10-11T07:01:58.919180844Z
 req_type: Story
 tags:
 - lanes
@@ -58,4 +58,38 @@ comments:
   created_at: 2026-09-29T06:28:24.403199005Z
   modified_at: 2026-09-29T06:28:24.403199005Z
   session_id: 01a0eb4e-6ae3-7cd1-bc89-0fd039463774
+- id: 01a129c4-b207-72e2-b55e-5fb9ab4b3a4e
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided, needs-sketch; blocked by STORY-1481; Done-in-lane changes Completed semantics (EPIC-74 ADR required).
+
+    ## Approach
+    Two seams carry this story. (1) PR base: the forge already centralises base selection — `forge.rs:3842 default_branch_of` feeds `base: self.default_branch()` (forge.rs:2654) and `create_cmd_for_branch(branch, base)` (forge.rs:216); `pr_cmd.rs:1438 pr_ship_target_branch` and `4580 resolve_mr_target_branch` are the ship/MR siblings. Override that ONE seam with the epic's declared target branch (or `AIDA_TARGET_BRANCH`) and every PR-producing path (drain, `aida pr`, `aida ship`, reviewer/merge phases) follows. (2) Status: `lib_part4.rs:16512 auto_bump_done_to_completed[_with]` walks commits on the default branch only (step 1 detects the default branch; `scanned=false` off it), so lane-branch merges already do not flip to Completed; the work is to make Done-in-lane explicit (`show`/`status` render "Done (in <target-branch>)") and to assert `handle_db_reconcile_status` (17507) never promotes while the declaration is active. Per the V4 amendment: no new status enum variant; Done + verified landing evidence.
+
+    ## Files and functions
+    - aida-cli-lib/src/forge.rs:3842 `default_branch_of` → new `pr_base_for(project_root, spec)` consulted by 2654 and by `pr_cmd.rs:1438/4580`.
+    - aida-cli-lib/src/pr_ship.rs:533 `ship_branch_context` — carry base; merge phase in burndown.rs uses the same base.
+    - aida-cli-lib/src/lib_part4.rs:14693 `auto_bump_eligible_status` / 16529 `auto_bump_done_to_completed_with` — skip specs whose epic declaration is active (test both pull and reconcile-status).
+    - aida-cli-lib/src/status_cmd.rs:1612 `handle_status_command` and the `show` renderer — "Done (in EPIC-N / <branch>)" from the declaration, not a tag.
+    - aida-core/src/models.rs:12 `RequirementStatus` — unchanged (no new variant).
+    - Trailer parsing (`pr_ship.rs:2725 trailing_spec_ids_match_auto_bump_shape`) — unchanged; verify lane commits still recognised at land time.
+
+    ## Tests (named)
+    - drain_inside_target_branch_opens_pr_with_base_target_and_main_untouched
+    - auto_bump_skips_done_specs_with_active_target_declaration (pull + reconcile-status)
+    - show_and_status_render_done_in_target_branch
+    - spec_trailers_on_target_branch_commits_recognised_when_landed
+
+    ## Risks
+    - Merge phase in burndown asserts PR base == default branch in places; each such assertion must read the resolved base.
+    - Done today is terminal for some gates (models.rs:138); Done-in-lane must not be archived or treated as closed by sweeps.
+
+    ## Acceptance check
+    - AC1 → base test asserting `git log main` unchanged. AC2 → auto-bump skip tests. AC3 → render tests. AC4 → trailer test.
+
+    ## Gate before implementation
+    STORY-1481 Completed; EPIC-74 ADR accepted (vocabulary + Completed semantics); advisor signoff on this story's amended acceptance (V4 1482 AC1-AC4 are proposed, not applied).
+  created_at: 2026-10-11T07:01:58.919180844Z
+  modified_at: 2026-10-11T07:01:58.919180844Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 execution_mode: guided
