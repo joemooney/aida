@@ -3,30 +3,33 @@ spec_id: FAQ-1-259
 agreed_id: FAQ-25
 title: How should I set up the aida binary while developing AIDA itself?
 description: |
-  **Symlink `~/.local/bin/aida` and `~/.local/bin/aida-server` to the main checkout's `target/agent/` builds, keep the main checkout on a clean `main`, and do all feature work in worktrees.**
+  **Run `aida dev build --install-links` once in the main checkout, then `aida dev build` there after each merge. `~/.local/bin/aida` and `aida-server` then point at a live directory (`~/.local/share/aida/live/`) outside `target/`, and only a smoke-tested build from a clean `main` ever reaches it. Do all feature work in worktrees.**
 
   ## How
   ```bash
-  ln -sfn ~/ai/aida/target/agent/aida        ~/.local/bin/aida
-  ln -sfn ~/ai/aida/target/agent/aida-server ~/.local/bin/aida-server
-  cd ~/ai/aida && git status --short && make build-fast   # rebuild the live binary
+  cd ~/ai/aida
+  aida dev build --install-links   # one-time: build, smoke-test, promote, link ~/.local/bin
+  aida dev build                   # after each merge: rebuild and promote
+  aida dev status                  # live / previous / latest-built SHAs
+  aida dev rollback                # swap the previous build back in (run again to roll forward)
   ```
-  Then remove the other copies (`~/.cargo/bin/aida*`, old `.bak` files) so only one binary remains.
+  `--install-links` lists any file or stale link it would replace (e.g. an old symlink into `target/agent/`) and asks first; a replaced real file is kept as `<name>.pre-live`. Then remove the other copies (`~/.cargo/bin/aida*`, old `.bak` files) so only one binary remains.
 
-  ## Caveats (until STORY-1646 lands)
-  - **The live binary is whatever the main checkout last compiled.** If an agent edits or builds there, its unfinished work becomes everyone's `aida`. Feature work goes in worktrees, which build into their own `target/`.
-  - **Don't run `cargo clean` in the main checkout.** It deletes the binary the symlink points at, and every session loses `aida` until the build finishes.
-  - **A build that compiles but misbehaves goes live immediately, with no rollback.** To recover, check out a known-good commit and run `make build-fast`.
-  - Use `make build-fast` rather than plain `cargo build`. It runs the live-wave build guard and restarts stale MCP servers.
+  ## What `aida dev build` guarantees
+  - **Promotes only from the primary checkout, on `main`, with no tracked modifications and HEAD equal to `origin/main`.** Untracked files only warn. Anything else refuses before building; `--allow-dirty` overrides (status then shows the `+dirty` SHA).
+  - **In a worktree it builds and smoke-tests only**, and prints how to try the build in your shell (`aida dev activate auto`). `--no-promote` does the same anywhere.
+  - **Smoke test before promote:** `aida --version`, `aida list --limit 1`, `aida-server --version`. A failed build or smoke test leaves the live binaries untouched.
+  - **Atomic promote with rollback:** the outgoing pair is kept in `live/prev/`; stale MCP servers are restarted.
+  - **`cargo clean` can no longer break the live binary**, because it is a copy outside `target/`. For incremental-cache trouble use `aida dev build --clean` (deletes `target/agent/incremental` only) or `--clean=full` (`cargo clean --profile agent`).
+  - **Live waves:** it refuses to replace a binary a live drain wave is pinned to; `--after-wave` waits for the wave to drain.
 
-  ## Coming
-  STORY-1646: `aida dev build` builds, smoke-tests and atomically promotes to a live directory outside `target/`. It refuses from a dirty checkout, and adds `--clean` and `aida dev rollback`. `aida dev rebuild` is being removed.
+  `make build-fast` still exists but is build-only: it never touches the live binary. `aida dev rebuild` has been removed.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:27:12.385613822Z
-modified_at: 2026-10-10T18:47:57.818948302Z
+modified_at: 2026-10-11T08:18:27.129054031Z
 req_type: Faq
 tags:
 - audience:dev
