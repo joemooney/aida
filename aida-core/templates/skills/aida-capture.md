@@ -80,7 +80,7 @@ Review the conversation history for:
 For each finding, check if it already exists:
 
 ```bash
-aida list --search "<keyword>"
+aida search "<keyword>"
 ```
 
 For FAQ candidates, search both lenses — the default FAQ list hides
@@ -175,7 +175,7 @@ first and cite the id it printed. Never cite a guessed `FAQ-N`.
 
 ```bash
 # Search for existing requirements
-aida list --search "<keyword>"
+aida search "<keyword>"
 
 # Add new requirement (NOTE: use --tags not --tag)
 aida add --title "..." --description "..." --status <status> --tags "comma,separated"
