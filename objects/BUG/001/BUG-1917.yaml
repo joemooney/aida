@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   1. Each flag's help text describes what it does (`--code-only` pushes only the code branch; `--store-only` only syncs the store).
   2. A test pins help text to behaviour, e.g. by asserting each flag's description names the leg it pushes.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:49:05.302626163Z
-modified_at: 2026-10-11T07:13:47.012313765Z
+modified_at: 2026-10-11T07:42:45.285970817Z
 req_type: Bug
 tags:
 - cli
@@ -50,6 +50,14 @@ comments:
   created_at: 2026-10-11T07:13:31.602179721Z
   modified_at: 2026-10-11T07:13:31.602179721Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+history:
+- id: 01a129ea-0625-7c83-95ff-dbcf0ccc406b
+  author: joe
+  timestamp: 2026-10-11T07:42:45.285966736Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
