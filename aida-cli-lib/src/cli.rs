@@ -2206,6 +2206,17 @@ pub enum PrCommand {
         // trace:TASK-1448 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_approval: bool,
+
+        /// Ship this PR as a non-completing slice: write no completing
+        /// `(SPEC-ID)` trailer into the squash subject from any source
+        /// (title trailer or branch name), so the merge completes no spec.
+        /// Use for one PR of a multi-PR spec. A PR body line reading
+        /// `aida: no-complete` or `Non-completing slice` has the same
+        /// effect; and the branch-name fallback is skipped on its own when
+        /// the spec carries `closure:pending` or has open slice children.
+        // trace:BUG-1919 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_complete: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but

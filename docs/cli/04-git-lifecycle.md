@@ -84,6 +84,20 @@ or forced completion is needed for an ID remapping.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+**Non-completing slices.** The squash subject's trailing `(SPEC-ID)` group is
+what completes a spec at merge time. Ship derives it from an explicit title
+trailer first, then from the branch name — so a slice PR with no id in its
+title but a `<spec-id>-…` branch would complete `<spec-id>` after one of many
+PRs. Three things stop that: `aida pr ship --no-complete`, a PR-body line
+reading `aida: no-complete` or `Non-completing slice` (either one withholds
+the trailer from every source — the spec id stays in the PR body as a trace),
+and, with no declaration at all, the branch-name fallback is skipped when the
+spec carries `closure:pending` or still has open slice children. An explicit
+title trailer is always honoured. Before merging, ship prints the trailer it
+derived and its source — `from the PR title`, `from the branch name`, or
+`none` with the reason it was withheld.
+<!-- trace:BUG-1919 | ai:claude -->
+
 **Drive-owned PRs.** A live drive's PR remains protected by its independent
 reviewer. A direct human terminal invocation reports the owning wave/PID
 and phase, plus recent headless activity when that member's session is known.
