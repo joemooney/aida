@@ -13,9 +13,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:32:21.773236209Z
-modified_at: 2026-10-10T20:35:35.284264008Z
+modified_at: 2026-10-11T06:28:03.735495305Z
 req_type: Bug
 tags:
+- batch:night-2026-10-10
 - roles
 - statusline
 history:
