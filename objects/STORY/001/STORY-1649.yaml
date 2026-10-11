@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:11:01.493042018Z
-modified_at: 2026-10-11T07:24:57.860390276Z
+modified_at: 2026-10-11T07:42:52.999733770Z
 req_type: Story
 tags:
 - agent-surface
@@ -95,6 +95,15 @@ comments:
   content: 'FACTORY DRAFT: PR #2501 at aebf574c8da982d092a787ac4028c19f6f864f4e (branch story-1649-work, worktree /home/joe/ai/aida-story1649). make check-ci-fast passed 21 fast gates; build/clippy/tests run on CI only. Draft - not ready for review.'
   created_at: 2026-10-11T07:24:57.860390276Z
   modified_at: 2026-10-11T07:24:57.860390276Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129ea-2447-7a51-b3e0-d842e066887e
+  author: joe
+  content: |
+    FACTORY READY: PR #2501 green at aebf574c8da982d092a787ac4028c19f6f864f4e
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed on the first run; PR is mergeable. Draft left for the night relay / advisor to review, mark ready, and merge. Review fixes go in worktree `/home/joe/ai/aida-story1649` (branch `story-1649-work`). Reviewer notes from the drafting pass are in the PR body (TOON `shipped` is default-branch corroboration, narrower than `--format json`; the warning covers `--status completed`, not `done`).
+  created_at: 2026-10-11T07:42:52.999733770Z
+  modified_at: 2026-10-11T07:42:52.999733770Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a128c4-83c8-7663-b10d-a3f5ec8926ac
