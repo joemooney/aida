@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:23.618102809Z
-modified_at: 2026-10-11T13:38:54.704527432Z
+modified_at: 2026-10-11T13:59:33.236586087Z
 req_type: Bug
 tags:
 - ci
@@ -68,6 +68,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2519 at 089ffc4c9d'
   created_at: 2026-10-11T13:38:52.783735009Z
   modified_at: 2026-10-11T13:38:52.783735009Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b42-fe74-7d60-99a5-724bffa9cdef
+  author: joe
+  content: 'FACTORY READY: PR #2519 green at 089ffc4c9d (may need a trivial rebase against #2514 in ci.yml / ci-gate-tiers.toml)'
+  created_at: 2026-10-11T13:59:33.236586087Z
+  modified_at: 2026-10-11T13:59:33.236586087Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-06c7-7843-b2ba-7e9cf8b9848c
