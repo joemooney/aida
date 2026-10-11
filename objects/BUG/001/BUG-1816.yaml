@@ -16,9 +16,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T07:53:57.302480691Z
+modified_at: 2026-10-11T07:53:59.054946222Z
 req_type: Bug
 tags:
+- factory:night
 - triaged:night
 comments:
 - id: 01a129cd-dde6-76c1-87f2-0e01e252a5eb
