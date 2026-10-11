@@ -113,8 +113,8 @@ loop pick the rest back up.
   cycle before unattended.
 - `intake --apply` blessing the wrong thing is bounded by `[intake]` policy +
   the keystone exclusion, but review its first runs.
-- Cross-platform: the drain lock + `pid_is_alive` are validated on Linux (PR CI);
-  the nightly cross-platform run covers the rest.
+- Platforms: the drain lock + `pid_is_alive` are validated on Linux (PR CI);
+  AIDA is Linux-only, so no other platform is covered.
 
 ## See also
 

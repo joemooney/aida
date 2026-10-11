@@ -1,42 +1,17 @@
-name: Cross-platform (weekly)
+name: Cross-platform (manual)
 
-# Weekly Windows validation of latest main keeps platform checks informational.
-# Ubuntu Build and merge-hold-gate remain the only required PR checks.
-# macOS stays disabled; fixes use ordinary topic branches into main.
-# This cadence reduces platform-run frequency, not Linux PR CI duration.
-# trace:TASK-1588 | ai:codex
+# ADR-72: AIDA is Linux-only. Windows and macOS are unsupported platforms,
+# with no CI and no fix work. This workflow is kept ONLY so a future operator
+# reversal is cheap: it has no schedule and no pull_request trigger, never runs
+# automatically, gates nothing, and releases do not require it. Do not re-add
+# automatic triggers without a new explicit operator decision superseding
+# ADR-72. The weekly Linux-only jobs that used to live here moved to
+# weekly-linux.yml. trace:TASK-1723 | ai:claude
 #
-# Refresh before release: gh workflow run cross-platform.yml --ref main
-# scripts/pre-release-check.sh still requires green within 24 hours.
+# Manual run (informational only): gh workflow run cross-platform.yml --ref main
 
 on:
-  schedule:
-    - cron: '0 6 * * 0'   # Sunday 06:00 UTC
-  # TASK-1205: keep the Windows matrix informational on PRs that
-  # touch the fragile cross-platform surface, without expanding the required
-  # Linux-only PR CI path. trace:TASK-1205 | ai:codex
-  pull_request:
-    branches: [main]
-    paths:
-      # trace:BUG-1682 | ai:codex
-      - 'aida-cli-lib/src/global_queue.rs'
-      - 'aida-cli-lib/src/tests/bug_1682_global_queue_tests.rs'
-      - 'aida-cli-lib/src/agent_registry.rs'
-      - 'aida-cli-lib/src/**/worktree*.rs'
-      - 'aida-core/src/**/worktree*.rs'
-      - 'aida-cli-lib/src/init_cmd.rs'
-      - 'aida-cli-lib/src/**/resolve_aida_exe*'
-      - 'aida-cli-lib/src/**/session*.rs'
-      - 'aida-core/src/db/git_backend.rs'
-      - 'aida-core/templates/hooks/**'
-      - '.github/workflows/**'
   workflow_dispatch:
-    inputs:
-      exercise_tracking_issue:
-        description: 'Deliberately fail the matrix so the tracking-issue notifier can be exercised'
-        required: false
-        default: false
-        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -51,205 +26,10 @@ jobs:
       - name: Reject non-main manual dispatch
         shell: bash
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "::error::Cross-platform manual validation requires --ref main (received $GITHUB_REF)"
             exit 1
           fi
-
-  # TASK-1273: a real weekly GitLab lifecycle catches provider assumptions that
-  # mocked CLI output cannot: open MR -> wait for pipeline -> read review verdict
-  # -> merge through the Forge trait. The ignored Rust test owns cleanup. An
-  # absent credentials fail loudly; only an unreachable mirror skips the probe.
-  # trace:TASK-1273 | ai:codex
-  # Cloudflare Access and GitLab authorization are deliberately separate
-  # credentials. glab resolves the Access headers from environment variables
-  # at request time; no perimeter secret is written to disk.
-  # trace:TASK-1425 trace:ADR-54 | ai:codex
-  gitlab-forge-smoke:
-    needs: validate-main
-    name: GitLab live forge smoke
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      AIDA_GITLAB_LIVE_HOST: gitlab.joemooney.com
-      GLAB_VERSION: 1.118.0
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: main
-
-      - name: Check mirror availability and credentials
-        id: preflight
-        shell: bash
-        env:
-          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
-          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
-          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          for credential in GITLAB_TOKEN AIDA_CF_ACCESS_CLIENT_ID AIDA_CF_ACCESS_CLIENT_SECRET; do
-            if [ -z "${!credential:-}" ]; then
-              echo "::error::${credential} is not provisioned"
-              exit 1
-            fi
-          done
-
-          response="$(mktemp)"
-          headers="$(mktemp)"
-          set +e
-          http_status="$(curl --silent --show-error --max-time 15 \
-            --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
-            --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
-            --header "CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}" \
-            --header "CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}" \
-            "https://${AIDA_GITLAB_LIVE_HOST}/api/v4/version")"
-          curl_status=$?
-          set -e
-
-          content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
-          cf_ray="$(awk 'BEGIN { IGNORECASE=1 } /^cf-ray:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers")"
-          location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$headers" | sed -E 's/[?#].*$//')"
-          if [ "$http_status" = "302" ] && [[ "$location" == *cloudflareaccess.com/cdn-cgi/access/login/* ]]; then
-            body_class="cloudflare-access-login-redirect"
-          elif jq -e '.version | type == "string" and length > 0' "$response" >/dev/null 2>&1; then
-            body_class="gitlab-version-json"
-          elif grep -Eqi '<title>[^<]*(Cloudflare Access|Sign in)[^<]*</title>' "$response"; then
-            body_class="cloudflare-access-html"
-          elif grep -Eqi '^[[:space:]]*<!DOCTYPE html|^[[:space:]]*<html' "$response"; then
-            body_class="other-html"
-          elif jq -e 'type == "object" or type == "array"' "$response" >/dev/null 2>&1; then
-            body_class="other-json"
-          else
-            body_class="other"
-          fi
-          echo "GitLab API probe: curl_status=${curl_status} http_status=${http_status:-none} content_type=${content_type:-none} cf_ray=${cf_ray:-none} location_path=${location:-none} body_class=${body_class}"
-
-          identity_response="$(mktemp)"
-          identity_headers="$(mktemp)"
-          set +e
-          identity_status="$(curl --silent --show-error --max-time 15 \
-            --dump-header "$identity_headers" --output "$identity_response" --write-out '%{http_code}' \
-            --header "CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}" \
-            --header "CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}" \
-            "https://${AIDA_GITLAB_LIVE_HOST}/cdn-cgi/access/get-identity")"
-          identity_curl_status=$?
-          set -e
-          identity_content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$identity_headers")"
-          if jq -e 'type == "object"' "$identity_response" >/dev/null 2>&1; then
-            identity_body_class="json-object"
-          elif grep -Eqi '<title>[^<]*(Cloudflare Access|Sign in)[^<]*</title>' "$identity_response"; then
-            identity_body_class="cloudflare-access-html"
-          elif grep -Eqi '^[[:space:]]*<!DOCTYPE html|^[[:space:]]*<html' "$identity_response"; then
-            identity_body_class="other-html"
-          else
-            identity_body_class="other"
-          fi
-          echo "Cloudflare identity probe: curl_status=${identity_curl_status} http_status=${identity_status:-none} content_type=${identity_content_type:-none} body_class=${identity_body_class}"
-
-          if [ "$curl_status" -ne 0 ]; then
-            echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          elif [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
-            if [ "$body_class" = "cloudflare-access-login-redirect" ]; then
-              echo "::error::Cloudflare Access rejected the service-token pair and redirected to interactive login; verify that the matching token is included by a Service Auth policy covering this hostname and path"
-            else
-              echo "::error::GitLab API preflight returned HTTP ${http_status}; verify the Access Service Auth policy and both credential pairs"
-            fi
-            exit 1
-          elif [ "$body_class" != "gitlab-version-json" ]; then
-            echo "::error::GitLab API preflight returned ${body_class}, not GitLab version JSON; compare the safe API and identity probe classifications above"
-            exit 1
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-          rm -f "$response" "$headers" "$identity_response" "$identity_headers"
-
-      - name: Install Rust and GitLab CLI
-        if: steps.preflight.outputs.run == 'true'
-        shell: bash
-        run: |
-          archive="glab_${GLAB_VERSION}_linux_amd64.tar.gz"
-          release="https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads"
-          curl --silent --show-error --fail --location --output "$RUNNER_TEMP/$archive" "$release/$archive"
-          curl --silent --show-error --fail --location --output "$RUNNER_TEMP/glab-checksums.txt" "$release/checksums.txt"
-          (cd "$RUNNER_TEMP" && grep "  ${archive}$" glab-checksums.txt | sha256sum --check --strict)
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
-          sudo install -m 0755 "$RUNNER_TEMP/bin/glab" /usr/local/bin/glab
-          glab --version | grep -F "glab ${GLAB_VERSION}"
-          rustup toolchain install stable --profile minimal
-
-      - name: Configure GitLab CLI authentication
-        if: steps.preflight.outputs.run == 'true'
-        shell: bash
-        env:
-          GLAB_CONFIG_DIR: ${{ runner.temp }}/glab-cli
-          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
-          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
-          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          mkdir -p "$GLAB_CONFIG_DIR"
-          cat >"$GLAB_CONFIG_DIR/config.yml" <<EOF
-          hosts:
-            ${AIDA_GITLAB_LIVE_HOST}:
-              api_host: ${AIDA_GITLAB_LIVE_HOST}
-              api_protocol: https
-              git_protocol: https
-              custom_headers:
-                - name: CF-Access-Client-Id
-                  valueFromEnv: AIDA_CF_ACCESS_CLIENT_ID
-                - name: CF-Access-Client-Secret
-                  valueFromEnv: AIDA_CF_ACCESS_CLIENT_SECRET
-          EOF
-          chmod 600 "$GLAB_CONFIG_DIR/config.yml"
-          glab auth status --hostname "$AIDA_GITLAB_LIVE_HOST"
-
-      - name: Run open-CI-review-merge lifecycle
-        if: steps.preflight.outputs.run == 'true'
-        env:
-          GLAB_CONFIG_DIR: ${{ runner.temp }}/glab-cli
-          GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
-          AIDA_CF_ACCESS_CLIENT_ID: ${{ secrets.AIDA_CF_ACCESS_CLIENT_ID }}
-          AIDA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.AIDA_CF_ACCESS_CLIENT_SECRET }}
-        shell: bash
-        run: |
-          # Git's smart-HTTP transport is separate from glab and must cross the
-          # same Access perimeter. Numbered environment config applies only to
-          # this process tree: no secret-bearing repo/global config is written.
-          # The glab credential helper supplies the separate GitLab PAT without
-          # embedding it in the clone URL. trace:TASK-1425 trace:ADR-54 | ai:codex
-          export GIT_CONFIG_COUNT=3
-          export GIT_CONFIG_KEY_0="http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader"
-          export GIT_CONFIG_VALUE_0="CF-Access-Client-Id: ${AIDA_CF_ACCESS_CLIENT_ID}"
-          export GIT_CONFIG_KEY_1="http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader"
-          export GIT_CONFIG_VALUE_1="CF-Access-Client-Secret: ${AIDA_CF_ACCESS_CLIENT_SECRET}"
-          export GIT_CONFIG_KEY_2="credential.https://${AIDA_GITLAB_LIVE_HOST}.helper"
-          export GIT_CONFIG_VALUE_2='!glab auth git-credential'
-          trap 'unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 GIT_CONFIG_KEY_1 GIT_CONFIG_VALUE_1 GIT_CONFIG_KEY_2 GIT_CONFIG_VALUE_2' EXIT
-
-          header_count="$(git config --get-all "http.https://${AIDA_GITLAB_LIVE_HOST}/.extraHeader" | wc -l)"
-          if [ "$header_count" -ne 2 ]; then
-            echo "::error::Git smart-HTTP Access headers were not installed in process-scoped configuration"
-            exit 1
-          fi
-          cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
-
-  # TASK-1507: the history index's random-DAG parity sweep is too slow for
-  # the PR suite (about 40 s of git processes), so it is #[ignore]d there and
-  # run weekly here, like the gitlab_live smoke above. trace:TASK-1507 | ai:claude
-  history-index-sweep:
-    needs: validate-main
-    name: History index random sweep
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: main
-      - name: Install Rust
-        run: rustup toolchain install stable --profile minimal
-      - name: Run the ignored random DAG sweep
-        run: cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored --nocapture
 
   build:
     needs: validate-main
@@ -258,88 +38,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TASK-1570: macOS is disabled until further notice (operator mandate,
-        # 2026-10-02). Restore by re-adding macos-latest. While disabled, the
-        # BUG-1776 macOS weekly reds cannot fire. trace:TASK-1570 | ai:claude
         os: [windows-latest]
 
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+          ref: main
 
-      # TASK-1205: manual, opt-in tripwire for exercising the red-matrix
-      # tracking-issue path without waiting for a genuine weekly failure.
-      # trace:TASK-1205 | ai:codex
-      - name: Exercise tracking issue notifier
-        if: github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue
-        run: |
-          echo "::error::Deliberate cross-platform failure requested by workflow_dispatch"
-          exit 1
-
-      # BUG-1555 PROBE: is the project-copy discipline guide checked out with
-      # CRLF on Windows while its embedded master is LF?
-      #
-      # The discipline-drift test compares `local.trim_end() != *master`, which
-      # normalises TRAILING whitespace only — every interior newline still
-      # differs if one side is CRLF. `.gitattributes` pins
-      # `aida-core/templates/**` to LF (BUG-244) and says nothing about
-      # `.aida/discipline/**`, so the two sides can disagree by line ending
-      # alone and 23 of 23 compared guides fail at once.
-      #
-      # REPORT-ONLY, DELIBERATELY. It never fails the job: the point is to emit
-      # an observation that does not exist today. The log shortcut is already
-      # ruled out — actions/checkout never prints core.autocrlf, so its absence
-      # from an 8820-line job says nothing either way.
-      # trace:BUG-1555 | ai:claude
-      - name: Probe discipline-pack line endings
-        if: always()
-        shell: bash
-        run: |
-          probe_file () {
-            if [ ! -f "$2" ]; then echo "  $1: ABSENT ($2)"; return; fi
-            if grep -qU $'\r' "$2"; then echo "  $1: CRLF  ($2)"; else echo "  $1: LF    ($2)"; fi
-          }
-          echo "BUG-1555 line-ending probe on ${{ runner.os }}"
-          echo "core.autocrlf = $(git config --get core.autocrlf || echo '(unset)')"
-          echo "core.eol      = $(git config --get core.eol || echo '(unset)')"
-          echo "--- the two sides the drift test compares ---"
-          probe_file "project copy" ".aida/discipline/README.md"
-          probe_file "master      " "aida-core/templates/.aida/discipline/README.md"
-          echo "--- every tracked project-copy guide ---"
-          for f in .aida/discipline/*.md; do probe_file "$(basename "$f")" "$f"; done
-          echo "(report-only — this step never fails the job)"
-      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # BUG-103: the macos-latest runner intermittently has a stale cache
-      # where `cargo` resolves to `rustup-init`, breaking `cargo build`
-      # with "unexpected argument 'build'". Re-pinning the default
-      # toolchain regenerates the rustup proxy binaries; the grep guard
-      # then fails the job fast + clearly if `cargo` is still wrong,
-      # instead of a cryptic mid-build error. Runs on every OS (idempotent
-      # elsewhere) via `shell: bash`, which GitHub provides on all
-      # runners. trace:BUG-103 | ai:claude
-      - name: Pin stable toolchain & verify cargo
-        shell: bash
-        run: |
-          rustup default stable
-          echo "cargo path: $(command -v cargo)"
-          cargo --version
-          cargo --version | grep -q '^cargo ' || {
-            echo "::error::cargo did not resolve to the real cargo binary (stale rustup-init cache — BUG-103)"
-            exit 1
-          }
-
       # protoc is required by tonic-build (aida-server's gRPC build script).
-      # See BUG-66. Installed via OS package managers instead of
-      # arduino/setup-protoc — that action still runs on Node.js 20
-      # (deprecated) and has no Node 24 release. trace:TASK-290 | ai:claude
-      - name: Install protoc (macOS)
-        if: runner.os == 'macOS'
-        run: brew install protobuf
-
       - name: Install protoc (Windows)
         if: runner.os == 'Windows'
         run: choco install protoc -y
@@ -351,67 +60,4 @@ jobs:
         run: cargo build --workspace --release
 
       - name: Run tests
-        # --no-fail-fast: one run reports every failing test binary across
-        # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
-
-  # TASK-687: the former daily matrix was red 3 days unnoticed before a release gate
-  # forced the issue. PR CI is Linux-only (TASK-257), so cross-platform debt
-  # accrues invisibly between releases. Make failure LOUD: open (or comment on)
-  # a single tracking issue when the *scheduled* run fails, and close it when a
-  # scheduled run goes green again. Scoped to `schedule` so the manual dispatches
-  # fired during a release fix-forward loop don't spam issues. trace:TASK-687
-  notify-failure:
-    name: Open tracking issue on weekly failure
-    needs: build
-    if: failure() && needs.build.result == 'failure' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue))
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-    steps:
-      # BUG-1021: gh issue commands infer the repository from git context unless
-      # GH_REPO is provided. Give the scheduled notifier a checkout so it can
-      # open/comment reliably after a matrix failure. trace:BUG-1021 | ai:codex
-      - uses: actions/checkout@v5
-
-      - name: Open or update the cross-platform-red issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          label="cross-platform-red"
-          gh label create "$label" --color B60205 \
-            --description "Weekly Windows CI is failing" 2>/dev/null || true
-          existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
-          line="Weekly Windows validation failed: $RUN_URL"
-          title="Weekly cross-platform CI is red"
-          body="$(printf '%s\n\n%s\n\n%s\n' "$line" \
-            "The Windows matrix is failing on the weekly Sunday 06:00 UTC main validation. macOS remains disabled. PR CI requires Ubuntu Build and merge-hold-gate only; selected-path Windows PR checks are informational. Product triages this issue at its next daily check and before any release. Windows fixes remain behind Linux work unless the operator reprioritizes them. Subsequent weekly failures update this issue; a green scheduled recovery closes it." \
-            "trace:TASK-687 trace:TASK-1588")"
-          if [ -n "$existing" ]; then
-            gh issue edit "$existing" --title "$title" --body "$body"
-            gh issue comment "$existing" --body "$line"
-          else
-            gh issue create --title "$title" --label "$label" --body "$body"
-          fi
-
-  notify-recovery:
-    name: Close tracking issue on weekly recovery
-    needs: build
-    if: success() && github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-    steps:
-      # See notifier checkout note above. trace:BUG-1021 | ai:codex
-      - uses: actions/checkout@v5
-
-      - name: Close any open cross-platform-red issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          label="cross-platform-red"
-          for n in $(gh issue list --state open --label "$label" --json number --jq '.[].number'); do
-            gh issue close "$n" --comment "Cross-platform CI is green again: $RUN_URL"
-          done

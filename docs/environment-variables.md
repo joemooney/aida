@@ -227,7 +227,7 @@ doesn't match.
 | `AIDA_SERVER` | Remote gRPC server address for distributed mode. Overrides the `--server` flag when the flag is absent. | unset = `None`. Values: `host:port` or `grpc://host:port`. | user | process env |
 | `AIDA_MCP_PROFILE` | MCP tool access tier. Resolution: CLI flag → env → config → default. | `full`. Values: `read-only` / `core` / `full`. | user | process env |
 | `AIDA_GH_VERIFY_RETRIES` | Retry count for GitHub PR-verification during pull/merge. | `3`. | user | process env |
-| `AIDA_SKIP_XPLAT_CHECK` | Skips the cross-platform pre-release validation gate in `scripts/release.sh`. | unset = gate enforced. Opt-in (truthy). | launch-path (`aida release --dev`) / user | process env |
+| `AIDA_SKIP_XPLAT_CHECK` | Ignored (kept for compatibility): releases are Linux-only and `scripts/release.sh` has no cross-platform gate. | no effect. | launch-path (`aida release --dev`) / user | process env |
 | `AIDA_SKIP_DOCS_CHECK` | Skips the release-time documentation gate (`scripts/docs-gate.sh`) in `scripts/release.sh` — the CHANGELOG-currency + plan-ref check that runs before the tag. | unset = gate enforced. Opt-in (truthy). | user | process env |
 | `AIDA_BIN` | Overrides the `aida` invocation used by `scripts/docs-gate.sh` (tests point it at a prebuilt binary). Space-separated words are honoured. | unset = `cargo run -q -p aida-cli --`. | test | process env |
 | `AIDA_DEBUG_GH` | Traces `gh` binary resolution to stderr (every candidate tried + why rejected). | unset = off. Any non-empty value except `0` enables. | dev | process env |

@@ -211,3 +211,31 @@ fn newer_failed_main_dispatch_does_not_clear_nightly_red() {
 
     assert_eq!(red.run_id, Some(400));
 }
+
+// ADR-72: the cross-platform workflow is dispatch-only, so `aida awaiting` and
+// `aida doctor` must not surface a nightly red, even when an old cache entry
+// still holds one. Returns before any `gh` call, so this needs no network.
+// trace:TASK-1723 | ai:claude
+#[test]
+fn task_1723_nightly_red_is_silenced_while_cross_platform_is_unscheduled() {
+    assert!(!CROSS_PLATFORM_WORKFLOW_SCHEDULED);
+    let dir = tempfile::tempdir().unwrap();
+    assert!(nightly_red_status(dir.path()).is_none());
+
+    let cache_dir = dir.path().join(".aida").join("cache");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    let stale = NightlyRedCache {
+        fetched_at: chrono::Utc::now(),
+        item: Some(crate::awaiting_you::NightlyRedItem {
+            summary: "cross-platform nightly red since 2026-09-23".into(),
+            run_id: Some(1),
+            nights: 3,
+        }),
+    };
+    std::fs::write(
+        cache_dir.join("awaiting-nightly-red.json"),
+        serde_json::to_vec(&stale).unwrap(),
+    )
+    .unwrap();
+    assert!(cached_nightly_red_status(dir.path()).is_none());
+}

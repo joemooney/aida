@@ -2966,7 +2966,7 @@ mod sweep {
     }
 
     /// Slow (about 100 s of git processes): run with `--ignored`. CI runs it
-    /// nightly in cross-platform.yml.
+    /// weekly in weekly-linux.yml.
     #[test]
     #[ignore = "slow random sweep; run with --ignored (nightly CI)"]
     fn task_1507_random_dag_sweep_fixed_seeds() {

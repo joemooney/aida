@@ -121,8 +121,8 @@ bodies are separate: `aida-cli-lib/src/forge.rs` contains `GitLabForge` for the
 PR/MR + CI lifecycle, while `aida-core/src/integrations/gitlab/client.rs`
 contains `GitLabClient` for the GitLab Issues integration.
 
-**Live-GitLab trait validation runs nightly.** The scheduled
-`cross-platform.yml` workflow creates a throwaway project on the self-hosted
+**Live-GitLab trait validation runs weekly.** The scheduled
+`weekly-linux.yml` workflow creates a throwaway project on the self-hosted
 mirror, opens an MR through `Forge::open_change`, waits for a real pipeline,
 reads its review verdict, and merges it through `Forge::merge_change`. The job
 deletes the project even after a test panic. It reports a skipped probe (rather

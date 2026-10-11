@@ -123,12 +123,13 @@ drain shelves `ci-red` or `pr ship` aborts:
 
 ```toml
 [ci]
-informational_workflows = ["Cross-platform*"]  # default: the path-filtered Windows/macOS matrix
+informational_workflows = ["Cross-platform*"]  # default: the manual-only cross-platform workflow
 informational_checks = []                      # e.g. ["Build (windows*"] — `*` wildcards, case-insensitive
 ```
 
-`informational_workflows` matches the *workflow* name (the Windows/macOS jobs
-share PR CI's `Build (…)` job name, so the workflow is the discriminator);
+`informational_workflows` matches the *workflow* name (the manual-only
+cross-platform workflow's jobs share PR CI's `Build (…)` job name, so the
+workflow is the discriminator);
 `informational_checks` matches the check name. An explicit `[]` disables that
 list. The rows come from the forge: GitHub `gh pr checks --json` (with the
 branch-protection required set), GitLab the newest pipeline's jobs (no

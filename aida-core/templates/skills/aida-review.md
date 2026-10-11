@@ -123,9 +123,8 @@ current wait state and exit instead of parking the session on a future
 notification.
 
 Reviewer CI contract: you may gate on the PR CI required for the review, but
-do not gate on the nightly cross-platform workflow unless the spec's
-acceptance criteria explicitly name that workflow. When the spec does require
-it, poll it by the bounded-step rule above.
+do not gate on the manual-only cross-platform workflow: AIDA is Linux-only,
+and a Windows/macOS-only failure is not a review blocker.
 
 ## Fix-forward policy — trace:TASK-333 | ai:claude
 
