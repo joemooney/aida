@@ -298,6 +298,7 @@ mod network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
+mod reconcile_evidence;
 mod reconstitute;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;

@@ -22,6 +22,14 @@ a later deliberate decision or later commit permits progress. Queue views
 label old evidence as reopened work instead of recommending reconciliation.
 <!-- trace:TASK-1338 | ai:codex -->
 
+`db reconcile-status` reports each matched candidate's reason against a pinned
+default-branch tip. A required open-PR check that cannot answer (missing `gh`,
+failed exit, malformed/non-array rows, unsupported or unclassifiable forge) is
+an ordinary nonzero error naming the commit, in `--dry-run` too; the normal
+batch stays all-or-nothing. Forge discovery there never rewrites config. The
+write seam rechecks identity, reopen, closure and covers facts on the live store.
+<!-- trace:TASK-1335 | ai:claude -->
+
 `pr ship` preflights review/corpus, mergeability, stale-definition, and hold
 gates before CI, then checks again under the merge lease. `--wait <secs>`
 bounds CI registration plus settlement; omitted means unbounded. Typed exit
