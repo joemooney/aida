@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:47:04.707704853Z
-modified_at: 2026-10-11T13:18:00.950038853Z
+modified_at: 2026-10-11T13:23:02.951805173Z
 req_type: Bug
 tags:
 - attribution
@@ -59,6 +59,12 @@ comments:
   content: 'FACTORY PLAN (night): Split detect_agent_type() in aida-cli-lib/src/agent_registry.rs into a thin env wrapper over a pure detect_agent_type_from_env(vars) so precedence is unit-testable without env mutation. Precedence: AIDA_AGENT_TYPE override > strong live-session markers (CODEX_*, ANTIGRAVITY_*, CLAUDECODE / CLAUDE_CODE_*) > weak vendor prefixes (GEMINI_*, CLAUDE*) > other. Variable names ending in _API_KEY (and _KEY/_TOKEN credentials) are excluded from the scan entirely, so an exported API key never decides attribution. Also add ''faq'' to the ''aida edit --type'' help enumeration (cli.rs). Tests (agent_registry tests module): detect_agent_type_prefers_live_session_over_api_key (CLAUDECODE=1 + GEMINI_API_KEY -> claude), detect_agent_type_api_key_never_decides (ANTIGRAVITY_SESSION_ID + ANTHROPIC_API_KEY -> antigravity; GEMINI_API_KEY alone -> other), detect_agent_type_explicit_override_wins, detect_agent_type_live_marker_beats_stale_weak_prefix (CLAUDE_CODE_ENTRYPOINT + GEMINI_MODEL -> claude). Risks: behaviour change for sessions whose only signal was a GEMINI_*_API_KEY (now ''other''); intended. Acceptance checked via CI running these unit tests.'
   created_at: 2026-10-11T13:18:00.950038853Z
   modified_at: 2026-10-11T13:18:00.950038853Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b21-92a7-7da0-8fda-79d72363e81b
+  author: joe
+  content: 'FACTORY DRAFT: PR #2513 at 39467642d2'
+  created_at: 2026-10-11T13:23:02.951805173Z
+  modified_at: 2026-10-11T13:23:02.951805173Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ed-727c-7c03-ab2f-96c425625e17
