@@ -8,12 +8,12 @@ description: |
   Want: the CI column honours the same informational_workflows / informational_checks config as ci_gate (BUG-1191), or reads only the branch-protection required checks, so "Failing" means "blocks merge". Collapse a multi-spec PR into one row listing every ID.
 
   Acceptance: a PR whose only red check is informational shows Passing (or "Passing, 1 informational red"); a two-spec PR is one row.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:08.306254718Z
-modified_at: 2026-10-11T13:46:45.868669153Z
+modified_at: 2026-10-11T15:26:51.040297483Z
 req_type: Bug
 tags:
 - ci
@@ -88,6 +88,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b92-ea4f-7121-8cb3-2413a0e8c874
+  author: aida-auto-bump
+  timestamp: 2026-10-11T15:26:50.959463805Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b92-eaa0-7850-b69f-05f787e9e7ef
+  timestamp: 2026-10-11T15:26:51.040294965Z
+  agent: implementer
+  commit_sha: 1d2931a927278e02c02b58a935de532fc229f13d
+  summary: Completed via merge 1d2931a9
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
@@ -96,3 +109,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:26:50.959459441Z
+  completion_sha: 1d2931a927278e02c02b58a935de532fc229f13d
