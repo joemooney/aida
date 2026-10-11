@@ -14,12 +14,12 @@ description: |-
   Also seen: the BUG-1918 and BUG-1921 sessions were human 'dormant' with pid '-' and no worktree change in 10+ minutes, while the TOON view gave dispatch_state 'moving' for the same rows. Tied to STORY-1653 (show who is driving each spec).
 
   Acceptance: (a) never show Salvageable for a cwd that has a live process, and treat untracked-only changes on the main checkout as not salvageable; human and --all views agree. (b) started and elapsed refer to the same process. (c) different processes in the main checkout get separate rows with their real roles (or at least are not labelled subagent), and the pid is chosen deterministically. (d) dispatch_state agrees with the dormant/stalled label.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:01:08.017370724Z
-modified_at: 2026-10-11T17:48:34.772673331Z
+modified_at: 2026-10-11T18:09:27.021387220Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -60,6 +60,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12c27-c789-7aa0-ba16-086aae49e64e
+  author: aida-auto-bump
+  timestamp: 2026-10-11T18:09:26.921989961Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12c27-c7ed-70d2-9503-cf09d6bac99c
+  timestamp: 2026-10-11T18:09:27.021384797Z
+  agent: implementer
+  commit_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
+  summary: Completed via merge ff2f6d5b
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
@@ -68,3 +81,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T18:09:26.921985591Z
+  completion_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
