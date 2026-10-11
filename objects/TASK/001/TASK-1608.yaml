@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:06.818167687Z
-modified_at: 2026-10-07T01:49:46.482790443Z
+modified_at: 2026-10-11T07:01:37.358744136Z
 req_type: Task
 tags:
 - guided-lane
@@ -35,6 +35,42 @@ relationships:
   target_id: 01a11409-166a-7532-811a-eb943fe701d0
   created_at: 2026-10-07T01:45:14.231034023Z
   created_by: joe
+comments:
+- id: 01a129c4-5dce-7ec2-b99f-3c511cf26559
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided; blocked by TASK-1607 (slice A, Approved, PR #2451 open on `story-1485`, not merged).
+
+    ## Approach
+    Slice B builds strictly on slice A's modules from `origin/story-1485` (`git diff origin/main...origin/story-1485 --stat`: 20 files, +5480): `aida-cli-lib/src/seat_occupancy/{mod.rs, runtime.rs, cmd.rs, store.rs, scope.rs, config.rs, tests.rs}`, `aida-core/src/process_probe.rs` (ProcessIdentity, Probe Alive/Dead/Unknown, ProcFacts, ProbeSource, FakeProc), a 14-line liveness.rs hook, and the sketch `docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md` (on the branch, not main). Slice A ships the graceful state machine (`claim/release/ack/takeover/poll_takeover`, `TakeoverRequest`, `Relation`, `gate`) and refuses `--kill` before reading any state (`cmd.rs:25-29`; test `kill_is_refused_everywhere_before_any_state_is_read`). Slice B replaces that refusal with the sketch §4-5 hard path: direct non-child TTY grant + target confirmation, post-grace revalidation, exact-target stop adapter (pidfd where available), stopping-state recovery, dirty-worktree report/preserve, positive termination proof, then CAS transfer. No trusted-kill config (sketch §5).
+
+    ## Files and functions
+    - aida-cli-lib/src/seat_occupancy/cmd.rs:24 `dispatch` — route `--kill` to a new `run_hard_takeover` instead of bailing; keep the bail for managed/MCP/headless callers.
+    - aida-cli-lib/src/seat_occupancy/runtime.rs:175 `authorize_with_caller` — add `SeatOp::HardStop` requiring `seat_authority::require_direct_human` + a direct (non-child) grant + interactive confirmation naming holder, generation, in-flight scopes.
+    - aida-cli-lib/src/seat_occupancy/mod.rs:1224 `takeover` / 1351 `poll_takeover` — new `TakeoverStep::Stopping`, `StopOutcome {Terminated, Failed, Unknown}`; revalidate grant/request/generation/target identity after grace before signalling.
+    - aida-core/src/process_probe.rs — `StopHandle::open(ProcessIdentity) -> pidfd` (Linux), `signal(SIGTERM→SIGKILL)` only through the identity-bound handle; Unknown → refuse.
+    - aida-cli-lib/src/seat_occupancy/store.rs — persist `stopping` with request id so an interrupted stop resumes, never resets grace.
+    - new: dirty-worktree report helper reusing `working_tree_clean` (queue_cmd.rs) for the holder's lease worktrees.
+
+    ## Tests (named)
+    - hard_takeover_stops_controlled_process_and_transfers_by_cas — owned child process only (FakeProc + real spawn), never a peer session.
+    - hard_takeover_refused_for_managed_mcp_headless_callers; refused_on_ambiguous_daemon_mapping.
+    - hard_takeover_stop_failure_enters_stopping_recovery; unknown_probe_never_signals.
+    - hard_takeover_reports_and_preserves_dirty_worktree.
+    - Non-vacuity: each refusal test re-run with the guard removed (document the failing output in the PR).
+
+    ## Risks
+    - Slice A may still change under review (C7 rework commits are recent); rebase cost.
+    - pidfd unavailability on older kernels → must refuse, not fall back to bare PID.
+
+    ## Acceptance check
+    - AC1 → controlled-process stop test. AC2 → caller-class refusal tests. AC3 → stopping/Unknown + dirty tests. AC4 → guard-removal witness. AC5 → commits carry only `(TASK-1608)`.
+
+    ## Gate before implementation
+    TASK-1607 merged (PR #2451) and Completed; then guided lane with Joe, `make check-ci-fast` before push, no self-merge; STORY-1485 completes only after independent review of both slice PRs plus the 2026-09-26 operator acceptance.
+  created_at: 2026-10-11T07:01:37.358744136Z
+  modified_at: 2026-10-11T07:01:37.358744136Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a1140a-404d-7d10-b7bc-73b33bd3898b
   author: joe
