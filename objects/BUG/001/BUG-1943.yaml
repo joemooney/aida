@@ -11,13 +11,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:20:55.567515247Z
-modified_at: 2026-10-11T18:10:10.306692128Z
+modified_at: 2026-10-11T18:28:44.830216550Z
 req_type: Bug
 tags:
 - awaiting
 - batch:night-2026-10-10
 - ci
 - platforms
+comments:
+- id: 01a12c39-729e-7443-8c2e-08ae568554ee
+  author: joe
+  content: 'REVIEW (night): APPROVE at 246e2713 (PR #2537), fresh reviewer. The key stays as ''nightly_red: -'' (the standard empty placeholder; JSON gives null), accepted as meeting the acceptance. Note: main had already silenced the signal via a hard-coded constant (TASK-1723); this generalises it to read the workflow''s schedule trigger.'
+  created_at: 2026-10-11T18:28:44.830216550Z
+  modified_at: 2026-10-11T18:28:44.830216550Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a129a5-9019-7001-b225-cfd924c179f1
   author: joe
