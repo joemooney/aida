@@ -3,12 +3,12 @@ spec_id: BUG-1942
 agreed_id: BUG-1942
 title: History index stall guard never retries inline catch-up and repeats its hint in short-lived processes
 description: 'Follow-up from the PR #2488 review (approved at e80ff69d74). (1) Once catch_up_guarded in aida-cli-lib/src/history_cache.rs records 3 consecutive zero-progress attempts, inline catch-up stays disabled until aida cache rebuild --history; three interrupted slow first chunks or transient git/disk errors therefore permanently degrade queries to the git walk. Add a cool-down retry (e.g. a stored timestamp, retry hourly or when the gap grows by more than one chunk). (2) stalled_hint prints once per process, so frequent short processes (statusline, hooks) print it on every call; suppress it when stderr is not a TTY. (3) Strengthen the far-behind regression test with a per-call check that the indexed commit count equals rev-list --count <tip>. Acceptance: a paused index resumes catch-up after the cool-down without a manual rebuild; no hint on non-TTY stderr; the test asserts per-call ancestor completeness.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T08:08:29.167387139Z
+modified_at: 2026-10-11T13:40:30.141586527Z
 req_type: Bug
 tags:
 - triaged:night
@@ -64,6 +64,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b31-8d3d-7912-a28d-d7552239ab8c
+  author: aida-session-start
+  timestamp: 2026-10-11T13:40:30.141585849Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 392438a12ee4539e011144313eb625fd543cd6f1
   branch: main
