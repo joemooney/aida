@@ -14,12 +14,12 @@ description: |
   - Operator attribution requires a human-at-TTY gate (BUG-1693 floor).
   - `aida pr ship` refuses a PR that has no approval recorded at its head by an authorized non-author seat. Where "no approval → proceed" must stay for unreviewed lanes, it applies only to lanes that explicitly opt out (fasttrack), not by default.
   - Regression test: a self-recorded approval at head with recorded_by="aida review record (operator)" from the author session → ship refuses.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T01:51:12.523278361Z
+modified_at: 2026-10-11T01:53:06.829049931Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -143,6 +143,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a128a9-eb0d-7012-867e-c64fe06e41c0
+  author: aida-session-start
+  timestamp: 2026-10-11T01:53:06.829049390Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
