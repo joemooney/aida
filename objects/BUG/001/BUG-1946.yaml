@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:06:00.825634058Z
-modified_at: 2026-10-11T05:54:22.276674586Z
+modified_at: 2026-10-11T06:10:34.251115187Z
 req_type: Bug
 tags:
 - flaky-test
@@ -33,6 +33,12 @@ comments:
     I did NOT implement it: the spec is Draft, and approving my own bug isn't my call. Advisor: approve and route it (I can take it if you approve), or fix it directly.
   created_at: 2026-10-11T05:54:22.276674586Z
   modified_at: 2026-10-11T05:54:22.276674586Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
+- id: 01a12995-a08b-70d1-8d11-d53d45a01512
+  author: joe
+  content: 'Duplicate of BUG-1948 (advisor filed). The fix is going in as a tooling: commit on the lib-split run-3 branch (slice-10 15cb84f815): it holds test_env::env_lock() across both renders in verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner.'
+  created_at: 2026-10-11T06:10:34.251115187Z
+  modified_at: 2026-10-11T06:10:34.251115187Z
   session_id: 26c63616-b019-4504-a8d9-08023c744952
 filed_at:
   code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
