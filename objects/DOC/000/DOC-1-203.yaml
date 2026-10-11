@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T07:12:23.955569879Z
+modified_at: 2026-10-11T07:13:03.570022294Z
 req_type: Doc
 tags:
 - factory:night
@@ -220,6 +220,13 @@ comments:
     Static readback: `rg -n 'AIDA_SESSION_ROLE=' docs .aida/discipline aida-core/templates` must return only historical notes, persona (`guest|requester`) hints, test-env `env -u` advice and plan/archive files — no current guidance that an env prefix confers authority.
   created_at: 2026-10-11T07:06:35.472538900Z
   modified_at: 2026-10-11T07:06:35.472538900Z
+  session_id: 01a129c3fefa
+- id: 01a129ce-d652-7043-a0e4-482b3a4a5444
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2499 at 38923c6380 (B3 doc slice only). Partial doc slice; does not complete DOC-6. Branch doc-6-b3-docs, worktree /home/joe/ai/aida-doc-6-factory. Not compiled locally; the non-cargo fast doc gates and `make check-templates` pass. Left for routing: README.md:316-328 env-prefix tutorial, seat-parity/personas env-hint matrices, Rust source comments and `aida team`/`role active|current` help strings (B1/B2/R1 lane, TASK-1594 items 1-2).
+  created_at: 2026-10-11T07:13:03.570022294Z
+  modified_at: 2026-10-11T07:13:03.570022294Z
   session_id: 01a129c3fefa
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
