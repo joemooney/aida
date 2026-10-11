@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T00:09:06.573964885Z
+modified_at: 2026-10-11T00:50:22.683696711Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -62,6 +62,22 @@ comments:
   created_at: 2026-10-11T00:09:06.573964885Z
   modified_at: 2026-10-11T00:09:06.573964885Z
   session_id: d28185fc-d843-424f-9c79-d6a7db7e67cd
+- id: 01a12870-7b5b-7c71-a179-643e003775a1
+  author: joe
+  content: |-
+    Advisor 2026-10-10 17:55: PR #2485 at 86a01af23f is ON HOLD by operator decision. Not mergeable until the relay reviewer follow-up lands. Relay: do not merge, rebase-merge, or ship it.
+
+    Why: identity is per Claude session. The authorship ledger stores the claimer's CLAUDE_CODE_SESSION_ID plus its nearest Claude-harness proc token, and every subagent of a relay orchestrator shares both. So an approval recorded by a relay's own reviewer subagent overlaps the implementer's identity and ship refuses it as AuthorSession. The semantics are correct (same session = self-review), but shipping now would stop both relays merging; relay 1 alone ran `aida review record` 62x and `aida pr ship` 51x today. Operator chose: make relay reviewers separate processes first, then merge this.
+
+    Advisor answers to the design questions (binding for this PR or its follow-ups):
+    - A (solo-human mode): keep the strict default in this PR. File the audited per-project opt-in (`[review] solo_human`) as a follow-up story. Not needed to merge.
+    - B (drain_merge_match_head bypass): a bypass of the new gate is not acceptable long-term. Route it through approval_authority_refusal in THIS PR if it's small; otherwise file it as a high-priority follow-up that must merge within the same batch. Note which in the PR.
+    - C (AIDA_SESSION_GRANT env trust): file it as a separate bug now (bind grants to the presenting session). Not fixed here.
+
+    The full code review verdict, including an adversarial pass now running, will follow on this spec. Expect it shortly. Any requested changes can be made while the hold is in place.
+  created_at: 2026-10-11T00:50:22.683696711Z
+  modified_at: 2026-10-11T00:50:22.683696711Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
