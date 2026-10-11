@@ -13,9 +13,11 @@ Checks against the live binary + the spec graph:
      other half of the doc-intent loop — completeness asks "is every command documented?";
      reflection asks "is every spec's documented change actually IN the docs?". Drift here
      is a spec that moved a surface without the manual following.
+  4. SUBCOMMAND EXISTENCE (BUG-1949) — every cited `aida <cmd> <verb>` (and every
+     slash/vs verb list inside a command's section) names a subcommand the CLI has.
 
-Exit non-zero on a completeness omission, an unreflected surface-changing delta, or a
-flag mismatch.
+Exit non-zero on a completeness omission, an unreflected surface-changing delta, a
+flag mismatch, or a cited subcommand the CLI no longer has.
 
 # trace:TASK-795
 # trace:TASK-796
@@ -383,6 +385,163 @@ def reflection_misses(spec_deltas, manual_text, top_level_cmds):
     return misses
 
 
+# --- 4. subcommand existence (BUG-1949) ------------------------------------
+# trace:BUG-1949 | ai:claude
+#
+# The flag-accuracy check (2) resolves `--flag` tokens but never asks whether
+# the subcommand a citation names still exists, so a verb cut from the CLI
+# (`aida session forget`) survived in the manual. This check collects two
+# citation shapes and asks the live binary about each:
+#
+#   * EXPLICIT — a backtick span (or a fenced code line) starting `aida a b c`.
+#     Every leading lowercase word after a real top-level command is a
+#     candidate subcommand. Unknown TOP-level words are left to the
+#     completeness check: `aida <name>` may be a PATH extension (`aida-<name>`).
+#   * VERB LIST — single-word backtick spans joined by ` / ` or ` vs ` inside a
+#     `### `aida <cmd>`` section (`start` / `end` / `leases`): each word is read
+#     as `aida <cmd> <word>` — or `aida <cmd> <sub> <word>` when the list sits in
+#     parentheses right after a `<sub>` span (`scope` (`set` / `clear`)). A list
+#     counts only when at least half its words ARE real subcommands, so a list
+#     of roles, modes or graph reads is never mistaken for a list of verbs; and
+#     a word that is itself a top-level command is a cross-reference, not a
+#     miss.
+#
+# A path is a miss only when clap itself answers `unrecognized subcommand` —
+# a command that takes a positional parses the word as an argument and never
+# errors, so the check cannot false-fail on `aida show <ID>`-shaped prose.
+SUBCMD_WORD_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+VERB_LIST_RE = re.compile(
+    r"`([a-z][a-z0-9-]*)`(?:\s*(?:/|vs\.?)\s*`[a-z][a-z0-9-]*`)+"
+)
+VERB_LIST_WORD_RE = re.compile(r"`([a-z][a-z0-9-]*)`")
+FENCE_LINE_RE = re.compile(r"^\s*(?:\$\s+)?(aida\s.*)$")
+NESTED_LIST_PARENT_RE = re.compile(r"`([a-z][a-z0-9-]*)`\s*\($")
+
+
+def _leading_words(snippet):
+    """Lowercase command words after `aida`, stopping at the first flag/arg."""
+    toks = snippet.split()
+    if not toks or toks[0] != "aida":
+        return []
+    words = []
+    for tok in toks[1:]:
+        if not SUBCMD_WORD_RE.match(tok):
+            break
+        words.append(tok)
+    return words
+
+
+def subcommand_citations(files):
+    """Every subcommand path the manual cites, in the two shapes above."""
+    # trace:BUG-1949 | ai:claude
+    cites = []
+    for f in files:
+        with open(f) as fh:
+            cur = None
+            in_fence = False
+            for line_no, line in enumerate(fh, 1):
+                if line.lstrip().startswith("```"):
+                    in_fence = not in_fence
+                    continue
+                if in_fence:
+                    m = FENCE_LINE_RE.match(line)
+                    words = _leading_words(m.group(1)) if m else []
+                    if words:
+                        cites.append(
+                            {"kind": "explicit", "words": words, "file": f, "line": line_no}
+                        )
+                    continue
+                m = ENTRY_RE.match(line)
+                if m:
+                    cur = m.group(1)
+                    continue
+                if line.startswith("## ") or line.startswith("---"):
+                    cur = None
+                for bm in re.finditer(r"`([^`]+)`", line):
+                    words = _leading_words(bm.group(1))
+                    if words:
+                        cites.append(
+                            {"kind": "explicit", "words": words, "file": f, "line": line_no}
+                        )
+                if not cur:
+                    continue
+                for lm in VERB_LIST_RE.finditer(line):
+                    verbs = VERB_LIST_WORD_RE.findall(lm.group(0))
+                    nested = NESTED_LIST_PARENT_RE.search(line[: lm.start()])
+                    parent = f"{cur} {nested.group(1)}" if nested else cur
+                    cites.append(
+                        {
+                            "kind": "list",
+                            "parent": parent,
+                            "words": verbs,
+                            "file": f,
+                            "line": line_no,
+                        }
+                    )
+    return cites
+
+
+@functools.lru_cache(maxsize=None)
+def subcommand_unrecognized(cmd_path):
+    """True when clap rejects the last word of cmd_path as an unknown subcommand."""
+    # trace:BUG-1949 | ai:claude
+    try:
+        res = subprocess.run(
+            ["aida", *cmd_path.split(), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:
+        return False
+    return "unrecognized subcommand" in (res.stderr or "")
+
+
+def subcommand_misses(cites, unrecognized, known):
+    """Citations naming a subcommand the CLI does not have.
+
+    `unrecognized(path)` — clap rejects the path's last word as a subcommand.
+    `known(path)` — the path is a real command (so its next word is a candidate
+    subcommand, not a positional argument).
+    """
+    # trace:BUG-1949 | ai:claude
+    misses = []
+    seen = set()
+    for cite in cites:
+        if cite["kind"] == "explicit":
+            words = cite["words"]
+            if not known(words[0]):
+                continue  # unknown top-level: completeness check / PATH extension
+            for k in range(2, len(words) + 1):
+                path = " ".join(words[:k])
+                if unrecognized(path):
+                    bad = path
+                    break
+                if not known(path):
+                    bad = None
+                    break
+            else:
+                bad = None
+            if bad:
+                key = (bad, cite["file"], cite["line"])
+                if key not in seen:
+                    seen.add(key)
+                    misses.append({"path": bad, "file": cite["file"], "line": cite["line"]})
+            continue
+        parent = cite["parent"]
+        paths = [f"{parent} {w}" for w in cite["words"]]
+        if 2 * sum(1 for p in paths if known(p)) < len(paths):
+            continue  # not a verb list (roles, modes, graph reads)
+        for w, p in zip(cite["words"], paths):
+            if known(w):
+                continue  # a top-level command cited alongside, not a subcommand
+            key = (p, cite["file"], cite["line"])
+            if key not in seen and unrecognized(p):
+                seen.add(key)
+                misses.append({"path": p, "file": cite["file"], "line": cite["line"]})
+    return misses
+
+
 # --- static hidden-flag guard (BUG-1937) -----------------------------------
 # trace:BUG-1937 | ai:claude
 #
@@ -691,6 +850,24 @@ def main():
             else:
                 n = len(spec_deltas)
                 print(f"OK reflection — all {n} surface-changing spec(s)' interface_changes reflected in the manual")
+
+    # 4. subcommand existence — every cited `aida <cmd> <verb>` must be a verb
+    # the CLI still has. trace:BUG-1949 | ai:claude
+    sub_misses = subcommand_misses(
+        subcommand_citations(files), subcommand_unrecognized, command_path_exists
+    )
+    if sub_misses:
+        hard_fail = True
+        print(
+            f"FAIL subcommands — {len(sub_misses)} cited subcommand(s) the CLI "
+            "rejects as unrecognized:"
+        )
+        for miss in sub_misses[:80]:
+            loc = f"{os.path.basename(miss['file'])}:{miss['line']}"
+            print(f"    {loc} `aida {miss['path']}`")
+        print("    Fix: cite a subcommand listed in the parent's --help, or drop the citation.")
+    else:
+        print("OK subcommands — every cited subcommand exists in the CLI")
 
     # 2. flag accuracy
     # trace:TASK-1207 | ai:codex
