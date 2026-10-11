@@ -1774,20 +1774,85 @@ pub(crate) fn humanize_elapsed(secs: i64) -> String {
     }
 }
 
+/// Detect which agent tool this process runs under, from the process env.
+///
+/// See [`detect_agent_type_from_env`] for the precedence rule.
 pub(crate) fn detect_agent_type() -> String {
-    if let Some(v) = env_nonempty("AIDA_AGENT_TYPE").map(normalize_agent_type) {
-        return v;
+    detect_agent_type_from_env(std::env::vars())
+}
+
+/// Pure agent-type detection over an explicit env snapshot.
+///
+/// Precedence (strongest signal wins):
+/// 1. explicit override: a non-empty `AIDA_AGENT_TYPE`;
+/// 2. live session/tool markers set by the running tool itself:
+///    `CODEX_*`, then `ANTIGRAVITY_*`, then `CLAUDECODE` / `CLAUDE_CODE_*`;
+/// 3. weak vendor prefixes that may be stale shell config: `GEMINI_*`, then
+///    `CLAUDE*`;
+/// 4. otherwise `"other"`.
+///
+/// Credential variable names (`*_KEY`, `*_TOKEN`, e.g. `GEMINI_API_KEY`) are
+/// excluded from the scan: an exported API key says nothing about which tool
+/// is live, so it must never decide attribution.
+// trace:BUG-1920 | ai:claude
+pub(crate) fn detect_agent_type_from_env<I, K, V>(vars: I) -> String
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    let mut override_type: Option<String> = None;
+    let names: Vec<String> = vars
+        .into_iter()
+        .filter_map(|(k, v)| {
+            let key = k.as_ref();
+            if key == "AIDA_AGENT_TYPE" {
+                let value = v.as_ref().trim();
+                if !value.is_empty() {
+                    override_type = Some(value.to_string());
+                }
+                return None;
+            }
+            if is_credential_var(key) {
+                return None;
+            }
+            Some(key.to_string())
+        })
+        .collect();
+    if let Some(v) = override_type {
+        return normalize_agent_type(v);
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("CODEX_")) {
+    // Tier 2: live session markers.
+    if any_name(&names, |k| k.starts_with("CODEX_")) {
         return "codex".to_string();
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("ANTIGRAVITY_") || k.starts_with("GEMINI_")) {
+    if any_name(&names, |k| k.starts_with("ANTIGRAVITY_")) {
         return "antigravity".to_string();
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("CLAUDE")) {
+    if any_name(&names, |k| {
+        k == "CLAUDECODE" || k.starts_with("CLAUDE_CODE_")
+    }) {
+        return "claude".to_string();
+    }
+    // Tier 3: weak vendor prefixes.
+    if any_name(&names, |k| k.starts_with("GEMINI_")) {
+        return "antigravity".to_string();
+    }
+    if any_name(&names, |k| k.starts_with("CLAUDE")) {
         return "claude".to_string();
     }
     "other".to_string()
+}
+
+fn any_name(names: &[String], pred: impl Fn(&str) -> bool) -> bool {
+    names.iter().any(|k| pred(k.as_str()))
+}
+
+/// Credential-shaped env var names (`GEMINI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`)
+/// are configuration, not evidence of a live tool session.
+// trace:BUG-1920 | ai:claude
+fn is_credential_var(key: &str) -> bool {
+    key.ends_with("_KEY") || key.ends_with("_TOKEN")
 }
 
 pub(crate) fn normalize_agent_type(raw: String) -> String {
@@ -3425,5 +3490,80 @@ source = "mcp"
         assert!(looks_like_spec_id("TASK-498"));
         assert!(!looks_like_spec_id("story-431"));
         assert!(!looks_like_spec_id("branch-name"));
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_prefers_live_session_over_api_key() {
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_API_KEY", "x"), ("CLAUDECODE", "1")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("GEMINI_API_KEY", "x"),
+                ("CLAUDE_CODE_ENTRYPOINT", "cli"),
+            ]),
+            "claude"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_api_key_never_decides() {
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("ANTHROPIC_API_KEY", "x"),
+                ("ANTIGRAVITY_SESSION_ID", "s1"),
+            ]),
+            "antigravity"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_API_KEY", "x")]),
+            "other"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("CLAUDE_CODE_OAUTH_TOKEN", "x")]),
+            "other"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_live_marker_beats_stale_weak_prefix() {
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_MODEL", "pro"), ("CLAUDECODE", "1")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_CLI", "1")]),
+            "antigravity"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("CLAUDE_CONFIG_DIR", "/x")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env(Vec::<(String, String)>::new()),
+            "other"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_explicit_override_wins() {
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("CLAUDECODE", "1"),
+                ("GEMINI_API_KEY", "x"),
+                ("AIDA_AGENT_TYPE", "codex"),
+            ]),
+            "codex"
+        );
+        // A blank override is ignored rather than forcing "other".
+        assert_eq!(
+            detect_agent_type_from_env([("AIDA_AGENT_TYPE", "  "), ("CLAUDECODE", "1")]),
+            "claude"
+        );
     }
 }
