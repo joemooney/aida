@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:16.006176829Z
-modified_at: 2026-10-11T17:05:54.494106649Z
+modified_at: 2026-10-11T17:32:02.478861599Z
 req_type: Story
 tags:
 - dev-tooling
@@ -84,6 +84,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2531 at 56e8260a603be671684c55276ce4014f0dc9ffd1'
   created_at: 2026-10-11T17:05:54.494106649Z
   modified_at: 2026-10-11T17:05:54.494106649Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
+- id: 01a12c05-882e-7233-9568-e8a6688b6cb9
+  author: joe
+  content: 'FACTORY READY: PR #2531 green at 56e8260a60'
+  created_at: 2026-10-11T17:32:02.478861599Z
+  modified_at: 2026-10-11T17:32:02.478861599Z
   session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8d-9452-7c42-bbf7-8075ff6da32f
