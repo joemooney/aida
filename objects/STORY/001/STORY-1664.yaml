@@ -1,0 +1,64 @@
+id: 01a12b35-cfc8-7303-ab46-25bb18b0221e
+spec_id: STORY-1664
+agreed_id: STORY-1664
+title: 'aida history opened|completed|rejected|approved|closed: list-shaped views of what changed in a time window'
+description: |
+  ## Want
+  List-shaped history views that answer "what was opened / completed / closed in this window":
+
+  ```
+  aida history opened    [--since 7d] [--until ..] [filters]
+  aida history completed [...]
+  aida history rejected  [...]
+  aida history approved  [...]
+  aida history closed    [...]   # entered any terminal status
+  ```
+
+  Each row matches `aida list`'s row, with one extra leading column for the event time:
+  `when │ id │ type │ status │ priority │ title`
+
+  ## Semantics (decided)
+  - **when** = the time of the matching event: the creation commit for `opened`; the transition INTO the status for the others.
+  - **status** = the spec's CURRENT status, not its status at the event. That way "opened last week" shows how each spec stands now. Say so in `--help`.
+  - **One row per spec** by default (its latest matching event in the window). A spec completed, reopened and completed again appears once. `--all-events` gives one row per occurrence.
+  - **closed** = transitions into a terminal status: completed, rejected, superseded. Archived is housekeeping, not an outcome, so it is excluded.
+  - **Default window** `--since 7d`; `--since`/`--until` accept history's existing forms (`7d`, `2w`, ISO date, RFC3339). The resolved window prints at the top of human output, as history already does.
+  - **Filters** accepted from `aida list`: `--type`, `--priority`, `--tags`, `--status` (current status), `--limit`. Sort is newest first; `--oldest-first` reverses it.
+
+  ## Implementation notes
+  - Thin subcommands over the existing `--opened` / `--to <STATUS>` event selection; no new event decoding. `aida history <SPEC-ID>` keeps working, since spec IDs never collide with these words, like the existing `events`/`templates` subcommands.
+  - Render through `aida list`'s row renderer, so human, TOON and JSON are identical in shape to `list` plus the `when` field. Agents parse both the same way.
+  - **Completeness:** read from the history index (TASK-1507 cache; kept current by STORY-1650's catch-up and STORY-1661), not a capped git walk. If the view must fall back to walking commits and the `--max-commits` cap cuts the window short, it MUST say so (a "window truncated at <date>" line in human output; a `truncated` field in TOON/JSON). An incomplete answer that looks complete is the failure to avoid.
+
+  ## Acceptance
+  - `aida history completed --since 2w --type bug` lists exactly the bugs that entered completed in the window, one row each, with current status and list-identical columns (human/TOON/JSON goldens).
+  - `closed` includes completed, rejected and superseded, and excludes archived.
+  - A spec completed, reopened and recompleted appears once by default and twice with `--all-events`.
+  - A spec opened in the window and since completed shows `opened` with when = filed time and status = completed.
+  - A store whose window exceeds the walk cap either answers from the index or prints the truncation notice (test both).
+  - `aida history <SPEC-ID>`, `events` and `templates` behave unchanged.
+  - Docs: docs/cli chapter plus `--help` examples.
+
+  ## Sequencing
+  After BUG-1942 and STORY-1661 (history index freshness), which this reuses.
+
+  Requested by the operator 2026-10-11; design agreed in the advisor session.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:45:09.320682147Z
+modified_at: 2026-10-11T13:45:09.320682147Z
+req_type: Story
+tags:
+- cli
+- history
+- reporting
+filed_at:
+  code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
