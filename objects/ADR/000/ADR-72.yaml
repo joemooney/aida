@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:00:48.238857387Z
-modified_at: 2026-10-11T00:01:26.692343272Z
+modified_at: 2026-10-11T00:01:49.099468667Z
 req_type: Decision
 tags:
 - ci
@@ -48,6 +48,13 @@ relationships:
   target_id: 01a104d8-0ef0-74e1-a7f6-c746814b010d
   created_at: 2026-10-11T00:01:26.692340275Z
   created_by: joe
+comments:
+- id: 01a12844-062b-7c02-84cc-9b7b60135511
+  author: joe
+  content: 'Implementation: TASK-1723 (approved, batch:next). Supersedes ADR-47, ADR-62, ADR-65.'
+  created_at: 2026-10-11T00:01:49.099468667Z
+  modified_at: 2026-10-11T00:01:49.099468667Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
