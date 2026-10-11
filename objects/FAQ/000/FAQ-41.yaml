@@ -1,0 +1,43 @@
+id: 01a12b25-0a2d-7b11-86e2-87058a8fb323
+spec_id: FAQ-41
+agreed_id: FAQ-41
+title: Why does my stacked PR show no Build check?
+description: |
+  **CI's Build job only runs for pull requests whose base is `main` (`.github/workflows/ci.yml`: `pull_request: branches: [main]`). A PR stacked on another branch gets only the non-Build checks, such as merge-hold-gate. Rebase it onto `main` and switch its base before you trust it as green.**
+
+  ## Why
+  - GitHub retargets a stacked PR to `main` only when its parent PR's branch is merged *and deleted*. A **rebase-merge** of the parent leaves the child based on the old branch, now with the parent's commits duplicated under new SHAs, so Build never runs.
+  - Seen on 2026-10-11: lib-split run 4 (#2494) was based on `slice-10` after run 3 (#2493) was rebase-merged. Only merge-hold-gate ran.
+
+  ## How
+  1. `git fetch origin`
+  2. `git rebase --onto origin/main <old-parent-head> <child-branch>`: the parent's already-merged commits drop out.
+  3. Publish the rewritten branch with a lease-protected force update.
+  4. `gh pr edit <n> --base main`. Build now runs.
+
+  For the lib.rs split: re-cut the `slice-NN-rR` tags at the new SHAs (verify_stack check 6). Proofs carry over only where the trees are equal (`git rev-parse <sha>^{tree}`).
+
+  ## See also
+  FAQ-8, TASK-1538, TASK-1722
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:26:50.157944617Z
+modified_at: 2026-10-11T13:26:50.157944617Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:ci
+- topic:merge
+filed_at:
+  code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T13:26:50.157980999Z
