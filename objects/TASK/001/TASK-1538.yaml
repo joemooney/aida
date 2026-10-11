@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T10:47:41.088417552Z
+modified_at: 2026-10-11T10:56:06.109638747Z
 req_type: Task
 tags:
 - closure:pending
@@ -523,6 +523,12 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 2dcc01e), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit TASK-1538 --description ...` / `aida edit TASK-1538 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1538 --since 2dcc01e^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1538 --status completed`. (merge sha: 2dcc01edaedee88b2e839c2ab754aa0e7d3c06e5)'
   created_at: 2026-10-11T10:47:41.360762859Z
   modified_at: 2026-10-11T10:47:41.360762859Z
+- id: 01a12a9b-09dd-7dc3-be1f-b3397f9aa149
+  author: joe
+  content: 'QUESTION Q9 (blocks phase_driver only; run 7 goes ahead without it). At the signed ranges, phase_driver.rs comes to 36 items and 6593 lines, over the 6000-line V7 cap; the map estimated 5.4k. That count applies Q3 (the advisor second range''s post-signoff items and the old 103864-104189 RealPhaseDriver block) and Q7 (the 14-line post-signoff block), plus git_capture by decl line (Q8). Breakdown in current lib_part6: config/struct/gate helpers/ResumeEntry and sandwiched NEW items ~610; the three inherent impl RealPhaseDriver blocks 1619+362+14; missing_implementer_worktree_push_gate 37; the single impl auto_complete::PhaseDriver for RealPhaseDriver at 3773 lines; the ci-fix/AutonomyMode tail ~250. Options: (a) two modules. phase_driver.rs (~2.8k) takes the struct, config, inherent impls, ci-fix tail and AutonomyMode. A new phase_driver_trait.rs (~3.8k) takes only the PhaseDriver trait impl, so both are pure moves. The map''s retargets (bug_1186_reviewer_seat_tests.rs:87; headless_hint_tests.rs:139/:155, whose AIDA_HEADLESS/spawn sites sit in the trait impl) would point at whichever file holds the scanned code. (b) A cap exception for phase_driver.rs. (c) Leave the trait impl in lib_part6 until slice 2. I recommend (a). The trait impl alone fits the cap, and the module name is the only addition to the map.'
+  created_at: 2026-10-11T10:56:06.109638747Z
+  modified_at: 2026-10-11T10:56:06.109638747Z
+  session_id: 74729565-cb48-4858-8a37-d58740f64a38
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
