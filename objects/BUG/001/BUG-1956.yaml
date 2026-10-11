@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-11T16:21:34.732023551Z
+modified_at: 2026-10-11T16:32:14.344228956Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -19,6 +19,12 @@ comments:
   content: 'ADVISOR 2026-10-11 09:25: performance-guard tripped again on the same 27.9s outlier (8.7% over the 1s budget, inside tolerance, ceiling breached). Decision: real regression; don''t raise the ceiling. Check whether it coincides with the 07:43-07:55 squash burst and store-lock contention (#2502 serialized store sync only landed at 08:29).'
   created_at: 2026-10-11T16:21:34.732023551Z
   modified_at: 2026-10-11T16:21:34.732023551Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12bce-c808-7b02-a49d-1458760d6749
+  author: joe
+  content: 'ADVISOR 2026-10-11 09:35, evidence from ~/.aida/usage.jsonl (cmd=show, >5s): the 27,868 ms worst call was at 07:19:35Z (00:19 local), in a cluster of five 25.5-27.9 s calls between 07:19:07Z and 07:20:33Z, then 8.4 s at 07:28Z and 12.5 s at 07:38Z. The near-identical ~25.5 s durations look like a fixed wait/timeout (lock or refresh deadline), not CPU load. That cluster sits in the overnight relay window, before #2502''s store-sync serialization merged (15:29Z). It is NOT the operator''s /tmp/bug1939 stress test, which started 15:49Z. That test (6 CPU spinners, flock churn, 3 parallel full suites) plausibly explains only the 5.2 s call at 16:30Z; the 7.1 s call at 15:47Z came just before it started. Next step for the implementer: correlate 07:19-07:21Z with store-write.lock holders and cache refresh logs, and find what waits ~25 s.'
+  created_at: 2026-10-11T16:32:14.344228956Z
+  modified_at: 2026-10-11T16:32:14.344228956Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
