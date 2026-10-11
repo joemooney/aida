@@ -249,6 +249,9 @@ pub(crate) fn print_tiered_help() {
         println!("  {}", group.bold());
     }
     println!();
+    // Installed `aida-<name>` extensions, in their own group (nothing when
+    // none are installed). trace:STORY-1641 | ai:claude
+    crate::external_cmd::print_help_section();
 
     println!(
         "Run {} for the full command list, or {} for one command's options.",
@@ -285,6 +288,8 @@ pub(crate) fn print_help_all() {
         }
         println!();
     }
+    // trace:STORY-1641 | ai:claude
+    crate::external_cmd::print_help_section();
     println!(
         "Bare `aida` / `aida help` shows the curated Getting-started view. {}",
         "Tip:".bold()

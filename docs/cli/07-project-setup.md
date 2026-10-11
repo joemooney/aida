@@ -234,6 +234,34 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ---
 
+## Extending aida with external commands
+
+<!-- trace:STORY-1641 | ai:claude -->
+Like `git`, `aida` runs an executable named `aida-<name>` from your `PATH` when `<name>` is not one of its own commands. Drop a script called `aida-deploy` somewhere on `PATH`, mark it executable, and `aida deploy --dry-run` runs it with `--dry-run` passed through unchanged. Its stdout, stderr and exit code are the command's; on Unix the extension replaces the `aida` process outright.
+
+Names resolve in a fixed order, and the first match wins:
+1. a built-in command (an extension can never shadow one),
+2. a built-in alias,
+3. your own alias from `~/.aida/aliases.toml` (expanded for interactive use only),
+4. an `aida-<name>` executable, first match on `PATH`.
+
+If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
+
+The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+
+The extension receives its context in the environment:
+- `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
+- `AIDA_STORE_PATH` — the project's requirements store directory (unset outside a project).
+- `AIDA_OUTPUT_FORMAT` — the output format aida would use here: `human`, `json` or `toon`.
+- `AIDA_CALLER_KIND` — `human`, `agent` or `headless`.
+- `AIDA_BIN` — the path of the `aida` binary that dispatched it.
+
+Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
+
+Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
+
+---
+
 ## Where to go next
 
 You've set the project up and can keep its machinery healthy. From here:

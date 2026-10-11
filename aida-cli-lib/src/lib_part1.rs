@@ -3225,6 +3225,14 @@ pub(crate) fn run() -> Result<()> {
             if help_catalog::print_exact_command_help(topic) {
                 return Ok(());
             }
+            // `aida help <ext>` delegates to `aida-<ext> --help` once no
+            // built-in command or help group claims the name.
+            // trace:STORY-1641 | ai:claude
+            if help::resolve_help_topic(topic).is_err() {
+                if let Some(code) = external_cmd::help_for(topic) {
+                    std::process::exit(code?);
+                }
+            }
             return print_help_topic(topic);
         }
         // TASK-970: content-first bare `aida` in AGENT MODE. A human at a TTY
@@ -3276,6 +3284,12 @@ pub(crate) fn run() -> Result<()> {
                 &rewrite_personal_view_alias(&expanded),
             ))),
         )));
+    // Git-style extensions: a head that is still not a real subcommand after
+    // every built-in and user-alias stage runs `aida-<name>` from PATH.
+    // trace:STORY-1641 | ai:claude
+    if let Some(code) = external_cmd::maybe_dispatch(&after_alias_rewrites)? {
+        std::process::exit(code);
+    }
     let mut cli = Cli::parse_from(after_alias_rewrites.clone());
 
     // STORY-764: install the explicit output-format pin before any handler
