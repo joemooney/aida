@@ -225,7 +225,8 @@ locks() { for f in /proc/"$1"/fd/*; do readlink "$f"; done 2>/dev/null | grep '\
   echo "hook_locks=$(locks $$)"
   echo "git_locks=$(locks "$git_pid")"
   echo "aida_locks=$(locks "$aida_pid")"
-  echo "aida_cmd=$(tr '\0' ' ' < /proc/"$aida_pid"/cmdline)"
+  cmdline=/proc/"$aida_pid"/cmdline
+  echo "aida_cmd=$(tr '\0' ' ' < "$cmdline")"
 } >> "$d/obs-$name.log"
 if [ "$name" = pre-push ]; then
   cat >> "$d/prepush-refs.log"
@@ -285,6 +286,9 @@ fn finish(child: Child, what: &str) -> Output {
 
 /// True while `child` is alive and has the store lock file open: it is
 /// inside `store_lock::acquire`, waiting for (or holding) the lock.
+// The whole file is linux-only (`#![cfg]` above); the outer attribute is
+// for the test portability ratchet, which scopes outer attributes only.
+#[cfg(target_os = "linux")]
 fn has_lock_fd(child: &Child, store: &Path) -> bool {
     let lock = std::fs::canonicalize(lock_path(store)).unwrap();
     let Ok(dir) = std::fs::read_dir(format!("/proc/{}/fd", child.id())) else {
@@ -345,6 +349,7 @@ fn hold_lock(fx: &Fx, script: &str) -> Holder {
     Holder { child, release }
 }
 
+#[cfg(target_os = "linux")]
 impl Holder {
     fn release(mut self) {
         std::fs::write(&self.release, "").unwrap();
@@ -1949,7 +1954,8 @@ fn drifted_generated_hook_is_refused_with_upgrade_guidance() {
     let before = snapshot(&fx);
     let out = fx.run(&["db", "sync"]);
     assert!(!out.status.success(), "{}", text(&out));
-    assert!(text(&out).contains("aida upgrade"), "{}", text(&out));
+    assert!(text(&out).contains("aida scaffold apply"), "{}", text(&out));
+    assert!(text(&out).contains("Nothing was changed"), "{}", text(&out));
     assert_eq!(snapshot(&fx), before, "nothing changed");
 }
 

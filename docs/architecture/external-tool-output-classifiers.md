@@ -27,6 +27,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `git_ops::commit` |
 | `git_ops::looks_like_index_lock_failure` |
 | `git_ops::push` |
+| `git_ops::push_exact` |
 | `git_ops::restore_stranded_autostash` |
 | `network_retry::classify_transient` |
 | `overlay::ci_style` |

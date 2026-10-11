@@ -322,7 +322,7 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
 // trace:TASK-1717 | ai:claude
 #[cfg(feature = "native")]
 pub fn push_exact(repo: &Path, remote: &str, sha: &str, branch: &str) -> Result<bool> {
-    // external-prose-classifier: git_ops::push
+    // external-prose-classifier: git_ops::push_exact
     anyhow::ensure!(
         !crate::db::any_store_write_lock_held(),
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
@@ -3705,12 +3705,33 @@ const IN_TRANSACTION_HOOKS: &[&str] = &[
 /// not pass to child processes, so a hook that runs `aida edit` (or anything
 /// else that takes the lock) would wait for its own parent until timeout.
 ///
-/// Supported: hooks byte-identical to a shipped AIDA hook template, and
-/// hooks whose only `aida` uses are `aida internal ...` (dispatched before
-/// any store is opened) or a `command -v`/`which` probe. A hook that sources
-/// `.aida/commit-config` (the shipped commit-msg does) needs that file to be
-/// plain `NAME=value` assignments: anything else is executable shell this
-/// check cannot classify. Non-executable hooks are skipped (git ignores them).
+/// Supported installed profile (`classify_hook`), keyed by the git
+/// hook name to the template `aida init` installs under that name:
+/// - the template bytes themselves (a copy, or a symlink to the template:
+///   metadata and reads follow links);
+/// - the copy `aida init`/`aida scaffold apply` writes, i.e. the template
+///   with the two `# AIDA Generated: v… | checksum:…` / `# To customize…`
+///   lines after the shebang, under any header version (the header confers
+///   nothing; only the executable body is compared);
+/// - custom hooks whose only `aida` uses are `aida internal ...` (dispatched
+///   before any store is opened) or a `command -v`/`which`/`type` probe whose
+///   result is not run; quoted echo/printf prose and assigned paths are data.
+///
+/// Version-drift policy: a hook carrying the generated header whose body is
+/// not this build's template for that name (older or newer scaffold, or
+/// edited after install) is refused before any effect with guidance to run
+/// `aida scaffold apply`; it is never overwritten or run as supported. A
+/// shipped template installed under a different hook name is not a shipped
+/// hook (`aida-track-commits.sh` as post-commit runs store writers).
+///
+/// A hook that sources `.aida/commit-config` (the shipped commit-msg does)
+/// needs that file to be plain `NAME=value` assignments: anything else is
+/// executable shell this check cannot classify. Non-executable hooks are
+/// skipped (git ignores them). Residual limits, by design (no shell parser,
+/// hooks are never executed to classify them): `$(command -v aida) edit`
+/// is caught, but quoting tricks, sourced scripts, `run-parts` and hook
+/// managers are not; an undetected reentry degrades to the store lock
+/// timeout with a propagated error, not a deadlock.
 // trace:TASK-1717 | ai:claude
 pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     if !is_git_repo(store) {
@@ -3756,9 +3777,9 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
                 "refusing AIDA store write: the `{name}` hook ({}) is an AIDA-generated hook whose body is not \
                  this aida build's shipped `{name}` hook (installed by another AIDA version, or edited after \
                  install). Git runs it while this command holds the store write lock, and its safety there is \
-                 not established. Nothing was changed. Run `aida upgrade` to install the current hook; if you \
-                 changed it on purpose, remove its two `# AIDA Generated` / `# To customize` header lines so it \
-                 is checked as a custom hook.",
+                 not established. Nothing was changed. Run `aida scaffold apply` (or `aida init --force`) to \
+                 install this build's `{name}` hook; if you changed it on purpose, remove its two \
+                 `# AIDA Generated` / `# To customize` header lines so it is checked as a custom hook.",
                 path.display()
             ),
             HookKind::Custom => {}
@@ -6902,6 +6923,111 @@ mod tests {
             crate::db::with_store_write_lock(&repo, || push_exact(&repo, "origin", &head, "main"))
                 .unwrap_err();
         assert!(push.to_string().contains("refusing to push"), "{push:#}");
+    }
+
+    /// Every form `aida init`/`scaffold apply` leaves in `.git/hooks/` is
+    /// supported through the real directory walk: a symlink to the template,
+    /// a wrapped copy with the current header, and a wrapped copy with an
+    /// older header over the same body. A wrapped copy whose body drifted is
+    /// refused naming `aida scaffold apply`; the same file non-executable is
+    /// skipped, since git ignores it.
+    // trace:TASK-1717 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn task_1717_installed_hook_forms_are_supported() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let executable = |path: &Path, body: &str| {
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let tpl = |key: &str| crate::templates::EMBEDDED_TEMPLATES[key];
+        let wrapped = |name: &str, key: &str| {
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                tpl(key),
+            )
+        };
+        // pre-commit: symlink to a template copy elsewhere (the AIDA
+        // checkout's own profile).
+        let template_copy = dir.path().join("aida-pre-commit.sh");
+        executable(&template_copy, tpl("hooks/aida-pre-commit.sh"));
+        std::os::unix::fs::symlink(&template_copy, hooks.join("pre-commit")).unwrap();
+        // commit-msg: current scaffolder output.
+        executable(
+            &hooks.join("commit-msg"),
+            &wrapped("commit-msg", "hooks/aida-commit-msg"),
+        );
+        // post-commit: older header over this build's body.
+        let older = wrapped("post-commit", "hooks/aida-post-commit.sh").replacen(
+            "# AIDA Generated: v",
+            "# AIDA Generated: v0.0.1-old-",
+            1,
+        );
+        executable(&hooks.join("post-commit"), &older);
+        // prepare-commit-msg: scaffolded store-pair hook.
+        executable(
+            &hooks.join("prepare-commit-msg"),
+            &wrapped("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+        );
+        ensure_store_hooks_supported(&repo).expect("installed AIDA hook profile is supported");
+
+        // A generated hook whose body drifted is refused with upgrade guidance.
+        let drifted = format!("{}\necho drifted\n", older.trim_end());
+        executable(&hooks.join("post-commit"), &drifted);
+        let err = ensure_store_hooks_supported(&repo).unwrap_err().to_string();
+        assert!(err.contains("`post-commit`"), "{err}");
+        assert!(err.contains("aida scaffold apply"), "{err}");
+        assert!(err.contains("Nothing was changed"), "{err}");
+        // Non-executable, git ignores it; so does the classifier.
+        std::fs::set_permissions(
+            hooks.join("post-commit"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        ensure_store_hooks_supported(&repo).expect("non-executable hooks are skipped");
+        // A dangling symlink is nothing git can run: skipped like a missing
+        // hook (metadata follows the link and reports NotFound).
+        std::fs::remove_file(&template_copy).unwrap();
+        ensure_store_hooks_supported(&repo).expect("dangling symlink hooks are skipped");
+    }
+
+    /// B2: a failing `git status` is an error for store writers, never
+    /// "clean"; the tolerant reader keeps its contract for displays.
+    // trace:TASK-1717 | ai:claude
+    #[test]
+    fn task_1717_has_changes_checked_fails_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+        assert!(!has_changes_checked(&repo).unwrap());
+        std::fs::write(repo.join("b.txt"), "b").unwrap();
+        assert!(has_changes_checked(&repo).unwrap());
+
+        // Point the worktree at a gitdir that does not exist: `git status`
+        // exits 128 with empty stdout and a message on stderr.
+        let broken = dir.path().join("broken");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join(".git"),
+            format!("gitdir: {}\n", dir.path().join("missing-gitdir").display()),
+        )
+        .unwrap();
+        let err = has_changes_checked(&broken).unwrap_err().to_string();
+        assert!(err.contains("git status failed"), "{err}");
+        assert!(!err.trim_end().ends_with(':'), "stderr retained: {err}");
+        assert!(
+            !has_changes(&broken).unwrap(),
+            "tolerant reader still answers clean for displays"
+        );
     }
 
     // trace:TASK-1717 | ai:claude
