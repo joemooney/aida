@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1951",
+  "publishes": [
+    {
+      "at": "2026-10-11T14:54:15.183331898Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T13:22:05.175642276Z",
+      "spec": "BUG-1951",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T13:51:05.637684051Z",
+      "spec": "BUG-1951",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T14:54:15.150089960Z",
+      "spec": "BUG-1951",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ec9b060c8a67ef1ffac1675552e93ed9ecf82b70",
+        "pr": 2525,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
