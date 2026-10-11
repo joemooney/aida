@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-06T19:24:58.364295372Z
+last_run: 2026-10-11T01:35:23.217398079Z
 last_by:
   seat: advisor
-  session: 36e37eeb-41d2-4231-8a77-efe52f659ee7
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
   vendor: antigravity
 result: done
-note: 'Burn-down session remediated: aida-store on gitlab was 6 commits behind origin (fast-forwardable, no divergence); ran aida remote mirror-sync twice (874eb85e105b then 8c7fada444ce), mirror now at origin tip. No force-push. Residual trailing during active sessions is expected; 6h guard will re-check.'
-due_since: 2026-10-07T01:25:20.635980496Z
-due_reason: on CronJobFailed:hub-drift-guard
+note: 'aida-store: gitlab was 2 commits behind origin and fast-forwardable (gitlab ⊂ origin verified); pushed origin/aida-store to gitlab, e057441d52..efcdf08ab5. main and v0.15.0 already in sync.'
