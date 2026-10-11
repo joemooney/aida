@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:22:50.976734054Z
-modified_at: 2026-10-11T13:27:13.813372008Z
+modified_at: 2026-10-11T13:46:57.494441568Z
 req_type: Bug
 tags:
 - cli
@@ -67,6 +67,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2515 at a4239d8e9c'
   created_at: 2026-10-11T13:27:10.991743475Z
   modified_at: 2026-10-11T13:27:10.991743475Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b37-7656-7882-8677-91b5c6908e78
+  author: joe
+  content: 'FACTORY READY: PR #2515 green at a4239d8e9c (note: #2516 also edits pr_list.rs; whichever merges second needs a rebase)'
+  created_at: 2026-10-11T13:46:57.494441568Z
+  modified_at: 2026-10-11T13:46:57.494441568Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-549f-7c71-8cb4-903e70ca8678
