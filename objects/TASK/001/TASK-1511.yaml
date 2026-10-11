@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:05:27.587470098Z
-modified_at: 2026-09-27T20:59:33.868650159Z
+modified_at: 2026-10-11T07:01:49.566391461Z
 req_type: Task
 tags:
 - needs-sketch
@@ -49,6 +49,44 @@ comments:
   created_at: 2026-09-27T14:15:29.861054725Z
   modified_at: 2026-09-27T14:15:29.861054725Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a129c4-8d7e-75e2-91ce-47f77e2edee0
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided, needs-sketch, operator-deferred; unattended-run enablement (authority-class).
+
+    ## Approach
+    Cold-boot is a new step in the STORY-1218 tick alongside `redrive_step` (aida-cli-lib/src/shift.rs:1997, guarded by `redrive_guards` 1929) and `mail_step` (2142), run from `run_tick` (3097). It follows the exact redrive pattern: a default-off switch read ONLY from the local layer (`ShiftConfig.redrive`/`redrive_source`/`committed_redrive_ignored`, shift.rs:159-166, 362-376 — add `cold_boot`, `cold_boot_source`, `committed_cold_boot_ignored`), evidence-recorded BEFORE launch with a fallible write (`events::emit_recorded`, the B1 rule from TASK-1492), and caps counted from the event stream like `RedriveHistory` (shift.rs:966). Caps: 1/hour/seat and 4/day total. The ledger already reserves `cold_boot_at` (schedule_ledger.rs:159-162). Authority floor: never launch a seat whose roster seats include advisor/approve/merge; v1 = non-authority implementer seats only (operator decision 2026-09-26).
+
+    ## Files and functions
+    - aida-cli-lib/src/shift.rs:131 `ShiftConfig` — `cold_boot: bool`, `max_cold_boots_per_day: usize (4)`; parsing at 362-376 mirrored.
+    - aida-cli-lib/src/shift.rs — `cold_boot_guards(cfg, probes) -> Option<reason>` (budget evidence 935, enabled, `AIDA_EVENTS_DISABLE` refuses) and `cold_boot_step` after `redrive_step`.
+    - aida-cli-lib/src/events.rs:63 — `SeatColdBooted{seat, vendor, job}`, `ColdBootHistory::read_strict` (per-seat last hour, total last 24h).
+    - aida-cli-lib/src/schedule_ledger.rs:162 — stamp `cold_boot_at` on launch.
+    - aida-cli-lib/src/seat_authority.rs — `is_authority_seat(seat)` helper (advisor, integrator, product, any `--delegate-seat` grant) used as a hard refusal.
+    - Launch via the existing detached path `launch_wave_isolated` (shift.rs:1433) with `--no-human`.
+
+    ## Tests (named)
+    - shift_cold_boot_default_off_and_committed_enable_ignored
+    - shift_cold_boot_refuses_authority_seat_even_when_enabled
+    - shift_cold_boot_cap_one_per_hour_per_seat / cap_four_per_day_total
+    - shift_cold_boot_unrecordable_attempt_launches_nothing (fail-closed on events write)
+    - shift_cold_boot_cap_survives_event_rotation
+
+    ## Open design questions (from TASK-1492 comments[1])
+    1. Seat selection + vendor mapping for `seats=["*"]`. 2. Source of liveness (agent_registry live pid vs presence vs discover_live_advisor_session). 3. Meaning of "overdue" (due_since > interval vs any due). 4. The "would drain or merge" test (per-job `cold_boot = true` opt-in?). 5. AUTHORITY — Joe's decision: operator already ruled default-OFF and never advisor/approve/merge; the sketch must encode that as a refusal, not config. 6. Where the 4/day cap is counted (shift-state vs ledger `cold_boot_at`) — recommend events.jsonl like redrive, ledger as display.
+
+    ## Risks
+    - Per-clone counting (events.jsonl not in substrate), same as redrive M2; document.
+    - A cold-booted implementer still inherits ambient grants; must launch with no `--delegate-seat`.
+
+    ## Acceptance check
+    - default-off switch → config test; never authority → refusal test; caps via seams → cap tests.
+
+    ## Gate before implementation
+    Sketch answering Q1-Q6 on this spec, Joe's explicit Q5 decision recorded, independent advisor signoff; then /aida-guided-implement with Joe present.
+  created_at: 2026-10-11T07:01:49.566391461Z
+  modified_at: 2026-10-11T07:01:49.566391461Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a0def4-f1c5-7552-b525-532bdee87e94
   author: joe
