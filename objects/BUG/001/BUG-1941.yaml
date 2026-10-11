@@ -19,12 +19,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:01:08.017370724Z
-modified_at: 2026-10-11T02:01:08.017370724Z
+modified_at: 2026-10-11T02:35:45.885517765Z
 req_type: Bug
 tags:
 - ps
 - regression
 - sessions
+comments:
+- id: 01a128d0-f75d-7b92-b479-ca7d145f4631
+  author: joe
+  content: 'More evidence, 2026-10-10 19:35: the TASK-1722 lease 01a128c021d2 reports dormant/stalled with ''no branch/dirty movement in aida-pool-aida-2'', yet the lib-split relay (claude -p pid 4097632) committed 568ddc3178 in that worktree 8 minutes earlier and is still running. ps attributes no pid to the lease (the relay adopted a lease created by an earlier, failed aida agent new) and misses the branch movement.'
+  created_at: 2026-10-11T02:35:45.885517765Z
+  modified_at: 2026-10-11T02:35:45.885517765Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
