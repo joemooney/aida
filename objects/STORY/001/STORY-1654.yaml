@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-11T07:09:14.693561834Z
+modified_at: 2026-10-11T13:17:55.244920729Z
 req_type: Story
 tags:
 - batch:next
@@ -121,6 +121,31 @@ comments:
   created_at: 2026-10-11T07:09:09.935504600Z
   modified_at: 2026-10-11T07:09:09.935504600Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a12b1c-e0ac-7bf1-b142-74e410dbd78d
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (2026-10-11 06:30): the night design sketch is SIGNED with the amendments below. Option 1, the existing standalone headless reviewer launched via Bash, is approved. Option 2 is deferred.
+
+    Verified against code: run_standalone_reviewer (queue_cmd.rs:12648) mints a child reviewer grant through issue_child (:12426). issue_child -> validate_child_delegation (seat_authority.rs:211) fails closed with a re-enter hint when the parent grant doesn't delegate the seat. On bug-1918-work, review_authority.rs walks ancestry only up to the nearest agent harness (:262-297), so a nested `claude -p` gets its own identity. The sketch's process/identity flow is correct.
+
+    AMENDMENTS (binding):
+    A1. Independence, not just a separate process. The reviewer's prompt must be the AIDA-generated headless review contract that the `aida queue work PR-<n> --role reviewer --no-human` launch produces. Skills and relay prompts must forbid hand-rolled reviewer launches (`claude -p "<orchestrator text>"`) and must not let the orchestrator pass verdict guidance or pre-digested conclusions to the reviewer. The orchestrator may add only a pointer to operator-checklist comments on the spec, which the reviewer reads itself. The BUG-1918 gate establishes identity; A1 is what makes the review independent. State plainly in aida-review.md that the gate is an accident and independence control, not a defence against a deliberately subverting orchestrator.
+    A2. Sequencing. The STORY-1654 template and prompt changes plus the e2e acceptance must pass BEFORE PR #2485 merges. Run the e2e on a build that combines #2485 and this story's branch. Record both the positive (Bash reviewer -> ship OK, no override) and the negative (Agent-tool reviewer -> AuthorSession) on this spec. Only then is BUG-1918 eligible for merge (the operator hold lifts at that point).
+    A3. Add the sketch's nested-harness unit case (two harnesses: only the child pid is in the tokens) to the #2485 test suite or this story's suite, whichever lands first.
+
+    RULINGS ON THE OPEN QUESTIONS:
+    Q1 Delegation: required. Every relay or orchestrator seat that ships PRs must be entered with `--delegate-seat reviewer` (and implementer, where it launches implementers as processes). That is an operator TTY action. Document the exact `aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer` line in the relay launch docs and in every .aida/handoff/*/prompt.md launch header. No code change: fail-closed is correct.
+    Q2 Implementers: this story covers reviewers only. File the implementer half (separate implementer processes, including the advisor-launched case from Joe's 2026-10-10 comment) as its own story, linked to this one.
+    Q3 Concurrency: allowed, one reviewer process per PR, at most 3 concurrent per orchestrator to bound review-worktree churn. No `--sandbox` for reviewers until BUG-1928/BUG-1929 land.
+    Q4 Override: fail closed is intended. In a relay a stale approval always means launching a new reviewer. No relay uses `--override-stale-approval`; that override stays a human-operator tool.
+    Q5 Option 2: wait until a measured throughput problem exists. Don't file it now; the sketch's text is the reference when it's needed.
+
+    Throughput: the measurement approach is accepted (headless-log wall-clock for "after", orchestrator transcript timestamps for "before"). Report the token cost per review alongside wall-clock.
+
+    Implementation lane: this changes how every relay merges, so it's guided or attended, not factory or drain.
+  created_at: 2026-10-11T13:17:55.244920729Z
+  modified_at: 2026-10-11T13:17:55.244920729Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
