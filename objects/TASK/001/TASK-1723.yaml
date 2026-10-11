@@ -1,0 +1,50 @@
+id: 01a12843-e4ab-7e81-a3f6-2a25818dbf27
+spec_id: TASK-1723
+agreed_id: TASK-1723
+title: 'Implement ADR-72: remove all Windows/macOS CI legs, release artifacts, and the cross-platform pre-release gate'
+description: |
+  Implement ADR-72 (Linux-only, no expiry). Remove every automatic Windows/macOS CI path and every re-entry vector. Operator decision 2026-10-10.
+
+  SCOPE
+  1. .github/workflows/cross-platform.yml: remove the `schedule` and `pull_request` triggers; keep the file with `workflow_dispatch` only, plus a header comment citing ADR-72. Remove the failure-reporting step that files/announces "Weekly Windows CI is failing".
+  2. .github/workflows/ci.yml:
+     - Release job: drop the windows-latest matrix entry and the Windows-only steps (protoc Windows, Package/Upload artifacts (Windows)); drop the commented-out macOS entry and the macOS protoc step.
+     - Remove the "Report cross-target cargo check (Windows/macOS on Linux)" step (x86_64-pc-windows-msvc).
+     - Remove the "Weekly Windows workflow contract" step and delete tests/test_weekly_windows_workflow.py.
+     - Remove the BUG-1728 Windows file-time guard step (around L484) if it exists only for Windows.
+  3. scripts/pre-release-check.sh and scripts/release.sh: releases must NOT require a cross-platform run. Remove the gate (or make the script a no-op that exits 0 with an ADR-72 note), and update release.sh's call site.
+  4. The `aida awaiting` "nightly_red: cross-platform nightly red since ..." line: stop surfacing it (no cross-platform workflow runs automatically). Find the producer (rg 'nightly_red') and drop the cross-platform source or make it ignore a dispatch-only workflow.
+  5. ci_gate informational_workflows config / docs that reference "Cross-platform": update or remove so nothing waits on it.
+  6. Docs: update any CLAUDE.md/OVERVIEW.md/docs/ text that claims Windows/macOS support or describes the weekly Windows run (rg -i 'windows|macos' docs OVERVIEW.md README.md). Release notes/README: state Linux-only.
+  7. tests/test_executable_fixture_ratchet.py and any other test asserting the cross-platform workflow's shape: update to match.
+
+  OUT OF SCOPE
+  - Do NOT rip out existing #[cfg(windows)] code paths (no churn). Do NOT touch Linux CI gates.
+  - Do NOT change branch protection (required checks are already only merge-hold-gate + Build (ubuntu-latest)).
+
+  ACCEPTANCE
+  - A PR touching aida-cli-lib/src/init_cmd.rs triggers no Windows/macOS job.
+  - No scheduled cross-platform workflow run is configured.
+  - The Release job builds Linux artifacts only.
+  - scripts/pre-release-check.sh passes with no cross-platform run in existence.
+  - `aida awaiting` no longer reports a cross-platform nightly_red.
+  - make check-ci-fast is green.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T00:01:40.523945463Z
+modified_at: 2026-10-11T00:01:40.523945463Z
+req_type: Task
+tags:
+- batch:next
+- ci
+- platforms
+filed_at:
+  code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
