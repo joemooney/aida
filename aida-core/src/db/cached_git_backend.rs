@@ -1166,7 +1166,16 @@ impl CachedGitBackend {
     /// upsert failure — so the next read does a full rebuild from the store and
     /// picks up the pulled rows. This trades one extra rebuild for correctness.
     /// trace:TASK-712
-    fn restamp_head(&self, pre_write_head: &str) {
+    ///
+    /// BUG-1951: callers capture both heads while holding the store write
+    /// lock, so `pre_write_head` cannot predate a lock-respecting writer's
+    /// commit. `post_write_head` is stamped rather than the live HEAD, so a
+    /// commit that lands after the lock is released reads as stale. A writer
+    /// that skips the lock can still commit between the two captures, so the
+    /// stamp is also refused unless `post_write_head` is `pre_write_head` or
+    /// a single commit on top of it (our own commit).
+    // trace:BUG-1951 | ai:claude
+    fn restamp_head(&self, pre_write_head: &str, post_write_head: &str) {
         // TASK-1515: while a schema migration is pending, `source_head_sha()`
         // reads `None`, which the freshness match below would take for "just
         // rebuilt" and stamp the post-write HEAD on rows that never ingested
@@ -1179,8 +1188,22 @@ impl CachedGitBackend {
             let _ = self.cache.set_source_head_sha("");
             return;
         }
-        let head = self.current_head_sha();
+        let head = post_write_head;
         if head.is_empty() {
+            return;
+        }
+        // An empty `pre_write_head` means the store had no commit yet, so our
+        // write made the root commit (which has no parent).
+        // trace:BUG-1951 | ai:claude
+        let advanced_only_by_us = head == pre_write_head || {
+            let parent = crate::git_ops::first_parent_sha(self.inner.path(), head);
+            match parent.as_deref() {
+                Some(p) => p == pre_write_head,
+                None => pre_write_head.is_empty(),
+            }
+        };
+        if !advanced_only_by_us {
+            let _ = self.cache.set_source_head_sha("");
             return;
         }
         let recorded = self.cache.source_head_sha().ok().flatten();
@@ -1194,7 +1217,7 @@ impl CachedGitBackend {
             Some(s) => s == pre_write_head, // unchanged since we last freshened
         };
         if was_current {
-            let _ = self.cache.set_source_head_sha(&head);
+            let _ = self.cache.set_source_head_sha(head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1264,7 +1287,12 @@ impl CachedGitBackend {
     /// HEAD (every epic resolved) or mark the cache stale so the next read does
     /// an authoritative full rebuild (a targeted epic read missed).
     // trace:BUG-1606 | ai:claude
-    fn refresh_epics_then_restamp(&self, reqs: &[&Requirement], pre_write_head: &str) {
+    fn refresh_epics_then_restamp(
+        &self,
+        reqs: &[&Requirement],
+        pre_write_head: &str,
+        post_write_head: &str,
+    ) {
         // TASK-1515: a pending migration keeps the on-disk head empty; see
         // `restamp_head`. Skip the epic rollups too: the next read rebuilds.
         // trace:TASK-1515 | ai:claude
@@ -1277,7 +1305,7 @@ impl CachedGitBackend {
             all_resolved &= self.refresh_parent_epic_status(req);
         }
         if all_resolved {
-            self.restamp_head(pre_write_head);
+            self.restamp_head(pre_write_head, post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1293,8 +1321,15 @@ impl CachedGitBackend {
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
         // Capture HEAD BEFORE the write so restamp_head can tell our own commit
         // apart from an external pull that moved HEAD underneath us. trace:TASK-712
-        let pre_write_head = self.current_head_sha();
-        let n = self.inner.bulk_update(requirements, commit_subject)?;
+        // BUG-1951: capture both heads under the store lock (re-entrant; the
+        // inner write takes it again). Released before the cache upserts.
+        // trace:BUG-1951 | ai:claude
+        let (pre_write_head, n, post_write_head) = {
+            let _lock = self.inner.lock_store()?;
+            let pre = self.current_head_sha();
+            let n = self.inner.bulk_update(requirements, commit_subject)?;
+            (pre, n, self.current_head_sha())
+        };
         let mut cache_ok = true;
         for req in requirements {
             if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
@@ -1309,7 +1344,7 @@ impl CachedGitBackend {
         if cache_ok {
             // BUG-626: refresh each touched child's parent epic rollup status.
             let reqs: Vec<&Requirement> = requirements.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1337,10 +1372,18 @@ impl CachedGitBackend {
     {
         // Capture HEAD BEFORE the write so restamp_head can tell our own commit
         // apart from an external pull that moved HEAD underneath us.
-        let pre_write_head = self.current_head_sha();
-        let report = self
-            .inner
-            .bulk_update_atomically(targets, commit_subject, keep)?;
+        // BUG-1951: both heads are captured under the store lock (re-entrant;
+        // the inner write takes it again), which is released before the cache
+        // upserts as described above.
+        // trace:BUG-1951 | ai:claude
+        let (pre_write_head, report, post_write_head) = {
+            let _lock = self.inner.lock_store()?;
+            let pre = self.current_head_sha();
+            let report = self
+                .inner
+                .bulk_update_atomically(targets, commit_subject, keep)?;
+            (pre, report, self.current_head_sha())
+        };
         let mut cache_ok = true;
         for req in &report.written {
             if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
@@ -1355,7 +1398,7 @@ impl CachedGitBackend {
         }
         if cache_ok {
             let reqs: Vec<&Requirement> = report.written.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1384,11 +1427,12 @@ impl CachedGitBackend {
         else {
             return Ok(None);
         };
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(&updated) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
-            self.refresh_epics_then_restamp(&[&updated], &pre_write_head);
+            self.refresh_epics_then_restamp(&[&updated], &pre_write_head, &post_write_head);
         }
         Ok(Some(updated))
     }
@@ -1453,6 +1497,7 @@ impl DatabaseBackend for CachedGitBackend {
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let (store, summary) = self.inner.update_atomically_tracked(update_fn)?;
+        let post_write_head = self.current_head_sha();
         if summary.written.is_empty() && summary.deleted.is_empty() && !summary.metadata_changed {
             return Ok(store);
         }
@@ -1475,7 +1520,7 @@ impl DatabaseBackend for CachedGitBackend {
         }
         if cache_ok {
             let reqs: Vec<&Requirement> = summary.written.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1533,8 +1578,13 @@ impl DatabaseBackend for CachedGitBackend {
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(&added) {
             // Cache write failure is non-fatal — mark stale by clearing the
             // recorded SHA so the next read triggers a rebuild.
@@ -1542,37 +1592,47 @@ impl DatabaseBackend for CachedGitBackend {
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
             // BUG-626: a new child shifts its parent epic's rollup status.
-            self.refresh_epics_then_restamp(&[&added], &pre_write_head);
+            self.refresh_epics_then_restamp(&[&added], &pre_write_head, &post_write_head);
         }
         Ok(added)
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
             // BUG-626: a child's status (or hierarchy edge) change shifts its
             // parent epic's rollup status — refresh the parent epic's row.
-            self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
+            self.refresh_epics_then_restamp(&[requirement], &pre_write_head, &post_write_head);
         }
         Ok(())
     }
 
     fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<UpdateResult> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
+        let post_write_head = self.current_head_sha();
         if matches!(result, UpdateResult::Success) {
             if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
                 let _ = self.cache.set_source_head_sha("");
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
                 // BUG-626: refresh the parent epic's rollup status. trace:BUG-626
-                self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
+                self.refresh_epics_then_restamp(&[requirement], &pre_write_head, &post_write_head);
             }
         }
         Ok(result)
@@ -1580,13 +1640,18 @@ impl DatabaseBackend for CachedGitBackend {
 
     fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.delete_requirement_with_schema_retry(id) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache delete failed, cache marked stale: {}", e);
         } else {
-            self.restamp_head(&pre_write_head);
+            self.restamp_head(&pre_write_head, &post_write_head);
         }
         Ok(())
     }
@@ -2010,6 +2075,100 @@ mod tests {
         let scope = super::super::cache_refresh::CacheReadScope::new();
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(scope.metadata()["refreshing"], "deferred");
+        assert!(backend.cache_snapshot_is_stale().unwrap());
+        let all = backend
+            .list_summaries_strict(&ListFilter::default())
+            .unwrap();
+        assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    /// Real git store with one row written through a long-lived cached
+    /// backend, so the cache is fresh at the store HEAD.
+    // trace:BUG-1951 | ai:claude
+    fn fresh_cached_store_with_one_row(dir: &Path) -> (PathBuf, CachedGitBackend) {
+        let store_root = dir.join("store");
+        let cache_path = dir.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        assert!(
+            !backend.cache_snapshot_is_stale().unwrap(),
+            "a plain local write must leave the cache fresh"
+        );
+        (store_root, backend)
+    }
+
+    // trace:BUG-1951 | ai:claude — an external commit that lands AFTER the
+    // pre-write HEAD capture but BEFORE our own commit (a store sync that does
+    // not take the writer lock) must not be absorbed by the restamp: the
+    // cache never ingested it.
+    #[test]
+    fn restamp_after_external_commit_between_capture_and_write_marks_stale() {
+        let dir = tempdir().unwrap();
+        let (store_root, backend) = fresh_cached_store_with_one_row(dir.path());
+
+        // (a) capture the pre-write HEAD, as the write paths do.
+        let pre_write_head = backend.current_head_sha();
+        // (b) an external commit lands in the window.
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("FR-1-002", "b (external)"))
+            .unwrap();
+        // (c) our own write commits on top of it, then restamps.
+        let added = backend
+            .inner
+            .add_requirement(sample_req("FR-1-003", "c"))
+            .unwrap();
+        let post_write_head = backend.current_head_sha();
+        backend
+            .upsert_requirement_with_schema_retry(&added)
+            .unwrap();
+        backend.restamp_head(&pre_write_head, &post_write_head);
+
+        assert!(
+            backend.cache_snapshot_is_stale().unwrap(),
+            "the post-write HEAD must not be stamped fresh over an unread commit"
+        );
+        let all = backend
+            .list_summaries_strict(&ListFilter::default())
+            .unwrap();
+        assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    // trace:BUG-1951 | ai:claude — the stamp is the HEAD captured right after
+    // our commit, not the live HEAD, so a commit that lands after the store
+    // lock is released still reads as stale.
+    #[test]
+    fn restamp_stamps_post_write_head_captured_under_lock() {
+        let dir = tempdir().unwrap();
+        let (store_root, backend) = fresh_cached_store_with_one_row(dir.path());
+
+        let pre_write_head = backend.current_head_sha();
+        let added = backend
+            .inner
+            .add_requirement(sample_req("FR-1-002", "b"))
+            .unwrap();
+        let post_write_head = backend.current_head_sha();
+        assert_ne!(pre_write_head, post_write_head);
+        // A commit lands after the lock would have been released.
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("FR-1-003", "c (external)"))
+            .unwrap();
+        backend
+            .upsert_requirement_with_schema_retry(&added)
+            .unwrap();
+        backend.restamp_head(&pre_write_head, &post_write_head);
+
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(post_write_head.as_str()),
+            "our own commit is ingested, so its HEAD is the stamp"
+        );
         assert!(backend.cache_snapshot_is_stale().unwrap());
         let all = backend
             .list_summaries_strict(&ListFilter::default())

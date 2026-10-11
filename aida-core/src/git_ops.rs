@@ -1081,6 +1081,20 @@ pub fn head_sha(repo: &Path) -> Result<String> {
     Ok(result.stdout)
 }
 
+/// First parent of commit `sha`, or `None` when `sha` is a root commit, is
+/// empty, or cannot be resolved. The cache write paths use it to confirm the
+/// post-write HEAD is exactly one commit on top of the pre-write HEAD (their
+/// own commit) before stamping the cache fresh.
+// trace:BUG-1951 | ai:claude
+pub fn first_parent_sha(repo: &Path, sha: &str) -> Option<String> {
+    if sha.is_empty() {
+        return None;
+    }
+    let rev = format!("{sha}^1");
+    let result = git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
+    (result.success && !result.stdout.is_empty()).then_some(result.stdout)
+}
+
 /// The kind of change a diff reports for a single object file. Renames are
 /// decomposed into Deleted+Added (we pass `--no-renames`), which is exactly the
 /// cache mutation we want: drop the old spec_id's row, add the new one.
@@ -4306,6 +4320,28 @@ mod tests {
         let branch = current_branch(&repo).unwrap();
         // Could be "main" or "master" depending on git config
         assert!(!branch.is_empty());
+    }
+
+    // trace:BUG-1951 | ai:claude
+    #[test]
+    fn first_parent_sha_names_the_previous_commit_and_none_for_a_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "first").unwrap();
+        let first = head_sha(&repo).unwrap();
+        assert_eq!(first_parent_sha(&repo, &first), None, "root has no parent");
+
+        std::fs::write(repo.join("b.txt"), "b").unwrap();
+        add(&repo, &["b.txt"]).unwrap();
+        commit(&repo, "second").unwrap();
+        let second = head_sha(&repo).unwrap();
+        assert_eq!(first_parent_sha(&repo, &second), Some(first));
+        assert_eq!(first_parent_sha(&repo, ""), None);
     }
 
     /// Helper: create a bare remote and a working clone with an initial commit pushed.
