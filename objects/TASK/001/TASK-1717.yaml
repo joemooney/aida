@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-11T08:05:37.106410036Z
+modified_at: 2026-10-11T13:41:50.623203571Z
 req_type: Task
 tags:
 - factory:night
@@ -1119,6 +1119,12 @@ comments:
   created_at: 2026-10-11T08:05:37.106410036Z
   modified_at: 2026-10-11T08:05:37.106410036Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12b32-c79f-78b2-85c9-506cc54be37b
+  author: joe
+  content: 'FACTORY READY: PR #2502 green at c76121cd56 (rebased onto main after the lib split)'
+  created_at: 2026-10-11T13:41:50.623203571Z
+  modified_at: 2026-10-11T13:41:50.623203571Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
   author: aida-session-start
