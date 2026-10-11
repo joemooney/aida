@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T13:02:46.951453818Z
+modified_at: 2026-10-11T13:10:38.927033939Z
 req_type: Bug
 tags:
 - factory:night
@@ -100,6 +100,12 @@ comments:
     The factory relay is down, so the night orchestrator is applying these fixes.
   created_at: 2026-10-11T13:02:46.951453818Z
   modified_at: 2026-10-11T13:02:46.951453818Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b16-384f-7fe1-8b83-31e4f58ed4f7
+  author: joe
+  content: 'REVIEW (night): APPROVE at 4b02ac3c4d (fresh reviewer, round 2). All four round-1 findings are fixed, the claims check out against --help and the code, and the test covers every acceptance item. One nit, not blocking: the test does not guard against vendor model names creeping into the bodies. Merging on green CI at this SHA.'
+  created_at: 2026-10-11T13:10:38.927033939Z
+  modified_at: 2026-10-11T13:10:38.927033939Z
   session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a129e9-a32a-7eb0-9168-23f36f14ddab
