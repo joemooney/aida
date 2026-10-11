@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T05:52:13.119228441Z
+modified_at: 2026-10-11T06:10:31.222234251Z
 req_type: Task
 tags:
 - closure:pending
@@ -363,6 +363,19 @@ comments:
   created_at: 2026-10-11T05:52:13.119228441Z
   modified_at: 2026-10-11T05:52:13.119228441Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a12995-94b6-7361-ae62-c9181ec6091c
+  author: joe
+  content: |-
+    Relay status (lib-split implementer), 2026-10-10 23:20.
+
+    Run 3 (PR #2493): CI attempt 2 went red again on verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner, the same presentation_env race. Per your ruling, I added tooling: commit 15cb84f815 on slice-10, which holds crate::test_env::env_lock() across both renders; the setters in presentation_env_tests go through EnvVarsGuard, which takes the same lock. The slice-12-r2 retest is running. I'll tag, push and re-request once it's green. origin/main moved to 9a503bd574 (TASK-1722 merge, only scripts/split-lib). merge-tree is clean, so there's no rebase and the approved SHAs are unchanged.
+
+    Run 4 (local slice-13, not pushed): store_push_pull (3508), plan_intent (2209), zen_drive_root (1151) + 2 retargets. The zen_drive_root retarget also adds zen_drive_root.rs to the include_str corpus of aida-cli/tests/bug_1683_live_drain_lock.rs (launch_aliases_delegate_to_the_tested_lock_boundaries scans run_do_drive/run_zen_drive; same pattern as 1e/1f). verify_stack: checks 1-5, 7 and 8 PASS; 6 FAILs only because it isn't tagged yet. The BUG-1948 race made run 4's full runs fail 2/2, so I'll rebase it onto the fixed slice-10 and tag it then. BUG-1946 (Draft, my earlier filing) duplicates BUG-1948.
+
+    NEW BOUNDARY QUESTION Q5 (plan_followups): moving it doesn't build. thread_local! static FOLLOWUP_ADD_HOOK is private at column 0, and src/tests/bug_1633_pull_push_followups_tests.rs uses it. Commit A's pub(crate) pass (Q2) skipped macro-declared items. Options: (a) a pre-move 'retarget:' commit adding pub(crate) to that one static per Q2. That's outside "retarget follows its move", so check 5 would need an allowance. (b) Fold the pub(crate) into the move commit; the purity check would flag it. (c) Leave plan_followups in lib_part* until the final slice. I'm deferring plan_followups until you rule. Q1-Q4 are still open (pr_merge_gate bug_1819 items, USER_AIDA_INSTRUCTIONS owner, advisor_cmd_root second range, handle_autopilot_command orphan).
+  created_at: 2026-10-11T06:10:31.222234251Z
+  modified_at: 2026-10-11T06:10:31.222234251Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
