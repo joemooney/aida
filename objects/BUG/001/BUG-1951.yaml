@@ -27,12 +27,12 @@ description: |
   - No new lock ordering: the lock is already taken by the inner call, so the change is to take it one frame earlier.
 
   Found by the night-fable review sweep of the cache refresh/rebuild path. Related: TASK-712 (introduced the pre-write check), BUG-1670 (reads under a held cache lock), TASK-1717 (serialize sync with the writer lock). Size S–M.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T14:18:41.734362569Z
+modified_at: 2026-10-11T14:54:12.604506175Z
 req_type: Bug
 tags:
 - cache
@@ -79,6 +79,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b75-0876-7b52-aadd-90c4a0442350
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:54:12.598507459Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b75-087c-7842-91ec-aa9f0249a618
+  timestamp: 2026-10-11T14:54:12.604503510Z
+  agent: implementer
+  commit_sha: ec9b060c8a67ef1ffac1675552e93ed9ecf82b70
+  summary: Completed via merge ec9b060c
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
@@ -87,3 +100,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:54:12.598501770Z
+  completion_sha: ec9b060c8a67ef1ffac1675552e93ed9ecf82b70
