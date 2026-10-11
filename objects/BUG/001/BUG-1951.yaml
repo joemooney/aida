@@ -27,12 +27,12 @@ description: |
   - No new lock ordering: the lock is already taken by the inner call, so the change is to take it one frame earlier.
 
   Found by the night-fable review sweep of the cache refresh/rebuild path. Related: TASK-712 (introduced the pre-write check), BUG-1670 (reads under a held cache lock), TASK-1717 (serialize sync with the writer lock). Size S–M.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T13:22:05.266370096Z
+modified_at: 2026-10-11T13:51:00.486822707Z
 req_type: Bug
 tags:
 - cache
@@ -53,6 +53,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12b3b-2b86-7e83-8f7b-b321fd4f4f60
+  author: aida-session-start
+  timestamp: 2026-10-11T13:51:00.486822028Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
