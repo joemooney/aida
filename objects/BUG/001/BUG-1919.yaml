@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:51.794153285Z
-modified_at: 2026-10-11T07:07:00.917588506Z
+modified_at: 2026-10-11T07:07:10.084800782Z
 req_type: Bug
 tags:
 - completion
@@ -57,6 +57,13 @@ comments:
     **Risks.** Threading one more bool through `pr_ship_handler` (already `too_many_arguments`); the `tests/task_140_squash_subject_tests.rs` file may call `derive_pr_ship_squash_subject` and needs its signature updated; built only on CI (no local compile), so a type slip shows up there.
   created_at: 2026-10-11T06:53:38.118412195Z
   modified_at: 2026-10-11T06:53:38.118412195Z
+  session_id: 01a129b988a3
+- id: 01a129c9-7184-73d3-a8bc-6324ddf205ef
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2497 at 07bddbbae0dbda1ce82232c869ecefe7769b84f5
+  created_at: 2026-10-11T07:07:10.084800782Z
+  modified_at: 2026-10-11T07:07:10.084800782Z
   session_id: 01a129b988a3
 history:
 - id: 01a12638-b4f6-79a3-9136-4d928974533f
