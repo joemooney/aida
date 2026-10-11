@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:48:53.370540996Z
-modified_at: 2026-10-11T01:49:01.439796686Z
+modified_at: 2026-10-11T07:13:02.960456585Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,26 @@ relationships:
   target_id: 01a12797-ea80-7bc2-8e1f-711b7f047743
   created_at: 2026-10-11T01:49:01.439794638Z
   created_by: joe
+comments:
+- id: 01a129ce-d3f0-7f23-bfe7-77eedf8887a7
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend reject because PR #2483 was already merged on 2026-10-11 05:51Z (by joemooney, CI Build and merge-hold-gate SUCCESS), so there is no review work left; close this auto-filed item.
+
+    Problem: auto-filed review item for PR #2483 (branch task-1722-work to main, covers TASK-1722, pure-move slice stack checker).
+
+    Evidence path: `gh pr view 2483 --json state,mergedAt` reports MERGED at 2026-10-11T05:51:07Z with no GitHub review recorded. Files: .github/workflows/ci.yml, Makefile, scripts/ci-gate-tiers.toml, scripts/split-lib/verify_stack.py, scripts/split-lib/tests/test_verify_stack.py, scripts/split-lib/verify_pr.sh (+865/-0).
+
+    Follow-up worth a look: TASK-1722 is still in-progress although the squash subject carries "(TASK-1722)"; merge-time completion may not have fired. Check with `aida show TASK-1722` after the next pull or reconcile before closing this story.
+
+    If a post-merge review is still wanted, the reviewer should read `gh pr diff 2483` and check: the new CI gate in ci.yml and scripts/ci-gate-tiers.toml cannot block unrelated PRs (tier and trigger scope), verify_stack.py's pure-move verdict is actually exercised by test_verify_stack.py for a failing case, and the Makefile target is listed by `make check-ci-list`.
+
+    Scope: review work only; no acceptance criteria for the code change are invented here. Related: related:TASK-1722.
+
+    Suggested size: S.
+  created_at: 2026-10-11T07:13:02.960456585Z
+  modified_at: 2026-10-11T07:13:02.960456585Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
