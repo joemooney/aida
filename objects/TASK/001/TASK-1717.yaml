@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-11T06:58:42.440461512Z
+modified_at: 2026-10-11T07:05:01.029671349Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -1081,6 +1081,27 @@ comments:
   created_at: 2026-10-08T21:59:40.760768388Z
   modified_at: 2026-10-08T21:59:40.760768388Z
   relayed_from: task1717-rework-fresh-independent-review
+- id: 01a129c7-7965-7e32-9f07-585baca23b91
+  author: joe
+  content: |
+    FACTORY PLAN (night) — TASK-1717 rework of the REQUEST_CHANGES on 223c192 (comments[4])
+
+    Observed state before work: origin/task-1717 was at 3c1445d532 (one unposted commit on top of 223c192, dated after the review) that already carries a B1/B2 rework: name-keyed hook classification with the generated header stripped, `has_changes_checked`, pre-digest status preflight, maintenance.auto=false under the lock, and the section-7 witnesses. Reviewed against comments[4]; it is retained, not redone.
+
+    1. Rebase onto main (post lib.rs split). The three branch commits (a6fac83f5c, 223c192aa1, 3c1445d532) are squashed to one and rebased; the 18 lib.rs hunks relocate to lib_part1.rs (allocation pull/push), lib_part3.rs (maybe_sync_pull) and lib_part4.rs (auto-push, mailbox digest, push/pull store legs). Verified: sorted added/removed line sets identical pre/post (4195/508) and none of the 14 touched pre-existing functions changed on main since bf65220.
+
+    2. B1 remedy (aida-core/src/git_ops.rs): keep `classify_hook`/`strip_generated_header`/`SHIPPED_HOOKS` (template bytes, scaffolder-wrapped copies with any header version, symlinks — metadata/read follow links — all Shipped, keyed by hook name). Fix the drift guidance: `aida upgrade` upgrades the binary, so the refusal names `aida scaffold apply` (re-run `aida init --force`) instead; test assertion follows. Document the exact supported profile, drift policy (refuse OtherAidaGenerated with named guidance, no overwrite) and residual classifier limits on `ensure_store_hooks_supported`. New core witness `task_1717_installed_hook_forms_are_supported`: real temp repo, pre-commit as a symlink to template bytes, commit-msg/post-commit as wrapped copies (current and older header) → Ok; drifted wrapped body → Err naming scaffold apply; non-executable drift skipped. Design question for the advisor goes in the PR body: drifted older generated hooks are refused (conservative), not auto-overwritten.
+
+    3. B2 remedy: keep `has_changes_checked` (Err with stderr when git status fails) at every A4 decision (db sync window, push/pull legs before the digest, auto-push, allocation, reconcile precondition and rollback). Remaining tolerant `has_changes` callers are read-only displays (`db status`, push dry-run/leg status, dev release). `worktree_is_dirty` stays a bool for worktree-pool callers; reconcile no longer uses it. New core witness `task_1717_has_changes_checked_fails_closed`: a `.git` file pointing at a missing gitdir makes `git status` fail → Err, while tolerant `has_changes` keeps its contract.
+
+    4. Gate: `make check-ci-fast` only (no local build); CI builds/tests the draft PR. Commit `[AI:claude] fix(store-lock): accept scaffolded hooks and fail closed on git status errors (TASK-1717)`, force-with-lease push, draft PR labelled factory.
+
+    Acceptance mapping: B1 → scaffolded_hook_profile_runs_every_route, drifted_generated_hook_is_refused_with_upgrade_guidance, task_1717_hook_classification, task_1717_installed_hook_forms_are_supported, reentrant_writer_hook_is_refused_before_any_change, commit_config_must_be_literal_settings. B2 → unreadable_status_fails_push_and_auto_push_without_false_success, push_store_leg_reports_a_failed_commit_and_pushes_nothing, remote_reconcile_checks_its_rollback, task_1717_has_changes_checked_fails_closed. Section 7 → owned_rebase_abort_failure_is_reported_and_preserved, unreachable_origin_files_locally_and_defers, pull_window_unions_a_same_spec_conflict, stale_cache_with_a_competing_refresh_holder (cache-backed `list` under a held refresh.lock), gc_runs_after_the_store_window.
+
+    Risks: compile errors only surface on CI (no local build allowed); the squash rewrites the branch history (pre-rebase shas recorded in the commit and PR body).
+  created_at: 2026-10-11T07:05:01.029671349Z
+  modified_at: 2026-10-11T07:05:01.029671349Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
   author: aida-session-start
