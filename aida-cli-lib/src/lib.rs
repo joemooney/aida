@@ -80,6 +80,7 @@ mod mailbox_root;
 mod memory_doc;
 mod merge_hold_cmd;
 mod output_format;
+mod plan_intent;
 mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -143,6 +144,7 @@ use memory_doc::*;
 use merge_hold_cmd::*;
 use orchestrator_cmd::*;
 use output_format::*;
+use plan_intent::*;
 use pr_cmd::*;
 use pr_list::*;
 use punt_done::*;
