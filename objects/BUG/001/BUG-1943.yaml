@@ -6,12 +6,12 @@ description: |-
   As of main c6c0d9c3b2 (TASK-1723, ADR-72), .github/workflows/cross-platform.yml has no schedule and no pull_request trigger. aida awaiting still prints 'nightly_red: cross-platform nightly red since 2026-09-23 (run 37323717377, 13 nights)', judged from the last scheduled run. No new nightly will ever run, so the line stays red forever and trains seats to ignore the field.
 
   Expected: when the workflow has no schedule trigger (or once the project is Linux-only per ADR-72), the nightly_red signal reports nothing, or 'retired (ADR-72)', not red. Acceptance: on a repo whose cross-platform workflow has no schedule, awaiting has no nightly_red line, plus a test.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:20:55.567515247Z
-modified_at: 2026-10-11T18:28:44.830216550Z
+modified_at: 2026-10-11T18:43:47.683718162Z
 req_type: Bug
 tags:
 - awaiting
@@ -40,6 +40,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12c47-3961-7001-b457-3c3489c2e2f9
+  author: aida-auto-bump
+  timestamp: 2026-10-11T18:43:47.681337731Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12c47-3963-76b1-942e-9f32d789ea4a
+  timestamp: 2026-10-11T18:43:47.683716982Z
+  agent: implementer
+  commit_sha: eb0a08cd5fa64cce8193bdde47ce2efaac3e6cac
+  summary: Completed via merge eb0a08cd
 filed_at:
   code_sha: 392438a12ee4539e011144313eb625fd543cd6f1
   branch: main
@@ -48,3 +61,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T18:43:47.681333680Z
+  completion_sha: eb0a08cd5fa64cce8193bdde47ce2efaac3e6cac
