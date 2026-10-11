@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:45:09.320682147Z
-modified_at: 2026-10-11T13:45:25.199231471Z
+modified_at: 2026-10-11T13:52:08.742120985Z
 req_type: Story
 tags:
 - cli
@@ -63,6 +63,23 @@ relationships:
   target_id: 01a129a4-a38a-75f3-a9f6-32b9d0d80c82
   created_at: 2026-10-11T13:45:25.199227517Z
   created_by: joe
+comments:
+- id: 01a12b3c-3626-76e3-88cf-718eb945ef62
+  author: joe
+  content: |-
+    FACTORY PLAN (night) — plan only, no worktree/code tonight. Reason: no advisor approval comment on record, and the spec is hard-blocked (BUG-1942 In Progress via draft PR #2521; STORY-1661 Approved, not started); its Sequencing section requires both to land first, and pickup refuses until blockers are Completed.
+
+    Approach once unblocked:
+    1. CLI: add five variants to HistoryCommand (aida-cli-lib/src/cli.rs ~8423) — Opened/Completed/Rejected/Approved/Closed — sharing one #[clap(flatten)] HistoryViewArgs {since (default 7d), until, type, priority, tags, status (current), limit, all_events, oldest_first, max_commits}. Help text states status = current status and closed = completed|rejected|superseded (archived excluded); include examples.
+    2. New focused module aida-cli-lib/src/history_views.rs (avoids history.rs digest sort region of #2517 and history_cache.rs stall guard of #2521): map view -> event selection reusing HistoryOptions {opened_only, to_status}; closed = union of to_status in {completed,rejected,superseded}. Query the history index (history_cache) first; fall back to the git walk only when the index is unavailable, carrying commit_walk_capped through as truncated + 'window truncated at <date>' human line / truncated field in TOON/JSON. Dedupe to latest matching event per spec unless --all-events; join current status/type/priority/title/tags from the requirements cache; apply list filters on current fields; sort newest-first (or --oldest-first); limit.
+    3. Render: reuse output_format::render_list_fields_table with a leading 'when' column so human/TOON/JSON match aida list shape + when; print resolved window header as history already does.
+    4. Dispatch: route new variants in the history handler without touching spec-ID/events/templates paths.
+    Tests (history_views.rs unit + cli parse tests): history_view_completed_filters_type_one_row_per_spec, history_view_closed_includes_terminal_excludes_archived, history_view_recompleted_dedup_and_all_events, history_view_opened_shows_current_status, history_view_index_answers_beyond_walk_cap, history_view_walk_fallback_prints_truncation, history_subcommands_spec_id_events_templates_unchanged (parse), golden human/TOON/JSON rows.
+    Docs: docs/cli history chapter section for the five views.
+    Risks: index API shape may change with STORY-1661/BUG-1942 — the reason to wait; clap flatten conflicts with existing global history flags (--since/--until/--status) need checking.
+  created_at: 2026-10-11T13:52:08.742120985Z
+  modified_at: 2026-10-11T13:52:08.742120985Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
