@@ -421,59 +421,24 @@ pub(crate) struct AutoBumpFlip {
 /// `None` means the GitHub lookup was unavailable or failed. Callers
 /// default-to-preserve in that ambiguous case; hiding unfinished work is more
 /// damaging than leaving shipped work visible for another pass.
+///
+/// Compatibility wrapper over the checked lookup in [`reconcile_evidence`],
+/// which owns the forge query and response validation (a non-array or
+/// malformed response is unavailable, never empty). The pure-git positive
+/// and GitLab-is-unknown rules are documented there.
 // trace:BUG-1454 | ai:codex
+// trace:TASK-1335 | ai:claude
 pub(crate) fn specs_with_open_prs(
     project_root: &std::path::Path,
     spec_ids: impl IntoIterator<Item = String>,
 ) -> Option<std::collections::BTreeMap<String, u64>> {
-    // "Not GitHub" is TWO different situations and they need opposite answers.
-    //
-    //   ForgeKind::GitLab — merge requests exist, and `gh` cannot read them.
-    //     The state is genuinely UNKNOWN, which is the `None` this function's
-    //     own contract describes above. Returning `Some(empty)` here asserted
-    //     "the lookup ran and nothing is open" and auto-bumped every candidate
-    //     to Completed even with an MR still open against it. That is the
-    //     defect: unknown must never read as clear.
-    //
-    //   ForgeKind::None — a pure-git project has no change-request concept at
-    //     all, so "no open PR references this spec" is a MEASURED TRUTH, not a
-    //     failed lookup. Returning `None` here would defer every auto-bump on
-    //     every remoteless repository forever, which is why collapsing both
-    //     cases into `None` turns 20 existing tests red: they are pure-git.
-    //
-    // trace:BUG-1454 | ai:claude
-    match forge::resolve_forge_kind(project_root) {
-        forge::ForgeKind::GitHub => {}
-        // no forge, therefore no pull requests, therefore none are open
-        forge::ForgeKind::None => return Some(std::collections::BTreeMap::new()),
-        // a forge we cannot query — unknown, so preserve
-        _ => return None,
-    }
-    let gh = resolve_gh_binary()?;
-    let mut open = std::collections::BTreeMap::new();
-    for spec_id in spec_ids {
-        let out = std::process::Command::new(&gh)
-            .current_dir(project_root)
-            .args([
-                "pr", "list", "--state", "open", "--search", &spec_id, "--limit", "1", "--json",
-                "number",
-            ])
-            .output_retrying_etxtbsy()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        let rows: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-        if let Some(number) = rows
-            .as_array()
-            .and_then(|items| items.first())
-            .and_then(|item| item.get("number"))
-            .and_then(|number| number.as_u64())
-        {
-            open.insert(spec_id, number);
-        }
-    }
-    Some(open)
+    let forge = Ok(forge::resolve_forge_kind(project_root));
+    reconcile_evidence::open_changes_or_none(reconcile_evidence::check_open_changes(
+        project_root,
+        &forge,
+        spec_ids,
+        true,
+    ))
 }
 
 impl AutoBumpFlip {
@@ -1535,6 +1500,17 @@ pub(crate) fn apply_closure_hold(
 /// STORY-1436: the closure hold as a [`events::EventKind::GateHeld`] record.
 // trace:STORY-1436 | ai:claude
 pub(crate) fn closure_hold_reason(hold: &ClosureHold) -> String {
+    format!(
+        "merged ({}) but completion held at Done — {}",
+        hold.flip.sha.chars().take(7).collect::<String>(),
+        closure_hold_causes(hold)
+    )
+}
+
+/// What holds `hold` — blockers and/or unmet criteria — without the
+/// "held at Done" framing, for paths that do not land at Done.
+// trace:TASK-1335 | ai:claude
+pub(crate) fn closure_hold_causes(hold: &ClosureHold) -> String {
     let mut why = Vec::new();
     if !hold.blockers.is_empty() {
         why.push(format!(
@@ -1548,11 +1524,7 @@ pub(crate) fn closure_hold_reason(hold: &ClosureHold) -> String {
             closure_criteria_label(&hold.criteria)
         ));
     }
-    format!(
-        "merged ({}) but completion held at Done — {}",
-        hold.flip.sha.chars().take(7).collect::<String>(),
-        why.join("; ")
-    )
+    why.join("; ")
 }
 
 // trace:STORY-1436 | ai:claude
@@ -2750,62 +2722,6 @@ pub(crate) fn reconcile_no_flip_message(
     }
 }
 
-/// TASK-1446 (BUG-1506 AC3): the "direction B" diagnostic — how many of
-/// `candidate_ids` (specs already `Completed` that a commit in the scan
-/// window still names) are ALSO named by a currently-open PR's title or
-/// body. Deliberately ONE `gh pr list` call regardless of candidate count
-/// (unlike `specs_with_open_prs`, which is one call PER candidate — fine for
-/// that function's small `flips` domain, but this direction can hold every
-/// Completed spec a wide scan touches). Best-effort: any forge/lookup
-/// failure reads as 0 — this is a pure diagnostic, never a write guard, so
-/// there is no "ambiguous, so preserve" case to get right here.
-// trace:TASK-1446 | ai:claude
-pub(crate) fn count_completed_specs_with_open_prs(
-    project_root: &std::path::Path,
-    candidate_ids: &[String],
-) -> Option<usize> {
-    // Review fix (PRIN-5): every failure path is `None` ("could not check"),
-    // never `0` — a zero must mean "checked, found none".
-    if !matches!(
-        forge::resolve_forge_kind(project_root),
-        forge::ForgeKind::GitHub
-    ) {
-        return None;
-    }
-    let gh = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            "200",
-            "--json",
-            "title,body",
-        ])
-        .output_retrying_etxtbsy()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let rows = serde_json::from_slice::<serde_json::Value>(&out.stdout).ok()?;
-    let items = rows.as_array()?;
-    let haystack: String = items
-        .iter()
-        .map(|item| {
-            format!(
-                "{} {}",
-                item.get("title").and_then(|v| v.as_str()).unwrap_or(""),
-                item.get("body").and_then(|v| v.as_str()).unwrap_or("")
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    Some(count_ids_mentioned(&haystack, candidate_ids))
-}
-
 /// Counts candidate spec ids that appear in `haystack` as WHOLE ids
 /// (case-insensitive): `BUG-1` must not match inside `BUG-10` or `XBUG-1`.
 // trace:TASK-1446 | ai:claude
@@ -2908,6 +2824,26 @@ pub(crate) fn handle_db_reconcile_status(
     // it, so warn loudly. trace:BUG-568 | ai:claude
     warn_multi_repo_scan_limited(project_root, "reconcile-status scan");
 
+    // TASK-1335: pin the scanned tip once. Every candidate reason refers to
+    // this snapshot, never to a HEAD reread after the branch moved.
+    // trace:TASK-1335 | ai:claude
+    let head_oid = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "HEAD^{commit}"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|oid| git_arg_guard::is_hex_sha(oid))
+        .ok_or_else(|| anyhow::anyhow!("could not resolve the default branch tip (HEAD)"))?;
+    let scan = reconcile_evidence::ScanRange {
+        branch: default_branch.clone(),
+        oid: head_oid.clone(),
+        since: since.map(str::to_string),
+        max_count: 200,
+    };
+
     // BUG-536: full-message (`%B`) scan, NUL-record-separated, so the manual
     // replay sees the same squash-body completion trailers the live auto-bump
     // now reads — otherwise `reconcile-status` couldn't recover the umbrella
@@ -2924,12 +2860,12 @@ pub(crate) fn handle_db_reconcile_status(
             // (`--output=<path>..HEAD` writes a file). trace:BUG-1622 | ai:claude
             git_arg_guard::reject_option_like("--since", s)?;
             log_args.push(git_arg_guard::END_OF_OPTIONS.to_string());
-            log_args.push(format!("{}..HEAD", s));
+            log_args.push(format!("{}..{}", s, head_oid));
             log_args.push("--".to_string());
         }
         None => {
-            log_args.push("--max-count=200".to_string());
-            log_args.push("HEAD".to_string());
+            log_args.push(format!("--max-count={}", scan.max_count));
+            log_args.push(head_oid.clone());
         }
     }
     let log_out = ProcessCommand::new("git")
@@ -2950,6 +2886,12 @@ pub(crate) fn handle_db_reconcile_status(
     let mut candidates: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
     let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    // TASK-1335: which accepted form first supplied each candidate, for the
+    // per-candidate report. Attribution itself is unchanged.
+    let mut candidate_sources: std::collections::BTreeMap<
+        String,
+        reconcile_evidence::EvidenceSource,
+    > = std::collections::BTreeMap::new();
     for record in log.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2968,7 +2910,13 @@ pub(crate) fn handle_db_reconcile_status(
         // the live pull already (correctly) left alone. trace:BUG-426 | ai:claude
         if !is_plan_commit_subject(subject) {
             for id in extract_spec_ids_from_commit(subject) {
-                candidates.entry(id).or_insert_with(|| sha.to_string());
+                if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
+                    candidate_sources.insert(
+                        slot.key().clone(),
+                        reconcile_evidence::EvidenceSource::SubjectTrailer,
+                    );
+                    slot.insert(sha.to_string());
+                }
             }
             // BUG-536: harvest the squash-body completion trailers too (gated on
             // a `(#N)` squash/merge subject), mirroring the live auto-bump scan
@@ -2976,7 +2924,13 @@ pub(crate) fn handle_db_reconcile_status(
             // single-trailer squash. trace:BUG-536 | ai:claude
             if extract_pr_number_from_commit_subject(subject).is_some() {
                 for id in extract_referenced_spec_ids_from_commit(message) {
-                    candidates.entry(id).or_insert_with(|| sha.to_string());
+                    if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
+                        candidate_sources.insert(
+                            slot.key().clone(),
+                            reconcile_evidence::EvidenceSource::SquashBodyTrailer,
+                        );
+                        slot.insert(sha.to_string());
+                    }
                 }
             }
         }
@@ -3007,21 +2961,71 @@ pub(crate) fn handle_db_reconcile_status(
     // them so we can print an explicit "already Completed — nothing to do"
     // message instead of the misleading no-op text. trace:BUG-418 | ai:claude
     let mut already_terminal: Vec<(String, RequirementStatus)> = Vec::new();
+    // TASK-1335: every candidate's reason is recorded here BEFORE a filter
+    // drops it, so the report never infers "no match" from an empty flip
+    // list. trace:TASK-1335 | ai:claude
+    let mut outcomes = reconcile_evidence::ReconcileOutcomes::default();
+    let outcome_for = |spec_id: &str,
+                       sha: &str,
+                       source: reconcile_evidence::EvidenceSource,
+                       req: Option<&Requirement>,
+                       reason: reconcile_evidence::CandidateReason| {
+        reconcile_evidence::CandidateOutcome {
+            spec_id: spec_id.to_string(),
+            identity: req.map(reconcile_evidence::CandidateIdentity::of),
+            sha: sha.to_string(),
+            source,
+            reason,
+        }
+    };
     for (spec_id, sha) in &candidates {
         if let Some(target) = spec {
             if !spec_id.eq_ignore_ascii_case(target) {
                 continue;
             }
         }
+        let source = candidate_sources
+            .get(spec_id)
+            .copied()
+            .unwrap_or(reconcile_evidence::EvidenceSource::SubjectTrailer);
         let Some(req) = trailer_spec_or_skip(&store, spec_id, sha) else {
+            let reason = if store.get_requirement_unambiguous(spec_id).is_err() {
+                reconcile_evidence::CandidateReason::AmbiguousSpec
+            } else {
+                reconcile_evidence::CandidateReason::UnknownSpec
+            };
+            outcomes.record(outcome_for(spec_id, sha, source, None, reason));
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
             if matches!(req.status, RequirementStatus::Completed) {
                 already_terminal.push((spec_id.clone(), req.status.clone()));
+                outcomes.record(outcome_for(
+                    spec_id,
+                    sha,
+                    source,
+                    Some(req),
+                    reconcile_evidence::CandidateReason::AlreadyTerminal,
+                ));
+            } else if !draft_landed.iter().any(|(id, _)| id == spec_id) {
+                // A Draft landing at Done is reported by its own path.
+                outcomes.record(outcome_for(
+                    spec_id,
+                    sha,
+                    source,
+                    Some(req),
+                    reconcile_evidence::CandidateReason::Ineligible,
+                ));
             }
             continue;
         }
+        outcomes.record(outcome_for(
+            spec_id,
+            sha,
+            source,
+            Some(req),
+            reconcile_evidence::CandidateReason::WouldComplete,
+        ));
         flips.push(AutoBumpFlip::new(
             spec_id.clone(),
             sha.clone(),
@@ -3050,6 +3054,13 @@ pub(crate) fn handle_db_reconcile_status(
             if flips.iter().any(|f| f.spec_id == sid) {
                 continue;
             }
+            outcomes.record(outcome_for(
+                sid,
+                sha,
+                reconcile_evidence::EvidenceSource::ReviewStoryMerge,
+                Some(req),
+                reconcile_evidence::CandidateReason::WouldComplete,
+            ));
             flips.push(AutoBumpFlip::new(
                 sid.to_string(),
                 sha.clone(),
@@ -3067,9 +3078,27 @@ pub(crate) fn handle_db_reconcile_status(
     // already covers the Done-state review story, so this completes the
     // {Approved, InProgress, Done} set. trace:BUG-219 | ai:claude
     let mut stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
-    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
     if let Some(target) = spec {
         stale_review_flips.retain(|(sid, ..)| sid.eq_ignore_ascii_case(target));
+    }
+    // TASK-1335: this independent path gets the same per-candidate record
+    // (scan-time UUID included) so its write-seam decision is reportable.
+    // trace:TASK-1335 | ai:claude
+    for (sid, sha, ..) in &stale_review_flips {
+        outcomes.record(outcome_for(
+            sid,
+            sha,
+            reconcile_evidence::EvidenceSource::ReviewStoryMerge,
+            store.get_requirement_by_spec_id(sid),
+            reconcile_evidence::CandidateReason::WouldComplete,
+        ));
+    }
+    let before_fresh_stale = stale_review_flips.clone();
+    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
+    for (sid, ..) in &before_fresh_stale {
+        if !stale_review_flips.iter().any(|(kept, ..)| kept == sid) {
+            outcomes.set_reason(sid, reconcile_evidence::CandidateReason::StaleAfterReopen);
+        }
     }
 
     // BUG-113: the covers chain — a `Done` review story whose covered
@@ -3078,54 +3107,171 @@ pub(crate) fn handle_db_reconcile_status(
     // the `(#N)` scan missed because their PR's merge commit is outside
     // the replay range. Mirrors the auto-bump path; honours `--spec`.
     // trace:BUG-113 | ai:claude
+    let mark_stale = |outcomes: &mut reconcile_evidence::ReconcileOutcomes,
+                      before: &[AutoBumpFlip],
+                      after: &[AutoBumpFlip]| {
+        for flip in before {
+            if !after.iter().any(|kept| kept.spec_id == flip.spec_id) {
+                outcomes.set_reason(
+                    &flip.spec_id,
+                    reconcile_evidence::CandidateReason::StaleAfterReopen,
+                );
+            }
+        }
+    };
+    let before_fresh = flips.clone();
     retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
+    mark_stale(&mut outcomes, &before_fresh, &flips);
     let mut covers_completed_flips = collect_covers_completed_review_flips(&store, &flips);
     if let Some(target) = spec {
         covers_completed_flips.retain(|f| f.spec_id.eq_ignore_ascii_case(target));
     }
     for flip in covers_completed_flips {
+        outcomes.record(outcome_for(
+            &flip.spec_id,
+            &flip.sha,
+            reconcile_evidence::EvidenceSource::CoversChain,
+            store.get_requirement_by_spec_id(&flip.spec_id),
+            reconcile_evidence::CandidateReason::WouldComplete,
+        ));
         flips.push(flip);
     }
 
     // BUG-1454: replay must enforce the same open-PR guard as pull-time
     // auto-bump. Otherwise a manual Completed → Done recovery would be undone
     // immediately by the already-landed trailer in this wider scan.
-    let mut open_pr_deferred = false;
+    let before_fresh = flips.clone();
     retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
-    let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
-    match specs_with_open_prs(project_root, candidate_ids) {
-        Some(open) => {
-            flips.retain(|flip| {
-                let Some(pr) = open.get(&flip.spec_id) else {
-                    return true;
-                };
-                open_pr_deferred = true;
-                eprintln!(
-                    "  {} {} stays Done — open PR #{} still references it",
-                    "↷".yellow(),
-                    flip.spec_id,
-                    pr
-                );
-                false
-            });
-        }
-        None if !flips.is_empty() => {
-            open_pr_deferred = true;
-            eprintln!(
-                "  {} reconcile deferred — could not verify whether candidate specs have open PRs",
-                "↷".yellow()
-            );
-            flips.clear();
-        }
-        None => {}
+    mark_stale(&mut outcomes, &before_fresh, &flips);
+
+    // TASK-1335: a checked lookup per candidate, against a forge classified
+    // WITHOUT repairing config. Any unavailable answer still defers the whole
+    // normal batch (all or nothing, as before), but each candidate keeps its
+    // own reason: unavailable, open, or checked-clear-but-batch-deferred.
+    // trace:TASK-1335 | ai:claude
+    let mut forge_class: Option<Result<forge::ForgeKind, String>> = None;
+    let open_checks = if flips.is_empty() {
+        Vec::new()
+    } else {
+        let forge_kind = forge_class.get_or_insert_with(|| forge::checked_forge_kind(project_root));
+        reconcile_evidence::check_open_changes(
+            project_root,
+            forge_kind,
+            flips.iter().map(|flip| flip.spec_id.clone()),
+            false,
+        )
+    };
+    let batch_unavailable = open_checks
+        .iter()
+        .any(|(_, check)| matches!(check, reconcile_evidence::OpenChangeCheck::Unavailable(_)));
+    for (spec_id, check) in &open_checks {
+        let reason = match check {
+            reconcile_evidence::OpenChangeCheck::Clear if batch_unavailable => {
+                reconcile_evidence::CandidateReason::BatchDeferred
+            }
+            reconcile_evidence::OpenChangeCheck::Clear => continue,
+            reconcile_evidence::OpenChangeCheck::Open(pr) => {
+                reconcile_evidence::CandidateReason::OpenChange(*pr)
+            }
+            reconcile_evidence::OpenChangeCheck::Unavailable(why) => {
+                reconcile_evidence::CandidateReason::RequiredCheckUnavailable(why.clone())
+            }
+        };
+        outcomes.set_reason(spec_id, reason);
+    }
+    if batch_unavailable {
+        flips.clear();
+    } else {
+        flips.retain(|flip| {
+            !open_checks.iter().any(|(id, check)| {
+                id == &flip.spec_id && matches!(check, reconcile_evidence::OpenChangeCheck::Open(_))
+            })
+        });
     }
 
     // BUG-1551: the replay honours the same closure gate as the live
     // auto-bump — an unresolved BlockedBy predecessor keeps the spec at Done
     // (merge recorded in a note) rather than completing past it.
     // trace:BUG-1551 | ai:claude
-    let closure_holds = split_closure_held_flips(&store, &mut flips);
-    report_closure_holds(&closure_holds);
+    // TASK-1335: one least-fixed-point closure pass over EVERY completion
+    // this run would grant — normal flips and the independent stale-review
+    // flips — so the dry-run preview and the live write seam agree. A held
+    // normal flip keeps its existing Done landing + note; a held stale
+    // review story is simply not completed (no new landing policy).
+    // trace:TASK-1335 | ai:claude
+    // The covers chain uses the same DIRECT rooted rule as the write seam: a
+    // covers candidate whose only covered spec this pass just held loses its
+    // support, which can in turn change the closure picture — so the two
+    // filters iterate to a fixed point (each pass only removes candidates).
+    let mut closure_holds: Vec<ClosureHold> = Vec::new();
+    loop {
+        let mut all_completions: Vec<AutoBumpFlip> = flips.clone();
+        all_completions.extend(stale_review_flips.iter().map(|(sid, sha, _, prior)| {
+            AutoBumpFlip::new(sid.clone(), sha.clone(), prior.clone())
+        }));
+        let mut changed = false;
+        for hold in split_closure_held_flips(&store, &mut all_completions) {
+            changed = true;
+            if stale_review_flips
+                .iter()
+                .any(|(sid, ..)| *sid == hold.flip.spec_id)
+            {
+                stale_review_flips.retain(|(sid, ..)| *sid != hold.flip.spec_id);
+                outcomes.set_reason(
+                    &hold.flip.spec_id,
+                    reconcile_evidence::CandidateReason::Held(closure_hold_causes(&hold)),
+                );
+            } else {
+                flips.retain(|flip| flip.spec_id != hold.flip.spec_id);
+                outcomes.set_reason(
+                    &hold.flip.spec_id,
+                    reconcile_evidence::CandidateReason::ClosureHeld,
+                );
+                closure_holds.push(hold);
+            }
+        }
+        let anchors: std::collections::HashSet<uuid::Uuid> = flips
+            .iter()
+            .filter(|f| {
+                outcomes.get(&f.spec_id).map(|o| o.source)
+                    != Some(reconcile_evidence::EvidenceSource::CoversChain)
+            })
+            .filter_map(|f| store.get_requirement_by_spec_id(&f.spec_id).map(|r| r.id))
+            .collect();
+        let unsupported: Vec<String> = flips
+            .iter()
+            .filter(|f| {
+                outcomes.get(&f.spec_id).map(|o| o.source)
+                    == Some(reconcile_evidence::EvidenceSource::CoversChain)
+                    && !covers_chain_rooted(&store, &f.spec_id, &anchors)
+            })
+            .map(|f| f.spec_id.clone())
+            .collect();
+        for id in &unsupported {
+            changed = true;
+            flips.retain(|flip| flip.spec_id != *id);
+            outcomes.set_reason(
+                id,
+                reconcile_evidence::CandidateReason::Held(
+                    "no covered spec is Completed or completing in this run".to_string(),
+                ),
+            );
+        }
+        if !changed {
+            break;
+        }
+    }
+    let targeted = spec.is_some();
+    for outcome in outcomes.entries() {
+        if let Some(line) = reconcile_evidence::render_outcome(outcome, targeted) {
+            eprintln!("  {line}");
+        }
+    }
+    // A dry run reports the scan's holds; a writing run reports the holds the
+    // live seam actually decided (below), never an obsolete scan payload.
+    if dry_run {
+        report_closure_holds(&closure_holds);
+    }
 
     // TASK-1446 (BUG-1506 AC3): the sweep runs — and reports — in BOTH
     // directions, not just the one that produces a flip.
@@ -3161,8 +3307,8 @@ pub(crate) fn handle_db_reconcile_status(
         })
         .map(|(spec_id, _)| spec_id.clone())
         .collect();
-    let completed_with_open_pr_count: Option<usize> = if completed_candidate_ids.is_empty() {
-        Some(0)
+    let completed_with_open_pr_count = if completed_candidate_ids.is_empty() {
+        Ok(0)
     } else {
         // TASK-1446: ONE `gh pr list` call for every open PR, not one
         // `specs_with_open_prs`-style search per candidate — `specs_with_open_prs`
@@ -3171,7 +3317,15 @@ pub(crate) fn handle_db_reconcile_status(
         // spec a wide `--since`-less (200-commit) scan touches, and a
         // network round trip per candidate was measured to blow well past
         // an operator's `timeout 120` on this repo's own history.
-        count_completed_specs_with_open_prs(project_root, &completed_candidate_ids)
+        // TASK-1335: same read-only forge classification as the required
+        // check; its failure is labeled as this diagnostic's, never as a
+        // completion refusal. trace:TASK-1335 | ai:claude
+        let forge_kind = forge_class.get_or_insert_with(|| forge::checked_forge_kind(project_root));
+        reconcile_evidence::count_completed_with_open_changes(
+            project_root,
+            forge_kind,
+            &completed_candidate_ids,
+        )
     };
     println!(
         "{} sweep: {} pre-Done spec{} with a merged trailer, {} Completed spec{} still \
@@ -3180,21 +3334,54 @@ pub(crate) fn handle_db_reconcile_status(
         pre_done_merged_count,
         if pre_done_merged_count == 1 { "" } else { "s" },
         completed_with_open_pr_count
+            .as_ref()
             .map(|n| n.to_string())
-            .unwrap_or_else(|| "unknown (forge unavailable)".to_string()),
-        if completed_with_open_pr_count == Some(1) {
+            .unwrap_or_else(|_| "unknown (open-PR diagnostic unavailable)".to_string()),
+        if completed_with_open_pr_count == Ok(1) {
             ""
         } else {
             "s"
         },
     );
+    if let Err(why) = &completed_with_open_pr_count {
+        eprintln!(
+            "  {} could not check whether already-Completed specs are still referenced by an \
+             open PR: {why}. This diagnostic does not gate completion.",
+            "warning:".yellow()
+        );
+    }
+
+    // TASK-1335: exit matrix. A real candidate that lost a REQUIRED check is
+    // an ordinary error (dry-run too); everything else keeps its existing
+    // success/no-op meaning. trace:TASK-1335 | ai:claude
+    let required_unavailable: Vec<reconcile_evidence::CandidateOutcome> = outcomes
+        .required_unavailable()
+        .into_iter()
+        .cloned()
+        .collect();
+    let required_unavailable_error = |other: reconcile_evidence::OtherEffects| {
+        let refs: Vec<&reconcile_evidence::CandidateOutcome> =
+            required_unavailable.iter().collect();
+        anyhow::anyhow!(reconcile_evidence::required_unavailable_error(
+            &refs, &scan, dry_run, other
+        ))
+    };
 
     if flips.is_empty()
         && stale_review_flips.is_empty()
         && draft_landed.is_empty()
         && closure_holds.is_empty()
     {
-        if open_pr_deferred {
+        if !required_unavailable.is_empty() {
+            return Err(required_unavailable_error(
+                reconcile_evidence::OtherEffects::default(),
+            ));
+        }
+        if outcomes
+            .entries()
+            .iter()
+            .any(|o| matches!(o.reason, reconcile_evidence::CandidateReason::OpenChange(_)))
+        {
             return Ok(());
         }
         // BUG-418: disambiguate "already recovered" from "nothing matched".
@@ -3202,7 +3389,34 @@ pub(crate) fn handle_db_reconcile_status(
         // say so plainly — the operator who just ran a recovery needs to read
         // "it's done" as success, not "no commit references it" as failure.
         // trace:BUG-418 | ai:claude
-        println!("{}", reconcile_no_flip_message(spec, &already_terminal));
+        // An id no requirement owns is reported only to a targeted run.
+        let matched_but_ineligible = outcomes
+            .entries()
+            .iter()
+            .filter(|o| match o.reason {
+                reconcile_evidence::CandidateReason::AlreadyTerminal => false,
+                reconcile_evidence::CandidateReason::UnknownSpec => spec.is_some(),
+                _ => true,
+            })
+            .count();
+        if already_terminal.is_empty() && matched_but_ineligible > 0 {
+            // TASK-1335: a commit DID match; the reason is printed above
+            // (targeted) or available per spec, so do not claim no match.
+            match spec {
+                Some(s) => println!("No eligible flips for {s}: see the reason above."),
+                None => {
+                    println!(
+                    "No eligible flips: {matched_but_ineligible} spec{} named by commits in the \
+                     scan range {} not eligible (rerun with --spec <ID> for the reason).",
+                    if matched_but_ineligible == 1 { "" } else { "s" },
+                    if matched_but_ineligible == 1 { "is" } else { "are" },
+                )
+                }
+            }
+        } else {
+            println!("{}", reconcile_no_flip_message(spec, &already_terminal));
+        }
+        println!("Scanned {scan}.");
         return Ok(());
     }
 
@@ -3270,6 +3484,11 @@ pub(crate) fn handle_db_reconcile_status(
                 );
             }
         }
+        if !required_unavailable.is_empty() {
+            return Err(required_unavailable_error(
+                reconcile_evidence::OtherEffects::default(),
+            ));
+        }
         return Ok(());
     }
 
@@ -3277,17 +3496,73 @@ pub(crate) fn handle_db_reconcile_status(
     let flips_for_write = flips.clone();
     let stale_for_write = stale_review_flips.clone();
     let holds_for_write = closure_holds.clone();
+    // TASK-1335: every write-seam candidate — holds, normal flips, and the
+    // independent stale-review flips — with its scan-time identity, so the
+    // seam decides ALL of them against the live store before ANY mutation.
+    // Order: holds, then flips, then stale-review flips (scan order within).
+    // trace:TASK-1335 | ai:claude
+    let seam_item = |spec_id: &str, sha: &str, kind: SeamKind| {
+        let (uuid, source) = outcomes
+            .get(spec_id)
+            .map(|o| (o.identity.as_ref().map(|id| id.uuid), o.source))
+            .unwrap_or((None, reconcile_evidence::EvidenceSource::SubjectTrailer));
+        SeamItem {
+            spec_id: spec_id.to_string(),
+            sha: sha.to_string(),
+            uuid,
+            source,
+            kind,
+        }
+    };
+    let seam_items: Vec<SeamItem> = holds_for_write
+        .iter()
+        .map(|h| seam_item(&h.flip.spec_id, &h.flip.sha, SeamKind::Hold))
+        .chain(
+            flips_for_write
+                .iter()
+                .map(|f| seam_item(&f.spec_id, &f.sha, SeamKind::Flip)),
+        )
+        .chain(
+            stale_for_write
+                .iter()
+                .map(|(sid, sha, ..)| seam_item(sid, sha, SeamKind::StaleReview)),
+        )
+        .collect();
+    let mut seam_verdicts: Vec<SeamVerdict> = Vec::new();
     storage.update_atomically(|s| {
+        seam_verdicts = plan_reconcile_seam(project_root, s, &seam_items);
+        let target_of = |item: &SeamItem| -> Option<usize> {
+            match item.uuid {
+                Some(uuid) => s.requirements.iter().position(|r| r.id == uuid),
+                None => s
+                    .get_requirement_unambiguous(&item.spec_id)
+                    .ok()
+                    .flatten()
+                    .map(|r| r.id)
+                    .and_then(|id| s.requirements.iter().position(|r| r.id == id)),
+            }
+        };
+        let targets: Vec<Option<usize>> = seam_items.iter().map(target_of).collect();
+        let (hold_verdicts, rest) = seam_verdicts.split_at(holds_for_write.len());
+        let (flip_verdicts, stale_verdicts) = rest.split_at(flips_for_write.len());
+        let (hold_targets, rest_targets) = targets.split_at(holds_for_write.len());
+        let (flip_targets, stale_targets) = rest_targets.split_at(flips_for_write.len());
         // BUG-1551: closure holds — land at Done + record the merge.
-        for hold in &holds_for_write {
-            if let Some(r) = s.requirements.iter_mut().find(|r| {
-                r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
-                    || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
-            }) {
-                apply_closure_hold(r, hold, now, project_root);
+        // TASK-1335: only a hold the LIVE graph still supports is written, with
+        // its CURRENT blockers/criteria — never the scan's payload.
+        for (verdict, target) in hold_verdicts.iter().zip(hold_targets) {
+            let SeamVerdict::Hold(current) = verdict else {
+                continue;
+            };
+            if let Some(index) = *target {
+                apply_closure_hold(&mut s.requirements[index], current, now, project_root);
             }
         }
-        for flip in &flips_for_write {
+        for ((flip, verdict), target) in flips_for_write.iter().zip(flip_verdicts).zip(flip_targets)
+        {
+            if *verdict != SeamVerdict::Apply {
+                continue;
+            }
             // TASK-1-113: match agreed_id as well as spec_id. flip.spec_id is
             // harvested from the commit subject's `(SPEC-ID)` ref, which is
             // the AGREED id (e.g. TASK-131); for a node-aware spec the stored
@@ -3296,17 +3571,10 @@ pub(crate) fn handle_db_reconcile_status(
             // the dry-run/candidate path uses `get_requirement_by_spec_id`
             // (agreed-aware), so the apply diverged from the preview.
             // trace:TASK-1-113 | ai:claude
-            if let Some(r) = s.requirements.iter_mut().find(|r| {
-                r.spec_id.as_deref() == Some(flip.spec_id.as_str())
-                    || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
-            }) {
-                if !auto_bump_eligible_status(&r.status) {
-                    continue;
-                }
-                // trace:TASK-1600 | ai:codex
-                if auto_bump_evidence_is_stale(project_root, r, &flip.sha) {
-                    continue;
-                }
+            // TASK-1335: the seam verdict already resolved the id to the
+            // scan-time requirement (agreed or native form), so write exactly
+            // that requirement, once.
+            if let Some(r) = target.map(|index| &mut s.requirements[index]) {
                 // BUG-477: record the reconcile-driven Done→Completed bump
                 // in the per-spec history, matching the manual edit path's
                 // status field_change shape. trace:BUG-477
@@ -3347,23 +3615,17 @@ pub(crate) fn handle_db_reconcile_status(
         // rather than calling it, so it needed the same Draft widening by
         // hand — kept in lockstep with the other two sites deliberately,
         // not by omission.
-        for (spec_id, sha, pr_n, _) in &stale_for_write {
-            if let Some(r) = s
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
-            {
-                if !matches!(
-                    r.status,
-                    RequirementStatus::Draft
-                        | RequirementStatus::Approved
-                        | RequirementStatus::InProgress
-                ) {
-                    continue;
-                }
-                if auto_bump_evidence_is_stale(project_root, r, sha) {
-                    continue;
-                }
+        // TASK-1335: status/reopen/identity/closure were decided for this
+        // path by the seam verdict above, against the live store.
+        for (((_, sha, pr_n, _), verdict), target) in stale_for_write
+            .iter()
+            .zip(stale_verdicts)
+            .zip(stale_targets)
+        {
+            if *verdict != SeamVerdict::Apply {
+                continue;
+            }
+            if let Some(r) = target.map(|index| &mut s.requirements[index]) {
                 // trace:STORY-1418 | ai:claude
                 let prior = completion::mark_completed(r);
                 // BUG-477: record the reconcile stale-review flip-to-Completed
@@ -3396,25 +3658,64 @@ pub(crate) fn handle_db_reconcile_status(
         }
     })?;
 
-    let after = storage.load().unwrap_or_else(|_| store.clone());
-    let confirmed: Vec<AutoBumpFlip> = flips
-        .into_iter()
-        .filter(|flip| {
-            after
-                .get_requirement_by_spec_id(&flip.spec_id)
-                .map(|r| matches!(r.status, RequirementStatus::Completed))
-                .unwrap_or(false)
+    // TASK-1335: "applied" is what the write seam actually decided for this
+    // invocation, never "Completed after the write" — a peer's concurrent
+    // completion is not ours to count, report, or emit.
+    // trace:TASK-1335 | ai:claude
+    let mut confirmed: Vec<AutoBumpFlip> = Vec::new();
+    let mut confirmed_stale: Vec<(String, String, u64, RequirementStatus)> = Vec::new();
+    let mut seam_reports: Vec<String> = Vec::new();
+    let mut verdict_iter = seam_verdicts.into_iter();
+    let hold_verdicts: Vec<SeamVerdict> =
+        verdict_iter.by_ref().take(holds_for_write.len()).collect();
+    let flip_verdicts: Vec<SeamVerdict> = verdict_iter.by_ref().take(flips.len()).collect();
+    let stale_verdicts: Vec<SeamVerdict> = verdict_iter.collect();
+    // The holds the live seam actually kept, with their current payloads.
+    let live_holds: Vec<ClosureHold> = hold_verdicts
+        .iter()
+        .filter_map(|v| match v {
+            SeamVerdict::Hold(current) => Some(current.clone()),
+            _ => None,
         })
         .collect();
-    let confirmed_stale: Vec<(String, String, u64, RequirementStatus)> = stale_review_flips
-        .into_iter()
-        .filter(|(sid, _, _, _)| {
-            after
-                .get_requirement_by_spec_id(sid)
-                .map(|r| matches!(r.status, RequirementStatus::Completed))
-                .unwrap_or(false)
-        })
-        .collect();
+    let mut decide = |spec_id: &str, verdict: SeamVerdict| -> bool {
+        let reason = match verdict {
+            SeamVerdict::Apply => reconcile_evidence::CandidateReason::Applied,
+            SeamVerdict::Hold(_) => reconcile_evidence::CandidateReason::ClosureHeld,
+            SeamVerdict::Changed(why) => {
+                reconcile_evidence::CandidateReason::ChangedDuringApply(why)
+            }
+            SeamVerdict::SameAs(other) => {
+                reconcile_evidence::CandidateReason::SameRequirementAs(other)
+            }
+        };
+        let applied = reason == reconcile_evidence::CandidateReason::Applied;
+        outcomes.set_reason(spec_id, reason);
+        if let Some(line) = outcomes
+            .get(spec_id)
+            .and_then(|o| reconcile_evidence::render_outcome(o, targeted))
+        {
+            seam_reports.push(line);
+        }
+        applied
+    };
+    for (hold, verdict) in closure_holds.iter().zip(hold_verdicts) {
+        decide(&hold.flip.spec_id, verdict);
+    }
+    for (flip, verdict) in flips.into_iter().zip(flip_verdicts) {
+        if decide(&flip.spec_id, verdict) {
+            confirmed.push(flip);
+        }
+    }
+    for (stale, verdict) in stale_review_flips.into_iter().zip(stale_verdicts) {
+        if decide(&stale.0, verdict) {
+            confirmed_stale.push(stale);
+        }
+    }
+    for line in &seam_reports {
+        eprintln!("  {line}");
+    }
+    report_closure_holds(&live_holds);
 
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "reconcile-status");
@@ -3484,7 +3785,278 @@ pub(crate) fn handle_db_reconcile_status(
             );
         }
     }
+    if !required_unavailable.is_empty() {
+        return Err(required_unavailable_error(
+            reconcile_evidence::OtherEffects {
+                drafts_landed: confirmed_draft.len(),
+                review_stories_completed: confirmed_stale.len(),
+            },
+        ));
+    }
     Ok(())
+}
+
+/// TASK-1335: one write-seam candidate — a closure hold, a normal
+/// Done→Completed flip, or an independent stale-review flip — with the
+/// requirement its evidence resolved to at scan time.
+#[derive(Clone, Debug)]
+struct SeamItem {
+    spec_id: String,
+    sha: String,
+    uuid: Option<uuid::Uuid>,
+    source: reconcile_evidence::EvidenceSource,
+    kind: SeamKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SeamKind {
+    Hold,
+    Flip,
+    StaleReview,
+}
+
+/// TASK-1335: what the write seam decided for one [`SeamItem`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SeamVerdict {
+    Apply,
+    /// The live store no longer supports the scan-time decision.
+    Changed(String),
+    /// A scan-time hold is still held by the live graph: write THIS payload.
+    Hold(ClosureHold),
+    /// Another accepted id of the same requirement is applied instead.
+    SameAs(String),
+}
+
+/// TASK-1335: decide every seam item against the LIVE store under the writer
+/// lock, before any mutation. Per item: the evidence id must still resolve
+/// unambiguously to the scan-time UUID, the status must still be one its
+/// path completes (or holds), and reopen fences must not cover the
+/// evidence. Completions are then consolidated per UUID (the first accepted
+/// item in scan order wins; its aliases are reported, not re-applied), and —
+/// to a fixed point, since dropping one completion can withdraw another's
+/// support — covers support must be ROOTED in a live Completed requirement
+/// or a surviving non-covers completion (never another covers candidate),
+/// and the live closure graph is evaluated as a least fixed point over the
+/// surviving completions. Finally each scan-time hold is re-derived from the
+/// live graph: still held → [`SeamVerdict::Hold`] with the CURRENT payload;
+/// no longer held → refused as changed (a rerun decides; no completion and
+/// no obsolete note). Covers support is deliberately DIRECT (BUG-113's
+/// existing rule: a covered spec Completed or completing in this run's
+/// normal batch), so a story covering only another covers candidate
+/// completes on a later run, once that candidate is Completed. Pure local
+/// reads; no forge I/O under the lock.
+// trace:TASK-1335 | ai:claude
+// trace:TASK-1600 | ai:codex
+fn plan_reconcile_seam(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    items: &[SeamItem],
+) -> Vec<SeamVerdict> {
+    let mut verdicts: Vec<SeamVerdict> = items
+        .iter()
+        .map(|item| {
+            let current = match store.get_requirement_unambiguous(&item.spec_id) {
+                Ok(Some(r)) => r,
+                Ok(None) => {
+                    return SeamVerdict::Changed(
+                        "its ID no longer resolves to a requirement".to_string(),
+                    )
+                }
+                Err(_) => {
+                    return SeamVerdict::Changed(
+                        "its ID now names more than one requirement".to_string(),
+                    )
+                }
+            };
+            if item.uuid.is_some_and(|uuid| uuid != current.id) {
+                return SeamVerdict::Changed(
+                    "its ID now resolves to a different requirement".to_string(),
+                );
+            }
+            let status_ok = match item.kind {
+                SeamKind::Hold | SeamKind::Flip => auto_bump_eligible_status(&current.status),
+                SeamKind::StaleReview => matches!(
+                    current.status,
+                    RequirementStatus::Draft
+                        | RequirementStatus::Approved
+                        | RequirementStatus::InProgress
+                ),
+            };
+            if !status_ok {
+                return SeamVerdict::Changed(format!("its status changed to {}", current.status));
+            }
+            if auto_bump_evidence_is_stale(project_root, current, &item.sha) {
+                return SeamVerdict::Changed("it was reopened after this evidence".to_string());
+            }
+            SeamVerdict::Apply
+        })
+        .collect();
+
+    // One completion per requirement, whichever accepted id named it.
+    let completes = |kind: SeamKind| kind != SeamKind::Hold;
+    let resolved_uuid = |item: &SeamItem| {
+        item.uuid.or_else(|| {
+            store
+                .get_requirement_by_spec_id(&item.spec_id)
+                .map(|r| r.id)
+        })
+    };
+    for index in 0..items.len() {
+        if verdicts[index] != SeamVerdict::Apply || !completes(items[index].kind) {
+            continue;
+        }
+        let Some(uuid) = resolved_uuid(&items[index]) else {
+            continue;
+        };
+        if let Some(first) = (0..index).find(|&earlier| {
+            verdicts[earlier] == SeamVerdict::Apply
+                && completes(items[earlier].kind)
+                && resolved_uuid(&items[earlier]) == Some(uuid)
+        }) {
+            verdicts[index] = SeamVerdict::SameAs(items[first].spec_id.clone());
+        }
+    }
+
+    loop {
+        let mut changed = false;
+        let anchors: std::collections::HashSet<uuid::Uuid> = items
+            .iter()
+            .zip(&verdicts)
+            .filter(|(item, v)| {
+                **v == SeamVerdict::Apply
+                    && item.kind == SeamKind::Flip
+                    && item.source != reconcile_evidence::EvidenceSource::CoversChain
+            })
+            .filter_map(|(item, _)| resolved_uuid(item))
+            .collect();
+        for index in 0..items.len() {
+            if verdicts[index] != SeamVerdict::Apply
+                || items[index].source != reconcile_evidence::EvidenceSource::CoversChain
+            {
+                continue;
+            }
+            if !covers_chain_rooted(store, &items[index].spec_id, &anchors) {
+                verdicts[index] =
+                    SeamVerdict::Changed("no covered spec is still completed".to_string());
+                changed = true;
+            }
+        }
+        let surviving: Vec<usize> = (0..items.len())
+            .filter(|&i| verdicts[i] == SeamVerdict::Apply && completes(items[i].kind))
+            .collect();
+        let mut released: Vec<AutoBumpFlip> = surviving
+            .iter()
+            .map(|&i| {
+                AutoBumpFlip::new(
+                    items[i].spec_id.clone(),
+                    items[i].sha.clone(),
+                    RequirementStatus::Done,
+                )
+            })
+            .collect();
+        for hold in split_closure_held_flips(store, &mut released) {
+            let Some(&index) = surviving
+                .iter()
+                .find(|&&i| items[i].spec_id == hold.flip.spec_id)
+            else {
+                continue;
+            };
+            // Every completion was released by the scan's closure pass, so
+            // a hold here is new since the scan.
+            verdicts[index] = SeamVerdict::Changed(format!(
+                "its completion is now held ({})",
+                closure_hold_causes(&hold)
+            ));
+            changed = true;
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    // Scan-time holds: re-derive the hold from the LIVE graph (treating the
+    // surviving completions as resolved, the same least fixed point), so the
+    // writer records the current blockers/criteria — or nothing at all when
+    // the hold no longer applies (conservatively refused, rerun decides).
+    let resolved: std::collections::HashSet<uuid::Uuid> = items
+        .iter()
+        .zip(&verdicts)
+        .filter(|(item, v)| **v == SeamVerdict::Apply && completes(item.kind))
+        .filter_map(|(item, _)| resolved_uuid(item))
+        .collect();
+    let mut held_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (item, verdict) in items.iter().zip(&verdicts) {
+        if item.kind == SeamKind::Hold && *verdict == SeamVerdict::Apply {
+            held_ids.insert(item.spec_id.clone());
+            if let Some(req) = store.get_requirement_by_spec_id(&item.spec_id) {
+                held_ids.insert(
+                    req.agreed_id
+                        .clone()
+                        .or_else(|| req.spec_id.clone())
+                        .unwrap_or_else(|| req.id.to_string()),
+                );
+            }
+        }
+    }
+    for (item, verdict) in items.iter().zip(verdicts.iter_mut()) {
+        if item.kind != SeamKind::Hold || *verdict != SeamVerdict::Apply {
+            continue;
+        }
+        let Some(req) = store.get_requirement_by_spec_id(&item.spec_id) else {
+            continue;
+        };
+        let (blockers, criteria) = closure_holders_treating_resolved(req, store, &resolved);
+        *verdict = if blockers.is_empty() && criteria.is_empty() {
+            SeamVerdict::Changed("its closure hold no longer applies".to_string())
+        } else {
+            let cycle_members = blockers
+                .iter()
+                .filter(|b| held_ids.contains(&b.id))
+                .map(|b| b.id.clone())
+                .collect();
+            SeamVerdict::Hold(ClosureHold {
+                flip: AutoBumpFlip::new(item.spec_id.clone(), item.sha.clone(), req.status.clone()),
+                blockers,
+                cycle_members,
+                criteria,
+            })
+        };
+    }
+    verdicts
+}
+
+/// TASK-1335: [`collect_covers_completed_review_flips`]'s condition re-read
+/// at the write seam with ROOTED support: the review story is still a `Done`
+/// review story and an `implements` target is Completed in the live store
+/// or is one of `anchors` (surviving non-covers completions). Another covers
+/// candidate never counts, so a covers cycle cannot justify itself.
+// trace:TASK-1335 | ai:claude
+fn covers_chain_rooted(
+    store: &aida_core::RequirementsStore,
+    review_id: &str,
+    anchors: &std::collections::HashSet<uuid::Uuid>,
+) -> bool {
+    let Some(review) = store.get_requirement_by_spec_id(review_id) else {
+        return false;
+    };
+    if !matches!(review.status, RequirementStatus::Done)
+        || parse_review_story_pr_number(&review.title).is_none()
+    {
+        return false;
+    }
+    review.relationships.iter().any(|rel| {
+        matches!(
+            &rel.rel_type,
+            aida_core::RelationshipType::Custom(n) if n.eq_ignore_ascii_case("implements")
+        ) && store
+            .requirements
+            .iter()
+            .find(|r| r.id == rel.target_id)
+            .is_some_and(|covered| {
+                matches!(covered.status, RequirementStatus::Completed)
+                    || anchors.contains(&covered.id)
+            })
+    })
 }
 
 /// STORY-86 / BUG-328: print the auto-bump summary line after a successful

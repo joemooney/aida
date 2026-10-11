@@ -1017,6 +1017,11 @@ pub(crate) fn forge_host_of(url: &str) -> Option<String> {
 pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
     let config_path = project_dir.join(".aida").join("config.toml");
     let content = std::fs::read_to_string(&config_path).ok()?;
+    ForgeKind::from_config_token(forge_provider_token(&content)?)
+}
+
+/// The raw `[forge] provider` value in a config file's text, unquoted.
+fn forge_provider_token(content: &str) -> Option<&str> {
     let mut in_forge = false;
     for raw in content.lines() {
         let line = raw.split('#').next().unwrap_or("").trim();
@@ -1032,11 +1037,99 @@ pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
         }
         if let Some((key, val)) = line.split_once('=') {
             if key.trim() == "provider" {
-                return ForgeKind::from_config_token(val.trim().trim_matches('"'));
+                return Some(val.trim().trim_matches('"'));
             }
         }
     }
     None
+}
+
+/// Read-only forge classification for checks that must not guess.
+///
+/// Same precedence as [`resolve_forge_kind`] — an explicit provider wins,
+/// except that an explicit pure-git provider yields to an `origin` naming a
+/// supported forge — but it never rewrites the config, and an unreadable
+/// config, an unrecognized provider, or a failed `origin` lookup is an
+/// error rather than a fallback to pure git. `Ok(ForgeKind::None)` is
+/// therefore an affirmative classification: the project has no change
+/// requests to look up.
+// trace:TASK-1335 | ai:claude
+pub fn checked_forge_kind(project_root: &Path) -> Result<ForgeKind, String> {
+    let config_path = project_root.join(".aida").join("config.toml");
+    let configured = match std::fs::read_to_string(&config_path) {
+        Ok(content) => checked_forge_provider(&content)
+            .map_err(|why| format!("{why} in {}", config_path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("could not read {}: {e}", config_path.display())),
+    };
+    match configured {
+        Some(kind) if kind != ForgeKind::None => Ok(kind),
+        _ => Ok(checked_origin_url(project_root)?
+            .map(|url| detect_forge_kind(&url))
+            .unwrap_or(ForgeKind::None)),
+    }
+}
+
+/// The configured `[forge] provider`, read as real TOML so every valid
+/// spelling (`[forge]` table, dotted `forge.provider`, inline
+/// `forge = { provider = … }`) is seen. `Ok(None)` only when the document
+/// genuinely sets no provider; a document or value this reader cannot
+/// interpret is an error, never "no forge".
+// trace:TASK-1335 | ai:claude
+fn checked_forge_provider(content: &str) -> Result<Option<ForgeKind>, String> {
+    let doc: toml::Table = content
+        .parse()
+        .map_err(|e: toml::de::Error| format!("unparseable config ({})", e.message()))?;
+    let Some(forge) = doc.get("forge") else {
+        return Ok(None);
+    };
+    let forge = forge
+        .as_table()
+        .ok_or_else(|| "`forge` is not a table".to_string())?;
+    let Some(provider) = forge.get("provider") else {
+        return Ok(None);
+    };
+    let token = provider
+        .as_str()
+        .ok_or_else(|| "`[forge] provider` is not a string".to_string())?;
+    ForgeKind::from_config_token(token)
+        .map(Some)
+        .ok_or_else(|| format!("unrecognized forge provider {token:?}"))
+}
+
+/// `origin`'s URL, `Ok(None)` only when the repository has no `origin`.
+// trace:TASK-1335 | ai:claude
+fn checked_origin_url(project_root: &Path) -> Result<Option<String>, String> {
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .map_err(|e| format!("could not run `git {}`: {e}", args.join(" ")))
+            .and_then(|out| {
+                if out.status.success() {
+                    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+                } else {
+                    Err(format!(
+                        "`git {}` failed: {}",
+                        args.join(" "),
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ))
+                }
+            })
+    };
+    if !git(&["remote"])?
+        .lines()
+        .any(|name| name.trim() == "origin")
+    {
+        return Ok(None);
+    }
+    let url = git(&["remote", "get-url", "origin"])?.trim().to_string();
+    if url.is_empty() {
+        return Err("`origin` has an empty URL".to_string());
+    }
+    Ok(Some(url))
 }
 
 /// Rewrite the existing `[forge] provider` line in `.aida/config.toml`.
@@ -4728,6 +4821,38 @@ mod tests {
         let (kind, msg) = forge_cli_status(tmp.path());
         assert_eq!(kind, ForgeKind::None);
         assert!(msg.contains("none needed"));
+    }
+
+    #[test]
+    fn checked_forge_provider_reads_every_toml_spelling_or_refuses() {
+        // trace:TASK-1335 | ai:claude
+        for (doc, want) in [
+            ("[forge]\nprovider = \"gitlab\"\n", Some(ForgeKind::GitLab)),
+            ("forge.provider = \"github\"\n", Some(ForgeKind::GitHub)),
+            (
+                "forge = { provider = \"gitlab\" }\n",
+                Some(ForgeKind::GitLab),
+            ),
+            (
+                "[forge]\nprovider = 'pure-git' # local\n",
+                Some(ForgeKind::None),
+            ),
+            ("[node]\nid = \"1\"\n", None),
+            ("[forge]\n", None),
+            ("", None),
+        ] {
+            assert_eq!(checked_forge_provider(doc), Ok(want), "{doc:?}");
+        }
+        for doc in [
+            "forge = \"gitlab\"\n",
+            "[forge]\nprovider = 7\n",
+            "forge = { provider = [\"gitlab\"] }\n",
+            "[forge]\nprovider = \"bitbucket\"\n",
+            "[forge\nprovider = \"gitlab\"\n",
+            "[forge]\nprovider = \"github\"\nprovider = \"gitlab\"\n",
+        ] {
+            assert!(checked_forge_provider(doc).is_err(), "{doc:?} must refuse");
+        }
     }
 
     #[test]

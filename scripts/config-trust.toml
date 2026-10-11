@@ -75,9 +75,10 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# TASK-1335: checked_forge_kind adds a third worktree read of [forge] provider.
 [readers."aida-cli-lib/src/forge.rs"]
 channels = ["worktree", "write"]
-sites = 2
+sites = 3
 
 [readers."aida-cli-lib/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
