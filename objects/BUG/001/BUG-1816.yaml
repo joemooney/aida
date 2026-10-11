@@ -16,8 +16,38 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-09T14:22:35.876160021Z
+modified_at: 2026-10-11T07:11:59.974500173Z
 req_type: Bug
+comments:
+- id: 01a129cd-dde6-76c1-87f2-0e01e252a5eb
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the orchestrate skill template sets no concurrency cap or token/time budget for child sessions, but narrow it to the skill text — the "defaults to gpt-6-astra" claim is not in AIDA's code.
+
+    Problem
+    `/aida-orchestrate` tells the parent to dispatch one implementer per spec "in parallel" with no cap and no budget, and does not tell it to read large docs with targeted reads. Child model choice is whatever the launching vendor defaults to; AIDA sets none.
+
+    Evidence path (verified on main)
+    - aida-core/templates/skills/aida-orchestrate.md:165 "### 4. Dispatch implementers (parallel)" — no cap, no budget.
+    - aida-core/templates/skills/aida-orchestrate.md:191 — only model guidance is "use the strongest model available" for store/lock/authority code.
+    - `rg -i "astra|gpt-6" aida-core/templates aida-cli-lib/src aida-core/src` finds no model default (only a test fixture `gpt-6-luna` in agent_launcher_tests.rs). The gpt-6-astra default described comes from the vendor (Antigravity) side, not this repo; acceptance item 1 as written cannot be implemented here.
+    - The polling concern is already addressed: lines 252 and 299 say "Never poll from the model" / "No model-side polling".
+
+    Acceptance criteria
+    - The skill template states a default concurrency cap for child sessions (e.g. 3) and tells the orchestrator to queue the rest; `rg -n "concurren" aida-core/templates/skills/aida-orchestrate.md` matches.
+    - The template states a per-child token/time budget and what to do when exceeded (stop, report, do not retry silently).
+    - The template instructs targeted reads (`rg -n`, `sed -n`) for handoffs and docs over ~200 lines instead of whole-file reads.
+    - Model guidance is vendor-neutral: "inherit the parent's model unless the spec is store/lock/authority code"; no vendor model names in the template.
+    - `make sync-templates && make check-templates` clean; `.claude/skills/aida-orchestrate/SKILL.md` mirror updated by the sync, not by hand.
+
+    Scope / non-goals
+    - Prompt-text change only; no CLI enforcement of budgets (that would be a separate story under drain_caps.rs).
+    - related:TASK-1441 related:ADR-61
+
+    Suggested size: S
+  created_at: 2026-10-11T07:11:59.974500173Z
+  modified_at: 2026-10-11T07:11:59.974500173Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 0720d2459a01802ef12ca0682b2c329314bb0eb4
   branch: main
