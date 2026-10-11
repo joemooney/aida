@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T19:49:09.884898595Z
+modified_at: 2026-10-11T22:15:23.483171425Z
 req_type: Task
 tags:
 - closure:pending
@@ -629,6 +629,23 @@ comments:
   content: 'IMPLEMENTER (session 3 relay): reopened Done→Approved. #2530 (verify_stack shim rule, merged e0e97b77be) carried the (TASK-1538) trailer as requested, and merge-time completion fired again; closure:pending held it at Done. About 26 of ~45 modules are still in lib.rs, so the task is not done. closure:pending is kept. Slice stack status follows in the next comment.'
   created_at: 2026-10-11T19:49:06.993626451Z
   modified_at: 2026-10-11T19:49:06.993626451Z
+  session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+- id: 01a12d08-f25b-7200-89f3-5b2b36028e4d
+  author: joe
+  content: |-
+    RUN 7 -r3 READY TO MERGE (PR #2511, branch slice-25, head 27e972044e, base origin/main 18428db14c). CI is green (Build + merge-hold-gate), MERGEABLE, and it merges cleanly into current main 95f15a20d4. Tags are pushed, each proven at its own SHA (warnings 0/0, cargo test --workspace --no-fail-fast 10289/10289, 8 ignored):
+    - slice-25-r3 orchestrator_leases 5dd1f27e82 (2252)
+    - slice-26-r3 upgrade_release 0b34271ec4 (2072)
+    - slice-27-r3 findings_gate 044cbf95b7 (2129)
+    - slice-28-r3 questions 9b37ef9486 (2635)
+    - slice-29-r3 session_end 27e972044e (1765)
+    verify_stack 18428db14c..slice-25 --build: 7 commits (5 MOVE, 1 RETARGET, 1 TOOLING), checks 1–9 PASS. check-ci-fast at slice-25: 26 gates pass. The rebase onto 18428db14c had no conflicts in run 7's moved text.
+    Runs 8/9 are rebased locally onto 18428db14c with checks 1–8 PASS, but since then main's #2540 (markdown render, lib_part5 render_tree_node/print_comment) conflicts with run 8. After #2511's squash merge, runs 8/9 need one more rebase in any case. Plan: once #2511 merges, rebase slice-30/slice-36 onto main once, carry #2540's text into the MOVE, re-prove all 11 SHAs, re-tag (run 8 as -r3, run 9 as -r2), retarget #2526 to main, then ping you for #2526 and #2538.
+    The proofs at the 18428db14c base flaked on 6 timing tests, none in moved code: aida-core cached_git_backend reader_incremental_lock_error_does_not_full_rebuild and worker_crash_loop_stops_spawning; bug_1942 x2 (BUG-1968 family); report_cmd bug_1606; supervise_cmd bug_1621 watch_redrive. Logs are kept.
+    Q10 is still open: each main-induced rebase costs ~16 full workspace proofs (~2h on two lanes). A ruling would help the stack keep up with main.
+    TASK-1538 was auto-flipped to Done when #2530 merged (its (TASK-1538) trailer). I reopened it to Approved and kept closure:pending.
+  created_at: 2026-10-11T22:15:23.483171425Z
+  modified_at: 2026-10-11T22:15:23.483171425Z
   session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
