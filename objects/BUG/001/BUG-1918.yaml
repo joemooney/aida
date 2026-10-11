@@ -19,12 +19,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T01:44:19.074341296Z
+modified_at: 2026-10-11T01:51:12.523278361Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
 - review-gate
 - two-seat
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a128a8-0ee0-7fe0-8a86-9b2b55034fa2
+  created_at: 2026-10-11T01:51:12.523275313Z
+  created_by: joe
 comments:
 - id: 01a126fe-db00-70c2-b3d0-e66dff82bca4
   author: joe
