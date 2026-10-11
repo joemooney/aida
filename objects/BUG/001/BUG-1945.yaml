@@ -28,8 +28,37 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T04:14:37.105043879Z
-modified_at: 2026-10-11T04:14:37.105043879Z
+modified_at: 2026-10-11T07:13:45.891370705Z
 req_type: Bug
+comments:
+- id: 01a129cf-7ba3-75f2-9396-34b4f029c47d
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the digest sort on main is a plain string compare over a field that mixes YAML `...Z` timestamps with git `%aI` offsets.
+
+    Problem
+    build_digest_rows takes a live spec's last touch from YAML modified_at (always `Z`) and a deleted spec's from the git author date (`%aI`, `+00:00` or `Z` depending on git version, or a local offset), then run_digest sorts those strings lexically, so ties and non-UTC offsets order inconsistently.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/history.rs:1961 — `entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));` (String cmp).
+    - history.rs:1887-1889 — `let last_ts_iso = modified_at.unwrap_or_else(|| e.last_git_ts.clone());` mixes the two sources.
+    - history.rs:1418 — git log format `%H%x09%aI%x09%ae` feeds last_git_ts; history.rs:2007-2021 read_current() returns modified_at from YAML.
+    - `git log -3 -- aida-cli-lib/src/history.rs` shows no change to this sort since TASK-1526; not fixed on main.
+
+    Acceptance criteria
+    - Unit test history::digest_orders_by_instant_not_string: rows with "2025-03-04T06:00:00-07:00" and "2025-03-04T12:00:00Z" order the -07:00 row first (it is the later instant).
+    - Unit test history::digest_tie_breaks_by_spec_id: a live spec (modified_at "...Z") and a deleted spec (git "...+00:00") at the same instant always order by spec id regardless of which string form git produced.
+    - Rendering is unchanged: the existing digest goldens stay byte-identical (the parsed instant is used for ordering only).
+    - An unparseable timestamp falls back to the old string compare (or sorts last) rather than panicking; test covers it.
+
+    Scope / non-goals
+    - Only the digest/old-default ordering; the status-flow default (STORY-1650) and the events feed are untouched.
+    - related:STORY-1650 related:STORY-1478
+
+    Suggested size: S
+  created_at: 2026-10-11T07:13:45.891370705Z
+  modified_at: 2026-10-11T07:13:45.891370705Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 5cc5fa7934093ae52269643aa0972efd2b7352e5
   branch: story-1650-work
