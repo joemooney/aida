@@ -15,12 +15,12 @@ description: |-
   - No `aida list --search` remains in templates/docs (`rg 'list --search'` is clean outside history).
   - `/aida-capture`'s dedup step runs without error.
   - The template-command lint exists and fails on an unknown flag.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:58.831939233Z
-modified_at: 2026-10-11T13:46:31.677692681Z
+modified_at: 2026-10-11T14:44:42.588634782Z
 req_type: Bug
 tags:
 - docs
@@ -97,6 +97,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b6c-55da-7a01-b620-4eaa14eec705
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:44:42.586223504Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b6c-55dc-7c51-ac50-e25832db8db3
+  timestamp: 2026-10-11T14:44:42.588633618Z
+  agent: implementer
+  commit_sha: 21151a591b94b1f1fdc207156f6cbce8a95b394a
+  summary: Completed via merge 21151a59
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -105,3 +118,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:44:42.586219627Z
+  completion_sha: 21151a591b94b1f1fdc207156f6cbce8a95b394a
