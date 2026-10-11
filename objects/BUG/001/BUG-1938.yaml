@@ -1,0 +1,26 @@
+id: 01a12890-989e-71c1-94bd-e09defee3754
+spec_id: BUG-1938
+agreed_id: BUG-1938
+title: aida remote mirror / init leave .aida/config.toml changes uncommitted and unmentioned
+description: |
+  Observed 2026-10-10 creating aida-host. `aida remote mirror gitlab --url ...` (with `aida init --github` before it) changed .aida/config.toml (mirror_remotes, provider, class, ci) but did not commit the change or mention it, so the file sat dirty until noticed. The mirror is also skipped on the first push ("not confirmed on origin"); that is expected, but the setup flow should still end with every hub in sync.
+
+  Want: a command that changes committed config either commits it (as an [AI:tool] chore commit) or prints a clear "config changed; commit it" line. The init/mirror flow finishes with `aida remote mirror-sync` and `aida remote status`. Related: STORY-1656.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:25:27.326683954Z
+modified_at: 2026-10-11T01:25:27.326683954Z
+req_type: Bug
+tags:
+- forge
+- init
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
