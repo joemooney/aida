@@ -4,12 +4,12 @@ agreed_id: DOC-6
 title: Entering session-bound seats and delegating child seats
 description: |
   Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...])"` at an interactive human TTY to establish a session seat. The requested seat must be in the user's team roster; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>` at a TTY. Child delegation is empty by default: list each permitted child seat with a repeated `--delegate-seat`. AIDA launchers issue a distinct grant for each requested child seat; children cannot delegate onward unless explicitly issued delegation scope. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An MCP server captures the grant it starts with, so enter advisor at a TTY and restart/reconnect the server to change its authority.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-08T20:19:53.440632274Z
+modified_at: 2026-10-11T07:01:13.670342317Z
 req_type: Doc
 relationships:
 - rel_type: References
@@ -194,6 +194,14 @@ comments:
   content: 'Additional bounded maintained-guidance finding verified during advisor read: .aida/discipline/advisor-role.md section feedback_advisor_role_for_queue_after_647 still recommends AIDA_SESSION_ROLE=advisor prefixes to confer queue/approval authority and says internal storage.queue_add bypasses the CLI gate. Those historical instructions conflict with current validated-grant semantics and the actual MCP queue refusal; root did NOT follow them. Future B3 documentation work should reconcile the maintained/template source of this migrated lesson to current canonical ADR-66 without introducing a new authority convention. Preserve its historical provenance as historical; no environment elevation advice in current operating guidance. This is documentation-source inventory only, not a root patch or queue authorization.'
   created_at: 2026-10-08T20:19:53.440625238Z
   modified_at: 2026-10-08T20:19:53.440625238Z
+history:
+- id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
+  author: aida-session-start
+  timestamp: 2026-10-11T07:01:13.670341605Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
   branch: story-1473
