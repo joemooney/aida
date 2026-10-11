@@ -128,6 +128,26 @@ const _: () = assert!(FLOW_CATCH_UP_CAP <= CATCH_UP_CHUNK);
 /// Meta key counting consecutive inline catch-ups that kept nothing.
 const CATCH_UP_FAILURES_KEY: &str = "catch_up_failures";
 
+/// Meta key holding when (RFC 3339) the latest counted catch-up attempt
+/// reached [`CATCH_UP_STALL_LIMIT`]. The pause lasts
+/// [`CATCH_UP_RETRY_COOLDOWN_SECS`] from it; a kept chunk clears it.
+// trace:BUG-1942 | ai:claude
+const CATCH_UP_STALLED_AT_KEY: &str = "catch_up_stalled_at";
+
+/// How long a paused inline catch-up waits before one more budgeted
+/// attempt, so a few transient failures (an interrupted slow chunk, a git
+/// or disk error) do not demote queries to the git walk until a rebuild.
+// trace:BUG-1942 | ai:claude
+const CATCH_UP_RETRY_COOLDOWN_SECS: i64 = 3600;
+
+/// When a pause stamped at `stalled_at` (RFC 3339) ends. `None` when the
+/// stamp is missing or unreadable: the pause then ends at once.
+// trace:BUG-1942 | ai:claude
+fn catch_up_retry_at(stalled_at: Option<&str>) -> Option<chrono::DateTime<chrono::Utc>> {
+    let at = chrono::DateTime::parse_from_rfc3339(stalled_at?).ok()?;
+    Some(at.with_timezone(&chrono::Utc) + chrono::Duration::seconds(CATCH_UP_RETRY_COOLDOWN_SECS))
+}
+
 /// Short retry ladder for a busy database. A reader never waits long: it
 /// falls back to the git walk instead.
 const BUSY_LADDER_MS: [u64; 3] = [0, 50, 100];
@@ -1159,8 +1179,14 @@ pub(crate) struct HistoryCacheStatus {
     // trace:BUG-1923 | ai:claude
     pub(crate) lag: Option<usize>,
     /// True when inline catch-up has paused after repeated attempts that
-    /// kept nothing; queries read git until a rebuild.
+    /// kept nothing; queries read git until a rebuild or the next retry.
     pub(crate) catch_up_stalled: bool,
+    /// When the pause started (RFC 3339), if recorded.
+    // trace:BUG-1942 | ai:claude
+    pub(crate) catch_up_stalled_at: Option<String>,
+    /// When a query next retries inline catch-up (RFC 3339); `None` while
+    /// stalled means the next query retries.
+    pub(crate) catch_up_next_retry_at: Option<String>,
 }
 
 /// Outcome of an explicit full build.
@@ -1322,8 +1348,13 @@ impl HistoryCache {
     /// attempts in a row that kept nothing (each failed or was killed
     /// before its first chunk), queries stop paying for catch-up and print
     /// a one-line hint to rebuild instead; the git walk still answers them.
+    /// The pause is a cool-down, not permanent: once
+    /// [`CATCH_UP_RETRY_COOLDOWN_SECS`] pass after the attempt that reached
+    /// the limit, one query tries again. That attempt is counted and
+    /// re-stamps the pause, so a failed retry waits another cool-down.
     /// An unbounded caller (rebuild) always runs.
     // trace:BUG-1923 | ai:claude
+    // trace:BUG-1942 | ai:claude
     fn catch_up_guarded(
         &mut self,
         store: &Path,
@@ -1340,14 +1371,19 @@ impl HistoryCache {
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
         if failures >= CATCH_UP_STALL_LIMIT {
-            stalled_hint();
-            return Ok(());
+            let retry_at = catch_up_retry_at(self.meta(CATCH_UP_STALLED_AT_KEY)?.as_deref());
+            if retry_at.is_some_and(|at| chrono::Utc::now() < at) {
+                stalled_hint();
+                return Ok(());
+            }
         }
-        Self::set_meta(
-            &self.conn,
-            CATCH_UP_FAILURES_KEY,
-            &(failures + 1).to_string(),
-        )?;
+        let attempts = failures.saturating_add(1);
+        let tx = self.conn.transaction()?;
+        Self::set_meta(&tx, CATCH_UP_FAILURES_KEY, &attempts.to_string())?;
+        if attempts >= CATCH_UP_STALL_LIMIT {
+            Self::set_meta(&tx, CATCH_UP_STALLED_AT_KEY, &now_rfc3339())?;
+        }
+        tx.commit()?;
         self.catch_up(store, tip, head, budget)?;
         Ok(())
     }
@@ -1505,6 +1541,8 @@ impl HistoryCache {
         Self::set_meta(tx, "indexer_pid", &std::process::id().to_string())?;
         // trace:BUG-1923 | ai:claude
         tx.execute("DELETE FROM meta WHERE key = ?1", [CATCH_UP_FAILURES_KEY])?;
+        // trace:BUG-1942 | ai:claude
+        tx.execute("DELETE FROM meta WHERE key = ?1", [CATCH_UP_STALLED_AT_KEY])?;
         if let Some(store) = roots_from {
             // A sync joined another root into the store's history.
             let roots = aida_core::git_ops::root_commits(store, &newest.sha)?.join(",");
@@ -1924,14 +1962,28 @@ fn debug_log(err: &anyhow::Error) {
 /// Tell the user (once per process) that inline catch-up is paused.
 // trace:BUG-1923 | ai:claude
 fn stalled_hint() {
+    use std::io::IsTerminal;
     static SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let Some(msg) = stalled_hint_message(std::io::stderr().is_terminal()) else {
+        return;
+    };
     if !SHOWN.swap(true, std::sync::atomic::Ordering::Relaxed) {
-        eprintln!(
-            "note: the history index has fallen behind the store and is not catching up; \
-             run `aida cache rebuild --history` to bring it up to date \
-             (until then `aida history` reads git directly)"
-        );
+        eprintln!("{msg}");
     }
+}
+
+/// The stalled-catch-up hint, or `None` when stderr is not a terminal:
+/// short-lived scripted callers (hooks, status lines, agents) would print
+/// it on every call, and `aida cache status` / `aida doctor` report the
+/// pause anyway.
+// trace:BUG-1942 | ai:claude
+pub(crate) fn stalled_hint_message(stderr_is_tty: bool) -> Option<&'static str> {
+    stderr_is_tty.then_some(
+        "note: the history index has fallen behind the store and catching up is paused \
+         after repeated failures (it retries within the hour); run \
+         `aida cache rebuild --history` to bring it up to date now \
+         (until then `aida history` reads git directly)",
+    )
 }
 
 /// Serve `opts` from the history index, catching it up inline within the
@@ -2323,6 +2375,12 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
             .meta(CATCH_UP_FAILURES_KEY)?
             .and_then(|v| v.parse::<u32>().ok())
             .is_some_and(|n| n >= CATCH_UP_STALL_LIMIT);
+        // trace:BUG-1942 | ai:claude
+        if st.catch_up_stalled {
+            st.catch_up_stalled_at = cache.meta(CATCH_UP_STALLED_AT_KEY)?;
+            st.catch_up_next_retry_at = catch_up_retry_at(st.catch_up_stalled_at.as_deref())
+                .map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+        }
         if let (Some(tip), Some(head)) = (&st.tip, &st.head) {
             if tip != head && aida_core::git_ops::is_ancestor(store, tip, head).unwrap_or(false) {
                 st.lag = aida_core::git_ops::rev_list_count(store, &format!("{tip}..{head}")).ok();
@@ -2360,6 +2418,15 @@ pub(crate) mod test_support {
     pub(crate) fn set_meta(db_path: &Path, key: &str, value: &str) {
         let cache = HistoryCache::open_existing(db_path).unwrap();
         HistoryCache::set_meta(&cache.conn, key, value).unwrap();
+    }
+
+    // trace:BUG-1942 | ai:claude
+    pub(crate) fn delete_meta(db_path: &Path, key: &str) {
+        let cache = HistoryCache::open_existing(db_path).unwrap();
+        cache
+            .conn
+            .execute("DELETE FROM meta WHERE key = ?1", [key])
+            .unwrap();
     }
 
     pub(crate) fn commit_count(db_path: &Path) -> i64 {
