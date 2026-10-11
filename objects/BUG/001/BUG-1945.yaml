@@ -23,12 +23,12 @@ description: |
   - The digest orders rows by instant, regardless of offset format.
   - Ties break deterministically and do not depend on the git version.
   - A test covers a live and a deleted spec at the same instant, and a non-UTC offset.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T04:14:37.105043879Z
-modified_at: 2026-10-11T13:55:16.472107204Z
+modified_at: 2026-10-11T14:43:38.521940853Z
 req_type: Bug
 tags:
 - factory:night
@@ -101,6 +101,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b6b-5b97-7ed0-9059-7d5df7b19848
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:43:38.519169061Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b6b-5b99-79b2-9c1a-f951b29540c5
+  timestamp: 2026-10-11T14:43:38.521938876Z
+  agent: implementer
+  commit_sha: a21076da05bfc57bd5d3e92a4f99c643aa4e505c
+  summary: Completed via merge a21076da
 filed_at:
   code_sha: 5cc5fa7934093ae52269643aa0972efd2b7352e5
   branch: story-1650-work
@@ -109,3 +122,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: ba0773e5-a9ac-4500-9776-22fe6fee4671
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:43:38.519164966Z
+  completion_sha: a21076da05bfc57bd5d3e92a4f99c643aa4e505c
