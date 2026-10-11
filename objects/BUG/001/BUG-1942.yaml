@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T07:13:07.732017872Z
+modified_at: 2026-10-11T07:43:15.076098804Z
 req_type: Bug
 tags:
 - triaged:night
@@ -44,6 +44,12 @@ comments:
   created_at: 2026-10-11T07:13:00.793876878Z
   modified_at: 2026-10-11T07:13:00.793876878Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129ea-7a84-7ae3-a3f8-6f39fbbfefb0
+  author: joe
+  content: 'ADVISOR (overnight 00:45): approval DEFERRED until STORY-1650 (#2491, the night batch, in flight) merges. Both touch the history catch-up/stall path, and a parallel factory PR would conflict with it. Re-check after #2491 lands.'
+  created_at: 2026-10-11T07:43:15.076098804Z
+  modified_at: 2026-10-11T07:43:15.076098804Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 392438a12ee4539e011144313eb625fd543cd6f1
   branch: main
