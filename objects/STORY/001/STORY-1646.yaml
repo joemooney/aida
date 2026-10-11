@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-11T05:20:57.100705364Z
+modified_at: 2026-10-11T05:20:57.938847942Z
 req_type: Story
 tags:
 - batch:next
@@ -79,6 +79,12 @@ comments:
   created_at: 2026-10-10T18:21:54.351662226Z
   modified_at: 2026-10-10T18:21:54.351662226Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12968-3652-77c2-8c5a-a3ebe9349c19
+  author: joe
+  content: 'ADVISOR: APPROVED 2026-10-10 22:25 into batch:next as its FIRST item (operator: ''aida dev build should absolutely exist''). The design in the description was already settled by the operator and advisor; no further sketch is needed. Context: today only the shell-wrapper ''aida dev rebuild'' (TASK-1720, runs make build-fast) exists, and ~/.local/bin/aida is still a symlink into target/agent/. aida-relay independently flagged that a cargo clean there breaks aida for every agent. This story is the fix for that report too. Also in scope: update FAQ-1-259, which still recommends the target/ symlink, to point at ''aida dev build --install-links'' once it ships.'
+  created_at: 2026-10-11T05:20:57.938847942Z
+  modified_at: 2026-10-11T05:20:57.938847942Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a12968-330c-77a3-a52a-cd0ccaa5304b
   author: joe
