@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-11T00:01:25.582897772Z
+modified_at: 2026-10-11T00:01:26.274030270Z
 req_type: Decision
 tags:
 - branch-policy
@@ -49,6 +49,10 @@ relationships:
 - rel_type: Parent
   target_id: 01a104f7-8772-7472-b36e-62333a0bc367
   created_at: 2026-10-04T03:31:39.271422789Z
+- rel_type: SupersededBy
+  target_id: 01a12843-186e-76f0-8143-4a37b1058ba7
+  created_at: 2026-10-11T00:01:26.274027395Z
+  created_by: joe
 comments:
 - id: 01a104de-2552-7ac1-9725-5871294f014b
   author: joe
