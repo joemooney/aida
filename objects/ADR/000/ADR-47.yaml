@@ -32,12 +32,12 @@ description: |
   RECORDED BY
 
   The product seat, from an operator decision given in session on 2026-09-20. This is a relay: the advisor seat has not witnessed it directly and should treat the attribution accordingly.
-status: Approved
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:13:58.873984092Z
-modified_at: 2026-10-03T10:20:26.314622508Z
+modified_at: 2026-10-11T00:01:19.192439115Z
 req_type: Decision
 tags:
 - cross-platform
@@ -79,3 +79,11 @@ comments:
   content: 'Operator direction (2026-10-03): grant a scoped exception for BUG-1728 so its remaining Windows-baseline acceptance can be checked and implemented alongside the related BUG-1777 work. This does not lift ADR-47 general deferral for other Windows/cross-platform work or release policy.'
   created_at: 2026-10-03T10:20:22.724306296Z
   modified_at: 2026-10-03T10:20:22.724306296Z
+history:
+- id: 01a12843-9158-70d3-9d14-535770c414e7
+  author: joe
+  timestamp: 2026-10-11T00:01:19.192435216Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
