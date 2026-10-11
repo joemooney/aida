@@ -20,12 +20,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T22:30:56.627348261Z
-modified_at: 2026-10-10T22:30:56.627348261Z
+modified_at: 2026-10-11T00:01:48.306540284Z
 req_type: Bug
 tags:
 - init
 - portability
 - windows
+comments:
+- id: 01a12844-0312-7fe0-ba45-e2a4eb90888e
+  author: joe
+  content: Deferred per ADR-72 (Linux-only, operator 2026-10-10). Windows-only failures are no longer bugs.
+  created_at: 2026-10-11T00:01:48.306540284Z
+  modified_at: 2026-10-11T00:01:48.306540284Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
