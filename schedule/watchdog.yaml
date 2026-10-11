@@ -1,6 +1,6 @@
 job: watchdog
-last_run: 2026-10-11T15:31:38.332625601Z
+last_run: 2026-10-11T15:53:28.748928635Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:1
+result: ok
