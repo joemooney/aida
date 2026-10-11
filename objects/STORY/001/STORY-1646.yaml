@@ -35,12 +35,12 @@ description: |
   ## Split out
   - Pre-commit refusal in the primary checkout, and the session-start/status-line drift indicator: separate specs, related:STORY-1646.
   - Changing the release flow so GitHub "require a pull request" can be enabled: a separate spec.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-11T08:04:44.749472264Z
+modified_at: 2026-10-11T12:11:31.997606536Z
 req_type: Story
 tags:
 - batch:next
@@ -101,6 +101,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12ae0-190a-7cb3-bf1e-967561d92a6c
+  author: aida-auto-bump
+  timestamp: 2026-10-11T12:11:31.978076621Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12ae0-191d-7191-96db-4005de64e839
+  timestamp: 2026-10-11T12:11:31.997604700Z
+  agent: implementer
+  commit_sha: 8a448f8bda8388517626fcf7b60b3f5290dff7f5
+  summary: Completed via merge 8a448f8b
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -109,3 +122,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T12:11:31.978072365Z
+  completion_sha: 8a448f8bda8388517626fcf7b60b3f5290dff7f5
