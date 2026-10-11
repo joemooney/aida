@@ -79,6 +79,17 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
             continue;
         };
 
+        // A live process inside the tree (cwd, open file, running program)
+        // keeps it: skip before archiving or deleting anything.
+        // trace:BUG-1947 | ai:claude
+        if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&target) {
+            eprintln!(
+                "  Skipping: {}. Stop those processes, then re-run.",
+                in_use.summary()
+            );
+            continue;
+        }
+
         // Archive the branch tip
         let archive_ref = format!("refs/archive/{}", branch_name);
         Command::new("git")

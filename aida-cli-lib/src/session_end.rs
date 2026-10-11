@@ -1185,6 +1185,38 @@ pub(crate) fn session_end(
         let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
     }
 
+    // Refuse to delete a worktree any live process is still using: a cwd
+    // inside it, an open file under it, or a program running from it. A bulk
+    // sweep that loops `session end` over sessions it believes are stale is
+    // therefore safe by default, because each call refuses on its own. The
+    // caller's own process chain (this command, its shell, the agent that
+    // owns the session when run from inside the tree) is exempt, so ending
+    // your own session still works. `--force` overrides. Checked only when
+    // the tree will actually be deleted (not shared with a peer lease, not
+    // returned to the warm pool), and before the lease is touched, so a
+    // refusal changes nothing. trace:BUG-1947 | ai:claude
+    let will_remove_worktree = has_worktree
+        && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none()
+        && (remove
+            || !aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path));
+    if will_remove_worktree {
+        if let Err(in_use) =
+            aida_core::worktree_holders::check_worktree_removal(&target.worktree_path)
+        {
+            if !force {
+                anyhow::bail!(
+                    "{}\n\nThe session was NOT ended; its lease and worktree are unchanged.",
+                    in_use.refusal("--force")
+                );
+            }
+            eprintln!(
+                "{} worktree {} — removing anyway (--force)",
+                "Warning:".yellow().bold(),
+                in_use.summary()
+            );
+        }
+    }
+
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
     // when wrapped — same shape as session_start's `export`. Stdin/stderr
     // for the prompt still works inside `eval "$(...)"` because $(...)

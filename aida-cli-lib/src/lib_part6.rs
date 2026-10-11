@@ -4041,6 +4041,16 @@ impl RealPhaseDriver {
                 ));
             }
             auto_complete::RecoveryTeardown::Remove => {
+                // Never tear down a tree a live process is still using.
+                // trace:BUG-1947 | ai:claude
+                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&worktree) {
+                    log(format!(
+                        "keeping the failed attempt's worktree {} — {}",
+                        worktree.display(),
+                        in_use.summary()
+                    ));
+                    return;
+                }
                 match aida_core::git_ops::remove_worktree_at(&self.project_root, &worktree, false) {
                     Ok(()) => {
                         log(format!(

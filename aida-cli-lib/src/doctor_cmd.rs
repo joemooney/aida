@@ -6180,7 +6180,18 @@ fn heal_doctor_merged_agent_worktree(
         &worktree,
         &worktree_pool_global_hooks("pre_destroy"),
     );
-    if removed.is_err() {
+    if let Err(e) = removed {
+        // A live process inside the tree: keep it and say who holds it.
+        // trace:BUG-1947 | ai:claude
+        if let Some(in_use) = e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "skipped".to_string(),
+                detail: Some(format!("worktree {} — NOT removed", in_use.summary())),
+            });
+        }
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -7477,18 +7488,34 @@ fn heal_doctor_orphan_worktree(
     let salvage = salvage_worktree_patch(project_root, "orphan-worktree", None, &worktree)?;
     // STORY-714: route through the shared teardown so the pre_destroy
     // cargo-clean hook fires (TASK-0396) and a pooled tree is deregistered.
-    let healed = aida_core::worktree_pool_destroy::teardown_worktree_path(
+    let teardown = aida_core::worktree_pool_destroy::teardown_worktree_path(
         project_root,
         &worktree,
         &worktree_pool_global_hooks("pre_destroy"),
-    )
-    .is_ok();
+    );
+    // A live process inside the tree: keep it and say who holds it.
+    // trace:BUG-1947 | ai:claude
+    let in_use = teardown.as_ref().err().and_then(|e| {
+        e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>()
+            .map(|u| u.summary())
+    });
+    let status = match (&teardown, &in_use) {
+        (Ok(_), _) => "healed",
+        (Err(_), Some(_)) => "skipped",
+        (Err(_), None) => "failed",
+    };
+    let salvage_note = salvage.map(|p| format!("salvage patch: {}", p.display()));
+    let detail = match (in_use, salvage_note) {
+        (Some(u), Some(s)) => Some(format!("worktree {u} — NOT removed; {s}")),
+        (Some(u), None) => Some(format!("worktree {u} — NOT removed")),
+        (None, s) => s,
+    };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: "removed orphan worktree".to_string(),
-        status: if healed { "healed" } else { "failed" }.to_string(),
-        detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
+        status: status.to_string(),
+        detail,
     })
 }
 

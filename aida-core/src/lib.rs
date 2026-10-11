@@ -159,6 +159,8 @@ pub mod user_prefs;
 #[cfg(feature = "native")]
 pub mod workspace;
 // Worktree warm-pool (STORY-714): registry + tiered destroy + lifecycle hooks.
+// Live-process guard before any worktree removal (BUG-1947).
+pub mod worktree_holders;
 pub mod worktree_hooks;
 pub mod worktree_pool;
 // Migration of pre-pool sibling worktrees into the registry (TASK-1009).
