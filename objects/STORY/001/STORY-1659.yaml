@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:04.928345393Z
-modified_at: 2026-10-11T07:32:13.315484998Z
+modified_at: 2026-10-11T07:44:40.660410133Z
 req_type: Story
 tags:
 - sweep:night
@@ -77,6 +77,12 @@ comments:
   created_at: 2026-10-11T07:30:48.409577519Z
   modified_at: 2026-10-11T07:30:48.409577519Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129eb-c8d4-7022-b729-d892a0547371
+  author: joe
+  content: 'ADVISOR (overnight 00:45): left for the OPERATOR, not proxy-approved overnight. This is in the BUG-1918 / STORY-1654 approval-authority area under operator hold.'
+  created_at: 2026-10-11T07:44:40.660410133Z
+  modified_at: 2026-10-11T07:44:40.660410133Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
