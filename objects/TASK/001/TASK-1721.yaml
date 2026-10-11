@@ -19,13 +19,43 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:23.867040641Z
-modified_at: 2026-10-10T18:22:23.867040641Z
+modified_at: 2026-10-11T07:17:41.821426061Z
 req_type: Task
 tags:
 - branch-protection
 - main-checkout
 - related:STORY-1646
 - release
+comments:
+- id: 01a129d3-153d-7690-84c1-03dd11d44f7d
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because scripts/release.sh is verified to be the only direct-to-main push path on main, and routing it through a PR is the precondition for enabling "require a pull request" on main.
+
+    Problem
+    Branch protection on main requires checks but not a PR, so a direct push (any agent with --no-verify, or the release script itself) can land on main unreviewed. The release script commits the version bump and pushes straight to main.
+
+    Evidence path (verified on main after TASK-1723 shifted lines)
+    - scripts/release.sh:363-364 (`git push origin HEAD` / tag), :411-412 (`git push origin main` in the printed manual-fallback text), :434-435 (`git push origin HEAD` then the tag) — the direct push; `rg "gh pr create|--match-head-commit" scripts/release.sh` finds nothing, so there is no PR path today.
+    - scripts/release.sh:425-431 — AIDA_RELEASE=1 suppresses the commit-msg hook's AI-tag/trace warnings on the bump commit; the PR path must keep that.
+    - aida-cli-lib/src/lib_part1.rs:3897 — `aida dev release` wraps scripts/release.sh (store pull -> release.sh -> tarball wait), so the wrapper's wait-for-tag logic must tolerate the PR/merge delay.
+    - Branch-protection state itself is an operator-side setting; not verifiable from the repo (only .github/workflows/merge-hold-gate.yml references enforce_admins).
+
+    Acceptance criteria
+    - `scripts/release.sh patch --dry-run` (or an equivalent against a scratch remote) prints the planned sequence: branch release/vX -> push branch -> gh pr create -> wait checks -> squash-merge with --match-head-commit -> tag merged sha -> push tag; and performs no `git push origin HEAD|main`.
+    - An integration fixture against a local bare remote with a simulated "PR required" refusal (pre-receive hook rejecting non-tag pushes to main) completes a release end to end.
+    - The tag points at the squash-merged commit on main (`git merge-base --is-ancestor vX main` true) and the Cargo.toml version on main equals X.
+    - `aida dev release` still waits for the tarball/release artifact after the merged commit, with a timeout that covers CI duration; its docs/cli/11-dev.md entry and docs/release docs are updated.
+    - Operator runbook step added: enable "Require a pull request before merging" (0 approvals, enforce_admins on) and verify once that a direct push to main is rejected.
+
+    Scope / non-goals
+    - Does not change what the release builds or publishes; does not touch merge-hold-gate.
+    - related:STORY-1646 related:TASK-1723 related:STORY-1125 related:TASK-488
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:41.821426061Z
+  modified_at: 2026-10-11T07:17:41.821426061Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
