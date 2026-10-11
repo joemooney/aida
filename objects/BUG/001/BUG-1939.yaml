@@ -12,12 +12,12 @@ description: |-
   The diagnostics show a direct flock returning WouldBlock while neither the in-process registry nor the holder scan finds any holder. That points to a race between the forked child releasing the lock (exec/exit) and the parent's probe, or to a holder the scan can't see. Same family as BUG-1729 and BUG-1736, which made earlier refresh-lock tests wait out contended flocks. This test seems to need the same bounded wait-for-release, or a deterministic handshake with the child.
 
   Acceptance: the test is deterministic under parallel cargo test on a loaded host (for example, 200 iterations with stress), and asserts the real invariant instead of timing.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:36:04.697193014Z
-modified_at: 2026-10-11T16:34:13.860365091Z
+modified_at: 2026-10-11T16:54:21.442199748Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -46,6 +46,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12be3-07db-7183-906f-b61a6abb3f1f
+  author: aida-auto-bump
+  timestamp: 2026-10-11T16:54:21.403145152Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12be3-0802-77a3-bc59-728ec037e180
+  timestamp: 2026-10-11T16:54:21.442197424Z
+  agent: implementer
+  commit_sha: 92781f85ad0b7f73e16f817e8b2df77aed8d56fb
+  summary: Completed via merge 92781f85
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
@@ -54,3 +67,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T16:54:21.403140397Z
+  completion_sha: 92781f85ad0b7f73e16f817e8b2df77aed8d56fb
