@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:23:59.400773750Z
-modified_at: 2026-10-11T16:56:28.102555475Z
+modified_at: 2026-10-11T16:57:31.034936982Z
 req_type: Bug
 tags:
 - docs
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-10-11T15:17:40.143164507Z
   modified_at: 2026-10-11T15:17:40.143164507Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12be5-ec9a-7852-9ad5-28153ff6b558
+  author: joe
+  content: 'FACTORY PLAN (day): Finding: the drift direction for NeedsAttention is the reverse of the filing. STORY-1023 (#1729, completed) hand-edited the generated page docs/cli/12-glossary.md with the Shelved / Needs Decision split but never updated the template master; the template still carries the pre-STORY-1023 ''isn''t shelvable'' wording. Role is the other direction: the template carries the newer TASK-1260 seat wording. Ruling (implementer call, open to owner override): the STORY-1023 Shelved/Needs Decision text is correct post-STORY-1023 because it describes shipped display behavior; port it into aida-core/templates/.aida/discipline/machinery-glossary.md (keeping the ''drain continues past it'' note and human_only contrast), keep the template''s role text. Then make sync-templates (discipline mirror) and regenerate 12-glossary.md via docs/cli/generate-glossary.sh. Gate: add --check mode to generate-glossary.sh (render to temp, diff against committed page, nonzero on drift), a Makefile target check-book-glossary, a CI step ''Book glossary drift guard'' after the Minimal aida-cli build (not gated on full_ci) using AIDA_BIN=target/debug/aida, and a shell test tests/test_generate_glossary_check.sh (stub AIDA_BIN: matching page passes, mutated page fails, missing binary fails) wired into CI and check-ci-fast-eligible. Also fix the script/page header''s wrong template path (templates/docs/aida/discipline -> templates/.aida/discipline). Acceptance: (1) regenerated page committed -> CI step ''Book glossary drift guard'' passes against built binary; (2) reconciliation -> template diff + this comment; (3) gate -> tests/test_generate_glossary_check.sh + the CI step. Risk: installed binary predates the template edit, so local regeneration uses a stub AIDA_BIN that concatenates the two template files exactly as render_discipline_glossary does; CI''s real-binary check verifies that.'
+  created_at: 2026-10-11T16:57:31.034936982Z
+  modified_at: 2026-10-11T16:57:31.034936982Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8a-6e7e-79c0-aa90-c7ab16cbba38
   author: joe
