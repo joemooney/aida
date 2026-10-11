@@ -86,6 +86,9 @@ mod kernel;
 mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
+// trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+mod live_work;
+pub(crate) use live_work::try_auto_queue_pr_review;
 mod mailbox_root;
 mod memory_doc;
 mod merge_hold_cmd;

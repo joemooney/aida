@@ -4462,3 +4462,82 @@ fn task_1338_latest_deliberate_status_decides_legacy_fence() {
     );
     assert!(!auto_bump_evidence_is_stale(&root, &automated, &sha));
 }
+
+/// BUG-1944 (c): a spec still at Approved when its squash-merged
+/// `(SPEC-ID) (#N)` subject lands on main is completed by the trailer — it
+/// need not have passed through In Progress. The closure hold still applies,
+/// and specs outside the delivery pipeline (Draft, Rejected, Superseded) are
+/// never completed by a trailer.
+// trace:BUG-1944 | ai:claude
+#[test]
+fn bug_1944_trailer_completes_approved_spec_with_gates_intact() {
+    let land = |project_root: &std::path::Path, store_path: &std::path::Path, spec_id: &str| {
+        let pre_sha = aida_core::git_ops::head_sha(project_root).unwrap();
+        std::fs::write(project_root.join(format!("{spec_id}.txt")), "land\n").unwrap();
+        run_git(project_root, &["add", "."]);
+        run_git(
+            project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("[AI:claude] ci(x): ship it ({spec_id}) (#2487)"),
+            ],
+        );
+        let storage = Storage::new(store_path);
+        let flips = auto_bump_done_to_completed(project_root, store_path, Some(&pre_sha), &storage)
+            .unwrap();
+        let req = storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id(spec_id)
+            .unwrap()
+            .clone();
+        (flips, req)
+    };
+
+    // Approved → Completed by the trailer alone.
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "TASK-9723", "Approved");
+    let (flips, req) = land(&project_root, &store_path, "TASK-9723");
+    assert!(has_flip(&flips, "TASK-9723"), "flips={flips:?}");
+    assert_eq!(req.status, RequirementStatus::Completed);
+
+    // Approved + closure:pending → held at Done, not Completed.
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "TASK-9724", "Approved");
+    mutate_spec(&store_path, "TASK-9724", |r| {
+        r.tags.insert("closure:pending".to_string());
+    });
+    let (flips, req) = land(&project_root, &store_path, "TASK-9724");
+    assert!(!has_flip(&flips, "TASK-9724"), "flips={flips:?}");
+    assert_eq!(req.status, RequirementStatus::Done);
+
+    // Outside the pipeline: never Completed by a trailer.
+    for (spec_id, status) in [
+        ("TASK-9725", "Rejected"),
+        ("TASK-9726", "Superseded"),
+        ("TASK-9727", "Draft"),
+    ] {
+        let (_tmp, project_root, store_path) = init_test_project();
+        seed_spec_at(&store_path, spec_id, status);
+        let (flips, req) = land(&project_root, &store_path, spec_id);
+        assert!(!has_flip(&flips, spec_id), "{status}: flips={flips:?}");
+        assert_ne!(
+            req.status,
+            RequirementStatus::Completed,
+            "{status} must not be completed by a trailer"
+        );
+    }
+
+    // `aida: no-complete` withholds the trailer at ship time, whatever the
+    // spec's status, so nothing reaches the merge scan to complete.
+    let trailer = crate::pr_ship::derive_squash_trailer(
+        "[AI:claude] fix(x): slice 1 (TASK-9723)",
+        "task-9723-work",
+        "aida: no-complete",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+}

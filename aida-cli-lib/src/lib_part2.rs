@@ -5013,39 +5013,13 @@ pub(crate) fn bump_spec_in_progress_at_lease_take(
     let Some(spec_id) = harness_lease_spec_scope(scope) else {
         return false;
     };
-    let store_root = project_root.join(".aida-store");
-    if !store_root.is_dir() {
-        // Legacy/centralized store — skip; the doctor heal covers the drift.
-        return false;
-    }
-    let result = (|| -> Result<bool> {
-        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_root);
-        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path)?;
-        // trace:TASK-1468 | ai:claude
-        let Some(req) = backend.get_requirement_unambiguous(&spec_id)? else {
-            return Ok(false);
-        };
-        // BUG-1638: the race-test seam between the read and the write.
-        // trace:BUG-1638 | ai:claude
-        status_write_race_seam(&store_root);
-        // BUG-1637: the status check runs on the copy read under the store
-        // lock; a refused bump writes nothing. trace:BUG-1637 | ai:claude
-        let mut bumped = false;
-        backend.update_spec_atomically(&req, |r| {
-            bumped = approved_to_in_progress_bump(r, aida_core::conflict::LEASE_TAKE_AUTHOR);
-        })?;
-        Ok(bumped)
-    })();
-    match result {
-        Ok(bumped) => bumped,
-        Err(e) => {
-            eprintln!(
-                "warning: couldn't bump `{}` to In Progress at lease-take: {} — `aida doctor` will heal",
-                scope, e
-            );
-            false
-        }
-    }
+    // BUG-1944: one shared targeted bump (BUG-634/1637/1638 rules live there).
+    // trace:BUG-1944 | ai:claude
+    crate::live_work::bump_spec_in_progress(
+        project_root,
+        &spec_id,
+        aida_core::conflict::LEASE_TAKE_AUTHOR,
+    )
 }
 
 // BUG-754: fanout-pickup lease-take status-bump tests.

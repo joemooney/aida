@@ -3502,6 +3502,16 @@ pub(crate) fn ensure_spec_worktree(
         if let Some(id) = out.lease_id.as_deref() {
             let _ = mark_lease_manual_enter(&main_root, id);
         }
+        // BUG-1944: taking the worktree starts work on every outcome (fresh,
+        // re-entered lease, or lease-less registered worktree), so an Approved
+        // spec moves to In Progress here too, not only inside session_start.
+        // No driver is recorded: AIDA has no driver field (derived, STORY-1653).
+        // trace:BUG-1944 | ai:claude
+        crate::live_work::bump_spec_in_progress(
+            &main_root,
+            spec_display,
+            aida_core::conflict::LEASE_TAKE_AUTHOR,
+        );
         out
     })
 }

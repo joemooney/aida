@@ -5083,6 +5083,20 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
                 let _ = std::fs::remove_file(&marker);
             }
         }
+        // BUG-1944: `try_auto_queue_pr_review` already moved the branch's and
+        // covered specs to In Progress; the session scope is known only here.
+        // trace:BUG-1944 | ai:claude
+        if let Some(spec) = lease_scope
+            .as_deref()
+            .and_then(crate::worktree_lease::spec_id_from_branch)
+        {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            crate::live_work::bump_spec_in_progress(
+                &main_root,
+                &spec,
+                aida_core::conflict::PR_OPEN_AUTHOR,
+            );
+        }
     }
 
     // BUG-86: on every non-success outcome (needs-attention OR by-design
@@ -5119,6 +5133,33 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
         }
         _ => Ok(()),
     }
+}
+
+/// BUG-1944: the specs an opened PR starts work on — the session's spec scope,
+/// the spec named by the branch, and the specs the PR covers — deduplicated,
+/// upper-cased, non-spec scopes dropped.
+// trace:BUG-1944 | ai:claude
+pub(crate) fn pr_open_bump_targets(
+    lease_scope: Option<&str>,
+    branch: &str,
+    covered_specs: &[String],
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let candidates = lease_scope
+        .and_then(crate::worktree_lease::spec_id_from_branch)
+        .into_iter()
+        .chain(crate::worktree_lease::spec_id_from_branch(branch))
+        .chain(
+            covered_specs
+                .iter()
+                .filter_map(|s| crate::worktree_lease::spec_id_from_branch(s)),
+        );
+    for id in candidates {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    out
 }
 
 /// True when the forge could not answer (as opposed to answering "no PR"):
