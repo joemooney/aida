@@ -11,9 +11,16 @@ protocol (TASK-1538 comments, 2026-10-10 plus the rule-7 amendment):
   2 spec-id    no spec ID in any subject except the final slice
   3 purity     MOVE/final: removed lines == added lines, apart from wiring that
                sits in its own file; only move-set files change; each new module
-               is wired exactly once in lib.rs
+               is wired exactly once in lib.rs; lib*.rs only LOSES lines (bar
+               lib.rs wiring); each new module receives moved lines; every
+               removed -U0 block lands contiguous and in order in one module
+               (blocks may reorder among themselves; a final-slice block may
+               split only at a module seam)
   4 retarget   retarget:/tooling: commits change no code line in lib*.rs or in
-               a module moved earlier in the range
+               a module moved earlier in the range; a retarget may widen a
+               source-scan corpus (signed amendment 1e) by adding
+               `include_str!("<moved>.rs")` and its `"{}\\n…{}"` placeholder
+               string (reported as NOTE 4)
   5 pairing    every retarget: commit directly follows a MOVE
   6 tags       every slice-NN-rR tag in the range is annotated and carries
                numeric proofs: `warnings <n>[/<n>]`, `tests <n>/<n>`, and
@@ -102,6 +109,55 @@ def diff_lines(sha):
             yield cur, line[0], line[1:]
 
 
+def diff_hunks(sha):
+    """Yield (file, sign, [lines]) for every contiguous same-sign run of the -U0 diff."""
+    cur, run = "", None
+    for line in git("show", "--format=", "-U0", "--no-color", "--no-renames", sha).splitlines():
+        if line.startswith("diff --git "):
+            cur = line.split(" b/", 1)[-1]
+        if line[:1] in "+-" and not line.startswith(("+++", "---")):
+            if run and run[0] == cur and run[1] == line[0]:
+                run[2].append(line[1:])
+                continue
+            if run:
+                yield run
+            run = (cur, line[0], [line[1:]])
+        elif line.startswith(("diff --git ", "@@")) and run:
+            yield run
+            run = None
+    if run:
+        yield run
+
+
+def split_block(block, bodies):
+    """Cover `block` greedily with maximal runs found contiguously in `bodies`.
+
+    Returns [(module, length)], or None if some line lands nowhere. A block
+    lands intact when every piece goes to a different module than the piece
+    before it: a split is only legitimate at a module seam (the final slice
+    deletes whole lib_part files whose items fan out to several modules).
+    """
+    index = {m: collections.defaultdict(list) for m in bodies}
+    for m, body in bodies.items():
+        for pos, l in enumerate(body):
+            index[m][l].append(pos)
+    pieces, i = [], 0
+    while i < len(block):
+        best = (None, 0)
+        for m, body in bodies.items():
+            for pos in index[m].get(block[i], ()):
+                k = 0
+                while i + k < len(block) and pos + k < len(body) and body[pos + k] == block[i + k]:
+                    k += 1
+                if k > best[1]:
+                    best = (m, k)
+        if not best[1]:
+            return None
+        pieces.append(best)
+        i += best[1]
+    return pieces
+
+
 def wiring_ok(path, text, modules, deleted_parts):
     """Is this added/removed line allowed wiring for the file it sits in?"""
     s = text.strip()
@@ -159,6 +215,37 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
         for l, n in list(extra_rem.items())[:10]:
             issues.append(f"        - x{n} {l}")
 
+    # A move only takes lines OUT of lib*.rs: a non-wiring line added there is
+    # code relocated between root files, not a move.
+    for path, sign, text in diff_lines(sha):
+        if sign == "+" and LIB_ANY.match(path) and text.strip() \
+                and not wiring_ok(path, text, modules, deleted_parts):
+            issues.append(f"FAIL 3: non-wiring line added to {path}: {text.strip()[:80]}")
+            break
+
+    # Each removed block must land intact: its lines contiguous and in the same
+    # order inside one new module (blocks may be reordered relative to each other).
+    landed = collections.defaultdict(list)
+    removed_blocks = []
+    for path, sign, lines in diff_hunks(sha):
+        if sign == "+":
+            m = NEW_MODULE.match(path)
+            if m and m.group(1) in modules:
+                # keep header-shaped lines: moved code may carry its own `// trace:`
+                landed[m.group(1)] += [l for l in lines if l.strip()]
+        elif LIB_ANY.match(path):
+            block = [l for l in lines if l.strip() and not wiring_ok(path, l, modules, deleted_parts)]
+            if block:
+                removed_blocks.append((path, block))
+    for m in sorted(modules):
+        if all(wiring_ok(f"{SRC}{m}.rs", l, modules, deleted_parts) for l in landed[m]):
+            issues.append(f"FAIL 3: {m}.rs receives no moved lines (empty extraction)")
+    for path, block in removed_blocks:
+        pieces = split_block(block, landed)
+        if pieces is None or any(a[0] == b[0] for a, b in zip(pieces, pieces[1:])):
+            issues.append(f"FAIL 3: block removed from {path} does not land intact and in order "
+                          f"(starts: {block[0].strip()[:60]})")
+
     for m in sorted(modules):
         mods = sum(n for l, n in lib_adds.items() if re.fullmatch(rf"(pub\(crate\) )?mod {m};", l))
         uses = sum(n for l, n in lib_adds.items() if re.fullmatch(rf"(pub\(crate\) )?use {m}::\*;", l))
@@ -167,17 +254,37 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
     return issues
 
 
-def code_text(sha, protected):
-    """Whitespace-free concatenation of added/removed non-comment code lines."""
-    add, rem = [], []
+SCAN_FORMAT = re.compile(r'^"(\{\}\\n)*\{\}",?$')
+SCAN_INCLUDE = re.compile(r'^include_str!\("([^"]+)"\),?$')
+
+
+def code_text(sha, protected, moved=()):
+    """Whitespace-free concatenation of added/removed non-comment code lines.
+
+    A retarget that widens a source-scan corpus (signed amendment 1e: a guard
+    whose `format!` concatenates `include_str!` files) may add
+    `include_str!("<moved module>.rs")`, the comma that precedes it, and the
+    matching `"{}\\n…{}"` placeholder string; those lines are excused and
+    counted in the third return value.
+    """
+    add, rem, excused = [], [], 0
     for path, sign, text in diff_lines(sha):
         if not (LIB_ANY.match(path) or path in protected):
             continue
         s = text.strip()
         if not s or s.startswith("//"):
             continue
+        inc = SCAN_INCLUDE.match(s)
+        if sign == "+" and inc and inc.group(1) in {f"{m}.rs" for m in moved}:
+            excused += 1
+            continue
+        if moved and SCAN_FORMAT.match(s):
+            excused += 1
+            continue
+        if inc:
+            s = s.rstrip(",")
         (add if sign == "+" else rem).append(re.sub(r"\s+", "", s))
-    return "".join(add), "".join(rem)
+    return "".join(add), "".join(rem), excused
 
 
 def check_tag(tag, tag_sha, segment_modules):
@@ -310,7 +417,9 @@ def main():
                         issues += [f"        {l}" for l in tail]
             else:
                 protected = {f"{SRC}{m}.rs" for m in moved}
-                a, r = code_text(sha, protected)
+                a, r, excused = code_text(sha, protected, moved if cls == "RETARGET" else ())
+                if excused and a == r:
+                    notes[sha].append(f"NOTE 4: {excused} scan-corpus line(s) widened to a moved module")
                 if a != r:
                     bad = [p for _, p in status if LIB_ANY.match(p) or p in protected]
                     issues.append(f"FAIL 4: {cls.lower()} commit changes protected code: {', '.join(bad)}")

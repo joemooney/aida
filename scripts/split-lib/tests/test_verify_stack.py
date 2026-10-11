@@ -185,6 +185,108 @@ class TestVerifyStack(unittest.TestCase):
         self.assertEqual(res.returncode, 0, res.stdout)
         self.assertIn("1 FINAL", res.stdout)
 
+    # --- round 2: blocks land intact; lib*.rs only loses lines ---------------
+    HEADER = "//! {m}\n// trace:STORY-1488 | ai:claude\n\nuse crate::*;\n\n"
+
+    def two_parts(self):
+        self.write(f"{SRC}/lib.rs", self.read(f"{SRC}/lib.rs") + 'include!("lib_part2.rs");\n')
+        self.write(f"{SRC}/lib_part1.rs", "fn a() {\n    one();\n    two();\n}\nfn keep1() {}\n")
+        self.write(f"{SRC}/lib_part2.rs", "fn z() {\n    three();\n}\nfn keep2() {}\n")
+        self.commit("init parts")
+        self.base = self.head()
+
+    def wire(self, mod, body):
+        self.write(f"{SRC}/{mod}.rs", self.HEADER.format(m=mod) + body)
+        self.write(f"{SRC}/lib.rs", f"mod {mod};\nuse {mod}::*;\n" + self.read(f"{SRC}/lib.rs"))
+        self.write(MANIFEST, self.read(MANIFEST) + f"[{mod}]\n")
+
+    def test_fixture_a_reorder_inside_a_block_fails(self):
+        # Same multiset of lines, but the body of `a` is reordered: a Counter
+        # match cannot see it, the intact-block check must.
+        self.two_parts()
+        self.write(f"{SRC}/lib_part1.rs", "fn keep1() {}\n")
+        self.wire("m1", "fn a() {\n    two();\n    one();\n}\n")
+        self.commit("refactor(cli-lib): extract m1.rs")
+        self.tag("slice-01-r1", self.proof("m1"))
+        self.assertFails("does not land intact and in order")
+
+    def test_fixture_b_relocation_between_parts_and_empty_extraction_fails(self):
+        # Code shuffled from lib_part1 into lib_part2 while the "extracted"
+        # module gets nothing but its header.
+        self.two_parts()
+        self.write(f"{SRC}/lib_part1.rs", "fn keep1() {}\n")
+        self.write(f"{SRC}/lib_part2.rs", self.read(f"{SRC}/lib_part2.rs")
+                   + "fn a() {\n    one();\n    two();\n}\n")
+        self.wire("m1", "")
+        self.commit("refactor(cli-lib): extract m1.rs")
+        self.tag("slice-01-r1", self.proof("m1"))
+        res = self.assertFails("FAIL 3: non-wiring line added to aida-cli-lib/src/lib_part2.rs")
+        self.assertIn("FAIL 3: m1.rs receives no moved lines (empty extraction)", res.stdout)
+
+    def test_moved_code_carrying_header_shaped_lines_passes(self):
+        # A moved block may contain its own `// trace:` comment; it must still
+        # match contiguously against the new module's body.
+        self.two_parts()
+        self.write(f"{SRC}/lib_part1.rs", "// trace:TASK-9 | ai:x\nfn a() {\n    one();\n}\nfn keep1() {}\n")
+        self.commit("init traced")
+        self.base = self.head()
+        self.write(f"{SRC}/lib_part1.rs", "fn keep1() {}\n")
+        self.wire("m1", "// trace:TASK-9 | ai:x\nfn a() {\n    one();\n}\n")
+        self.commit("refactor(cli-lib): extract m1.rs")
+        self.tag("slice-01-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+
+    def test_two_parts_in_opposite_block_order_passes(self):
+        # Positive control: blocks from two lib_part files may land in either
+        # order relative to each other, as long as each stays intact.
+        self.two_parts()
+        self.write(f"{SRC}/lib_part1.rs", "fn keep1() {}\n")
+        self.write(f"{SRC}/lib_part2.rs", "fn keep2() {}\n")
+        self.wire("m1", "fn z() {\n    three();\n}\nfn a() {\n    one();\n    two();\n}\n")
+        self.commit("refactor(cli-lib): extract m1.rs")
+        self.tag("slice-01-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+
+    def test_final_block_splits_at_a_module_seam(self):
+        self.two_parts()
+        self.write(f"{SRC}/lib.rs", self.read(f"{SRC}/lib.rs")
+                   .replace('include!("lib_part1.rs");\n', "").replace('include!("lib_part2.rs");\n', ""))
+        os.remove(self.path(f"{SRC}/lib_part1.rs"))
+        os.remove(self.path(f"{SRC}/lib_part2.rs"))
+        self.wire("m1", "fn a() {\n    one();\n    two();\n}\nfn z() {\n    three();\n}\n")
+        self.wire("m2", "fn keep1() {}\nfn keep2() {}\n")
+        self.commit("refactor(cli-lib): extract m2.rs (TASK-9)")
+        self.tag("slice-01-r1", self.proof("m1", "m2"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+        self.assertIn("1 FINAL", res.stdout)
+
+    def scan_guard(self, extra_include):
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs") + (
+            "fn guard() {\n    let src = format!(\n        \"{}\\n{}\",\n"
+            "        include_str!(\"lib.rs\"),\n        include_str!(\"lib_part1.rs\")\n    );\n}\n"))
+        self.commit("init guard")
+        self.base = self.head()
+        self.move("m1", "a")
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace(
+            '        \"{}\\n{}\",\n', '        \"{}\\n{}\\n{}\",\n').replace(
+            '        include_str!("lib_part1.rs")\n',
+            f'        include_str!("lib_part1.rs"),\n        include_str!("{extra_include}")\n'))
+        self.commit("retarget: guard scans include the moved module")
+        self.tag("slice-01-r1", self.proof("m1"))
+
+    def test_retarget_widening_a_scan_corpus_is_a_note(self):
+        self.scan_guard("m1.rs")
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+        self.assertIn("NOTE 4: 3 scan-corpus line(s) widened", res.stdout)
+
+    def test_retarget_scan_corpus_of_an_unmoved_file_fails(self):
+        self.scan_guard("secrets.rs")
+        self.assertFails("FAIL 4: retarget commit changes protected code")
+
     # --- check 4/5 -----------------------------------------------------------
     def test_retarget_edits_lib_part(self):
         self.move("m1", "a")
