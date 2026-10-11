@@ -8,8 +8,38 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:16:08.851780217Z
-modified_at: 2026-10-11T00:16:08.851780217Z
+modified_at: 2026-10-11T07:17:49.567835122Z
 req_type: Bug
+comments:
+- id: 01a129d3-337f-7b61-a0e8-52fcc08b3884
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the merge-mode scan swallows per-parent `git diff` errors and a failing awk, both of which yield an empty offender list and an allowed commit.
+
+    Problem
+    In merge mode the provenance gate diffs the staged tree against each parent with `2>/dev/null` inside a function whose status is ignored, and the whole pipeline's output is captured into `__aida_prov_offenders`; any failure (missing object, awk crash) produces an empty string, which the hook reads as "no offenders".
+
+    Evidence path (verified on main)
+    - aida-core/templates/hooks/aida-pre-commit.sh:377-392 `__aida_staged_rs_diffs()`: `git diff --cached ... "$parent" -- '*.rs' 2>/dev/null` per parent, then unconditional `return 0`.
+    - aida-core/templates/hooks/aida-pre-commit.sh:378 `__aida_prov_offenders=$(__aida_staged_rs_diffs | awk ...)` — no `pipefail`, no `PIPESTATUS`, no sentinel; the file has no `set -e`/`set -o pipefail` (`rg -n "pipefail|PIPESTATUS" ...` empty).
+    - aida-core/templates/hooks/aida-pre-commit.sh:467-484 — refusal only when `${#DOC_TRACE_OFFENDERS[@]} -gt 0`; empty output passes.
+    - Introduced by 7cad9ce231 (BUG-1925, #2482); the previous two-pass version refused on awk failure as the description says.
+
+    Acceptance criteria
+    - awk prints a final sentinel line (e.g. `#AIDA-PROV-END`); the shell refuses the commit with "provenance scan did not complete" when the sentinel is missing. Test: tests/test_precommit_provenance_awk_failure.sh runs the hook with `awk` shadowed by a script that exits 2 → commit refused.
+    - Each per-parent `git diff` exit status is checked; on failure the hook refuses (or falls back to the first-parent full check and says so). Test: tests/test_precommit_provenance_parent_diff_failure.sh stages a merge with a bogus parent in MERGE_HEAD → commit refused with the parent named.
+    - Existing tests/test_precommit_provenance_*.sh pass unchanged.
+    - perf/coverage cases from the review added: octopus merge (multi-line MERGE_HEAD), a file renamed on one side, a resolution duplicating an existing debt line — each with the expected offender count.
+    - `make sync-templates && make check-templates` clean; `.claude/hooks` mirror regenerated.
+
+    Scope / non-goals
+    - POSIX awk / bash 3.2 baseline stays (no gawk, no `declare -A`).
+    - related:BUG-1925 related:TASK-144
+
+    Suggested size: S
+  created_at: 2026-10-11T07:17:49.567835122Z
+  modified_at: 2026-10-11T07:17:49.567835122Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
