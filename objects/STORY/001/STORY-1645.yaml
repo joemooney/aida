@@ -8,13 +8,38 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:07:51.313331759Z
-modified_at: 2026-10-10T18:07:51.313331759Z
+modified_at: 2026-10-11T07:11:08.092410017Z
 req_type: Story
 tags:
 - faq
 - knowledge-types
 - list
 - related:STORY-1642
+comments:
+- id: 01a129cd-133c-7101-8d68-0c79ba443ba6
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because it is a small read-only listing that completes the STORY-1642 FAQ surface and the superseded-hiding helper it needs already exists.
+
+    Problem: there is no way to browse FAQs by topic; a reader must already know a tag name before `aida list faq --tag <tag>` is useful.
+
+    Evidence path (verified):
+    - aida-cli-lib/src/knowledge_list.rs (STORY-1642) holds BUILTIN_TYPE_WORDS and, at :122, hide_superseded_faqs, which already defines "live FAQ" and the id-plus-question table; topics must call the same predicate so the two cannot drift.
+    - Command shape caveat: there is no standalone faq subcommand enum in cli.rs (`rg -n Faq aida-cli-lib/src/cli.rs` hits doc comments only); `aida faq list` is the type-word spelling of `aida list --type faq`. `aida faq topics` therefore needs a new type-word verb, or the surface should be `aida list faq --topics`; decide before implementation.
+    - STORY-1642 is Completed, so this deferred item is unblocked. Dedupe: `aida search "faq topics"` finds no prior spec.
+
+    Acceptance criteria:
+    1. `aida faq topics` (or `aida list faq --topics`) prints tag and count sorted by count desc then name; test faq_topics_counts_live_faqs_only with three FAQs (one superseded, one archived) asserts the superseded and archived tags are absent.
+    2. Agent output (non-TTY or --format toon/json) is a compact table with no spec ids; the test asserts no "FAQ-" substring.
+    3. Tags with zero live FAQs do not appear; an empty store prints a one-line "no FAQ topics" notice and exits 0.
+    4. Every tag printed is accepted verbatim by `aida list faq --tag <tag>` (round-trip test).
+
+    Scope / non-goals: no tag editing and no topic taxonomy; counts are per tag, not per FAQ group. Related: related:STORY-1642 related:FAQ-11.
+
+    Suggested size: S.
+  created_at: 2026-10-11T07:11:08.092410017Z
+  modified_at: 2026-10-11T07:11:08.092410017Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
