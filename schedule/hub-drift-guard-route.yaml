@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-11T01:35:23.217398079Z
+last_run: 2026-10-11T08:38:21.959555739Z
 last_by:
   seat: advisor
-  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
   vendor: antigravity
 result: done
-note: 'aida-store: gitlab was 2 commits behind origin and fast-forwardable (gitlab ⊂ origin verified); pushed origin/aida-store to gitlab, e057441d52..efcdf08ab5. main and v0.15.0 already in sync.'
-due_since: 2026-10-11T08:33:28.305325281Z
-due_reason: on CronJobFailed:hub-drift-guard
+note: '01:45 advisor: aida-store had diverged (gitlab +6, origin +1, both behind local 5d8a10453d). aida remote reconcile --execute pushed the union to both hubs; now in sync. main was in sync throughout.'
