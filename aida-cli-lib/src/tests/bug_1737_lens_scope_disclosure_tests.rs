@@ -132,14 +132,15 @@ fn explicit_status_filter_does_not_disclose() {
 #[test]
 fn disclosure_helper_never_queries_the_backend() {
     let src = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         include_str!("../lib.rs"),
         include_str!("../lib_part1.rs"),
         include_str!("../lib_part2.rs"),
         include_str!("../lib_part3.rs"),
         include_str!("../lib_part4.rs"),
         include_str!("../lib_part5.rs"),
-        include_str!("../lib_part6.rs")
+        include_str!("../lib_part6.rs"),
+        include_str!("../status_awaiting.rs")
     );
     let start = src
         .find("fn list_lens_scope_disclosure(")
