@@ -1,0 +1,36 @@
+id: 01a129d7-a9f5-7bd1-b50a-25426a978b69
+spec_id: BUG-1949
+agreed_id: BUG-1949
+title: 'docs/cli cites invocations that fail: ''aida session forget'' (cut by TASK-850) and bare ''aida usage unused'' (DURATION is required)'
+description: |
+  Problem: two pages in docs/cli cite invocations that fail when run as written.
+
+  1. docs/cli/06-roles-sessions.md:48 lists `forget` among the conversation verbs (`conversations` / `resume` / `new` / `prune` / `forget`) and :71 explains "`prune` vs `forget`". `aida session forget <id>` returns `error: unrecognized subcommand 'forget'`. The verb was cut by TASK-850 (completed) and no doc follow-up removed it. `aida session --help` lists: conversations resume focus send new start end leases show handoff manifest prune gc reap.
+  2. docs/cli/08-reporting.md:263 and :270 cite bare `aida usage unused`. `<DURATION>` is a required positional; the bare form returns `error: the following required arguments were not provided: <DURATION>`. Line 25 of the same page already says it takes a time bound, so only the two cited forms are wrong.
+
+  Evidence path: run the two commands above on main (verified 2026-10-11 00:21 -07:00 against the dev binary). The CLI-manual drift guard (`check-cli-manual`, tier full) does not catch these because it checks flags, not subcommand existence in prose, and not required positionals (see also BUG-1937 for the fast tier skipping it).
+
+  Acceptance:
+  - 06-roles-sessions.md no longer names `forget`; the :71 bullet covers `prune` (and points at `session gc`/`reap` for cleanup) without inventing a verb.
+  - 08-reporting.md cites `aida usage unused 30d` (or states the positional is required) at :263 and :270.
+  - A drift check (existing guard or a small test) fails if a docs/cli page cites `aida session <verb>` where `<verb>` is not in `aida session --help`.
+
+  Found by the night-fable review sweep (docs-vs-CLI pass over docs/cli/01-12). Size S, docs only.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T07:22:42.037610572Z
+modified_at: 2026-10-11T07:22:42.037610572Z
+req_type: Bug
+tags:
+- docs
+- found:night-2026-10-10
+filed_at:
+  code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
