@@ -79,6 +79,7 @@ or forced completion is needed for an ID remapping.
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
+- `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" only for a red check that gates the merge; a red check matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` shows as "Passing (N informational red)".
 
 **Don't reach for it when** — the work needs **review**. `aida pr ship` *skips* the reviewer phase by design; for work that should be reviewed, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead. Shipping unreviewed code is the right tool only when a human already approved it.
 

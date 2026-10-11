@@ -76,7 +76,8 @@ pub(crate) fn pr_list_handler(json: bool, mapped_only: bool) -> Result<()> {
             format!("{:<15}", "No").green()
         };
         let ci_str = match e.ci.as_str() {
-            "Passing" | "SUCCESS" => format!("{:<12}", e.ci).green(),
+            // trace:BUG-1935 | ai:claude — "Passing (N informational red)" is still green.
+            ci if ci == "SUCCESS" || ci.starts_with("Passing") => format!("{:<12}", e.ci).green(),
             "Failing" | "FAILURE" => format!("{:<12}", e.ci).red(),
             "Pending" | "PENDING" | "IN_PROGRESS" => format!("{:<12}", e.ci).yellow(),
             _ => format!("{:<12}", e.ci).normal(),
@@ -131,12 +132,20 @@ fn pr_list_github(
     anyhow::ensure!(out.status.success(), "gh pr list failed");
 
     let prs: Vec<GhPr> = serde_json::from_slice(&out.stdout)?;
-    Ok(github_entries(prs, lease_scopes))
+    let ci_cfg = crate::ci_gate::read_ci_gate_config(project_root); // trace:BUG-1935 | ai:claude
+    Ok(github_entries(prs, lease_scopes, &ci_cfg))
 }
 
-/// Build one row per mapped spec, or a single unmapped row, for each PR.
+/// Build exactly one row per PR: every mapped spec ID comma-joined, or a
+/// single unmapped row. CI is classified against the `[ci]` informational
+/// allow-list.
 // trace:BUG-1927 | ai:claude
-fn github_entries(prs: Vec<GhPr>, lease_scopes: &[(String, String)]) -> Vec<PrListEntry> {
+// trace:BUG-1935 | ai:claude
+fn github_entries(
+    prs: Vec<GhPr>,
+    lease_scopes: &[(String, String)],
+    ci_cfg: &crate::ci_gate::CiGateConfig,
+) -> Vec<PrListEntry> {
     let mut entries = Vec::new();
 
     for pr in prs {
@@ -148,37 +157,11 @@ fn github_entries(prs: Vec<GhPr>, lease_scopes: &[(String, String)]) -> Vec<PrLi
         };
         let rebase_needed = pr.mergeable == "CONFLICTING" || pr.mergeable == "UNKNOWN"; // GH often says UNKNOWN if it hasn't checked recently, but CONFLICTING is the main one. We can also check if behind? gh pr list doesn't give behind count easily without fields that cause n+1. We'll stick to CONFLICTING.
 
-        let mut ci_status = "Unknown".to_string();
-        if let Some(rollup) = &pr.status_check_rollup {
-            if rollup.is_empty() {
-                ci_status = "None".to_string();
-            } else {
-                let mut has_failure = false;
-                let mut has_pending = false;
-                for check in rollup {
-                    if let Some(conclusion) = check.get("conclusion").and_then(|c| c.as_str()) {
-                        if conclusion == "FAILURE"
-                            || conclusion == "TIMED_OUT"
-                            || conclusion == "ACTION_REQUIRED"
-                        {
-                            has_failure = true;
-                        }
-                    }
-                    if let Some(status) = check.get("status").and_then(|s| s.as_str()) {
-                        if status == "IN_PROGRESS" || status == "QUEUED" {
-                            has_pending = true;
-                        }
-                    }
-                }
-                if has_failure {
-                    ci_status = "Failing".to_string();
-                } else if has_pending {
-                    ci_status = "Pending".to_string();
-                } else {
-                    ci_status = "Passing".to_string();
-                }
-            }
-        }
+        // trace:BUG-1935 | ai:claude
+        let ci_status = match &pr.status_check_rollup {
+            Some(rollup) => github_rollup_ci_status(rollup, ci_cfg),
+            None => "Unknown".to_string(),
+        };
 
         for spec_id in row_spec_ids(specs) {
             entries.push(PrListEntry {
@@ -196,7 +179,7 @@ fn github_entries(prs: Vec<GhPr>, lease_scopes: &[(String, String)]) -> Vec<PrLi
         }
     }
 
-    entries
+    collapse_by_pr(entries) // trace:BUG-1935 | ai:claude
 }
 
 fn pr_list_gitlab(
@@ -270,7 +253,108 @@ fn pr_list_gitlab(
         }
     }
 
-    Ok(entries)
+    Ok(collapse_by_pr(entries)) // trace:BUG-1935 | ai:claude
+}
+
+/// BUG-1935: classify a GitHub `statusCheckRollup` through the same
+/// informational-aware matcher `aida pr ship` uses, so "Failing" means a red
+/// check that gates the merge. Branch-protection required checks are not
+/// fetched here (one extra call per PR); with an empty required set the
+/// `[ci]` informational allow-list alone decides, exactly as in `ci_gate`.
+// trace:BUG-1935 | ai:claude
+fn github_rollup_ci_status(
+    rollup: &[serde_json::Value],
+    cfg: &crate::ci_gate::CiGateConfig,
+) -> String {
+    if rollup.is_empty() {
+        return "None".to_string();
+    }
+    let rows: Vec<crate::ci_gate::CheckRow> = rollup.iter().map(rollup_check_row).collect();
+    let refined = crate::ci_gate::classify_red(&rows, &[], cfg, false, false);
+    if refined.is_real() {
+        "Failing".to_string()
+    } else if refined.has_pending() {
+        "Pending".to_string()
+    } else if refined.ignored_informational.is_empty() {
+        "Passing".to_string()
+    } else {
+        format!(
+            "Passing ({} informational red)",
+            refined.ignored_informational.len()
+        )
+    }
+}
+
+/// Map one rollup entry (a `CheckRun` or a commit `StatusContext`) onto the
+/// `gh pr checks` bucket vocabulary `ci_gate` classifies. Only the outcomes the
+/// listing always treated as red are red; a cancelled run is not.
+// trace:BUG-1935 | ai:claude
+fn rollup_check_row(check: &serde_json::Value) -> crate::ci_gate::CheckRow {
+    let field = |key: &str| {
+        check
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let name = if check.get("context").is_some() {
+        field("context")
+    } else {
+        field("name")
+    };
+    let status = field("status");
+    let conclusion = field("conclusion");
+    let state = field("state");
+    let bucket = if matches!(
+        conclusion.as_str(),
+        "FAILURE" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE"
+    ) || matches!(state.as_str(), "FAILURE" | "ERROR")
+    {
+        "fail"
+    } else if matches!(
+        status.as_str(),
+        "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" | "REQUESTED"
+    ) || matches!(state.as_str(), "PENDING" | "EXPECTED")
+    {
+        "pending"
+    } else {
+        "pass"
+    };
+    crate::ci_gate::CheckRow {
+        name,
+        workflow: field("workflowName"),
+        bucket: bucket.to_string(),
+        run_id: None,
+    }
+}
+
+/// BUG-1935: one row per PR. A PR whose title names several specs used to be
+/// listed once per spec; merge rows sharing a PR number, joining the spec IDs
+/// with `,` in first-seen order (unmapped `None` IDs are skipped, so a PR
+/// stays `None` only when no row carried an ID).
+// trace:BUG-1935 | ai:claude
+fn collapse_by_pr(entries: Vec<PrListEntry>) -> Vec<PrListEntry> {
+    let mut out: Vec<PrListEntry> = Vec::new();
+    for entry in entries {
+        match out.iter_mut().find(|e| e.pr_number == entry.pr_number) {
+            Some(existing) => {
+                let Some(id) = entry.spec_id else {
+                    continue;
+                };
+                match &mut existing.spec_id {
+                    None => existing.spec_id = Some(id),
+                    Some(joined) => {
+                        if !joined.split(',').any(|s| s == id) {
+                            joined.push(',');
+                            joined.push_str(&id);
+                        }
+                    }
+                }
+            }
+            None => out.push(entry),
+        }
+    }
+    out
 }
 
 fn extract_specs(title: &str, branch: &str) -> Vec<String> {
@@ -426,7 +510,9 @@ fn parse_and_format_date(iso: &str) -> String {
 #[cfg(test)]
 mod tests {
     // trace:BUG-1927 | ai:claude
+    // trace:BUG-1935 | ai:claude
     use super::*;
+    use crate::ci_gate::CiGateConfig;
 
     fn gh_prs(json: &str) -> Vec<GhPr> {
         serde_json::from_str(json).expect("valid gh pr list fixture")
@@ -460,7 +546,7 @@ mod tests {
                 ""
             )
         );
-        let entries = github_entries(gh_prs(&fixture), &[]);
+        let entries = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
         let rows: Vec<&PrListEntry> = entries.iter().filter(|e| e.pr_number == 2480).collect();
         assert_eq!(rows.len(), 1, "unmapped PR must appear exactly once");
         let row = rows[0];
@@ -483,7 +569,7 @@ mod tests {
                 "Slice of TASK-1538, uses UTF-8 output.\n"
             )
         );
-        let entries = github_entries(gh_prs(&fixture), &[]);
+        let entries = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
         let rows: Vec<&PrListEntry> = entries.iter().filter(|e| e.pr_number == 2480).collect();
         assert_eq!(rows.len(), 1, "body-mapped PR must appear exactly once");
         assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-1538"));
@@ -502,7 +588,7 @@ mod tests {
                 "see TASK-1"
             )
         );
-        let entries = github_entries(gh_prs(&fixture), &[]);
+        let entries = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].spec_id.as_deref(), Some("BUG-1927"));
         assert_eq!(entries[0].mapping_source, "title");
@@ -539,7 +625,7 @@ mod tests {
             gh_pr_json(1, "refactor: no id", "no-id", ""),
             gh_pr_json(2, "fix: thing (BUG-5)", "bug-5", "")
         );
-        let all = github_entries(gh_prs(&fixture), &[]);
+        let all = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
         assert_eq!(all.len(), 2);
         let mapped = filter_mapped(all, true);
         assert_eq!(mapped.len(), 1);
@@ -549,9 +635,149 @@ mod tests {
     #[test]
     fn pr_list_json_unmapped_spec_id_is_null() {
         let fixture = format!("[{}]", gh_pr_json(3, "refactor: no id", "no-id", ""));
-        let entries = github_entries(gh_prs(&fixture), &[]);
+        let entries = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
         let value = serde_json::to_value(&entries).expect("serialize entries");
         assert!(value[0]["spec_id"].is_null());
         assert_eq!(value[0]["mapping_source"], "none");
+    }
+
+    fn check_run(name: &str, workflow: &str, status: &str, conclusion: &str) -> serde_json::Value {
+        serde_json::json!({
+            "__typename": "CheckRun",
+            "name": name,
+            "workflowName": workflow,
+            "status": status,
+            "conclusion": conclusion,
+        })
+    }
+
+    fn entry(spec_id: &str, pr_number: u64) -> PrListEntry {
+        PrListEntry {
+            spec_id: Some(spec_id.to_string()),
+            mapping_source: "title".to_string(),
+            pr_number,
+            url: format!("https://example.invalid/pull/{pr_number}"),
+            branch: format!("branch-{pr_number}"),
+            title: format!("title {pr_number}"),
+            status: "Open".to_string(),
+            ci: "Passing".to_string(),
+            rebase_needed: false,
+            updated_at: "1h ago".to_string(),
+        }
+    }
+
+    #[test]
+    fn ci_column_ignores_informational_checks() {
+        let rollup = vec![
+            check_run("Build (ubuntu-latest)", "CI", "COMPLETED", "SUCCESS"),
+            check_run("merge-hold-gate", "merge-hold-gate", "COMPLETED", "SUCCESS"),
+            check_run(
+                "Build (windows-latest)",
+                "Cross-platform (nightly)",
+                "COMPLETED",
+                "FAILURE",
+            ),
+        ];
+        assert_eq!(
+            github_rollup_ci_status(&rollup, &CiGateConfig::default()),
+            "Passing (1 informational red)"
+        );
+        // A configured informational check name is honoured the same way.
+        let cfg =
+            crate::ci_gate::parse_ci_gate_config("[ci]\ninformational_checks = [\"nightly-*\"]\n");
+        let rollup = vec![
+            check_run("Build (ubuntu-latest)", "CI", "COMPLETED", "SUCCESS"),
+            check_run("nightly-soak", "Nightly", "COMPLETED", "TIMED_OUT"),
+        ];
+        assert_eq!(
+            github_rollup_ci_status(&rollup, &cfg),
+            "Passing (1 informational red)"
+        );
+    }
+
+    #[test]
+    fn ci_column_fails_on_required_red() {
+        let rollup = vec![
+            check_run("Build (ubuntu-latest)", "CI", "COMPLETED", "FAILURE"),
+            check_run(
+                "Build (windows-latest)",
+                "Cross-platform (nightly)",
+                "COMPLETED",
+                "FAILURE",
+            ),
+        ];
+        assert_eq!(
+            github_rollup_ci_status(&rollup, &CiGateConfig::default()),
+            "Failing"
+        );
+        // A red commit status context (no workflow) is a real failure too.
+        let rollup = vec![serde_json::json!({
+            "__typename": "StatusContext",
+            "context": "ci/external",
+            "state": "ERROR",
+        })];
+        assert_eq!(
+            github_rollup_ci_status(&rollup, &CiGateConfig::default()),
+            "Failing"
+        );
+    }
+
+    #[test]
+    fn ci_column_pending_ignores_informational_pending() {
+        let cfg = CiGateConfig::default();
+        let rollup = vec![
+            check_run("Build (ubuntu-latest)", "CI", "COMPLETED", "SUCCESS"),
+            check_run(
+                "Build (macos-latest)",
+                "Cross-platform (nightly)",
+                "IN_PROGRESS",
+                "",
+            ),
+        ];
+        assert_eq!(github_rollup_ci_status(&rollup, &cfg), "Passing");
+        let rollup = vec![check_run("Build (ubuntu-latest)", "CI", "QUEUED", "")];
+        assert_eq!(github_rollup_ci_status(&rollup, &cfg), "Pending");
+        assert_eq!(github_rollup_ci_status(&[], &cfg), "None");
+    }
+
+    #[test]
+    fn multi_spec_pr_is_one_row() {
+        let specs = extract_specs("feat(x): retire legs (ADR-72) (TASK-1723)", "branch");
+        let entries: Vec<PrListEntry> = specs
+            .iter()
+            .map(|s| entry(s, 2487))
+            .chain(std::iter::once(entry("BUG-1", 2483)))
+            .collect();
+        let rows = collapse_by_pr(entries);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].pr_number, 2487);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("ADR-72,TASK-1723"));
+        assert_eq!(rows[1].pr_number, 2483);
+        assert_eq!(rows[1].spec_id.as_deref(), Some("BUG-1"));
+        // JSON shape: one object per PR, spec_id carries every ID comma-joined.
+        let json = serde_json::to_value(&rows).unwrap();
+        assert_eq!(json[0]["spec_id"], "ADR-72,TASK-1723");
+        assert_eq!(json.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn github_entries_lists_multi_spec_pr_once_beside_unmapped() {
+        // trace:BUG-1935 | ai:claude — collapse composes with BUG-1927 mapping.
+        let fixture = format!(
+            "[{},{}]",
+            gh_pr_json(2487, "feat(x): retire legs (ADR-72) (TASK-1723)", "b", ""),
+            gh_pr_json(2480, "refactor: split lib.rs", "split-stack", "")
+        );
+        let rows = github_entries(gh_prs(&fixture), &[], &CiGateConfig::default());
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].pr_number, 2487);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("ADR-72,TASK-1723"));
+        assert_eq!(rows[0].mapping_source, "title");
+        assert_eq!(rows[1].pr_number, 2480);
+        assert_eq!(rows[1].spec_id, None);
+        assert_eq!(rows[1].mapping_source, "none");
+        let mapped = filter_mapped(rows, true);
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].pr_number, 2487);
     }
 }
