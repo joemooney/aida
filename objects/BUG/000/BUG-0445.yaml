@@ -16,9 +16,10 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T07:48:16.084852708Z
+modified_at: 2026-10-11T08:01:33.933931651Z
 req_type: Bug
 tags:
+- factory:night
 - papercut
 - shell-wrapper
 - triaged:night
