@@ -83,6 +83,7 @@ mod findings_gate;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
+mod human;
 mod kernel;
 // trace:STORY-1645 | ai:claude
 mod faq_topics;
@@ -168,6 +169,7 @@ use doctor_root::*;
 use drain_cmd::*;
 use findings_gate::*;
 use help::*;
+use human::*;
 use kernel::*;
 use mailbox_root::*;
 use mcp_cmd::*;
