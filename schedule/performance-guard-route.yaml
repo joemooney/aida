@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: '03:15 advisor: aida show ceiling breach (worst 27.9 s against 5 s); the proportion of 9.5% is within the 10% tolerance. This is a real regression under ADR-53, not a budget change. Filed BUG-1956 (likely contention with tonight''s cache rebuild / BUG-1940).'
+due_since: 2026-10-11T16:16:27.361287967Z
+due_reason: on CronJobFailed:performance-guard
