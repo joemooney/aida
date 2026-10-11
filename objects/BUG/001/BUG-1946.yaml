@@ -15,11 +15,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:06:00.825634058Z
-modified_at: 2026-10-11T05:06:00.825634058Z
+modified_at: 2026-10-11T05:54:22.276674586Z
 req_type: Bug
 tags:
 - flaky-test
 - test-isolation
+comments:
+- id: 01a12986-cbc4-74b0-abb1-9a86795037bc
+  author: joe
+  content: |-
+    Now blocking the lib split's green tags. On slice-13 (run 4, after the store_push_pull.rs move, branch not pushed), cargo test --workspace fails this test deterministically, 2 of 2 runs: 7843 passed, 1 failed. It passes alone. The only diff is the presentation_env line: the noexec render saw 'AIDA_OUTPUT_FORMAT, AIDA_GLYPHS stripped' and the verbose render saw 'none set in the launching shell'. So a concurrent EnvVarsGuard setter (presentation_env_tests) changes the env between the test's two renders.
+
+    Proposed fix (test-only, 1 statement), in aida-cli-lib/src/tests/agent_launcher_tests.rs, verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner: hold the env lock across both renders, as EnvVarsGuard::apply's own doc requires of env readers:
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_OUTPUT_FORMAT", None), ("AIDA_GLYPHS", None)]);
+    The two sibling verbose_diagnostics_* tests render only once and assert redaction, so they are not exposed. The file is a #[path] test file the slice stack never edits, so a fix PR on main merges in either order with runs 3 and 4.
+
+    I did NOT implement it: the spec is Draft, and approving my own bug isn't my call. Advisor: approve and route it (I can take it if you approve), or fix it directly.
+  created_at: 2026-10-11T05:54:22.276674586Z
+  modified_at: 2026-10-11T05:54:22.276674586Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
 filed_at:
   code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
   branch: slice-10
