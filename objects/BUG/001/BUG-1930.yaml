@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-10T21:41:20.198280080Z
+modified_at: 2026-10-11T07:17:36.886400929Z
 req_type: Bug
 tags:
 - drain
@@ -32,6 +32,39 @@ relationships:
   target_id: 01a09264-472d-77a0-a07a-34fe474beb25
   created_at: 2026-10-10T21:41:20.198278391Z
   created_by: joe
+comments:
+- id: 01a129d3-01f6-79e0-816a-b501fa34c009
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the drain's only environmental classifier matches disk/OOM, a Live verdict after a clean exit still yields FailureKind::LeaseConflict, and nothing halts the drain on repeated identical failures.
+
+    Problem
+    A clean implementer exit caused by permission denials is retried, the retry fails to reclaim the predecessor lease, and the spec is shelved as "lease-conflict" (not auto-drafting a BUG) — wrong cause, and the drain then repeats the same failure on every queued spec.
+
+    Separate from BUG-1928/BUG-1929: those fix the two write boundaries; this one is the drain's reporting and stop logic, which must be right even when a future environmental failure has a different cause. Independent of their order.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/lib_part6.rs:15765-15780 — after `reprobes` Live/UnknownLiveness verdicts the retry returns `FailureKind::LeaseConflict` with "phase 1 retry cannot reclaim predecessor lease ... after N liveness re-probe(s)" (the exact message in the report). A clean exit should have been ReclaimableClean; the Live verdict seconds after death is the BUG-1078 shape.
+    - aida-cli-lib/src/lib_part6.rs:3436-3458 — `is_environmental_failure` (disk/OOM) and the BUG-908 lease-conflict arm are the only non-drafting classes; no permission-denied class.
+    - aida-cli-lib/src/headless_tee.rs:279-283 — `permission_denials` from the stream are already summarised as "permission denied: <tools>", so the data to classify exists at phase end.
+    - `rg -n "consecutive" aida-cli-lib/src/drain_caps.rs aida-cli-lib/src/lib_part6.rs` — no consecutive-environmental-failure halt.
+    - Token figure (1.79M, ~$2.66) consistent with the three logs' `total_cost_usd` (0.52 + 0.71 + 1.43).
+
+    Acceptance criteria
+    - New `FailureKind::PermissionDenied` (or Environment{cause}) set when the phase's headless stream recorded permission_denials and no PR/commit was produced; shelve text names the denied tools; no phase-1 retry is attempted. Unit test over a synthetic stream.
+    - Regression test next to BUG-1078's: predecessor exited cleanly (result event seen, PID gone) → retry reclaims the lease on the first probe instead of returning LeaseConflict.
+    - After N consecutive (default 2, configurable in OrchestratorConfig) phase failures of the same environmental class, the drain stops with one message naming the cause and the fix, leaves the remaining queue untouched, and exits non-zero. Unit test with three specs: the third is never dispatched.
+    - Drain summary has an "environment blocked" line distinct from per-spec failures; TOON/JSON output carries `halt_reason`.
+    - `aida drain start --no-human` on a repo whose sandbox denies all writes consumes at most two phase attempts (integration test with a stub claude).
+
+    Scope / non-goals
+    - Do not change lease liveness probing beyond the clean-exit case; broader reclaim is BUG-1078's territory.
+    - related:BUG-1078 related:BUG-908 related:BUG-657 related:STORY-1051 related:EPIC-62 related:BUG-1928 related:BUG-1929
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:36.886400929Z
+  modified_at: 2026-10-11T07:17:36.886400929Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
