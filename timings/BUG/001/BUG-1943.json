@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1943",
+  "publishes": [
+    {
+      "at": "2026-10-11T18:43:48.743427251Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T06:27:59.325674788Z",
+      "spec": "BUG-1943",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T18:10:12.656857438Z",
+      "spec": "BUG-1943",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T18:20:28.680696395Z",
+      "spec": "BUG-1943",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1943",
+        "branch": "bug-1943-work",
+        "first_seen": "2026-10-11T18:20:28.680629588+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T18:43:48.730308482Z",
+      "spec": "BUG-1943",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "eb0a08cd5fa64cce8193bdde47ce2efaac3e6cac",
+        "pr": 2537,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
