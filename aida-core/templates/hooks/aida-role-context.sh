@@ -23,13 +23,44 @@ fi
 # so the project copy takes precedence even when the hook fires from a
 # different cwd; fall back to the vendor project var, then git, then pwd.
 project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
+
+# AIDA_SESSION_ROLE is a display/routing label, not authority. Check it against
+# the validated seat grant (`aida role current` prints the granted seat, empty
+# when none) so the header never claims a role the session cannot act as. The
+# implementer baseline and guest/requester personas need no grant; with no
+# `aida` on PATH there is nothing to validate against, so the label stands.
+# trace:BUG-1924 | ai:claude
+shown_role="$role"
+grant_note=""
+canonical_label="$role"
+[ "$canonical_label" = "dialog" ] && canonical_label=advisor
+case "$canonical_label" in
+    implementer | guest | requester) ;;
+    *)
+        if command -v aida >/dev/null 2>&1; then
+            seat=$(cd "$project_root" 2>/dev/null && aida role current 2>/dev/null | head -n 1)
+            if [ -z "$seat" ]; then
+                shown_role="${canonical_label} (no grant)"
+                grant_note="This session carries the ${canonical_label} role label but no valid grant for it, so commands gated on that role will refuse. A human enters the role at a terminal with: eval \"\$(aida role enter ${canonical_label})\""
+            elif [ "$seat" != "$canonical_label" ]; then
+                shown_role="$seat"
+            fi
+        fi
+        ;;
+esac
+
+# Locate the role file (project copy first, then the global one).
 role_file=""
 if [ -f "$project_root/.aida/roles/$role.toml" ]; then
     role_file="$project_root/.aida/roles/$role.toml"
 elif [ -f "$HOME/.aida/roles/$role.toml" ]; then
     role_file="$HOME/.aida/roles/$role.toml"
 fi
-if [ -z "$role_file" ] || [ ! -r "$role_file" ]; then
+if [ -n "$role_file" ] && [ ! -r "$role_file" ]; then
+    role_file=""
+fi
+# No role file: nothing to inject unless the role label lacks its grant.
+if [ -z "$role_file" ] && [ -z "$grant_note" ]; then
     exit 0
 fi
 
@@ -76,8 +107,12 @@ extract_field() {
     ' "$file"
 }
 
-purpose=$(extract_field purpose "$role_file")
-system_prompt=$(extract_field system_prompt "$role_file")
+purpose=""
+system_prompt=""
+if [ -n "$role_file" ]; then
+    purpose=$(extract_field purpose "$role_file")
+    system_prompt=$(extract_field system_prompt "$role_file")
+fi
 
 # STORY-278/STORY-285: the advisor seat triages findings the headless drain
 # files as draft TASKs — the reviewer (from-review:) and the implementer
@@ -99,11 +134,16 @@ fi
 
 # Build the addendum body. If the role contributes no purpose/system_prompt
 # AND there is no findings line, there's nothing useful — exit silently.
-if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ]; then
+if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ] && [ -z "$grant_note" ]; then
     exit 0
 fi
 
-body="# AIDA active role: ${role}"
+body="# AIDA active role: ${shown_role}"
+if [ -n "$grant_note" ]; then
+    body="${body}
+
+${grant_note}"
+fi
 if [ -n "$purpose" ]; then
     body="${body}
 

@@ -133,6 +133,55 @@ pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 
+/// What a display surface (the statusline) should show as the session's
+/// role. The `AIDA_SESSION_ROLE` label is only a display/routing hint, so a
+/// label naming a seat the session holds no valid grant for must read as
+/// ungranted rather than as authority the session doesn't have.
+// trace:BUG-1924 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RoleDisplay {
+    /// The session holds this seat: a validated grant, or the `implementer`
+    /// baseline, which needs no grant.
+    Held(String),
+    /// The label names this seat, but there is no valid grant for it
+    /// (missing, expired, revoked, or minted in another shell).
+    Ungranted(String),
+    /// Neither a label nor a grant: the implicit `implementer` baseline.
+    Default,
+}
+
+/// Pure classifier behind [`role_display`]: `grant_seat` is the seat of the
+/// validated grant, if any.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn classify_role_display(label: Option<&str>, grant_seat: Option<&str>) -> RoleDisplay {
+    if let Some(seat) = grant_seat.map(str::trim).filter(|s| !s.is_empty()) {
+        return RoleDisplay::Held(crate::canonical_role_name(seat));
+    }
+    match label.map(str::trim).filter(|s| !s.is_empty()) {
+        None => RoleDisplay::Default,
+        Some(label) => {
+            let role = crate::canonical_role_name(label);
+            // The implementer baseline and the lower-privilege stakeholder
+            // personas confer nothing a grant would gate, so the label is
+            // already the truth for them.
+            if matches!(role.as_str(), "implementer" | "guest" | "requester") {
+                RoleDisplay::Held(role)
+            } else {
+                RoleDisplay::Ungranted(role)
+            }
+        }
+    }
+}
+
+/// Resolve the displayed role from the validated grant (local file reads
+/// only — cheap enough for the per-prompt statusline), falling back to the
+/// label marked ungranted.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn role_display(project_root: &Path, label: Option<&str>) -> RoleDisplay {
+    let seat = current_seat(project_root);
+    classify_role_display(label, seat.as_deref())
+}
+
 pub(crate) fn require_direct_tty() -> Result<()> {
     use std::io::IsTerminal;
     if !(std::io::stdin().is_terminal() && std::io::stderr().is_terminal()) {
@@ -447,6 +496,82 @@ mod tests {
                 current_seat(root),
                 None,
                 "a shrunk roster ceiling invalidates the grant"
+            );
+        }
+    }
+
+    /// A role label with no valid grant reads as ungranted; a validated grant
+    /// reads as held; the implementer baseline needs no grant.
+    // trace:BUG-1924 | ai:claude
+    #[test]
+    fn role_display_follows_the_grant_not_the_label() {
+        assert_eq!(
+            classify_role_display(Some("advisor"), None),
+            RoleDisplay::Ungranted("advisor".into())
+        );
+        assert_eq!(
+            classify_role_display(Some("dialog"), None),
+            RoleDisplay::Ungranted("advisor".into()),
+            "the deprecated alias canonicalizes before display"
+        );
+        assert_eq!(
+            classify_role_display(Some("advisor"), Some("advisor")),
+            RoleDisplay::Held("advisor".into())
+        );
+        assert_eq!(
+            classify_role_display(Some("advisor"), Some("reviewer")),
+            RoleDisplay::Held("reviewer".into()),
+            "the grant, not the label, names the displayed seat"
+        );
+        assert_eq!(
+            classify_role_display(None, Some("reviewer")),
+            RoleDisplay::Held("reviewer".into())
+        );
+        assert_eq!(
+            classify_role_display(Some("implementer"), None),
+            RoleDisplay::Held("implementer".into())
+        );
+        assert_eq!(classify_role_display(None, None), RoleDisplay::Default);
+        assert_eq!(
+            classify_role_display(Some("  "), None),
+            RoleDisplay::Default
+        );
+    }
+
+    /// End to end through the grant store: an env-only advisor label is
+    /// ungranted, a minted advisor grant is held, and revocation drops it
+    /// back to ungranted.
+    // trace:BUG-1924 | ai:claude
+    #[test]
+    fn role_display_validates_the_grant_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_SESSION_ROLE", Some("advisor")),
+                (GRANT_ENV, None),
+            ]);
+            assert_eq!(
+                role_display(root, Some("advisor")),
+                RoleDisplay::Ungranted("advisor".into())
+            );
+        }
+        let subject = crate::current_user_id(None);
+        let id = test_support::mint_grant_for(root, &subject, "advisor", &[]);
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_SESSION_ROLE", Some("advisor")),
+                (GRANT_ENV, Some(id.as_str())),
+            ]);
+            assert_eq!(
+                role_display(root, Some("advisor")),
+                RoleDisplay::Held("advisor".into())
+            );
+            assert!(revoke_current().unwrap());
+            assert_eq!(
+                role_display(root, Some("advisor")),
+                RoleDisplay::Ungranted("advisor".into()),
+                "a revoked grant reads as ungranted"
             );
         }
     }

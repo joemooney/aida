@@ -52,6 +52,11 @@ pub(crate) fn handle_statusline_command(
         .ok()
         .filter(|s| !s.trim().is_empty());
     let (effective_role_name, role_is_default) = resolve_effective_role(raw_role.as_deref());
+    // BUG-1924: the label above stays the routing key (queue depth, @SPEC),
+    // but the *displayed* role comes from the validated seat grant, so a
+    // shell that only carries the label can see it lacks the authority.
+    // trace:BUG-1924 | ai:claude
+    let role_display = crate::seat_authority::role_display(&project_root, raw_role.as_deref());
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.
@@ -199,13 +204,9 @@ pub(crate) fn handle_statusline_command(
         // `(default)` so the implicit role is visible but unalarming.
         let session_role = lease.as_ref().and_then(|l| l.role.as_deref());
         let warn_enabled = !role_is_default && statusline_role_mismatch_enabled(&project_root);
-        let (role_text, role_mismatch) = role_segment_text(r, session_role, warn_enabled);
-        let role_text = if role_is_default {
-            format!("{} (default)", role_text)
-        } else {
-            role_text
-        };
-        let role_segment = if role_mismatch {
+        let (role_text, role_warning) =
+            role_display_segment_text(&role_display, r, session_role, warn_enabled);
+        let role_segment = if role_warning {
             role_text.red().bold().to_string()
         } else {
             role_text.yellow().bold().to_string()
@@ -445,6 +446,34 @@ pub(crate) fn handle_statusline_command(
         println!("{line}");
     }
     Ok(())
+}
+
+/// Plain text of the statusline role segment, plus whether it warrants the
+/// warning colour. The displayed name comes from the validated seat grant
+/// (`display`); `routing_role` is the label-derived role used only when no
+/// label or grant exists (the implicit default). A label without a valid
+/// grant renders `role:<label> (no grant)` in the warning colour.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn role_display_segment_text(
+    display: &crate::seat_authority::RoleDisplay,
+    routing_role: &str,
+    session_role: Option<&str>,
+    warn_enabled: bool,
+) -> (String, bool) {
+    use crate::seat_authority::RoleDisplay;
+    match display {
+        RoleDisplay::Held(seat) => role_segment_text(seat, session_role, warn_enabled),
+        RoleDisplay::Ungranted(label) => {
+            // Tag the role itself, ahead of any session-mismatch suffix.
+            let (text, _) = role_segment_text(label, session_role, warn_enabled);
+            let head = format!("role:{label}");
+            (text.replacen(&head, &format!("{head} (no grant)"), 1), true)
+        }
+        RoleDisplay::Default => {
+            let (text, mismatch) = role_segment_text(routing_role, session_role, warn_enabled);
+            (format!("{text} (default)"), mismatch)
+        }
+    }
 }
 
 pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {

@@ -68,8 +68,10 @@ rules:
   ever applies to a plain-text (no-ANSI) line.
 - unknown/stale AIDA values already degrade the same way the plain
   `aida statusline` segment always has (`cache:?` for unknown freshness,
-  `role:X (default)` for an unset role, etc.) — this contract does not
-  change that behavior, only what gets appended alongside it.
+  `role:X (default)` for an unset role, `role:X (no grant)` when the role
+  label names a seat this session holds no valid grant for, etc.) — this
+  contract does not change that behavior, only what gets appended
+  alongside it.
 
 ## Per-client adapters
 
@@ -172,8 +174,11 @@ no business in a status line or a log file:
   (plain text only — see the ANSI note above).
 - **Unknown/stale AIDA values** — unchanged from the existing behavior:
   `cache:?` for unknown freshness, `role:X (default)` for an unset role,
-  etc. This contract only adds the live segment alongside that; it doesn't
-  touch how the AIDA segment itself degrades.
+  `role:X (no grant)` for a role label without a valid seat grant, etc. The
+  role shown is the seat of the validated grant; the `AIDA_SESSION_ROLE`
+  label is only a display/routing hint. This contract only adds the live
+  segment alongside that; it doesn't touch how the AIDA segment itself
+  degrades.
 
 ## Setup, per client
 
