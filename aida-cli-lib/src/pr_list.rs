@@ -5,7 +5,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrListEntry {
-    pub spec_id: String,
+    /// Spec the PR maps to; `None` (JSON `null`) when no title, branch,
+    /// body or lease reference was found.
+    pub spec_id: Option<String>,
+    /// Where `spec_id` came from: `title`, `branch`, `body`, `lease`, or
+    /// `none`.
+    // trace:BUG-1927 | ai:claude
+    pub mapping_source: String,
     pub pr_number: u64,
     pub url: String,
     pub branch: String,
@@ -16,17 +22,25 @@ pub struct PrListEntry {
     pub updated_at: String,
 }
 
-pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
+/// List open PRs/MRs. Every open PR gets a row; `mapped_only` restores the
+/// old behaviour of dropping PRs that map to no spec.
+// trace:BUG-1927 | ai:claude
+pub(crate) fn pr_list_handler(json: bool, mapped_only: bool) -> Result<()> {
     let project_root = find_main_worktree_root()?;
     let forge = crate::forge::resolve_forge_kind(&project_root);
+    let lease_scopes: Vec<(String, String)> = list_leases(&project_root)
+        .into_iter()
+        .map(|l| (l.branch, l.scope))
+        .collect();
 
     let entries = match forge {
-        crate::forge::ForgeKind::GitHub => pr_list_github(&project_root)?,
-        crate::forge::ForgeKind::GitLab => pr_list_gitlab(&project_root)?,
+        crate::forge::ForgeKind::GitHub => pr_list_github(&project_root, &lease_scopes)?,
+        crate::forge::ForgeKind::GitLab => pr_list_gitlab(&project_root, &lease_scopes)?,
         crate::forge::ForgeKind::None => {
             anyhow::bail!("pure-git has no PR concept — `aida list pr` requires GitHub or GitLab")
         }
     };
+    let entries = filter_mapped(entries, mapped_only);
 
     if json {
         println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -34,7 +48,11 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
     }
 
     if entries.is_empty() {
-        println!("No open PRs with mapped specs found.");
+        if mapped_only {
+            println!("No open PRs with mapped specs found.");
+        } else {
+            println!("No open PRs found.");
+        }
         return Ok(());
     }
 
@@ -42,7 +60,7 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
 
     println!(
         "{} {} {} {} {} {} {}",
-        format!("{:<15}", "Spec ID").bold(),
+        format!("{:<18}", "Spec ID").bold(),
         format!("{:<8}", "PR").bold(),
         format!("{:<12}", "Status").bold(),
         format!("{:<12}", "CI").bold(),
@@ -65,7 +83,7 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
         };
         println!(
             "{} {} {} {} {} {} {}",
-            format!("{:<15}", e.spec_id).bold(),
+            format!("{:<18}", spec_column(&e)).bold(),
             format!("{:<8}", format!("#{}", e.pr_number)),
             format!("{:<12}", e.status),
             ci_str,
@@ -78,7 +96,25 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
     Ok(())
 }
 
-fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GhPr {
+    number: u64,
+    url: String,
+    head_ref_name: String,
+    title: String,
+    #[serde(default)]
+    body: String,
+    mergeable: String,
+    review_decision: String,
+    updated_at: String,
+    status_check_rollup: Option<Vec<serde_json::Value>>,
+}
+
+fn pr_list_github(
+    project_root: &std::path::Path,
+    lease_scopes: &[(String, String)],
+) -> Result<Vec<PrListEntry>> {
     let out = std::process::Command::new("gh")
         .current_dir(project_root)
         .args([
@@ -87,31 +123,24 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
             "--state",
             "open",
             "--json",
-            "number,url,headRefName,title,mergeable,reviewDecision,updatedAt,statusCheckRollup",
+            "number,url,headRefName,title,body,mergeable,reviewDecision,updatedAt,statusCheckRollup",
         ])
         .output()
         .context("running gh pr list")?;
 
     anyhow::ensure!(out.status.success(), "gh pr list failed");
 
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct GhPr {
-        number: u64,
-        url: String,
-        head_ref_name: String,
-        title: String,
-        mergeable: String,
-        review_decision: String,
-        updated_at: String,
-        status_check_rollup: Option<Vec<serde_json::Value>>,
-    }
-
     let prs: Vec<GhPr> = serde_json::from_slice(&out.stdout)?;
+    Ok(github_entries(prs, lease_scopes))
+}
+
+/// Build one row per mapped spec, or a single unmapped row, for each PR.
+// trace:BUG-1927 | ai:claude
+fn github_entries(prs: Vec<GhPr>, lease_scopes: &[(String, String)]) -> Vec<PrListEntry> {
     let mut entries = Vec::new();
 
     for pr in prs {
-        let specs = extract_specs(&pr.title, &pr.head_ref_name);
+        let (specs, source) = map_pr_specs(&pr.title, &pr.head_ref_name, &pr.body, lease_scopes);
         let status = if pr.review_decision.is_empty() {
             "Open".to_string()
         } else {
@@ -151,9 +180,10 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
             }
         }
 
-        for spec in specs {
+        for spec_id in row_spec_ids(specs) {
             entries.push(PrListEntry {
-                spec_id: spec,
+                spec_id,
+                mapping_source: source.as_str().to_string(),
                 pr_number: pr.number,
                 url: pr.url.clone(),
                 branch: pr.head_ref_name.clone(),
@@ -166,10 +196,13 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
         }
     }
 
-    Ok(entries)
+    entries
 }
 
-fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
+fn pr_list_gitlab(
+    project_root: &std::path::Path,
+    lease_scopes: &[(String, String)],
+) -> Result<Vec<PrListEntry>> {
     let out = std::process::Command::new("glab")
         .current_dir(project_root)
         .args([
@@ -189,6 +222,8 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
         web_url: String,
         source_branch: String,
         title: String,
+        #[serde(default)]
+        description: Option<String>,
         merge_status: String,
         updated_at: String,
         head_pipeline: Option<serde_json::Value>,
@@ -198,7 +233,13 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
     let mut entries = Vec::new();
 
     for mr in mrs {
-        let specs = extract_specs(&mr.title, &mr.source_branch);
+        // trace:BUG-1927 | ai:claude
+        let (specs, source) = map_pr_specs(
+            &mr.title,
+            &mr.source_branch,
+            mr.description.as_deref().unwrap_or(""),
+            lease_scopes,
+        );
         let rebase_needed = mr.merge_status != "can_be_merged";
 
         let mut ci_status = "None".to_string();
@@ -213,9 +254,10 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
             }
         }
 
-        for spec in specs {
+        for spec_id in row_spec_ids(specs) {
             entries.push(PrListEntry {
-                spec_id: spec,
+                spec_id,
+                mapping_source: source.as_str().to_string(),
                 pr_number: mr.iid,
                 url: mr.web_url.clone(),
                 branch: mr.source_branch.clone(),
@@ -256,6 +298,115 @@ fn extract_specs(title: &str, branch: &str) -> Vec<String> {
     specs
 }
 
+/// Where a PR's spec mapping came from, in lookup order.
+// trace:BUG-1927 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MappingSource {
+    Title,
+    Branch,
+    Body,
+    Lease,
+    None,
+}
+
+impl MappingSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            MappingSource::Title => "title",
+            MappingSource::Branch => "branch",
+            MappingSource::Body => "body",
+            MappingSource::Lease => "lease",
+            MappingSource::None => "none",
+        }
+    }
+}
+
+/// Map a PR to its spec IDs: title, then branch (every ID found), then the
+/// first ID named in the body, then the scope of a lease riding the PR's
+/// branch. An empty list with `MappingSource::None` means "unmapped" — the
+/// PR still gets a row.
+// trace:BUG-1927 | ai:claude
+fn map_pr_specs(
+    title: &str,
+    branch: &str,
+    body: &str,
+    lease_scopes: &[(String, String)],
+) -> (Vec<String>, MappingSource) {
+    let from_title = extract_specs(title, "");
+    if !from_title.is_empty() {
+        return (from_title, MappingSource::Title);
+    }
+    let from_branch = extract_specs("", branch);
+    if !from_branch.is_empty() {
+        return (from_branch, MappingSource::Branch);
+    }
+    if let Some(id) = first_strict_spec_id(body) {
+        return (vec![id], MappingSource::Body);
+    }
+    let lease_id = lease_scopes
+        .iter()
+        .filter(|(lease_branch, _)| !branch.is_empty() && lease_branch == branch)
+        .find_map(|(_, scope)| first_strict_spec_id(scope));
+    if let Some(id) = lease_id {
+        return (vec![id], MappingSource::Lease);
+    }
+    (Vec::new(), MappingSource::None)
+}
+
+/// First uppercase spec-shaped ID in free text (PR body, lease scope).
+/// Case-sensitive so prose like "utf-8" never maps, and forge refs or
+/// common non-spec tokens are skipped.
+// trace:BUG-1927 | ai:claude
+fn first_strict_spec_id(text: &str) -> Option<String> {
+    let re =
+        regex::Regex::new(r"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)\b").expect("valid spec id regex");
+    let found = re
+        .captures_iter(text)
+        .map(|cap| cap[1].to_string())
+        .find(|id| {
+            let prefix = id.split('-').next().unwrap_or("");
+            !matches!(
+                prefix,
+                "PR" | "MR" | "GH" | "GL" | "UTF" | "SHA" | "ISO" | "RFC" | "CVE"
+            )
+        });
+    found
+}
+
+/// One `Some(id)` per mapped spec, or a single `None` for an unmapped PR.
+// trace:BUG-1927 | ai:claude
+fn row_spec_ids(specs: Vec<String>) -> Vec<Option<String>> {
+    if specs.is_empty() {
+        vec![None]
+    } else {
+        specs.into_iter().map(Some).collect()
+    }
+}
+
+/// `--mapped-only` drops the rows that map to no spec.
+// trace:BUG-1927 | ai:claude
+fn filter_mapped(entries: Vec<PrListEntry>, mapped_only: bool) -> Vec<PrListEntry> {
+    if mapped_only {
+        entries
+            .into_iter()
+            .filter(|e| e.spec_id.is_some())
+            .collect()
+    } else {
+        entries
+    }
+}
+
+/// Spec ID column text: `—` when unmapped, `body:ID` / `lease:ID` when the
+/// mapping came from a secondary source, the bare ID otherwise.
+// trace:BUG-1927 | ai:claude
+fn spec_column(e: &PrListEntry) -> String {
+    match (&e.spec_id, e.mapping_source.as_str()) {
+        (None, _) => "—".to_string(),
+        (Some(id), "body" | "lease") => format!("{}:{}", e.mapping_source, id),
+        (Some(id), _) => id.clone(),
+    }
+}
+
 fn parse_and_format_date(iso: &str) -> String {
     if let Ok(dt) = DateTime::parse_from_rfc3339(iso) {
         let now = Utc::now();
@@ -269,5 +420,138 @@ fn parse_and_format_date(iso: &str) -> String {
         }
     } else {
         iso.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // trace:BUG-1927 | ai:claude
+    use super::*;
+
+    fn gh_prs(json: &str) -> Vec<GhPr> {
+        serde_json::from_str(json).expect("valid gh pr list fixture")
+    }
+
+    fn gh_pr_json(number: u64, title: &str, branch: &str, body: &str) -> String {
+        serde_json::json!({
+            "number": number,
+            "url": format!("https://github.com/o/r/pull/{number}"),
+            "headRefName": branch,
+            "title": title,
+            "body": body,
+            "mergeable": "CONFLICTING",
+            "reviewDecision": "",
+            "updatedAt": "2026-10-10T00:00:00Z",
+            "statusCheckRollup": [
+                {"conclusion": "FAILURE", "status": "COMPLETED"}
+            ]
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn pr_list_keeps_unmapped_pr() {
+        let fixture = format!(
+            "[{}]",
+            gh_pr_json(
+                2480,
+                "refactor: split lib.rs into modules",
+                "split-stack",
+                ""
+            )
+        );
+        let entries = github_entries(gh_prs(&fixture), &[]);
+        let rows: Vec<&PrListEntry> = entries.iter().filter(|e| e.pr_number == 2480).collect();
+        assert_eq!(rows.len(), 1, "unmapped PR must appear exactly once");
+        let row = rows[0];
+        assert_eq!(row.spec_id, None);
+        assert_eq!(row.mapping_source, "none");
+        assert_eq!(row.ci, "Failing");
+        assert!(row.rebase_needed);
+        assert_eq!(row.status, "Open");
+        assert_eq!(spec_column(row), "—");
+    }
+
+    #[test]
+    fn pr_list_maps_body_only_reference() {
+        let fixture = format!(
+            "[{}]",
+            gh_pr_json(
+                2480,
+                "refactor: split lib.rs into modules",
+                "split-stack",
+                "Slice of TASK-1538, uses UTF-8 output.\n"
+            )
+        );
+        let entries = github_entries(gh_prs(&fixture), &[]);
+        let rows: Vec<&PrListEntry> = entries.iter().filter(|e| e.pr_number == 2480).collect();
+        assert_eq!(rows.len(), 1, "body-mapped PR must appear exactly once");
+        assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-1538"));
+        assert_eq!(rows[0].mapping_source, "body");
+        assert_eq!(spec_column(rows[0]), "body:TASK-1538");
+    }
+
+    #[test]
+    fn pr_list_title_mapping_wins_over_body() {
+        let fixture = format!(
+            "[{}]",
+            gh_pr_json(
+                7,
+                "[AI:claude] fix(x): y (BUG-1927)",
+                "bug-1927-work",
+                "see TASK-1"
+            )
+        );
+        let entries = github_entries(gh_prs(&fixture), &[]);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].spec_id.as_deref(), Some("BUG-1927"));
+        assert_eq!(entries[0].mapping_source, "title");
+        assert_eq!(spec_column(&entries[0]), "BUG-1927");
+    }
+
+    #[test]
+    fn pr_list_maps_through_lease_on_branch() {
+        let leases = vec![
+            ("other".to_string(), "TASK-9".to_string()),
+            ("split-stack".to_string(), "STORY-1488".to_string()),
+        ];
+        let (specs, source) = map_pr_specs("refactor: split", "split-stack", "", &leases);
+        assert_eq!(specs, vec!["STORY-1488".to_string()]);
+        assert_eq!(source, MappingSource::Lease);
+    }
+
+    #[test]
+    fn pr_list_body_ignores_lowercase_and_non_spec_tokens() {
+        assert_eq!(
+            first_strict_spec_id("uses utf-8 and SHA-256, see PR-12"),
+            None
+        );
+        assert_eq!(
+            first_strict_spec_id("STORY-1488/TASK-1538"),
+            Some("STORY-1488".to_string())
+        );
+    }
+
+    #[test]
+    fn pr_list_mapped_only_drops_unmapped_rows() {
+        let fixture = format!(
+            "[{},{}]",
+            gh_pr_json(1, "refactor: no id", "no-id", ""),
+            gh_pr_json(2, "fix: thing (BUG-5)", "bug-5", "")
+        );
+        let all = github_entries(gh_prs(&fixture), &[]);
+        assert_eq!(all.len(), 2);
+        let mapped = filter_mapped(all, true);
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].pr_number, 2);
+    }
+
+    #[test]
+    fn pr_list_json_unmapped_spec_id_is_null() {
+        let fixture = format!("[{}]", gh_pr_json(3, "refactor: no id", "no-id", ""));
+        let entries = github_entries(gh_prs(&fixture), &[]);
+        let value = serde_json::to_value(&entries).expect("serialize entries");
+        assert!(value[0]["spec_id"].is_null());
+        assert_eq!(value[0]["mapping_source"], "none");
     }
 }
