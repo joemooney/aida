@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T20:00:54.770666806Z
+modified_at: 2026-10-11T20:08:43.756469725Z
 req_type: Bug
 tags:
 - contained
@@ -91,6 +91,43 @@ comments:
   created_at: 2026-10-11T18:21:28.708610285Z
   modified_at: 2026-10-11T18:21:28.708610285Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12c94-fbec-7f92-9b68-2bbc00f6a54a
+  author: joe
+  content: |-
+    FACTORY PLAN (day)
+
+    Worktree: /home/joe/ai/aida-bug1929 (branch bug-1929-work). Builds on contained_boundary.rs from BUG-1928.
+
+    Verified facts (from the claude 2.1.296 binary and the relay logs):
+    - Claude Code has a `sandbox.filesystem.allowWrite` list, separate from Edit allow rules (both feed the Bash sandbox's write set). Using allowWrite keeps the Edit/Write TOOL boundary at the worktree (BUG-1928) and widens only what sandboxed Bash (the `aida` binary) can write.
+    - On Linux each allowWrite entry becomes `bwrap --bind P P`. A path that does NOT EXIST at launch is skipped ("Skipping non-existent write path"). Write paths get NO glob expansion, so a literal `cache.db*` would match nothing. The cache entries therefore have to be an explicit list of the files that match cache.db*.
+    - The cache runs in WAL mode. SQLite deletes cache.db-wal/-shm when the last connection closes, which happens after every short-lived `aida` command. A file bind pins the inode. If a host process deletes and recreates -wal while the sandbox still holds the old inode, the two sides write different WALs: corruption risk. If -wal/-shm are missing at launch, SQLite can't create them, so the cache falls back to read-only.
+    - BUG-83 log: `aida edit --status in-progress` wrote the YAML (the card printed In Progress), then a read hit a read-only cache whose head differed (cached_git_backend.rs ~:709, cache_read_only_guidance) and exited 1. That is the partial success.
+
+    Approach:
+    1. contained_boundary.rs: `contained_store_write_paths(main)`. For each base in contained_write_roots(main), emit: `<base>/.aida-store` (a directory, which covers objects/ and .aida/store-write.lock) plus `<base>/.aida/cache.db`, `cache.db-wal`, `cache.db-shm`, `cache.db.lock-info`, `cache.db.refresh.lock`, `cache.db.refresh-request.lock`. Spell each as `//<abs>`; root_rule_path refuses any it can't express (fails closed). Add `sandbox_allow_write_entries(..)`.
+    2. session.rs contained_settings_json gets a `store_write_paths` param and emits `sandbox.filesystem.allowWrite` only when it's non-empty. claude_contained_settings_json derives main with main_worktree_root_from(worktree).
+    3. aida-core cache: set SQLITE_FCNTL_PERSIST_WAL on every cache connection (rusqlite::ffi::sqlite3_file_control). -wal/-shm then survive close and the bind stays on the live inode. Before spawning, the launcher opens the main cache once so the sidecars exist.
+    4. Atomic failure: CachedGitBackend add/update/update_versioned/delete/bulk paths refuse BEFORE the inner store write when cache.is_read_only(). The result is one error and nothing persisted.
+    5. `aida doctor check permission-posture`: report when contained mode's write set would exclude the resolved store or cache (store outside <main>/.aida-store, a missing sidecar, or a path that can't be expressed).
+
+    Tests:
+    - bug_1929_contained_store_tests.rs
+      - settings_allow_write_is_exactly_store_and_cache: unit test asserting the exact entries and nothing else in main.
+      - sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main: behavioural test over real tempdir paths.
+      - unexpressible_main_emits_no_entries
+      - an env-gated (AIDA_TEST_REAL_CLAUDE=1) real-claude test: contained session claims a spec and adds a comment, both visible from main.
+    - aida-core: read_only_cache_refuses_write_atomically (the YAML is unchanged afterwards), cache_connections_persist_wal.
+
+    Risks / gotchas:
+    - A store write inside the sandbox ALSO git-commits, which writes <main>/.git (objects, refs, the store worktree's index). That is outside the ruling's set, so the commit fails silently (`let _ =` in auto_commit_paths). The YAML persists uncommitted and stays visible from main until the next unsandboxed write sweeps it into a commit. Per the ruling I'm NOT widening for this; I'll flag it in the PR as a follow-up for the advisor.
+    - PERSIST_WAL changes cache behaviour for every caller. It's small, but it's outside contained_boundary. I'll flag it for advisor review.
+    - Merge gate per the advisor: BUG-1928's real-claude test must have run first (BUG-1971).
+
+    Acceptance mapping: write verbs work (allowWrite entries plus the env-gated real test); exactly-those-entries (unit test); atomic failure (aida-core test); doctor reports exclusion (doctor test).
+  created_at: 2026-10-11T20:08:43.756469725Z
+  modified_at: 2026-10-11T20:08:43.756469725Z
+  session_id: 299b0c1f-b21f-4541-b974-77c3079b3922
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
