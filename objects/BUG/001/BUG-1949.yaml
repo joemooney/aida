@@ -16,12 +16,12 @@ description: |
   - A drift check (existing guard or a small test) fails if a docs/cli page cites `aida session <verb>` where `<verb>` is not in `aida session --help`.
 
   Found by the night-fable review sweep (docs-vs-CLI pass over docs/cli/01-12). Size S, docs only.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:22:42.037610572Z
-modified_at: 2026-10-11T16:33:42.825827603Z
+modified_at: 2026-10-11T16:56:18.046428236Z
 req_type: Bug
 tags:
 - docs
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12be4-cf7e-7a81-8571-88621e350a33
+  author: aida-session-start
+  timestamp: 2026-10-11T16:56:18.046427409Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
