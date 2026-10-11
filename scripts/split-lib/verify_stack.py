@@ -11,7 +11,9 @@ protocol (TASK-1538 comments, 2026-10-10 plus the rule-7 amendment):
   2 spec-id    no spec ID in any subject except the final slice
   3 purity     MOVE/final: removed lines == added lines, apart from wiring that
                sits in its own file; only move-set files change; each new module
-               is wired exactly once in lib.rs; lib*.rs only LOSES lines (bar
+               is wired exactly once in lib.rs (plus amendment-1n `pub use
+               <m>::{..};` shims naming only bare-`pub` items this MOVE removes
+               from lib*.rs); lib*.rs only LOSES lines (bar
                lib.rs wiring); each new module receives moved lines; every
                removed -U0 block lands contiguous and in order in one module
                (blocks may reorder among themselves; a final-slice block may
@@ -158,13 +160,33 @@ def split_block(block, bodies):
     return pieces
 
 
-def wiring_ok(path, text, modules, deleted_parts):
+PUB_DECL = re.compile(r"pub (?:(?:async|const|unsafe|extern \"C\") )*"
+                      r"(?:fn|struct|enum|trait|type|const|static|union|mod) (\w+)")
+
+
+# trace:TASK-1538 | ai:claude
+def moved_pub_items(sha):
+    """Names declared bare `pub` (not pub(crate)) at the root of lines the
+    commit removes from lib*.rs: the only names an amendment-1n shim may name."""
+    return frozenset(m.group(1) for path, sign, text in diff_lines(sha)
+                     if sign == "-" and LIB_ANY.match(path)
+                     for m in [PUB_DECL.match(text)] if m)
+
+
+def wiring_ok(path, text, modules, deleted_parts, shim_names=frozenset()):
     """Is this added/removed line allowed wiring for the file it sits in?"""
     s = text.strip()
     if path == LIB_RS:
         for m in modules:
             if re.fullmatch(r"(pub\(crate\) )?(mod {0};|use {0}::\*;)".format(m), s):
                 return True
+            # Amendment 1n: a moved bare-`pub` item keeps its crate-root path
+            # through a `pub use` shim naming that module; it must not widen
+            # the API by re-exporting a pub(crate) or unmoved item.
+            shim = re.fullmatch(r"pub use {0}::(\w+|\{{(\w+(?:, \w+)*)\}});".format(m), s)
+            if shim:
+                names = (shim.group(2) or shim.group(1)).split(", ")
+                return all(n in shim_names for n in names)
         return any(s == f'include!("{os.path.basename(p)}");' for p in deleted_parts)
     m = NEW_MODULE.match(path)
     return bool(m and m.group(1) in modules and HEADER_WIRING.match(s))
@@ -177,6 +199,8 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
     if odd:
         issues.append(f"FAIL 3: file outside move set: {', '.join(odd)}")
 
+    shims = moved_pub_items(sha)
+    wiring = lambda path, text: wiring_ok(path, text, modules, deleted_parts, shims)
     added, removed = collections.Counter(), collections.Counter()
     ok_add, ok_rem = collections.Counter(), collections.Counter()
     lib_adds = collections.Counter()
@@ -185,12 +209,12 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
             continue  # manifest entries are declarations, not moved code
         if sign == "+":
             added[text] += 1
-            ok_add[text] += wiring_ok(path, text, modules, deleted_parts)
+            ok_add[text] += wiring(path, text)
             if path == LIB_RS:
                 lib_adds[text.strip()] += 1
         else:
             removed[text] += 1
-            ok_rem[text] += wiring_ok(path, text, modules, deleted_parts)
+            ok_rem[text] += wiring(path, text)
 
     def residue(mine, other, excused):
         out = collections.Counter()
@@ -219,7 +243,7 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
     # code relocated between root files, not a move.
     for path, sign, text in diff_lines(sha):
         if sign == "+" and LIB_ANY.match(path) and text.strip() \
-                and not wiring_ok(path, text, modules, deleted_parts):
+                and not wiring(path, text):
             issues.append(f"FAIL 3: non-wiring line added to {path}: {text.strip()[:80]}")
             break
 
@@ -234,11 +258,11 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
                 # keep header-shaped lines: moved code may carry its own `// trace:`
                 landed[m.group(1)] += [l for l in lines if l.strip()]
         elif LIB_ANY.match(path):
-            block = [l for l in lines if l.strip() and not wiring_ok(path, l, modules, deleted_parts)]
+            block = [l for l in lines if l.strip() and not wiring(path, l)]
             if block:
                 removed_blocks.append((path, block))
     for m in sorted(modules):
-        if all(wiring_ok(f"{SRC}{m}.rs", l, modules, deleted_parts) for l in landed[m]):
+        if all(wiring(f"{SRC}{m}.rs", l) for l in landed[m]):
             issues.append(f"FAIL 3: {m}.rs receives no moved lines (empty extraction)")
     for path, block in removed_blocks:
         pieces = split_block(block, landed)
