@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-11T15:20:57.047984204Z
+modified_at: 2026-10-11T15:20:57.754802739Z
 req_type: Bug
 tags:
 - contained
@@ -77,6 +77,12 @@ comments:
   created_at: 2026-10-11T07:43:48.560799738Z
   modified_at: 2026-10-11T07:43:48.560799738Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-869a-7e62-97f3-0b7dae817cda
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. This NARROWS the posture (the broken Edit(/**) becomes an absolute rule scoped to the session''s real worktree), so it is not a boundary widening. Must include the behavioural test (contained session can write inside its worktree, is denied one level above); a string assertion is not sufficient. Lands before BUG-1929.'
+  created_at: 2026-10-11T15:20:57.754802739Z
+  modified_at: 2026-10-11T15:20:57.754802739Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-83d7-70c1-a870-4853ee25287b
   author: joe
