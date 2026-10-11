@@ -10,12 +10,12 @@ description: |
   Repro (on the lib-split stack, where both test modules sit under the same parent module): `cargo test -p aida-cli-lib --lib agent_registry_root` fails 3/3. With `-- --test-threads=1` it passes, and the launcher tests alone pass. Under a full `cargo test --workspace` whether it fires depends on scheduling. It was green on several runs and then failed 2/2 once unrelated test modules were renamed.
 
   Fix: have the test take the env lock for both renders, e.g. `crate::test_env::EnvVarsGuard::apply(&[("AIDA_OUTPUT_FORMAT", None), ("AIDA_GLYPHS", None), ...])` like `noexec_preview_shows_none_set_when_no_presentation_vars_are_present` does. This blocks the next lib.rs split slice (session_start.rs), which cannot be tagged green until it lands.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:06:00.825634058Z
-modified_at: 2026-10-11T15:16:55.987366874Z
+modified_at: 2026-10-11T15:17:05.919951034Z
 req_type: Bug
 tags:
 - flaky-test
@@ -73,6 +73,14 @@ comments:
   created_at: 2026-10-11T15:16:55.987366874Z
   modified_at: 2026-10-11T15:16:55.987366874Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+history:
+- id: 01a12b89-fcff-78b1-aab4-f434bbe8dd58
+  author: joe
+  timestamp: 2026-10-11T15:17:05.919945334Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
   branch: slice-10
