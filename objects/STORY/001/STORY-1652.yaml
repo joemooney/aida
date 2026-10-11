@@ -37,9 +37,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:43:50.345052560Z
-modified_at: 2026-10-10T20:45:29.146365856Z
+modified_at: 2026-10-11T06:28:04.493083202Z
 req_type: Story
 tags:
+- batch:night-2026-10-10
 - cli
 - knowledge
 - show
