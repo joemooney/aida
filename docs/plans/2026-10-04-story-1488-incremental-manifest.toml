@@ -1577,3 +1577,31 @@ items = [
   "fn auto_archive_enabled",
   "fn maybe_auto_archive_sweep",
 ]
+
+[module.agent_config]
+purpose = "agents.toml posture readers and writers (STORY-1488 slice 1)"
+items = [
+  "fn load_agent_default_flags",
+  "fn parse_agents_toml",
+  "fn merge_agent_flags_from_file",
+  "fn load_agents_bypass",
+  "fn load_agents_mcp",
+  "fn read_agents_string_from_file",
+  "fn agents_toml_type_name",
+  "fn load_agents_contained",
+  "const PRESENTATION_ENV_VARS",
+  "struct PresentationEnvPolicy",
+  "fn classify_presentation_env",
+  "fn apply_presentation_env_policy",
+  "fn describe_presentation_env",
+  "fn resolve_presentation_env_policy",
+  "fn load_agents_inherit_env",
+  "fn read_agents_string_array_from_file",
+  "enum AgentPermissionPosture",
+  "impl impl:AgentPermissionPosture",
+  "fn maybe_prompt_confirm_bypass",
+  "fn maybe_prompt_agent_posture",
+  "fn write_global_agents_permission_posture",
+  "fn read_agents_bypass_from_file",
+  "fn read_agents_bool_from_file",
+]
