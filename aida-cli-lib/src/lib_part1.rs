@@ -3128,6 +3128,18 @@ pub(crate) fn rewrite_type_alias(args: &[String]) -> Vec<String> {
                 ];
                 out.extend_from_slice(&args[3..]);
                 return out;
+            } else if ty == "faq" && args[2] == "topics" {
+                // aida faq topics ... -> aida list --type faq --topics ...
+                // trace:STORY-1645 | ai:claude
+                let mut out = vec![
+                    args[0].clone(),
+                    "list".to_string(),
+                    "--type".to_string(),
+                    ty,
+                    "--topics".to_string(),
+                ];
+                out.extend_from_slice(&args[3..]);
+                return out;
             } else if args[2] == "add" {
                 // aida bug add ... -> aida add --type bug ...
                 let mut out = vec![args[0].clone(), "add".to_string(), "--type".to_string(), ty];

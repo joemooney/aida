@@ -9539,9 +9539,10 @@ pub enum Command {
 
         /// Filter by tags (comma separated). A trailing `*` is a prefix-glob:
         /// `aida:queue:*` matches every tag under that surface (and an exact
-        /// `aida:queue`). e.g. `--tags 'aida:queue:*'`.
+        /// `aida:queue`). e.g. `--tags 'aida:queue:*'`. `--tag` is accepted too.
         // trace:TASK-527 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(long)]
+        // trace:STORY-1645 | ai:claude — `--tag` alias (`aida faq list --tag <topic>`).
+        #[clap(long, alias = "tag")]
         tags: Option<String>,
 
         /// Show only machine-filed auto-complete failure drafts. Plain
@@ -9799,6 +9800,14 @@ pub enum Command {
         // trace:STORY-734 | ai:claude — now drives the human table too.
         #[clap(long, value_name = "CSV")]
         fields: Option<String>,
+
+        /// List the topics (tags) in use on live FAQs, with how many FAQs
+        /// carry each, most-used first. Requires the FAQ type: `aida faq
+        /// topics` (== `aida list --type faq --topics`). Browse one topic
+        /// with `aida faq list --tags <topic>`.
+        // trace:STORY-1645 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        topics: bool,
     },
 
     /// Show details for a specific requirement

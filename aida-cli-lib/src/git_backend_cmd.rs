@@ -1907,6 +1907,8 @@ pub(crate) fn handle_git_backend_command(
             limit,
             no_focus,
             fields,
+            // trace:STORY-1645 | ai:claude
+            topics,
             ..
         } => {
             // STORY-764: the global `--format json` pin reaches list the same way
@@ -1929,6 +1931,22 @@ pub(crate) fn handle_git_backend_command(
                 (None, None) => None,
             };
             let r#type: &Option<String> = &type_filter;
+            // STORY-1645: `aida faq topics` (== `aida list --type faq
+            // --topics`) lists the tags on live FAQs with counts. It reads the
+            // whole live FAQ set itself, so no other list lens applies.
+            // trace:STORY-1645 | ai:claude
+            if *topics {
+                if !crate::knowledge_list::type_filter_is_faq(r#type.as_deref()) {
+                    anyhow::bail!(
+                        "`--topics` lists FAQ topics: run `aida faq topics` \
+                         (or `aida list --type faq --topics`)."
+                    );
+                }
+                if *sync {
+                    maybe_sync_pull(store_path)?;
+                }
+                return crate::faq_topics::run_faq_topics(&backend, effective_json);
+            }
             let shortcut: Option<String> = if positional_type.is_some() {
                 None
             } else {
