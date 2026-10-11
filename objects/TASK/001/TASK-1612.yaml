@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:13:23.384864566Z
-modified_at: 2026-10-11T01:44:26.251201987Z
+modified_at: 2026-10-11T07:01:17.085773732Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -325,6 +325,43 @@ comments:
   created_at: 2026-10-08T21:33:58.294031125Z
   modified_at: 2026-10-08T21:33:58.294031125Z
   relayed_from: batch-d-final-fresh-review
+- id: 01a129c4-0e9d-71b0-b794-337862080b78
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: guided; production release is explicitly unavailable; last independent batch-D verdict is PARTIAL/NON-PASS.
+
+    ## Approach
+    The transport already exists on `origin/task-1612-waiting-child-transport` (head a5e1bc4f18, 6 commits over 5d4180e5de: bc914f887e feat, 17b6ac3eca cancel test, abc8fbd759 adopter qualification, 9a944b2ba4/09d7b88edf portability ratchets, a5e1bc4f18 SIGPIPE fix; `git diff --stat origin/main...` = 10 files, +3316). Modules: `aida-core/src/launch_transport/{mod.rs, image.rs (SealedExecImage, ImageIdentity), linux.rs (HostProfile, LaunchDescription, ProcessIdentity, WaitingChild, Cancellation), tests.rs}`, entry seam `launch_transport::bootstrap_if_requested()` wired in `aida-cli-lib/src/lib.rs` before `main_entry`, and `aida-cli/tests/waiting_child_bootstrap.rs`. Linux x86_64 GNU is the only supported profile (`require_supported_build`); other targets exit 126 before any lifecycle effect. Plan doc on the branch: `docs/plans/2026-10-07-task-1612-waiting-child-transport.md`. Remaining work is not new design: it is closing the batch-D findings and getting a clean independent re-review.
+
+    ## Files and functions
+    - aida-core/src/launch_transport/linux.rs — `HostProfile::probe` adopter cleanup (F1 SIGPIPE, fixed in a5e1bc4f18; re-verify under SIG_DFL public-API subprocess).
+    - aida-core/src/launch_transport/tests.rs — the one failing lock witness ("non-CLOEXEC owned lock/release assertion", holder unidentified per batch-D review): isolate the holder in a private fixture, distinguish helper retention from concurrent-fork inheritance (brief: .aida/handoff/orchestrator/run-20261008/task1612-batch-d-lock-failure-prepared.md).
+    - aida-core/src/launch_transport/mod.rs doc comment — document the CommittedDispatch integration seam without inventing a format (AC4).
+    - docs/plans/2026-10-07-task-1612-waiting-child-transport.md — "Validation limits" honest unsupported/untested list (AC5).
+
+    ## Tests (named)
+    - Existing: 10 core transport witnesses + 2 CLI bootstrap passes (batch-D count), 5 ignored worker entrypoints.
+    - lock_descriptor_inventory_has_no_inherited_lock_handle — the failing witness, re-run serially and under parallel load with holder diagnostics.
+    - public_profile_probe_survives_sigpipe_default — AC F1.
+    - no_production_release_constructor_compiles — compile-fail/absence check that a release permit is cfg(test) only.
+
+    ## Risks
+    - Full-suite runs on this branch contaminated the live store once (role-activity symlink); use the disposable export described in the plan doc.
+    - Fixtures need `cc`, `strip`, procfs, user/mount namespaces; CI parity is unproven.
+
+    ## Acceptance check
+    - AC1 sealed memfd + execveat, Linux-only refusal → image.rs/linux.rs witnesses.
+    - AC2 bootstrap before CLI init, identity auth, framing → waiting_child_bootstrap.rs + frame negatives.
+    - AC3 owned cancellation, no guessed PIDs → cancel/parent-death fixtures.
+    - AC4 no production release → compile-time absence test; mod.rs doc.
+    - AC5 isolated witnesses, honest limits → plan doc section.
+    - AC6 trace/commit trailers → `(TASK-1612)` already on all six commits; add `BUG-1808` trace lines exist in mod.rs.
+
+    ## Gate before implementation
+    Resolve the batch-D lock-witness failure under a legitimate dispatch (none authorized per comments[3]/[4]); then a NEW independent reviewer on the exact head; operator-owned merge. Parent EPIC-76 owns any production wiring.
+  created_at: 2026-10-11T07:01:17.085773732Z
+  modified_at: 2026-10-11T07:01:17.085773732Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a119b7-9c62-7890-901e-794aa2127b48
   author: aida-session-start
