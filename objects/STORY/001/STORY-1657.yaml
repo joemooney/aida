@@ -1,0 +1,33 @@
+id: 01a128a6-0cfa-79f3-8670-d925bff78f18
+spec_id: STORY-1657
+agreed_id: STORY-1657
+title: 'Review PR-2483: feat(tooling): pure-move slice stack checker (TASK-1722)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1282e`) for branch `task-1722-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2483>
+  - Branch: `task-1722-work` → `main`
+
+  ## Covers
+
+  - TASK-1722
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2483` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:48:53.370540996Z
+modified_at: 2026-10-11T01:48:53.370540996Z
+req_type: Story
+filed_at:
+  code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
