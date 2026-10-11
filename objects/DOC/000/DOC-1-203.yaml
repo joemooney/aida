@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T20:26:13.395622529Z
+modified_at: 2026-10-11T20:26:15.153476351Z
 req_type: Doc
 tags:
 - factory:2026-10-11
@@ -300,6 +300,12 @@ comments:
     Merging #2499 does not complete DOC-6 (aida: no-complete). Leave that as is.
   created_at: 2026-10-11T15:21:52.238088623Z
   modified_at: 2026-10-11T15:21:52.238088623Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ca5-06f1-7fa2-9d6c-37a197c097e3
+  author: joe
+  content: 'ADVISOR 13:26 (operator approved option 1): DOC-6 handed to the factory (factory:2026-10-11, item 7 in prompt-2026-10-11.md). The round-4 review found nothing pushed since round 3, so it does not count as a failed round. Rework per the REWORK BRIEF; the round-4 reviewer''s verified per-launcher sites: role enter = issue_direct (role_cmd.rs:193/211/296); role add = issue_direct (role_cmd.rs:511); session new = child grant with a seat (session.rs:1221/1230), else exec_claude (session.rs:938/950) inherits the parent env grant; session resume = exec_claude_resume (session.rs:4405/4414) inherits unless a grant is passed; agent new = env_remove AIDA_SESSION_GRANT (agent_launch.rs:2566/4353), a fresh child grant with a seat (:2571/:4358), else none; queue work / drain = child grant (queue_cmd.rs:12426) [no-seat cell unconfirmed: verify]. ONE more review round; if it fails, merge the passed parts and cut the section.'
+  created_at: 2026-10-11T20:26:15.153476351Z
+  modified_at: 2026-10-11T20:26:15.153476351Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
