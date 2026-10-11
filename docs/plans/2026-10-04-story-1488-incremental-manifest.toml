@@ -216,3 +216,96 @@ items = [
   "fn role_segment_text",
   "struct OrchestratorBadge",
 ]
+
+[module.help]
+purpose = "Tiered help, `aida help-all`, help topics and the user-guide opener (STORY-1488 slice 1)"
+items = [
+  "const GETTING_STARTED",
+  "fn command_groups",
+  "fn print_tiered_help",
+  "fn print_help_all",
+  "fn resolve_help_topic",
+  "fn print_help_topic",
+  "mod help_grouping_tests",
+  "fn open_user_guide",
+]
+
+[module.stakeholder_role]
+purpose = "Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)"
+items = [
+  "fn active_stakeholder_role",
+  "fn stakeholder_refusal_message",
+  "fn stakeholder_refusal",
+  "enum StakeholderAction",
+  "fn stakeholder_action_allowed",
+  "fn stakeholder_action_label",
+  "fn stakeholder_mcp_read_allowed",
+  "fn requester_intake_type_allowed",
+  "fn parse_requester_add_type",
+  "fn requester_add_type_allowed",
+  "fn add_csv_tag",
+  "fn enforce_stakeholder_role_capabilities",
+  "fn enforce_stakeholder_role_capabilities_for_role",
+  "mod stakeholder_cli_policy_tests",
+  "fn stakeholder_cli_action",
+]
+
+[module.memory_doc]
+purpose = "Scaffolded memory-pack refresh, drift reporting and markdown frontmatter helpers (STORY-1488 slice 1)"
+items = [
+  "fn fnv1a_hex",
+  "fn normalize_line_endings",
+  "fn split_md_frontmatter",
+  "fn frontmatter_field",
+  "fn build_scaffolded_memory",
+  "enum MemoryDisposition",
+  "fn memory_refresh_disposition",
+  "fn update_memory_index",
+  "struct MemoryPackReport",
+  "fn memory_matches_focus",
+  "fn scaffold_memory_pack_into",
+  "fn scaffold_memory_pack",
+  "enum MemoryDriftState",
+  "struct MemoryDriftRow",
+  "struct MemoryDriftReport",
+  "impl impl:MemoryDriftReport",
+  "fn master_memory_meta",
+  "fn compute_memory_drift_into",
+  "fn project_memory_dir",
+  "fn print_status_memory_drift_section",
+]
+
+[module.usage_mcp_helpers]
+purpose = "Shared usage-telemetry aggregation and MCP server launch/publish helpers (STORY-1488 slice 1)"
+items = [
+  "fn detect_store_path",
+  "fn poll_until_published",
+  "fn spawn_log_pump",
+  "fn locate_aida_server_binary",
+  "fn split_last_char",
+  "struct UsageRow",
+  "impl impl:UsageRow",
+  "fn aggregate_events",
+  "fn bug_status",
+]
+
+[module.punt_done]
+purpose = "`aida punt`/`aida done`/`aida punts` handlers, mention notifications and the completion crescendo (STORY-1488 slice 1)"
+items = [
+  "fn locate_for_status",
+  "fn handle_punt_command",
+  "fn send_notification",
+  "fn extract_mentions",
+  "fn mention_snippet",
+  "fn handle_done_command",
+  "fn render_completion_crescendo",
+  "fn completion_crescendo_lines",
+  "fn is_into_completed_transition",
+  "enum EditCompletionRender",
+  "fn edit_completion_render",
+  "mod story_738_completion_crescendo_tests",
+  "fn shorten_text",
+  "fn maybe_print_whats_left_tip",
+  "fn print_deferred_triggers",
+  "fn handle_punts_command",
+]
