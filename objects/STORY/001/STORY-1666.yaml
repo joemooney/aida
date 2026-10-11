@@ -1,0 +1,82 @@
+id: 01a12c98-3433-7df3-be87-fa03c9d14803
+spec_id: STORY-1666
+agreed_id: STORY-1666
+title: 'Keep spec descriptions current: amend-with-history, drift lint, mid-turn remarks and fix-time decision prompts'
+description: |
+  ## F1. Description is the truth; comments are history
+
+  **Seen:**
+  - STORY-13's scope roughly doubled during implementation, and the additions
+    exist only in a completion comment.
+  - STORY-15's title still says "5m/15m/1h" after the windows changed twice.
+  - STORY-17's later features live only in a comment.
+
+  **Why it matters:** a regenerating agent reading descriptions builds the
+  first draft of each feature. One reading comments must decide which ones
+  override what.
+
+  **Proposal:**
+  - `aida edit --amend` rewrites a description and moves the old text to history
+    automatically.
+  - A drift lint flags completed specs whose later comments contain words that
+    signal a change ("widened", "changed to", "at Joe's request", "also") or
+    numbers absent from the description.
+  - `/aida-implement` ends by asking: "does the description still describe what
+    you shipped?"
+
+  ## F11. Treat mid-turn remarks as candidate spec changes
+
+  **Seen:** almost every feature here began as a one-line remark sent while
+  other work was running ("and maybe color code the TYPE?", "maybe 7d as a
+  fourth window"). These were implemented quickly, and the specs were updated
+  late or only by comment.
+
+  **Proposal:**
+  - The capture skill (and a hook on mid-turn user messages) treats each such
+    remark as a candidate change to the spec in progress.
+  - At the end of the turn it asks: "these N remarks changed STORY-X's scope;
+    amend the description?"
+
+  ## F17. Capture a decision when a bug is fixed, not afterwards
+
+  **Seen:**
+  - The `flock -o` deadlock fix (2026-10-09) left one comment line.
+  - When we wrote its decision row two days later, the failing scenario was
+    gone. The agent writing it started to fill the hole with a plausible story
+    and had to stop.
+  - Knowledge not captured at fix time is not recoverable, and it invites
+    confabulation.
+
+  **Proposal:**
+  - A `fix:` commit touching code with a `trace:` comment prompts (via the
+    commit-msg hook or `/aida-commit`) for a decision row: symptom, cause, fix,
+    and the rejected alternative.
+  - At minimum it asks "what would a rewrite get wrong here?"
+  - Mark unrecoverable history explicitly as "lost knowledge" rather than
+    reconstructing it.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:12:14.771299093Z
+modified_at: 2026-10-11T20:12:14.771299093Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
