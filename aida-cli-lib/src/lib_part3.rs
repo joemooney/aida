@@ -10024,19 +10024,50 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         );
         return Ok(());
     }
-    if matches!(aida_core::git_ops::has_changes(store_path), Ok(true)) {
-        eprintln!(
-            "{} --sync: orphan store has uncommitted changes; skipping pull",
-            "Warning:".yellow().bold()
-        );
-        eprintln!("  Run `aida db sync --pull` manually after committing or stashing.");
-        return Ok(());
-    }
-    let branch =
-        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-    eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
-    match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
-        Ok(()) => {
+    // trace:TASK-1717 | ai:claude — the dirty check, the pull --rebase and
+    // the clean-up of a rebase THIS pull started run under the store write
+    // lock. A rebase that was already in progress (someone else's recovery)
+    // is reported and left alone, never aborted.
+    let pulled = aida_core::db::with_store_write_lock(store_path, || {
+        // A failing `git status` is a failed pull, not a clean tree.
+        match aida_core::git_ops::has_changes_checked(store_path) {
+            Ok(true) => return Ok(SyncPull::Dirty),
+            Ok(false) => {}
+            Err(e) => return Ok(SyncPull::Failed(e)),
+        }
+        let branch = aida_core::git_ops::current_branch(store_path)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
+        Ok(
+            match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
+                Ok(()) => SyncPull::Pulled,
+                Err(e) => {
+                    // pull --rebase aborts the rebase it started; if that abort
+                    // failed too, retry it once while still holding the lock —
+                    // the rebase is ours, since none was in progress when the
+                    // lock was taken. trace:STORY-78 | ai:claude
+                    if aida_core::git_ops::rebase_in_progress(store_path) {
+                        let _ = std::process::Command::new("git")
+                            .arg("-C")
+                            .arg(store_path)
+                            .args(aida_core::git_ops::transaction_git_config())
+                            .args(["rebase", "--abort"])
+                            .output();
+                    }
+                    SyncPull::Failed(e)
+                }
+            },
+        )
+    });
+    match pulled {
+        Ok(SyncPull::Dirty) => {
+            eprintln!(
+                "{} --sync: orphan store has uncommitted changes; skipping pull",
+                "Warning:".yellow().bold()
+            );
+            eprintln!("  Run `aida db sync --pull` manually after committing or stashing.");
+        }
+        Ok(SyncPull::Pulled) => {
             // Best-effort: refresh the statusline freshness signal so
             // the user doesn't see `cache:?` on the very next prompt
             // after they explicitly pulled. Silent on failure — losing
@@ -10048,17 +10079,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             // no-op unless the threshold is exceeded). Best-effort.
             aida_core::git_ops::opportunistic_store_gc(store_path);
         }
-        Err(e) => {
-            // pull --rebase can leave the repo mid-rebase on conflicts
-            // or network drops partway through. Abort defensively so
-            // the next command doesn't trip on `.git/rebase-merge/`.
-            // `git rebase --abort` is harmless when no rebase is in
-            // progress (exit code != 0, ignored). trace:STORY-78 | ai:claude
-            let _ = std::process::Command::new("git")
-                .arg("-C")
-                .arg(store_path)
-                .args(["rebase", "--abort"])
-                .output();
+        Ok(SyncPull::Failed(e)) | Err(e) => {
             let first_line = e
                 .to_string()
                 .lines()
@@ -10074,6 +10095,14 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Outcome of `maybe_sync_pull`'s locked window.
+// trace:TASK-1717 | ai:claude
+enum SyncPull {
+    Dirty,
+    Pulled,
+    Failed(anyhow::Error),
 }
 
 /// Stamp `~/.aida/cache/last-fetch.toml` with "ok"/now for the project
