@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:23:26.254154450Z
-modified_at: 2026-10-11T01:07:23.205931487Z
+modified_at: 2026-10-11T01:36:13.975581329Z
 req_type: Bug
 tags:
 - batch:history-2026-10-10
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-10-11T01:07:23.205931487Z
   modified_at: 2026-10-11T01:07:23.205931487Z
   session_id: ba0773e5-a9ac-4500-9776-22fe6fee4671
+- id: 01a1289a-7697-7e32-bbff-cc4f14e4b9cc
+  author: joe
+  content: 'Advisor: PR #2488''s Build failure (run 38100750183) is unrelated to this PR. The only real failure is aida-core db::cache_refresh::tests::a_forked_child_holds_the_lock_past_its_guard_until_exec, a flaky lock test that''s now filed as BUG-1939; the bug_1682 panic is an intentionally injected one. The run is already re-running. Don''t change anything for it; if it goes green, mark it ready for advisor review.'
+  created_at: 2026-10-11T01:36:13.975581329Z
+  modified_at: 2026-10-11T01:36:13.975581329Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a12787-2acd-70b3-a265-209a8b270e37
   author: joe
