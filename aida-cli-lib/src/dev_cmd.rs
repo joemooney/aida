@@ -1373,6 +1373,7 @@ fn print_shell_wrapper_status() {
 // trace:BUG-780 | ai:claude
 // trace:BUG-779 | ai:claude
 // trace:TASK-1171 | ai:claude
+// trace:BUG-0445 | ai:claude
 pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to
@@ -1393,7 +1394,14 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # block, so ordinary stdout is never an eval candidate. A binary that does not
 # see this token keeps emitting the legacy bare payload, so upgrading the binary
 # under an older wrapper changes nothing. (trace:TASK-1171)
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd'
+#
+# `init-cd-file` says the `init` arm below reads its `cd` block from a private
+# SIDE-CHANNEL FILE (handed to the binary in AIDA_INIT_CD_FILE) rather than by
+# capturing stdout. The older `init-cd` token meant "slice the block out of
+# captured stdout"; this wrapper deliberately does not advertise it, so a
+# binary that knows only that token prints a plain copy-paste `cd` hint here
+# instead of markers nobody is reading.
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file'
 
 aida() {
     # trace:BUG-1811 | ai:antigravity
@@ -1470,27 +1478,39 @@ AIDA_WRAPPER_OUTPUT
             ;;
         "init"|"init "*)
             # STORY-780: `aida init <DIR>` finishes by handing this shell a
-            # `cd` into the new project, through the same marker-delimited
-            # eval channel as the verbs above. One deliberate difference:
-            # there is NO bare-payload fallback here. A markerless init
-            # (bare in-place init, or an older binary) has only prose on
-            # stdout, which must never be eval'd — it prints as-is. The
-            # binary only emits the marker block when AIDA_SHELL_WRAPPER
-            # advertises `init-cd`, so older wrappers never see markers.
-            local _aida_out _aida_rc _aida_pre='' _aida_post='' _aida_eval=''
+            # `cd` into the new project. The block travels on a SIDE CHANNEL,
+            # not stdout: we hand the binary a private file in
+            # AIDA_INIT_CD_FILE and it writes the same marker-delimited block
+            # there. The child's stdout, stderr and stdin stay attached to the
+            # terminal, so an interactive init renders human output and shows
+            # its prompts live. Capturing stdout here used to make the child
+            # see a pipe (auto-selecting the agent format) and buffered every
+            # prompt invisibly until exit, so a prompt waiting on stdin looked
+            # like a hang.
+            #
+            # Nothing on stdout is EVER an eval candidate in this arm, and
+            # there is no bare-payload fallback: only a file holding exactly
+            # one marker pair and nothing else is eval'd. A failing init, an
+            # empty file (older binary, in-place init) or a malformed file all
+            # leave the shell where it was. The env assignment is a per-command
+            # prefix, so it never leaks into this shell.
+            local _aida_cd_file _aida_rc _aida_eval=''
             local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            if _aida_out=$(command aida "$@"; _aida_rc=$?; printf '.'; exit "$_aida_rc"); then
-                _aida_rc=0
-            else
-                _aida_rc=$?
+            _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
+            if [ -z "$_aida_cd_file" ]; then
+                # No private file available: plain pass-through; the binary
+                # prints the copy-paste `cd` hint.
+                command aida "$@"
+                return $?
             fi
-            _aida_out=${_aida_out%.}
-            if [ "$_aida_rc" -ne 0 ]; then
-                printf '%s' "$_aida_out" >&2
+            AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+            _aida_rc=$?
+            if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
+                rm -f "$_aida_cd_file"
                 return "$_aida_rc"
             fi
             while IFS= read -r _aida_line; do
@@ -1503,20 +1523,14 @@ AIDA_WRAPPER_OUTPUT
                         _aida_state=2 ;;
                     *)
                         case "$_aida_state" in
-                            0) _aida_pre="$_aida_pre$_aida_line$_aida_nl" ;;
                             1) _aida_eval="$_aida_eval$_aida_line$_aida_nl" ;;
-                            2) _aida_post="$_aida_post$_aida_line$_aida_nl" ;;
+                            *) _aida_valid=0 ;;
                         esac ;;
                 esac
-            done <<AIDA_WRAPPER_OUTPUT
-${_aida_out%"$_aida_nl"}
-AIDA_WRAPPER_OUTPUT
-            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ]; then
-                printf '%s' "$_aida_pre"
-                [ -n "$_aida_eval" ] && eval "$_aida_eval"
-                printf '%s' "$_aida_post"
-            else
-                printf '%s' "$_aida_out"
+            done < "$_aida_cd_file"
+            rm -f "$_aida_cd_file"
+            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ] && [ -n "$_aida_eval" ]; then
+                eval "$_aida_eval"
             fi
             return 0
             ;;

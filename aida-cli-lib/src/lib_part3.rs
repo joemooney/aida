@@ -3273,6 +3273,11 @@ mod bug_779_wrapper_eval_tests;
 #[path = "tests/task_1171_eval_channel_tests.rs"]
 mod task_1171_eval_channel_tests;
 
+// trace:BUG-0445 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_0445_init_side_channel_tests.rs"]
+mod bug_0445_init_side_channel_tests;
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn session_end(
