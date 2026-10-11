@@ -8,11 +8,41 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-11T00:51:06.094986066Z
+modified_at: 2026-10-11T07:11:15.294849710Z
 req_type: Bug
 tags:
 - review
 - security
+comments:
+- id: 01a129cd-2f5e-7a80-9aa1-8c854647255c
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the grant store on main is a bearer token scoped only to the user, and PR #2485 (still OPEN, not merged) re-validates the grant but adds no session binding, so the gap is real and unaddressed.
+
+    Problem
+    A seat grant presented via AIDA_SESSION_GRANT is accepted for any same-user process. SeatGrant.session_id is minted as a random UUID at issue time and never compared to anything, so a grant id copied from env/log/~/.aida lets any process of that user record approvals under the reviewer/advisor seat.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/seat_authority.rs:17-31 — SeatGrant has `session_id: String` (line 23) but `rg '\.session_id' aida-cli-lib/src/seat_authority.rs` returns nothing: no reader ever checks it.
+    - aida-cli-lib/src/seat_authority.rs:104-131 — current_grant() reads GRANT_ENV, checks revoked/expiry/`subject == current_user_id()`/roster/parent only. No process, lease, or Claude-session identity is consulted.
+    - seat_authority.rs:192-196 and :242-246 — issue paths set `session_id: Uuid::new_v4()` (unbound).
+    - PR #2485 (`gh pr diff 2485`, state OPEN): adds grant_authorized_at() (seat + validity window + roster + parent) and RecorderAttestation.identity tokens, but grep for session/lease binding on the grant itself finds none. Its author-overlap check (review_author_refusal) does refuse the IMPLEMENTER'S OWN session, so the specific "implementer exports a grant" case is partly mitigated once #2485 merges; a third same-user process with no authoring lease still passes. Recommend sequencing after #2485 merges.
+
+    Acceptance criteria
+    - Grant issuance (`aida role enter`) records a binding (claude session id and/or lease token set, plus issuing pid lineage) on the SeatGrant; `aida role status --json` shows it.
+    - Unit test seat_authority::grant_refused_when_presenter_identity_does_not_overlap_binding: current_grant() returns None when the presenting process's identity tokens do not intersect the grant binding.
+    - Unit test seat_authority::grant_accepted_for_bound_session: the legitimate holder (same session/lease tokens) still resolves the grant.
+    - Ship-time: grant_authorized_at (or its successor) refuses an attestation whose recorder identity does not overlap the grant's binding; test in bug_1918_review_authority_tests covers it.
+    - `aida doctor` reports a grant presented from an unbound process as a refusal reason, not a silent None.
+
+    Scope / non-goals
+    - Does not change roster/ceiling rules or child-grant delegation semantics (ADR-66); only adds the identity binding + check.
+    - related:BUG-1918 related:STORY-1654 related:ADR-66 related:STORY-1521 related:TASK-1593 (TASK-1593 enforced grants across commands but did not bind them).
+
+    Suggested size: M
+  created_at: 2026-10-11T07:11:15.294849710Z
+  modified_at: 2026-10-11T07:11:15.294849710Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
