@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:14.072123334Z
-modified_at: 2026-10-06T04:11:12.410138231Z
+modified_at: 2026-10-11T07:01:44.004374037Z
 req_type: Task
 tags:
 - aida-monitor
@@ -135,6 +135,42 @@ comments:
   created_at: 2026-10-06T04:03:19.503689856Z
   modified_at: 2026-10-06T04:03:19.503689856Z
   session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+- id: 01a129c4-77c4-76f1-93bf-871f757adffa
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: heft 23 > 20; blocked by STORY-1527 (Draft/deferred: no subject carries criterion-traced tests).
+
+    ## Approach
+    The measure exists: `aida reconstitute <SPEC> [--json] [--dry-run] [--yes]` (aida-cli-lib/src/cli.rs:9943; handler `reconstitute.rs:1170 handle_reconstitute_command`) runs `run_store_arm` (1051) and `run_baseline_arm` (1108), computes `delta_points` (359) with `delta_unknown_reason`, and `compute_coverage` (736) from STORY-1487's `criteria_coverage.rs` (`trailer_share`, criteria share, criterion-to-test share). The first run was already published as a null snapshot: docs/positioning/2026-10-05-north-star-check-aida-monitor.md (pins, commands, per-spec table, pass condition "not evaluable"). What remains is (a) a repeatable wrapper that runs the whole sample and aggregates, and (b) a real run once a subject has `trace:SPEC.ACn` tests. TASK-1324 (arm-B errors masked on empty denominator) is Completed, so the telemetry defect is cleared.
+
+    ## Files and functions
+    - scripts/north-star-check.sh (new, under docs/positioning/spike-86-scripts/ convention) — pins subject HEAD + store HEAD, iterates the sample (`aida list --type story,task --json | jq` for specs with criteria), runs `aida reconstitute <ID> --json --yes` N times, writes raw JSON per run.
+    - aida-cli-lib/src/reconstitute.rs — add `--out <dir>` (write the JSON report to a file instead of stdout) and `--seed <n>` for a fixed sample; no new scoring.
+    - aida-cli-lib/src/reconstitute.rs:1334-1366 — expose `delta`, `delta_reason`, `coverage` already in the JSON; add `aggregate` summarizer fn `aggregate_reports(&[Report]) -> Aggregate {mean_a, mean_b, mean_delta, variance}` (pure, unit-tested).
+    - docs/positioning/YYYY-MM-DD-north-star-check-aida-monitor.md — snapshot format fixed by the 2026-10-05 file: Pins / Commands / Results per spec / Coverage / Pass condition / Variance across ≥2 runs.
+
+    ## Tests (named)
+    - aggregate_delta_is_mean_of_per_spec_b_minus_a
+    - aggregate_reports_unknown_when_any_arm_unknown (never arm B alone)
+    - aggregate_variance_from_two_identical_runs_is_zero
+    - snapshot_renderer_includes_pins_commands_and_pass_condition
+
+    ## Risks
+    - Headless probe launches need `--yes` and a model; cost scales with sample × 2 arms × ≥2 runs.
+    - aida-monitor has 1 test/0 traced; until STORY-1527 lands the result stays "not evaluable" regardless of tooling.
+
+    ## Acceptance check
+    - AC1 repeatable command at pinned HEAD/store → script + Pins table.
+    - AC2 per-spec A, B, delta + coverage → JSON fields already present; aggregate fn.
+    - AC3 dated snapshot linked from VIS-2 → first real run; comment on VIS-2.
+    - AC4 pass condition stated → template section.
+    - AC5 reproducible within variance → ≥2 runs in the script.
+
+    ## Gate before implementation
+    STORY-1527 (subject readiness) Completed, or an operator decision to accept a seeded/traced subject. Attended work on aida-monitor only (advisor 2026-10-06: do not re-queue for an unattended drain).
+  created_at: 2026-10-11T07:01:44.004374037Z
+  modified_at: 2026-10-11T07:01:44.004374037Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a10eee-3f59-74fb-8c61-d65972c8abb3
   author: aida-orchestrator-phase1
