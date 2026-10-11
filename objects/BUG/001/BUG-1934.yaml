@@ -3,12 +3,12 @@ spec_id: BUG-1934
 agreed_id: BUG-1934
 title: 'Seat grants are trusted from AIDA_SESSION_GRANT env without binding to the presenting session: an implementer can export a reviewer/advisor grant id'
 description: 'Raised as design question C on BUG-1918 / PR #2485 (2026-10-10). Grant re-validation at ship (seat_authority::grant_authorized_at) checks that the grant exists, carries a non-implementer seat, and was valid at recorded_at, but cannot tell WHO presented it. Any same-user process that knows a grant id (e.g. from env, a log, or ~/.aida) can record an approval under that seat. Fix: bind a grant to its session at issue time (grant.session_id = the issuing Claude session / lease identity tokens) and require the recorder''s identity to overlap the grant''s binding at record and ship time. Acceptance: a recorder exporting another session''s AIDA_SESSION_GRANT is refused at record and at ship; the legitimate holder passes.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-11T07:44:03.806917287Z
+modified_at: 2026-10-11T15:20:49.952249142Z
 req_type: Bug
 tags:
 - review
@@ -50,6 +50,14 @@ comments:
   created_at: 2026-10-11T07:44:03.806917287Z
   modified_at: 2026-10-11T07:44:03.806917287Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+history:
+- id: 01a12b8d-6820-7292-ac96-3f451518bfcd
+  author: joe
+  timestamp: 2026-10-11T15:20:49.952244882Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
