@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:43:50.345052560Z
-modified_at: 2026-10-11T19:26:48.222026266Z
+modified_at: 2026-10-11T20:13:57.655956498Z
 req_type: Story
 tags:
 - batch:night-2026-10-10
@@ -52,6 +52,12 @@ comments:
   created_at: 2026-10-11T19:26:48.222026266Z
   modified_at: 2026-10-11T19:26:48.222026266Z
   session_id: 01a12c6dee78
+- id: 01a12c99-c617-7961-9b47-31141255e9ae
+  author: joe
+  content: 'Night relay: round-3 delta at a1caecff verified by orchestrator — fence_is_unclosed strips only the opening line''s quote depth (```\ncode\n> ``` now unclosed); quoted HTML merges across ''>'' prefixes, quoted blank line still separates. Approved; merging on green CI.'
+  created_at: 2026-10-11T20:13:57.655956498Z
+  modified_at: 2026-10-11T20:13:57.655956498Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a12790-46ba-7bd3-a5c9-2abcaabda9a0
   author: joe
