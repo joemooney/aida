@@ -3,12 +3,12 @@ spec_id: BUG-1956
 agreed_id: BUG-1956
 title: 'aida show breached the ADR-53 5000 ms ceiling again: one 27.9 s call in the 24h window (9.5% over the 1 s budget, inside the 10% tolerance)'
 description: 'performance-guard tripped (substrate run at 2026-10-11T10:00Z). Running ''aida doctor check performance'' at 03:10 local: show budget 1000 ms; 93 of 975 calls over (9.5%, tolerated 10.0%); worst 27868 ms against the 5000 ms ceiling, CEILING BREACHED. 46 samples excluded; lineage-scoped. The proportion is in tolerance, so this is a ceiling-only breach. Per ADR-53 that''s a real regression and NOT a reason to change the budget. Context for the window: tonight the host ran 4 relays plus cargo builds (load ~36), and cache.db was corrupted and rebuilt earlier (BUG-1940, approved, in the night batch). Prior art: BUG-1674 (show waited unbounded behind a concurrent stale-cache refresh) was completed, so check whether a cache rebuild or quarantine path or the store-write lock reintroduced an unbounded wait. Acceptance: identify the slow call''s path from telemetry, bound it within the 5 s ceiling (fail fast or serve stale with a note), and add a test for the contended path.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-11T16:32:14.344228956Z
+modified_at: 2026-10-11T16:33:20.794393275Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -26,6 +26,14 @@ comments:
   created_at: 2026-10-11T16:32:14.344228956Z
   modified_at: 2026-10-11T16:32:14.344228956Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+history:
+- id: 01a12bcf-cb9a-74f0-9d98-21e0a6befc37
+  author: joe
+  timestamp: 2026-10-11T16:33:20.794389009Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
