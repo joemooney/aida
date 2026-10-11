@@ -3,12 +3,12 @@ spec_id: BUG-1942
 agreed_id: BUG-1942
 title: History index stall guard never retries inline catch-up and repeats its hint in short-lived processes
 description: 'Follow-up from the PR #2488 review (approved at e80ff69d74). (1) Once catch_up_guarded in aida-cli-lib/src/history_cache.rs records 3 consecutive zero-progress attempts, inline catch-up stays disabled until aida cache rebuild --history; three interrupted slow first chunks or transient git/disk errors therefore permanently degrade queries to the git walk. Add a cool-down retry (e.g. a stored timestamp, retry hourly or when the gap grows by more than one chunk). (2) stalled_hint prints once per process, so frequent short processes (statusline, hooks) print it on every call; suppress it when stderr is not a TTY. (3) Strengthen the far-behind regression test with a per-call check that the indexed commit count equals rev-list --count <tip>. Acceptance: a paused index resumes catch-up after the cool-down without a manual rebuild; no hint on non-TTY stderr; the test asserts per-call ancestor completeness.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T14:10:08.519418402Z
+modified_at: 2026-10-11T14:49:57.696689183Z
 req_type: Bug
 tags:
 - factory:night
@@ -90,6 +90,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b71-24ba-7290-afce-45e4d80835c6
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:49:57.690919257Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b71-24c0-7631-956e-9dd934b6f893
+  timestamp: 2026-10-11T14:49:57.696687190Z
+  agent: implementer
+  commit_sha: faf704350c63f86544d7e6c7e2377a21b23437e4
+  summary: Completed via merge faf70435
 filed_at:
   code_sha: 392438a12ee4539e011144313eb625fd543cd6f1
   branch: main
@@ -98,3 +111,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: ba0773e5-a9ac-4500-9776-22fe6fee4671
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:49:57.690914531Z
+  completion_sha: faf704350c63f86544d7e6c7e2377a21b23437e4
