@@ -237,6 +237,11 @@ pub(crate) enum EventKind {
         title: String,
         req_type: String,
         priority: String,
+        /// The status the spec was filed at, so the status flow can show a
+        /// creation as `(new) → <status>`. Not rendered by the events feed.
+        // trace:STORY-1650 | ai:claude
+        #[serde(default)]
+        status: String,
     },
     Deleted {
         title: String,
@@ -632,10 +637,24 @@ where
     }
 }
 
-/// `json` selects the JSON projection of the events feed (`--json` /
-/// `--format json`); the caller also sets `opts.events_mode` for it.
+/// What a query with no SPEC-ID and no events mode shows.
+// trace:STORY-1650 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BareView {
+    /// The status flow (the default): one line per status change, served
+    /// only from the history index; the digest plus a note when the index
+    /// cannot answer.
+    Flow,
+    /// `--digest`: one row per requirement, sorted by last touch.
+    Digest,
+}
+
+/// `json` selects the JSON projection of the chosen view (`--json` /
+/// `--format json`). `bare` picks what a query with no SPEC-ID and no
+/// events mode shows.
 // trace:BUG-1631 | ai:claude
-pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
+// trace:STORY-1650 | ai:claude
+pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool, bare: BareView) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -669,8 +688,12 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
         return run_single_spec_progress(store_path, opts, output);
     }
 
+    // trace:STORY-1650 | ai:claude
     if !opts.events_mode {
-        return run_digest(store_path, opts);
+        return match bare {
+            BareView::Flow => crate::history_flow::run(store_path, opts, output),
+            BareView::Digest => run_digest_view(store_path, opts, output),
+        };
     }
 
     let (filtered, hidden_archived, window_exhausted, source) =
@@ -828,7 +851,11 @@ fn print_fallback_footer(source: &HistorySource) {
 /// Prints to stderr like the other `(...)` hints in this module, so it
 /// never pollutes stdout for a caller piping the event lines themselves.
 // trace:BUG-1617 | ai:claude
-fn print_window_exhausted_notice(opts: &HistoryOpts, window_exhausted: bool, shown: usize) {
+pub(crate) fn print_window_exhausted_notice(
+    opts: &HistoryOpts,
+    window_exhausted: bool,
+    shown: usize,
+) {
     // Agent/piped output is script-parsed; `window_exhausted` in the
     // JSON/MCP surface is the machine-readable equivalent there, and a
     // prose line would just be noise a script has to filter back out.
@@ -1355,6 +1382,20 @@ fn collect_filtered_events_unresolved(
     ))
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread ran the per-commit git walk, so tests can
+    /// assert structurally that a path never takes it.
+    static GIT_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The number of per-commit git walks this thread has run.
+// trace:STORY-1650 | ai:claude
+#[cfg(test)]
+pub(crate) fn git_walk_count() -> usize {
+    GIT_WALKS.with(|c| c.get())
+}
+
 /// Parse an RFC3339 string, unix timestamp, or ISO datetime into a unix epoch
 /// timestamp in seconds. Used so git log --since/--until commands receive
 /// unambiguous numeric timestamps, avoiding Git approxidate parser bugs
@@ -1404,6 +1445,8 @@ pub(crate) fn collect_filtered_events_git(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool)> {
+    #[cfg(test)]
+    GIT_WALKS.with(|c| c.set(c.get() + 1));
     // Build a `git log` command bounded by --since / --until / --max_commits.
     // BUG-1617 review fix: over-fetch by one commit. `-n<max_commits>` alone
     // can't distinguish "history is exactly max_commits commits long" (not
@@ -1770,6 +1813,70 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     Ok(())
 }
 
+/// The digest in the selected output: `--digest`, and the status flow's
+/// fallback when the history index cannot answer.
+///
+/// OPEN DESIGN QUESTION (JSON): the digest had no JSON before the status
+/// flow (a bare `--json` was the events feed). This is the one seam where
+/// that is decided. Today (option B) JSON is [`digest_json`], the TOON
+/// digest's fields as JSON, for both `--digest --json` and the flow's JSON
+/// fallback. Option A would keep `--digest --json` as the old events-feed
+/// JSON by routing that caller to the events feed instead, and give the
+/// fallback its own answer here.
+// trace:STORY-1650 | ai:claude
+pub(crate) fn run_digest_view(
+    store_path: &Path,
+    opts: &HistoryOpts,
+    output: HistoryOutput,
+) -> Result<()> {
+    if output == HistoryOutput::Json {
+        let doc = digest_json(store_path, opts)?;
+        println!("{}", crate::cache_output::json_pretty(&doc)?);
+        return Ok(());
+    }
+    run_digest(store_path, opts)
+}
+
+/// The digest as JSON: `view: "history"`, `count`, the hidden counts, and
+/// one `history` row per requirement with the TOON digest's fields (`id`,
+/// `type`, `status`, `when`, `change`, `title`).
+// trace:STORY-1650 | ai:claude
+pub(crate) fn digest_json(store_path: &Path, opts: &HistoryOpts) -> Result<JsonValue> {
+    let (entries, archived_hidden, deferred_hidden) = build_digest_rows(store_path, opts)?;
+    let rows: Vec<JsonValue> = entries
+        .iter()
+        .map(|e| {
+            json!({
+                "id": e.spec_id,
+                "type": display_type_name(&e.req_type),
+                "status": e.status,
+                "when": short_clock(&e.last_ts_iso),
+                "change": digest_change(e.had_add, e.had_delete),
+                "title": e.title,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "view": "history",
+        "count": rows.len(),
+        "archived_hidden": archived_hidden,
+        "deferred_hidden": deferred_hidden,
+        "history": rows,
+    }))
+}
+
+/// The digest's `change` cell: `del`, `add` or `edit`.
+// trace:STORY-1650 | ai:claude
+fn digest_change(had_add: bool, had_delete: bool) -> &'static str {
+    if had_delete {
+        "del"
+    } else if had_add {
+        "add"
+    } else {
+        "edit"
+    }
+}
+
 /// Builds the sorted, filtered digest rows for `run_digest` (extracted so the
 /// shard-resolution fix — BUG-1596 — can be exercised directly by tests
 /// without capturing stdout). Returns (rows, archived_hidden_count,
@@ -2007,7 +2114,7 @@ struct DigestRow {
 /// Returns (status, title, modified_at). `modified_at` is None for
 /// deleted requirements or when the field is missing — the caller then
 /// falls back to the git commit timestamp.
-fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
+pub(crate) fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
     let Ok(text) = std::fs::read_to_string(yaml_path) else {
         return ("(deleted)".to_string(), String::new(), None);
     };
@@ -2190,6 +2297,8 @@ pub(crate) fn decode_into_events(
                         .or_else(|| yaml_string(v, "type"))
                         .unwrap_or_else(|| req_type.clone()),
                     priority: effective(v, "priority", "custom_priority").unwrap_or_default(),
+                    // trace:STORY-1650 | ai:claude
+                    status: effective(v, "status", "custom_status").unwrap_or_default(),
                 }));
             }
         }
@@ -2636,6 +2745,7 @@ fn event_kind_record(kind: &EventKind, spec_id: &str) -> (String, String, JsonVa
             title,
             req_type,
             priority,
+            ..
         } => (
             "added".to_string(),
             format!("added ({req_type}, {priority}) {}", shorten(title, 80)),
@@ -2763,6 +2873,7 @@ fn format_event_body(e: &Event) -> String {
             title,
             req_type,
             priority,
+            ..
         } => format!(
             "{} ({}, {}) {}",
             "added".green(),
@@ -2885,7 +2996,7 @@ fn maybe_dash(s: &str) -> String {
 
 // Char-boundary-safe truncation: titles carry emoji/unicode, so slicing by raw
 // byte index panics mid-codepoint (BUG-424). Truncate by chars. trace:BUG-424
-fn shorten(s: &str, max: usize) -> String {
+pub(crate) fn shorten(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {

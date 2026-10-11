@@ -514,6 +514,7 @@ mod tests {
             title: "title".into(),
             req_type: "Task".into(),
             priority: "High".into(),
+            status: "Draft".into(),
         });
         assert_eq!(value(&added, "title"), "title");
         assert_eq!(value(&added, "priority"), "High");

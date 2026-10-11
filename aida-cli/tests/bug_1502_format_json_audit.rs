@@ -582,7 +582,17 @@ fn bug_1631_history_json_stdout_is_pure_json_outside_agent_mode() {
         assert!(!stdout.contains("Window:"), "{args:?} leaked: {stdout}");
         let value: serde_json::Value = serde_json::from_str(&stdout)
             .unwrap_or_else(|e| panic!("{args:?} stdout is not JSON ({e}): {stdout}"));
-        assert!(value["events"].is_array(), "{args:?}: {value}");
+        // trace:STORY-1650 | ai:claude
+        // Bare `history --json` is the status flow (or, when the history
+        // index can't answer, the digest); `events --json` is the feed.
+        if args.contains(&"events") {
+            assert!(value["events"].is_array(), "{args:?}: {value}");
+        } else {
+            assert!(
+                value["transitions"].is_array() || value["history"].is_array(),
+                "{args:?}: {value}"
+            );
+        }
     }
 }
 

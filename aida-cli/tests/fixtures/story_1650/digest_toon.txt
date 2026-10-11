@@ -1,0 +1,9 @@
+view: history
+count: 4
+history[4]{id,type,status,when,change,title}:
+  TASK-4,Task,Approved,"03-05 14:00",add,Filed approved
+  STORY-1,Story,Completed,"03-04 13:00",add,Flowing story
+  BUG-3,Bug,(deleted),"03-04 13:00",del,""
+  TASK-2,Task,Draft,"03-03 12:00",add,Renamed task
+cache:
+  stale: false
