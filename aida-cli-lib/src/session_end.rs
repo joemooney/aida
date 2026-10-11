@@ -980,12 +980,13 @@ pub(crate) fn session_end(
     return_to_pool: bool,
     remove: bool,
 ) -> Result<()> {
-    let _ = return_to_pool; // returning is now the default; flag kept for compat
-                            // BUG-1952: run from inside the worktree being ended, `find_project_root`
-                            // stops at the worktree's `.git` file. Resolve the MAIN checkout now, before
-                            // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
-                            // peer guard, pool checks and store detection below never resolve against
-                            // the dying tree. trace:BUG-1952 | ai:claude
+    // Returning is now the default; the flag is kept for compat.
+    let _ = return_to_pool;
+    // BUG-1952: run from inside the worktree being ended, `find_project_root`
+    // stops at the worktree's `.git` file. Resolve the MAIN checkout now, before
+    // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
+    // peer guard, pool checks and store detection below never resolve against
+    // the dying tree. trace:BUG-1952 | ai:claude
     let project_root = resolve_session_end_root(&find_project_root()?);
     let leases = list_leases(&project_root);
     if leases.is_empty() {

@@ -18,10 +18,30 @@ use std::process::{Command, Output};
 
 mod support;
 
+/// Pin every ambient input a spawned `git` (directly or under `aida`) reads:
+/// the temp HOME, no global/system git config, and no inherited `GIT_DIR` /
+/// `GIT_WORK_TREE` / `GIT_INDEX_FILE` (set when tests run under a git hook),
+/// which would otherwise point the fixture's git at the developer's checkout.
+fn isolate(cmd: &mut Command, home: &Path) {
+    cmd.env("HOME", home);
+    cmd.env("GIT_CONFIG_GLOBAL", "/dev/null");
+    cmd.env("GIT_CONFIG_NOSYSTEM", "1");
+    for k in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+        cmd.env_remove(k);
+    }
+}
+
+/// The isolated HOME `project` creates beside the fixture repo.
+fn home_of(repo: &Path) -> PathBuf {
+    repo.parent()
+        .expect("fixture repo has a parent")
+        .join("home")
+}
+
 fn aida(cwd: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(cwd);
-    cmd.env("HOME", home);
+    isolate(&mut cmd, home);
     cmd.env("AIDA_TELEMETRY", "0");
     for k in [
         "AIDA_SESSION_ROLE",
@@ -41,11 +61,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .current_dir(repo)
-        .args(args)
-        .status()
-        .expect("run git");
+    let mut cmd = Command::new("git");
+    isolate(&mut cmd, &home_of(repo));
+    let status = cmd.current_dir(repo).args(args).status().expect("run git");
     assert!(status.success(), "git {args:?} failed");
 }
 
@@ -79,6 +97,7 @@ fn project(base_dir: &Path, pool: bool) -> (PathBuf, PathBuf) {
     git(&repo, &["init", "-q", "-b", "main"]);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["config", "commit.gpgsign", "false"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
 
     let init = aida(&repo, &home)
@@ -208,7 +227,9 @@ fn session_end(cwd: &Path, home: &Path, id: &str) -> Output {
 }
 
 fn registered_worktrees(repo: &Path) -> Vec<PathBuf> {
-    let out = Command::new("git")
+    let mut cmd = Command::new("git");
+    isolate(&mut cmd, &home_of(repo));
+    let out = cmd
         .current_dir(repo)
         .args(["worktree", "list", "--porcelain"])
         .output()
@@ -334,7 +355,8 @@ fn bug_483_peer_guard_fires_from_inside_worktree() {
 // Acceptance 1 (pool checks): a pooled tree ended from INSIDE itself is
 // recognised as a pool tree against the main root's `.aida/worktree-pool`
 // registry (never linked into the worktree) and returned to the pool — the
-// directory persists and the entry goes idle — instead of being deleted.
+// directory persists and the entry goes idle — instead of being deleted. The
+// pool evidence is asserted first so it stands on its own.
 #[test]
 fn pooled_tree_ended_from_inside_is_returned_not_removed() {
     let base = tempfile::tempdir().expect("tempdir");
@@ -351,21 +373,6 @@ fn pooled_tree_ended_from_inside_is_returned_not_removed() {
     let out = session_end(&lease.worktree, &home, &lease.id);
     assert!(out.status.success(), "end failed: {}", show(&out));
     assert!(
-        !lease_file(&repo, &lease.id).exists(),
-        "lease not deleted: {}",
-        show(&out)
-    );
-    assert!(
-        !mcp_claim(&repo, &spec).exists(),
-        "mcp-claim leaked: {}",
-        show(&out)
-    );
-    assert!(
-        !manifest(&repo, &lease.id).exists(),
-        "manifest leaked: {}",
-        show(&out)
-    );
-    assert!(
         lease.worktree.is_dir(),
         "the pooled tree was deleted instead of returned: {}",
         show(&out)
@@ -380,6 +387,21 @@ fn pooled_tree_ended_from_inside_is_returned_not_removed() {
     assert!(
         !entry.leased && entry.owner_pid.is_none(),
         "the returned tree must be idle in the pool: {entry:?}\n{}",
+        show(&out)
+    );
+    assert!(
+        !lease_file(&repo, &lease.id).exists(),
+        "lease not deleted: {}",
+        show(&out)
+    );
+    assert!(
+        !mcp_claim(&repo, &spec).exists(),
+        "mcp-claim leaked: {}",
+        show(&out)
+    );
+    assert!(
+        !manifest(&repo, &lease.id).exists(),
+        "manifest leaked: {}",
         show(&out)
     );
 }
