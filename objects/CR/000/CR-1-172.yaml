@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-09-27T21:00:45.568580496Z
+modified_at: 2026-10-11T07:01:29.623352781Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -93,6 +93,46 @@ comments:
   created_at: 2026-09-27T21:00:45.568580496Z
   modified_at: 2026-09-27T21:00:45.568580496Z
   session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+- id: 01a129c4-3f97-72a3-af59-0281a3b164de
+  author: joe
+  content: |
+    FACTORY PLAN (night) — plan only, no code tonight. Reason: parked by the advisor (2026-09-27 disposition); items 2–6 stay blocked pending advisor unparking. BUG-1693 (the structural gate) is Completed, so the dependency edge is satisfied, but the parking decision has not been lifted.
+
+    ## Approach
+    Plan item 2 only: `aida seat wait --vendor <claude|codex|antigravity|opencode> --timeout N`, per docs/plans/2026-09-22-seat-wake-cross-harness.md. Reuse the existing event-follow machinery instead of a new classifier: `aida-cli-lib/src/event_wait.rs:168 wait_for_actionable(project_root, &mut offset, idle_backstop_secs, focus_filter)` already blocks on `.aida/events.jsonl`, uses `EventKind::is_actionable` (aida-cli-lib/src/events.rs:63) and consumes out-of-scope lines; `watch.rs:263 render` is the one-line wake renderer. `seat wait` adds (a) per-vendor stdin payload parsing, (b) an addressed-to-seat filter layered on `is_actionable` (seat/role field on the event, mailbox recipient), (c) a rolling per-hour wake cap, (d) the vendor continue dialect. Gating decisions already recorded: SPIKE-92 (completed) found the TUI-lock question NOT measured live — so v1 is `hold=0` for human-present seats (turn-clock oracle), holds only headless; operator decision 2026-09-26: v1 wakes non-authority seats only (never advisor/integrator/product).
+
+    ## Files and functions
+    - aida-core/src/seat_wait.rs (new) — `StopPayload` enum (claude/codex: session_id, stop_hook_active; antigravity: conversationId, terminationReason, fullyIdle), `hold_allowed(payload, seat, presence)`, `WakeCap`, `VendorResponse::render`.
+    - aida-cli-lib/src/events.rs:63 — add `SeatTurnEnded{seat,vendor,session_id,reason}`, `SeatWoken`, `WakeRateLimited`; extend `is_actionable` match (exhaustive).
+    - aida-cli-lib/src/event_wait.rs:168 — generalise `wait_for_actionable` with an `addressed_to: Option<&str>` seat filter (keep focus_filter).
+    - aida-cli-lib/src/cli.rs — `Seat { Wait { vendor, timeout } }` subcommand (no `aida seat` namespace exists today; seats.rs is the mapping type).
+    - aida-cli-lib/src/seat_authority.rs — `current_seat` is the seat identity; refuse hold when the seat is authority-class (v1 rule).
+    - aida-core/templates/hooks/aida-seat-wait.sh (new) + templates/settings.json Stop entry (line 122) — one-line handler; `make sync-templates`.
+
+    ## Tests (named)
+    - seat_wait_parses_claude_codex_antigravity_payloads
+    - seat_wait_no_hold_on_error_termination
+    - seat_wait_refuses_hold_for_authority_seat (v1 rule)
+    - seat_wait_hold_zero_when_human_present
+    - seat_wait_wake_cap_stops_after_n_per_hour
+    - seat_wait_ignores_events_addressed_to_other_seat / older_than_last_wake
+    - seat_wait_claude_codex_wake_is_exit2_stderr; antigravity_response_is_valid_stop_schema
+
+    ## Risks
+    - Held hook may lock TUI input (unmeasured); hold=0 when present mitigates.
+    - Wake storms (BUG-1589 shape): cap + newer-than-last-wake filter.
+    - Stop hook already exists (aida-stop-check.sh); ordering of two Stop handlers must be defined.
+
+    ## Acceptance check
+    - "zero-token wait on addressed work" → wait_for_actionable extension + filter tests.
+    - "no model-side polling" → no CronCreate/loop; hook only.
+    - "v1 non-authority only" → refusal test.
+
+    ## Gate before implementation
+    Advisor unparks CR-7 items 2–6 (explicit comment), confirms the SPIKE-92-derived hold=0 rule as item 6's acceptance, and Joe reconfirms the non-authority-only scope. Items 3–6 (adapters, OpenCode plugin, resume fallback, hold policy) follow as separate specs.
+  created_at: 2026-10-11T07:01:29.623352781Z
+  modified_at: 2026-10-11T07:01:29.623352781Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 decision_request:
   question: Allow idle agent seats to self-resume via held Stop hooks (CR-7)?
   choices:
