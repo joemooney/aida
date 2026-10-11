@@ -1415,14 +1415,17 @@ fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
     // sidecars writable as individual files while the directory stays
     // read-only. That is enough for SQLite in WAL mode with persistent
     // sidecars, so it counts as writable.
+    // SQLite names the sidecars after the symlink-resolved database path, so
+    // check those, not stale ones beside a symlink.
     // trace:BUG-1929 | ai:claude
+    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let sidecar = |suffix: &str| {
-        let mut name = path.as_os_str().to_os_string();
+        let mut name = resolved.as_os_str().to_os_string();
         name.push(suffix);
         PathBuf::from(name)
     };
     path.exists()
-        && appendable(path)
+        && appendable(&resolved)
         && appendable(&sidecar("-wal"))
         && appendable(&sidecar("-shm"))
 }
