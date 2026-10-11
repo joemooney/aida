@@ -1,0 +1,33 @@
+id: 01a128a8-0ee0-7fe0-8a86-9b2b55034fa2
+spec_id: STORY-1659
+agreed_id: STORY-1659
+title: 'Review PR-2485: [AI:claude] fix(review): bind approval authority to session identity, not labels (BUG-1918)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a12672`) for branch `bug-1918-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2485>
+  - Branch: `bug-1918-work` → `main`
+
+  ## Covers
+
+  - BUG-1918
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2485` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:51:04.928345393Z
+modified_at: 2026-10-11T01:51:04.928345393Z
+req_type: Story
+filed_at:
+  code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
