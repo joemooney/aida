@@ -58,12 +58,12 @@ class TestVerifyStack(unittest.TestCase):
     def tag(self, name, msg=None):
         git(self.tmp, "tag", *(["-a", name, "-m", msg] if msg else [name]))
 
-    def move(self, mod, fn, extra="", wiring_twice=False, subject=None):
-        """Pure move of `fn <fn>() {}` from lib_part1.rs into <mod>.rs."""
-        line = f"fn {fn}() {{}}\n"
+    def move(self, mod, fn, extra="", wiring_twice=False, subject=None, shim="", vis=""):
+        """Pure move of `<vis>fn <fn>() {}` from lib_part1.rs into <mod>.rs."""
+        line = f"{vis}fn {fn}() {{}}\n"
         self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace(line, ""))
         self.write(f"{SRC}/{mod}.rs", f"//! {mod}\n// trace:STORY-1488 | ai:claude\n\nuse crate::*;\n\n{line}{extra}")
-        wiring = f"mod {mod};\nuse {mod}::*;\n" + (f"mod {mod};\n" if wiring_twice else "")
+        wiring = f"mod {mod};\nuse {mod}::*;\n" + (f"mod {mod};\n" if wiring_twice else "") + shim
         self.write(f"{SRC}/lib.rs", wiring + self.read(f"{SRC}/lib.rs"))
         self.write(MANIFEST, self.read(MANIFEST) + f"[{mod}]\n")
         self.commit(subject or f"refactor(cli-lib): extract {mod}.rs")
@@ -133,6 +133,39 @@ class TestVerifyStack(unittest.TestCase):
         self.move("m1", "a", wiring_twice=True)
         self.tag("slice-01-r1", self.proof("m1"))
         self.assertFails("FAIL 3: module m1 not wired exactly once in lib.rs")
+
+    def visible_base(self):
+        """Rebase the fixture on `pub fn a`, `pub(crate) fn b`, private `fn c`."""
+        self.write(f"{SRC}/lib_part1.rs", "pub fn a() {}\npub(crate) fn b() {}\nfn c() {}\n")
+        self.commit("visibility")
+        self.base = self.head()
+
+    def test_pub_use_shim_for_a_moved_pub_item_passes(self):
+        # Amendment 1n: a moved bare-`pub` item keeps its crate-root path.
+        self.visible_base()
+        self.move("m1", "a", vis="pub ", shim="pub use m1::{a};\n")
+        self.tag("slice-01-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+
+    def test_pub_use_shim_for_a_moved_pub_crate_item_fails(self):
+        # The shim would widen a pub(crate) item to the public API.
+        self.visible_base()
+        self.move("m1", "b", vis="pub(crate) ", shim="pub use m1::b;\n")
+        self.tag("slice-01-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: non-wiring line added to aida-cli-lib/src/lib.rs: pub use m1::b;")
+
+    def test_pub_use_shim_naming_an_unmoved_item_fails(self):
+        self.visible_base()
+        self.move("m1", "a", vis="pub ", shim="pub use m1::{a, c};\n")
+        self.tag("slice-01-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: non-wiring line added to aida-cli-lib/src/lib.rs: pub use m1::{a, c};")
+
+    def test_pub_use_shim_for_another_module_fails(self):
+        self.visible_base()
+        self.move("m1", "a", vis="pub ", shim="pub use m2::a;\n")
+        self.tag("slice-01-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: non-wiring line added to aida-cli-lib/src/lib.rs: pub use m2::a;")
 
     def test_wiring_outside_its_file_is_residue(self):
         # Advisor finding 6: `use crate::*;` belongs in the new module only.
