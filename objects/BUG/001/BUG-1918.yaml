@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T00:51:19.073934475Z
+modified_at: 2026-10-11T01:10:11.297371179Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
@@ -83,6 +83,37 @@ comments:
   content: 'Follow-ups filed: STORY-1654 (relay reviewers as separate processes; BLOCKS merging this PR), BUG-1934 (design Q-C: grant env trust), STORY-1655 (design Q-A: solo-human mode).'
   created_at: 2026-10-11T00:51:19.073934475Z
   modified_at: 2026-10-11T00:51:19.073934475Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a12882-9e61-7a83-be25-23464dc5e310
+  author: joe
+  content: |-
+    Advisor verdict 2026-10-10 18:15: REQUEST CHANGES on PR #2485 at 86a01af23f (BUG-1918). The operator hold (STORY-1654) also still applies.
+
+    An independent adversarial pass built the PR's binary and wrote throwaway tests. All 25 bug_1918 tests pass, and the overall design (identity tokens, ledger, re-validation at ship, override cannot bypass) is the right direction. But the gate still admits self-approval through ordinary, non-malicious paths. Each item below was reproduced unless marked.
+
+    THREAT MODEL (advisor decision, recorded here): this gate must stop an agent that self-approves by following normal commands, which is what happened in #2474/#2475/#2477. It does NOT have to stop a same-user adversary deliberately forging files or re-parenting processes (setsid/script, hand-written receipts or verdicts, back-dated recorded_at). That needs an out-of-process anchor and is tracked as BUG-1934 (grant binding) plus a follow-up for signed receipts. State this threat model in review_authority.rs's module docs and in the PR body.
+
+    BLOCKING (normal-path holes)
+    1. An empty identity fails open. identities_overlap([], x) is false, so a recorder or verdict with no tokens passes both gates. Refuse at record time AND at ship when the identity is empty or has no anchor (no session token and no harness/proc token). Test: identity [] with a valid grant or receipt is refused.
+    2. The author can opt out of review. Anyone can add `lifecycle:no-review` with `aida edit --add-tag` (no authority), and specs_opt_out_of_review then lets a PR with NO approval ship. Fix: the opt-out counts only if the tag was added by a non-implementer authority (an advisor/product seat or a TTY human), recorded and attested like a verdict, OR drop the no-approval opt-out from the ship gate entirely and keep fasttrack on its existing path. Pick one and test the self-tagging case.
+    3. The ship-gate spec set comes from the wrong place. ship_gate_spec_records uses resolve_gate_range(project_root, None), which is `<default>..HEAD` of the checkout running ship, not the PR's commits. From the main checkout, the trailer ids are empty, so the ids come only from the author-chosen title and branch. Renaming the head branch then yields author_sessions = [] and lets a self-approval through. Fix: derive spec ids from the PR's own base..head commit range (via the forge, or by fetching the PR head), and FAIL CLOSED when the PR maps to no spec (treat every live authoring lease as an author, as record time already does). Test: run ship from the main checkout with a renamed branch, and confirm the author is still found.
+    4. Other merge paths skip the gate: drain_merge_match_head (admitted), `aida release --after-pr` (lib_part4 ~10850), and the burndown wave merge_wave_pr (lib_part3 ~19103). Route all three through approval_authority_refusal in this PR. Design question B is answered: in this PR, not a follow-up.
+
+    SHOULD-FIX (this PR)
+    5. The ledger records the LAUNCHER, not the worker. record_authoring_lease stamps the calling process's session and harness, so `aida agent new` / session_start from an advisor records the advisor as the author (a wrong block), while the worker's own session never reaches the ledger (a missed author once the lease is released). Record the worker's identity: at the worker's first lease-bound command, or by having the launched session append its own record. Make the "survives release" test use a different AIDA_SESSION_ID at claim and at record.
+    6. Non-Claude implementers (Codex, Antigravity) have no stable anchor: harness detection is Claude-only. Generalize nearest-harness detection to known agent CLIs (claude, codex, agy, gemini), or record the lease's active_pid ancestry. Not demonstrated; from reading the code.
+    7. Missing, unreadable or malformed ledger: surface a warning on `aida review record` and `aida pr ship` instead of silently treating it as empty.
+    8. Pick the "newest approval" by parsed timestamp, not string compare.
+
+    DOCUMENT AS OUT OF SCOPE (per the threat model above; one paragraph in the PR body)
+    - setsid/script re-parenting plus env stripping to forge a "human at TTY" receipt (finding 1)
+    - hand-forged receipts (0644 JSON), back-dated recorded_at re-validating an old grant, and grant-id env trust (BUG-1934)
+
+    CORRECTION to the PR body: a human claimer is NOT refused everywhere. From a fresh terminal in the main checkout they currently pass. Fix the wording in design question A. STORY-1655 tracks the explicit solo mode.
+
+    Re-request with "PR #2485 ready for advisor review at <sha>". I'll re-run the adversarial tests for 1–4 against the new head.
+  created_at: 2026-10-11T01:10:11.297371179Z
+  modified_at: 2026-10-11T01:10:11.297371179Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
