@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T02:16:30.727391721Z
+modified_at: 2026-10-11T02:21:40.989752282Z
 req_type: Task
 tags:
 - closure:pending
@@ -284,6 +284,12 @@ comments:
   content: 'ADVISOR: RESTART 2026-10-10 19:20 (operator request). Routed to ONE attended implementer session (per the standing 10-04 attended-only decision; never headless) with the kickoff brief .aida/handoff/lib-split/prompt.md. Order: TASK-1722 rework first, then slice-05 from origin/main under the pipelined protocol plus the rule-7 amendment. The incremental manifest is used up (all 8 entries extracted), so the next modules come from the signed STORY-1488 map, with each manifest entry added in its own move commit. Shipping stays advisor-gated (rebase-merge).'
   created_at: 2026-10-11T02:16:30.727391721Z
   modified_at: 2026-10-11T02:16:30.727391721Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a128c4-12fd-72e3-8905-c603bd740242
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-10 19:25 (relayed by advisor): the lib split moves from an attended session to a headless relay (relay.sh, seat lib-split), replacing the 10-04 attended-only rule. Basis: the pipelined protocol''s per-tag advisor review, rebase-merge gating that only the advisor or a human can run, and the TASK-1722 checker now cover what the earlier unattended attempts lacked. Brief: .aida/handoff/lib-split/prompt.md. It hard-stops with BLOCKED_ON_HUMAN at design forks, METHOD findings, or more than 2 unreviewed runs. Advisor reviews each stack.'
+  created_at: 2026-10-11T02:21:40.989752282Z
+  modified_at: 2026-10-11T02:21:40.989752282Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
