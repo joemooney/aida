@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-10T21:41:19.723487344Z
+modified_at: 2026-10-11T07:17:08.506068963Z
 req_type: Bug
 tags:
 - contained
@@ -34,6 +34,42 @@ relationships:
   target_id: 019ebc5b-0a32-7223-bf80-6e649b9a173b
   created_at: 2026-10-10T21:41:19.723485047Z
   created_by: joe
+comments:
+- id: 01a129d2-931a-7460-ac8a-cf62449bc57b
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the contained posture's only file-write allow rule is `Edit(/**)` under `--permission-mode dontAsk`, the headless logs show the Claude permission layer denying Edit/Write inside the pool worktree, and the only test asserts the rule string exists.
+
+    Problem
+    With `[agents] contained = true`, the implementer launches with `--permission-mode dontAsk` plus a settings file whose allow list is `["Edit(/**)"]`. In practice Claude Code denied every Edit/Write ("denied because Claude Code is running in don't ask mode"), so the contained posture cannot ship code.
+
+    Why this is NOT one defect with BUG-1929 and BUG-1930 (checked the three logs)
+    - BUG-1928 is the Claude permission-rule layer: the denial text is the permission-mode message and the config key is `permissions.allow`.
+    - BUG-1929 is the OS sandbox layer: its failures read "store-write.lock isn't writable from this sandbox" and "cache ... not writable" — the `sandbox` filesystem boundary, a different key and a different path (the main checkout's store/cache). `.aida-store` is not a symlink in the pool worktree (it does not exist there); store_locate resolves to the main checkout.
+    - BUG-1930 is the drain's failure classification/halt logic, which would still be wrong if both boundaries were fixed.
+    Keep all three. Sequence: 1928 first (it decides how the write boundary is expressed), then 1929 extends that same boundary; 1930 is independent.
+
+    Evidence path (verified on main + logs)
+    - aida-cli-lib/src/session.rs:2261-2300 `contained_settings_json`: allow = ["Edit(/**)"] (line 2293); sandbox block has no filesystem allow list.
+    - aida-cli-lib/src/session.rs:6001 — test only asserts the string "Edit(/**)" is present.
+    - /home/joe/ai/aida-relay/.aida/headless-logs/bug-81-01a127b3-*.jsonl: 9 x "Permission to use Edit has been denied", 3 x Write; bug-83: 12 Edit + 3 Bash; story-85: 3 Edit + 3 Bash. `"cwd":"/home/joe/ai/aida-pool-aida-relay-0"` in all three; `/home/joe/ai/aida-relay-bug-81` does not exist (hypothesis 2 confirmed: announced path != real cwd).
+    - Hypothesis 1 (single-slash rule is project-relative, `//` is absolute) is consistent with the denials but unverified against Claude Code's rule grammar; the fix must include a behavioural test, not a string assertion.
+
+    Acceptance criteria
+    - `contained_settings_json` takes the resolved worktree path and emits an absolute, worktree-scoped Edit rule (and whatever Write/MultiEdit need); unit test asserts the rule contains the worktree's absolute path and nothing broader.
+    - Integration test (real `claude -p` behind an env gate, or the closest harness): a contained session can Write a file inside its lease worktree and is denied one level above it.
+    - The write boundary is derived from the worktree the session actually runs in (pool or named); a test feeds a pool worktree and asserts the announced "phase 1 workspace" and the rule path are identical.
+    - A contained `aida drain start --no-human` on a trivial spec in a fixture repo opens a PR (end-to-end smoke, may be nightly-only).
+    - The headless tee's `permission denied` summary is part of the phase failure text when it fires (hand-off to BUG-1930).
+
+    Scope / non-goals
+    - Store/cache writability is BUG-1929; drain classification/halt is BUG-1930.
+    - related:STORY-567 related:STORY-612 related:BUG-1178 related:STORY-1127 related:ADR-61
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:08.506068963Z
+  modified_at: 2026-10-11T07:17:08.506068963Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
