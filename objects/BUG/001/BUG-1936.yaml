@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T13:35:46.280842672Z
+modified_at: 2026-10-11T13:52:38.417867893Z
 req_type: Bug
 tags:
 - factory:night
@@ -76,6 +76,12 @@ comments:
   content: 'FACTORY DRAFT: PR #2518 at c6ce934f43'
   created_at: 2026-10-11T13:35:43.208875641Z
   modified_at: 2026-10-11T13:35:43.208875641Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b3c-aa11-72d1-a2e4-b7f582dab4b4
+  author: joe
+  content: 'FACTORY READY: PR #2518 green at c6ce934f43'
+  created_at: 2026-10-11T13:52:38.417867893Z
+  modified_at: 2026-10-11T13:52:38.417867893Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ee-9841-7d11-b580-163c37355ef4
