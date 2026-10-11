@@ -8,11 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:05:27.587470098Z
-modified_at: 2026-10-11T07:01:49.566391461Z
+modified_at: 2026-10-11T07:02:22.585739308Z
 req_type: Task
 tags:
 - needs-sketch
 - operator-deferred
+- plan:night
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0e3c3-e95c-7a52-a7f1-ca8ae072444d
