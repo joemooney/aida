@@ -1,0 +1,30 @@
+id: 01a12a94-55a3-7f00-9314-1c384b4d8469
+spec_id: BUG-1958
+agreed_id: BUG-1958
+title: 'show linkage follow-ups from STORY-1649 review: aida done skips the warning, double scan, missing --, docs'
+description: |-
+  Minor findings from the night review of PR #2501 (STORY-1649, merged 5ca72fd2b9):
+  1. punt_done.rs:284 handle_done_command: `aida done` marks a spec Completed through transition_to_completed, but it never calls shipped_linkage::warn_if_completed_without_shipped_commit. Add the call and a binary test. Also check MCP status edits.
+  2. shipped_linkage.rs:234-247: an unshipped spec pays for two full scans (origin/main and main, each a git log plus a git grep; about 270ms on this repo), which is the common case for TOON show. Skip the local ref when it is an ancestor of the remote, or when the two resolve to the same SHA.
+  3. shipped_linkage.rs:152, 188-193: there is no '--' after the ref, so a path named like the branch makes git log/grep ambiguous, and the swallowed error gives a false result. Append '--'.
+  4. shipped_linkage.rs:289: the token 'detail=--format json' contains a space and breaks the promise that the line splits on whitespace. Use 'detail=--format=json'.
+  5. docs/cli/01-getting-started.md (aida show, edit, done) doesn't mention the TOON linkage: line or the completion warning and its doctor:no-code opt-out.
+  6. In a shallow clone, completing an old shipped spec warns falsely. Add '(shallow clone)' to the warning when git rev-parse --is-shallow-repository is true.
+  7. shipped_linkage.rs:204: the trace-hit parser splits on the first ':', so a path containing ':' is miscounted. Cosmetic.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T10:48:46.755538061Z
+modified_at: 2026-10-11T10:48:46.755538061Z
+req_type: Bug
+tags:
+- batch:night-2026-10-10
+filed_at:
+  code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: acfbf100-b965-4582-a364-9323fd734a00
