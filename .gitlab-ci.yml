@@ -5,7 +5,8 @@
 # GitLab — zero regression risk to the current pipeline.
 #
 # Linux-only: AIDA supports Linux only (ADR-72), as on GitHub.
-# trace:TASK-1723 | ai:claude The GitHub pull_request-only gates (trace gate / coverage / doc-intent
+# trace:TASK-1723 | ai:claude
+# The GitHub pull_request-only gates (trace gate / coverage / doc-intent
 # — STORY-498/499/603) depend on PR-event vars + an aida-store fetch and are a
 # follow-up here: adapt them to CI_MERGE_REQUEST_* + `git fetch origin
 # aida-store` once a GitLab runner is wired.

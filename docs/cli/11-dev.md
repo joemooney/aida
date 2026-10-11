@@ -48,7 +48,6 @@ Live drain waves pin their launching binary SHA and mtime. `make build-fast` ref
 - `aida release check` — preview the planned release without acting. Always run this first; it surfaces a dirty tree or wrong-branch state before you've tagged anything irreversible.
 - `aida release patch` / `aida release minor` / `aida release major` — the semver level (default `patch`). The single most consequential choice; pick deliberately.
 - `--after-pr <N>` — land an in-flight PR *first* (wait for its checks, squash-merge, sync main) and *then* release. The way to fold a last-minute fix into the release without a separate manual merge round-trip; it refuses if the PR's checks fail, so it can't ship a red PR.
-- `--skip-xplat-check` — accepted for compatibility and ignored; releases are Linux-only and have no cross-platform gate.
 
 **Gotchas.** A clean `git status` is *not* "no work to release" — committed-but-unpushed work is on the branch; read what `aida release check` reports about tree/branch state before assuming.
 
