@@ -10130,7 +10130,8 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// New type: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
+        /// New type: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq
+        // trace:BUG-1920 | ai:claude
         #[clap(long)]
         r#type: Option<String>,
 
