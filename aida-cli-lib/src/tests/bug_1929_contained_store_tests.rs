@@ -173,7 +173,7 @@ fn symlinked_main_lists_both_spellings_of_the_same_files() {
 // settings keep the pre-BUG-1929 shape (no `filesystem` key).
 #[test]
 fn unexpressible_main_emits_no_entries() {
-    for main in ["/tmp/a*b", "relative/main"] {
+    for main in ["/work/a*b", "relative/main"] {
         let main = Path::new(main);
         assert!(sandbox_allow_write_entries(&contained_store_write_paths(main)).is_empty());
         let json = crate::session::contained_settings_json_with_store(
@@ -217,7 +217,7 @@ fn store_boundary_gaps_name_each_exclusion() {
     assert_eq!(gaps.len(), 1, "{gaps:?}");
     assert!(gaps[0].contains("AIDA cache"), "{gaps:?}");
 
-    let gaps = contained_store_boundary_gaps(Path::new("/tmp/a*b"), None, &cache);
+    let gaps = contained_store_boundary_gaps(Path::new("/work/a*b"), None, &cache);
     assert_eq!(gaps.len(), 1, "{gaps:?}");
     assert!(gaps[0].contains("cannot be expressed"), "{gaps:?}");
 }
