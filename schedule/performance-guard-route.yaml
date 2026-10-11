@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Same trip as BUG-1956 (one 27.9s aida show call; 8.7% over the 1s budget, inside the 10% tolerance). Real outlier, not a budget change: ceiling stays per ADR-53. Tracked on BUG-1956.'
+due_since: 2026-10-11T22:16:49.961468394Z
+due_reason: on CronJobFailed:performance-guard
