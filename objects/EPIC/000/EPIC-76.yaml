@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T19:07:37.843699330Z
-modified_at: 2026-10-10T19:08:30.442650052Z
+modified_at: 2026-10-11T07:10:58.969353664Z
 req_type: Epic
 tags:
 - architecture
@@ -47,6 +47,34 @@ relationships:
   target_id: 01a11409-166a-7532-811a-eb943fe701d0
   created_at: 2026-10-10T19:08:30.442646388Z
   created_by: joe
+comments:
+- id: 01a129cc-ef99-77b0-b713-56dde9b912cb
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because it is the agreed home (operator + advisor split, 2026-10-10) for binding architecture signoffs and ~3.2k lines of parked groundwork that would otherwise be orphaned when BUG-1808 closes; guided lane only.
+
+    Problem: BUG-1808's narrow preflight fix grew into a multi-part authority architecture (sealed launch transport, CommittedDispatch publication, store-CAS owner join, pane containment). The design artifacts and signoffs exist but are scattered across BUG-1808 comments and the handoff directory, and TASK-1607 is blocked on the common owner.
+
+    Evidence path (verified):
+    - Branch bug-1808-delegation-publication exists locally and on origin at 6a1733a1 (2026-10-07), 2 commits ahead of main, containing aida-core/src/publication/{durable,effects,mod,observations,preflight,records}.rs and aida-core/src/git_publication/callback_input.rs. None of these paths exist on main (`ls aida-core/src/publication` fails), confirming "groundwork with no callers".
+    - Signoff artifacts exist: .aida/handoff/orchestrator/BUG-1808-sketch.md through BUG-1808-sketch-v5-addendum.md, BUG-1808-independent-verdict.md, BUG-1808-launch-commit-addendum.md, BUG-1808-pane-containment-addendum.md, PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md (hashes recorded in EPIC-74's V4 review comment).
+    - Children: only TASK-1612 (approved). BUG-1808 approved; TASK-1607 approved and blocked by this epic. This epic has zero comments of its own.
+
+    Sketch + advisor signoff (required for architecture): the sketches and signoffs are real but live on BUG-1808 and in the handoff dir, not on this epic. Before any child beyond TASK-1612 is approved: (a) relay the binding signoff chain (callback V5, launch V2, pane containment) onto EPIC-76 as comments or references so the owning spec carries them; (b) re-run the A2 store-CAS V3 independent review (its ~22:20 2026-10-08 run produced no report; no A2/V3 review artifact exists in the handoff dir). No A2 implementation or publication consumer should start before (b).
+
+    Acceptance criteria (child slices and what each proves):
+    1. TASK-1612 lands (sealed executable and owned waiting-child transport, no production release); its tests pass in CI.
+    2. A2 V3 independent review re-run; the report is posted as a comment on EPIC-76 with a verdict line (APPROVED AS AMENDED or CHANGES REQUESTED) and each finding becomes a child spec or is explicitly closed.
+    3. A child defines the smallest production consumer of aida-core/src/publication (CommittedDispatch) so the parked branch ships with a caller. Check after merge: `rg CommittedDispatch aida-cli-lib/src` has at least one non-test call site; the branch is rebased onto current main first (it predates the lib.rs to lib_part1..6 split).
+    4. Pane/containment adapter child scoped by PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md.
+    5. TASK-1607 unblocked: `aida show TASK-1607` reports blocked: false once the common owner lands.
+
+    Scope / non-goals: guided only, no unattended drain, operator merges; no new store engine. Related: related:BUG-1808 related:TASK-1612 related:TASK-1607 related:STORY-1485 related:EPIC-74 (consumer of the common publisher) related:TASK-1717 (writer-lock serialization, in-progress; check for overlap with the store-CAS owner join before approving an A2 child).
+
+    Suggested size: L.
+  created_at: 2026-10-11T07:10:58.969353664Z
+  modified_at: 2026-10-11T07:10:58.969353664Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
