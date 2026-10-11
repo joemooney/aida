@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T07:17:18.243835624Z
+modified_at: 2026-10-11T07:43:57.208532427Z
 req_type: Bug
 tags:
 - contained
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-10-11T07:17:12.664406628Z
   modified_at: 2026-10-11T07:17:12.664406628Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129eb-1f18-74a3-9435-8250eb1c8df0
+  author: joe
+  content: 'ADVISOR (overnight 00:45): left for the OPERATOR, not proxy-approved overnight. Widening the contained-session write boundary is a security-posture change and needs a sketch plus a morning decision.'
+  created_at: 2026-10-11T07:43:57.208532427Z
+  modified_at: 2026-10-11T07:43:57.208532427Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
