@@ -1,0 +1,24 @@
+id: 01a12c2f-c425-7b62-a0b2-f5be7fc3287e
+spec_id: BUG-1971
+agreed_id: BUG-1971
+title: 'BUG-1928 follow-ups: run the real-claude boundary test once; announcement vs rule path on symlinks; cwd fallback outside git; resume path ignores its worktree'
+description: 'Non-blocking findings from the advisor review of PR #2534 (BUG-1928). (1) real_claude_contained_session_write_boundary has never run. Run AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib real_claude_contained once and post the result on BUG-1928, BEFORE BUG-1929 extends this boundary. The harness test checks the rules against a matcher written by the same author, so only the real run proves Claude Code''s grammar agrees. (2) queue_cmd.rs ~12602 announces the boundary from lease.worktree_path (as-given plus canonical), while claude_contained_flags() builds rules from the canonical cwd, so on a symlinked worktree path the two disagree (fails closed). Build the flags with claude_contained_flags_for(&lease.worktree_path), or announce from headless_worktree_root(). (3) headless_worktree_root() (session.rs ~1251) falls back to cwd when no git root is found, which could be $HOME; return no roots instead. (4) spawn_claude_headless_resume (session.rs ~4442) ignores its worktree argument; pass it to claude_contained_flags_for. Acceptance: (1)''s result posted; unit tests for (2)-(4).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T18:18:10.341676814Z
+modified_at: 2026-10-11T18:18:10.341676814Z
+req_type: Bug
+tags:
+- contained
+- follow-up:advisor-review
+- sandbox
+filed_at:
+  code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
