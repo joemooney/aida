@@ -11,12 +11,12 @@ description: |
   Want: the guardrail matches only actual git invocations (the command word and its arguments after shell parsing), not words inside quoted arguments, heredoc bodies, or other commands' arguments. When it blocks, it says why on stderr.
 
   Acceptance: `aida add --description "mentions a force push"` and a heredoc containing that text are allowed; a real force push is still refused with a stated reason.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T14:46:43.241620017Z
+modified_at: 2026-10-11T15:11:42.357648883Z
 req_type: Bug
 tags:
 - factory:night
@@ -109,6 +109,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b85-0d13-7551-9ac6-e670950e77d7
+  author: aida-auto-bump
+  timestamp: 2026-10-11T15:11:42.355105215Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b85-0d15-7cf1-a850-157ecd0c6cf5
+  timestamp: 2026-10-11T15:11:42.357646409Z
+  agent: implementer
+  commit_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
+  summary: Completed via merge ad50bb82
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
@@ -117,3 +130,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T15:11:42.355101268Z
+  completion_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
