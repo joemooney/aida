@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:27:17.703282889Z
-modified_at: 2026-10-11T06:59:41.769972399Z
+modified_at: 2026-10-11T07:16:29.169809331Z
 req_type: Bug
 tags:
 - factory:night
@@ -54,6 +54,15 @@ comments:
   created_at: 2026-10-11T06:59:41.769972399Z
   modified_at: 2026-10-11T06:59:41.769972399Z
   session_id: 01a129bb7d82
+- id: 01a129d1-f971-7c63-a5f7-5677f39e3302
+  author: joe
+  content: |
+    FACTORY READY: PR #2496 green at 408a0811ca3c3342da7bcdf7b88ef93153fabb08
+
+    CI Build (ubuntu-latest) and merge-hold-gate both passed; PR is mergeable. Draft left for the night relay / advisor to review, mark ready, and merge. Factory seat will address review findings in worktree `/home/joe/ai/aida-bug-1813-factory` (branch `bug-1813-work`).
+  created_at: 2026-10-11T07:16:29.169809331Z
+  modified_at: 2026-10-11T07:16:29.169809331Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129bb-7fda-72e1-b287-631139fea06c
   author: aida-session-start
