@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T13:25:01.275134221Z
+modified_at: 2026-10-11T13:27:23.596241526Z
 req_type: Bug
 tags:
 - hooks
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-10-11T13:25:01.275134221Z
   modified_at: 2026-10-11T13:25:01.275134221Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b25-8ccc-7d61-8b29-7d7db0f04c46
+  author: joe
+  content: 'Repro 2026-10-11 06:30 (advisor session): an ''aida faq add'' bash command whose heredoc FAQ body contained a ''git push --force-with-lease'' code example was blocked by aida-git-guardrails.sh with ''PreToolUse:Bash hook error: No stderr output''. The text was in a heredoc, not a command. Workaround: write the body with the Write tool and pass --description-from-file.'
+  created_at: 2026-10-11T13:27:23.596241526Z
+  modified_at: 2026-10-11T13:27:23.596241526Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a129ee-9841-7d11-b580-163c37355ef4
   author: joe
