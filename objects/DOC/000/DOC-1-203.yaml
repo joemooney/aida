@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T10:47:20.022052374Z
+modified_at: 2026-10-11T12:56:51.872474319Z
 req_type: Doc
 tags:
 - factory:night
@@ -251,6 +251,18 @@ comments:
   created_at: 2026-10-11T10:47:20.022052374Z
   modified_at: 2026-10-11T10:47:20.022052374Z
   session_id: acfbf100-b965-4582-a364-9323fd734a00
+- id: 01a12b09-99a0-7051-8c5f-03bb250b7b42
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 81a262a3a6 (fresh reviewer, round 2)
+
+    All five round-1 findings are fixed. Two new over-claims in docs/cli/06-roles-sessions.md conflict with the DOC-6 proxy decision, which says this slice must not claim universal child grants or a human-only roster.
+    1. MAJOR, :49 and :56. The text says roster changes require "a human at a TTY". The roster writers (team_cmd.rs:207/246/265/290) call `require_direct_tty`, which only checks for a terminal; a managed agent at a TTY passes. Say "require an interactive TTY".
+    2. MAJOR, :27 and :41. The text says headless and managed agents always work under a child grant their launcher issued. But `exec_claude_resume` and `exec_claude` (session.rs:4407/:938) set a grant only when one is passed, and without one the child inherits the parent's AIDA_SESSION_GRANT. Limit the claim to the launchers that do issue child grants, or note the exception.
+    3. Minor, :49. "Unless explicitly issued delegation scope": no path issues that scope today (`issue_child` always sets `delegable_seats` empty). Prefer "cannot delegate onward".
+  created_at: 2026-10-11T12:56:51.872474319Z
+  modified_at: 2026-10-11T12:56:51.872474319Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
