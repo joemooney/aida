@@ -14,14 +14,15 @@ description: |-
   Also seen: the BUG-1918 and BUG-1921 sessions were human 'dormant' with pid '-' and no worktree change in 10+ minutes, while the TOON view gave dispatch_state 'moving' for the same rows. Tied to STORY-1653 (show who is driving each spec).
 
   Acceptance: (a) never show Salvageable for a cwd that has a live process, and treat untracked-only changes on the main checkout as not salvageable; human and --all views agree. (b) started and elapsed refer to the same process. (c) different processes in the main checkout get separate rows with their real roles (or at least are not labelled subagent), and the pid is chosen deterministically. (d) dispatch_state agrees with the dormant/stalled label.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:01:08.017370724Z
-modified_at: 2026-10-11T02:35:45.885517765Z
+modified_at: 2026-10-11T06:27:56.951130854Z
 req_type: Bug
 tags:
+- batch:night-2026-10-10
 - ps
 - regression
 - sessions
@@ -32,6 +33,14 @@ comments:
   created_at: 2026-10-11T02:35:45.885517765Z
   modified_at: 2026-10-11T02:35:45.885517765Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+history:
+- id: 01a129a5-8997-7b00-81d0-34deb3bd1458
+  author: joe
+  timestamp: 2026-10-11T06:27:56.951120770Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
