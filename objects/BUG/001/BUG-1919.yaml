@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:51.794153285Z
-modified_at: 2026-10-11T07:07:10.084800782Z
+modified_at: 2026-10-11T07:51:58.606795964Z
 req_type: Bug
 tags:
 - completion
@@ -65,6 +65,15 @@ comments:
   created_at: 2026-10-11T07:07:10.084800782Z
   modified_at: 2026-10-11T07:07:10.084800782Z
   session_id: 01a129b988a3
+- id: 01a129f2-778e-7bc2-886a-30201700c318
+  author: joe
+  content: |
+    FACTORY READY: PR #2497 green at 1f7fddfb0675b6e1f96b2cf3125ab39fc67bc57a
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed; PR is mergeable. Two CI rounds were needed: (1) the sibling-id test fixture used a hyphen-joined branch name that the existing extractor reads as one id, so the fixture now uses a slash-separated branch; (2) the manual chapter used a real spec id as an example, now a `<spec-id>` placeholder. No production logic changed between rounds. Draft left for the night relay / advisor to review, mark ready, and merge. Review fixes go in worktree `/home/joe/ai/aida-bug1919` (branch `bug-1919-work`).
+  created_at: 2026-10-11T07:51:58.606795964Z
+  modified_at: 2026-10-11T07:51:58.606795964Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a12638-b4f6-79a3-9136-4d928974533f
   author: joe
