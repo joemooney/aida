@@ -4715,6 +4715,36 @@ mod tests {
         }
     }
 
+    /// Both orchestrate bodies cap child concurrency, budget each child, make
+    /// the child model explicit instead of assumed, and ask for targeted reads.
+    // trace:BUG-1816 | ai:claude
+    #[test]
+    fn orchestrate_bodies_cap_concurrency_and_budget_children() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        for key in [
+            "skills/aida-orchestrate.md",
+            "skills-portable/aida-orchestrate.md",
+        ] {
+            let body = EMBEDDED_TEMPLATES
+                .get(key)
+                .expect("orchestrate body embedded");
+            for guidance in [
+                "Dispatch implementers (bounded parallel)",
+                "at most 3 live child sessions",
+                "Per-child budget.",
+                "retry silently",
+                "--max-runtime",
+                "--max-tokens",
+                "inherit the orchestrator's model",
+                "Bounded check-ins.",
+                "rg -n <term> <file>",
+                "sed -n '<a>,<b>p' <file>",
+            ] {
+                assert!(body.contains(guidance), "{key} lacks `{guidance}`");
+            }
+        }
+    }
+
     // STORY-1129: default scaffolding keeps CLI-capable agents on the
     // token-efficient CLI/TOON lane and does not register MCP unless opted in.
     // trace:TASK-0424 STORY-1129 | ai:claude,codex
