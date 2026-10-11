@@ -13,11 +13,41 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:22:50.976734054Z
-modified_at: 2026-10-10T21:22:50.976734054Z
+modified_at: 2026-10-11T07:16:57.397275524Z
 req_type: Bug
 tags:
 - cli
 - pr
+comments:
+- id: 01a129d2-67b5-7581-a20f-be1973f30724
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because `pr list` only emits a row per spec ID extracted from the PR title/branch, so a PR with no ID is dropped silently.
+
+    Problem
+    `aida pr list` (and `aida list pr`) builds rows by iterating `extract_specs(title, head_ref_name)`; an open PR whose title and branch carry no spec ID produces zero rows, and the empty-state message even says "with mapped specs". PR #2480 (TASK-1538 split stack, deliberately ID-free) is therefore invisible.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/pr_list.rs:114 `let specs = extract_specs(&pr.title, &pr.head_ref_name);` and :154 `for spec in specs { ... PrListEntry { spec_id: spec, ... } }` — no entry when `specs` is empty.
+    - aida-cli-lib/src/pr_list.rs:36 `"No open PRs with mapped specs found."` confirms the mapped-only contract.
+    - GitLab path (pr_list.rs:172+) has the same shape.
+    - History: TASK-1583 (#2406) introduced the command, TASK-1589 added CI columns; neither considered unmapped PRs.
+
+    Acceptance criteria
+    - With one open PR whose title and branch carry no spec ID, `aida pr list` shows it with Spec ID `—` and its Status/CI/Rebase columns.
+    - When the PR body names a spec (e.g. "STORY-1488/TASK-1538"), the row shows `body:TASK-1538` (first ID) and JSON/TOON carry `spec_id` plus `mapping_source` in {title, branch, body, lease, none}.
+    - `aida pr list --mapped-only` restores the old filter; the empty-state message no longer says "with mapped specs" unless that flag is set.
+    - Unit tests: `pr_list_keeps_unmapped_pr` (no reference anywhere) and `pr_list_maps_body_only_reference`; both assert the PR number appears once.
+    - `aida pr list --json` for an unmapped PR has `"spec_id": null`.
+
+    Scope / non-goals
+    - Per-spec duplication of multi-spec PRs and the informational-check CI misreport are BUG-1935's; do not fold them in.
+    - related:BUG-1935 related:TASK-1583 related:TASK-1589
+
+    Suggested size: S
+  created_at: 2026-10-11T07:16:57.397275524Z
+  modified_at: 2026-10-11T07:16:57.397275524Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
