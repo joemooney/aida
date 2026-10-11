@@ -1,0 +1,29 @@
+id: 01a12847-4f4e-7083-8676-03616f3a8541
+spec_id: BUG-1932
+agreed_id: BUG-1932
+title: 'aida-store silently diverged between GitHub and GitLab for a day: a GitLab-only node registration made later store pushes non-fast-forward, with no alert'
+description: |-
+  Found 2026-10-10 by the advisor. On 2026-10-09 a clone registered as node 11 (spock-joe-aida-gitlab) and committed 14 registry/* commits to gitlab/aida-store only. After that, origin/aida-store gained 438 commits that never reached GitLab; the GitLab store was 438 behind and 14 ahead. Reconciled manually at a8c5e49c1c (a clean merge with no block overlaps and no duplicate node ids), then pushed to both remotes.
+
+  Gaps: (1) nothing surfaced the divergence (doctor/awaiting were silent); (2) whichever path mirrors the store to the second forge dropped non-fast-forward rejections silently; (3) a node can register against a non-canonical forge and fork the registry.
+
+  Want: aida doctor (or awaiting) reports store divergence across configured forges; the store mirror push surfaces non-ff rejections; registration targets the canonical store remote.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T00:05:24.430788370Z
+modified_at: 2026-10-11T00:05:24.430788370Z
+req_type: Bug
+tags:
+- forge
+- gitlab
+- sync
+filed_at:
+  code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
