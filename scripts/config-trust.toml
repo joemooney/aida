@@ -55,6 +55,12 @@ sites = 1
 channels = ["worktree", "home", "write", "other-file", "prose"]
 sites = 33
 
+# Settles a config edit by staging and committing exactly `.aida/config.toml`;
+# it reads no keys from the file. trace:BUG-1938 | ai:claude
+[readers."aida-cli-lib/src/config_commit.rs"]
+channels = ["write"]
+sites = 1
+
 [readers."aida-cli-lib/src/dispatch_routing_config.rs"]
 channels = ["worktree"]
 sites = 1

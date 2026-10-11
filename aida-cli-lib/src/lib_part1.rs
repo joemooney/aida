@@ -3709,6 +3709,10 @@ pub(crate) fn run() -> Result<()> {
                 eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
             }
         }
+        // BUG-1938: the steps below may rewrite the committed config
+        // (provider refresh, capabilities); snapshot its state first.
+        let cfg_root = statusline_project_root();
+        let cfg_was_clean = config_commit::config_is_clean(&cfg_root);
         // STORY-780: remote + ordered pushes, only for a bootstrap init and
         // only now that the store branch exists. trace:STORY-780 | ai:claude
         if let Some(plan) = &bootstrap {
@@ -3719,6 +3723,8 @@ pub(crate) fn run() -> Result<()> {
         // `[project.capabilities]`, and print them so forge-dependent features
         // degrade explicitly. Best-effort. trace:STORY-1467 | ai:claude
         project_capabilities::record_and_report(&statusline_project_root());
+        // trace:BUG-1938 | ai:claude
+        config_commit::finish_init_refresh(&cfg_root, cfg_was_clean);
         // Register the initialized project in the machine-global project
         // registry after bootstrap remote setup, so `repo` reflects the final
         // origin URL when one was configured. Best-effort because this writes

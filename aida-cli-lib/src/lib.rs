@@ -54,6 +54,8 @@ mod compete;
 mod compete_cmd;
 mod complexity_calibration;
 mod config_cmd;
+// trace:BUG-1938 | ai:claude
+mod config_commit;
 mod config_edit;
 mod context_prompt;
 mod coordination;
