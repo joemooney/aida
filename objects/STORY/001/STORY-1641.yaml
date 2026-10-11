@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-10T04:48:14.894996930Z
+modified_at: 2026-10-11T07:11:04.419052697Z
 req_type: Story
 tags:
 - cli
@@ -40,6 +40,35 @@ relationships:
   target_id: 01a12423-b652-7de0-8475-d057043e6ff2
   created_at: 2026-10-10T04:48:14.894992619Z
   created_by: joe
+comments:
+- id: 01a129cd-04e3-7562-bb38-2df7642bbddb
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the extension seam is cheap, well specified, and the resolution order is already enforced in code except for the final external hop.
+
+    Problem: `aida foo` with no built-in fails with clap's unrecognized-subcommand error; there is no way to add a command without changing core, which ADR-71 (draft) makes the porcelain boundary.
+
+    Evidence path (verified):
+    - Entry: aida-cli-lib/src/lib_part1.rs:3195 run() calls user_alias::expand at :3302 and then clap parses. aida-cli-lib/src/user_alias.rs:333 expand gates on is_interactive_human_caller() (TASK-877 invariant) and :168 real_subcommand_names() already yields the built-in set an external must never shadow; reuse both.
+    - No allow_external_subcommands anywhere (`rg allow_external_subcommands aida-cli-lib/src` finds nothing), so the external hop is genuinely absent.
+    - Fuzzy matcher: levenshtein exists twice, aida-cli-lib/src/lib_part5.rs:8020 and aida-cli-lib/src/help_catalog.rs:708; the spec's "EPIC-52 fuzzy matcher" name does not appear in source (`rg EPIC-52` finds nothing), so pick one of these and say which.
+    - Env names AIDA_PROJECT_ROOT, AIDA_STORE_PATH, AIDA_OUTPUT_FORMAT and AIDA_BIN already appear in aida-cli-lib/src (session.rs, lib_part1.rs, cli.rs); reuse them. The caller-kind variable still needs a name.
+    - Dedupe: no prior spec; ADR-71 is the companion decision and is still Draft. This story should not merge before ADR-71 is accepted unless it is explicitly declared standalone.
+
+    Acceptance criteria:
+    1. Test external_subcommand_execs_aida_prefixed_binary: with a temp PATH holding an aida-hello stub, `aida hello a "b c"` passes argv exactly; stub exit 3 gives exit 3; stub killed by SIGTERM gives 143.
+    2. Test builtin_and_user_alias_shadow_external: an aida-list stub never runs for `aida list`; a user alias foo resolves for a human caller while aida-foo runs for an agent caller.
+    3. Test external_receives_context_env: from the project root and a subdirectory the stub sees correct AIDA_PROJECT_ROOT / AIDA_STORE_PATH / AIDA_OUTPUT_FORMAT / AIDA_BIN; outside any project the first two are unset.
+    4. Test unknown_name_without_extension_keeps_error_and_exit_code: `aida nosuch` error text and exit code are unchanged; with aida-hallo on PATH, `aida hello` hints aida-hallo.
+    5. `aida help` and `aida alias list` (human, toon, json) show an external group with the resolved path, and nothing extra when none exist (snapshot test).
+    6. A docs page describes writing an extension: CLI and machine output only, never direct store or cache writes.
+
+    Scope / non-goals: no registry or installer, no command moved out of core; Windows .exe resolution or a documented gap. Related: related:ADR-71 related:TASK-877.
+
+    Suggested size: S.
+  created_at: 2026-10-11T07:11:04.419052697Z
+  modified_at: 2026-10-11T07:11:04.419052697Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
