@@ -161,6 +161,10 @@ sites = 1
 channels = ["worktree", "write"]
 sites = 1
 
+[readers."aida-cli-lib/src/agent_launch.rs"]
+channels = ["prose"]
+sites = 2
+
 [readers."aida-cli-lib/src/lib.rs"]
 channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # load_review_story_inventory adds a worktree/probe site: validate TOML and
@@ -171,7 +175,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 33
+sites = 31
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
