@@ -4452,7 +4452,7 @@ mod tests {
         // closing-brace split below still finds the body end.
         // trace:BUG-1556 | ai:claude
         let lib_source = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
@@ -4460,7 +4460,8 @@ mod tests {
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
             include_str!("lib_part6.rs"),
-            include_str!("merge_hold_cmd.rs")
+            include_str!("merge_hold_cmd.rs"),
+            include_str!("status_awaiting.rs")
         )
         .replace("\r\n", "\n");
         let awaiting = lib_source
