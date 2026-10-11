@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:43:50.345052560Z
-modified_at: 2026-10-11T19:26:04.993486900Z
+modified_at: 2026-10-11T19:26:48.222026266Z
 req_type: Story
 tags:
 - batch:night-2026-10-10
@@ -45,6 +45,13 @@ tags:
 - knowledge
 - show
 - ux
+comments:
+- id: 01a12c6e-999e-7890-8a21-b8ed72678d90
+  author: joe
+  content: 'Library decision: small renderer over pulldown-cmark (0.9, already in the workspace via aida-core/aida-tui) plus unicode-width 0.2 (already in the lock graph transitively) for display-width alignment. Zero new crates. Rejected termimad 0.35.5: its crossterm is 0.29 (matches ours, good), but it pulls ~10 new crates: crokey + crokey-proc_macros, crossbeam (+queue/channel/deque/epoch), lazy-regex + proc macros, minimad, coolor, strict, and syn v3 (a duplicate syn major alongside our syn 2, extra proc-macro compile cost). It also parses with its own minimad dialect rather than CommonMark, so nested lists/tables would not match what pulldown-cmark/HTML reports render. Owning the renderer also makes NO_COLOR layout-only output and deterministic snapshots straightforward.'
+  created_at: 2026-10-11T19:26:48.222026266Z
+  modified_at: 2026-10-11T19:26:48.222026266Z
+  session_id: 01a12c6dee78
 history:
 - id: 01a12790-46ba-7bd3-a5c9-2abcaabda9a0
   author: joe
