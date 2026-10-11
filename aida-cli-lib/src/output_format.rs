@@ -35,7 +35,12 @@ pub(crate) fn agent_output_mode() -> bool {
     // purely because stdout is not a terminal — no explicit pin, no explicit
     // `AIDA_AGENT_OUTPUT` — nudge the caller (on STDERR, so piped STDOUT stays
     // clean) toward `--format` the first time. trace:STORY-764 | ai:claude
-    if agent && pin.is_none() && env.is_none() && !stdout_is_tty {
+    // BUG-1813: the decision is the pure [`toon_switch_hint_applies`] so it is
+    // unit-tested, and it also requires stderr to be a terminal — when a script
+    // captures `2>&1` there is no human to nudge, only output to pollute.
+    // trace:BUG-1813 | ai:claude
+    let stderr_is_tty = std::io::stderr().is_terminal();
+    if toon_switch_hint_applies(pin, env.as_deref(), stdout_is_tty, stderr_is_tty) {
         maybe_emit_toon_switch_hint();
     }
     agent
@@ -265,6 +270,104 @@ pub(crate) fn render_list_fields_table<F>(
     }
 }
 
+/// STORY-764's one-time nudge, emitted on STDERR when output auto-switched to
+/// TOON because stdout is piped. Kept as a constant so the test asserts the
+/// exact text the user sees.
+// trace:BUG-1813 | ai:claude
+pub(crate) const TOON_SWITCH_HINT: &str =
+    "note: stdout is not a terminal — aida switched to compact TOON output. \
+     Pin a format with `--format human|toon|json` or AIDA_OUTPUT_FORMAT to keep scripts stable.";
+
+/// File name of the once-marker that silences [`TOON_SWITCH_HINT`] after its
+/// first appearance; lives under a project's `.aida/` or, outside a project,
+/// under `~/.aida/`.
+// trace:BUG-1813 | ai:claude
+pub(crate) const TOON_SWITCH_HINT_MARKER: &str = ".format-hint-shown";
+
+/// Pure decision: does the STORY-764 auto-switch hint apply? True only on the
+/// REAL auto-switch path — no `--format` / `AIDA_OUTPUT_FORMAT` pin, no
+/// `AIDA_AGENT_OUTPUT`, stdout not a terminal (with no pin and no env the
+/// agent verdict is exactly `!stdout_is_tty`) — AND stderr is a terminal.
+/// A pinned format was the caller's explicit choice, so there is nothing to
+/// hint about; a non-terminal stderr means no human is watching (cron, CI,
+/// MCP, a `2>&1` capture), so the hint would only pollute captured output.
+/// That keeps the hint for the case STORY-764 built it for: a human at a
+/// terminal piping `aida … | grep` for the first time.
+// trace:BUG-1813 | ai:claude
+pub(crate) fn toon_switch_hint_applies(
+    pin: Option<OutputFormat>,
+    agent_env: Option<&str>,
+    stdout_is_tty: bool,
+    stderr_is_tty: bool,
+) -> bool {
+    pin.is_none() && agent_env.is_none() && !stdout_is_tty && stderr_is_tty
+}
+
+/// Where the once-marker lives: the project's `.aida/` when inside a project,
+/// else the user's `~/.aida/` so a shell outside any project still remembers
+/// the hint was shown, else `None` (nowhere to persist it).
+// trace:BUG-1813 | ai:claude
+pub(crate) fn toon_switch_hint_marker(
+    project_root: Option<&std::path::Path>,
+    home: Option<&std::path::Path>,
+) -> Option<std::path::PathBuf> {
+    project_root
+        .or(home)
+        .map(|dir| dir.join(".aida").join(TOON_SWITCH_HINT_MARKER))
+}
+
+/// Write [`TOON_SWITCH_HINT`] to `err` at most once per `marker`. The marker is
+/// persisted FIRST and the hint is written only when that succeeded: a hint
+/// that cannot be remembered would otherwise reappear on every invocation
+/// (each script call is a fresh process), which is exactly the spam this guards
+/// against. `None` (nowhere to persist), an existing marker, or an unwritable
+/// marker all mean silence. Returns true when the hint was written.
+// trace:BUG-1813 | ai:claude
+pub(crate) fn emit_toon_switch_hint_once(
+    marker: Option<&std::path::Path>,
+    err: &mut dyn std::io::Write,
+) -> bool {
+    let Some(marker) = marker else {
+        return false;
+    };
+    if marker.exists() {
+        return false;
+    }
+    if marker
+        .parent()
+        .is_some_and(|dir| std::fs::create_dir_all(dir).is_err())
+    {
+        return false;
+    }
+    if std::fs::write(marker, b"").is_err() {
+        return false;
+    }
+    let _ = writeln!(err, "{TOON_SWITCH_HINT}");
+    true
+}
+
+/// STORY-764: emit the first-pipe format hint at most once. Guarded first by a
+/// process-once `OnceLock`, then by the once-marker from
+/// [`toon_switch_hint_marker`] (project `.aida/`, else `~/.aida/`). Real
+/// filesystem + real stderr; the testable logic is [`emit_toon_switch_hint_once`].
+// trace:STORY-764 | ai:claude
+// trace:BUG-1813 | ai:claude
+pub(crate) fn maybe_emit_toon_switch_hint() {
+    static PROCESS_ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if PROCESS_ONCE.set(()).is_err() {
+        return; // already fired in this process
+    }
+    let root = find_project_root().ok();
+    let home = crate::home_dir();
+    let marker = toon_switch_hint_marker(root.as_deref(), home.as_deref());
+    let _ = emit_toon_switch_hint_once(marker.as_deref(), &mut std::io::stderr());
+}
+
 #[cfg(test)]
 #[path = "tests/task970_agent_output_tests.rs"]
 mod task970_agent_output_tests;
+
+// trace:BUG-1813 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1813_toon_hint_tests.rs"]
+mod bug_1813_toon_hint_tests;

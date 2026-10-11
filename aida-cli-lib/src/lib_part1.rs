@@ -2052,40 +2052,6 @@ pub(crate) fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<(
     Ok(())
 }
 
-/// STORY-764: emit the first-pipe format hint at most once. Guarded first by a
-/// process-once `OnceLock`, then by a per-project marker file under `.aida/` so
-/// the nudge shows once and then gets out of the way (the durable reference is
-/// the README + `docs/environment-variables.md`). All best-effort: a missing
-/// project root or an unwritable marker just falls back to once-per-process.
-// trace:STORY-764 | ai:claude
-pub(crate) fn maybe_emit_toon_switch_hint() {
-    static PROCESS_ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-    if PROCESS_ONCE.set(()).is_err() {
-        return; // already fired in this process
-    }
-    // Per-session/project suppression: skip if we've shown it here before.
-    // Fall back to global if run outside a project. trace:BUG-1813 | ai:antigravity
-    let marker = find_project_root()
-        .ok()
-        .map(|root| root.join(".aida").join(".format-hint-shown"))
-        .or_else(|| crate::home_dir().map(|h| h.join(".aida").join(".format-hint-shown")));
-    if let Some(path) = &marker {
-        if path.exists() {
-            return;
-        }
-    }
-    eprintln!(
-        "note: stdout is not a terminal — aida switched to compact TOON output. \
-         Pin a format with `--format human|toon|json` or AIDA_OUTPUT_FORMAT to keep scripts stable."
-    );
-    if let Some(path) = &marker {
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(path, b"");
-    }
-}
-
 /// True when there is no human at the keyboard to answer a `Type 'y' to
 /// confirm:` prompt — agent output mode is forced, or stdin is not a TTY. In
 /// this state reading the prompt only hits EOF: the answer is never 'y', so the
