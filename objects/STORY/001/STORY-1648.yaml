@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:20.116652715Z
-modified_at: 2026-10-11T13:36:19.584733258Z
+modified_at: 2026-10-11T13:38:23.524590105Z
 req_type: Story
 tags:
 - dev-tooling
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-10-11T07:48:39.033669185Z
   modified_at: 2026-10-11T07:48:39.033669185Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b2f-9ea4-7a33-8108-c1666edd9926
+  author: joe
+  content: 'FACTORY PLAN (night): (1) New focused module aida-cli-lib/src/main_checkout_drift.rs: pure parser of `git status --porcelain=v2 --branch` into CheckoutDrift {branch, upstream, ahead, behind, tracked paths, untracked paths}; is_drifted() (tracked/untracked changes, off main/master, ahead/behind upstream; no-upstream alone is not drift); summary_line() producing ''main checkout: N tracked changes, M untracked · on <branch> · <ahead/behind origin>''; probe() runs one `git --no-optional-locks status`; doctor_findings() lists drifting paths with best-effort lease attribution by mtime (latest lease started before the file mtime), never deletes. (2) Session-context hook template master: same line via git rev-parse --git-common-dir (works from a linked worktree) + one git status parsed in awk; silent when clean; AIDA_MAIN_CHECKOUT_DRIFT=off opt-out. (3) statusline_cmd.rs: red ''⌂!'' segment when the main worktree has drifted. (4) doctor: new opt-in-path category main-checkout-drift (alias table in lib_part2, small) appended in doctor_cmd.rs. Tests: Rust unit tests in tests/story_1648_main_checkout_drift_tests.rs (parser: clean, tracked-dirty, untracked-only, off-main, behind origin, detached; statusline marker clean vs dirty; doctor attribution + temp tree byte-identical after scan on a real git fixture; alias normalization); shell test tests/test_session_context_drift.sh (five fixtures + worktree case + <50ms delta timing via opt-out comparison, stub aida, no cargo) wired into ci.yml. Then make sync-templates/check-templates, check-ci-fast. Risks: compile-correctness without local build; statusline hot-path cost of one git status in the main checkout.'
+  created_at: 2026-10-11T13:38:23.524590105Z
+  modified_at: 2026-10-11T13:38:23.524590105Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-6977-71d0-91cb-519cb047237b
   author: joe
