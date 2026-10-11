@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T06:17:43.438846022Z
+modified_at: 2026-10-11T06:20:26.038761843Z
 req_type: Task
 tags:
 - closure:pending
@@ -382,6 +382,12 @@ comments:
   created_at: 2026-10-11T06:17:43.438846022Z
   modified_at: 2026-10-11T06:17:43.438846022Z
   session_id: 26c63616-b019-4504-a8d9-08023c744952
+- id: 01a1299e-a836-7ac1-82cd-31107cb56dea
+  author: joe
+  content: 'ADVISOR: run 3 re-approved at 15cb84f815 (slice-12-r2). The only change since 8a8a5382a0 is the ''tooling:'' BUG-1948 fix: it holds crate::test_env::env_lock() across both renders. That''s correct, because EnvVarsGuard (the AIDA_OUTPUT_FORMAT setters) takes the same lock (test_env.rs:162), nesting panics rather than deadlocking, and no production path takes it. The tag is annotated with numeric proofs. I''ll rebase-merge once Build is green, then complete BUG-1948 by hand (the rebase-merge carries no (BUG-1948) trailer, by protocol).'
+  created_at: 2026-10-11T06:20:26.038761843Z
+  modified_at: 2026-10-11T06:20:26.038761843Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
