@@ -1,0 +1,6 @@
+Plain, bold, italic, both, `inline code`, struck and a link
+(https://example.com/docs).
+
+  │ fn main() {
+  │     println!("hi");
+  │ }

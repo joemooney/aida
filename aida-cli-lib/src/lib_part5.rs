@@ -5371,6 +5371,14 @@ pub(crate) fn render_tree_node(
 }
 
 pub(crate) fn print_comment(comment: &Comment, indent: usize) {
+    print_comment_with(comment, indent, None);
+}
+
+/// [`print_comment`], rendering each body as terminal markdown laid out for
+/// `markdown_width` columns when it is `Some` (human output at a TTY, not
+/// `--raw`). `None` prints the body exactly as stored.
+// trace:STORY-1652 | ai:claude
+pub(crate) fn print_comment_with(comment: &Comment, indent: usize, markdown_width: Option<usize>) {
     let indent_str = "  ".repeat(indent);
     println!();
     println!("{}{}:", indent_str, comment.id.to_string().yellow());
@@ -5414,11 +5422,27 @@ pub(crate) fn print_comment(comment: &Comment, indent: usize) {
             aida_core::mailbox::provenance_label(&comment.author, Some(orig)).magenta()
         );
     }
-    println!("{}  {}", indent_str, comment.content);
+    match markdown_width {
+        Some(width) => {
+            let body_indent = format!("{indent_str}  ");
+            let rendered = crate::markdown_render::render_markdown_for_terminal(
+                &comment.content,
+                width.saturating_sub(body_indent.len()),
+            );
+            for line in rendered.lines() {
+                if line.is_empty() {
+                    println!();
+                } else {
+                    println!("{body_indent}{line}");
+                }
+            }
+        }
+        None => println!("{}  {}", indent_str, comment.content),
+    }
 
     if !comment.replies.is_empty() {
         for reply in &comment.replies {
-            print_comment(reply, indent + 1);
+            print_comment_with(reply, indent + 1, markdown_width);
         }
     }
 }

@@ -9897,6 +9897,15 @@ pub enum Command {
         // trace:BUG-1502 | ai:codex
         #[clap(long, conflicts_with_all = ["tree", "card"])]
         json: bool,
+
+        /// Print the description and comments as raw markdown source instead
+        /// of rendering headings, emphasis, lists and tables for the terminal.
+        /// Rendering only happens in human output at an interactive terminal;
+        /// piped, TOON and JSON output are always raw. `AIDA_MARKDOWN=raw`
+        /// sets this for every invocation.
+        // trace:STORY-1652 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        raw: bool,
     },
 
     /// List or write proxy-approval ledger comments.

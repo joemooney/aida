@@ -92,6 +92,8 @@ mod knowledge_list;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod mailbox_root;
+// trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
+mod markdown_render;
 mod memory_doc;
 mod merge_hold_cmd;
 mod output_format;

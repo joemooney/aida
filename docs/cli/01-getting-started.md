@@ -100,8 +100,9 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--tree` (+ `--depth`) — show the spec *and its descendants* as an indented hierarchy. The quick "what's under this EPIC" without leaving `show`.
 - `--rels` / `--relations` — force every relationship edge to print. Without it, `show` summarizes (lists edges when few, otherwise a count + pointer to `rel list`) to keep the view readable on hub specs.
 - `-c/--comments` — inline the comment bodies (design discussion, doc seeds) rather than just the count.
+- `--raw` — print the description and comments as their markdown source. At an interactive terminal, human output renders that markdown: styled headings and emphasis, indented lists and code blocks, and tables drawn as aligned boxes that fit the terminal width. `AIDA_MARKDOWN=raw` does the same for every run.
 
-**Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`.
+**Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
 
 **Chains with** — the natural stop between `list` (found it) and acting (`edit` / `queue work` / `comment add`).
 
