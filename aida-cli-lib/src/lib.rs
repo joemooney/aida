@@ -165,6 +165,7 @@ mod shipped_linkage;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
+mod trace;
 mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
@@ -216,6 +217,7 @@ use status_awaiting::*;
 use status_cmd::*;
 use statusline_root::*;
 use store_push_pull::*;
+use trace::*;
 use tui_entry::*;
 use upgrade_release::*;
 use usage_mcp_helpers::*;
