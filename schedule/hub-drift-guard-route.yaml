@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'aida-store: gitlab was 2 commits behind origin and fast-forwardable (gitlab ⊂ origin verified); pushed origin/aida-store to gitlab, e057441d52..efcdf08ab5. main and v0.15.0 already in sync.'
+due_since: 2026-10-11T08:33:28.305325281Z
+due_reason: on CronJobFailed:hub-drift-guard
