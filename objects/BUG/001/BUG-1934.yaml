@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-11T15:20:49.952249142Z
+modified_at: 2026-10-11T15:20:53.256288971Z
 req_type: Bug
 tags:
 - review
@@ -50,6 +50,12 @@ comments:
   created_at: 2026-10-11T07:44:03.806917287Z
   modified_at: 2026-10-11T07:44:03.806917287Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-7508-7e10-b07c-07719a5ff02c
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. High priority. Sequence: on top of PR #2485 after it merges (tier 1 of batch:2026-10-11, after STORY-1654 and BUG-1918), not in parallel. Acceptance per the night triage comment: grant binding recorded at issue, presenter-identity overlap checked at record and ship, doctor reports the refusal reason.'
+  created_at: 2026-10-11T15:20:53.256288971Z
+  modified_at: 2026-10-11T15:20:53.256288971Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
