@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:46:33.091000129Z
-modified_at: 2026-10-11T18:46:45.834133900Z
+modified_at: 2026-10-11T18:46:46.833059565Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -16,6 +16,13 @@ tags:
 - flaky
 - follow-up:advisor
 - history-cache
+comments:
+- id: 01a12c49-f531-7662-b745-39c9eff4a4c2
+  author: joe
+  content: 'ADVISOR: approved and routed to the NIGHT relay, ahead of batch:2026-10-11 tier 1, because a flaky test on main reds unrelated PRs. Root cause first; never weaken or ignore the test.'
+  created_at: 2026-10-11T18:46:46.833059565Z
+  modified_at: 2026-10-11T18:46:46.833059565Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12c49-edab-73e0-b099-d2a277af77da
   author: joe
