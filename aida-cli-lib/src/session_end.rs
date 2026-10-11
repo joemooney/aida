@@ -943,6 +943,26 @@ mod task_1171_eval_channel_tests;
 #[path = "tests/bug_0445_init_side_channel_tests.rs"]
 mod bug_0445_init_side_channel_tests;
 
+/// BUG-1952: the root `session end` resolves every runtime-state path against.
+/// A main checkout (real `.git` directory) is returned unchanged. From a linked
+/// worktree, git's own registry names the main checkout (via the shared
+/// common dir, which survives the worktree's `.aida` symlinks being stripped),
+/// and that is used when it is a real checkout. Anything else — a bare main, a
+/// submodule, git unavailable — keeps the invocation root, which is the
+/// pre-fix behavior.
+// trace:BUG-1952 | ai:claude
+pub(crate) fn resolve_session_end_root(invocation_root: &std::path::Path) -> std::path::PathBuf {
+    if invocation_root.join(".git").is_dir() {
+        return invocation_root.to_path_buf();
+    }
+    let main = main_worktree_root_from(invocation_root);
+    if main != invocation_root && main.join(".git").is_dir() {
+        main
+    } else {
+        invocation_root.to_path_buf()
+    }
+}
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn session_end(
@@ -961,7 +981,12 @@ pub(crate) fn session_end(
     remove: bool,
 ) -> Result<()> {
     let _ = return_to_pool; // returning is now the default; flag kept for compat
-    let project_root = find_project_root()?;
+                            // BUG-1952: run from inside the worktree being ended, `find_project_root`
+                            // stops at the worktree's `.git` file. Resolve the MAIN checkout now, before
+                            // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
+                            // peer guard, pool checks and store detection below never resolve against
+                            // the dying tree. trace:BUG-1952 | ai:claude
+    let project_root = resolve_session_end_root(&find_project_root()?);
     let leases = list_leases(&project_root);
     if leases.is_empty() {
         // BUG-779: a BARE `session end` with nothing to end is a benign no-op
