@@ -184,7 +184,9 @@ implementer, half of each for a reviewer. The budget flags on `aida queue work`
 (`--max-runtime`, `--max-tokens`, `--no-progress-minutes`) apply only to
 `--auto-complete` drains, which this skill does not dispatch, so for the
 children this skill launches **you** are the budget: the ELAPSED column of
-`aida ps` is the clock, and the child's own usage report is the meter. When a
+`aida ps` is the clock. A child reports its token usage only when it finishes,
+so the time budget is the one you enforce live; check the token budget against
+the child's final usage report and treat an overrun as exceeded. When a
 child runs past its budget: stop it (`TaskStop`, or `aida agent stop <name>`
 for an AIDA-launched seat), read its final report or
 `aida tail <SPEC> --no-follow -n 40`, record a PROXY DECISION on the spec with
@@ -214,11 +216,14 @@ The implementer brief must include:
 - Commit as `[AI:<tool>] type(scope): summary (<SPEC>)`, push the branch, and
   set the spec to `done`. **Don't open a PR.**
 
-**Model.** Children inherit the orchestrator's model unless you set one. Pass
-the model explicitly on the dispatch (`model` on `Agent`; `--model` on
-`aida queue work` and `aida agent new <vendor>`) rather than assuming the
-vendor default. Only store, lock or authority code justifies a stronger model
-than the parent's, and the brief says why.
+**Model.** Only the `Agent` tool inherits the orchestrator's model by default.
+For an AIDA-launched child, an unset model means the `[agents.<vendor>] model`
+config or, when that is empty, the vendor default. Pass the
+parent's model explicitly to inherit it: `--model` on `aida queue work`,
+`aida agent new claude` and `aida agent new codex`
+(`aida agent new antigravity` has no model option). Only store, lock or
+authority code justifies a stronger model than the parent's, and the brief
+says why.
 
 ### 5. Fresh review of every branch
 

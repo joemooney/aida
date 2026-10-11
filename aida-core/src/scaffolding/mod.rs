@@ -4735,13 +4735,27 @@ mod tests {
                 "retry silently",
                 "--max-runtime",
                 "--max-tokens",
-                "inherit the orchestrator's model",
+                "parent's model explicitly to inherit it",
+                "`aida agent new codex`",
+                "time budget is the one you enforce live",
                 "Bounded check-ins.",
                 "rg -n <term> <file>",
                 "sed -n '<a>,<b>p' <file>",
             ] {
                 assert!(body.contains(guidance), "{key} lacks `{guidance}`");
             }
+        }
+        // The command summary carries the same cap and budget sentence.
+        let command = EMBEDDED_TEMPLATES
+            .get("commands/aida-orchestrate.md")
+            .expect("orchestrate command embedded");
+        for guidance in [
+            "Keep at most 3 child sessions live",
+            "wall-clock and token budget",
+            "state the\n   child's model explicitly",
+            "never retried silently",
+        ] {
+            assert!(command.contains(guidance), "command lacks `{guidance}`");
         }
     }
 

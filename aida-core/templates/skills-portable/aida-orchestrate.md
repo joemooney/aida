@@ -282,7 +282,9 @@ implementer, half of each for a reviewer. The budget flags on `aida queue work`
 (`--max-runtime`, `--max-tokens`, `--no-progress-minutes`) apply only to
 `--auto-complete` drains, which this skill does not dispatch, so for the
 children this skill launches **you** are the budget: the ELAPSED column of
-`aida ps` is the clock, and the child's own usage report is the meter. When a
+`aida ps` is the clock. A child reports its token usage only when it finishes,
+so the time budget is the one you enforce live; check the token budget against
+the child's final usage report and treat an overrun as exceeded. When a
 child runs past its budget: stop it (`aida agent stop <name>`, or the harness's
 own job control), read its final report or
 `aida tail <SPEC> --no-follow -n 40`, record a PROXY DECISION on the spec with
@@ -312,12 +314,14 @@ The implementer brief must include:
 - Commit as `[AI:<tool>] type(scope): summary (<SPEC>)`, push the branch, and
   set the spec to `done`. **Don't open a PR.**
 
-**Model.** Children inherit the orchestrator's model unless you set one. Pass
-the model explicitly on the dispatch (`--model` on `aida queue work` and on
-`aida agent new <vendor>`) rather than assuming the vendor default. Only store,
-lock or authority code justifies a stronger model than the parent's, and the
-brief says why; for that code pick the strongest model and vendor available,
-never agy.
+**Model.** An AIDA-launched child does not inherit your model: an unset model
+means the `[agents.<vendor>] model` config or, when that is empty, the vendor
+default. Pass the parent's model explicitly to inherit it: `--model` on
+`aida queue work`, `aida agent new claude` and `aida agent new codex`. The
+antigravity lane (`aida agent new antigravity`) has no model option, so it runs
+the configured or vendor default. Only store, lock or authority code justifies
+a stronger model than the parent's, and the brief says why; for that code pick
+the strongest model and vendor available, never agy.
 
 Watch the fleet with `aida ps` and `aida tail <SPEC> --no-follow -n 40`. A
 session that makes no progress is stopped with `aida agent stop <name>` or the
