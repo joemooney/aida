@@ -1,0 +1,43 @@
+id: 01a129db-f6f0-7d71-80cc-222532193aad
+spec_id: BUG-1952
+agreed_id: BUG-1952
+title: aida session end run from inside its own worktree strips the .aida symlinks first and then resolves the mcp-claim, manifest, BUG-483 peer guard and pool checks against the dead paths
+description: |
+  Problem: when `aida session end` runs with its cwd inside the worktree it is ending, `find_project_root()` (kernel.rs:186 → find_project_root_from, which stops at the first `.git` entry) returns the WORKTREE, not the main checkout. `session_end` (lib_part3.rs:3294) then uses that `project_root` for every runtime-state path. At :3592-3596 it unlinks `<wt>/.aida-store` and strips the `<wt>/.aida/sessions` symlink (`unlink_worktree_aida_runtime`, :12679), after which every later lookup against `project_root` resolves to a path that no longer exists:
+
+  - :3693 mcp-claim reap: `mcp_claim_path(&leases_dir(&project_root), ..)` → NotFound is swallowed, the claim leaks (BUG-694 scenario re-opens).
+  - :3717 `release_claim(&project_root.join(".aida-store"), ..)` returns early on `!exists()`.
+  - :3733 manifest delete skipped. Main currently has 29 `.manifest.toml` files with no matching lease.
+  - :3804 `list_leases(&project_root)` is empty, so the BUG-483 shared-worktree guard never fires and a peer's lease on the same worktree does not stop `git worktree remove --force`.
+  - :3623/:3836 `is_pool_worktree(<wt>, ..)` is false (`.aida/worktree-pool` is never linked into a worktree), so a pooled tree is deleted instead of returned, and the dirty gate refuses instead of salvaging.
+  - :4024 `detect_distributed_store_from(<wt>)` is None after removal, so the mailbox digest and store auto-push are skipped.
+
+  The flow is anticipated: :3769-3792 captures `starting_cwd`, computes `cwd_was_inside_worktree` and chdirs to `project_root` (which in this case is the worktree being removed). Only the lease and activity paths are canonicalized first (BUG-56). The BUG-61 guard (:3455) only refuses for live `claude` processes with cwd under the worktree; a codex/gemini agent, a human shell, or a relay step running `aida session end` from inside the worktree passes it.
+
+  Evidence path: `link_worktree_runtime_state` (lib_part3.rs:12626) links `sessions` and `.aida-store` as symlinks (confirmed on a live worktree under ~/ai/). No test runs `session_end` with cwd inside a worktree; the BUG-483 test is pure-function. Reproduce: `aida worktree add <spec>`, `cd` into it, `aida session end`; then check the mcp-claim file and manifest under the main checkout's `.aida/sessions/`, which survive.
+
+  Acceptance:
+  - `session_end` resolves `project_root` to the main checkout at the top (lease `parent_project_root`, or `main_worktree_root_from`) and uses it for the mcp-claim, release_claim, manifest, BUG-483 peer check, pool detection and post-removal store detection.
+  - A test runs `session_end` with cwd inside the worktree and asserts the mcp-claim and manifest are removed and the BUG-483 peer guard still fires.
+  - BUG-1947's live-process check, when it lands, is evaluated against the same resolved root.
+
+  Found by the night-fable review sweep of worktree/session end paths. Related: BUG-56, BUG-61, BUG-483, BUG-694, BUG-734, BUG-1947. Size M.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T07:27:23.888391365Z
+modified_at: 2026-10-11T07:27:23.888391365Z
+req_type: Bug
+tags:
+- found:night-2026-10-10
+- session-end
+- worktree
+filed_at:
+  code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
