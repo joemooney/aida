@@ -1505,6 +1505,9 @@ fn commit_init_scaffolding(
     }
     match git_ops::commit(root, "chore: scaffold AIDA") {
         Ok(true) => {
+            // Lets the end-of-init config refresh follow with its own commit
+            // instead of leaving the file dirty. trace:BUG-1938 | ai:claude
+            crate::config_commit::mark_init_scaffold_committed();
             println!(
                 "  {} saved your AIDA setup",
                 crate::glyph(crate::glyphs::Glyph::Check).green()

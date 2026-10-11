@@ -2018,6 +2018,22 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
 /// the git remote, list it for store-leg fan-out, install the code-leg
 /// pre-push hook. Idempotent — safe to re-run.
 pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) -> Result<()> {
+    use std::io::IsTerminal;
+    // A config change is committed (non-TTY / accepted prompt) or announced,
+    // never left silently dirty. trace:BUG-1938 | ai:claude
+    let mode = crate::config_commit::mode_for_terminal(std::io::stdin().is_terminal());
+    run_remote_mirror(project_root, name, url, mode).map(|_| ())
+}
+
+/// [`handle_remote_mirror`] with the config-commit decision injected, so
+/// tests can drive both the commit and the hint path without a terminal.
+// trace:BUG-1938 | ai:claude
+fn run_remote_mirror(
+    project_root: &Path,
+    name: &str,
+    url: Option<&str>,
+    mode: crate::config_commit::CommitMode,
+) -> Result<crate::config_commit::ConfigChangeOutcome> {
     if name == "origin" {
         anyhow::bail!(
             "`origin` is the primary hub — name the extra hub to mirror to (e.g. `aida remote mirror gitlab --url <clone-url>`)"
@@ -2056,6 +2072,7 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
     }
 
     // 2. Store-leg fan-out config.
+    let config_was_clean = crate::config_commit::config_is_clean(project_root);
     if add_mirror_remote_to_config(project_root, name)? {
         println!(
             "{check} listed `{name}` in [store.sync] mirror_remotes — store pushes now fan out"
@@ -2067,11 +2084,32 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
     // 3. Code-leg pre-push hook.
     install_mirror_pre_push_hook(project_root)?;
 
+    // 4. Settle the config change. trace:BUG-1938 | ai:claude
+    let outcome = crate::config_commit::finish_config_change(
+        project_root,
+        config_was_clean,
+        mode,
+        &format!("[AI:aida] chore(remote): list {name} as a store mirror"),
+    );
+
     println!();
     println!("Every `git push origin …` now mirrors the pushed code refs to `{name}`");
     println!("(best-effort — a mirror failure warns without blocking the push).");
-    println!("Check hub drift anytime with: aida remote status");
-    Ok(())
+    println!();
+    println!("{}", mirror_next_steps(name));
+    Ok(outcome)
+}
+
+/// The block every `aida remote mirror` run ends with: the first push skips
+/// a mirror origin has not confirmed yet, so bring every hub level now and
+/// check it.
+// trace:BUG-1938 | ai:claude
+fn mirror_next_steps(name: &str) -> String {
+    format!(
+        "Next steps:\n  \
+         aida remote mirror-sync    # bring `{name}` level with origin now\n  \
+         aida remote status         # confirm every hub is in sync"
+    )
 }
 
 // ───────────────────────── multi-hub store reconcile ─────────────────────
@@ -3835,5 +3873,104 @@ host = \"should.not.count\"
             err.to_string().contains("--url"),
             "error must point at --url: {err}"
         );
+    }
+
+    /// A repo with a local identity and a committed `.aida/config.toml`.
+    // trace:BUG-1938 | ai:claude
+    fn repo_with_committed_config(project: &Path) {
+        init_repo_with_commit(project);
+        git(project, &["config", "user.name", "Test"]);
+        git(project, &["config", "user.email", "test@example.invalid"]);
+        git(project, &["config", "commit.gpgsign", "false"]);
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(project.join(".aida/config.toml"), "[store]\n").unwrap();
+        git(project, &["add", ".aida/config.toml"]);
+        git(project, &["commit", "-q", "-m", "add config"]);
+    }
+
+    // The mirror's config edit is never silent: declined/never-commit runs
+    // print the "config changed; commit it" hint and leave HEAD alone.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_reports_config_change() {
+        use crate::config_commit::{config_change_hint, CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Never).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+        let hint = config_change_hint();
+        assert!(
+            hint.contains("config changed: .aida/config.toml")
+                && hint.contains("commit it with: git add .aida/config.toml && git commit"),
+            "hint must name the file and the commit command: {hint}"
+        );
+        let next = mirror_next_steps("mirror");
+        assert!(next.contains("aida remote mirror-sync"), "{next}");
+        assert!(next.contains("aida remote status"), "{next}");
+    }
+
+    // Non-interactive: the config edit lands as its own chore commit and
+    // the file is clean afterwards.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_commits_config_change_when_clean() {
+        use crate::config_commit::{config_is_clean, CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Auto).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::Committed);
+        assert_eq!(config_is_clean(&project), Some(true));
+        assert_eq!(
+            git_out(&project, &["log", "-1", "--format=%s"])
+                .unwrap()
+                .trim(),
+            "[AI:aida] chore(remote): list mirror as a store mirror"
+        );
+        // Re-running changes nothing and commits nothing.
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+        let again = run_remote_mirror(&project, "mirror", None, CommitMode::Auto).unwrap();
+        assert_eq!(again, ConfigChangeOutcome::Unchanged);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+    }
+
+    // Pre-existing edits to the config are never swept into an automated
+    // commit, even non-interactively.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_never_commits_a_dirty_config() {
+        use crate::config_commit::{CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "# operator wip\n[store]\n",
+        )
+        .unwrap();
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Auto).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+        let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
+        assert!(body.contains("# operator wip") && body.contains("mirror"));
     }
 }

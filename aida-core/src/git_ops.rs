@@ -258,6 +258,25 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     }
 }
 
+/// Commit ONLY `paths` (`git commit -m <msg> -- <paths>`), leaving every
+/// other staged change in the index untouched — a setup command that rewrote
+/// one config file must never sweep unrelated work into its commit. Authored
+/// with the same identity redaction as [`commit`]. The caller is expected to
+/// know the paths are changed; any non-zero exit is an error.
+// trace:BUG-1938 | ai:claude
+pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
+    let (_h, public_email) = read_public_identity();
+    let redact = commit_redaction_args(public_email.as_deref());
+    let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
+    argv.extend_from_slice(&["commit", "-q", "-m", message, "--"]);
+    argv.extend_from_slice(paths);
+    let result = git(repo, &argv)?;
+    if !result.success {
+        anyhow::bail!("git commit failed: {}", result.stderr);
+    }
+    Ok(())
+}
+
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
 pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
