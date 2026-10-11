@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-11T01:35:25.573747672Z
+last_run: 2026-10-11T04:20:57.611815189Z
 last_by:
   seat: advisor
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
   vendor: antigravity
 result: done
-note: 'Re-ran doctor check performance: show proportion is within budget (4.2% of 331 vs 10% tolerated; was 14.4% on 10-03). Still tripping only on the single-call ceiling (worst 8044 ms vs 5000). Judged environmental: the host is HDD-bound with heavy I/O stalls, and disk was at 93% before today''s reclaim (see aida-host STORY-4/6). Not a code regression; ceiling NOT raised. If it still trips after the host disk work, investigate the slow call.'
-due_since: 2026-10-11T03:57:38.006462635Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Re-trip 21:35 on the SAME 8044 ms aida show outlier as 18:40. It''s still inside the 24h window, so this keeps re-tripping until it ages out. Overall proportion is healthy (3.5% of 460 vs 10%). The current binary 3bb1454cf0 is at 1.4%. Host io PSI has been 70–80% all evening with three relays building. Same verdict: environmental, ceiling not raised.'
