@@ -11,7 +11,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:27.326683954Z
-modified_at: 2026-10-11T13:55:25.982731907Z
+modified_at: 2026-10-11T13:56:21.311999012Z
 req_type: Bug
 tags:
 - forge
@@ -57,6 +57,12 @@ comments:
   content: 'FACTORY PLAN (night): New module aida-cli-lib/src/config_commit.rs: snapshot whether .aida/config.toml is tracked+clean before a setup command edits it; afterwards commit ONLY that file (new aida_core::git_ops::commit_paths, git commit -- <path>, same identity redaction as commit) when it was clean and mode allows (non-TTY auto, TTY prompt default-Y), otherwise print ''config changed: .aida/config.toml — commit it with: git add ... && git commit ...''. A pre-dirty config is never auto-committed; a failed commit degrades to the hint. remote_create.rs: handle_remote_mirror delegates to run_remote_mirror(mode) which settles the change with subject ''[AI:aida] chore(remote): list <name> as a store mirror'' and ends with a Next steps block (aida remote mirror-sync, aida remote status). init: commit_init_scaffolding marks a process flag on success; lib_part1 init dispatch snapshots config state before finish_remote/record_and_report and calls config_commit::finish_init_refresh, which commits the provider/capabilities refresh only if the scaffold commit was made this run (clone bootstrap / declined prompt -> hint only, preserving BUG-570). Tests: remote_create::handle_remote_mirror_reports_config_change, handle_remote_mirror_commits_config_change_when_clean, handle_remote_mirror_never_commits_a_dirty_config; config_commit unit tests (auto commits only config leaving other staged work, previously dirty never committed, never mode, cleanliness detection, not-a-checkout). Docs: docs/cli/04-git-lifecycle.md mirror paragraph. Risk: compiled only on CI; init --github end-to-end needs gh so covered by unit tests of the shared helper.'
   created_at: 2026-10-11T13:55:25.982731907Z
   modified_at: 2026-10-11T13:55:25.982731907Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b40-10c0-76d1-aebe-1950890ad9f2
+  author: joe
+  content: 'FACTORY DRAFT: PR #2524 at 11c1183172'
+  created_at: 2026-10-11T13:56:21.311999012Z
+  modified_at: 2026-10-11T13:56:21.311999012Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-1f57-7c31-bec0-6229c598696f
