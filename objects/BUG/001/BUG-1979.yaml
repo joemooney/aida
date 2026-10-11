@@ -1,0 +1,28 @@
+id: 01a12cc5-c814-7f82-a0e1-125e670f85cc
+spec_id: BUG-1979
+agreed_id: BUG-1979
+title: aida show markdown rendering ignores AIDA_GLYPHS=ascii
+description: |-
+  Found in the post-merge review of #2540 (STORY-1652). aida-cli-lib/src/markdown_render.rs hard-codes Unicode glyphs: heading rules ═/─ (~:577), bullets • (~:631), blockquote │ (~:845, :859) and box-drawing table borders (~:978-1034). The rest of aida show goes through the glyph profile, so with AIDA_GLYPHS=ascii on a terminal that cannot draw box characters, rendered descriptions show mojibake tables and rules.
+
+  ## Acceptance
+  - With AIDA_GLYPHS=ascii, rendered headings, bullets, blockquotes and table borders use ASCII only (e.g. = - * | +-).
+  - The renderer takes its glyphs from the existing glyph profile rather than literals.
+  - Snapshot tests cover ascii mode for a table and a nested list.
+
+  Also fold in (trivial, same file): the catch_unwind fallback in render_markdown_for_terminal (~:108) still lets the default panic hook print to stderr, so install a silent hook around the render or avoid the panic path; and styling_enabled (~:101) should ignore an empty NO_COLOR value per no-color.org.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T21:02:01.748928563Z
+modified_at: 2026-10-11T21:02:01.748928563Z
+req_type: Bug
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
