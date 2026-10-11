@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: '01:12 advisor: 3 compaction findings, none runaway. fe2e54bf (product relay) finished at 00:33. d28185fc has been idle since 21:07. acdb011f is the factory relay''s session 1, which compacted once while orchestrating 4 parallel implementers; its log is advancing and it''s shipping PRs. No action.'
+due_since: 2026-10-11T15:37:50.517488282Z
+due_reason: on CronJobFailed:watchdog
