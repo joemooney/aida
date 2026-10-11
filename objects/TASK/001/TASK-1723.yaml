@@ -34,12 +34,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:01:40.523945463Z
-modified_at: 2026-10-11T00:01:40.523945463Z
+modified_at: 2026-10-11T00:44:17.828841561Z
 req_type: Task
 tags:
 - batch:next
 - ci
 - platforms
+comments:
+- id: 01a1286a-ea24-7c11-b125-9fff64ca9bf5
+  author: joe
+  content: 'PR #2487 ready for advisor review'
+  created_at: 2026-10-11T00:44:17.828841561Z
+  modified_at: 2026-10-11T00:44:17.828841561Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
