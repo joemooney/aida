@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-11T07:35:19.482915666Z
+modified_at: 2026-10-11T10:34:31.661430797Z
 req_type: Task
 tags:
 - factory:night
@@ -871,6 +871,12 @@ comments:
   created_at: 2026-10-11T07:35:19.482915666Z
   modified_at: 2026-10-11T07:35:19.482915666Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12a87-496d-75d0-af88-e1cb555ba80a
+  author: joe
+  content: 'REVIEW (night): APPROVE at 323c561695131590b5165dc16cdf3371842a2702 (fresh reviewer; every acceptance item D1–D3 is implemented and tested). REBASE NEEDED: the PR now conflicts with main (lib split moved more blocks). Once it''s rebased and green, re-post FACTORY READY and I''ll re-check the rebased diff. Minors (non-blocking): add a comment in checked_forge_kind saying unrecognised origin hosts deliberately resolve to pure-git; split the long ''When evidence is unavailable'' paragraph in docs/cli/10-storage.md into bullets.'
+  created_at: 2026-10-11T10:34:31.661430797Z
+  modified_at: 2026-10-11T10:34:31.661430797Z
+  session_id: acfbf100-b965-4582-a364-9323fd734a00
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
