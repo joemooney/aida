@@ -8,10 +8,40 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-11T00:51:12.553707881Z
+modified_at: 2026-10-11T07:16:54.395608534Z
 req_type: Story
 tags:
 - review
+comments:
+- id: 01a129d2-5bfb-7aa3-a3f9-af9f872dcc6e
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because PR #2485 (BUG-1918, still OPEN) contains no solo carve-out (`grep solo` over its diff is empty), so once it merges a genuinely solo project cannot record any approval; this needs an explicit, audited opt-in rather than a label.
+
+    Problem
+    BUG-1918's identity gate refuses an approval whose recorder overlaps an author session, everywhere. A one-person project with a human at the TTY has no independent session to approve from. Add an audited per-project opt-in so that human (never an agent) may approve their own claim, with the mode visible in the receipt, verdict, doctor and awaiting.
+
+    Evidence path (verified)
+    - `gh pr diff 2485` — review_author_refusal() (diff lines ~896-915) refuses on any identity overlap with no config escape; RecorderAttestation (diff ~3287-3320) has no solo flag. PR state OPEN, so the refusal is not on main yet; this story should land after #2485 or inside its follow-up.
+    - aida-cli-lib/src/config_cmd.rs:560-590 — the [review] section already carries mass_change_mode, run_acceptance_commands, acceptance_command_allow via KnobSpec; a `solo_human` knob fits the same table (note run_acceptance_commands is global-config-only; decide whether solo_human is project- or global-scoped — the description says project).
+    - aida-cli-lib/src/presence.rs:281-314 — an existing TTL-based "solo" presence (set_solo/current_solo, used by advisor_code_gate.rs:195) already exists; the design must say whether solo_human reuses `aida solo` or is a separate durable config key, to avoid two meanings of "solo".
+    - seat_authority.rs:133-138 require_direct_tty() is the existing human-at-TTY floor to reuse.
+
+    Acceptance criteria
+    - `aida config show review.solo_human` defaults to false; setting it true in .aida/config.toml is listed by `aida config` and `aida doctor` prints "review: solo-human mode ON (self-approval permitted for TTY humans)".
+    - Unit test review_authority::solo_human_allows_tty_human_to_approve_own_claim: with solo_human = true and human_at_tty = true, review_author_refusal returns None and the written verdict/receipt carry solo_human: true.
+    - Unit test review_authority::solo_human_never_covers_agents: solo_human = true but recorder lacks the TTY floor (agent/non-TTY) => still refused with the BUG-1918 message.
+    - Unit test: solo_human = false (default) keeps the BUG-1918 refusal byte-identical.
+    - `aida review awaiting` / `aida pr ship` output line names the mode when a solo_human approval is relied on; docs/review-process.md documents the opt-in and its audit trail.
+
+    Scope / non-goals
+    - Does not relax seat grants, roster ceilings or the TTY floor; does not apply to relay/orchestrator reviewers (that is STORY-1654).
+    - related:BUG-1918 related:STORY-1654 related:BUG-1934 related:ADR-3 related:STORY-1415
+
+    Suggested size: M
+  created_at: 2026-10-11T07:16:54.395608534Z
+  modified_at: 2026-10-11T07:16:54.395608534Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
