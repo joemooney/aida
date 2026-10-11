@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:18.266739747Z
-modified_at: 2026-10-11T13:52:38.417867893Z
+modified_at: 2026-10-11T14:46:43.241620017Z
 req_type: Bug
 tags:
 - factory:night
@@ -83,6 +83,17 @@ comments:
   created_at: 2026-10-11T13:52:38.417867893Z
   modified_at: 2026-10-11T13:52:38.417867893Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12b6e-2d29-7fe3-acb7-977186fc9bf6
+  author: joe
+  content: |-
+    REVIEW (merge): REQUEST CHANGES at c6ce934f4303d4e1103b3fee99df262d230d3b44
+
+    1. Advisor ruling violated: `aida-core/templates/hooks/aida-git-guardrails.sh:517-524` exits 2 whenever `strip_shell_literals` fails, for every command, git or not. Hand-fed at this SHA: `echo "unterminated` -> exit 2; a non-git heredoc with no terminator (`cat <<EOF\nhello`) -> exit 2; `python3 -c "print(1)` -> exit 2. A non-git command must never be blocked because the tokenizer could not parse it. Fix: on scanner failure, fail closed only when the raw command would otherwise be inspected as git (e.g. a word-boundary `git` match on the raw $COMMAND); otherwise exit 0. Add fixtures in tests/test_git_guardrails_parse.sh asserting exit 0 for `echo "unterminated` and for an unterminated non-git heredoc; keep the existing git-bearing fail-closed fixtures.
+
+    Every block path already writes its reason to stderr; that half of the ruling holds.
+  created_at: 2026-10-11T14:46:43.241620017Z
+  modified_at: 2026-10-11T14:46:43.241620017Z
+  session_id: 268d52ff-fd05-4376-91d6-c472ac1d6f52
 history:
 - id: 01a129ee-9841-7d11-b580-163c37355ef4
   author: joe
