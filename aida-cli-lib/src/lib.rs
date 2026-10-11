@@ -57,6 +57,8 @@ mod config_cmd;
 // trace:BUG-1938 | ai:claude
 mod config_commit;
 mod config_edit;
+// trace:BUG-1928 | ai:claude — contained-posture write boundary (absolute allowed roots).
+mod contained_boundary;
 mod context_prompt;
 mod coordination;
 mod criteria;

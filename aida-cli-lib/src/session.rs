@@ -2051,11 +2051,23 @@ pub fn claude_headless_args_with_posture_model_and_effort(
 /// trace:STORY-263 | ai:claude
 
 pub fn claude_contained_flags() -> Vec<String> {
+    // BUG-1928: the write boundary is the worktree this process runs in — the
+    // git root of cwd, which `queue work` has already `set_current_dir`'d to the
+    // lease's worktree (pool or named), and the same root the STORY-612 OS
+    // wrapper binds rw. Never the orchestrator's requested path, which the warm
+    // pool may have replaced. trace:BUG-1928 | ai:claude
+    claude_contained_flags_for(&headless_worktree_root())
+}
+
+/// BUG-1928: the contained launch flags with the write boundary scoped to
+/// `worktree` (see `crate::contained_boundary`).
+// trace:BUG-1928 | ai:claude
+pub fn claude_contained_flags_for(worktree: &Path) -> Vec<String> {
     vec![
         "--setting-sources".to_string(),
         "project".to_string(),
         "--settings".to_string(),
-        claude_contained_settings_json(),
+        claude_contained_settings_json(worktree),
     ]
 }
 
@@ -2144,7 +2156,7 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-fn claude_contained_settings_json() -> String {
+fn claude_contained_settings_json(worktree: &Path) -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2157,7 +2169,9 @@ fn claude_contained_settings_json() -> String {
         .as_ref()
         .map(|r| contained_managed_domains_only(r))
         .unwrap_or(false);
-    contained_settings_json(&allowed_hosts, managed_only)
+    // trace:BUG-1928 | ai:claude
+    let write_roots = crate::contained_boundary::contained_write_roots(worktree);
+    contained_settings_json(&allowed_hosts, managed_only, &write_roots)
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2258,9 +2272,18 @@ pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
 /// without-prompt needs `network.allowManagedDomainsOnly` via MANAGED settings
 /// (not this project `--settings`) and is a follow-up — see STORY-605. Pure +
 /// total so the "empty → unchanged" invariant is unit-tested. trace:STORY-605
+///
+/// BUG-1928: `permissions.allow` is the WRITE boundary under `dontAsk` — one
+/// absolute `//<root>/**` rule per file-writing tool for each of `write_roots`
+/// (see `crate::contained_boundary`). It replaces `Edit(/**)`, whose single
+/// leading `/` Claude Code anchors at the project root, so it never covered the
+/// session's worktree and every contained edit was denied. Empty roots → no
+/// allow rule → every edit denied (fails closed).
+// trace:BUG-1928 | ai:claude
 pub(crate) fn contained_settings_json(
     allowed_hosts: &[String],
     managed_domains_only: bool,
+    write_roots: &[PathBuf],
 ) -> String {
     let mut sandbox = serde_json::json!({
         "enabled": true,
@@ -2289,9 +2312,7 @@ pub(crate) fn contained_settings_json(
     }
     serde_json::json!({
         "permissions": {
-            "allow": [
-                "Edit(/**)"
-            ],
+            "allow": crate::contained_boundary::write_allow_rules(write_roots),
             "deny": destructive_command_deny_rules()
         },
         "sandbox": sandbox
@@ -4643,7 +4664,7 @@ mod tests {
     // trace:STORY-605 | ai:claude
     #[test]
     fn empty_egress_allowlist_omits_network_key_unchanged() {
-        let json = contained_settings_json(&[], false);
+        let json = contained_settings_json(&[], false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let sandbox = v.get("sandbox").and_then(|s| s.as_object()).unwrap();
         assert!(
@@ -4676,7 +4697,7 @@ mod tests {
     #[test]
     fn managed_domains_only_adds_allow_managed_flag() {
         // managed-only with NO allowlist → network carries only the flag.
-        let json = contained_settings_json(&[], true);
+        let json = contained_settings_json(&[], true, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             v.pointer("/sandbox/network/allowManagedDomainsOnly"),
@@ -4687,7 +4708,7 @@ mod tests {
             "no allowlist → no allowedDomains key: {json}"
         );
         // composes with an allowlist (both keys present).
-        let json = contained_settings_json(&["github.com".to_string()], true);
+        let json = contained_settings_json(&["github.com".to_string()], true, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             v.pointer("/sandbox/network/allowManagedDomainsOnly"),
@@ -4695,7 +4716,7 @@ mod tests {
         );
         assert!(v.pointer("/sandbox/network/allowedDomains").is_some());
         // default off + empty allowlist → network omitted (unchanged posture).
-        let json = contained_settings_json(&[], false);
+        let json = contained_settings_json(&[], false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(v.pointer("/sandbox/network").is_none());
     }
@@ -4944,7 +4965,7 @@ mod tests {
     #[test]
     fn nonempty_egress_allowlist_adds_allowed_domains() {
         let hosts = vec!["github.com".to_string(), "*.crates.io".to_string()];
-        let json = contained_settings_json(&hosts, false);
+        let json = contained_settings_json(&hosts, false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let domains = v
             .pointer("/sandbox/network/allowedDomains")
@@ -5995,10 +6016,32 @@ mod tests {
         assert_eq!(settings["sandbox"]["enabled"], true);
         assert_eq!(settings["sandbox"]["failIfUnavailable"], true);
         assert_eq!(settings["sandbox"]["allowUnsandboxedCommands"], false);
-        assert!(settings["permissions"]["allow"]
+        // BUG-1928: the allow list is the absolute rule set for the worktree
+        // this process runs in, not the project-relative `Edit(/**)`.
+        // trace:BUG-1928 | ai:claude
+        let allow: Vec<String> = settings["permissions"]["allow"]
             .as_array()
             .unwrap()
-            .contains(&serde_json::Value::String("Edit(/**)".to_string())));
+            .iter()
+            .filter_map(|r| r.as_str().map(str::to_string))
+            .collect();
+        assert!(!allow.contains(&"Edit(/**)".to_string()), "{allow:?}");
+        assert!(
+            !allow.is_empty(),
+            "the worktree must be writable: {allow:?}"
+        );
+        assert!(
+            allow
+                .iter()
+                .all(|r| r.contains("(//") && r.ends_with("/**)")),
+            "every write rule must be absolute: {allow:?}"
+        );
+        assert_eq!(
+            allow,
+            crate::contained_boundary::write_allow_rules(
+                &crate::contained_boundary::contained_write_roots(&headless_worktree_root())
+            )
+        );
         assert!(settings["permissions"]["deny"]
             .as_array()
             .unwrap()

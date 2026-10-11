@@ -3831,8 +3831,12 @@ pub(crate) fn orchestrate_with_resume(
         };
         if let Some((worktree, branch)) = workspace {
             if !json {
+                // BUG-1928: this is the REQUESTED workspace. The child's session
+                // start may serve a warm-pool tree instead; the child announces
+                // the tree it actually runs in (`phase 1 workspace: …`) and the
+                // contained write boundary derived from it. trace:BUG-1928 | ai:claude
                 eprintln!(
-                    "  {} phase 1 workspace: {} [{}]",
+                    "  {} phase 1 workspace requested: {} [{}]",
                     "↳".cyan(),
                     worktree,
                     branch
