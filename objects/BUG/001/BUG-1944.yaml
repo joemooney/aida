@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T14:48:59.870230436Z
+modified_at: 2026-10-11T15:09:54.637310435Z
 req_type: Bug
 tags:
 - auto-bump
@@ -54,6 +54,16 @@ comments:
     Verified: the only automatic InProgress→Approved writer is the doctor heal (doctor_cmd.rs:7346). (c) already handles Approved, and a new test pins that, including the gates. The lib_part4 edits are minimal.
   created_at: 2026-10-11T14:48:59.870230436Z
   modified_at: 2026-10-11T14:48:59.870230436Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b83-684d-7410-8d9e-7d70d0a6772e
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 84de7b9f2d (fresh reviewer, round 2). All round-1 findings are fixed. New:
+    1. MEDIUM: doctor_cmd.rs:7311-7372. heal_doctor_spec_status loads the whole store, spends up to ~10s+ on spec_live_work probes, then saves the whole store without reloading. A concurrent write is lost, including the new worktree-add bump on the same spec. Compute the verdicts before load, or re-read and revert per spec under the writer lock.
+    2. LOW: live_work.rs:422-430. bump_pr_specs falls back to find_main_worktree_root() (cwd). Use main_worktree_root_from(project_root).
+    3. LOW: live_work_tests.rs:281 tests bump_pr_specs, not the wrapper's Filed/AlreadyExists gate.
+  created_at: 2026-10-11T15:09:54.637310435Z
+  modified_at: 2026-10-11T15:09:54.637310435Z
   session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a128e6-d6ea-78f0-884e-3cb09bf8043e
