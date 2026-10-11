@@ -29,11 +29,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-11T13:48:12.732187427Z
+modified_at: 2026-10-11T13:48:17.312514356Z
 req_type: Story
 tags:
 - cli
 - extensions
+- factory:night
 - porcelain
 - triaged:night
 relationships:
