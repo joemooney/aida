@@ -29,13 +29,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:17:21.502760874Z
-modified_at: 2026-10-11T00:01:23.981259438Z
+modified_at: 2026-10-11T00:01:24.549551717Z
 req_type: Decision
 tags:
 - ci
 - operator-decision
 - platforms
 - policy
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a12843-186e-76f0-8143-4a37b1058ba7
+  created_at: 2026-10-11T00:01:24.549548963Z
+  created_by: joe
 history:
 - id: 01a0e371-ad18-7380-9e12-83650bf54576
   author: joe
