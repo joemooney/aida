@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:04.928345393Z
-modified_at: 2026-10-11T07:14:51.918148392Z
+modified_at: 2026-10-11T07:30:48.409577519Z
 req_type: Story
 tags:
 - triaged:night
@@ -54,6 +54,27 @@ comments:
     Suggested size: M (large diff, authority-sensitive).
   created_at: 2026-10-11T07:13:53.715237933Z
   modified_at: 2026-10-11T07:13:53.715237933Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129df-15d9-7291-87e1-962921805371
+  author: night-fable
+  content: |
+    SWEEP FINDINGS (night) for PR #2485 @ 3fcaa2488a, read-only via `git show`. Input for the fresh reviewer; none of these exist on main, so they are not filed as bugs. Ordered by what a reviewer should block on.
+
+    1. Ledger append is two syscalls (review_authority.rs:680-690). `writeln!(f, "{line}")` on an O_APPEND handle issues write(line) then write("\n"). Two concurrent claims (burndown fan-out, parallel `agent new`/`session start`) can interleave to `{A}{B}\n\n`; `load_ledger_checked` (:701) drops the malformed line with a stderr warning, so neither claim is recorded and either author's identity can later record an approval that `author_sessions` no longer refuses. Fix: build `line + "\n"` and emit one `write_all`, or flock the ledger around the append. A concurrent-append test is missing. Severity: medium, but it is a hole in the gate the PR exists to close.
+
+    2. Receipts and seat grants resolve from the per-user `aida_home_dir()` (review_authority.rs:867 `receipt_dir`; seat_authority.rs:33). An attested approval recorded on workstation A is invisible to a ship from a second machine, a CI runner, a bwrap-contained session or a different $HOME: `verified_authority_keys` (:938) finds nothing → Unattested, and ship/drain/burndown/release all refuse an honest approval. Nothing in docs or the PR body states the same-home requirement. Fix: a project-scoped copy under the main worktree `.aida/`, or document the limitation and give `pr ship` a hint naming it. Severity: medium; this is the same class of fault STORY-1654 has to live with for relay reviewers.
+
+    3. `ship_gate_refuses_self_approval_at_head_end_to_end` (tests/bug_1918_review_authority_tests.rs:278-325) hand-builds `ShipApprovalPolicy` and inserts into `verified_authority` directly, with the receipt written to a tempdir production never reads. The property "the receipt's identity copy wins over a relabelled verdict" is never exercised through `ship_approval_policy` → `verified_authority_keys` → `human_receipt_for`. Fix: point AIDA_HOME at the tempdir and drive the real path without pre-populating `verified_authority`.
+
+    4. `release_burndown_and_drain_merges_pass_the_authority_gate` (:1250-1295) is a source grep (`include_str!` + `contains("merge_path_approval_gate")`). Release `--after-pr` (lib_part4 ~10886) and `merge_wave_pr` (lib_part3 ~19184) have no behavioural refusal test; both are correct today but the test cannot catch a future `let _ = gate` regression. Drain is covered behaviourally (t1458). Fix: one fixture test per call site that records an author approval and asserts no merge.
+
+    5. `worker_with_a_different_session_id_than_the_launcher_is_the_author` (:895) does not test what its name says: the claim is a plain `record_authoring_lease`, not inside `as_launcher`, and there is no negative assertion on the launcher's tokens. Coverage of that scenario lives only in `launcher_may_approve_the_worker_it_launched_but_the_worker_may_not`. Fix: wrap the claim in `as_launcher` and assert the launcher's shell:/proc: tokens are absent from the author set.
+
+    Checked and found consistent: `approval_authority_refusal` ordering and empty-identity fail-closed; `stale_override_refusal`; spec-set and head parity of `merge_approval_inputs` across ship/drain/burndown/release (all honour Err); `is_authoring_lease` PR-/review-lease exclusion; record-time anchor/subject/author checks in `handle_review_record_at`; `issue_child` non-delegation blocking implementer-spawned reviewers; grant re-validation at `recorded_at`; clock-skew comparisons fail closed; harness-restart identity reset is a documented limitation.
+
+    Related, not duplicates: BUG-1934 (env grant trust), STORY-1654 (sketch posted tonight), STORY-1655.
+  created_at: 2026-10-11T07:30:48.409577519Z
+  modified_at: 2026-10-11T07:30:48.409577519Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
