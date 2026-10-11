@@ -1,0 +1,44 @@
+id: 01a12b25-1dee-7eb1-8fa2-15c9983b4dcd
+spec_id: FAQ-42
+agreed_id: FAQ-42
+title: Why can't an agent start a relay or enter a role for me?
+description: |
+  **Seat grants are issued only to a human at an interactive terminal. An agent's `aida role enter` fails with "role grants require a human at an interactive TTY", so you have to start relays and orchestrators yourself.**
+
+  ## Why
+  A seat grant is the authority behind every gated action (review approvals, merges, child sessions). If an agent could mint its own grant, the two-seat gate would mean nothing. Child grants for sessions that AIDA launches are derived from your grant, and only for the seats you delegated.
+
+  ## How
+  In your own terminal:
+  ```bash
+  eval "$(aida role enter integrator --delegate-seat implementer --delegate-seat reviewer)"
+  ANTHROPIC_MODEL=claude-opus-5-5 bash ~/ai/aida-relay/bin/relay.sh --batch --use-existing \
+    --handoff-file ~/ai/aida/.aida/handoff/<name>/latest.md \
+    --sessions-dir ~/ai/aida/.aida/relay-sessions-<name> --prompt-file ~/ai/aida/.aida/handoff/<name>/prompt.md
+  ```
+  An agent can prepare the command, stop a stalled relay, and verify the new one (`pgrep -af relay.sh`, then read `/proc/<pid>/environ` for ANTHROPIC_MODEL and AIDA_SESSION_ROLE). It cannot launch the relay.
+
+  ## See also
+  FAQ-18 (which seats to delegate), STORY-1654
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:26:55.214170874Z
+modified_at: 2026-10-11T13:26:55.214170874Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+- topic:roles
+filed_at:
+  code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T13:26:55.214220514Z
