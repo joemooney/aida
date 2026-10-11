@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-11T06:56:52.484399273Z
+modified_at: 2026-10-11T07:35:19.482915666Z
 req_type: Task
 tags:
 - factory:night
@@ -861,6 +861,15 @@ comments:
     Rebased onto origin/main 612cf8c2; lib.rs conflicts resolved by pure relocation of all 41 hunks into lib_part4.rs (zero fuzz); mod line stays in lib.rs. +/- line set identical to approved diff; forge.rs, reconcile_evidence.rs, CLI fixture and 10-storage.md byte-identical to reviewer pins. make check-ci-fast 21/21. Built only on CI.
   created_at: 2026-10-11T06:56:51.598951141Z
   modified_at: 2026-10-11T06:56:51.598951141Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129e3-38bb-7fb1-80b5-9ba36a86a027
+  author: joe
+  content: |
+    FACTORY READY: PR #2495 green at 323c561695131590b5165dc16cdf3371842a2702
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed; PR is mergeable. This is the approved branch (aba02517) rebased onto origin/main with its lib.rs hunks relocated to lib_part4.rs, plus one inventory fix (scripts/config-trust.toml: forge.rs now has 3 policy-class worktree reads). Draft left for the night relay / advisor to review, mark ready, and merge. Review fixes go in worktree `/home/joe/ai/aida-task-1335-factory` (branch `task-1335`).
+  created_at: 2026-10-11T07:35:19.482915666Z
+  modified_at: 2026-10-11T07:35:19.482915666Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
