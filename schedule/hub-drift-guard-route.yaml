@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: '07:40 advisor: aida-store drifted again (gitlab +3, origin +1, both behind local 7eff188a4c). Reconciled with a fast-forward union push to both hubs; now in sync. Second drift tonight with several relays writing; the hubs lag local between auto-pushes, as expected.'
+due_since: 2026-10-11T20:47:45.769729096Z
+due_reason: on CronJobFailed:hub-drift-guard
