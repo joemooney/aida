@@ -13,12 +13,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:05:24.430788370Z
-modified_at: 2026-10-11T00:05:24.430788370Z
+modified_at: 2026-10-11T07:17:41.645590114Z
 req_type: Bug
 tags:
 - forge
 - gitlab
 - sync
+comments:
+- id: 01a129d3-148d-7082-ad5a-f15ea3bae944
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the detection and fan-out machinery exists but did not surface a day-long store divergence, so the gaps are real; narrow gap (1) to "why the scheduled guard stayed silent" since `aida doctor check remote-drift` already covers aida-store.
+
+    Problem
+    A clone registered as a node against GitLab only, then origin/aida-store and gitlab/aida-store diverged for ~24h with no operator-visible alert; the store mirror step dropped the non-fast-forward silently; registration can target a non-canonical hub.
+
+    Evidence path (verified on main, read-only)
+    - Detection exists: aida-cli-lib/src/remote_create.rs:608 `DRIFT_BRANCHES = ["main", "aida-store"]`; `aida remote status --no-fetch` tonight still prints `aida-store ✗ DIVERGED gitlab +25/-0 origin +4/-0` with the reconcile hint (:730). So the signal is computable; the gap is delivery.
+    - `aida schedule list`: `hub-drift-guard` (substrate, every 6h, runs `aida doctor check remote-drift --fail-on-findings`) and `hub-drift-guard-route` (advisor seat, on CronJobFailed) both show state `pending` — consistent with the tick never running them on this host. That, not a missing check, is the likely reason doctor/awaiting were silent. Verify with `aida schedule` ledger before coding.
+    - Store mirroring is by design NOT in the pre-push hook: aida-cli-lib/src/remote_create.rs:1379-1381 "no code refs in this push — nothing to mirror (the store branch ... skipped by design)"; store fan-out is the scheduled `aida remote mirror-sync` (BUG-1676/BUG-1746), which "never force-pushes: a diverged hub is reported and exits non-zero" (cli.rs:3679-3686) — again dependent on the scheduler firing.
+    - Gap (3): node registration (aida-core/src/node.rs:506-557 `register*`) writes the registry through the normal store path; which remote it pushes to is whatever the clone's store upstream is. No canonical-remote check found.
+
+    Acceptance criteria
+    - `aida doctor` (default run, not only `check remote-drift`) reports "aida-store diverged across hubs (origin +N / gitlab +M)" when `remote status` would; unit test with a fake two-remote repo.
+    - `aida awaiting` shows a routed hub-drift item when the guard fails, and `aida schedule list` shows `hub-drift-guard` with a last-run timestamp after one tick on a host with two hubs (fix or document why the job stayed `pending`).
+    - `aida remote mirror-sync` (and whatever runs it) exits non-zero and prints the rejected ref on a non-fast-forward; that failure reaches the operator (CronJobFailed route), not just the log.
+    - Node registration refuses, or warns and asks, when the store's upstream is not the configured canonical store remote; test: clone whose `.aida-store` tracks `gitlab/aida-store` while config names origin → `aida team claim` exits non-zero with a message naming the canonical remote.
+    - FAQ-34 updated with the "registered against the wrong hub" cause.
+
+    Scope / non-goals
+    - No automatic reconcile of diverged stores (keep `aida remote reconcile --execute` human-driven).
+    - related:BUG-714 related:STORY-760 related:BUG-1746 related:BUG-1676 related:STORY-1367 related:FAQ-34 related:TASK-1095
+
+    Suggested size: M
+  created_at: 2026-10-11T07:17:41.645590114Z
+  modified_at: 2026-10-11T07:17:41.645590114Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
