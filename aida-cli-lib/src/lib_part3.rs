@@ -4276,7 +4276,7 @@ pub(crate) const FORGE_LOOKUP_TIMED_OUT: &str = "forge lookup timed out";
 
 thread_local! {
     // trace:BUG-1594 | ai:claude
-    static FORGE_LOOKUP_TIMEOUT: std::cell::Cell<Option<std::time::Duration>> =
+    pub(crate) static FORGE_LOOKUP_TIMEOUT: std::cell::Cell<Option<std::time::Duration>> =
         const { std::cell::Cell::new(None) };
 }
 
@@ -6624,7 +6624,7 @@ pub(crate) type FollowupAddHook =
 
 #[cfg(test)]
 thread_local! {
-    static FOLLOWUP_ADD_HOOK: std::cell::RefCell<Option<FollowupAddHook>> =
+    pub(crate) static FOLLOWUP_ADD_HOOK: std::cell::RefCell<Option<FollowupAddHook>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -9256,7 +9256,7 @@ pub(crate) type StatusWriteRaceHook = Box<dyn FnOnce(&std::path::Path)>;
 
 #[cfg(test)]
 thread_local! {
-    static STATUS_WRITE_RACE_HOOK: std::cell::RefCell<Option<StatusWriteRaceHook>> =
+    pub(crate) static STATUS_WRITE_RACE_HOOK: std::cell::RefCell<Option<StatusWriteRaceHook>> =
         const { std::cell::RefCell::new(None) };
 }
 
