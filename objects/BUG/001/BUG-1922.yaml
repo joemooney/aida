@@ -20,12 +20,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:58.831939233Z
-modified_at: 2026-10-10T18:13:58.831939233Z
+modified_at: 2026-10-11T07:14:56.974237709Z
 req_type: Bug
 tags:
 - docs
 - skills
 - templates
+comments:
+- id: 01a129d0-914e-7f43-949f-45776ec83a70
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the template master still tells `/aida-capture` to run `aida list --search`, which clap rejects.
+
+    Problem
+    The capture skill's dedup step and its CLI reference use a flag that does not exist (`aida list --search`); the real verb is `aida search`. Every capture run hits the error at the dedup step.
+
+    Evidence path (verified on main)
+    - aida-core/templates/skills/aida-capture.md:83 and :178 — two occurrences (the description says three; the third is the generated mirror .claude/skills/aida-capture/SKILL.md, which must not be hand-edited).
+    - docs/book/print.html — one occurrence (generated from the same source).
+    - docs/agents/aida-repository-guide.md:540 mentions `gh pr list --search`, which is a gh flag, not an aida one — not an offender; leave it.
+    - Unchanged by the last template touches (db70971d43 BUG-1921, 67fae0243e STORY-1643), so still live.
+    - FAQ-30 already documents the symptom for users; this spec is the fix.
+
+    Acceptance criteria
+    - `rg -n "aida list --search" aida-core/templates docs/agents .claude` returns nothing; `make sync-templates && make check-templates` clean; book rebuilt.
+    - aida-core/templates/skills/aida-capture.md step 2 uses `aida search "<keyword>"` (and mentions `--limit`/type filters if used).
+    - Template-command lint: a `make` target or `check-templates` extension extracts every fenced `aida ...` line from skill templates and runs it through clap parse (`aida <args> --help` or a parse-only mode); a fixture template containing `aida list --search x` fails the lint. (If this proves >1 day, split it to a follow-up TASK and ship the text fix alone.)
+    - FAQ-30 answer updated to say the templates were fixed in this spec.
+
+    Scope / non-goals
+    - Do not add `--search` to `aida list` (alias rejected in the description; agree).
+    - related:FAQ-30 related:TASK-731 related:STORY-1643
+
+    Suggested size: S (text fix) — M with the lint
+  created_at: 2026-10-11T07:14:56.974237709Z
+  modified_at: 2026-10-11T07:14:56.974237709Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
