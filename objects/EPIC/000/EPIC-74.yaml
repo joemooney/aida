@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T19:11:15.367016656Z
+modified_at: 2026-10-11T07:10:55.912797667Z
 req_type: Epic
 tags:
 - architecture
@@ -1150,6 +1150,34 @@ comments:
   created_at: 2026-10-08T19:11:15.367016656Z
   modified_at: 2026-10-08T19:11:15.367016656Z
   relayed_from: answered-v4-independent-advisor
+- id: 01a129cc-e3a8-7e13-8757-32723db24102
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the architecture is already sketched and independently signed at design level (V4, 2026-10-08), three approved children are waiting on this container, and approving the epic as the owning spec is not a dispatch.
+
+    Problem: `aida worktree enter EPIC-N` isolates by convention only. Main-line selectors still pick an isolated epic's children, implementer PRs base on main, and Completed is hard-wired to default-branch merge. The recorded operator answer (2026-10-08T15:54:26Z) replaced the coined noun "lane" with an epic-level target/parent branch declaration plus store-side exclusion.
+
+    Evidence path (verified on main):
+    - No `aida lane` and no target_branch field exist: `rg -n lane aida-cli-lib/src/cli.rs` hits only unrelated `--lanes`/`--lane` flags; `rg target_branch aida-core/src/models.rs` returns nothing.
+    - Seams the sketch names exist: aida-cli-lib/src/queue_cmd.rs:8969 `resolve_queue_work_plan`; aida-cli-lib/src/pr_cmd.rs:1438 `pr_ship_target_branch` (falls back to literal main on a failed metadata read, exactly as the sketch warns).
+    - Design artifacts: .aida/handoff/orchestrator/run-20261008/EPIC74_AMENDED_SKETCH_V4.md, EPIC74_ADR_DRAFT_V4.md, EPIC74_ENTRYPOINT_GUARDS_V4.md, EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V4.md; docs/plans/2026-09-28-epic-74-target-branch-vs-lane.md; docs/explanations/feature-lanes.md (DOC-5).
+    - Signoff state from the comments on this epic: V4 design APPROVED AS AMENDED (positive extension and the protective S1-S4 first slice); implementation readiness CHANGES REQUESTED / NOT READY.
+
+    Sketch + advisor signoff (required by repo CLAUDE.md for architecture): PARTIALLY SATISFIED. The design is signed, but: (a) no canonical ADR has been filed (ADR_DRAFT_V4 lives only in the handoff dir; `aida search "feature lane"` finds no ADR); (b) the child acceptance amendment V4 is "proposed, not applied": STORY-1481/1482/1483 canonical text still specifies `aida lane open/list/close`, a lane seat and a lane status that the recorded decision rejected; (c) slices 2-3 depend on EPIC-76's "sole common publisher", which has no production consumer yet. Status inversion: the epic is Draft while all three children are Approved (STORY-1481 even tagged plan:night). The children should not be queued until (a) and (b) are done.
+
+    Acceptance criteria (child slices and what each proves):
+    1. ADR filed canonically from EPIC74_ADR_DRAFT_V4.md and accepted; STORY-1481/82/83 descriptions re-worded per CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V4 (branch vocabulary, no lane command family). Check: `aida show STORY-1481 --full` contains no "aida lane".
+    2. Slice 1 (STORY-1481, protective S1-S4 only): the epic carries an optional typed target_branch declaration; every selector (queue view/pickup, burndown, shift, integrate, groom/backlog, direct agent start, MCP) excludes isolated descendants with no env vars set and reports the excluded count. Tests: off_default_subtree_excluded_without_env_each_selector, epic_declaration_survives_clone_boundary, conflicting_epic_ancestors_and_corrupt_store_refuse_before_effects.
+    3. Slice 2 (STORY-1482): child PRs base on the declared target; a verified merge to target yields Done with persisted evidence "merged to <target>; awaiting default-branch landing", never Completed. Test: child_pr_targets_epic_branch_on_each_forge (GitHub and GitLab fixtures).
+    4. Slice 3 (STORY-1483): parent-to-target sync with conflict-stop, commits-behind warning, landing PR target-to-parent; a verified default landing completes exactly the covered set. Tests: verified_landing_then_clear_revalidates_current_inventory, declaration_changes_between_plan_and_merge_refuse.
+    5. docs/explanations/feature-lanes.md and docs/cli/04-git-lifecycle.md updated to target/parent vocabulary.
+
+    Scope / non-goals: no branch protection, credential broker or OS boundary (same-user raw git bypasses store exclusion; document the guarantee at that scope). Slice 1 ships alone before 2-3. Related: related:STORY-1481 related:STORY-1482 related:STORY-1483 related:EPIC-76 (common publisher prerequisite for slices 2-3) related:DOC-5 related:TASK-1470.
+
+    Suggested size: L (heft 14; slice 1 alone is M).
+  created_at: 2026-10-11T07:10:55.912797667Z
+  modified_at: 2026-10-11T07:10:55.912797667Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
