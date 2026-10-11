@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:06:28.557834609Z
-modified_at: 2026-10-11T13:40:30.141586527Z
+modified_at: 2026-10-11T13:41:43.666619574Z
 req_type: Bug
 tags:
 - triaged:night
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-10-11T08:08:29.167387139Z
   modified_at: 2026-10-11T08:08:29.167387139Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b32-ac72-78d1-9261-236ab83a2f30
+  author: joe
+  content: 'FACTORY PLAN (night): (1) Cool-down retry in aida-cli-lib/src/history_cache.rs: new meta key catch_up_stalled_at (RFC3339), written in the same transaction as the attempt counter whenever a counted attempt brings catch_up_failures to the stall limit; catch_up_guarded skips (hint) only while now < stalled_at + 1h (CATCH_UP_RETRY_COOLDOWN_SECS), otherwise retries one budgeted catch-up (which re-stamps stalled_at, so a failed retry restarts the cool-down). finish_append clears stalled_at with the counter. A legacy stalled index with no stamp retries on its next query. (2) stalled_hint: split into stalled_hint_message(is_tty) -> Option<&str>, silent when stderr is not a terminal (std::io::IsTerminal); text updated to say it retries within the hour. Hint is stderr-only so --json stdout never carries it. (3) HistoryCacheStatus gains catch_up_stalled_at / catch_up_next_retry_at; cache_cmd history_status_lines prints them beside the stalled status. classify_miss / serve_flow unchanged (flow still treats stalled as Stuck; only event-view queries retry). Tests (task_1507_history_cache_tests.rs bug_1923 module): bug_1942_stalled_catch_up_retries_after_cooldown, bug_1942_stalled_catch_up_skips_inside_cooldown, bug_1942_a_failed_retry_restarts_the_cooldown, bug_1942_stalled_hint_is_silent_off_a_terminal; strengthen bug_1923_far_behind... to assert per call that commit_count == git rev-list --count <tip>. Risks: compile-only on CI; existing BUG-1923/STORY-1650 stall tests must keep passing (3rd failure stamps stalled_at so the paused-call assertion holds; 1650 test sets the counter only and goes through the flow, which is unchanged). Not touching history.rs (sibling #2517).'
+  created_at: 2026-10-11T13:41:43.666619574Z
+  modified_at: 2026-10-11T13:41:43.666619574Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a12a01-91cb-7483-89ce-183db6fe5dd1
   author: joe
