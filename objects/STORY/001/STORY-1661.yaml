@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-11T07:17:18.082721029Z
+modified_at: 2026-10-11T07:43:39.818420818Z
 req_type: Story
 tags:
 - history
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-10-11T07:17:10.559159190Z
   modified_at: 2026-10-11T07:17:10.559159190Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129ea-db2a-7490-a9de-b7b4cb7e73be
+  author: joe
+  content: 'ADVISOR (overnight 00:45): approval DEFERRED until STORY-1650 (#2491, the night batch, in flight) merges. Both touch the history catch-up/stall path, and a parallel factory PR would conflict with it. Re-check after #2491 lands. Once approved it is an architecture slice, so the factory produces a plan only.'
+  created_at: 2026-10-11T07:43:39.818420818Z
+  modified_at: 2026-10-11T07:43:39.818420818Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
