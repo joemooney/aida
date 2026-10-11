@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:49:05.302626163Z
-modified_at: 2026-10-11T07:53:14.992677281Z
+modified_at: 2026-10-11T08:10:08.009424060Z
 req_type: Bug
 tags:
 - cli
@@ -89,6 +89,15 @@ comments:
     Branch bug-1917-work, worktree /home/joe/ai/aida-bug-1917-factory. Help strings fixed on push and pull; help-text pin (push/pull/fetch) and dry-run scope pin added. Built only on CI; not compiled locally.
   created_at: 2026-10-11T07:53:12.327943078Z
   modified_at: 2026-10-11T07:53:12.327943078Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12a03-1709-7492-9967-949e87c2c558
+  author: joe
+  content: |
+    FACTORY READY: PR #2503 green at 645e490b3f13715d4efa01f3af14be1413a6c21f
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed on the first run; PR is mergeable. Draft left for the night relay / advisor to review, mark ready, and merge. Review fixes go in worktree `/home/joe/ai/aida-bug-1917-factory` (branch `bug-1917-work`).
+  created_at: 2026-10-11T08:10:08.009424060Z
+  modified_at: 2026-10-11T08:10:08.009424060Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129ea-0625-7c83-95ff-dbcf0ccc406b
