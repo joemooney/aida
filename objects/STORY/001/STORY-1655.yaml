@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-11T15:20:55.527439729Z
+modified_at: 2026-10-11T15:20:56.313245650Z
 req_type: Story
 tags:
 - review
@@ -49,6 +49,12 @@ comments:
   created_at: 2026-10-11T07:44:24.440027275Z
   modified_at: 2026-10-11T07:44:24.440027275Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-80f9-72b2-b786-2485598b2a18
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. With BINDING AMENDMENTS: (S1) solo_human is a GLOBAL user-config key (~/.aida), never read from project .aida/config.toml, so an agent''s PR cannot turn it on; add a test that a project-config value is ignored with a warning. (S2) require_direct_tty is NOT a human floor (a managed agent at a TTY passes it, per the DOC-6 round-2 review), so a solo approval also requires an interactive typed challenge (e.g. re-type the spec id and PR number) read from /dev/tty, not stdin; test that a piped/scripted answer is refused. (S3) The AIDA repository itself never runs solo mode (STORY-1654 gives it independent reviewer processes). Sequence: after BUG-1934 in tier 1. Reuse-vs-new question from triage: this is a separate durable key, not the TTL ''aida solo'' presence; name it review.solo_human_self_approval to avoid two meanings of ''solo''.'
+  created_at: 2026-10-11T15:20:56.313245650Z
+  modified_at: 2026-10-11T15:20:56.313245650Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-7de7-7f01-8bdf-9f893f4ac4f3
   author: joe
