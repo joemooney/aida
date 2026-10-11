@@ -1,0 +1,36 @@
+id: 01a128e0-e71f-7060-9820-d921e2e1634b
+spec_id: BUG-1944
+agreed_id: BUG-1944
+title: 'Specs with live work or a merged PR sit at Approved: session end reverts InProgress, re-dispatch doesn''t re-claim, and merge auto-bump only completes InProgress specs'
+description: |-
+  Two cases on 2026-10-10 (same class as BUG-549, a newer path):
+
+  1. TASK-1723: PR #2487 squash-merged at c6c0d9c3b2 with the (TASK-1723) trailer, but the spec was never claimed, so it stayed Approved. aida-auto-bump completed STORY-1642/1643 and BUG-1925 at the same time because those were InProgress, and skipped TASK-1723. The advisor completed it by hand.
+  2. STORY-1644: claimed at 18:36 (Approved→InProgress). At 18:52 the session ended and the store recorded InProgress→Approved (aida-store bff3fc482c). A later implementer kept working and opened PR #2490 (head story-1644-work) without claiming again. The operator saw a live 'fix is ready' report next to 'Approved' in aida list. The advisor set it back to in-progress at 19:53.
+
+  Effect: the status contradicts live work, and when the PR merges, auto-bump silently skips the spec, so it never completes.
+
+  Expected / acceptance:
+  (a) Ending or abandoning a session doesn't move a spec back to Approved while it has an open PR or unmerged commits on its branch.
+  (b) Any path that starts work on a spec (worktree add, session start, relay dispatch, the pr create/open path) moves Approved→InProgress.
+  (c) Merge-time auto-bump completes an Approved spec whose (SPEC-ID) trailer lands on main, not only InProgress ones. Same gate rules (closure:pending holds still apply).
+  (d) A regression test for each of (a)–(c).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T02:53:10.303215193Z
+modified_at: 2026-10-11T02:53:10.303215193Z
+req_type: Bug
+tags:
+- auto-bump
+- lifecycle
+- sessions
+filed_at:
+  code_sha: db70971d43e7ced30e179fcbcb9483a1dbfae465
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3bb1454cf0
+  vendor: antigravity
+  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
