@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:20.116652715Z
-modified_at: 2026-10-11T07:11:57.146669234Z
+modified_at: 2026-10-11T07:12:05.861574473Z
 req_type: Story
 tags:
 - dev-tooling
@@ -29,6 +29,7 @@ tags:
 - main-checkout
 - related:STORY-1646
 - statusline
+- triaged:night
 comments:
 - id: 01a129cd-d2da-7fc2-83ed-d5f8a23c2722
   author: night-fable
