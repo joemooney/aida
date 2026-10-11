@@ -1,10 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-10-11T14:37:51.342467049Z
+last_run: 2026-10-11T20:58:43.908113792Z
 last_by:
   seat: advisor
-  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
-  vendor: antigravity
+  session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+  vendor: claude
 result: done
-note: '07:40 advisor: aida-store drifted again (gitlab +3, origin +1, both behind local 7eff188a4c). Reconciled with a fast-forward union push to both hubs; now in sync. Second drift tonight with several relays writing; the hubs lag local between auto-pushes, as expected.'
-due_since: 2026-10-11T20:47:45.769729096Z
-due_reason: on CronJobFailed:hub-drift-guard
