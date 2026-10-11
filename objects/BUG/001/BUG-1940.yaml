@@ -13,12 +13,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:45.205677811Z
-modified_at: 2026-10-11T12:45:57.325447678Z
+modified_at: 2026-10-11T13:22:40.317570378Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - cache
 - recovery
+comments:
+- id: 01a12b21-3a3d-7891-8c7f-11abbb2486e5
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at b8ff9fc357 (fresh reviewer)
+    1. MAJOR: quarantine runs without the cache process lock. cache.rs:1531-1563 (quarantine_and_reopen) and cached_git_backend.rs:1166 never take RefreshLock (.aida/cache.db.refresh.lock). Two rebuilds can race, so B renames A's fresh cache and live -wal. A reader still holding the old inode deletes `<path>-wal` by name when it closes. Fix: hold RefreshLock across check, rename and rebuild, and re-check integrity under the lock.
+    2. MAJOR: the main_entry hook (lib_part1.rs:700 → cache_cmd.rs:503) rewrites ANY SQLITE_CORRUPT/NOTADB in the error chain into ".aida/cache.db is corrupt. Fix: aida cache rebuild". That is wrong for the history cache, the token ledger, the dispenser and the legacy canonical requirements.db. It also throws away the error chain. Scope it to errors from cache.db, and keep the original cause.
+    3. MINOR: partial quarantine (cache.rs:870). If the cache.db rename succeeds and the -wal rename fails, a hot old WAL is left next to a missing db. Roll back or fall back to removal.
+    4. MINOR: name collision (:862). Timestamps have one-second resolution, only the base name is checked, and rename overwrites. Use a unique suffix and check -wal/-shm too.
+    5. MINOR: quarantine copies are unbounded, ~36-50 MB each, across both the auto-heal and rebuild paths. Keep the newest N (e.g. 2).
+    6. MINOR: verify now always runs the full integrity_check. This is acceptable, but note it in the docs.
+    7. MINOR: docs/cli/10-storage.md doesn't mention the quarantine or verify's corrupt result.
+    Missing tests: a NOTADB read hint at the CLI level, and concurrent rebuilds (or at least the lock being held).
+  created_at: 2026-10-11T13:22:40.317570378Z
+  modified_at: 2026-10-11T13:22:40.317570378Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a129a5-7803-72c1-b35a-2a4195dac725
   author: joe
