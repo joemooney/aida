@@ -13,12 +13,42 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:49:05.302626163Z
-modified_at: 2026-10-10T04:49:05.302626163Z
+modified_at: 2026-10-11T07:13:31.602179721Z
 req_type: Bug
 tags:
 - cli
 - help-text
 - push
+comments:
+- id: 01a129cf-43d2-7072-b223-65e0f2acbaff
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the help strings for `--code-only` / `--store-only` on both `aida push` and `aida pull` are swapped relative to the implemented behaviour.
+
+    Problem
+    `aida push --help` says `--code-only` skips the code push and `--store-only` skips the store sync. The code does the opposite (the flag names are right, the descriptions are wrong). `aida pull` has the identical swap; `aida fetch` is correct.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/cli.rs:11260 `/// Skip the code push (only sync the orphan store).` on `code_only`; :11263 `/// Skip the orphan-store sync (only git push).` on `store_only`.
+    - aida-cli-lib/src/cli.rs:11377-11380 — same swap on `Pull`.
+    - aida-cli-lib/src/cli.rs:11307-11310 — `Fetch` descriptions are correct (reference wording).
+    - aida-cli-lib/src/lib_part4.rs:12354-12362 — `code_outcome` is NotRequested when `store_only`, `store_outcome` NotRequested when `code_only`; :12385 `if !store_only { /* code push */ }`. So `--code-only` pushes code, as the reporter observed.
+    - Text has been wrong since the cli-lib carve-out (92dabfeaac) at least.
+
+    Acceptance criteria
+    - `aida push --help` shows `--code-only` as "Push only the code branch (skip the orphan-store sync)" and `--store-only` as "Sync only the orphan store (skip git push)"; same for `aida pull --help`.
+    - A unit test over the clap `Command` asserts each of push/pull/fetch `--code-only` help contains "code" as the thing done and not "store", and vice-versa for `--store-only` (e.g. `push_pull_fetch_leg_flags_describe_the_leg_they_keep`).
+    - `aida push --code-only --dry-run` plan output names only the code leg; `--store-only --dry-run` only the store leg (existing dry-run tests extended).
+    - docs/cli/ reference regenerated if it embeds the help text (`rg "Skip the code push" docs` is empty).
+
+    Scope / non-goals
+    - Help text and a pinning test only; no behaviour change to the legs.
+    - related:STORY-115 related:TASK-106 related:BUG-1626
+
+    Suggested size: S
+  created_at: 2026-10-11T07:13:31.602179721Z
+  modified_at: 2026-10-11T07:13:31.602179721Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
