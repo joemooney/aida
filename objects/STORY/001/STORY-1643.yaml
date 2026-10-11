@@ -18,12 +18,12 @@ description: |
 
   ## Related
   FAQ-11 (convention), STORY-1642 (knowledge types), BUG-1921 (FAQ IDs)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:03:46.189565859Z
-modified_at: 2026-10-10T15:39:28.180840950Z
+modified_at: 2026-10-11T00:10:14.051306899Z
 req_type: Story
 tags:
 - aida-capture
@@ -37,6 +37,14 @@ comments:
   created_at: 2026-10-10T15:39:28.180840950Z
   modified_at: 2026-10-10T15:39:28.180840950Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+history:
+- id: 01a1284b-baa3-78a2-9911-59626e71d791
+  author: aida-session-start
+  timestamp: 2026-10-11T00:10:14.051305866Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
