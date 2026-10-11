@@ -94,6 +94,16 @@ const STORY_UUID: &str = "11111111-1111-4111-8111-111111111111";
 const TASK_UUID: &str = "22222222-2222-4222-8222-222222222222";
 const BUG_UUID: &str = "33333333-3333-4333-8333-333333333333";
 const TASK4_UUID: &str = "44444444-4444-4444-8444-444444444444";
+const STORY5_UUID: &str = "55555555-5555-4555-8555-555555555555";
+const TASK6_UUID: &str = "66666666-6666-4666-8666-666666666666";
+
+/// Append raw YAML lines (shelf flags) to a spec written by [`write_obj`].
+fn append_yaml(store: &Path, dir: &str, spec_id: &str, lines: &str) {
+    use std::io::Write;
+    let path = store.join(format!("objects/{dir}/000/{spec_id}.yaml"));
+    let mut f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+    f.write_all(lines.as_bytes()).unwrap();
+}
 
 #[allow(clippy::too_many_arguments)]
 fn write_obj(
@@ -270,8 +280,16 @@ fn init_fixture() -> Fixture {
         t1,
         t4,
     );
+    commit_at(&store, "update STORY-1", t4);
+
+    // A deletion in its own commit at its own time: the digest orders a
+    // deleted spec by git's commit time and a live one by `modified_at`,
+    // and git versions print the same instant differently (`Z` or
+    // `+00:00`), so an exact tie between the two would sort differently
+    // from machine to machine.
+    let t4b = "2025-03-04T13:30:00Z";
     std::fs::remove_file(store.join("objects/BUG/000/BUG-3.yaml")).unwrap();
-    commit_at(&store, "update STORY-1, delete BUG-3", t4);
+    commit_at(&store, "delete BUG-3", t4b);
 
     let t5 = "2025-03-05T14:00:00Z";
     write_obj(
@@ -286,8 +304,57 @@ fn init_fixture() -> Fixture {
         t5,
     );
     commit_at(&store, "add TASK-4", t5);
+
+    // Shelved specs: hidden by default, shown with `--all`.
+    let t6a = "2025-03-05T16:00:00Z";
+    write_obj(
+        &store,
+        "STORY",
+        "STORY-5",
+        STORY5_UUID,
+        "Story",
+        "Archived story",
+        "Completed",
+        t6a,
+        t6a,
+    );
+    append_yaml(
+        &store,
+        "STORY",
+        "STORY-5",
+        &format!("archived: true\narchived_at: {t6a}\n"),
+    );
+    commit_at(&store, "add STORY-5", t6a);
+    let t6b = "2025-03-05T17:00:00Z";
+    write_obj(
+        &store,
+        "TASK",
+        "TASK-6",
+        TASK6_UUID,
+        "Task",
+        "Deferred task",
+        "Draft",
+        t6b,
+        t6b,
+    );
+    append_yaml(
+        &store,
+        "TASK",
+        "TASK-6",
+        &format!("deferred: true\ndeferred_at: {t6b}\ndeferred_until: when it matters\n"),
+    );
+    commit_at(&store, "add TASK-6", t6b);
     fixture
 }
+
+/// The digest goldens: arguments after `history` (without `--digest`)
+/// and the file each is recorded in.
+const GOLDENS: &[(&[&str], &str)] = &[
+    (&["--format", "human"], "digest_human.txt"),
+    (&["--format", "toon"], "digest_toon.txt"),
+    (&["--all", "--format", "human"], "digest_all_human.txt"),
+    (&["--all", "--format", "toon"], "digest_all_toon.txt"),
+];
 
 fn golden_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/story_1650")
@@ -313,8 +380,10 @@ fn capture_digest_goldens() {
         PathBuf::from(std::env::var("STORY_1650_GOLDEN_BIN").expect("set STORY_1650_GOLDEN_BIN"));
     let fx = init_fixture();
     std::fs::create_dir_all(golden_dir()).unwrap();
-    for (format, file) in [("human", "digest_human.txt"), ("toon", "digest_toon.txt")] {
-        let out = aida_with(&bin, &fx, &["history", "--format", format], &[]);
+    for (args, file) in GOLDENS {
+        let mut argv = vec!["history"];
+        argv.extend_from_slice(args);
+        let out = aida_with(&bin, &fx, &argv, &[]);
         let stdout = ok("pre-change aida history", &out);
         std::fs::write(golden_dir().join(file), stdout).unwrap();
     }
@@ -323,16 +392,16 @@ fn capture_digest_goldens() {
 #[test]
 fn digest_flag_is_byte_identical_to_the_old_default_human_and_toon() {
     let fx = init_fixture();
-    for (format, file) in [("human", "digest_human.txt"), ("toon", "digest_toon.txt")] {
+    for (args, file) in GOLDENS {
         let want = golden(file);
+        let mut argv = vec!["history", "--digest"];
+        argv.extend_from_slice(args);
+        let format = args.join(" ");
         // Index on (the default) and switched off: the digest never reads it.
         for envs in [&[][..], &[("AIDA_HISTORY_CACHE", "0")][..]] {
-            let out = aida(&fx, &["history", "--digest", "--format", format], envs);
+            let out = aida(&fx, &argv, envs);
             let got = ok("aida history --digest", &out);
-            assert_eq!(
-                got, want,
-                "--digest --format {format} drifted (env {envs:?})"
-            );
+            assert_eq!(got, want, "--digest {format} drifted (env {envs:?})");
             assert!(
                 !stderr(&out).contains("note:"),
                 "--digest is asked for, so no fallback note: {}",
@@ -352,13 +421,28 @@ fn digest_flag_json_projects_the_digest_rows() {
     let rows = doc["history"].as_array().expect("history rows");
     assert_eq!(doc["count"], rows.len());
     let ids: Vec<&str> = rows.iter().map(|r| r["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["TASK-4", "STORY-1", "BUG-3", "TASK-2"], "{doc}");
-    let story = &rows[1];
+    assert_eq!(ids, ["TASK-4", "BUG-3", "STORY-1", "TASK-2"], "{doc}");
+    assert_eq!(doc["archived_hidden"], 1, "{doc}");
+    assert_eq!(doc["deferred_hidden"], 1, "{doc}");
+    let story = &rows[2];
     assert_eq!(story["status"], "Completed");
     assert_eq!(story["change"], "add");
     assert_eq!(story["title"], "Flowing story");
     assert_eq!(story["type"], "Story");
-    assert_eq!(rows[2]["change"], "del");
+    assert_eq!(rows[1]["change"], "del");
+}
+
+/// Build the index the way the fallback note tells users to. Bare
+/// `aida history` never builds or catches it up itself.
+fn warm(fx: &Fixture) {
+    ok(
+        "aida cache rebuild --history",
+        &aida(fx, &["cache", "rebuild", "--history"], &[]),
+    );
+}
+
+fn history_db(fx: &Fixture) -> PathBuf {
+    fx.repo.join(".aida").join("history-v6-5.db")
 }
 
 fn flow_lines(stdout: &str) -> Vec<String> {
@@ -372,6 +456,7 @@ fn flow_lines(stdout: &str) -> Vec<String> {
 #[test]
 fn default_human_lists_every_transition_newest_first() {
     let fx = init_fixture();
+    warm(&fx);
     let out = aida(&fx, &["history", "--format", "human"], &[]);
     let stdout = ok("aida history", &out);
     assert!(
@@ -398,6 +483,7 @@ fn default_human_lists_every_transition_newest_first() {
 #[test]
 fn default_toon_has_one_row_per_transition() {
     let fx = init_fixture();
+    warm(&fx);
     let out = aida(&fx, &["history", "--format", "toon"], &[]);
     let stdout = ok("aida history --format toon", &out);
     assert!(
@@ -423,6 +509,7 @@ fn default_toon_has_one_row_per_transition() {
 #[test]
 fn default_json_has_one_record_per_transition() {
     let fx = init_fixture();
+    warm(&fx);
     let out = aida(&fx, &["history", "--format", "json"], &[]);
     let stdout = ok("aida history --format json", &out);
     let doc: serde_json::Value = serde_json::from_str(&stdout).expect("pure JSON on stdout");
@@ -467,6 +554,7 @@ fn default_json_has_one_record_per_transition() {
 #[test]
 fn window_flags_narrow_the_default_like_the_events_feed() {
     let fx = init_fixture();
+    warm(&fx);
     let run = |args: &[&str]| {
         let mut argv = vec!["history", "--format", "human"];
         argv.extend_from_slice(args);
@@ -539,20 +627,10 @@ fn disabled_index_falls_back_to_the_digest_with_a_note() {
 #[test]
 fn stale_index_falls_back_to_the_digest_with_a_note() {
     let fx = init_fixture();
-    // Build the index at the current tip.
-    ok("warm", &aida(&fx, &["history", "--format", "human"], &[]));
-    // Pause inline catch-up the way repeated failed attempts do (the
-    // stalled state), then advance the store: the index stays behind HEAD.
-    let db = fx.repo.join(".aida").join("history-v6-5.db");
-    assert!(db.exists(), "index built at {}", db.display());
-    rusqlite::Connection::open(&db)
-        .unwrap()
-        .execute(
-            "INSERT INTO meta(key, value) VALUES('catch_up_failures', '3') \
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            [],
-        )
-        .unwrap();
+    // Build the index at the current tip, then advance the store: bare
+    // `aida history` does not catch the index up, so it is behind HEAD.
+    warm(&fx);
+    assert!(history_db(&fx).exists(), "index built");
     let store = fx.store();
     let t6 = "2025-03-06T15:00:00Z";
     write_obj(
@@ -579,17 +657,68 @@ fn stale_index_falls_back_to_the_digest_with_a_note() {
     assert_eq!(notes.len(), 1, "exactly one note line: {err}");
     assert!(notes[0].contains("behind"), "{err}");
     assert!(notes[0].contains("aida cache rebuild --history"), "{err}");
+    // Asking again still falls back: the fallback never indexes.
+    let again = aida(&fx, &["history", "--format", "human"], &[]);
+    assert!(stderr(&again).contains("behind"), "{}", stderr(&again));
     // The note's fix works: after a rebuild the default serves the flow.
-    ok(
-        "aida cache rebuild --history",
-        &aida(&fx, &["cache", "rebuild", "--history"], &[]),
-    );
+    warm(&fx);
     let out = aida(&fx, &["history", "--format", "human"], &[]);
     let lines = flow_lines(&ok("aida history (rebuilt)", &out));
     assert_eq!(
         lines[0],
         "2025-03-06 15:00 TASK-4 Approved → Completed Filed approved"
     );
+}
+
+#[test]
+fn unbuilt_index_falls_back_to_the_digest_without_building_it() {
+    let fx = init_fixture();
+    assert!(!history_db(&fx).exists(), "a fresh store has no index");
+    for (format, file) in [("human", "digest_human.txt"), ("toon", "digest_toon.txt")] {
+        let out = aida(&fx, &["history", "--format", format], &[]);
+        assert_eq!(
+            ok("aida history", &out),
+            golden(file),
+            "fallback is the digest"
+        );
+        let err = stderr(&out);
+        let notes: Vec<&str> = err.lines().filter(|l| l.starts_with("note:")).collect();
+        assert_eq!(notes.len(), 1, "exactly one note line: {err}");
+        assert!(notes[0].contains("has not been built yet"), "{err}");
+        assert!(notes[0].contains("aida cache rebuild --history"), "{err}");
+        assert!(
+            !history_db(&fx).exists(),
+            "the fallback must not build the index"
+        );
+    }
+}
+
+#[test]
+fn all_flag_brings_shelved_specs_into_the_default() {
+    let fx = init_fixture();
+    warm(&fx);
+    let run = |args: &[&str]| {
+        let mut argv = vec!["history", "--format", "human"];
+        argv.extend_from_slice(args);
+        flow_lines(&ok("aida history", &aida(&fx, &argv, &[])))
+    };
+    let default = run(&[]);
+    assert!(
+        default
+            .iter()
+            .all(|l| !l.contains("STORY-5") && !l.contains("TASK-6")),
+        "archived and deferred specs are hidden by default: {default:?}"
+    );
+    let all = run(&["--all"]);
+    assert_eq!(
+        all[..2],
+        [
+            "2025-03-05 17:00 TASK-6 (new) → Draft Deferred task".to_string(),
+            "2025-03-05 16:00 STORY-5 (new) → Completed Archived story".to_string(),
+        ],
+        "{all:?}"
+    );
+    assert_eq!(all.len(), default.len() + 2, "{all:?}");
 }
 
 #[test]

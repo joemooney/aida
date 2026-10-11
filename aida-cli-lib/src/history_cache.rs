@@ -1197,6 +1197,8 @@ impl HistoryCache {
     /// reset on a rewrite or a foreign store, append new commits, then
     /// back-fill older history while time remains.
     fn ensure_fresh(&mut self, store: &Path, head: &str, budget: Budget) -> Result<()> {
+        #[cfg(test)]
+        INDEX_PASSES.with(|c| c.set(c.get() + 1));
         self.ensure_schema()?;
         let versions_ok = self.meta("schema_version")?.as_deref()
             == Some(&HISTORY_SCHEMA_VERSION.to_string())
@@ -1844,24 +1846,11 @@ fn debug_log(err: &anyhow::Error) {
     }
 }
 
-/// Whether [`stalled_hint`] has already spoken (or was silenced) in this
-/// process.
-// trace:BUG-1923 | ai:claude
-static STALLED_HINT_SHOWN: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// Silence [`stalled_hint`] for the rest of this process. The status flow
-/// (bare `aida history`) prints its own one-line fallback note naming the
-/// cause and the fix, so a second note about the same stall would be noise.
-// trace:STORY-1650 | ai:claude
-pub(crate) fn suppress_stalled_hint() {
-    STALLED_HINT_SHOWN.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
 /// Tell the user (once per process) that inline catch-up is paused.
 // trace:BUG-1923 | ai:claude
 fn stalled_hint() {
-    if !STALLED_HINT_SHOWN.swap(true, std::sync::atomic::Ordering::Relaxed) {
+    static SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !SHOWN.swap(true, std::sync::atomic::Ordering::Relaxed) {
         eprintln!(
             "note: the history index has fallen behind the store and is not catching up; \
              run `aida cache rebuild --history` to bring it up to date \
@@ -1905,12 +1894,18 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
     }
 }
 
-/// Inline catch-up allowance for the status flow (bare `aida history`):
-/// at most this long, or less when `AIDA_HISTORY_INDEX_BUDGET_MS` asks for
-/// less. The flow must stay fast; an index that needs more work than this
-/// falls back to the digest with a note instead.
+#[cfg(test)]
+thread_local! {
+    static INDEX_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Test hook: how many indexing passes (catch-up, back-fill or reset, all
+/// via `ensure_fresh`) this thread has started.
 // trace:STORY-1650 | ai:claude
-const FLOW_INDEX_BUDGET_MS: u64 = 250;
+#[cfg(test)]
+pub(crate) fn index_pass_count() -> u64 {
+    INDEX_PASSES.with(std::cell::Cell::get)
+}
 
 /// Why the history index could not serve the status flow.
 // trace:STORY-1650 | ai:claude
@@ -1918,7 +1913,7 @@ const FLOW_INDEX_BUDGET_MS: u64 = 250;
 pub(crate) enum IndexMiss {
     /// `AIDA_HISTORY_CACHE=0` switched it off.
     Disabled,
-    /// No index file has been built yet (first run, or after an upgrade
+    /// No index has been built yet (first run, or after an upgrade
     /// changed the index format).
     NotBuilt,
     /// The index holds an older store commit than HEAD.
@@ -1926,7 +1921,7 @@ pub(crate) enum IndexMiss {
     /// The index is current but has not filled in enough older history to
     /// cover this query.
     Filling,
-    /// Another aida process holds the index lock.
+    /// Another aida process holds the index lock (it is updating it).
     Busy,
     /// The index file could not be read.
     Unreadable,
@@ -1938,39 +1933,27 @@ pub(crate) enum IndexMiss {
 /// Classify a miss from the index status read right after it.
 // trace:STORY-1650 | ai:claude
 pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
-    if !st.exists {
+    if !st.exists || (st.error.is_none() && st.tip.is_none()) {
         IndexMiss::NotBuilt
     } else if st.error.is_some() {
         IndexMiss::Unreadable
-    } else if st.tip.is_none() || st.tip != st.head {
+    } else if st.indexer_running {
+        IndexMiss::Busy
+    } else if st.tip != st.head {
         IndexMiss::Behind
     } else if !st.complete {
         IndexMiss::Filling
-    } else if st.indexer_running {
-        IndexMiss::Busy
     } else {
         IndexMiss::Unprovable
     }
 }
 
-#[cfg(test)]
-thread_local! {
-    static TEST_FLOW_BUDGET: std::cell::Cell<Option<Duration>> =
-        const { std::cell::Cell::new(None) };
-}
-
-/// Test hook: give [`serve_flow`] a bounded budget on this thread (`None`,
-/// the default, indexes unbounded), so tests can reach the paths only a
-/// budgeted query takes, such as the stalled catch-up.
-// trace:STORY-1650 | ai:claude
-#[cfg(test)]
-pub(crate) fn set_test_flow_budget(budget: Option<Duration>) {
-    TEST_FLOW_BUDGET.with(|b| b.set(budget));
-}
-
-/// Serve the status flow from the index only. Unlike [`serve`] there is no
-/// git-walk fallback here: the caller renders the digest on a miss. Inline
-/// catch-up gets [`FLOW_INDEX_BUDGET_MS`] at most.
+/// Serve the status flow from the index as it stands. Unlike [`serve`]
+/// this does no indexing at all (no catch-up, no back-fill, and it never
+/// creates the index file) and has no git-walk fallback: on a miss the
+/// caller renders the digest at once, so the fallback costs no more than
+/// the digest does. The index keeps healing through the event views and
+/// `aida cache rebuild --history`.
 // trace:STORY-1650 | ai:claude
 pub(crate) fn serve_flow(
     store: &Path,
@@ -1980,22 +1963,13 @@ pub(crate) fn serve_flow(
         return Err(IndexMiss::Disabled);
     }
     let db_path = history_db_path(store);
-    let budget = budget_from(
-        std::env::var("AIDA_HISTORY_INDEX_BUDGET_MS")
-            .ok()
-            .as_deref(),
-    )
-    .min(Duration::from_millis(FLOW_INDEX_BUDGET_MS));
-    // As in `serve`: in-crate tests index their tiny stores unbounded, so
-    // an answer never depends on machine load (BUG-1643).
-    #[cfg(test)]
-    let budget: Option<Duration> = {
-        let _ = budget;
-        TEST_FLOW_BUDGET.with(std::cell::Cell::get)
-    };
-    #[cfg(not(test))]
-    let budget = Some(budget);
-    match serve_with_budget_at(store, &db_path, opts, budget) {
+    // Checked before anything opens the path: opening would create it.
+    if !db_path.is_file() {
+        return Err(IndexMiss::NotBuilt);
+    }
+    let answer = aida_core::git_ops::head_sha(store)
+        .and_then(|head| HistoryCache::open_existing(&db_path)?.query(opts, &head));
+    match answer {
         Ok(Some(answer)) => Ok(answer),
         Ok(None) => Err(classify_miss(&status_at(store, &db_path))),
         Err(e) => {

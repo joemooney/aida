@@ -8529,7 +8529,8 @@ pub(crate) fn handle_git_backend_command(
             // trace:STORY-1650 | ai:claude
             if *digest && explicit_events {
                 anyhow::bail!(
-                    "invalid combination: --digest is the per-requirement view and the                      `events` feed is the per-event view; pass one or the other"
+                    "invalid combination: --digest is the per-requirement view and the \
+                     `events` feed is the per-event view; pass one or the other"
                 );
             }
             let bare = requested_id.is_none()

@@ -7,7 +7,9 @@
 //! prints the per-spec digest instead, with a one-line note on stderr
 //! naming the cause and the fix. It never falls back to the per-commit git
 //! walk: that walk takes seconds on a real store, and the default view has
-//! to stay fast.
+//! to stay fast. Nor does it build, catch up or back-fill the index: the
+//! fallback must cost no more than the digest. The event views and
+//! `aida cache rebuild --history` keep the index current.
 // trace:STORY-1650 | ai:claude
 
 use crate::history::{self, Event, EventKind, HistoryOpts, HistoryOutput};
@@ -283,9 +285,6 @@ pub(crate) fn render(answer: &FlowAnswer, output: HistoryOutput) -> Result<(Stri
 /// Bare `aida history`: the flow from the index, else the digest plus a
 /// note naming the cause.
 pub(crate) fn run(store: &Path, opts: &HistoryOpts, output: HistoryOutput) -> Result<()> {
-    // The fallback note below names a stalled index itself; the index's own
-    // stall hint would say the same thing a second time.
-    history_cache::suppress_stalled_hint();
     match answer(store, opts) {
         Ok(answer) => {
             let (out, err) = render(&answer, output)?;

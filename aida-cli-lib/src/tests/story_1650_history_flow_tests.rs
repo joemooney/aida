@@ -105,6 +105,13 @@ fn with_index_on<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// Build the index to HEAD the way the event views and `aida cache
+/// rebuild --history` do; the flow itself never indexes.
+fn warm(store: &Path) {
+    let db = history_cache::history_db_path(store);
+    history_cache::test_support::index(store, &db, history_cache::Budget::unbounded()).unwrap();
+}
+
 fn transitions(rows: &[FlowRow]) -> Vec<(String, Option<String>, String)> {
     rows.iter()
         .map(|r| (r.id.clone(), r.from.clone(), r.to.clone()))
@@ -119,6 +126,7 @@ fn s(v: &str) -> String {
 fn story_1650_a_spec_with_several_transitions_gets_one_row_each() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
+    warm(&store);
     let answer = with_index_on(|| history_flow::answer(&store, &opts())).expect("index answers");
     assert_eq!(
         transitions(&answer.rows),
@@ -139,6 +147,7 @@ fn story_1650_a_spec_with_several_transitions_gets_one_row_each() {
 fn story_1650_window_selectors_narrow_the_flow_like_the_feed() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
+    warm(&store);
     let run = |o: HistoryOpts| {
         transitions(
             &with_index_on(|| history_flow::answer(&store, &o))
@@ -207,26 +216,66 @@ fn story_1650_disabled_index_falls_back_without_the_git_walk() {
     assert_eq!(git_walk_count(), before + 1);
 }
 
+/// Asserts the flow misses with `want`, and that neither the miss nor the
+/// digest fallback walks git or does any indexing.
+fn assert_cheap_fallback(store: &Path, want: IndexMiss) {
+    with_index_on(|| {
+        let walks = git_walk_count();
+        let passes = history_cache::index_pass_count();
+        assert_eq!(history_flow::answer(store, &opts()).unwrap_err(), want);
+        for output in [
+            HistoryOutput::Human,
+            HistoryOutput::Toon,
+            HistoryOutput::Json,
+        ] {
+            history_flow::run(store, &opts(), output).unwrap();
+        }
+        assert_eq!(
+            git_walk_count(),
+            walks,
+            "{want:?}: the fallback never walks git"
+        );
+        assert_eq!(
+            history_cache::index_pass_count(),
+            passes,
+            "{want:?}: the fallback does no catch-up or back-fill"
+        );
+    });
+}
+
 #[test]
-fn story_1650_stale_index_falls_back_without_the_git_walk() {
+fn story_1650_unbuilt_index_falls_back_without_building_it() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
     let db = history_cache::history_db_path(&store);
-    with_index_on(|| {
-        history_flow::answer(&store, &opts()).expect("warm");
-        // Pause inline catch-up (the stalled state), then move the store on.
-        history_cache::test_support::set_meta(&db, "catch_up_failures", "3");
-        write_spec(&store, "TASK-2", "Filed approved", "Completed");
-        commit(&store, "update TASK-2", "2025-03-05T10:00:00Z");
-        let before = git_walk_count();
-        // The stall guard only applies to a budgeted (interactive) query.
-        history_cache::set_test_flow_budget(Some(std::time::Duration::from_secs(30)));
-        let miss = history_flow::answer(&store, &opts());
-        history_flow::run(&store, &opts(), HistoryOutput::Toon).unwrap();
-        history_cache::set_test_flow_budget(None);
-        assert_eq!(miss.unwrap_err(), IndexMiss::Behind);
-        assert_eq!(git_walk_count(), before, "the fallback never walks git");
-    });
+    assert!(!db.exists());
+    assert_cheap_fallback(&store, IndexMiss::NotBuilt);
+    assert!(!db.exists(), "the flow never creates the index");
+}
+
+#[test]
+fn story_1650_stale_index_falls_back_without_catching_up() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    write_spec(&store, "TASK-2", "Filed approved", "Completed");
+    commit(&store, "update TASK-2", "2025-03-05T10:00:00Z");
+    assert_cheap_fallback(&store, IndexMiss::Behind);
+    // Still behind: nothing caught it up.
+    let db = history_cache::history_db_path(&store);
+    let st = history_cache::status_at(&store, &db);
+    assert_ne!(st.tip, st.head);
+}
+
+#[test]
+fn story_1650_half_built_index_falls_back_without_back_filling() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    let db = history_cache::history_db_path(&store);
+    // Current at HEAD, but only the newest commit is indexed.
+    history_cache::test_support::partial_build(&store, &db, 1, 1).unwrap();
+    assert_cheap_fallback(&store, IndexMiss::Filling);
+    assert!(!history_cache::status_at(&store, &db).complete);
 }
 
 #[test]
@@ -259,6 +308,21 @@ fn story_1650_misses_are_classified_from_the_index_status() {
                 ..base.clone()
             },
             IndexMiss::Behind,
+        ),
+        (
+            HistoryCacheStatus {
+                tip: None,
+                ..base.clone()
+            },
+            IndexMiss::NotBuilt,
+        ),
+        (
+            HistoryCacheStatus {
+                head: Some(s("b")),
+                indexer_running: true,
+                ..base.clone()
+            },
+            IndexMiss::Busy,
         ),
         (
             HistoryCacheStatus {
@@ -401,8 +465,19 @@ fn story_1650_added_events_record_the_status_filed_at() {
     let mut feed = opts();
     feed.events_mode = true;
     feed.opened_only = true;
-    let records = history::collect_event_records(&store, &feed).unwrap();
-    assert_eq!(records.events.len(), 2);
+    // The git-walk decoder, the same one the index stores rows from.
+    let (events, _, _) = history::collect_filtered_events_git(&store, &feed).unwrap();
+    let filed: Vec<(String, String)> = events
+        .iter()
+        .map(|e| match &e.kind {
+            EventKind::Added { status, .. } => (e.spec_id.clone(), status.clone()),
+            other => panic!("only filings expected: {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        filed,
+        [(s("TASK-2"), s("Approved")), (s("STORY-1"), s("Draft"))]
+    );
     // The status is stored on the event but the feed's rendering of an
     // added event is unchanged.
     let added = EventKind::Added {
