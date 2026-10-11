@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T07:39:06.493198056Z
+modified_at: 2026-10-11T07:52:02.640119721Z
 req_type: Task
 tags:
 - closure:pending
@@ -444,6 +444,18 @@ comments:
   created_at: 2026-10-11T07:39:06.493198056Z
   modified_at: 2026-10-11T07:39:06.493198056Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a129f2-8750-7430-a60b-2a590e06aa30
+  author: joe
+  content: |-
+    Run 4 (#2494) tags pushed, merge requested. Head 824eccfdb3 (base 612cf8c202; merge-tree vs origin/main 7224b9758a clean; Build green).
+    - slice-13-r2 @ 9620a6f1f9: warnings 0/0, tests 9921/9921 (7 ignored), store_push_pull.rs=3508
+    - slice-14-r2 @ 02647951ba: warnings 0/0, tests 9921/9921 (7 ignored), plan_intent.rs=2209. First attempt had 1 failure: aida-cli/tests/bug_1683_live_drain_lock.rs two_hour_live_lock_blocks_all_launch_entry_points (sibling-clone route printed the first-run Welcome + proceeded instead of the holder gate; host load ~36). Full rerun at the same SHA green; the test passed at 13-r2 and 15-r2 too. Logged in the tag; not attributable to the move (plan_intent has no drain-lock code). If it recurs I'll stop and file it.
+    - slice-15-r2 @ 824eccfdb3: warnings 0/0, tests 9921/9921 (7 ignored), zen_drive_root.rs=1151
+    verify_stack.py (origin/main) 612cf8c202..824eccfdb3: 5 commits (3 MOVE, 2 RETARGET), checks 1-8 PASS.
+    COUNT CORRECTION: the r1 tags' 9971 (and earlier runs' counts) summed ~50 child-process 'test result: 1 passed; 7845 filtered out' lines printed by tests that re-exec the test binary. Counting only the 55 binaries' own result lines (0 filtered out) gives 9921 for the same Rust tree (the run-3 log /tmp/retest-s13.log also gives 9921 under this count). All r2 proofs use the corrected count. Run 5 (db_reconcile, status_awaiting, session_start, session_end, ~10.9k lines) is stacking next on slice-13.
+  created_at: 2026-10-11T07:52:02.640119721Z
+  modified_at: 2026-10-11T07:52:02.640119721Z
+  session_id: 74729565-cb48-4858-8a37-d58740f64a38
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
