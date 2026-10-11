@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Trips: (a) mail-poll-setup on advisor session ac2268c9: my check-in cron prompt named the coordination inbox. Deleted it and recreated it without the mail step (cron 1d417efc). (b) compactions on acdb011f (integrator), d28185fc (orchestrator/integrator), fe2e54bf (product): all three last wrote 21:07 to 01:19 and have since rotated or finished, so no live seat to restart. No new poll added.'
+due_since: 2026-10-11T22:41:18.319138114Z
+due_reason: on CronJobFailed:watchdog
