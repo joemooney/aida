@@ -515,6 +515,13 @@ EOF
 # blocking hook's stderr, so a stdout-only reason surfaced as "No stderr
 # output". trace:BUG-1936 | ai:claude
 if ! SCAN_COMMAND=$(strip_shell_literals "$COMMAND"); then
+    # Fail closed on unparseable input ONLY when the raw command could be a
+    # git command (word-boundary `git`, which also covers `rm -rf .git`). A
+    # non-git command must never be blocked because the tokenizer could not
+    # parse it. trace:BUG-1936 | ai:claude
+    if ! printf '%s' "$COMMAND" | grep -qE '\bgit\b'; then
+        exit 0
+    fi
     {
         echo "BLOCKED: could not parse this command's quoting (an unterminated quote or heredoc)."
         echo "The git safety check cannot tell which parts are real git commands, so it fails closed."

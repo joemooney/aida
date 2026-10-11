@@ -48,7 +48,13 @@ assert_exit "force-push split by a line continuation is blocked" 2 "$(run '{"too
 assert_exit "unterminated quote fails closed" 2 "$(run '{"tool_input":{"command":"git push origin main \"oops"}}')"
 assert_stderr "unterminated quote states its reason on stderr" "BLOCKED: could not parse" "$(run_stderr '{"tool_input":{"command":"git push origin main \"oops"}}')"
 assert_exit "unterminated heredoc fails closed" 2 "$(run '{"tool_input":{"command":"cat <<EOF\ngit push --force origin main"}}')"
-assert_stderr "unterminated heredoc states its reason on stderr" "BLOCKED: could not parse" "$(run_stderr '{"tool_input":{"command":"cat <<EOF\nbody"}}')"
+assert_stderr "unterminated heredoc states its reason on stderr" "BLOCKED: could not parse" "$(run_stderr '{"tool_input":{"command":"cat <<EOF\ngit push --force origin main"}}')"
+# Fail-closed applies ONLY to git-bearing commands: an unparseable non-git
+# command must never be blocked by the tokenizer. trace:BUG-1936 | ai:claude
+assert_exit "unterminated quote in a non-git command is allowed" 0 "$(run '{"tool_input":{"command":"echo \"unterminated"}}')"
+assert_exit "unterminated non-git heredoc is allowed" 0 "$(run '{"tool_input":{"command":"cat <<EOF\nhello"}}')"
+assert_exit "unterminated quote in python3 -c is allowed" 0 "$(run '{"tool_input":{"command":"python3 -c \"print(1)"}}')"
+assert_exit "unterminated quote with rm -rf .git fails closed" 2 "$(run '{"tool_input":{"command":"rm -rf .git \"oops"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"
