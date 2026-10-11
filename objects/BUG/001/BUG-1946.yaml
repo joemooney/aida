@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:06:00.825634058Z
-modified_at: 2026-10-11T06:10:34.251115187Z
+modified_at: 2026-10-11T07:15:48.175203245Z
 req_type: Bug
 tags:
 - flaky-test
@@ -40,6 +40,32 @@ comments:
   created_at: 2026-10-11T06:10:34.251115187Z
   modified_at: 2026-10-11T06:10:34.251115187Z
   session_id: 26c63616-b019-4504-a8d9-08023c744952
+- id: 01a129d1-594f-7fa3-a02c-1af13213b6f8
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend merge-into BUG-1948 because BUG-1948 (completed) is the same race and its one-statement fix is already on origin/main at 612cf8c202.
+
+    Problem
+    verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner rendered the launch preview twice without holding crate::test_env's env lock, so a parallel presentation_env_tests EnvVarsGuard setter could flip the `presentation_env:` line between the two renders.
+
+    Evidence path (verified)
+    - Fix merged: `git show 612cf8c202` ("tooling: hold the env lock across both launcher renders in the verbose-diagnostics test", PR #2493, MERGED 2026-10-11T06:36Z) adds `let _env = crate::test_env::env_lock();` in that test.
+    - The LOCAL main checkout at 9116ba7f23 does not yet contain it (origin/main is 7 commits ahead; aida-cli-lib/src/tests/agent_launcher_tests.rs:555-636 locally still has no lock), which is why it still reproduces here; it does not reproduce on origin/main.
+    - BUG-1948 comment (2026-10-10 23:37) records the same closure; this spec's own second comment already calls it a duplicate.
+
+    Acceptance criteria (already satisfied by BUG-1948; listed for the record)
+    - `cargo test -p aida-cli-lib --lib agent_registry_root` passes 3/3 on origin/main with default test threads.
+    - The test body holds env_lock() (or EnvVarsGuard) before the first render and releases after the assertion.
+    - No other test in agent_launcher_tests.rs renders twice without the lock (the two sibling verbose_diagnostics_* tests render once).
+
+    Scope / non-goals
+    - Nothing further to implement; close as duplicate once the local main is fast-forwarded.
+    - related:BUG-1948 related:STORY-1473 (last substantive edit to the test file)
+
+    Suggested size: S (no work remaining)
+  created_at: 2026-10-11T07:15:48.175203245Z
+  modified_at: 2026-10-11T07:15:48.175203245Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 92577b29a6185d8878230a38f3eb5355a34a514e
   branch: slice-10
