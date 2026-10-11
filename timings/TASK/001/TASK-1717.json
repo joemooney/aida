@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1717",
+  "publishes": [
+    {
+      "at": "2026-10-11T15:29:48.099621643Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T19:11:54.637737743Z",
+      "spec": "TASK-1717",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-10T15:34:07.669504223Z",
+      "spec": "TASK-1717",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1717",
+        "branch": "task-1717",
+        "first_seen": "2026-10-10T15:34:07.669455002+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:44:28.138816179Z",
+      "spec": "TASK-1717",
+      "seat": "integrator",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:48:20.963364132Z",
+      "spec": "TASK-1717",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-1717"
+      }
+    },
+    {
+      "ts": "2026-10-11T06:58:44.277983592Z",
+      "spec": "TASK-1717",
+      "seat": "integrator",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-11T15:29:48.086377555Z",
+      "spec": "TASK-1717",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1c842051ee5001e8b7f765b86f021f1fec1786c4",
+        "pr": 2502,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
