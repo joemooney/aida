@@ -1,0 +1,24 @@
+id: 01a12a1c-f8d9-7593-ae5c-21e5ea31c826
+spec_id: BUG-1955
+agreed_id: BUG-1955
+title: 'Flaky: task_1507 history_cache_merge_commit_decodes_like_git_show_cc fails with git ''unable to create temporary file'' on CI'
+description: 'Main CI on 36c906f453 (the STORY-1650 #2491 merge, run on 2026-10-11 08:11Z) failed in task_1507_history_cache_tests::history_cache_merge_commit_decodes_like_git_show_cc (tests/task_1507_history_cache_tests.rs:215). The fixture''s git commit -q --allow-empty failed: ''error: unable to create temporary file: No such file or directory / fatal: failed to write commit object''. The fixture repo or its .git/objects disappeared mid-test. The same run also panicked in global_queue::tests::bug_1682_process_child (bug_1682_global_queue_tests.rs:77). The next main run (c70c4b1cfa) passed, and so did PR #2491''s own Build, so this is nondeterministic. Suspects: a tempdir dropped early, or another test mutating shared HOME/TMPDIR/cwd while it runs (git_in sets HOME=dir). Acceptance: identify the interfering test or the early drop, fix the isolation, and show the test stable over repeated full-workspace runs.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T08:38:24.217096943Z
+modified_at: 2026-10-11T08:38:24.217096943Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- found:night-2026-10-10
+filed_at:
+  code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
