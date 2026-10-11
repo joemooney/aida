@@ -93,6 +93,8 @@ mod output_format;
 mod plan_followups;
 mod plan_intent;
 mod pr_merge_gate;
+// trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+mod live_work;
 mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.

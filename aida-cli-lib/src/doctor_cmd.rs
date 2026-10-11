@@ -364,8 +364,8 @@ struct DoctorRunOptions {
 pub(crate) struct DoctorHealResult {
     category: String,
     id: String,
-    action: String,
-    status: String,
+    pub(crate) action: String,
+    pub(crate) status: String,
     detail: Option<String>,
 }
 
@@ -7304,7 +7304,7 @@ fn heal_doctor_brief(finding: &DoctorFinding) -> Result<DoctorHealResult> {
     })
 }
 
-fn heal_doctor_spec_status(
+pub(crate) fn heal_doctor_spec_status(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
@@ -7314,6 +7314,7 @@ fn heal_doctor_spec_status(
         .iter()
         .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id));
     let mut action = None;
+    let mut kept: Option<String> = None;
     for req in &mut store.requirements {
         if req.spec_id.as_deref() != Some(finding.id.as_str()) {
             continue;
@@ -7344,6 +7345,16 @@ fn heal_doctor_spec_status(
             if current_scope_lease {
                 continue;
             }
+            // BUG-1944: a missing lease is not abandoned work. While a branch
+            // carrying the spec has an open PR or unmerged commits, or the
+            // forge can't say, the spec stays In Progress.
+            // trace:BUG-1944 | ai:claude
+            if let crate::live_work::LiveWorkVerdict::Keep(why) =
+                crate::live_work::spec_live_work(project_root, &finding.id)
+            {
+                kept = Some(why);
+                continue;
+            }
             // trace:BUG-1637 | ai:claude
             aida_core::conflict::set_status_recorded(
                 req,
@@ -7361,10 +7372,15 @@ fn heal_doctor_spec_status(
         storage.save(&store)?;
     }
     let changed = action.is_some();
+    // trace:BUG-1944 | ai:claude
+    let default_action = match kept {
+        Some(why) => format!("kept {} In Progress: {why}", finding.id),
+        None => "no automatic status change applied".to_string(),
+    };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
-        action: action.unwrap_or_else(|| "no automatic status change applied".to_string()),
+        action: action.unwrap_or(default_action),
         status: if changed { "healed" } else { "skipped" }.to_string(),
         detail: None,
     })
