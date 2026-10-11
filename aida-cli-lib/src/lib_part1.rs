@@ -4769,7 +4769,7 @@ pub(crate) fn run() -> Result<()> {
     } = &cli.command
     {
         if s == "pr" || s == "mr" {
-            return pr_list_handler(*json);
+            return pr_list_handler(*json, false);
         }
         // trace:TASK-1590 | ai:antigravity
         if s == "review" {

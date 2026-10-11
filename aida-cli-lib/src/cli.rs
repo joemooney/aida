@@ -2049,12 +2049,17 @@ pub enum PrCommand {
         branch: Option<String>,
     },
 
-    /// List open PRs/MRs with their mapped spec IDs and rebase status.
+    /// List every open PR/MR with its spec ID (when one can be found),
+    /// CI state and rebase status.
     #[clap(visible_alias = "mr")]
     List {
         /// Emit the list as a JSON array.
         #[clap(long)]
         json: bool,
+        /// Only show PRs that map to a spec ID; hide the unmapped ones.
+        // trace:BUG-1927 | ai:claude
+        #[clap(long)]
+        mapped_only: bool,
     },
 
     /// Rebase a PR onto its base in a temporary worktree, then
