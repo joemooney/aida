@@ -32,12 +32,12 @@ description: |
   - Piped output (`aida show FAQ-1-263 | cat`), `--format toon` and `--format json` are unchanged (golden tests).
   - `--raw` restores today's human output exactly.
   - Snapshot tests cover headings, bold/italic/code, nested lists, a wide table at 80 and 120 columns, and malformed markdown falling back to raw.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:43:50.345052560Z
-modified_at: 2026-10-11T06:28:04.493083202Z
+modified_at: 2026-10-11T19:26:04.993486900Z
 req_type: Story
 tags:
 - batch:night-2026-10-10
@@ -53,6 +53,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a12c6d-f0c1-7761-9468-b3e9d5d69072
+  author: aida-session-start
+  timestamp: 2026-10-11T19:26:04.993486274Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
