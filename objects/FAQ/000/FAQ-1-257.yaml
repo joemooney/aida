@@ -6,7 +6,7 @@ description: |
   **`aida list` has no `--search` flag. Use `aida search "<words>"`.**
 
   ## Why
-  Search is its own command and ranks matches across titles, descriptions and comments. Some skills and docs (e.g. `/aida-capture`'s dedup step) still say `aida list --search`, which fails with `unexpected argument '--search'`.
+  Search is its own command and ranks matches across titles, descriptions and comments. Older copies of some skills (e.g. `/aida-capture`'s dedup step) said `aida list --search`, which fails with `unexpected argument '--search'`.
 
   ## How
   ```bash
@@ -15,13 +15,13 @@ description: |
   ```
 
   ## Caveat
-  BUG-1922 tracks fixing the stale skill/doc text and adding a lint so made-up flags in skill templates fail CI.
+  The shipped skill templates now use `aida search`, and CI checks every `aida ...` command in skill and command templates against the CLI's `--help`, so invented flags fail before release. A project with skills installed from an older release keeps the old line until its skills are refreshed.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:23:44.157272849Z
-modified_at: 2026-10-10T18:48:11.081714830Z
+modified_at: 2026-10-11T13:20:05.396073382Z
 req_type: Faq
 tags:
 - audience:user
