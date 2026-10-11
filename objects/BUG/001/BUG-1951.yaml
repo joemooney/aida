@@ -32,10 +32,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:25:08.223791147Z
-modified_at: 2026-10-11T13:59:27.833729524Z
+modified_at: 2026-10-11T13:59:28.655954702Z
 req_type: Bug
 tags:
 - cache
+- factory:night
 - found:night-2026-10-10
 - locking
 comments:
