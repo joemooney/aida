@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T07:13:03.570022294Z
+modified_at: 2026-10-11T07:30:13.894749387Z
 req_type: Doc
 tags:
 - factory:night
@@ -228,6 +228,15 @@ comments:
   created_at: 2026-10-11T07:13:03.570022294Z
   modified_at: 2026-10-11T07:13:03.570022294Z
   session_id: 01a129c3fefa
+- id: 01a129de-8f06-78a1-90c6-2e2e8e432acd
+  author: joe
+  content: |
+    FACTORY READY: PR #2499 green at 425bbdbf69
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed; PR is mergeable. This is the B3 docs-only slice and does not complete DOC-6 (PR body says so; no DOC-6 completion trailer should be applied). Draft left for review and merge by the night relay / advisor. Review fixes go in worktree `/home/joe/ai/aida-doc-6-factory` (branch `doc-6-b3-docs`).
+  created_at: 2026-10-11T07:30:13.894749387Z
+  modified_at: 2026-10-11T07:30:13.894749387Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
