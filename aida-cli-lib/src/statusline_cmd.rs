@@ -54,9 +54,14 @@ pub(crate) fn handle_statusline_command(
     let (effective_role_name, role_is_default) = resolve_effective_role(raw_role.as_deref());
     // BUG-1924: the label above stays the routing key (queue depth, @SPEC),
     // but the *displayed* role comes from the validated seat grant, so a
-    // shell that only carries the label can see it lacks the authority.
+    // shell that only carries the label can see it lacks the authority. With
+    // no label but a valid grant, the granted seat routes too.
     // trace:BUG-1924 | ai:claude
     let role_display = crate::seat_authority::role_display(&project_root, raw_role.as_deref());
+    let (effective_role_name, role_is_default) = match (&role_display, raw_role.as_deref()) {
+        (crate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
+        _ => (effective_role_name, role_is_default),
+    };
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.

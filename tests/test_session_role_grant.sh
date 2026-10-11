@@ -102,6 +102,14 @@ out=$(run "$SESSION_HOOK" STUB_SEAT=reviewer)
 check "no label, valid grant: the granted seat is shown" \
     "AIDA · role: reviewer · queue: 0 · in-flight: 0" "$out"
 
+out=$(run "$SESSION_HOOK" AIDA_SESSION_ROLE=Guest STUB_SEAT=)
+check "persona labels compare case-insensitively and need no grant" \
+    "AIDA · role: guest · queue: 0 · in-flight: 0" "$out"
+
+out=$(run "$SESSION_HOOK" AIDA_SESSION_ROLE=Advisor STUB_SEAT=advisor)
+check "a mixed-case label with a valid grant is unchanged" \
+    "AIDA · role: advisor · queue: 0 · in-flight: 0" "$out"
+
 out=$(run "$SESSION_HOOK" AIDA_SESSION_ROLE=implementer STUB_SEAT=)
 check "implementer baseline needs no grant" \
     "AIDA · role: implementer · queue: 0 · in-flight: 0" "$out"
@@ -114,7 +122,8 @@ check "no label, no grant: role none" \
 ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=)
 check "role addendum header marks an ungranted advisor" \
     "# AIDA active role: advisor (no grant)" "$(printf '%s\n' "$ctx" | head -n 1)"
-contains "role addendum explains the missing grant" "no valid grant" "$ctx"
+absent "the full grant note appears once, in the digest, not the addendum" \
+    "aida role enter" "$ctx"
 
 ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
 check "role addendum header with a valid grant is unchanged" \
@@ -123,9 +132,19 @@ absent "role addendum with a valid grant has no grant warning" "no valid grant" 
 contains "role addendum still carries the role purpose" \
     "Purpose: Route work and groom the queue." "$ctx"
 
-ctx=$(role_ctx AIDA_SESSION_ROLE=reviewer STUB_SEAT=)
-check "ungranted label with no role file still gets the warning" \
-    "# AIDA active role: reviewer (no grant)" "$(printf '%s\n' "$ctx" | head -n 1)"
+ctx=$(role_ctx AIDA_SESSION_ROLE=Advisor STUB_SEAT=advisor)
+check "role addendum compares the label case-insensitively" \
+    "# AIDA active role: advisor" "$(printf '%s\n' "$ctx" | head -n 1)"
+
+mkdir -p "$HOME/.aida/roles"
+printf 'purpose = "Global reviewer."\n' >"$HOME/.aida/roles/reviewer.toml"
+ctx=$(run "$ROLE_HOOK" AIDA_SESSION_ROLE=reviewer STUB_SEAT= \
+    AIDA_SESSION_PROJECT="$TMP/missing" | python3 -c '
+import json, sys
+raw = sys.stdin.read()
+print(json.loads(raw)["hookSpecificOutput"]["additionalContext"] if raw.strip() else "")')
+check "an unreachable project root skips the grant check (no false tag)" \
+    "# AIDA active role: reviewer" "$(printf '%s\n' "$ctx" | head -n 1)"
 
 ctx=$(role_ctx STUB_SEAT=advisor)
 check "no label: role addendum stays silent" "" "$ctx"

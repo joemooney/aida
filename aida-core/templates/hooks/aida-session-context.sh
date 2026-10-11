@@ -39,9 +39,14 @@ cd "$project_root" 2>/dev/null || exit 0
 # shown as "<role> (no grant)" so the session can tell it lacks that authority.
 # The implementer baseline and the guest/requester personas need no grant.
 # trace:BUG-1924 | ai:claude
-label="${AIDA_SESSION_ROLE:-}"
+# Role names compare case-insensitively, as AIDA canonicalizes them.
+label=$(printf '%s' "${AIDA_SESSION_ROLE:-}" | tr '[:upper:]' '[:lower:]')
 [ "$label" = "dialog" ] && label=advisor
-seat=$(aida role current 2>/dev/null | head -n 1)
+if command -v timeout >/dev/null 2>&1; then
+    seat=$(timeout 2 aida role current 2>/dev/null | head -n 1)
+else
+    seat=$(aida role current 2>/dev/null | head -n 1)
+fi
 ungranted=""
 if [ -n "$seat" ]; then
     role="$seat"
