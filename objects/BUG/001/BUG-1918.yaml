@@ -19,9 +19,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T13:41:30.760394173Z
+modified_at: 2026-10-11T15:21:07.143818364Z
 req_type: Bug
 tags:
+- batch:2026-10-11
 - batch:relay-2026-10-10
 - review-gate
 - two-seat
