@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:59:40.157380366Z
-modified_at: 2026-10-11T15:21:03.704767580Z
+modified_at: 2026-10-11T15:21:04.621358264Z
 req_type: Story
 tags:
 - forge
@@ -57,6 +57,12 @@ comments:
   created_at: 2026-10-11T07:45:45.103806420Z
   modified_at: 2026-10-11T07:45:45.103806420Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-a16d-7c20-803e-e722c0fb22fb
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. Low priority. Outward-facing only when the operator passes the forge flags; repos private by default; a non-refusal push error must never trigger project creation. Keep BUG-1932 and BUG-1938 out of scope.'
+  created_at: 2026-10-11T15:21:04.621358264Z
+  modified_at: 2026-10-11T15:21:04.621358264Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-9dd8-7e31-8c50-e5141e12341b
   author: joe
