@@ -26,12 +26,12 @@ description: |-
   - AC3: `aida edit X --status completed`, for a code-type spec with no referencing commit on the default branch, exits 0 and prints a warning naming X and the opt-out tag.
   - AC4: the same command, for a spec with a shipped commit, or for a non-code type (decision, faq, …), prints no warning.
   - AC5: the warning and the doctor scan use the same rule, so the two cannot disagree. Test both on the same fixture.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:11:01.493042018Z
-modified_at: 2026-10-11T07:42:52.999733770Z
+modified_at: 2026-10-11T10:48:23.709213714Z
 req_type: Story
 tags:
 - agent-surface
@@ -120,6 +120,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12a93-fb98-71c0-9f44-905e71ebcbd1
+  author: aida-auto-bump
+  timestamp: 2026-10-11T10:48:23.704950370Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12a93-fb9d-7200-8314-f69c1192d1c2
+  timestamp: 2026-10-11T10:48:23.709211555Z
+  agent: implementer
+  commit_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
+  summary: Completed via merge 5ca72fd2
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
@@ -128,3 +141,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T10:48:23.704943698Z
+  completion_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
