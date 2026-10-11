@@ -249,3 +249,28 @@ items = [
   "mod stakeholder_cli_policy_tests",
   "fn stakeholder_cli_action",
 ]
+
+[module.memory_doc]
+purpose = "Scaffolded memory-pack refresh, drift reporting and markdown frontmatter helpers (STORY-1488 slice 1)"
+items = [
+  "fn fnv1a_hex",
+  "fn normalize_line_endings",
+  "fn split_md_frontmatter",
+  "fn frontmatter_field",
+  "fn build_scaffolded_memory",
+  "enum MemoryDisposition",
+  "fn memory_refresh_disposition",
+  "fn update_memory_index",
+  "struct MemoryPackReport",
+  "fn memory_matches_focus",
+  "fn scaffold_memory_pack_into",
+  "fn scaffold_memory_pack",
+  "enum MemoryDriftState",
+  "struct MemoryDriftRow",
+  "struct MemoryDriftReport",
+  "impl impl:MemoryDriftReport",
+  "fn master_memory_meta",
+  "fn compute_memory_drift_into",
+  "fn project_memory_dir",
+  "fn print_status_memory_drift_section",
+]
