@@ -80,6 +80,8 @@ mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
 mod kernel;
+// trace:STORY-1645 | ai:claude
+mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
 mod mailbox_root;
