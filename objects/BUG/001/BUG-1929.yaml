@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T16:33:50.365813549Z
+modified_at: 2026-10-11T18:21:28.708610285Z
 req_type: Bug
 tags:
 - contained
@@ -84,6 +84,12 @@ comments:
   content: 'ADVISOR: factory:2026-10-11 ordering. Do NOT start until BUG-1928''s PR is MERGED; build on the write-boundary mechanism it lands.'
   created_at: 2026-10-11T16:33:50.365813549Z
   modified_at: 2026-10-11T16:33:50.365813549Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12c32-cb04-7fa0-86d2-85f6a53b2135
+  author: joe
+  content: 'ADVISOR 2026-10-11 11:22: BUG-1928 MERGED (#2534, 3938d0a491), so BUG-1929 may start. Build on contained_boundary.rs. MERGE GATE: BUG-1929''s PR will not be merged until BUG-1928''s env-gated real-claude test (real_claude_contained_session_write_boundary, AIDA_TEST_REAL_CLAUDE=1) has run once and its result is posted on BUG-1928 (tracked as BUG-1971 item 1). The factory can''t compile locally, so the operator or advisor runs it. Draft and drive to green as usual.'
+  created_at: 2026-10-11T18:21:28.708610285Z
+  modified_at: 2026-10-11T18:21:28.708610285Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
