@@ -17,13 +17,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:36:04.697193014Z
-modified_at: 2026-10-11T15:46:37.768303681Z
+modified_at: 2026-10-11T16:34:13.860365091Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - cache
 - ci
 - flaky-test
+comments:
+- id: 01a12bd0-9ae4-71e2-b67c-bf41a4b8b236
+  author: joe
+  content: 'REVIEW (night): APPROVE at 5a167905 (PR #2529), fresh reviewer. Non-blocking minors: (1) the child''s pre_exec poll ignores EINTR (near-zero risk: aida-core installs no signal handlers); (2) the lock_holders re-reads run back to back with no spacing; (3) a comment nit about read sizes.'
+  created_at: 2026-10-11T16:34:13.860365091Z
+  modified_at: 2026-10-11T16:34:13.860365091Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a129a5-6220-7761-9530-f767760d5b20
   author: joe
