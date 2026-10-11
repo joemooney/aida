@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T15:20:58.425981017Z
+modified_at: 2026-10-11T15:20:59.258827871Z
 req_type: Bug
 tags:
 - contained
@@ -72,6 +72,12 @@ comments:
   created_at: 2026-10-11T07:43:57.208532427Z
   modified_at: 2026-10-11T07:43:57.208532427Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-8c7a-7a71-8d7a-078883eeab1d
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. Take the NARROW option: add exactly <main>/.aida-store/** and <main>/.aida/cache.db* (plus the store-write lock) to the sandbox write set, using the mechanism BUG-1928 lands; unit test asserts exactly those entries and nothing else in the main checkout. Do NOT build the broker alternative. Sequence after BUG-1928. The atomic-failure criterion (no ''status changed'' display after a failed write) stays in scope.'
+  created_at: 2026-10-11T15:20:59.258827871Z
+  modified_at: 2026-10-11T15:20:59.258827871Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
