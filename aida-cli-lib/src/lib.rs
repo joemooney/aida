@@ -28,6 +28,7 @@ mod autopilot;
 mod autopilot_audit;
 mod awaiting_you;
 mod backlog;
+mod brief;
 mod brief_cmd;
 mod burndown;
 // trace:TASK-1500 | ai:codex
@@ -126,6 +127,7 @@ mod token_ledger;
 mod tui_entry;
 mod usage_mcp_helpers;
 mod zen_cmd;
+use brief::*;
 use claim::*;
 use db_block::*;
 use drain_cmd::*;
