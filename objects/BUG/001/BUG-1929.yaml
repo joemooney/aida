@@ -16,12 +16,12 @@ description: |-
   - A contained session can run the AIDA write verbs its skills require: edit status, comment add, queue done, findings. Either the store and cache paths are added to the write boundary as narrowly as possible, or those writes go through a broker outside the sandbox.
   - If a store write does fail inside a session, the CLI exits non-zero with one clear message, not a partial success (status shown as changed but the error printed).
   - A test: a contained session claims a spec and adds a comment, and both are visible from the main checkout.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-11T07:43:57.208532427Z
+modified_at: 2026-10-11T15:20:58.425981017Z
 req_type: Bug
 tags:
 - contained
@@ -72,6 +72,14 @@ comments:
   created_at: 2026-10-11T07:43:57.208532427Z
   modified_at: 2026-10-11T07:43:57.208532427Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+history:
+- id: 01a12b8d-8939-7062-a354-e51064a03c51
+  author: joe
+  timestamp: 2026-10-11T15:20:58.425976418Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
