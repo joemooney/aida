@@ -1,0 +1,54 @@
+id: 01a12b32-13d9-7a73-b09e-66a524e161ed
+spec_id: ADR-73
+agreed_id: ADR-73
+title: The advisor seat may merge approved PRs only with an independent APPROVE, green CI on the pinned head, no holds, and no recorded authorship of its own
+description: |
+  ## Decision
+  The **advisor seat may merge approved PRs**, whatever vendor runs it (Claude, Codex, agy, …), only when ALL of the following hold. This replaces a permission that previously lived only in Claude-specific session context.
+
+  ## Conditions (all required)
+  1. **Not its own code, defined mechanically.** The advisor's identity (its session, its harness process, its seat grant and any lease it holds) must not appear anywhere in the PR's recorded authorship ledger, the same ledger BUG-1918's review-authority check reads. An advisor that launched an implementer subagent for the work IS an author of it (see STORY-1654 / STORY-1662) and may not merge it. The agent's own judgment of what it wrote does not count.
+  2. **Independent APPROVE.** The current head has an APPROVE recorded with `aida review record` by an identity that is separate from every author. That can be the advisor's own review when the advisor did not author the PR.
+  3. **Green CI on the exact head.** Merge with the head commit pinned (`--match-head-commit <full sha>` or the `aida pr ship` equivalent) after the required Build check passed on that SHA.
+  4. **Holds are absolute.** No operator hold (e.g. a spec or PR comment saying it holds), no merge-hold label, and no unresolved REQUEST CHANGES.
+  5. **Signoff for sensitive changes.** Architecture, security, approval-authority or identity changes also need the advisor or operator signoff recorded on the owning spec before merge (the sketch-and-signoff rule).
+  6. **Audit comment.** After merging, comment on the PR or owning spec naming the approval (who, which head), the merged SHA and the CI run.
+
+  ## Merge path
+  - Default: `aida pr ship`, the gated path that runs the approval-authority checks.
+  - **Narrow exception: verified mechanical slice stacks** (e.g. the STORY-1488 / TASK-1538 lib.rs split). `aida pr ship` only squash-merges, and these stacks must rebase-merge (FAQ-8). They may merge with `gh pr merge <n> --rebase --match-head-commit <full sha>` only when `scripts/split-lib/verify_stack.py` (from origin/main) passes against the PR's base, the slice tags carry their proofs, and conditions 1–6 hold. The exception ends when `aida pr ship` gains a rebase-merge mode (see the linked story).
+
+  ## Enforcement status: read this before relying on it
+  This ADR is policy. Advisors follow it because they have read it; the system does not enforce it yet. Enforcement arrives with BUG-1918's identity-bound approval gate in `aida pr ship`, which is sequenced behind STORY-1654 (separate reviewer processes). Until then, condition 1 depends on the advisor checking the authorship ledger honestly. Do not mistake this ADR for a control.
+
+  ## Scope and revocation
+  Applies to this project (aida). The operator may supersede or revoke it at any time with a successor decision. Other projects need their own decision.
+
+  ## Where it must be visible
+  Link it from the vendor-neutral two-seat discipline docs (`aida-core/templates/.aida/discipline/two-seat-protocol.md`, then `make sync-templates`), so every vendor's advisor loads it. It must not live only in a vendor-specific memory or prompt.
+
+  ## Context
+  Recorded 2026-10-11 at the operator's request, after an overnight run in which the (Claude) advisor rebase-merged lib-split runs #2493/#2494/#2507/#2509 and the pre-run PRs #2498/#2508 under these conditions. That surfaced two gaps: the permission was invisible to non-Claude advisors, and the stack merges bypassed `aida pr ship`.
+
+  ## Related
+  BUG-1918, STORY-1654, STORY-1662, TASK-1538, FAQ-8, ADR-9 (one engine), the two-seat protocol.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:41:04.601089795Z
+modified_at: 2026-10-11T13:41:04.601089795Z
+req_type: Decision
+tags:
+- advisor
+- merge
+- two-seat
+- vendor-neutral
+filed_at:
+  code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
