@@ -1,0 +1,31 @@
+id: 01a12b1c-ff55-76c0-b29d-5495b413ce81
+spec_id: STORY-1662
+agreed_id: STORY-1662
+title: Implementers launched by an orchestrator or advisor session run as separate processes with their own implementer seat
+description: |-
+  Split out of STORY-1654 (advisor signoff 2026-10-11, ruling Q2). STORY-1654 moves reviewers into separate processes. This story covers implementers.
+
+  Problem: orchestrator, relay and advisor sessions launch implementers as Agent-tool subagents. A subagent shares the parent's Claude session id, harness pid and seat grant. As a result, (1) the orchestrator becomes a recorded author of everything it implements, which costs it --override-stale-approval and blurs authorship, and (2) an implementer launched from an advisor session inherits the advisor seat and trips the advisor code guard (seen 2026-10-10 on TASK-1723; Joe's comment on STORY-1654).
+
+  Want: the orchestrator or advisor launches each implementer as a separate process with a child implementer grant (issue_child seat=implementer, parent entered with --delegate-seat implementer). Candidates: `aida queue work <SPEC> --no-human` (implementer phase only) or `aida agent new claude --role implementer`. Pick one, document it, and update the aida-orchestrate / aida-burndown skill masters and the relay prompts.
+
+  Acceptance: an advisor-launched implementer edits code without tripping the advisor guard; the orchestrator session is not recorded as an author of a spec it only orchestrated; throughput cost is measured as in STORY-1654; template gates pass. Sequence it after STORY-1654 lands.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T13:18:03.093067119Z
+modified_at: 2026-10-11T13:18:03.093067119Z
+req_type: Story
+tags:
+- relay
+- seats
+- security
+filed_at:
+  code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
