@@ -1,0 +1,43 @@
+id: 01a12ca6-d90e-7f91-91fe-aca1a6c3c361
+spec_id: FAQ-47
+agreed_id: FAQ-47
+title: Why does 'aida review record' fail with 'attribution fallback'?
+description: |
+  **No agent identity is set, so the CLI treats the verdict as the operator's and requires a human at the terminal. Agents should export `AIDA_AGENT_TYPE` (e.g. `claude`) or `AIDA_AGENT_NAME` before recording.**
+
+  ## Why
+  `review_recorded_by` builds the recorder label from `AIDA_AGENT_NAME` / `AIDA_AGENT_TYPE` plus the seat. With neither set, the label is `aida review record (operator)`, and that path calls `require_direct_human()`. A seat grant alone doesn't change this. The error's hint (`aida role enter`) is misleading when the grant is already valid.
+
+  ## How
+  ```bash
+  export AIDA_AGENT_TYPE=claude
+  aida review record <SPEC> --verdict approve --sha <full head sha> --summary "..."
+  ```
+  The verdict is then recorded as `claude advisor seat` (or the current seat).
+
+  ## Caveat
+  BUG-1978 tracks fixing the misleading hint.
+
+  ## See also
+  BUG-1978, BUG-1802, ADR-73
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T20:28:14.478428689Z
+modified_at: 2026-10-11T20:28:14.478428689Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:review
+filed_at:
+  code_sha: 18428db14cad4164704357aa5006bb5482039c62
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T20:28:14.478478506Z
