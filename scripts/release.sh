@@ -358,7 +358,7 @@ prepared v$new. No commit, tag, or push was performed.
 Next operator step:
   inspect the version bump and tag notes, then publish manually if approved:
     git add ${manifest_paths[*]}
-    git commit -m "chore: release v$new"
+    AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
     git tag -a v$new -F $notes_file
     git push origin HEAD
     git push origin v$new
@@ -406,7 +406,7 @@ Pick one:
 
   1. Proceed manually (use the auto-generated tag notes):
        git add ${manifest_paths[*]}
-       git commit -m "chore: release v$new"
+       AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
        git tag -a v$new -F $notes_file
        git push origin main
        git push origin v$new
@@ -428,6 +428,11 @@ esac
 # is unaffected — release commits still can't sneak intermediate build products in.
 # trace:TASK-488 | ai:claude
 export AIDA_RELEASE=1
+# The release commit is the operator's version bump on main in the primary
+# checkout, which the STORY-1647 pre-commit gate refuses by default; this is the
+# documented operator override (until release moves to a PR, TASK-1721).
+# trace:STORY-1647 | ai:claude
+export AIDA_ALLOW_PRIMARY_COMMIT=1
 git add "${manifest_paths[@]}"
 git commit -m "chore: release v$new"
 git tag -a "v$new" -F "$notes_file"

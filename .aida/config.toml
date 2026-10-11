@@ -329,3 +329,11 @@ worktree_parent = "../aida-worktrees"
 
 # ADR-72 removed the ADR-65 "weekly-windows-triage" Product reminder: AIDA is
 # Linux-only and agents do not triage Windows/macOS work. trace:TASK-1723 | ai:claude
+
+# STORY-1647: the pre-commit hook refuses commits made in the PRIMARY checkout
+# on main — in this repo every change lands from a sibling worktree
+# (`aida worktree add <SPEC>`). Merges, rebase replays and .aida-store commits
+# stay exempt; the operator override is AIDA_ALLOW_PRIMARY_COMMIT=1. Other
+# projects get the gate only by opting in with this same key.
+[hooks]
+block_primary_commits = true

@@ -27,6 +27,82 @@ aida_precommit_sentinel() {
     return 0
 }
 
+# 0b. Primary-checkout gate (STORY-1647). Where feature work happens only in
+# sibling worktrees, a commit made in the PRIMARY checkout on the default branch
+# is always a mistake (an agent with a stale cwd, a tool run from the wrong
+# directory). Unlike the warn-only TASK-1178 scope guard this one REFUSES: no
+# legitimate agent commit lands there, and the server-side "PR required" rule
+# catches --no-verify. Opt-in per project: inert unless the repo's
+# .aida/config.toml carries `[hooks] block_primary_commits = true`.
+# Runs BEFORE the --allow-intermediate bypass so only the dedicated operator
+# override AIDA_ALLOW_PRIMARY_COMMIT=1 lifts it. Exempt: linked worktrees
+# (incl. .aida-store), merge commits (MERGE_HEAD), rebase replays (rebase-merge
+# / rebase-apply), the aida-store branch, and detached HEAD. A primary checkout
+# on some other named branch is allowed with a one-line warning.
+# trace:STORY-1647 | ai:claude
+__aida_primary_gate_enabled() {
+    local top cfg
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+    cfg="$top/.aida/config.toml"
+    [ -f "$cfg" ] || return 1
+    awk '
+        /^[[:space:]]*\[/ {
+            line = $0
+            sub(/[[:space:]]*#.*/, "", line)
+            in_hooks = (line ~ /^[[:space:]]*\[[[:space:]]*hooks[[:space:]]*\][[:space:]]*$/)
+            next
+        }
+        in_hooks && /^[[:space:]]*block_primary_commits[[:space:]]*=/ {
+            v = $0
+            sub(/^[^=]*=[[:space:]]*/, "", v)
+            sub(/[[:space:]]*#.*/, "", v)
+            sub(/[[:space:]]+$/, "", v)
+            found = (v == "true")
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$cfg"
+}
+
+__aida_abs_dir() {
+    (cd "$1" 2>/dev/null && pwd -P)
+}
+
+if __aida_primary_gate_enabled; then  # trace:STORY-1647 | ai:claude
+    __aida_pg_git_dir=$(__aida_abs_dir "$(git rev-parse --git-dir 2>/dev/null)")
+    __aida_pg_common=$(__aida_abs_dir "$(git rev-parse --git-common-dir 2>/dev/null)")
+    __aida_pg_branch=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+    __aida_pg_exempt=0
+    if [ -z "$__aida_pg_git_dir" ] || [ "$__aida_pg_git_dir" != "$__aida_pg_common" ]; then
+        __aida_pg_exempt=1   # linked worktree (or git dir unresolvable)
+    elif [ -z "$__aida_pg_branch" ] || [ "$__aida_pg_branch" = "aida-store" ]; then
+        __aida_pg_exempt=1   # detached HEAD (rebase replay) or the store branch
+    elif git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        __aida_pg_exempt=1   # merge commit (incl. git pull with a merge)
+    elif [ -d "$__aida_pg_git_dir/rebase-merge" ] || [ -d "$__aida_pg_git_dir/rebase-apply" ]; then
+        __aida_pg_exempt=1   # rebase / pull --rebase replay
+    else
+        case "$(pwd -P)" in */.aida-store|*/.aida-store/*) __aida_pg_exempt=1 ;; esac
+    fi
+    if [ "$__aida_pg_exempt" = "0" ]; then
+        # Protected branch: main, plus the remote default branch when known.
+        __aida_pg_default=$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
+        __aida_pg_default=${__aida_pg_default#origin/}
+        if [ "$__aida_pg_branch" = "main" ] || { [ -n "$__aida_pg_default" ] && [ "$__aida_pg_branch" = "$__aida_pg_default" ]; }; then
+            if [ "$AIDA_ALLOW_PRIMARY_COMMIT" = "1" ]; then
+                printf 'pre-commit: primary-checkout commit on %s allowed by AIDA_ALLOW_PRIMARY_COMMIT=1.\n' "$__aida_pg_branch" >&2
+            else
+                printf 'pre-commit: refusing commit in the primary checkout on %s.\n' "$__aida_pg_branch" >&2
+                printf 'pre-commit:   feature work belongs in a sibling worktree: run aida worktree add <SPEC> and commit there.\n' >&2
+                printf 'pre-commit:   operator override: AIDA_ALLOW_PRIMARY_COMMIT=1 git commit ...\n' >&2
+                printf 'pre-commit:   (enabled by [hooks] block_primary_commits = true in .aida/config.toml)\n' >&2
+                exit 1
+            fi
+        else
+            printf 'pre-commit: warning: committing in the primary checkout on branch %s; feature work belongs in a sibling worktree.\n' "$__aida_pg_branch" >&2
+        fi
+    fi
+fi
+
 # 1. Environment and argument bypass check
 # Check if AIDA_ALLOW_INTERMEDIATE=1 is set, or if the git commit command was invoked with --allow-intermediate.
 # We check /proc/$PPID/cmdline (Linux) for --allow-intermediate to enable seamless bypass.
