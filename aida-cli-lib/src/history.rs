@@ -2061,11 +2061,37 @@ fn build_digest_rows(
         entries.retain(|e| only.contains(&e.spec_id));
     }
 
-    // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
-    entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
+    // Sort newest-first by instant (not by string: the timestamps mix YAML
+    // `...Z` with git `%aI` offsets). trace:BUG-1945 | ai:claude
+    sort_digest_rows(&mut entries);
     entries.truncate(opts.limit);
 
     Ok((entries, archived_hidden, deferred_hidden))
+}
+
+/// Orders digest rows newest-first by the UTC instant of `last_ts_iso`.
+///
+/// A live spec's timestamp comes from YAML `modified_at` (`...Z`); a deleted
+/// spec's comes from git `%aI`, which prints UTC as `+00:00` or `Z` depending
+/// on the git version, or a local offset. Comparing those strings orders
+/// equal instants by format and non-UTC offsets wrongly, so parse first.
+/// Ties break by spec id ascending, so the order never depends on which
+/// string form produced the instant. Unparseable timestamps sort after every
+/// parseable one (newest string first among themselves, then spec id). The
+/// rendered string is left untouched.
+// trace:BUG-1945 | ai:claude
+fn sort_digest_rows(entries: &mut [DigestRow]) {
+    entries.sort_by(|a, b| {
+        let ta = chrono::DateTime::parse_from_rfc3339(&a.last_ts_iso).ok();
+        let tb = chrono::DateTime::parse_from_rfc3339(&b.last_ts_iso).ok();
+        let by_time = match (ta, tb) {
+            (Some(x), Some(y)) => y.cmp(&x),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => b.last_ts_iso.cmp(&a.last_ts_iso),
+        };
+        by_time.then_with(|| a.spec_id.cmp(&b.spec_id))
+    });
 }
 
 /// In-flight commit metadata while parsing `git log --name-status`.
@@ -3006,6 +3032,79 @@ pub(crate) fn shorten(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1945: digest ordering is by instant, not by timestamp string.
+    // trace:BUG-1945 | ai:claude
+    fn digest_row(spec_id: &str, ts: &str) -> DigestRow {
+        DigestRow {
+            spec_id: spec_id.to_string(),
+            req_type: "BUG".to_string(),
+            status: "Approved".to_string(),
+            title: String::new(),
+            last_ts_iso: ts.to_string(),
+            last_author: String::new(),
+            had_add: false,
+            had_delete: false,
+        }
+    }
+
+    fn digest_ids(rows: &[DigestRow]) -> Vec<&str> {
+        rows.iter().map(|r| r.spec_id.as_str()).collect()
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_orders_by_instant_not_string() {
+        // 06:00-07:00 is 13:00Z: later than 12:00Z, though it sorts first as
+        // a string.
+        let mut rows = vec![
+            digest_row("BUG-1", "2025-03-04T12:00:00Z"),
+            digest_row("BUG-2", "2025-03-04T06:00:00-07:00"),
+        ];
+        sort_digest_rows(&mut rows);
+        assert_eq!(digest_ids(&rows), vec!["BUG-2", "BUG-1"]);
+        // Rendering is untouched: the original strings survive the sort.
+        assert_eq!(rows[0].last_ts_iso, "2025-03-04T06:00:00-07:00");
+        assert_eq!(rows[1].last_ts_iso, "2025-03-04T12:00:00Z");
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_tie_breaks_by_spec_id() {
+        // A live spec (YAML `...Z`) and a deleted spec (git `+00:00` from
+        // older git, `Z` from newer) at the same instant order by spec id,
+        // whatever the input order and whichever form git printed.
+        for deleted_ts in ["2025-03-04T12:00:00+00:00", "2025-03-04T12:00:00Z"] {
+            for flip in [false, true] {
+                let live = digest_row("BUG-20", "2025-03-04T12:00:00Z");
+                let deleted = digest_row("BUG-10", deleted_ts);
+                let mut rows = if flip {
+                    vec![deleted, live]
+                } else {
+                    vec![live, deleted]
+                };
+                sort_digest_rows(&mut rows);
+                assert_eq!(
+                    digest_ids(&rows),
+                    vec!["BUG-10", "BUG-20"],
+                    "deleted_ts={deleted_ts} flip={flip}"
+                );
+            }
+        }
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_unparseable_timestamp_sorts_last() {
+        let mut rows = vec![
+            digest_row("BUG-3", "not-a-timestamp"),
+            digest_row("BUG-1", "2025-03-04T12:00:00Z"),
+            digest_row("BUG-4", ""),
+            digest_row("BUG-2", "2025-03-05T12:00:00+00:00"),
+        ];
+        sort_digest_rows(&mut rows);
+        assert_eq!(digest_ids(&rows), vec!["BUG-2", "BUG-1", "BUG-3", "BUG-4"]);
+    }
 
     /// TASK-1055: a path-scoped `--id` walk only visits the spec's own commits,
     /// not the whole orphan-branch history. Builds a tiny store with three
