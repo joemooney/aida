@@ -40,10 +40,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-11T05:20:57.938847942Z
+modified_at: 2026-10-11T06:28:01.317855089Z
 req_type: Story
 tags:
 - batch:next
+- batch:night-2026-10-10
 - build
 - dev-tooling
 - main-checkout
