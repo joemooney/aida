@@ -4043,7 +4043,8 @@ impl RealPhaseDriver {
             auto_complete::RecoveryTeardown::Remove => {
                 // Never tear down a tree a live process is still using.
                 // trace:BUG-1947 | ai:claude
-                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&worktree) {
+                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&worktree)
+                {
                     log(format!(
                         "keeping the failed attempt's worktree {} — {}",
                         worktree.display(),
