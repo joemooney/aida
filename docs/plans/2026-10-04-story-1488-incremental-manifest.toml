@@ -349,3 +349,15 @@ items = [
   "fn render_agent_brief_read",
   "mod task_492_brief_tests",
 ]
+
+[module.merge_hold_cmd]
+purpose = "`aida merge-hold`/`merge-lock` handlers and stale-hold partitioning (STORY-1488 slice 1)"
+items = [
+  "fn slugify",
+  "fn handle_merge_lock_status",
+  "type StaleHold",
+  "fn partition_stale_holds",
+  "fn hold_terminal_state",
+  "mod merge_hold_cli_tests",
+  "fn handle_merge_hold",
+]
