@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T07:47:44.477054098Z
+modified_at: 2026-10-11T07:53:57.302480691Z
 req_type: Bug
 tags:
 - triaged:night
@@ -80,6 +80,12 @@ comments:
     Gates planned: `make check-templates`, non-cargo fast gates from scripts/check-ci-gates.py where selectable.
   created_at: 2026-10-11T07:47:44.477054098Z
   modified_at: 2026-10-11T07:47:44.477054098Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a129f4-4736-7a01-9530-d40d334fb8ba
+  author: joe
+  content: 'FACTORY DRAFT: PR #2504 at 997a333737d30ab9d5a226ec0a99cf110e345d18'
+  created_at: 2026-10-11T07:53:57.302480691Z
+  modified_at: 2026-10-11T07:53:57.302480691Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129e9-a32a-7eb0-9168-23f36f14ddab
