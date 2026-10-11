@@ -238,6 +238,8 @@ fn refusal_message(reasons: &[String]) -> String {
     }
     msg.push_str(
         "Nothing was built and the live binaries are untouched.\n\
+         HEAD is compared with your local `origin/main` ref; this command does not fetch, \
+         so run `git fetch` first if that ref may be stale.\n\
          Options: commit/push or sync with `origin/main` and retry; `aida dev build --no-promote` \
          to build and smoke-test only; or `aida dev build --allow-dirty` to promote anyway.",
     );
@@ -334,14 +336,17 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
 pub(crate) trait BuildSteps {
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState>;
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
-    /// wave is pinned to a binary this run would replace.
-    fn guard(&mut self, layout: &DevLayout, promoting: bool, after_wave: bool) -> Result<()>;
+    /// wave is pinned to `binary`, which this run would replace.
+    fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()>;
+    /// Where `aida` on `$PATH` currently resolves to, if anywhere.
+    fn path_aida(&mut self) -> Option<PathBuf>;
     /// `cargo clean --profile agent`.
     fn clean_full(&mut self, layout: &DevLayout) -> Result<()>;
     /// Incremental `--profile agent` workspace build.
     fn build(&mut self, layout: &DevLayout) -> Result<()>;
-    /// Run the freshly built binaries; `Err` names what failed.
-    fn smoke(&mut self, layout: &DevLayout) -> Result<()>;
+    /// Run `aida` / `server` (in `repo`); `Err` names what failed. When
+    /// promoting these are the staged copies that will be renamed live.
+    fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()>;
     /// Restart MCP servers still running a replaced binary.
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()>;
     /// Ask before replacing existing files at the link location.
@@ -385,7 +390,39 @@ pub(crate) fn run_dev_build(
         PromotionPlan::BuildOnly(_) => {}
     }
     let promoting = matches!(plan, PromotionPlan::Promote { .. });
-    steps.guard(layout, promoting, opts.after_wave)?;
+    steps.guard(&layout.repo, &layout.built("aida"), opts.after_wave)?;
+    if promoting {
+        steps.guard(&layout.repo, &layout.live("aida"), opts.after_wave)?;
+    }
+
+    // A PATH binary that still resolves into this target dir is the binary
+    // every session runs: cargo overwrites it before any smoke test, and a
+    // full clean would delete it outright.
+    let mut candidates: Vec<PathBuf> = LIVE_BINARIES.iter().map(|n| layout.link(n)).collect();
+    candidates.extend(steps.path_aida());
+    let exposed = live_binaries_in_target(layout, &candidates);
+    if !exposed.is_empty() {
+        let list = exposed
+            .iter()
+            .map(|(link, real)| format!("  {} -> {}", link.display(), real.display()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if opts.clean == Some(DevCleanMode::Full) {
+            bail!(
+                "refusing --clean=full: the binary on your PATH lives in this build's target dir, \
+                 and `cargo clean` would delete it for every session until the build finishes \
+                 (or for good if the build fails):\n{list}\n\
+                 Run `aida dev build --install-links` first (from a clean `main` in the primary \
+                 checkout) so the PATH points at the live directory, then retry. Nothing was changed."
+            );
+        }
+        writeln!(
+            out,
+            "warning: the binary on your PATH lives in this build's target dir, so cargo replaces \
+             it before the smoke test runs:\n{list}\n\
+             Run `aida dev build --install-links` to point the PATH at the live directory instead."
+        )?;
+    }
 
     match opts.clean {
         Some(DevCleanMode::Incremental) => {
@@ -422,15 +459,22 @@ pub(crate) fn run_dev_build(
             );
         }
     }
-    steps.smoke(layout).map_err(|e| {
+    let smoke_failed = |e: anyhow::Error| {
         anyhow!(
             "smoke test of the new build failed: {e:#}\nThe live binaries were not touched.\nHint: {CLEAN_HINT}"
         )
-    })?;
-    writeln!(out, "Smoke test passed: {}", layout.built("aida").display())?;
+    };
 
     let outcome = match plan {
         PromotionPlan::BuildOnly(reason) => {
+            steps
+                .smoke(
+                    &layout.repo,
+                    &layout.built("aida"),
+                    &layout.built("aida-server"),
+                )
+                .map_err(smoke_failed)?;
+            writeln!(out, "Smoke test passed: {}", layout.built("aida").display())?;
             match reason {
                 BuildOnlyReason::Worktree => writeln!(
                     out,
@@ -449,18 +493,43 @@ pub(crate) fn run_dev_build(
             BuildOutcome::BuiltOnly(reason)
         }
         PromotionPlan::Promote { .. } => {
-            // The build can take minutes; re-check that the checkout still
-            // qualifies before replacing the live pair.
+            // Everything from staging to the final rename happens under the
+            // live-dir lock, and the smoke test runs against the staged
+            // copies, so the pair that goes live is exactly the pair that
+            // was tested even if another build rewrites target/ meanwhile.
+            let lock = lock_live_dir(layout)?;
+            for note in recover_live_dir(layout)? {
+                writeln!(out, "note: {note}")?;
+            }
+            let incoming = stage_incoming(layout)?;
+            let smoked = steps.smoke(
+                &layout.repo,
+                &incoming.join("aida"),
+                &incoming.join("aida-server"),
+            );
+            if let Err(e) = smoked {
+                let _ = std::fs::remove_dir_all(&incoming);
+                return Err(smoke_failed(e));
+            }
+            writeln!(
+                out,
+                "Smoke test passed: {}",
+                incoming.join("aida").display()
+            )?;
+            // The build and smoke test can take minutes; re-check that the
+            // checkout still qualifies before replacing the live pair.
             let state = steps.probe(&layout.repo)?;
             if let PromotionPlan::Refuse { reasons } =
                 plan_promotion(&state, false, opts.allow_dirty)
             {
+                let _ = std::fs::remove_dir_all(&incoming);
                 bail!(
                     "the checkout changed during the build, so the new build was not promoted.\n{}",
                     refusal_message(&reasons)
                 );
             }
-            promote(layout)?;
+            commit_staged(layout)?;
+            drop(lock);
             writeln!(
                 out,
                 "Promoted to {} (previous build kept in {}; `aida dev rollback` restores it)",
@@ -483,6 +552,28 @@ pub(crate) fn run_dev_build(
         install_links(layout, opts.yes, steps, out)?;
     }
     Ok(outcome)
+}
+
+/// The `candidates` (PATH entries) that resolve to a file inside
+/// `layout.target_dir`, as `(candidate, resolved)` pairs.
+pub(crate) fn live_binaries_in_target(
+    layout: &DevLayout,
+    candidates: &[PathBuf],
+) -> Vec<(PathBuf, PathBuf)> {
+    let target = layout
+        .target_dir
+        .canonicalize()
+        .unwrap_or_else(|_| layout.target_dir.clone());
+    let mut found: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for cand in candidates {
+        let Ok(real) = cand.canonicalize() else {
+            continue;
+        };
+        if real.starts_with(&target) && !found.iter().any(|(_, r)| *r == real) {
+            found.push((cand.clone(), real));
+        }
+    }
+    found
 }
 
 /// `--clean`: delete `target/agent/incremental` only. Returns whether it existed.
@@ -537,14 +628,83 @@ fn fresh_dir(dir: &Path) -> Result<()> {
     std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))
 }
 
-/// Promote the built pair into the live dir. Each binary is replaced with a
-/// single `rename`, so `live/aida` never disappears; the outgoing pair is
-/// hard-linked into a fresh `live/prev/` first.
-pub(crate) fn promote(layout: &DevLayout) -> Result<()> {
+/// Exclusive lock on `<live>/.lock`, held across staging, the smoke test,
+/// prev rotation and the final renames (and across a rollback). A second
+/// promote or rollback refuses instead of interleaving with this one.
+pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
+    use fs2::FileExt;
     let live = &layout.live_dir;
     std::fs::create_dir_all(live).with_context(|| format!("creating {}", live.display()))?;
-    // Stage inside the live dir so the final rename never crosses filesystems.
-    let incoming = live.join(".incoming");
+    let path = live.join(".lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    if file.try_lock_exclusive().is_err() {
+        bail!(
+            "another `aida dev build` or `aida dev rollback` is updating {} right now; \
+             retry when it finishes. Nothing was changed.",
+            live.display()
+        );
+    }
+    Ok(file)
+}
+
+/// Finish or undo whatever an interrupted promote or rollback left behind.
+/// Must run under [`lock_live_dir`]. Returns a note per repair made.
+///
+/// Repaired: a promote that died between moving `prev/` aside and moving
+/// the new `prev/` in (the old `prev/` is restored); a rollback that died
+/// mid-swap (the parked live binary is moved into `prev/`); leftover staging
+/// dirs. Not repairable here: a crash between the two per-binary renames
+/// leaves a mixed live pair (new `aida`, old `aida-server` or the reverse);
+/// re-run `aida dev build` or `aida dev rollback` to fix that.
+pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
+    let live = &layout.live_dir;
+    let mut notes = Vec::new();
+    let prev_old = live.join(".prev-old");
+    if prev_old.exists() {
+        if layout.prev_dir().exists() {
+            std::fs::remove_dir_all(&prev_old)?;
+        } else {
+            std::fs::rename(&prev_old, layout.prev_dir())?;
+            notes.push(format!(
+                "restored {} after an interrupted promote",
+                layout.prev_dir().display()
+            ));
+        }
+    }
+    let swap = live.join(".rollback");
+    if swap.exists() {
+        for name in LIVE_BINARIES {
+            let parked = swap.join(name);
+            if parked.is_file() && !layout.prev(name).exists() {
+                std::fs::create_dir_all(layout.prev_dir())?;
+                std::fs::rename(&parked, layout.prev(name))?;
+                notes.push(format!(
+                    "finished an interrupted rollback of {}",
+                    layout.live(name).display()
+                ));
+            }
+        }
+        std::fs::remove_dir_all(&swap)?;
+    }
+    for leftover in [".prev-new", ".incoming"] {
+        let dir = live.join(leftover);
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+        }
+    }
+    Ok(notes)
+}
+
+/// Copy the built pair into `<live>/.incoming` (same filesystem as the live
+/// pair, so the final rename is atomic) and return that dir. Run under
+/// [`lock_live_dir`].
+pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
+    let incoming = layout.live_dir.join(".incoming");
     fresh_dir(&incoming)?;
     for name in LIVE_BINARIES {
         std::fs::copy(layout.built(name), incoming.join(name)).with_context(|| {
@@ -555,6 +715,16 @@ pub(crate) fn promote(layout: &DevLayout) -> Result<()> {
             )
         })?;
     }
+    Ok(incoming)
+}
+
+/// Rotate the live pair into `live/prev/` and rename the staged pair live.
+/// Each binary is replaced with a single `rename`, so `live/aida` never
+/// disappears; the outgoing pair is hard-linked into a fresh `prev/` first.
+/// Run under [`lock_live_dir`] after [`stage_incoming`].
+pub(crate) fn commit_staged(layout: &DevLayout) -> Result<()> {
+    let live = &layout.live_dir;
+    let incoming = live.join(".incoming");
     if LIVE_BINARIES.iter().any(|n| layout.live(n).is_file()) {
         let prev_new = live.join(".prev-new");
         fresh_dir(&prev_new)?;
@@ -581,10 +751,13 @@ pub(crate) fn promote(layout: &DevLayout) -> Result<()> {
     Ok(())
 }
 
-/// `aida dev rollback`: swap `live/prev/` and the live pair. Checks every
-/// precondition before changing anything, so "no previous build" is a clean
-/// no-op error. Running it twice rolls forward again.
-pub(crate) fn rollback(layout: &DevLayout) -> Result<()> {
+/// `aida dev rollback`: swap `live/prev/` and the live pair, under the
+/// live-dir lock. Checks every precondition before changing anything, so "no
+/// previous build" is a clean no-op error. Running it twice rolls forward.
+/// Returns notes about any interrupted-state repairs.
+pub(crate) fn rollback(layout: &DevLayout) -> Result<Vec<String>> {
+    let _lock = lock_live_dir(layout)?;
+    let notes = recover_live_dir(layout)?;
     for name in LIVE_BINARIES {
         if !layout.prev(name).is_file() {
             bail!(
@@ -599,6 +772,9 @@ pub(crate) fn rollback(layout: &DevLayout) -> Result<()> {
             );
         }
     }
+    // Park the live pair first; then per binary, prev -> live and the parked
+    // copy -> prev. [`recover_live_dir`] completes a swap interrupted
+    // between those two renames.
     let swap = layout.live_dir.join(".rollback");
     fresh_dir(&swap)?;
     for name in LIVE_BINARIES {
@@ -607,12 +783,10 @@ pub(crate) fn rollback(layout: &DevLayout) -> Result<()> {
     for name in LIVE_BINARIES {
         std::fs::rename(layout.prev(name), layout.live(name))
             .with_context(|| format!("restoring {}", layout.live(name).display()))?;
-    }
-    for name in LIVE_BINARIES {
         std::fs::rename(swap.join(name), layout.prev(name))?;
     }
     let _ = std::fs::remove_dir(&swap);
-    Ok(())
+    Ok(notes)
 }
 
 // ---------------------------------------------------------------------------
@@ -657,11 +831,35 @@ pub(crate) fn plan_link(link: &Path, target: &Path) -> LinkAction {
         };
     }
     LinkAction::Replace {
-        existing: format!(
-            "a regular file (kept as {}.pre-live)",
-            link.file_name().unwrap_or_default().to_string_lossy()
-        ),
+        existing: format!("a regular file (kept as {})", backup_path(link).display()),
         regular_file: true,
+    }
+}
+
+/// Where a replaced regular file at `link` is kept: `<name>.pre-live`, or
+/// `<name>.pre-live.<unix-secs>[.<n>]` when that name is taken. An existing
+/// backup is never overwritten.
+pub(crate) fn backup_path(link: &Path) -> PathBuf {
+    let name = link.file_name().unwrap_or_default().to_string_lossy();
+    let plain = link.with_file_name(format!("{name}.pre-live"));
+    if std::fs::symlink_metadata(&plain).is_err() {
+        return plain;
+    }
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let mut n = 0u32;
+    loop {
+        let cand = if n == 0 {
+            link.with_file_name(format!("{name}.pre-live.{secs}"))
+        } else {
+            link.with_file_name(format!("{name}.pre-live.{secs}.{n}"))
+        };
+        if std::fs::symlink_metadata(&cand).is_err() {
+            return cand;
+        }
+        n += 1;
     }
 }
 
@@ -731,8 +929,14 @@ pub(crate) fn install_links(
             LinkAction::Replace {
                 regular_file: true, ..
             } => {
-                let backup = layout.link_dir.join(format!("{name}.pre-live"));
+                let backup = backup_path(&link);
                 link_or_copy(&link, &backup)?;
+                writeln!(
+                    out,
+                    "kept the old {} as {}",
+                    link.display(),
+                    backup.display()
+                )?;
             }
             _ => {}
         }
@@ -823,12 +1027,15 @@ impl BuildSteps for RealSteps {
         probe_checkout(repo)
     }
 
-    fn guard(&mut self, layout: &DevLayout, promoting: bool, after_wave: bool) -> Result<()> {
-        crate::dev_cmd::guard_binary_change(&layout.repo, &layout.built("aida"), after_wave)?;
-        if promoting {
-            crate::dev_cmd::guard_binary_change(&layout.repo, &layout.live("aida"), after_wave)?;
-        }
-        Ok(())
+    fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()> {
+        crate::dev_cmd::guard_binary_change(repo, binary, after_wave)
+    }
+
+    fn path_aida(&mut self) -> Option<PathBuf> {
+        let path = std::env::var_os("PATH")?;
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("aida"))
+            .find(|cand| cand.is_file())
     }
 
     fn clean_full(&mut self, layout: &DevLayout) -> Result<()> {
@@ -856,26 +1063,24 @@ impl BuildSteps for RealSteps {
         )
     }
 
-    fn smoke(&mut self, layout: &DevLayout) -> Result<()> {
-        let aida = layout.built("aida");
-        let server = layout.built("aida-server");
+    fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()> {
         smoke_check(
             "aida --version",
-            Command::new(&aida).arg("--version"),
+            Command::new(aida).arg("--version"),
             Duration::from_secs(60),
             |o| o.starts_with("aida ") && o.contains("sha "),
         )?;
         smoke_check(
             "aida list --limit 1",
-            Command::new(&aida)
+            Command::new(aida)
                 .args(["list", "--limit", "1"])
-                .current_dir(&layout.repo),
+                .current_dir(repo),
             Duration::from_secs(300),
             |_| true,
         )?;
         smoke_check(
             "aida-server --version",
-            Command::new(&server).arg("--version"),
+            Command::new(server).arg("--version"),
             Duration::from_secs(60),
             |o| o.starts_with("aida-server"),
         )
@@ -937,29 +1142,53 @@ pub(crate) fn handle_dev_build(opts: &DevBuildOptions) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn handle_dev_rollback() -> Result<()> {
+/// `aida dev rollback` with the live-wave guard: refuses (or waits, with
+/// `after_wave`) while a live drain wave is pinned to the live binary,
+/// unless `force`.
+pub(crate) fn run_dev_rollback(
+    layout: &DevLayout,
+    after_wave: bool,
+    force: bool,
+    steps: &mut dyn BuildSteps,
+    out: &mut dyn Write,
+) -> Result<()> {
+    if force {
+        writeln!(out, "--force: skipping the live-wave guard")?;
+    } else {
+        steps
+            .guard(&layout.repo, &layout.live("aida"), after_wave)
+            .map_err(|e| anyhow!("{e:#}\n(or `aida dev rollback --force` to swap anyway)"))?;
+    }
+    for note in rollback(layout)? {
+        writeln!(out, "note: {note}")?;
+    }
+    writeln!(
+        out,
+        "Rolled back: {} now holds the previous build ({}); run `aida dev rollback` again to undo.",
+        layout.live_dir.display(),
+        binary_sha_label(&layout.live("aida")).unwrap_or_else(|| "unknown sha".into())
+    )?;
+    if let Err(e) = steps.restart_mcp(layout) {
+        writeln!(
+            out,
+            "warning: could not restart stale MCP servers ({e:#}); restart your MCP clients \
+             (or their `aida mcp-serve` processes) to pick up the restored build"
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn handle_dev_rollback(after_wave: bool, force: bool) -> Result<()> {
     let live_dir = default_live_dir()?;
     let repo = resolve_build_repo().ok();
     let layout = DevLayout {
-        repo: repo.clone().unwrap_or_else(|| live_dir.clone()),
+        repo: repo.unwrap_or_else(|| live_dir.clone()),
         target_dir: PathBuf::new(),
         live_dir,
         link_dir: default_link_dir()?,
     };
-    rollback(&layout)?;
-    println!(
-        "Rolled back: {} now holds the previous build ({}); run `aida dev rollback` again to undo.",
-        layout.live_dir.display(),
-        binary_sha_label(&layout.live("aida")).unwrap_or_else(|| "unknown sha".into())
-    );
-    if repo.is_some() {
-        if let Err(e) = RealSteps.restart_mcp(&layout) {
-            println!("warning: could not restart stale MCP servers ({e:#})");
-        }
-    } else {
-        println!("Restart your MCP clients (or their `aida mcp-serve` processes) to pick up the restored build.");
-    }
-    Ok(())
+    let mut stdout = std::io::stdout();
+    run_dev_rollback(&layout, after_wave, force, &mut RealSteps, &mut stdout)
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,6 +1258,10 @@ pub(crate) fn print_live_status() {
         Ok(repo) => DevLayout::for_repo(&repo).ok(),
         Err(_) => None,
     };
+    // Outside an AIDA checkout, only report when a live dir exists.
+    if layout.is_none() && !live_dir.exists() {
+        return;
+    }
     let live = binary_sha_label(&live_dir.join("aida"));
     let prev = binary_sha_label(&live_dir.join("prev").join("aida"));
     let built = layout

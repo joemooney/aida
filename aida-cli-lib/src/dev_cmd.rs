@@ -38,7 +38,9 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             yes: *yes,
             after_wave: *after_wave,
         }),
-        DevCommand::Rollback => crate::dev_build::handle_dev_rollback(),
+        DevCommand::Rollback { after_wave, force } => {
+            crate::dev_build::handle_dev_rollback(*after_wave, *force)
+        }
         DevCommand::BuildGuard {
             profile,
             after_wave,
@@ -278,7 +280,7 @@ fn pick_dev_binary_dir(
             "agent" => {
                 if agent_mtime.is_none() {
                     anyhow::bail!(
-                        "No agent build at {}.\nRun `make build-fast` first.",
+                        "No agent build at {}.\nRun `aida dev build --no-promote` (or `make build-fast`) first.",
                         agent.display()
                     );
                 }
@@ -620,9 +622,9 @@ pub(crate) fn activate_marker_hint(marker: &str, other_profile: Option<&str>) ->
                 switch
             ))
         }
-        "↻" => Some(
-            "prompt marker ↻ — no build matches HEAD; `make build-fast` to rebuild".to_string(),
-        ),
+        "↻" => {
+            Some("prompt marker ↻ — no build matches HEAD; `aida dev build` to rebuild".to_string())
+        }
         _ => None,
     }
 }

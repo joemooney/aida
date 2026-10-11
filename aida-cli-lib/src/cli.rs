@@ -2844,8 +2844,9 @@ pub enum DevCommand {
     /// smoke test of the new `aida` / `aida-server`, then an atomic promote
     /// into the live directory (default `~/.local/share/aida/live`, outside
     /// target/), keeping the previous pair in `live/prev/`. Promotes only from
-    /// the primary checkout on a clean `main` that matches `origin/main`; in a
-    /// worktree it builds and smoke-tests only.
+    /// the primary checkout on a clean `main` that matches `origin/main` (the
+    /// local remote-tracking ref; it does not fetch, so run `git fetch`
+    /// first); in a worktree it builds and smoke-tests only.
     // trace:STORY-1646 | ai:claude
     Build {
         /// Clear the incremental cache first. Bare `--clean` deletes only
@@ -2886,9 +2887,19 @@ pub enum DevCommand {
     },
 
     /// Swap the previous live binaries (`live/prev/`) back in, in one step.
-    /// Running it again rolls forward.
+    /// Running it again rolls forward. Refuses while a live drain wave is
+    /// pinned to the live binary unless --after-wave or --force.
     // trace:STORY-1646 | ai:claude
-    Rollback,
+    Rollback {
+        /// Wait for a live drain wave pinned to the live binary to finish
+        /// instead of refusing.
+        #[clap(long)]
+        after_wave: bool,
+
+        /// Swap even while a live drain wave is pinned to the live binary.
+        #[clap(long, conflicts_with = "after_wave")]
+        force: bool,
+    },
 
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]

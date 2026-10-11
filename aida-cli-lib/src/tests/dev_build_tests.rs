@@ -57,6 +57,15 @@ struct FakeSteps {
     fail_build: bool,
     fail_smoke: bool,
     confirm_answer: bool,
+    fail_guard: bool,
+    /// What `aida` on PATH resolves to (None: not on PATH).
+    path_aida: Option<PathBuf>,
+    /// The `aida` path and its contents at each smoke test.
+    smoked: Vec<(PathBuf, String)>,
+    /// Runs inside the build, before the binaries are written.
+    on_build: Option<Box<dyn FnMut()>>,
+    /// Runs inside the smoke test (e.g. a concurrent build rewriting target/).
+    on_smoke: Option<Box<dyn FnMut()>>,
     calls: Vec<String>,
 }
 
@@ -68,11 +77,19 @@ impl FakeSteps {
             fail_build: false,
             fail_smoke: false,
             confirm_answer: false,
+            fail_guard: false,
+            path_aida: None,
+            smoked: Vec::new(),
+            on_build: None,
+            on_smoke: None,
             calls: Vec::new(),
         }
     }
     fn called(&self, step: &str) -> bool {
         self.calls.iter().any(|c| c == step)
+    }
+    fn guarded(&self, binary: &Path) -> bool {
+        self.called(&format!("guard:{}", binary.display()))
     }
 }
 
@@ -86,9 +103,15 @@ impl BuildSteps for FakeSteps {
         };
         Ok(s)
     }
-    fn guard(&mut self, _l: &DevLayout, promoting: bool, _after_wave: bool) -> Result<()> {
-        self.calls.push(format!("guard:{promoting}"));
+    fn guard(&mut self, _repo: &Path, binary: &Path, _after_wave: bool) -> Result<()> {
+        self.calls.push(format!("guard:{}", binary.display()));
+        if self.fail_guard {
+            bail!("refusing to replace the binary pinned by live wave w-1 (pid 42); retry with --after-wave");
+        }
         Ok(())
+    }
+    fn path_aida(&mut self) -> Option<PathBuf> {
+        self.path_aida.clone()
     }
     fn clean_full(&mut self, _l: &DevLayout) -> Result<()> {
         self.calls.push("clean_full".into());
@@ -96,6 +119,9 @@ impl BuildSteps for FakeSteps {
     }
     fn build(&mut self, l: &DevLayout) -> Result<()> {
         self.calls.push("build".into());
+        if let Some(hook) = self.on_build.as_mut() {
+            hook();
+        }
         if self.fail_build {
             bail!("error[E0425]: cannot find value");
         }
@@ -104,8 +130,15 @@ impl BuildSteps for FakeSteps {
         }
         Ok(())
     }
-    fn smoke(&mut self, _l: &DevLayout) -> Result<()> {
+    fn smoke(&mut self, _repo: &Path, aida: &Path, _server: &Path) -> Result<()> {
         self.calls.push("smoke".into());
+        self.smoked.push((
+            aida.to_path_buf(),
+            fs::read_to_string(aida).unwrap_or_default(),
+        ));
+        if let Some(hook) = self.on_smoke.as_mut() {
+            hook();
+        }
         if self.fail_smoke {
             bail!("`aida list --limit 1` exited non-zero");
         }
@@ -445,7 +478,7 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         // The build stays in target/ for incremental reuse.
         assert_eq!(read(&f.layout.built(n)), format!("NEW-{n}"));
     }
-    assert!(steps.called("guard:true") && steps.called("restart_mcp"));
+    assert!(steps.guarded(&f.layout.live("aida")) && steps.called("restart_mcp"));
     assert!(out.contains("Promoted"), "{out}");
     // No staging leftovers.
     let mut names: Vec<_> = fs::read_dir(&f.layout.live_dir)
@@ -453,7 +486,8 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    assert_eq!(names, ["aida", "aida-server", "prev"]);
+    // `.lock` is the persistent live-dir lock file.
+    assert_eq!(names, [".lock", "aida", "aida-server", "prev"]);
 }
 
 #[test]
@@ -533,7 +567,13 @@ fn worktree_build_smoke_tests_but_never_promotes() {
         r.unwrap(),
         BuildOutcome::BuiltOnly(BuildOnlyReason::Worktree)
     );
-    assert!(steps.called("smoke") && steps.called("guard:false"));
+    assert!(steps.called("smoke") && steps.guarded(&f.layout.built("aida")));
+    assert!(!steps.guarded(&f.layout.live("aida")));
+    // Build-only smoke-tests the build in place and never stages into or
+    // locks the live dir.
+    assert_eq!(steps.smoked[0].0, f.layout.built("aida"));
+    assert!(!f.layout.live_dir.join(".incoming").exists());
+    assert!(!f.layout.live_dir.join(".lock").exists());
     assert!(!steps.called("restart_mcp"));
     assert!(out.contains("aida dev activate"), "{out}");
     assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
@@ -572,6 +612,12 @@ fn clean_deletes_only_the_incremental_dir() {
         is_linked_worktree: true,
         ..clean_main()
     });
+    // Clean ran before the build: the incremental dir is already gone when
+    // the build starts.
+    let inc = f.layout.incremental_dir();
+    let seen_at_build = std::rc::Rc::new(std::cell::Cell::new(true));
+    let seen = seen_at_build.clone();
+    steps.on_build = Some(Box::new(move || seen.set(inc.exists())));
     let opts = DevBuildOptions {
         clean: Some(DevCleanMode::Incremental),
         ..Default::default()
@@ -584,9 +630,11 @@ fn clean_deletes_only_the_incremental_dir() {
     assert!(t.join("release/aida").exists());
     assert!(!steps.called("clean_full"));
     assert!(out.contains("deleted"), "{out}");
-    // Clean ran before the build.
-    let pos = |s: &str| steps.calls.iter().position(|c| c == s).unwrap();
-    assert!(steps.called("build") && pos("build") > 0);
+    assert!(steps.called("build"));
+    assert!(
+        !seen_at_build.get(),
+        "incremental dir still existed when the build ran"
+    );
 }
 
 #[test]
@@ -658,7 +706,7 @@ fn rollback_swaps_prev_back_and_again_rolls_forward() {
     put_live(&f.layout, "OLD");
     let mut steps = FakeSteps::new(clean_main());
     run(&f, &DevBuildOptions::default(), &mut steps).0.unwrap();
-    rollback(&f.layout).unwrap();
+    assert!(rollback(&f.layout).unwrap().is_empty());
     for n in LIVE_BINARIES {
         assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
         assert_eq!(read(&f.layout.prev(n)), format!("NEW-{n}"));
@@ -840,4 +888,269 @@ fn cli_parses_build_flags_and_rebuild_is_gone() {
     );
     assert!(parse(&["aida", "dev", "rebuild"]).is_err());
     assert!(!crate::dev_cmd::SHELL_HELPERS.contains("dev rebuild"));
+}
+
+// --- review round 1: live binary in target/, staged smoke, lock, recovery ---------
+
+/// Make `<link_dir>/aida` a symlink to `<target>/agent/aida`, the pre-live
+/// layout where the PATH binary is the build output itself.
+fn link_into_target(layout: &DevLayout) {
+    write(&layout.built("aida"), "CURRENT-aida");
+    fs::create_dir_all(&layout.link_dir).unwrap();
+    std::os::unix::fs::symlink(layout.built("aida"), layout.link("aida")).unwrap();
+}
+
+#[test]
+fn clean_full_refuses_while_the_path_binary_lives_in_target() {
+    let f = fixture();
+    link_into_target(&f.layout);
+    let mut steps = FakeSteps::new(clean_main());
+    let opts = DevBuildOptions {
+        clean: Some(DevCleanMode::Full),
+        ..Default::default()
+    };
+    let (r, _) = run(&f, &opts, &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(
+        err.contains("refusing --clean=full") && err.contains("--install-links"),
+        "{err}"
+    );
+    assert!(!steps.called("clean_full") && !steps.called("build"));
+    assert_eq!(read(&f.layout.built("aida")), "CURRENT-aida");
+}
+
+#[test]
+fn clean_full_refuses_when_path_aida_resolves_into_target() {
+    let f = fixture();
+    write(&f.layout.built("aida"), "CURRENT-aida");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.path_aida = Some(f.layout.built("aida"));
+    let opts = DevBuildOptions {
+        clean: Some(DevCleanMode::Full),
+        ..Default::default()
+    };
+    assert!(run(&f, &opts, &mut steps).0.is_err());
+    assert!(!steps.called("clean_full"));
+}
+
+#[test]
+fn plain_build_warns_while_the_path_binary_lives_in_target() {
+    let f = fixture();
+    link_into_target(&f.layout);
+    let mut steps = FakeSteps::new(clean_main());
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    r.unwrap();
+    assert!(
+        out.contains("warning: the binary on your PATH lives in this build's target dir")
+            && out.contains("--install-links"),
+        "{out}"
+    );
+    // Incremental --clean never touches binaries, so it is allowed (with the warning).
+    let mut steps = FakeSteps::new(clean_main());
+    let opts = DevBuildOptions {
+        clean: Some(DevCleanMode::Incremental),
+        ..Default::default()
+    };
+    run(&f, &opts, &mut steps).0.unwrap();
+}
+
+#[test]
+fn links_into_the_live_dir_do_not_warn() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    fs::create_dir_all(&f.layout.link_dir).unwrap();
+    std::os::unix::fs::symlink(f.layout.live("aida"), f.layout.link("aida")).unwrap();
+    let mut steps = FakeSteps::new(clean_main());
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    r.unwrap();
+    assert!(!out.contains("warning: the binary on your PATH"), "{out}");
+}
+
+#[test]
+fn promote_smoke_tests_the_staged_copy_and_promotes_exactly_that() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    // A concurrent build rewrites target/ while the smoke test runs.
+    let layout = f.layout.clone();
+    steps.on_smoke = Some(Box::new(move || {
+        for n in LIVE_BINARIES {
+            write(&layout.built(n), &format!("RACE-{n}"));
+        }
+    }));
+    run(&f, &DevBuildOptions::default(), &mut steps).0.unwrap();
+    let (path, body) = &steps.smoked[0];
+    assert_eq!(path, &f.layout.live_dir.join(".incoming").join("aida"));
+    assert_eq!(body, "NEW-aida");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("NEW-{n}"));
+    }
+}
+
+#[test]
+fn staged_smoke_failure_leaves_no_staging_behind() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.fail_smoke = true;
+    assert!(run(&f, &DevBuildOptions::default(), &mut steps).0.is_err());
+    assert!(!f.layout.live_dir.join(".incoming").exists());
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+}
+
+#[test]
+fn a_held_live_lock_blocks_promote_and_rollback() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    write(&f.layout.prev("aida"), "PREV-aida");
+    write(&f.layout.prev("aida-server"), "PREV-aida-server");
+    let held = lock_live_dir(&f.layout).unwrap();
+
+    let mut steps = FakeSteps::new(clean_main());
+    let err = format!(
+        "{:#}",
+        run(&f, &DevBuildOptions::default(), &mut steps)
+            .0
+            .unwrap_err()
+    );
+    assert!(err.contains("another `aida dev build`"), "{err}");
+    assert!(
+        !steps.called("smoke"),
+        "smoke must not run without the lock"
+    );
+    let err = format!("{:#}", rollback(&f.layout).unwrap_err());
+    assert!(err.contains("another `aida dev build`"), "{err}");
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert_eq!(read(&f.layout.prev("aida")), "PREV-aida");
+
+    drop(held);
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+}
+
+#[test]
+fn recovery_restores_prev_after_a_promote_crashed_mid_rotation() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    // Crash after `prev -> .prev-old`, before `.prev-new -> prev`.
+    for n in LIVE_BINARIES {
+        write(
+            &f.layout.live_dir.join(".prev-old").join(n),
+            &format!("PREV-{n}"),
+        );
+        write(
+            &f.layout.live_dir.join(".prev-new").join(n),
+            &format!("LIVE-{n}"),
+        );
+        write(&f.layout.live_dir.join(".incoming").join(n), "STAGED");
+    }
+    let notes = rollback(&f.layout).unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("interrupted promote")),
+        "{notes:?}"
+    );
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("PREV-{n}"));
+        assert_eq!(read(&f.layout.prev(n)), format!("LIVE-{n}"));
+    }
+    for d in [".prev-old", ".prev-new", ".incoming", ".rollback"] {
+        assert!(!f.layout.live_dir.join(d).exists(), "{d} left behind");
+    }
+}
+
+#[test]
+fn recovery_finishes_a_rollback_interrupted_mid_swap() {
+    let f = fixture();
+    // Rollback parked LIVE in .rollback, moved prev/aida live, then died
+    // before moving the parked aida into prev/.
+    write(&f.layout.live("aida"), "PREV-aida");
+    write(&f.layout.live("aida-server"), "LIVE-aida-server");
+    write(&f.layout.prev("aida-server"), "PREV-aida-server");
+    let swap = f.layout.live_dir.join(".rollback");
+    write(&swap.join("aida"), "LIVE-aida");
+    write(&swap.join("aida-server"), "LIVE-aida-server");
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    let notes = recover_live_dir(&f.layout).unwrap();
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert_eq!(read(&f.layout.prev("aida")), "LIVE-aida");
+    assert_eq!(read(&f.layout.prev("aida-server")), "PREV-aida-server");
+    assert!(!swap.exists());
+}
+
+#[test]
+fn rollback_respects_the_live_wave_guard_unless_forced() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    write(&f.layout.prev("aida"), "PREV-aida");
+    write(&f.layout.prev("aida-server"), "PREV-aida-server");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.fail_guard = true;
+    let mut out = Vec::new();
+    let err = format!(
+        "{:#}",
+        run_dev_rollback(&f.layout, false, false, &mut steps, &mut out).unwrap_err()
+    );
+    assert!(
+        err.contains("live wave") && err.contains("--force"),
+        "{err}"
+    );
+    assert!(steps.guarded(&f.layout.live("aida")));
+    assert_eq!(read(&f.layout.live("aida")), "LIVE-aida");
+
+    let mut steps = FakeSteps::new(clean_main());
+    steps.fail_guard = true;
+    run_dev_rollback(&f.layout, false, true, &mut steps, &mut Vec::new()).unwrap();
+    assert!(!steps.calls.iter().any(|c| c.starts_with("guard:")));
+    assert!(steps.called("restart_mcp"));
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+}
+
+#[test]
+fn an_existing_pre_live_backup_is_never_overwritten() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    write(&f.layout.link_dir.join("aida.pre-live"), "FIRST-BACKUP");
+    write(&f.layout.link("aida"), "SECOND-REAL-FILE");
+    let mut steps = FakeSteps::new(clean_main());
+    install_links(&f.layout, true, &mut steps, &mut Vec::new()).unwrap();
+    assert_eq!(
+        read(&f.layout.link_dir.join("aida.pre-live")),
+        "FIRST-BACKUP"
+    );
+    let second: Vec<_> = fs::read_dir(&f.layout.link_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("aida.pre-live."))
+        .collect();
+    assert_eq!(second.len(), 1, "{second:?}");
+    assert_eq!(
+        read(&f.layout.link_dir.join(&second[0])),
+        "SECOND-REAL-FILE"
+    );
+}
+
+#[test]
+fn refusal_says_the_gate_does_not_fetch() {
+    let msg = refusal_message(&["HEAD is 1 commit(s) behind origin/main".into()]);
+    assert!(
+        msg.contains("does not fetch") && msg.contains("git fetch"),
+        "{msg}"
+    );
+}
+
+#[test]
+fn cli_parses_rollback_flags() {
+    use clap::Parser;
+    let parse = |args: &[&str]| crate::cli::Cli::try_parse_from(args);
+    match parse(&["aida", "dev", "rollback", "--force"])
+        .unwrap()
+        .command
+    {
+        crate::cli::Command::Dev(crate::cli::DevCommand::Rollback { force, after_wave }) => {
+            assert!(force && !after_wave)
+        }
+        other => panic!("unexpected parse: {other:?}"),
+    }
+    assert!(parse(&["aida", "dev", "rollback", "--after-wave"]).is_ok());
+    assert!(parse(&["aida", "dev", "rollback", "--force", "--after-wave"]).is_err());
 }
