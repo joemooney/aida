@@ -392,22 +392,67 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
     Ok(())
 }
 
-/// Hand the calling shell a `cd` into the new project — through the marked
-/// eval channel when (and only when) the shell's wrapper advertises the
-/// `init-cd` capability; otherwise a plain copy-paste hint. A wrapper that
-/// speaks only the legacy verbs never sees markers from init, so nothing is
-/// ever printed as comment noise.
+/// How the final `cd` into the new project reaches the calling shell.
+// trace:BUG-0445 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum EnterDirChannel {
+    /// The wrapper handed us a private file: write the marked block there and
+    /// leave stdout alone (the wrapper did not capture it).
+    File(PathBuf),
+    /// A wrapper that still captures stdout and slices the marked block out of
+    /// it (the pre-file-channel `init-cd` contract).
+    StdoutMarkers,
+    /// No capable wrapper: print a copy-paste hint, never markers.
+    Hint,
+}
+
+/// Pure channel choice. The side-channel file wins whenever the wrapper named
+/// one, because that wrapper left stdout attached to the terminal and will
+/// NOT be looking for markers there; the stdout block is only for a wrapper
+/// that advertises `init-cd` and therefore still captures.
+// trace:BUG-0445 | ai:claude
+pub(crate) fn enter_dir_channel(
+    side_channel: Option<&std::ffi::OsStr>,
+    wrapper: Option<&str>,
+) -> EnterDirChannel {
+    match side_channel.filter(|p| !p.is_empty()) {
+        Some(path) => EnterDirChannel::File(PathBuf::from(path)),
+        None if crate::shell_eval::marker_has_cap(wrapper, crate::shell_eval::INIT_CD_CAP) => {
+            EnterDirChannel::StdoutMarkers
+        }
+        None => EnterDirChannel::Hint,
+    }
+}
+
+/// Hand the calling shell a `cd` into the new project. Three channels, chosen
+/// by [`enter_dir_channel`]: the wrapper's side-channel file (stdout stays the
+/// terminal, so prompts and progress rendered live), the marked stdout block
+/// for a wrapper that still captures stdout, or a plain copy-paste hint. A
+/// wrapper that speaks only the legacy verbs never sees markers from init, so
+/// nothing is ever printed as comment noise.
+// trace:BUG-0445 | ai:claude
 fn emit_enter_dir(plan_dir: &Path) {
     let abs = std::env::current_dir().unwrap_or_else(|_| plan_dir.to_path_buf());
     let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();
-    if crate::shell_eval::marker_has_cap(wrapper.as_deref(), crate::shell_eval::INIT_CD_CAP) {
-        let _eval = crate::shell_eval::EvalBlock::open_with(true);
-        // Eval'd by the wrapper: quote the path. trace:BUG-1624 | ai:claude
-        println!(
-            "cd '{}'",
-            crate::sh_single_quote(&abs.display().to_string())
-        );
-    } else {
-        println!("      cd {}", plan_dir.display());
+    let side_channel = std::env::var_os(crate::shell_eval::INIT_CD_FILE_ENV);
+    // Eval'd by the wrapper: quote the path. trace:BUG-1624 | ai:claude
+    let payload = format!(
+        "cd '{}'",
+        crate::sh_single_quote(&abs.display().to_string())
+    );
+    match enter_dir_channel(side_channel.as_deref(), wrapper.as_deref()) {
+        EnterDirChannel::File(path) => {
+            match crate::shell_eval::write_init_cd_file(&path, &payload) {
+                Ok(()) => println!("      entering {}", plan_dir.display()),
+                // An unwritten file evals nothing, so fall back to the hint
+                // rather than leaving the operator with a silent no-op.
+                Err(_) => println!("      cd {}", plan_dir.display()),
+            }
+        }
+        EnterDirChannel::StdoutMarkers => {
+            let _eval = crate::shell_eval::EvalBlock::open_with(true);
+            println!("{payload}");
+        }
+        EnterDirChannel::Hint => println!("      cd {}", plan_dir.display()),
     }
 }
