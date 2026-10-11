@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-11T10:07:55.223493475Z
+modified_at: 2026-10-11T16:21:34.732023551Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - performance
+comments:
+- id: 01a12bc5-058c-78a2-b715-3f03ed6491be
+  author: joe
+  content: 'ADVISOR 2026-10-11 09:25: performance-guard tripped again on the same 27.9s outlier (8.7% over the 1s budget, inside tolerance, ceiling breached). Decision: real regression; don''t raise the ceiling. Check whether it coincides with the 07:43-07:55 squash burst and store-lock contention (#2502 serialized store sync only landed at 08:29).'
+  created_at: 2026-10-11T16:21:34.732023551Z
+  modified_at: 2026-10-11T16:21:34.732023551Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
