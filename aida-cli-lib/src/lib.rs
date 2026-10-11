@@ -154,6 +154,7 @@ mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
 mod tui_entry;
+mod upgrade_release;
 mod usage_mcp_helpers;
 mod zen_cmd;
 use advisor_cmd_root::*;
@@ -191,6 +192,7 @@ use status_cmd::*;
 use statusline_root::*;
 use store_push_pull::*;
 use tui_entry::*;
+use upgrade_release::*;
 use usage_mcp_helpers::*;
 use zen_cmd::*;
 use zen_drive_root::*;
