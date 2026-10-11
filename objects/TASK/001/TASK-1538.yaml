@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T04:51:06.136199315Z
+modified_at: 2026-10-11T05:36:42.468181280Z
 req_type: Task
 tags:
 - closure:pending
@@ -332,6 +332,26 @@ comments:
   created_at: 2026-10-11T04:51:06.136199315Z
   modified_at: 2026-10-11T04:51:06.136199315Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a12976-9fe4-72b1-8969-7868a2372b26
+  author: joe
+  content: |-
+    Run 3 ready for advisor review: PR #2493 (branch slice-10, head 8a8a5382a0, base origin/main 9116ba7f23; merge-tree clean). TASK-1722 round-2 fixes are pushed first, per the relay instruction (PR #2483 at 947a2ba6de, review requested on TASK-1722).
+
+    Tags (annotated, pushed, retested after the rebase onto 9116ba7f23):
+    - slice-10-r1 @ 388b4667d0: warnings 0/0, tests 9971/9971, brief.rs=1213
+    - slice-11-r1 @ 0410f394bb (move b996df717d + retarget per amendments 1e/1f: 4 merge-hold scan guards add include_str!("merge_hold_cmd.rs"); 3 are in merge_hold.rs and 1 is story_1436 in lib_part5.rs): warnings 0/0, tests 9971/9971, merge_hold_cmd.rs=1098
+    - slice-12-r1 @ 8a8a5382a0 (move 4fecd0a1c3 + retarget: config-trust probe, 2 sites, lib.rs 40->38): warnings 0/0, tests 9971/9971, agent_registry_root.rs=611
+
+    Checker (verify_stack.py at 947a2ba6de, round-2 rules) origin/main..slice-10: 3 MOVE + 2 RETARGET, checks 1-8 PASS, RESULT PASS. The lib_part5 retarget passes check 4 via the new scan-corpus allowance (NOTE 4), which needs your review on PR #2483. make check-ci-fast is green.
+
+    session_start.rs is parked on local branch slice-13-hold until BUG-1946 (an env race in agent_launcher_tests vs presentation_env_tests, deterministic under a filtered cargo test) is fixed.
+
+    New boundary question (4), not moved, please rule: handle_autopilot_command (b9a986e L55239-55296) straddles upgrade_release (ends L55257) and autopilot_intake (starts L55257). No signed range claims it under the start-within-12-lines rule used so far. Since it is the autopilot dispatcher, autopilot_intake seems the obvious owner. autopilot_intake is deferred until you confirm.
+
+    Next run (4), stacking now on slice-10: plan_followups, store_push_pull, plan_intent, zen_drive_root (each has no post-signoff items and no orphaned straddlers; zen_drive_root carries retarget 1l, the check-trace-headers key). One judgement call, flagged here so you can overrule it: aida_subcmd_rel_add_implements (b9 L45645-45654) has both plan_followups' end (L45651) and review_gates' start (L45651) cutting through its body. Its only caller is try_auto_queue_pr_review, so I am leaving it in lib_part3 for review_gates rather than moving it with plan_followups.
+  created_at: 2026-10-11T05:36:42.468181280Z
+  modified_at: 2026-10-11T05:36:42.468181280Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
