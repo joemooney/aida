@@ -1,0 +1,28 @@
+id: 01a12890-4e52-7012-82dc-689e18695109
+spec_id: BUG-1935
+agreed_id: BUG-1935
+title: aida pr list reports CI Failing for non-required informational checks and lists multi-spec PRs once per spec
+description: |
+  Observed 2026-10-10. `aida pr list` showed CI "Failing" for PR #2483 when only the non-required, path-filtered `Build (windows-latest)` had failed; the required `Build (ubuntu-latest)` and `merge-hold-gate` were green. It also listed PR #2487 twice (rows for ADR-72 and TASK-1723) because its title mentions both IDs.
+
+  Want: the CI column honours the same informational_workflows / informational_checks config as ci_gate (BUG-1191), or reads only the branch-protection required checks, so "Failing" means "blocks merge". Collapse a multi-spec PR into one row listing every ID.
+
+  Acceptance: a PR whose only red check is informational shows Passing (or "Passing, 1 informational red"); a two-spec PR is one row.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:25:08.306254718Z
+modified_at: 2026-10-11T01:25:08.306254718Z
+req_type: Bug
+tags:
+- ci
+- cli
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
