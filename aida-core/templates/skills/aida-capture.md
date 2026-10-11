@@ -165,11 +165,11 @@ MD
 aida faq add --title "How do I ...?" --description-from-file /tmp/faq-answer.md \
   --tags "audience:user,topic:drain" --status completed
 # zen/headless: --status draft and add faq:unvetted to --tags
-aida db merge-gate   # promote FAQ-1-NNN to canonical FAQ-N (until BUG-1921 lands)
 ```
 
-When one new FAQ references another, cite it **by title**, never by a guessed
-`FAQ-N` — merge-gate does not number in creation order.
+`aida faq add` prints the FAQ's short `FAQ-N` id at creation; no merge-gate
+step is needed. When one new FAQ references another, add the referenced FAQ
+first and cite the id it printed. Never cite a guessed `FAQ-N`.
 
 ## CLI Reference
 
