@@ -79,6 +79,7 @@ mod dev_cmd;
 mod digest;
 mod digest_cmd;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
+mod doctor_root;
 mod drain_failure_note;
 mod findings_gate;
 mod gitlab_mirror_link;
@@ -170,6 +171,7 @@ use brief::*;
 use claim::*;
 use db_block::*;
 use db_reconcile::*;
+use doctor_root::*;
 use drain_cmd::*;
 use findings_gate::*;
 use help::*;
