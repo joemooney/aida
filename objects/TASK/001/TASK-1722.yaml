@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:53:49.824465012Z
-modified_at: 2026-10-11T01:49:06.971196223Z
+modified_at: 2026-10-11T02:16:31.759469179Z
 req_type: Task
 tags:
 - refactor
@@ -191,6 +191,12 @@ comments:
   created_at: 2026-10-11T00:10:18.598798965Z
   modified_at: 2026-10-11T00:10:18.598798965Z
   session_id: d1ebc976-deb4-4770-b036-20a1547772ad
+- id: 01a128bf-5b0f-7b30-b5a6-35097712f98b
+  author: joe
+  content: 'ADVISOR: rework routed 2026-10-10 19:20 to the attended lib-split implementer session (brief .aida/handoff/lib-split/prompt.md), first item. The worktree ../aida-task1722 was removed; the branch task-1722-work is intact. The verdict in comment [3] stands as the brief.'
+  created_at: 2026-10-11T02:16:31.759469179Z
+  modified_at: 2026-10-11T02:16:31.759469179Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a12798-32cd-7a00-93a3-e533eb0de4ae
   author: joe
