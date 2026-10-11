@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:40:59.363859672Z
-modified_at: 2026-10-11T17:06:41.422267824Z
+modified_at: 2026-10-11T17:10:26.807815632Z
 req_type: Bug
 tags:
 - contained
@@ -84,6 +84,35 @@ comments:
   created_at: 2026-10-11T15:20:57.754802739Z
   modified_at: 2026-10-11T15:20:57.754802739Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12bf1-c2f7-7ce0-86f1-3017ca9efcb0
+  author: joe
+  content: |-
+    FACTORY PLAN (day) — BUG-1928
+
+    Root cause (verified against real claude 2.1.296, dontAsk, --setting-sources project, inline --settings, cwd = the worktree): `Edit(/**)` does NOT match a Write to <worktree>/inside.txt (denied, same "don't ask mode" text as the BUG-81 logs). `Edit(//<abs wt>/**)` + `Write(//<abs wt>/**)` allows <wt>/inside.txt and denies <wt>/../outside.txt. `/x` is project/settings-relative; `//x` is the absolute form.
+
+    Sketch — boundary = list of absolute allowed roots
+    - New focused module aida-cli-lib/src/contained_boundary.rs:
+      - `contained_write_roots(worktree: &Path) -> Vec<PathBuf>`: [worktree] (absolute; plus its canonical form if it differs). BUG-1929 appends `<main>/.aida-store` and `<main>/.aida/cache.db*` style roots to THIS list; nothing else grows.
+      - `write_allow_rules(roots) -> Vec<String>`: per root, `Edit|Write|MultiEdit|NotebookEdit(//<root>/**)`. Fail closed: a root that is relative, is `/`, contains `..`, or contains glob/rule metacharacters (* ? [ ] { } ( ) \) emits NO rule (narrower, never broader).
+      - `#[cfg(test)]` evaluator implementing Claude Code's documented Read/Edit rule grammar (gitignore-style: `//p` absolute, `~/p` home, `/p` relative to the settings root, `**` any depth, `*` within a segment) over lexically-normalised real paths.
+    - session.rs: `contained_settings_json(allowed_hosts, managed_only, write_roots: &[PathBuf])` emits `write_allow_rules(write_roots)` instead of `Edit(/**)`. `claude_contained_flags()` derives roots from `headless_worktree_root()` — the git root of the process cwd, i.e. `lease.worktree_path` after queue-work's `set_current_dir` (pool or named), the same root the STORY-612 OS wrapper binds rw. Never from the orchestrator's requested path. New `claude_contained_flags_for(worktree)` for explicit callers/tests.
+    - Announcement: the orchestrator prints the requested path before the child's session start, and the warm pool can substitute a recycled tree (the BUG-81 mismatch). Parent line becomes `phase 1 workspace requested: …`; the child (queue work, headless arm, after the lease exists) prints `phase 1 workspace: <lease.worktree_path> [branch]` plus `write boundary: //<root>/**` — both from the same `PathBuf` the rules come from.
+
+    Tests
+    - contained_boundary::tests::contained_session_writes_inside_worktree_denied_one_level_above (harness, behavioural): real tempdir parent/worktree, generated settings JSON parsed, evaluator: Edit/Write/MultiEdit to worktree/src/x.rs allowed; parent/outside.txt denied; sibling `worktree-evil/x` denied; `worktree/../outside.txt` denied.
+    - ..::no_allow_rule_is_broader_than_the_worktree; ..::legacy_single_slash_rule_misses_a_pool_worktree (regression: `Edit(/**)` resolved against the main checkout does not cover ../<repo>-pool-0).
+    - ..::unsafe_roots_emit_no_rule (glob chars, relative, `/`).
+    - ..::pool_worktree_announcement_matches_rule_path: feed `<tmp>/aida-pool-aida-relay-0` lease worktree, assert announced phase-1 workspace path == the path inside the rule.
+    - ..::real_claude_contained_session_write_boundary (gated AIDA_TEST_REAL_CLAUDE=1): drives `claude -p --permission-mode dontAsk` with the generated settings; inside file created, parent file not.
+    - session.rs existing `contained_headless_args_use_strict_sandbox_settings` now asserts the cwd-worktree rule and the absence of `Edit(/**)`; STORY-605/615 tests updated to the new signature.
+
+    Risks: (1) interactive `aida agent new --sandbox` builds flags from the launcher's cwd, which may differ from the launch cwd — it prompts (not dontAsk), so a narrow rule only means prompts; noted, not changed. (2) Bash writes to the main store/cache remain BUG-1929. (3) Not compiled locally (factory rule) — CI compiles.
+
+    Acceptance check: AC1 -> behavioural harness + env-gated real-claude test; AC2 -> pool announcement test + roots derived from the lease cwd; AC3 -> BUG-1929 (operator: lands after this).
+  created_at: 2026-10-11T17:10:26.807815632Z
+  modified_at: 2026-10-11T17:10:26.807815632Z
+  session_id: 3349aec6-83dd-4955-839e-627cfae55679
 history:
 - id: 01a12b8d-83d7-70c1-a870-4853ee25287b
   author: joe
