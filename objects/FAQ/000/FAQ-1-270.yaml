@@ -1,0 +1,36 @@
+id: 01a1288d-6a4f-74a1-a5bd-6f00582c8577
+spec_id: FAQ-1-270
+title: Can a relay's reviewer subagent approve the PR its implementer subagent wrote?
+description: |
+  **Not once BUG-1918 lands. Approval authority is bound to session identity, and every subagent of one Claude process shares that identity (`CLAUDE_CODE_SESSION_ID` plus the harness process), so the approval counts as self-approval and `aida pr ship` refuses it.**
+
+  ## Why
+  PRs #2474, #2475 and #2477 merged with no independent review because the old guard checked a free-text label. BUG-1918 compares identities instead. An in-process reviewer subagent of the orchestrator that also ran the implementer is, correctly, the same session.
+
+  ## How
+  Run reviewers as separate processes with their own session and reviewer seat (for example a separate `claude -p` reviewer launched by `aida queue work PR-<n>`), recording the verdict with `aida review record`.
+
+  ## Caveat
+  BUG-1918 (PR #2485) is on hold until STORY-1654 changes relays to launch separate reviewer processes. Until then, the old label-based guard applies.
+
+  ## See also
+  BUG-1918, STORY-1654, BUG-1934
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:21:58.863533095Z
+modified_at: 2026-10-11T01:21:58.863533095Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+- topic:review-gate
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
