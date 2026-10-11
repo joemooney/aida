@@ -1,0 +1,35 @@
+id: 01a1288c-e62a-75c0-a3ac-14d69f75b642
+spec_id: FAQ-1-266
+title: Does AIDA support Windows or macOS?
+description: |
+  **No. AIDA supports Linux only, for the foreseeable future. Windows and macOS have no CI, no release binaries, and no fix work (ADR-72, 2026-10-10).**
+
+  ## Why
+  Windows CI was a large drain on throughput, and nobody uses those platforms. Earlier "until the backlog drains" decisions (ADR-47, ADR-62, ADR-65) kept expiring, and the release gate re-forced Windows work every release. ADR-72 has no expiry; only a new operator decision reverses it.
+
+  ## How
+  - `scripts/install.sh` refuses non-Linux systems with a clear message.
+  - The `Cross-platform (manual)` workflow still exists but only runs by hand, and never gates anything.
+  - A Windows/macOS-only failure is not a bug: don't file or fix it, and reviewers reject PRs that re-add those platforms.
+
+  ## See also
+  ADR-72, TASK-1723
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:21:25.034374161Z
+modified_at: 2026-10-11T01:21:25.034374161Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:build
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
