@@ -8584,29 +8584,6 @@ impl RealPhaseDriver {
     }
 }
 
-/// STORY-347: which kind of advisor pass to spawn — a fresh cold-boot
-/// `claude -p` (substrate only) or a fork-from-live `claude --resume` on a
-/// copied JSONL. The orchestrator decides which up front; this enum is the
-/// internal type that flows into `spawn_advisor_session`.
-/// trace:STORY-347 | ai:claude
-pub(crate) enum AdvisorPass {
-    ColdBoot,
-    Fork(advisor::ForkPlan),
-}
-
-/// STORY-347: resolve the effective calibration mode for the current
-/// orchestrator run. The `AIDA_CALIBRATE=1`/`0` env var (set by the
-/// `--calibrate`/`--no-calibrate` queue-work flags) overrides
-/// `[advisor] calibration_mode` from `.aida/config.toml`.
-/// trace:STORY-347 | ai:claude
-pub(crate) fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::CalibrationMode {
-    match std::env::var("AIDA_CALIBRATE").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") | Some("yes") => advisor::CalibrationMode::On,
-        Some("0") | Some("false") | Some("off") | Some("no") => advisor::CalibrationMode::Off,
-        _ => cfg.calibration_mode,
-    }
-}
-
 /// Decide whether phase 2 can safely continue after phase 1 removed its
 /// recorded worktree. Both durable views must identify the same published
 /// commit; otherwise the push/teardown guard has lost the evidence it needs.

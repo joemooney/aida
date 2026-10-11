@@ -781,3 +781,16 @@ items = [
   "fn plan_rel_path",
   "fn extract_plan_followups",
 ]
+
+[module.advisor_cmd_root]
+purpose = "Advisor command handlers (handoff, register, dashboard), AdvisorPass and calibration mode (STORY-1488 slice 1)"
+items = [
+  "fn handle_advisor_handoff",
+  "fn render_advisor_handoff",
+  "mod story_363_handoff_tests",
+  "fn handle_advisor_register",
+  "fn handle_advisor_registration_status",
+  "fn handle_advisor_dashboard",
+  "enum AdvisorPass",
+  "fn effective_calibration_mode",
+]
