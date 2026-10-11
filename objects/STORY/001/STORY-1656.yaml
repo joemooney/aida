@@ -17,12 +17,39 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:59:40.157380366Z
-modified_at: 2026-10-11T00:59:40.157380366Z
+modified_at: 2026-10-11T07:12:07.448218162Z
 req_type: Story
 tags:
 - forge
 - gitlab
 - init
+comments:
+- id: 01a129cd-fb18-7f41-af42-440c395bad99
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because the multi-forge init path is a real gap (init handles exactly one forge and the GitLab leg has no API fallback), with GitLab project creation on refusal as the first slice.
+
+    Problem: `aida init --github` creates and publishes to GitHub only; a GitLab mirror needs a separate `aida remote mirror`, and when SSH push-to-create is refused in a group namespace there is no API fallback, so mirroring fails until the project is created by hand.
+
+    Evidence path (verified):
+    - aida-cli-lib/src/init_bootstrap.rs:324-358 finish_remote: exactly one of plan.github or plan.remote runs; the GitLab leg is a bare `git push -u origin` relying on push-to-create. resolve_forge_profile (:136-175, STORY-823) selects ONE profile from ~/.aida/forges.toml.
+    - aida-cli-lib/src/remote_create.rs:7 ("push-to-create over SSH, no glab required") and :120 attach_fallback_hint: the designed fallback is manual attach, not API creation. A glab token reader already exists at :879 glab_config_path and :889 gitlab_release_token_from_glab_config_for_host and can back a REST POST /projects call.
+    - aida-cli-lib/src/cli.rs:3647 RemoteCommand::Mirror { name, url } adds the remote and fan-out but never creates the project.
+    - Related and overlap: BUG-1932 (aida-store silently diverged GitHub/GitLab after a GitLab-only node registration) is the sync-correctness failure on the same two-hub setup and is being triaged separately; this story must not absorb it, but item 4 (`aida remote status` verification at the end of init) is the seam where that divergence would have surfaced. BUG-1938 (mirror/init leave .aida/config.toml uncommitted) is a smaller adjacent defect on the same path. STORY-760 and BUG-1746 cover ongoing fan-out, not creation.
+
+    Acceptance criteria:
+    1. `aida init DIR --github --gitlab <host>/<group>` (and a forges.toml profile listing both) creates both repos, wires the second as a mirror hub, and pushes main then aida-store (TASK-844 order) to each; an integration test with fake gh and glab on PATH asserts the call sequence.
+    2. When the GitLab push is refused with "project could not be found", init creates the project via `glab api -X POST projects` (namespace_id resolved from the group, visibility matching the GitHub repo, private by default) and retries the push; unit test on the request builder; a non-refusal push error must NOT trigger creation.
+    3. `aida remote mirror <name> --url` gets the same create-if-missing fallback (test).
+    4. The final summary runs `aida remote status`; all hubs agree on main and aida-store; exit non-zero if any hub disagrees.
+    5. With no glab token: clear message with the existing manual recipe (attach_fallback_hint), non-zero exit, and the already-created GitHub repo is reported, not rolled back.
+
+    Scope / non-goals: no sync-divergence detection (BUG-1932), no config.toml commit fix unless trivial (BUG-1938), no third forge kind. Related: related:BUG-1932 related:BUG-1938 related:STORY-823 related:STORY-537 related:TASK-844 related:TASK-1097.
+
+    Suggested size: M.
+  created_at: 2026-10-11T07:12:07.448218162Z
+  modified_at: 2026-10-11T07:12:07.448218162Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
