@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T07:45:56.157037258Z
+modified_at: 2026-10-11T07:47:44.477054098Z
 req_type: Bug
 tags:
 - triaged:night
@@ -56,6 +56,31 @@ comments:
   created_at: 2026-10-11T07:42:34.099784369Z
   modified_at: 2026-10-11T07:42:34.099784369Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a129ee-96dd-7891-8989-d655a65aa21c
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    Scope follows the advisor's narrowing: orchestrate skill TEXT only (concurrency cap + token/time budget guidance), no runtime model-selection code, no CLI enforcement.
+
+    Findings
+    - Master: aida-core/templates/skills/aida-orchestrate.md. `.claude/skills/aida-orchestrate/SKILL.md` and `.claude/commands/aida-orchestrate.md` are symlinks to the masters, so the Claude mirrors follow automatically (`make check-templates` verifies).
+    - The Codex/Antigravity packs ship the vendor-neutral copy aida-core/templates/skills-portable/aida-orchestrate.md (scaffolding/mod.rs test `orchestrate_skill_is_portable_in_vendor_packs_and_claude_pack_unchanged`). The bug was filed from Antigravity, so that copy gets the same guidance; it must keep every gate string in `portable_orchestrate_body_has_no_claude_only_tools` and name no Claude-only tool.
+    - Real knobs that exist today: `aida queue work --max-tokens N --max-runtime DUR --no-progress-minutes MIN` (all "with --auto-complete"), `--model` on `aida queue work` and `aida agent new <vendor>`; `aida ps` (ELAPSED column), `aida tail <SPEC> --no-follow -n 40`, `aida agent stop <name>`. Only these are cited.
+
+    Changes
+    1. Section 4 "Dispatch implementers" in both bodies: rename to "(bounded parallel)"; default concurrency cap of 3 live child sessions (implementers + reviewers together), queue the rest and dispatch as `aida ps` frees a slot; one-line rationale.
+    2. New "Child budgets" block in both bodies: per-child defaults (about 90 minutes wall clock, one full context window of tokens), what to do when exceeded (stop the child, record a PROXY DECISION with what was spent, re-dispatch once with a narrower brief, otherwise report; never retry silently), and which flags carry the budget where the harness supports it.
+    3. Model guidance made vendor-neutral and explicit: inherit the parent's model unless the spec is store/lock/authority code; set it explicitly via `--model` rather than assuming the vendor default. No vendor model names.
+    4. Bounded check-in cadence: read `aida ps`/`aida tail -n 40` once per batch boundary or on a child's exit notification, never re-send the full board/handoff to a child; targeted reads (`rg -n`, `sed -n`) for handoffs and docs over ~200 lines. Existing "No model-side polling" guardrail retained.
+    5. Commands template gets one sentence on the cap and budgets so the short form matches.
+    6. Regression check: extend `portable_orchestrate_body_has_no_claude_only_tools` (and a sibling assertion on the Claude master) so both bodies must contain the concurrency-cap and budget text. Not compiled locally; CI runs it.
+
+    Out of scope (per advisor): acceptance item 1's vendor-default model change (not in this repo), any drain_caps.rs enforcement.
+    Gates planned: `make check-templates`, non-cargo fast gates from scripts/check-ci-gates.py where selectable.
+  created_at: 2026-10-11T07:47:44.477054098Z
+  modified_at: 2026-10-11T07:47:44.477054098Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a129e9-a32a-7eb0-9168-23f36f14ddab
   author: joe
