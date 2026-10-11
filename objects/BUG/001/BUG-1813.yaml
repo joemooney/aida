@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:27:17.703282889Z
-modified_at: 2026-10-11T06:59:10.997055889Z
+modified_at: 2026-10-11T06:59:36.263341964Z
 req_type: Bug
+tags:
+- factory:night
 comments:
 - id: 01a129bd-8e19-7702-8b09-5700b4502760
   author: joe
