@@ -11,11 +11,40 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:27.326683954Z
-modified_at: 2026-10-11T01:25:27.326683954Z
+modified_at: 2026-10-11T07:12:30.854526341Z
 req_type: Bug
 tags:
 - forge
 - init
+comments:
+- id: 01a129ce-5686-7c40-9d07-f54938ecb9c6
+  author: night-fable
+  content: |
+    PRODUCT TRIAGE (night): recommend approve because `aida remote mirror` writes [store.sync] mirror_remotes into .aida/config.toml and neither commits it nor tells the operator it is now dirty; init already has an auto-commit/prompt path the mirror command does not use.
+
+    Problem
+    Setup commands that mutate committed config (remote mirror, and any init --github provider/class/ci rewrite that lands after the scaffold commit) leave .aida/config.toml dirty with no "commit it" hint, so the hub set drifts until someone notices.
+
+    Evidence path (verified on main)
+    - aida-cli-lib/src/remote_create.rs:2020-2075 handle_remote_mirror(): step 2 calls add_mirror_remote_to_config (:1893-1943) and prints "listed `{name}` in [store.sync] mirror_remotes"; the tail (:2068-2074) prints hook/status hints only. No git add/commit, no "config changed" line.
+    - aida-cli-lib/src/init_cmd.rs:377-400 should_auto_commit_scaffold() and :1440-1460 — init already auto-commits (non-TTY) or prompts (TTY) and otherwise prints "scaffolding left uncommitted — commit it with ..."; this logic is not reused by remote mirror.
+    - `rg "config changed|commit it" aida-cli-lib/src` — no such hint in remote_create.rs.
+    - The "mirror skipped on first push (not confirmed on origin)" behaviour is by design (remote_create.rs:1386-1440) and is not part of the bug.
+
+    Acceptance criteria
+    - `aida remote mirror <name> --url <u>` on a clean tree ends with either an `[AI:aida] chore(remote): list <name> as a store mirror` commit (non-TTY or --commit) or a printed line "config changed: .aida/config.toml — commit it with: git add .aida/config.toml && git commit ..." (TTY decline). Unit test handle_remote_mirror_reports_config_change asserts the hint text.
+    - With a dirty .aida/config.toml before the command, nothing is auto-committed and the hint names the file (no silent sweep of unrelated WIP).
+    - `aida init --github` run against a scratch repo leaves `git status --porcelain .aida/config.toml` empty when the operator accepts the scaffold commit.
+    - The remote mirror success output ends with a next-steps block naming `aida remote mirror-sync` and `aida remote status`; docs/cli entry updated.
+
+    Scope / non-goals
+    - Not changing mirror-push semantics or first-push confirmation; not auto-pushing.
+    - related:STORY-1656 related:TASK-631 (init auto-commit)
+
+    Suggested size: S
+  created_at: 2026-10-11T07:12:30.854526341Z
+  modified_at: 2026-10-11T07:12:30.854526341Z
+  session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
