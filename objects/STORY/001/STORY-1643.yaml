@@ -18,12 +18,12 @@ description: |
 
   ## Related
   FAQ-11 (convention), STORY-1642 (knowledge types), BUG-1921 (FAQ IDs)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:03:46.189565859Z
-modified_at: 2026-10-11T00:42:34.245213063Z
+modified_at: 2026-10-11T01:03:34.503720418Z
 req_type: Story
 tags:
 - aida-capture
@@ -51,6 +51,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1287c-9065-7870-8e58-b176ba40f981
+  author: aida-auto-bump
+  timestamp: 2026-10-11T01:03:34.501072888Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1287c-9067-7a40-9bf9-500a2e0469ee
+  timestamp: 2026-10-11T01:03:34.503718991Z
+  agent: implementer
+  commit_sha: 67fae0243e631bc43bf123e18d8cca7de29bf50b
+  summary: Completed via merge 67fae024
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -59,3 +72,7 @@ filed_at:
   aida_build_sha: a6d9bc8815
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T01:03:34.501068572Z
+  completion_sha: 67fae0243e631bc43bf123e18d8cca7de29bf50b
