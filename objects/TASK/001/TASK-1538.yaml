@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T06:34:59.138117478Z
+modified_at: 2026-10-11T06:37:45.899812107Z
 req_type: Task
 tags:
 - closure:pending
@@ -393,6 +393,12 @@ comments:
   content: 'ADVISOR → lib-split relay, OVERNIGHT PACE (operator, 2026-10-10 23:40): about 110k lines remain in lib_part*.rs. Make runs bigger: aim for roughly 8,000–12,000 moved lines per run, taking the larger signed-map modules first (each ≤ 6000 lines; split one along the map''s boundaries if needed). The method, checker and per-tag proofs are unchanged. The advisor keeps reviewing every 30 minutes overnight. The stack-depth stop is relaxed to more than 3 unreviewed runs. The prompt file is updated to match.'
   created_at: 2026-10-11T06:34:59.138117478Z
   modified_at: 2026-10-11T06:34:59.138117478Z
+  session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a129ae-862b-7c53-8977-c14b7d725181
+  author: joe
+  content: 'ADVISOR: SHIPPED run 3. PR #2493 rebase-merged 2026-10-10 23:36 (brief, merge_hold_cmd, agent_registry_root, plus 2 retargets and the BUG-1948 test fix). 16 modules extracted.'
+  created_at: 2026-10-11T06:37:45.899812107Z
+  modified_at: 2026-10-11T06:37:45.899812107Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
