@@ -102,5 +102,105 @@ aida advisor register                 Record the current session
         self.assertEqual(self.vm.flag_accuracy_misses(documented, paths), [])
 
 
+
+class VerifyManualStaticFlagsTest(unittest.TestCase):
+    """No-build hidden-flag guard run by the pre-push tier. trace:BUG-1937 | ai:claude"""
+
+    CLAP_SOURCE = """
+pub enum Commands {
+    /// Cut a release.
+    Release {
+        /// Preview only.
+        #[clap(long)]
+        preview: bool,
+        /// No-op kept for compatibility.
+        // a plain comment between attribute and field
+        #[clap(long, hide = true)]
+        skip_xplat_check: bool,
+        #[clap(
+            long = "after-pr",
+            value_name = "N",
+            help = "a long help that says hide = true in prose"
+        )]
+        after_pr: Option<u64>,
+        #[arg(long, alias = "old-name", visible_alias = "shown-name")]
+        new_name: bool,
+        #[clap(long)]
+        #[clap(hide = true)]
+        split_hidden: bool,
+        #[clap(long)]
+        r#type: Option<String>,
+        #[clap(hide = true)]
+        positional: Option<String>,
+    },
+    #[clap(hide = true)]
+    Secret,
+}
+pub struct Other {
+    #[clap(long, hide = true)]
+    preview: bool,
+}
+"""
+
+    def setUp(self):
+        self.vm = load_verify_manual()
+
+    def test_static_clap_parse_visible_vs_hidden(self):
+        visible, hidden = self.vm.clap_long_flags(self.CLAP_SOURCE)
+        self.assertEqual(
+            visible,
+            {"--preview", "--after-pr", "--new-name", "--shown-name", "--type"},
+        )
+        self.assertEqual(
+            hidden,
+            {"--skip-xplat-check", "--old-name", "--split-hidden", "--preview"},
+        )
+
+    def _cites(self, lines):
+        with tempfile.TemporaryDirectory() as td:
+            chapter = Path(td) / "manual.md"
+            chapter.write_text("\n".join(lines) + "\n")
+            return self.vm.static_flag_citations([str(chapter)])
+
+    def test_static_hidden_flag_citation_fails(self):
+        visible, hidden = self.vm.clap_long_flags(self.CLAP_SOURCE)
+        cites = self._cites(
+            [
+                "### `aida release`",
+                "Pass `--skip-xplat-check` to skip the gate.",
+                "Run aida release --old-name in prose.",
+            ]
+        )
+        misses = self.vm.static_hidden_flag_misses(cites, visible, hidden)
+        self.assertEqual(
+            [(m["flag"], m["parent"], m["line"]) for m in misses],
+            [("--skip-xplat-check", "release", 2), ("--old-name", "release", 3)],
+        )
+
+    def test_static_flag_visible_elsewhere_passes(self):
+        # `--preview` is hidden on one struct but visible on another command.
+        visible, hidden = self.vm.clap_long_flags(self.CLAP_SOURCE)
+        cites = self._cites(["### `aida release`", "`aida release --preview` previews."])
+        self.assertEqual(self.vm.static_hidden_flag_misses(cites, visible, hidden), [])
+
+    def test_static_scope_and_external_tool_spans_ignored(self):
+        visible, hidden = self.vm.clap_long_flags(self.CLAP_SOURCE)
+        cites = self._cites(
+            [
+                "Intro prose citing `--skip-xplat-check` outside any command.",
+                "### `aida release`",
+                "`git push --split-hidden` is git's flag, not ours.",
+                "## Notes",
+                "`--skip-xplat-check` after the section ended.",
+            ]
+        )
+        self.assertEqual(self.vm.static_hidden_flag_misses(cites, visible, hidden), [])
+
+    def test_static_mode_passes_on_current_manual(self):
+        files = sorted(str(p) for p in (REPO / "docs" / "cli").glob("[0-9][0-9]-*.md"))
+        self.assertTrue(files)
+        self.assertEqual(self.vm.main_static(files), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

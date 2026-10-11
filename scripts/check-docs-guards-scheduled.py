@@ -44,6 +44,8 @@ DOCS_GUARDS = [
     "External-prose classifier inventory",
     "Doc-intent gate (surface changes mark doc-impact)",
     "CLI-manual drift-guard (every command documented)",
+    # trace:BUG-1937 | ai:claude
+    "CLI-manual hidden-flag guard (static, no build)",
     "Monitor contract drift guard",
     "Trace/doc-header stranding gate",
 ]
