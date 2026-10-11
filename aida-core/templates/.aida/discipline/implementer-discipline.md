@@ -683,7 +683,7 @@ Two consequences I had to act on:
 
 **How to apply:**
 - After ANY merge that touches the orchestrator, assume the drain is stale until checked. `aida dev status` gives binary SHA, HEAD, and the match verdict; `git merge-base --is-ancestor <merge-sha> <binary-sha>` answers it precisely.
-- Queue `make build-fast AFTER_WAVE=1` rather than rebuilding live — it refuses to swap a binary a wave is pinned to and fires at `QueueDrained`.
+- Queue `aida dev build --after-wave` rather than rebuilding live — it refuses to swap a binary a wave is pinned to and fires at `QueueDrained`.
 - **Record the binary SHA alongside any drain measurement you intend to file.** "Observed on binary X at time T" is the difference between evidence and an anecdote, and it costs one command.
 - Before acting on the premise "fix F is now live", verify F is in the RUNNING binary, not merely on main. Merged ≠ running.
 

@@ -69,6 +69,8 @@ mod decide_cmd;
 mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
+// trace:STORY-1646 | ai:claude
+mod dev_build;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;

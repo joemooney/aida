@@ -22,6 +22,23 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             release,
             auto,
         } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
+        // trace:STORY-1646 | ai:claude
+        DevCommand::Build {
+            clean,
+            no_promote,
+            allow_dirty,
+            install_links,
+            yes,
+            after_wave,
+        } => crate::dev_build::handle_dev_build(&crate::dev_build::DevBuildOptions {
+            clean: *clean,
+            no_promote: *no_promote,
+            allow_dirty: *allow_dirty,
+            install_links: *install_links,
+            yes: *yes,
+            after_wave: *after_wave,
+        }),
+        DevCommand::Rollback => crate::dev_build::handle_dev_rollback(),
         DevCommand::BuildGuard {
             profile,
             after_wave,
@@ -869,7 +886,7 @@ fn handle_dev_activate(
 /// Refuse replacing the binary pinned by a live wave, or
 /// park on the event stream until that wave emits QueueDrained.
 // trace:TASK-1285 | ai:codex
-fn guard_binary_change(
+pub(crate) fn guard_binary_change(
     repo: &std::path::Path,
     target: &std::path::Path,
     after_wave: bool,
@@ -964,6 +981,8 @@ fn handle_dev_status() -> Result<()> {
     let resolved_binary = resolve_aida_on_path();
     let activation =
         classify_dev_activation(active, pinned_binary.as_deref(), resolved_binary.as_deref());
+    // trace:STORY-1646 | ai:claude — live / prev / latest-built SHAs first.
+    crate::dev_build::print_live_status();
     // trace:TASK-1285 | ai:codex
     if let Ok(root) = crate::find_main_worktree_root() {
         if let Some(lock) = crate::drain_lock::read_pid_live_lock(&root) {
@@ -995,7 +1014,7 @@ fn handle_dev_status() -> Result<()> {
         }
     );
     if activation == DevActivationState::Missing {
-        println!("Recommended:  rebuild the pinned dev binary with `make build-fast`");
+        println!("Recommended:  rebuild the pinned dev binary with `aida dev build --no-promote`");
     }
     if active {
         if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
@@ -1050,7 +1069,7 @@ fn handle_dev_status() -> Result<()> {
                 // trace:TASK-188 | ai:claude
                 if matches!(kind, ShaMatch::Ancestor) {
                     eprintln!(
-                        "{} your dev aida binary (build {}) is behind HEAD ({}) — run `make build-fast`",
+                        "{} your dev aida binary (build {}) is behind HEAD ({}) — run `aida dev build`",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         bin_short,
                         head_short
@@ -1383,16 +1402,6 @@ aida() {
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
-        "dev rebuild")
-            # trace:TASK-1720 | ai:antigravity
-            local _aida_repo="${AIDA_DEV_REPO:-$PWD}"
-            if ! [ -f "$_aida_repo/Makefile" ] || ! grep -q "build-fast" "$_aida_repo/Makefile" 2>/dev/null; then
-                echo "aida dev rebuild: Must be run inside the AIDA repository" >&2
-                return 1
-            fi
-            make -C "$_aida_repo" build-fast
-            return $?
-            ;;
         "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter"|"worktree exit")
             # These subcommands mutate the CALLING shell, so their shell code
             # has to be eval'd here rather than run in the subprocess. Human

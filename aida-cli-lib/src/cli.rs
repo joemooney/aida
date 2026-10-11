@@ -42,6 +42,16 @@ pub enum InitFootprint {
     MemoryLane,
 }
 
+/// What `aida dev build --clean[=MODE]` deletes before building.
+// trace:STORY-1646 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DevCleanMode {
+    /// Delete only `target/agent/incremental`; keep compiled dependencies.
+    Incremental,
+    /// Run `cargo clean --profile agent`.
+    Full,
+}
+
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProxyApprovalIndependent {
     /// The proxy review was independent of the implementation.
@@ -2828,6 +2838,57 @@ pub enum DevCommand {
         #[clap(long, conflicts_with_all = ["debug", "release"])]
         auto: bool,
     },
+
+    /// Build, smoke-test and promote the live dev binary. The one build
+    /// command: an incremental `--profile agent` workspace build, then a
+    /// smoke test of the new `aida` / `aida-server`, then an atomic promote
+    /// into the live directory (default `~/.local/share/aida/live`, outside
+    /// target/), keeping the previous pair in `live/prev/`. Promotes only from
+    /// the primary checkout on a clean `main` that matches `origin/main`; in a
+    /// worktree it builds and smoke-tests only.
+    // trace:STORY-1646 | ai:claude
+    Build {
+        /// Clear the incremental cache first. Bare `--clean` deletes only
+        /// `target/agent/incremental` (keeps compiled dependencies);
+        /// `--clean=full` runs `cargo clean --profile agent`.
+        #[clap(
+            long,
+            value_enum,
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "incremental"
+        )]
+        clean: Option<DevCleanMode>,
+
+        /// Build and smoke-test only; never promote.
+        #[clap(long)]
+        no_promote: bool,
+
+        /// Promote even when the checkout is dirty, off `main`, or not at
+        /// `origin/main` (`aida dev status` then shows the dirty SHA).
+        #[clap(long)]
+        allow_dirty: bool,
+
+        /// Point `~/.local/bin/aida` and `~/.local/bin/aida-server` at the
+        /// live directory, showing anything it replaces first.
+        #[clap(long)]
+        install_links: bool,
+
+        /// With --install-links: replace existing files/links without
+        /// asking (required when stdin is not a terminal).
+        #[clap(long, requires = "install_links")]
+        yes: bool,
+
+        /// Wait for a live drain wave pinned to the current binary to finish
+        /// instead of refusing.
+        #[clap(long)]
+        after_wave: bool,
+    },
+
+    /// Swap the previous live binaries (`live/prev/`) back in, in one step.
+    /// Running it again rolls forward.
+    // trace:STORY-1646 | ai:claude
+    Rollback,
 
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]
