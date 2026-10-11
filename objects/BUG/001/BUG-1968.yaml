@@ -12,8 +12,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:57.026279964Z
-modified_at: 2026-10-11T15:55:57.026279964Z
+modified_at: 2026-10-11T18:09:49.263144002Z
 req_type: Bug
+comments:
+- id: 01a12c28-1ecf-70d0-b8ce-25203b2aeb19
+  author: joe
+  content: 'Recurred 2026-10-11 10:10-11:05 in lib-split run 8/9 proofs (two parallel cargo test --workspace lanes): bug_1923_a_kept_chunk_clears_the_failure_count at d606ec7259 and 22a3fe9b38; siblings in the same catch-up/cooldown family also failed once each: bug_1942_stalled_catch_up_skips_inside_cooldown (22a3fe9b38) and story_1650_history_flow_tests::story_1650_stalled_catch_up_falls_back_without_trying_again (95fe1abed3). Likely the same shared timing/cooldown state.'
+  created_at: 2026-10-11T18:09:49.263144002Z
+  modified_at: 2026-10-11T18:09:49.263144002Z
+  session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
