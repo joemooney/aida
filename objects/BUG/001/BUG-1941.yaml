@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:01:08.017370724Z
-modified_at: 2026-10-11T17:27:20.281434710Z
+modified_at: 2026-10-11T17:48:34.772673331Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -38,6 +38,12 @@ comments:
   content: 'REVIEW (night): APPROVE-with-minors at bf96df9e (PR #2535). Sent back to fix: (1) commit movement overrides the awaiting-integration and stopped states; (2) the unattributed-movement note is gated on state instead of pid; (3) the commit age uses committer time. Item (c), per-process rows for the main checkout, is deferred to a follow-up design (options in the PR body; recommendation: link relay processes to spec leases via env/manifest, plus per-process root rows). The spec''s ''or at least not labelled subagent'' clause is met.'
   created_at: 2026-10-11T17:27:20.281434710Z
   modified_at: 2026-10-11T17:27:20.281434710Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
+- id: 01a12c14-ac54-7ae1-9351-8060974a9ac1
+  author: joe
+  content: 'REVIEW (night): round 3 (fresh reviewer at 366f087e) found the logic correct, with one blocking hermeticity issue in the author-time test. The fix at a6951c76 is exactly the prescribed env isolation plus gpgsign=false (7 lines, test only), verified by the orchestrator. APPROVE at a6951c76 pending CI.'
+  created_at: 2026-10-11T17:48:34.772673331Z
+  modified_at: 2026-10-11T17:48:34.772673331Z
   session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a129a5-8997-7b00-81d0-34deb3bd1458
