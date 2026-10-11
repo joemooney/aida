@@ -238,6 +238,14 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_session_context_drift.sh
 
+      # trace:BUG-1924 | ai:claude
+      # SessionStart banners derive the shown role from the validated seat
+      # grant: a role label without a grant reads "(no grant)", a granted
+      # seat reads as before. Stub `aida`; no build.
+      - name: Run session role grant banner test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_session_role_grant.sh
+
       # trace:BUG-1688 | ai:claude
       # The five shipped scripts with no legitimate unattended caller
       # must refuse a direct full-access vendor launch. The fixture puts

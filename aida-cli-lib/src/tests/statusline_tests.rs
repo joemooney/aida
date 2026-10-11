@@ -1,7 +1,7 @@
 use super::*;
 use crate::statusline_cmd::{
-    derive_session_branch_suffix, draft_backlog_statusline_segment, sess_anchor_annotation,
-    sess_label_with_suffix, wt_divergence_segment,
+    derive_session_branch_suffix, draft_backlog_statusline_segment, role_display_segment_text,
+    routing_role, sess_anchor_annotation, sess_label_with_suffix, wt_divergence_segment,
 };
 
 /// TASK-244: matching shell + session role — no warning, plain
@@ -6039,4 +6039,71 @@ fn skill_lint_counts_registry_glyphs() {
     body.push_str(crate::glyphs::Glyph::Cross.unicode());
     body.push_str(crate::glyphs::Glyph::Check.unicode());
     assert_eq!(count_registry_glyphs(&body), 3);
+}
+
+/// An advisor label with no valid grant renders as ungranted in the warning
+/// colour; a validated grant renders exactly as before; the unset default
+/// keeps its `(default)` tag.
+// trace:BUG-1924 | ai:claude
+#[test]
+fn role_segment_reflects_the_seat_grant_not_the_label() {
+    use crate::seat_authority::RoleDisplay;
+
+    let (text, warn) = role_display_segment_text(
+        &RoleDisplay::Ungranted("advisor".into()),
+        "advisor",
+        None,
+        true,
+    );
+    assert_eq!(text, "role:advisor (no grant)");
+    assert!(warn, "an ungranted label takes the warning colour");
+
+    let (text, _) = role_display_segment_text(
+        &RoleDisplay::Ungranted("advisor".into()),
+        "advisor",
+        Some("implementer"),
+        true,
+    );
+    assert!(
+        text.starts_with("role:advisor (no grant) "),
+        "the tag sits on the role, ahead of a mismatch suffix: {text}"
+    );
+
+    let (text, warn) =
+        role_display_segment_text(&RoleDisplay::Held("advisor".into()), "advisor", None, true);
+    assert_eq!(text, "role:advisor", "a granted seat renders as today");
+    assert!(!warn);
+
+    let (text, warn) = role_display_segment_text(&RoleDisplay::Default, "implementer", None, false);
+    assert_eq!(text, "role:implementer (default)");
+    assert!(!warn);
+}
+
+/// With no label, a validated grant's seat routes queue depth and @SPEC;
+/// a set label keeps routing even when the grant names another seat.
+// trace:BUG-1924 | ai:claude
+#[test]
+fn routing_role_prefers_the_grant_only_without_a_label() {
+    use crate::seat_authority::RoleDisplay;
+
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            None,
+            ("implementer".into(), true)
+        ),
+        ("integrator".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            Some("advisor"),
+            ("advisor".into(), false)
+        ),
+        ("advisor".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(&RoleDisplay::Default, None, ("implementer".into(), true)),
+        ("implementer".to_string(), true)
+    );
 }

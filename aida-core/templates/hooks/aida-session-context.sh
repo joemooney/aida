@@ -32,7 +32,42 @@ command -v aida >/dev/null 2>&1 || exit 0
 project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
 cd "$project_root" 2>/dev/null || exit 0
 
-role="${AIDA_SESSION_ROLE:-none}"
+# The role shown is the seat this session actually holds. `aida role current`
+# prints the seat of the validated grant (empty when there is none), while
+# AIDA_SESSION_ROLE is only a display/routing label: a label naming a seat with
+# no valid grant (missing, expired, revoked, or minted in another shell) is
+# shown as "<role> (no grant)" so the session can tell it lacks that authority.
+# The implementer baseline and the guest/requester personas need no grant.
+# trace:BUG-1924 | ai:claude
+# Role names compare case-insensitively, as AIDA canonicalizes them.
+label=$(printf '%s' "${AIDA_SESSION_ROLE:-}" | tr '[:upper:]' '[:lower:]')
+[ "$label" = "dialog" ] && label=advisor
+# `aida role current` exits 0 with an empty line when no grant is held, so a
+# nonzero status (killed by the timeout, or any failure) means the check did
+# not complete: show the label as-is rather than a false "(no grant)".
+if command -v timeout >/dev/null 2>&1; then
+    seat_out=$(timeout 2 aida role current 2>/dev/null)
+else
+    seat_out=$(aida role current 2>/dev/null)
+fi
+seat_rc=$?
+seat=$(printf '%s\n' "$seat_out" | head -n 1)
+ungranted=""
+if [ "$seat_rc" -ne 0 ]; then
+    role="${label:-none}"
+elif [ -n "$seat" ]; then
+    role="$seat"
+elif [ -z "$label" ] || [ "$label" = "none" ]; then
+    role=none
+else
+    case "$label" in
+        implementer | guest | requester) role="$label" ;;
+        *)
+            role="$label (no grant)"
+            ungranted="$label"
+            ;;
+    esac
+fi
 
 # In-flight count: dependency-free line count of in-progress spec ids.
 in_flight=$(aida list --status in-progress --format ids 2>/dev/null | grep -c .)
@@ -80,6 +115,9 @@ case "$queue_depth" in '' | *[!0-9]*) queue_depth=0 ;; esac
 
 # Emit the compact digest to STDOUT.
 printf 'AIDA · role: %s · queue: %s · in-flight: %s\n' "$role" "$queue_depth" "$in_flight"
+if [ -n "$ungranted" ]; then
+    printf 'role %s is a label only: this shell holds no valid grant for it, so commands gated on that role will refuse. A human enters it at a terminal with: eval "$(aida role enter %s)"\n' "$ungranted" "$ungranted"
+fi
 if [ -n "$queue_lines" ]; then
     printf '%s\n' "$queue_lines"
 fi

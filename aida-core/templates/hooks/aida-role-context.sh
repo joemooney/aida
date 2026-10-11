@@ -23,13 +23,56 @@ fi
 # so the project copy takes precedence even when the hook fires from a
 # different cwd; fall back to the vendor project var, then git, then pwd.
 project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
+
+# AIDA_SESSION_ROLE is a display/routing label, not authority. Check it against
+# the validated seat grant (`aida role current` prints the granted seat, empty
+# when none) so the header never claims a role the session cannot act as. The
+# explanatory note lives in the session-context digest; this addendum only tags
+# its header. The implementer baseline and guest/requester personas need no
+# grant. With no `aida` on PATH, or a project root we cannot enter, there is
+# nothing reliable to validate against, so the label stands.
+# trace:BUG-1924 | ai:claude
+canonical_label=$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]')
+[ "$canonical_label" = "dialog" ] && canonical_label=advisor
+shown_role="$canonical_label"
+case "$canonical_label" in
+    implementer | guest | requester) ;;
+    *)
+        # `aida role current` exits 0 (empty line) when no grant is held; a
+        # nonzero status (timeout kill, failure) leaves the label unvalidated.
+        if command -v aida >/dev/null 2>&1 && seat_out=$(
+            cd "$project_root" 2>/dev/null || exit 1
+            if command -v timeout >/dev/null 2>&1; then
+                timeout 2 aida role current 2>/dev/null
+            else
+                aida role current 2>/dev/null
+            fi
+        ); then
+            seat=$(printf '%s\n' "$seat_out" | head -n 1)
+            if [ -z "$seat" ]; then
+                shown_role="${canonical_label} (no grant)"
+            elif [ "$seat" != "$canonical_label" ]; then
+                shown_role="$seat"
+            fi
+        fi
+        ;;
+esac
+
+# Locate the role file (project copy first, then the global one).
+# Try the canonical (lowercase) name first, then the label as written.
 role_file=""
-if [ -f "$project_root/.aida/roles/$role.toml" ]; then
-    role_file="$project_root/.aida/roles/$role.toml"
-elif [ -f "$HOME/.aida/roles/$role.toml" ]; then
-    role_file="$HOME/.aida/roles/$role.toml"
+for name in "$canonical_label" "$role"; do
+    if [ -f "$project_root/.aida/roles/$name.toml" ]; then
+        role_file="$project_root/.aida/roles/$name.toml"
+    elif [ -f "$HOME/.aida/roles/$name.toml" ]; then
+        role_file="$HOME/.aida/roles/$name.toml"
+    fi
+    [ -n "$role_file" ] && break
+done
+if [ -n "$role_file" ] && [ ! -r "$role_file" ]; then
+    role_file=""
 fi
-if [ -z "$role_file" ] || [ ! -r "$role_file" ]; then
+if [ -z "$role_file" ]; then
     exit 0
 fi
 
@@ -84,10 +127,10 @@ system_prompt=$(extract_field system_prompt "$role_file")
 # (from-implementer:). Surface a pending count at session start so they aren't
 # missed. Non-zero count only — silent when clean. Best-effort: a missing/slow
 # `aida` degrades to no line.
-# TASK-586: match `advisor` (canonical) and `dialog` (deprecated alias, for a
-# shell whose AIDA_SESSION_ROLE predates the rename).
+# TASK-586: `canonical_label` already folds the deprecated `dialog` alias (and
+# any casing) into `advisor`.
 findings_line=""
-if [ "$role" = "advisor" ] || [ "$role" = "dialog" ]; then
+if [ "$canonical_label" = "advisor" ]; then
     n=$(aida findings list --count 2>/dev/null || echo 0)
     case "$n" in
         '' | *[!0-9]*) n=0 ;;
@@ -103,7 +146,7 @@ if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ]; then
     exit 0
 fi
 
-body="# AIDA active role: ${role}"
+body="# AIDA active role: ${shown_role}"
 if [ -n "$purpose" ]; then
     body="${body}
 
