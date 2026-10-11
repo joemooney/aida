@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T14:22:35.876160021Z
-modified_at: 2026-10-11T07:42:19.946822792Z
+modified_at: 2026-10-11T07:42:34.099784369Z
 req_type: Bug
 tags:
 - triaged:night
@@ -50,6 +50,12 @@ comments:
   created_at: 2026-10-11T07:11:59.974500173Z
   modified_at: 2026-10-11T07:11:59.974500173Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129e9-da73-7d61-b343-b50bf5ef08ab
+  author: joe
+  content: 'ADVISOR (overnight 00:45): APPROVED per the product triage. It''s concrete and bounded, with no architecture fork, so it''s factory-eligible. Scope is narrowed as product recommended: the orchestrate skill template text only (concurrency cap + token/time budget guidance), no runtime model-selection code.'
+  created_at: 2026-10-11T07:42:34.099784369Z
+  modified_at: 2026-10-11T07:42:34.099784369Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 history:
 - id: 01a129e9-a32a-7eb0-9168-23f36f14ddab
   author: joe
