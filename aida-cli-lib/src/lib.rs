@@ -28,6 +28,7 @@ mod autonomy_cmd;
 mod autopilot;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
+mod autopilot_intake;
 mod awaiting_you;
 mod backlog;
 mod brief;
@@ -138,6 +139,7 @@ mod usage_mcp_helpers;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_registry_root::*;
+use autopilot_intake::*;
 use brief::*;
 use claim::*;
 use db_block::*;

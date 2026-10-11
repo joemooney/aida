@@ -794,3 +794,17 @@ items = [
   "enum AdvisorPass",
   "fn effective_calibration_mode",
 ]
+
+[module.autopilot_intake]
+purpose = "Autopilot subcommands and `aida intake` (STORY-1488 slice 1)"
+items = [
+  "fn handle_autopilot_command",
+  "fn handle_autopilot_reindex",
+  "fn handle_autopilot_executions",
+  "fn handle_autopilot_revert",
+  "fn handle_autopilot_inspect",
+  "fn record_inspect_rows",
+  "fn handle_autopilot_audit",
+  "fn handle_autopilot_challenge",
+  "fn handle_intake_command",
+]
