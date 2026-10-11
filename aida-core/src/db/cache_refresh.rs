@@ -172,9 +172,10 @@ impl RefreshLock {
 /// alone instead of leaving it to inference.
 ///
 /// It is evidence, not an identity check, and a reader should not treat it as
-/// more: `/proc/locks` is read as a whole while it can change underneath, and
-/// a row's pid is the pid that CREATED the lock, which is not necessarily the
-/// process whose descriptor is keeping it alive.
+/// more: `/proc/locks` is not a snapshot, it can change underneath the read,
+/// and a row's pid is the pid that CREATED the lock, which is not necessarily
+/// the process whose descriptor is keeping it alive. An empty `holders` is
+/// weaker evidence still: see the re-read below.
 // trace:BUG-1729 | ai:claude
 #[cfg(all(test, target_os = "linux"))]
 fn lock_holders(sidecar: &Path) -> String {
@@ -194,7 +195,21 @@ fn lock_holders(sidecar: &Path) -> String {
     let ino = meta.ino();
     let me = std::process::id().to_string();
     let mut holders: Vec<String> = Vec::new();
-    if let Ok(locks) = std::fs::read_to_string("/proc/locks") {
+    // `/proc/locks` is a seq_file. Each `read` returns at most about a page,
+    // and the next one restarts the walk by INDEX into the lock list. A
+    // concurrent unlock ahead of that index shifts every later row down one,
+    // so a row can be SKIPPED, and on a busy host (parallel tests holding
+    // sqlite and flock locks) the file spans several pages. A lock that is
+    // genuinely held can therefore be missing from one read. Re-read a few
+    // times before reporting no holders; a row that is found is not re-read.
+    // trace:BUG-1939 | ai:claude
+    for _ in 0..5 {
+        if !holders.is_empty() {
+            break;
+        }
+        let Ok(locks) = std::fs::read_to_string("/proc/locks") else {
+            break;
+        };
         for line in locks.lines() {
             // "1: FLOCK  ADVISORY  WRITE 4242 08:02:123456 0 EOF", with an
             // extra "->" token on a blocked waiter's row.
@@ -666,14 +681,15 @@ mod tests {
     /// The race that made this module's CI failure unreproducible on a quiet
     /// host, made deterministic. `pre_exec` runs in the child after `fork` and
     /// before `exec`, with the parent's descriptors — including the guard's —
-    /// still open, so lingering there reproduces a descheduled pre-exec child
-    /// exactly. Dropping the guard in that window must leave the lock held,
-    /// with an empty registry, and the diagnostic must say SELF rather than
-    /// implicate an unrelated holder.
+    /// still open, so holding the child there reproduces a descheduled
+    /// pre-exec child exactly. Dropping the guard in that window must leave the
+    /// lock held, with an empty registry, and the diagnostic must say SELF
+    /// rather than implicate an unrelated holder.
     // trace:BUG-1729 | ai:claude
     #[cfg(target_os = "linux")]
     #[test]
     fn a_forked_child_holds_the_lock_past_its_guard_until_exec() {
+        use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
         use std::os::unix::process::CommandExt;
         let d = tempfile::tempdir().unwrap();
         let path = d.path().join("cache.db");
@@ -682,40 +698,70 @@ mod tests {
         // `Command::spawn` does not return until the child reaches `exec` — it
         // reads the child's error pipe to closure — so the window cannot be
         // observed from the spawning thread. The child announces itself down a
-        // plain pipe from `pre_exec` and then lingers, and this thread observes
-        // the window while another thread sits inside `spawn`.
-        // `O_CLOEXEC` on both ends is what makes this safe to wait on: it does
-        // NOT stop the child inheriting them at `fork`, so the child can still
-        // write, but it closes them at `exec`. So either the byte arrives, or
-        // the child reached `exec` and the read sees EOF — never an
-        // indefinite block on a write end this process is still holding.
-        let mut fds = [0 as libc::c_int; 2];
-        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
-        let (read_fd, write_fd) = (fds[0], fds[1]);
+        // `ready` pipe from `pre_exec` and then waits on a `release` pipe, and
+        // this thread observes the window while another thread sits inside
+        // `spawn`.
+        //
+        // The release is a handshake, not a sleep: a fixed linger (formerly
+        // 2s) let a loaded host's scheduler outrun it, so the child could
+        // reach `exec` — freeing the lock — before the assertions below ran.
+        // Now the child holds the window until this thread drops
+        // `release_w`, which it does only after asserting, and which unwinding
+        // also does, so a failed assertion still lets the child exec.
+        //
+        // `O_CLOEXEC` on all four ends is what makes this safe to wait on: it
+        // does NOT stop the child inheriting them at `fork`, but it closes them
+        // at `exec`. So either the ready byte arrives, or the child reached
+        // `exec` and the read sees EOF — never an indefinite block on a write
+        // end this process is still holding. For the same reason the child
+        // closes its inherited copy of `release_w` first: otherwise it would
+        // hold a write end of the pipe it waits on, and never see EOF.
+        // trace:BUG-1939 | ai:claude
+        let pipe = || {
+            let mut fds = [0 as libc::c_int; 2];
+            assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+            // SAFETY: `pipe2` just returned these two descriptors, owned by
+            // nothing else.
+            unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) }
+        };
+        let (ready_r, ready_w) = pipe();
+        let (release_r, release_w) = pipe();
+        let (ready_w_fd, release_r_fd, release_w_fd) = (
+            ready_w.as_raw_fd(),
+            release_r.as_raw_fd(),
+            release_w.as_raw_fd(),
+        );
         let spawner = std::thread::spawn(move || {
             let mut cmd = std::process::Command::new("true");
-            // SAFETY: after `fork` the child calls only `write` and
-            // `nanosleep`, both async-signal-safe, which is the constraint on a
+            // SAFETY: after `fork` the child calls only `close`, `write` and
+            // `poll`, all async-signal-safe, which is the constraint on a
             // post-fork closure in a multithreaded parent. `std::thread::sleep`
-            // would NOT satisfy it. The window is 2s against the microseconds
-            // of work below.
+            // or any allocation would NOT satisfy it. The raw descriptors are
+            // valid in the child: `fork` copies the descriptor table while the
+            // parent still owns all four, and nothing the parent closes later
+            // reaches the child's copy.
+            // The poll is bounded (30s) so a parent that somehow never
+            // releases cannot hang the child, and with it this test, forever.
             unsafe {
                 cmd.pre_exec(move || {
-                    let _ = libc::write(write_fd, b"x".as_ptr().cast(), 1);
-                    let ts = libc::timespec {
-                        tv_sec: 2,
-                        tv_nsec: 0,
+                    libc::close(release_w_fd);
+                    let _ = libc::write(ready_w_fd, b"x".as_ptr().cast(), 1);
+                    let mut pfd = libc::pollfd {
+                        fd: release_r_fd,
+                        events: libc::POLLIN,
+                        revents: 0,
                     };
-                    libc::nanosleep(&ts, std::ptr::null_mut());
+                    libc::poll(&mut pfd, 1, 30_000);
                     Ok(())
                 });
             }
             cmd.spawn().unwrap().wait().unwrap();
+            drop((ready_w, release_r));
         });
         // Bounded: a child that dies before writing must fail this test, never
         // hang it.
         let mut pfd = libc::pollfd {
-            fd: read_fd,
+            fd: ready_r.as_raw_fd(),
             events: libc::POLLIN,
             revents: 0,
         };
@@ -726,7 +772,7 @@ mod tests {
         );
         let mut byte = [0u8; 1];
         assert_eq!(
-            unsafe { libc::read(read_fd, byte.as_mut_ptr().cast(), 1) },
+            unsafe { libc::read(ready_r.as_raw_fd(), byte.as_mut_ptr().cast(), 1) },
             1,
             "the child reached exec without reporting from pre_exec"
         );
@@ -749,6 +795,9 @@ mod tests {
         assert!(report.contains("SELF/pid="), "{report}");
         assert!(report.contains("own_fds=[]"), "{report}");
 
+        // Release the child: its `poll` sees EOF and it proceeds to `exec`.
+        // trace:BUG-1939 | ai:claude
+        drop(release_w);
         spawner.join().unwrap();
         // Once the child execs, its copy closes and the lock is free again.
         assert!(
@@ -756,7 +805,6 @@ mod tests {
             "the lock stayed held after the forked child exited; {}",
             RefreshLock::diagnose_unavailable(&path)
         );
-        unsafe { libc::close(read_fd) };
     }
 
     /// A diagnostic is worth only what it says at the one moment it is read.
