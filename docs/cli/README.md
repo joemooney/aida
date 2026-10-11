@@ -34,7 +34,7 @@ Use `aida commands --flags` to include long option names on each row, or
 | 11 | [Working on AIDA itself](11-dev.md) | *Working on aida itself* | ✅ |
 | — | [Glossary](12-glossary.md) | *(generated)* | ✅ |
 
-> **The Glossary chapter is generated, not hand-written.** [`12-glossary.md`](12-glossary.md) is produced by `bash docs/cli/generate-glossary.sh` (or `make book-glossary`) from `aida docs glossary` — the binary's embedded machinery + lifecycle vocabulary. Edit a term in `aida-core/templates/docs/aida/discipline/{machinery-glossary,lifecycle-vocabulary}.md`, rebuild the binary, re-run the generator, and the page follows. Per ADR-5, there is no hand-maintained term list to drift.
+> **The Glossary chapter is generated, not hand-written.** [`12-glossary.md`](12-glossary.md) is produced by `bash docs/cli/generate-glossary.sh` (or `make book-glossary`) from `aida docs glossary` — the binary's embedded machinery + lifecycle vocabulary. Edit a term in `aida-core/templates/.aida/discipline/{machinery-glossary,lifecycle-vocabulary}.md`, rebuild the binary, re-run the generator, and the page follows. Per ADR-5, there is no hand-maintained term list to drift.
 
 > **Structured for downstream consumers.** Every command entry uses the same parseable shape — an ``### `aida <cmd>` `` header followed by fixed labeled fields — so a tool like `aida-tutor` (or a future `aida manual <cmd>`) can split any chapter into `{command → {field → text}}` without heuristics. And the manual carries **no SPEC-IDs** (`STORY-x`/`TASK-x`): it's user-facing, and those are kept out of user-facing surfaces by the same convention that keeps them out of `--help`. The drift-guard fails on either violation.
 

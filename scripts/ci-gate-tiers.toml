@@ -80,6 +80,9 @@
 "Monitor contract drift guard" = "full"
 # Runs target/debug/aida --help per template command. trace:BUG-1922 | ai:claude
 "Template command lint" = "full"
+# trace:BUG-1950 | ai:claude — real-binary check vs. stub-binary fixture tests.
+"Book glossary drift guard" = "full"
+"Book glossary generator tests (stub binary, no build)" = "fast"
 "Performance profile guard" = "fast"
 "Check formatting" = "fast"
 "Removed mode-flag spelling guard" = "fast"

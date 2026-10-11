@@ -4,7 +4,7 @@
      Source: `aida docs glossary` (embedded machinery + lifecycle vocabulary).
      Regenerate: `bash docs/cli/generate-glossary.sh` (or `make book-glossary`).
      Edit the term definitions in
-     aida-core/templates/docs/aida/discipline/{machinery-glossary,lifecycle-vocabulary}.md,
+     aida-core/templates/.aida/discipline/{machinery-glossary,lifecycle-vocabulary}.md,
      rebuild the binary, then re-run. -->
 
 > The shared vocabulary AIDA's docs, error messages, and agent-to-agent
@@ -17,7 +17,8 @@
 ## Machinery glossary
 
 AIDA's docs, error messages, and agent-to-agent handoffs lean on a small set
-of machinery terms — **orchestrator, phase, drain, lease, role, session,
+of machinery terms — **orchestrator, phase, drain, lease, role, seat,
+stakeholder persona, session,
 scope, worktree, sentinel, batch, autonomy mode**. Each has a precise
 meaning; conflating them produces handoffs that almost-work and specs that
 almost-reproduce. This page is the canonical definition for each.
@@ -78,7 +79,8 @@ non-integrity phases during `aida queue work --auto-complete`:
 - `lifecycle:no-preflight` — skip the local CI-parity guards before the
   implementer branch is published. Use only when the change is genuinely
   unrelated to those guards; the drain banner names this opt-out.
-- `lifecycle:trivial` — shorthand for all three skips.
+- `lifecycle:trivial` — shorthand for the CI-wait, review, and build skips
+  (it does not skip preflight).
 
 Merge and pull/auto-bump never short-circuit. These tags are for small,
 low-blast-radius specs where the saved latency is worth the reduced
@@ -95,7 +97,8 @@ implements one iteration of it.
 
 ### batch
 
-A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --add-tag batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
+A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --add-tag
+batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
 head queued member of that batch; `--batch NAME --auto-complete` drains
 the whole batch sequentially.
 
@@ -119,6 +122,31 @@ do when they would normally prompt a human**:
 Two orthogonal axes: *is a human present?* and *what kinds of prompts
 warrant pausing?*. See `feedback_three_mode_autonomy_taxonomy` in the
 starter memory pack for the full taxonomy.
+
+### autopilot (autopilot envelope)
+
+A **grooming-stage posture**, *not* a drain mode. Where the three
+[autonomy modes](#autonomy-mode) parameterise the **drain** (how the
+implement→merge pipeline handles prompts while a human is or isn't present),
+autopilot parameterises the **advisor disposition pass** (`aida groom`) — how
+the advisor decides a spec's fate before it ever enters the ready set. The two
+live on **orthogonal axes**: grooming decides *what enters the ready set*,
+draining *works it*. Autopilot is therefore **not a fourth rung** on the autonomy
+ladder; it is the grooming-stage analog of the draining-stage ladder, and the two
+**compose** (a `groom --autopilot --then-drain` runs each stage under its own
+setting) rather than contend.
+
+Mechanically, autopilot is a **bounded-authority envelope** over `groom` (opt-in
+`aida groom --autopilot` + a `[autopilot]` config posture) — *not* a new engine.
+It layers a per-action authority map (`auto` / `propose` / `never`) and four
+AND-composed gates (in-fence, action-authority, substrate-grounded, under
+risk-ceiling) *inside* the existing candidate fence. The default is conservative:
+only reversible actions auto-execute; approvals/rejections are held; uncertain
+calls escalate. It reuses the **same keystone classifier**
+(`presence::is_keystone_class`) as the groom fence, the solo posture, and the
+drain — so all stages agree on "keystone" and no stage can disagree. See
+`docs/architecture/autonomy-and-escalation.md` §8 (the grooming-stage analog of
+the cascade) and `docs/solo-mode.md`.
 
 ### session
 
@@ -153,15 +181,30 @@ A session has exactly one scope; a scope has at most one live lease.
 
 ### role
 
-A workflow position: **implementer**, **reviewer**, or **advisor**
-(user-facing identity: *advisor*). The role decides queue routing
-(`aida queue add <id> --for <role>`), worktree naming, and which skill
-templates a session loads.
+A persistent workflow position such as **advisor**, **implementer**,
+**reviewer**, **integrator**, or **product**. A role is stored in a role file,
+can receive routed work (`aida queue add <id> --for <role>`), and supplies the
+context and authority used by its sessions.
 
 A role is **not** a Claude Code subagent — see
 [`vs-claude-code-subagents.md`](../archive/positioning/vs-claude-code-subagents.md) for
 the within-conversation (subagent) vs cross-conversation (AIDA role) layer
 distinction.
+
+### seat
+
+The place a [role](#role) occupies in AIDA's build loop. A seat can receive
+work and own leased sessions/worktrees; driver seats are subject to the
+one-authoritative-driver rule. “Role” names the workflow position; “seat”
+emphasizes its operational place and cardinality.
+
+### stakeholder persona
+
+A fileless, non-routable least-privilege gate activated with
+`AIDA_SESSION_ROLE=guest|requester`: `guest` is read-only and `requester` adds
+Draft-only intake. A persona is discoverable in `aida role list` but has no
+seat, history, or lease. See
+`docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
 ### worktree
 
@@ -200,7 +243,8 @@ Rejected). The display layer splits this status by its recorded reason:
 
 This keeps the storage value stable (`NeedsAttention`) while making lists,
 cards, `why`, and awaiting surfaces distinguish "known recovery path" from
-"human decision needed". Triage:
+"human decision needed". The drain *continues* past a parked spec (the
+dependent specs skip via the pickability gate). Triage:
 
 - `aida findings list` surfaces parked punts and shelved failures with their
   recorded reason.
@@ -325,9 +369,36 @@ Why this matters for agent work:
 
 Cross-references: `aida history <ID>` (shorthand for `aida history --id
 <ID>`) filters to one spec's entries and shows its status progression by
-default; add `--full` (or use `aida history events`) for the complete
-edit/comment trail. The substrate-grounded equivalent in code:
+default, one row per transition in human, TOON and JSON output alike; add
+`--full` (or use `aida history events`) for the complete edit/comment
+trail. The substrate-grounded equivalent in code:
 `aida-core::object_store` walks the YAML files directly.
+
+### doctor exit-code contract
+
+`aida doctor` and `aida doctor check <category>` are **report-only by
+design**: exit code `0` means "the scan ran successfully," NOT "the scan
+found nothing." A category with thousands of findings and a category with
+zero findings both exit `0` — the findings print (text or `--json`)
+either way, but the process exit code does not encode them.
+
+This is a deliberate default, ruled by ADR-style precedent (`<spec-id>`,
+consistent with `<spec-id>`): a shared diagnostic surface should not
+silently change its exit-code contract underneath every existing caller
+just because one new caller wants a gate.
+
+A caller that needs pass/fail — a CI step, a scheduled job, a substrate
+gate — opts in explicitly:
+
+```bash
+aida doctor check <category> --fail-on-findings
+```
+
+This exits non-zero **only** when that one category has at least one
+finding; every other `aida doctor` / `aida doctor check` invocation stays
+reporting-only. Don't infer health from a bare `aida doctor`'s exit code —
+parse its output (`--json`) or add `--fail-on-findings` to the specific
+`check` you want to gate on.
 
 ## Adjacent terms (defined elsewhere)
 
@@ -363,7 +434,7 @@ machinery concept:
 5. **Keep it terse.** One paragraph plus optional bullets. Long-form
    discussion belongs in a dedicated doc, not the glossary.
 
-The master template is `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
+The master template is `aida-core/templates/.aida/discipline/machinery-glossary.md`
 (embedded via `build.rs`, scaffolded by `aida init`). Edit the master, not
 a project-local copy — the latter is yours to tailor after init.
 
@@ -416,6 +487,28 @@ because an autonomous agent hit a design-fork it could not safely resolve and
 Punting is a discipline, not a failure: a punted fork is a recorded decision
 point. Guessing past it produces a silent wrong implementation; punting keeps
 the wrong call from being made at all.
+
+## The two terminal off-ramps: rejected vs superseded
+
+Not every spec reaches Completed, and the two exits mean opposite things.
+Say the precise one.
+
+- **Rejected** — **declined.** We looked at it and said no. Nothing was
+  adopted. `aida edit <SPEC> --status rejected`.
+- **Superseded** — **adopted, then replaced.** This spec governed, and a later
+  spec now governs instead. `aida edit <SPEC> --status superseded
+  --superseded-by <NEW-SPEC>` — naming the successor is enough (the flag
+  implies the status), and it records a **typed relationship**, not a tag, so
+  `aida graph` can walk "what replaced this?" in both directions.
+
+The archetype is an **ADR** whose documented lifecycle is *proposed → accepted
+→ superseded*. Without a superseded state, a decision that was followed for
+months and then replaced had to masquerade as *rejected* — reading, in any
+listing, exactly like one that was turned down.
+
+Both are terminal: excluded from the default `aida list` view, from the open
+tally, and from the ready set. Superseded renders `⊡ Superseded` (dimmed
+closed-green — it *was* adopted), never the red `✗ Rejected`.
 
 ## The view axis: archive / unarchive / archive-sweep
 

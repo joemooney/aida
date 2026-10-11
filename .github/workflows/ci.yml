@@ -442,6 +442,23 @@ jobs:
           python3 scripts/check-template-commands.py
           python3 -m unittest tests/test_check_template_commands.py
 
+      # BUG-1950: docs/cli/12-glossary.md is GENERATED from `aida docs
+      # glossary` (ADR-5), but nothing compared the committed page with the
+      # generator, so it drifted for a month. Re-render it with the binary just
+      # built from this tree and fail on any difference. NOT gated on full_ci:
+      # the "Minimal aida-cli build" step above covers target/debug/aida on
+      # docs-only PRs, and a docs-only PR is exactly where a hand edit lands.
+      # trace:BUG-1950 | ai:claude
+      - name: Book glossary drift guard
+        run: |
+          AIDA_BIN="$PWD/target/debug/aida" bash docs/cli/generate-glossary.sh --check
+
+      # No-build slice of the guard above: fixture tests for `--check`, plus a
+      # stub-binary comparison of the committed page with the template
+      # masters. trace:BUG-1950 | ai:claude
+      - name: Book glossary generator tests (stub binary, no build)
+        run: bash tests/test_generate_glossary_check.sh
+
       - name: Performance profile guard
         run: ./tests/test_performance_profile_opt_level.sh
         shell: bash
