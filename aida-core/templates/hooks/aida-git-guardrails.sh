@@ -283,18 +283,91 @@ $segs
 EOF
 }
 
-# Blank out the BODIES of single- and double-quoted substrings in a command, so
-# a dangerous git token that appears only as PROSE inside a quoted ARGUMENT
-# (e.g. `aida add --description '...the git reset --hard flag...'`) is NOT matched
-# as if it were a real git invocation. The quotes themselves are kept (bodies
-# emptied) so word boundaries are preserved. A genuine destructive git command
-# never wraps its subcommand/flags in quotes, so every real block still fires;
-# a quoted ref (`git push --force "main"`) collapses to an unparseable target
-# and fails CLOSED (blocked), which is the safe direction. Single quotes are
-# stripped before double so an apostrophe inside a double-quoted string can't
-# eat the wrong span. trace:BUG-692 | ai:claude
-strip_quoted_args() {
-    printf '%s' "$1" | sed -e "s/'[^']*'/''/g" -e 's/"[^"]*"/""/g'
+# Blank out shell LITERALS in a command, so a dangerous git token that appears
+# only as PROSE (inside a quoted argument, a heredoc body, or a comment) is NOT
+# matched as if it were a real git invocation (e.g. `aida add --description
+# '...the git reset --hard flag...'`, or `cat > notes.md <<EOF` whose body quotes
+# a force-push). trace:BUG-692 | ai:claude
+#
+# The scanner is a small POSIX awk state machine (no gawk extensions — the hook
+# must run under mawk/BSD awk too) that, ACROSS lines:
+#   - empties single-, double- and $'...'-quoted bodies (quotes kept, so word
+#     boundaries survive; backslash escapes honoured outside single quotes);
+#   - drops heredoc bodies from `<<WORD` / `<<-WORD` / `<<'WORD'` to the
+#     terminator line (`<<<` here-strings and `$((1<<2))` arithmetic are not
+#     heredocs);
+#   - drops `#` comments and joins backslash line-continuations, so a real
+#     command split over lines is scanned as one line.
+# A genuine destructive git command never wraps its subcommand/flags in quotes,
+# so every real block still fires; a quoted ref (`git push --force "main"`)
+# collapses to an unparseable target and fails CLOSED. An unterminated quote or
+# heredoc makes the scanner exit non-zero, and the caller fails CLOSED with a
+# stated reason. trace:BUG-1936 | ai:claude
+strip_shell_literals() {
+    printf '%s' "$1" | awk '
+    BEGIN { SQ = "\047"; DQ = "\042"; BS = "\\"; st = "N"; nq = 0; hi = 0; inhd = 0; ar = 0; bad = 0 }
+    {
+        line = $0
+        if (inhd) {
+            cmp = line
+            if (hstrip[hi]) sub(/^\t+/, "", cmp)
+            if (cmp == hdelim[hi]) {
+                hi++
+                if (hi > nq) { inhd = 0; nq = 0; hi = 0 }
+            }
+            next
+        }
+        out = ""; n = length(line); i = 1; cont = 0
+        while (i <= n) {
+            c = substr(line, i, 1)
+            if (st == "S") {
+                if (c == SQ) { st = "N"; out = out c }
+                i++; continue
+            }
+            if (st == "A" || st == "D") {
+                if (c == BS) { i += 2; continue }
+                if ((st == "A" && c == SQ) || (st == "D" && c == DQ)) { st = "N"; out = out c }
+                i++; continue
+            }
+            # Unquoted text.
+            if (c == BS) {
+                if (i == n) { cont = 1; out = out " "; i++; continue }
+                out = out substr(line, i, 2); i += 2; continue
+            }
+            if (c == SQ) {
+                st = (substr(out, length(out), 1) == "$") ? "A" : "S"
+                out = out c; i++; continue
+            }
+            if (c == DQ) { st = "D"; out = out c; i++; continue }
+            if (c == "#" && (i == 1 || substr(line, i - 1, 1) ~ /[ \t;&|(]/)) break
+            if (substr(line, i, 2) == "((") { ar++; out = out "(("; i += 2; continue }
+            if (ar > 0 && substr(line, i, 2) == "))") { ar--; out = out "))"; i += 2; continue }
+            if (substr(line, i, 3) == "<<<") { out = out "<<<"; i += 3; continue }
+            if (ar == 0 && substr(line, i, 2) == "<<") {
+                j = i + 2; strip = 0
+                if (substr(line, j, 1) == "-") { strip = 1; j++ }
+                while (j <= n && substr(line, j, 1) ~ /[ \t]/) j++
+                d = ""
+                while (j <= n) {
+                    ch = substr(line, j, 1)
+                    if (ch ~ /[ \t;&|<>()]/) break
+                    if (ch != SQ && ch != DQ && ch != BS) d = d ch
+                    j++
+                }
+                if (d == "") bad = 1
+                else { nq++; hdelim[nq] = d; hstrip[nq] = strip }
+                out = out substr(line, i, j - i); i = j; continue
+            }
+            out = out c; i++
+        }
+        if (st == "N" && !cont) {
+            printf "%s\n", out
+            if (nq > 0) { inhd = 1; hi = 1 }
+        } else {
+            printf "%s", out
+        }
+    }
+    END { if (st != "N" || inhd || bad) exit 3 }'
 }
 
 # Patterns that indicate destructive git operations
@@ -436,13 +509,25 @@ EOF
     return 0
 }
 
-# Scan a copy with quoted-argument bodies neutralized so prose inside a quoted
-# value can't trip the destructive-pattern checks (BUG-692).
-SCAN_COMMAND=$(strip_quoted_args "$COMMAND")
+# Scan a copy with shell literals neutralized so prose inside a quoted value,
+# heredoc body, or comment can't trip the destructive-pattern checks (BUG-692,
+# BUG-1936). Every block reason goes to STDERR: the agent runtime only shows a
+# blocking hook's stderr, so a stdout-only reason surfaced as "No stderr
+# output". trace:BUG-1936 | ai:claude
+if ! SCAN_COMMAND=$(strip_shell_literals "$COMMAND"); then
+    {
+        echo "BLOCKED: could not parse this command's quoting (an unterminated quote or heredoc)."
+        echo "The git safety check cannot tell which parts are real git commands, so it fails closed."
+        echo "Close the quote or heredoc, or write long text to a file and pass it by path."
+    } >&2
+    exit 2
+fi
 
-if ! check_destructive "$SCAN_COMMAND"; then
-    echo ""
-    echo "To proceed anyway, ask the user to confirm the destructive operation."
+if ! check_destructive "$SCAN_COMMAND" >&2; then
+    {
+        echo ""
+        echo "To proceed anyway, ask the user to confirm the destructive operation."
+    } >&2
     exit 2
 fi
 
