@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:23:59.400773750Z
-modified_at: 2026-10-11T17:59:55.196974712Z
+modified_at: 2026-10-11T18:20:05.058850768Z
 req_type: Bug
 tags:
 - docs
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-10-11T17:59:55.196974712Z
   modified_at: 2026-10-11T17:59:55.196974712Z
   session_id: 3349aec6-83dd-4955-839e-627cfae55679
+- id: 01a12c31-8442-7d33-8889-22a63b612e83
+  author: joe
+  content: 'ADVISOR ruling at merge: the regeneration also corrected lifecycle:no-preflight and --tags -> --add-tag in the glossary master. Both are accepted as part of this fix (they match the code), not scope creep.'
+  created_at: 2026-10-11T18:20:05.058850768Z
+  modified_at: 2026-10-11T18:20:05.058850768Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8a-6e7e-79c0-aa90-c7ab16cbba38
   author: joe
