@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-11T16:33:22.454885296Z
+modified_at: 2026-10-11T16:33:29.395267398Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -26,6 +26,12 @@ comments:
   content: 'ADVISOR 2026-10-11 09:35, evidence from ~/.aida/usage.jsonl (cmd=show, >5s): the 27,868 ms worst call was at 07:19:35Z (00:19 local), in a cluster of five 25.5-27.9 s calls between 07:19:07Z and 07:20:33Z, then 8.4 s at 07:28Z and 12.5 s at 07:38Z. The near-identical ~25.5 s durations look like a fixed wait/timeout (lock or refresh deadline), not CPU load. That cluster sits in the overnight relay window, before #2502''s store-sync serialization merged (15:29Z). It is NOT the operator''s /tmp/bug1939 stress test, which started 15:49Z. That test (6 CPU spinners, flock churn, 3 parallel full suites) plausibly explains only the 5.2 s call at 16:30Z; the 7.1 s call at 15:47Z came just before it started. Next step for the implementer: correlate 07:19-07:21Z with store-write.lock holders and cache refresh logs, and find what waits ~25 s.'
   created_at: 2026-10-11T16:32:14.344228956Z
   modified_at: 2026-10-11T16:32:14.344228956Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12bcf-ed33-7493-800f-c341d40dbf1c
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. Root-cause investigation for the night relay, queued after batch:2026-10-11 tier 1 (STORY-1654 -> BUG-1918 -> BUG-1934 -> STORY-1655 -> BUG-1808). Not factory work: the factory''s write-then-review loop can''t investigate a lock wait. Start from the 07:19-07:21Z cluster evidence above.'
+  created_at: 2026-10-11T16:33:29.395267398Z
+  modified_at: 2026-10-11T16:33:29.395267398Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12bcf-cb9a-74f0-9d98-21e0a6befc37
