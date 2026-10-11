@@ -51,12 +51,32 @@ impl DevLayout {
         let target_dir = env_path("CARGO_TARGET_DIR")
             .map(|p| if p.is_absolute() { p } else { repo.join(p) })
             .unwrap_or_else(|| repo.join("target"));
-        Ok(Self {
+        let layout = Self {
             repo: repo.to_path_buf(),
             target_dir,
             live_dir: default_live_dir()?,
             link_dir: default_link_dir()?,
-        })
+        };
+        layout.check_live_outside_target()?;
+        Ok(layout)
+    }
+
+    /// Refuse a live dir inside the target dir: `cargo clean` would delete
+    /// the live pair, which is the whole point of keeping it separate.
+    // trace:STORY-1646 | ai:claude
+    pub(crate) fn check_live_outside_target(&self) -> Result<()> {
+        let target = canonical_or_self(&self.target_dir);
+        let live = canonical_or_self(&self.live_dir);
+        if live.starts_with(&target) {
+            bail!(
+                "the live dir {} is inside cargo's target dir {}, where `cargo clean` would delete \
+                 the live binaries. Point AIDA_DEV_LIVE_DIR somewhere outside it (the default is \
+                 ~/.local/share/aida/live). Nothing was changed.",
+                self.live_dir.display(),
+                self.target_dir.display()
+            );
+        }
+        Ok(())
     }
 
     pub(crate) fn built(&self, name: &str) -> PathBuf {
@@ -81,6 +101,26 @@ impl DevLayout {
 
     pub(crate) fn link(&self, name: &str) -> PathBuf {
         self.link_dir.join(name)
+    }
+}
+
+/// `path` canonicalized; when it does not exist yet, its nearest existing
+/// ancestor canonicalized with the remaining components re-appended.
+// trace:STORY-1646 | ai:claude
+fn canonical_or_self(path: &Path) -> PathBuf {
+    let mut tail = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(real) = cur.canonicalize() {
+            return tail.iter().rev().fold(real, |acc, c| acc.join(c));
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name.to_os_string());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
     }
 }
 
@@ -131,6 +171,9 @@ pub(crate) struct CheckoutState {
     pub ahead: usize,
     /// Commits in origin/main that HEAD lacks.
     pub behind: usize,
+    /// `git rev-parse HEAD`, when readable.
+    // trace:STORY-1646 | ai:claude
+    pub head: Option<String>,
 }
 
 /// Why a build stops after the smoke test.
@@ -323,6 +366,7 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
         has_origin_main,
         ahead,
         behind,
+        head: git_out(repo, &["rev-parse", "HEAD"]).filter(|h| !h.is_empty()),
     })
 }
 
@@ -347,6 +391,9 @@ pub(crate) trait BuildSteps {
     /// Run `aida` / `server` (in `repo`); `Err` names what failed. When
     /// promoting these are the staged copies that will be renamed live.
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()>;
+    /// The `sha ...` token of `aida --version` (may end in `+dirty`).
+    // trace:STORY-1646 | ai:claude
+    fn version_sha(&mut self, aida: &Path) -> Option<String>;
     /// Restart MCP servers still running a replaced binary.
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()>;
     /// Ask before replacing existing files at the link location.
@@ -528,7 +575,29 @@ pub(crate) fn run_dev_build(
                     refusal_message(&reasons)
                 );
             }
-            commit_staged(layout)?;
+            // trace:STORY-1646 | ai:claude
+            let head = state.head.clone().unwrap_or_default();
+            if !opts.allow_dirty {
+                let staged = steps.version_sha(&incoming.join("aida"));
+                if let Err(why) = check_staged_sha(staged.as_deref(), &head) {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    bail!(
+                        "the staged build does not match HEAD, so it was not promoted: {why}.\n\
+                         The live binaries were not touched. Re-run `aida dev build` (or pass \
+                         --allow-dirty to promote it anyway)."
+                    );
+                }
+            }
+            let meta = PromotionMeta {
+                sha: head,
+                allow_dirty: opts.allow_dirty
+                    && matches!(
+                        plan_promotion(&state, false, false),
+                        PromotionPlan::Refuse { .. }
+                    ),
+                promoted_at: chrono::Utc::now().to_rfc3339(),
+            };
+            commit_staged(layout, &meta)?;
             drop(lock);
             writeln!(
                 out,
@@ -549,7 +618,18 @@ pub(crate) fn run_dev_build(
     };
 
     if opts.install_links {
-        install_links(layout, opts.yes, steps, out)?;
+        // trace:STORY-1646 | ai:claude
+        install_links(layout, opts.yes, steps, out).map_err(|e| {
+            if outcome == BuildOutcome::Promoted {
+                anyhow!(
+                    "{e:#}\nThe build WAS promoted to {}; only the PATH links were left alone. \
+                     Run `aida dev build --install-links --yes` to replace them.",
+                    layout.live_dir.display()
+                )
+            } else {
+                e
+            }
+        })?;
     }
     Ok(outcome)
 }
@@ -642,7 +722,16 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
         .write(true)
         .open(&path)
         .with_context(|| format!("opening {}", path.display()))?;
-    if file.try_lock_exclusive().is_err() {
+    // trace:STORY-1646 | ai:claude
+    // Retry briefly: a child forked by this process (any thread) shares the
+    // lock's file description until it execs, which reads as "held" for a
+    // few microseconds even though no other promote is running.
+    let deadline = Instant::now() + Duration::from_millis(500);
+    while file.try_lock_exclusive().is_err() {
+        if Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+            continue;
+        }
         bail!(
             "another `aida dev build` or `aida dev rollback` is updating {} right now; \
              retry when it finishes. Nothing was changed.",
@@ -678,6 +767,18 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     }
     let swap = live.join(".rollback");
     if swap.exists() {
+        // trace:STORY-1646 | ai:claude
+        // A binary already swapped means the rollback was under way: finish
+        // the `.promoted` swap too; otherwise put the parked record back.
+        let swapped = LIVE_BINARIES
+            .iter()
+            .any(|n| swap.join(n).is_file() && !layout.prev(n).exists());
+        let parked_meta = swap.join(PROMOTED_FILE);
+        if swapped {
+            swap_meta_forward(layout, &swap)?;
+        } else if parked_meta.is_file() && !live.join(PROMOTED_FILE).exists() {
+            std::fs::rename(&parked_meta, live.join(PROMOTED_FILE))?;
+        }
         for name in LIVE_BINARIES {
             let parked = swap.join(name);
             if parked.is_file() && !layout.prev(name).exists() {
@@ -718,13 +819,63 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
     Ok(incoming)
 }
 
+/// Name of the promotion record kept beside each live pair (and in `prev/`).
+// trace:STORY-1646 | ai:claude
+pub(crate) const PROMOTED_FILE: &str = ".promoted";
+
+/// What `commit_staged` records about a promotion. `aida dev status` uses it,
+/// not the `+dirty` in the version banner (which build.rs also sets for
+/// untracked files the gate allows), to decide whether to warn.
+// trace:STORY-1646 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct PromotionMeta {
+    /// `git rev-parse HEAD` at promotion.
+    pub sha: String,
+    /// `--allow-dirty` overrode a gate refusal for this promotion.
+    pub allow_dirty: bool,
+    /// RFC 3339 promotion time.
+    pub promoted_at: String,
+}
+
+/// Read a `.promoted` record from `dir` (the live dir or `prev/`).
+// trace:STORY-1646 | ai:claude
+pub(crate) fn read_promotion_meta(dir: &Path) -> Option<PromotionMeta> {
+    let raw = std::fs::read_to_string(dir.join(PROMOTED_FILE)).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// `Ok` when the staged banner's sha (minus `+dirty`) is a prefix of `head`.
+// trace:STORY-1646 | ai:claude
+pub(crate) fn check_staged_sha(
+    staged: Option<&str>,
+    head: &str,
+) -> std::result::Result<(), String> {
+    let Some(staged) = staged else {
+        return Err("could not read a sha from the staged `aida --version`".into());
+    };
+    if head.is_empty() {
+        return Err("could not read HEAD with `git rev-parse HEAD`".into());
+    }
+    let sha = staged.trim_end_matches("+dirty");
+    if sha.len() < 7 || !head.starts_with(sha) {
+        return Err(format!(
+            "the staged `aida --version` reports sha {staged}, but HEAD is {head}"
+        ));
+    }
+    Ok(())
+}
+
 /// Rotate the live pair into `live/prev/` and rename the staged pair live.
 /// Each binary is replaced with a single `rename`, so `live/aida` never
 /// disappears; the outgoing pair is hard-linked into a fresh `prev/` first.
 /// Run under [`lock_live_dir`] after [`stage_incoming`].
-pub(crate) fn commit_staged(layout: &DevLayout) -> Result<()> {
+pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<()> {
     let live = &layout.live_dir;
     let incoming = live.join(".incoming");
+    // trace:STORY-1646 | ai:claude
+    let record = serde_json::to_string_pretty(meta)?;
+    std::fs::write(incoming.join(PROMOTED_FILE), record)
+        .with_context(|| format!("writing {}", incoming.join(PROMOTED_FILE).display()))?;
     if LIVE_BINARIES.iter().any(|n| layout.live(n).is_file()) {
         let prev_new = live.join(".prev-new");
         fresh_dir(&prev_new)?;
@@ -732,6 +883,11 @@ pub(crate) fn commit_staged(layout: &DevLayout) -> Result<()> {
             if layout.live(name).is_file() {
                 link_or_copy(&layout.live(name), &prev_new.join(name))?;
             }
+        }
+        // The outgoing pair's record goes with it, so rollback can swap it back.
+        let live_meta = live.join(PROMOTED_FILE);
+        if live_meta.is_file() {
+            link_or_copy(&live_meta, &prev_new.join(PROMOTED_FILE))?;
         }
         let prev_old = live.join(".prev-old");
         if prev_old.exists() {
@@ -747,7 +903,26 @@ pub(crate) fn commit_staged(layout: &DevLayout) -> Result<()> {
         std::fs::rename(incoming.join(name), layout.live(name))
             .with_context(|| format!("promoting {}", layout.live(name).display()))?;
     }
+    std::fs::rename(incoming.join(PROMOTED_FILE), live.join(PROMOTED_FILE))
+        .with_context(|| format!("writing {}", live.join(PROMOTED_FILE).display()))?;
     let _ = std::fs::remove_dir(&incoming);
+    Ok(())
+}
+
+/// Second half of a rollback's `.promoted` swap (the live record is already
+/// parked in `swap`): prev's record goes live, the parked one into `prev/`.
+// trace:STORY-1646 | ai:claude
+fn swap_meta_forward(layout: &DevLayout, swap: &Path) -> Result<()> {
+    let live_meta = layout.live_dir.join(PROMOTED_FILE);
+    let prev_meta = layout.prev_dir().join(PROMOTED_FILE);
+    let parked = swap.join(PROMOTED_FILE);
+    if prev_meta.is_file() && !live_meta.exists() {
+        std::fs::rename(&prev_meta, &live_meta)?;
+    }
+    if parked.is_file() && !prev_meta.exists() {
+        std::fs::create_dir_all(layout.prev_dir())?;
+        std::fs::rename(&parked, &prev_meta)?;
+    }
     Ok(())
 }
 
@@ -780,11 +955,17 @@ pub(crate) fn rollback(layout: &DevLayout) -> Result<Vec<String>> {
     for name in LIVE_BINARIES {
         link_or_copy(&layout.live(name), &swap.join(name))?;
     }
+    // trace:STORY-1646 | ai:claude
+    let live_meta = layout.live_dir.join(PROMOTED_FILE);
+    if live_meta.is_file() {
+        std::fs::rename(&live_meta, swap.join(PROMOTED_FILE))?;
+    }
     for name in LIVE_BINARIES {
         std::fs::rename(layout.prev(name), layout.live(name))
             .with_context(|| format!("restoring {}", layout.live(name).display()))?;
         std::fs::rename(swap.join(name), layout.prev(name))?;
     }
+    swap_meta_forward(layout, &swap)?;
     let _ = std::fs::remove_dir(&swap);
     Ok(notes)
 }
@@ -1064,26 +1245,37 @@ impl BuildSteps for RealSteps {
     }
 
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()> {
+        // trace:STORY-1646 | ai:claude
+        // A hook-exported GIT_DIR would point the read-only check at another repo.
+        let cmd = |bin: &Path| {
+            let mut c = Command::new(bin);
+            c.env_remove("GIT_DIR")
+                .env_remove("GIT_WORK_TREE")
+                .env_remove("GIT_INDEX_FILE");
+            c
+        };
         smoke_check(
             "aida --version",
-            Command::new(aida).arg("--version"),
+            cmd(aida).arg("--version"),
             Duration::from_secs(60),
             |o| o.starts_with("aida ") && o.contains("sha "),
         )?;
         smoke_check(
             "aida list --limit 1",
-            Command::new(aida)
-                .args(["list", "--limit", "1"])
-                .current_dir(repo),
+            cmd(aida).args(["list", "--limit", "1"]).current_dir(repo),
             Duration::from_secs(300),
             |_| true,
         )?;
         smoke_check(
             "aida-server --version",
-            Command::new(server).arg("--version"),
+            cmd(server).arg("--version"),
             Duration::from_secs(60),
             |o| o.starts_with("aida-server"),
         )
+    }
+
+    fn version_sha(&mut self, aida: &Path) -> Option<String> {
+        binary_sha_label(aida)
     }
 
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()> {
@@ -1218,8 +1410,13 @@ fn binary_sha_label(bin: &Path) -> Option<String> {
 }
 
 /// Pure: what `aida dev status` should flag about the live / prev / built SHAs.
+///
+/// `live_meta` is the live pair's `.promoted` record; when present it alone
+/// decides the dirty warning (the banner's `+dirty` also counts untracked
+/// files, which the gate allows). Without it, fall back to the banner.
 pub(crate) fn live_status_notes(
     live: Option<&str>,
+    live_meta: Option<&PromotionMeta>,
     prev: Option<&str>,
     built: Option<&str>,
 ) -> Vec<String> {
@@ -1231,10 +1428,17 @@ pub(crate) fn live_status_notes(
         );
         return notes;
     };
-    if live.ends_with("+dirty") {
-        notes.push(format!(
+    // trace:STORY-1646 | ai:claude
+    match live_meta {
+        Some(meta) if meta.allow_dirty => notes.push(format!(
+            "the live binary was promoted with --allow-dirty from a dirty checkout ({live}, HEAD {})",
+            meta.sha
+        )),
+        Some(_) => {}
+        None if live.ends_with("+dirty") => notes.push(format!(
             "the live binary was built from a dirty checkout ({live})"
-        ));
+        )),
+        None => {}
     }
     if let Some(built) = built {
         if built != live {
@@ -1254,8 +1458,11 @@ pub(crate) fn print_live_status() {
     let Ok(live_dir) = default_live_dir() else {
         return;
     };
+    let mut layout_err = None;
     let layout = match resolve_build_repo() {
-        Ok(repo) => DevLayout::for_repo(&repo).ok(),
+        Ok(repo) => DevLayout::for_repo(&repo)
+            .map_err(|e| layout_err = Some(format!("{e:#}")))
+            .ok(),
         Err(_) => None,
     };
     // Outside an AIDA checkout, only report when a live dir exists.
@@ -1269,6 +1476,20 @@ pub(crate) fn print_live_status() {
         .and_then(|l| binary_sha_label(&l.built("aida")));
     let show = |v: &Option<String>| v.clone().unwrap_or_else(|| "(none)".to_string());
     println!("Live binary:  {} ({})", show(&live), live_dir.display());
+    // trace:STORY-1646 | ai:claude
+    let live_meta = read_promotion_meta(&live_dir);
+    if let Some(meta) = &live_meta {
+        println!(
+            "Promoted:     HEAD {} at {}{}",
+            meta.sha,
+            meta.promoted_at,
+            if meta.allow_dirty {
+                " (--allow-dirty)"
+            } else {
+                ""
+            }
+        );
+    }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {
         println!(
@@ -1277,7 +1498,15 @@ pub(crate) fn print_live_status() {
             l.built("aida").display()
         );
     }
-    for note in live_status_notes(live.as_deref(), prev.as_deref(), built.as_deref()) {
+    if let Some(e) = &layout_err {
+        println!("  ! {e}");
+    }
+    for note in live_status_notes(
+        live.as_deref(),
+        live_meta.as_ref(),
+        prev.as_deref(),
+        built.as_deref(),
+    ) {
         println!("  ! {note}");
     }
     if live.is_some() {

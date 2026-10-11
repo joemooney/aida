@@ -304,7 +304,7 @@ fn pick_dev_binary_dir(
         Some((DevProfile::Agent, reason)) => Ok((repo.join("target/agent"), "agent", reason)),
         None => anyhow::bail!(
             "No aida binary found at {}, {}, or {}.\n\
-             Run `make build-fast` (or `cargo build`) first.",
+             Run `aida dev build --no-promote` (or `cargo build`) first.",
             release.display(),
             debug.display(),
             agent.display()

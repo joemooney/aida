@@ -15189,7 +15189,7 @@ pub(crate) fn warn_if_pulled_binary_stale(project_root: &std::path::Path) {
         if pull_binary_is_stale(dev_activated, verdict) {
             eprintln!();
             eprintln!(
-                "  {} your aida binary is now behind HEAD — run `make build-fast` to pick up the pulled changes.",
+                "  {} your aida binary is now behind HEAD — run `aida dev build` to pick up the pulled changes.",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
             );
         }

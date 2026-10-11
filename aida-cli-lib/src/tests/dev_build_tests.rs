@@ -41,10 +41,14 @@ fn put_live(layout: &DevLayout, tag: &str) {
     }
 }
 
+/// HEAD of the fake clean checkout; the fake staged banner reports its prefix.
+const HEAD: &str = "abc1234567890def1234567890abc1234567890d";
+
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
         has_origin_main: true,
+        head: Some(HEAD.into()),
         ..Default::default()
     }
 }
@@ -66,6 +70,8 @@ struct FakeSteps {
     on_build: Option<Box<dyn FnMut()>>,
     /// Runs inside the smoke test (e.g. a concurrent build rewriting target/).
     on_smoke: Option<Box<dyn FnMut()>>,
+    /// What `version_sha` reports for the staged `aida`.
+    staged_sha: Option<String>,
     calls: Vec<String>,
 }
 
@@ -82,6 +88,7 @@ impl FakeSteps {
             smoked: Vec::new(),
             on_build: None,
             on_smoke: None,
+            staged_sha: Some("abc1234567+dirty".into()),
             calls: Vec::new(),
         }
     }
@@ -143,6 +150,10 @@ impl BuildSteps for FakeSteps {
             bail!("`aida list --limit 1` exited non-zero");
         }
         Ok(())
+    }
+    fn version_sha(&mut self, _aida: &Path) -> Option<String> {
+        self.calls.push("version_sha".into());
+        self.staged_sha.clone()
     }
     fn restart_mcp(&mut self, _l: &DevLayout) -> Result<()> {
         self.calls.push("restart_mcp".into());
@@ -487,7 +498,7 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         .collect();
     names.sort();
     // `.lock` is the persistent live-dir lock file.
-    assert_eq!(names, [".lock", "aida", "aida-server", "prev"]);
+    assert_eq!(names, [".lock", ".promoted", "aida", "aida-server", "prev"]);
 }
 
 #[test]
@@ -853,9 +864,9 @@ fn banner_sha_token_keeps_dirty_suffix() {
 
 #[test]
 fn live_status_notes_flag_differences_and_dirty_builds() {
-    assert!(live_status_notes(None, None, Some("abc"))[0].contains("no live binary"));
-    assert!(live_status_notes(Some("abc"), Some("def"), Some("abc")).is_empty());
-    let n = live_status_notes(Some("abc+dirty"), None, Some("123"));
+    assert!(live_status_notes(None, None, None, Some("abc"))[0].contains("no live binary"));
+    assert!(live_status_notes(Some("abc"), None, Some("def"), Some("abc")).is_empty());
+    let n = live_status_notes(Some("abc+dirty"), None, None, Some("123"));
     assert!(
         n.iter().any(|s| s.contains("dirty checkout (abc+dirty)")),
         "{n:?}"
@@ -1158,4 +1169,179 @@ fn cli_parses_rollback_flags() {
     }
     assert!(parse(&["aida", "dev", "rollback", "--after-wave"]).is_ok());
     assert!(parse(&["aida", "dev", "rollback", "--force", "--after-wave"]).is_err());
+}
+
+// --- promotion metadata (review fixes) ---------------------------------------------
+
+fn status_notes(f: &Fixture, live_banner: &str) -> Vec<String> {
+    let meta = read_promotion_meta(&f.layout.live_dir);
+    live_status_notes(Some(live_banner), meta.as_ref(), None, None)
+}
+
+#[test]
+fn clean_promote_with_untracked_files_shows_no_dirty_warning() {
+    let f = fixture();
+    let mut steps = FakeSteps::new(CheckoutState {
+        untracked: 4,
+        ..clean_main()
+    });
+    run(&f, &DevBuildOptions::default(), &mut steps).0.unwrap();
+    let meta = read_promotion_meta(&f.layout.live_dir).expect("live/.promoted written");
+    assert_eq!(meta.sha, HEAD);
+    assert!(!meta.allow_dirty);
+    // build.rs stamps +dirty for untracked files; the record overrides it.
+    let notes = status_notes(&f, "abc1234567+dirty");
+    assert!(notes.iter().all(|n| !n.contains("dirty")), "{notes:?}");
+}
+
+#[test]
+fn allow_dirty_promote_records_it_and_status_warns() {
+    let f = fixture();
+    let mut steps = FakeSteps::new(CheckoutState {
+        tracked_changes: vec!["x.rs".into()],
+        ..clean_main()
+    });
+    let opts = DevBuildOptions {
+        allow_dirty: true,
+        ..Default::default()
+    };
+    run(&f, &opts, &mut steps).0.unwrap();
+    assert!(read_promotion_meta(&f.layout.live_dir).unwrap().allow_dirty);
+    let notes = status_notes(&f, "abc1234567+dirty");
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains("--allow-dirty") && n.contains(HEAD)),
+        "{notes:?}"
+    );
+    // --allow-dirty skips the staged-sha check.
+    assert!(!steps.called("version_sha"));
+}
+
+#[test]
+fn status_falls_back_to_the_banner_without_a_record() {
+    let f = fixture();
+    let notes = status_notes(&f, "abc1234567+dirty");
+    assert!(
+        notes.iter().any(|n| n.contains("dirty checkout")),
+        "{notes:?}"
+    );
+}
+
+#[test]
+fn rollback_swaps_the_promotion_records() {
+    let f = fixture();
+    let opts = DevBuildOptions {
+        allow_dirty: true,
+        ..Default::default()
+    };
+    let mut steps = FakeSteps::new(CheckoutState {
+        tracked_changes: vec!["x.rs".into()],
+        ..clean_main()
+    });
+    run(&f, &opts, &mut steps).0.unwrap();
+    let mut steps = FakeSteps::new(clean_main());
+    run(&f, &DevBuildOptions::default(), &mut steps).0.unwrap();
+    let prev_dir = f.layout.prev_dir();
+    assert!(!read_promotion_meta(&f.layout.live_dir).unwrap().allow_dirty);
+    assert!(read_promotion_meta(&prev_dir).unwrap().allow_dirty);
+
+    rollback(&f.layout).unwrap();
+    assert!(read_promotion_meta(&f.layout.live_dir).unwrap().allow_dirty);
+    assert!(!read_promotion_meta(&prev_dir).unwrap().allow_dirty);
+    rollback(&f.layout).unwrap();
+    assert!(!read_promotion_meta(&f.layout.live_dir).unwrap().allow_dirty);
+    assert!(read_promotion_meta(&prev_dir).unwrap().allow_dirty);
+}
+
+#[test]
+fn rollback_to_a_pair_without_a_record_moves_the_live_record_to_prev() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    run(&f, &DevBuildOptions::default(), &mut steps).0.unwrap();
+    assert!(read_promotion_meta(&f.layout.prev_dir()).is_none());
+    rollback(&f.layout).unwrap();
+    assert!(read_promotion_meta(&f.layout.live_dir).is_none());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()).unwrap().sha, HEAD);
+}
+
+#[test]
+fn staged_build_not_matching_head_is_not_promoted() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.staged_sha = Some("fff0000000".into());
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(
+        err.contains("does not match HEAD") && err.contains("fff0000000") && err.contains(HEAD),
+        "{err}"
+    );
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert!(!f.layout.prev_dir().exists());
+    assert!(!f.layout.live_dir.join(".incoming").exists());
+
+    // An unreadable banner is refused too.
+    steps.staged_sha = None;
+    let err = format!(
+        "{:#}",
+        run(&f, &DevBuildOptions::default(), &mut steps)
+            .0
+            .unwrap_err()
+    );
+    assert!(err.contains("could not read a sha"), "{err}");
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+}
+
+#[test]
+fn check_staged_sha_accepts_a_head_prefix_only() {
+    assert!(check_staged_sha(Some("abc1234567"), HEAD).is_ok());
+    assert!(check_staged_sha(Some("abc1234567+dirty"), HEAD).is_ok());
+    assert!(check_staged_sha(Some("abc1234568"), HEAD).is_err());
+    assert!(check_staged_sha(Some("abc"), HEAD).is_err());
+    assert!(check_staged_sha(Some("abc1234567"), "").is_err());
+}
+
+#[test]
+fn live_dir_inside_target_is_refused() {
+    let f = fixture();
+    let inside = DevLayout {
+        live_dir: f.layout.target_dir.join("live"),
+        ..f.layout.clone()
+    };
+    let err = format!("{:#}", inside.check_live_outside_target().unwrap_err());
+    assert!(
+        err.contains("inside cargo's target dir") && err.contains("AIDA_DEV_LIVE_DIR"),
+        "{err}"
+    );
+    // Also through a symlink that resolves into target/.
+    fs::create_dir_all(&f.layout.target_dir).unwrap();
+    let alias = f.layout.repo.join("alias");
+    std::os::unix::fs::symlink(&f.layout.target_dir, &alias).unwrap();
+    let via_link = DevLayout {
+        live_dir: alias.join("agent").join("live"),
+        ..f.layout.clone()
+    };
+    assert!(via_link.check_live_outside_target().is_err());
+    assert!(f.layout.check_live_outside_target().is_ok());
+}
+
+#[test]
+fn install_links_refusal_after_promote_says_the_promote_succeeded() {
+    let f = fixture();
+    fs::create_dir_all(&f.layout.link_dir).unwrap();
+    write(&f.layout.link("aida"), "REAL-FILE");
+    let mut steps = FakeSteps::new(clean_main());
+    let opts = DevBuildOptions {
+        install_links: true,
+        ..Default::default()
+    };
+    let err = format!("{:#}", run(&f, &opts, &mut steps).0.unwrap_err());
+    assert!(
+        err.contains("WAS promoted") && err.contains("only the PATH links were left alone"),
+        "{err}"
+    );
+    assert_eq!(read(&f.layout.live("aida")), "NEW-aida");
+    assert_eq!(read(&f.layout.link("aida")), "REAL-FILE");
 }
