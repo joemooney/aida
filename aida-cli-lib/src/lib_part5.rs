@@ -7036,7 +7036,9 @@ pub(crate) fn print_aida_dev_context(project_root: &std::path::Path) {
     let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
     let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
     let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
-    let cross_platform_ci = if commits_since_tag > 0 {
+    // ADR-72: releases no longer gate on a cross-platform run.
+    // trace:TASK-1723 | ai:claude
+    let cross_platform_ci = if commits_since_tag > 0 && CROSS_PLATFORM_WORKFLOW_SCHEDULED {
         Some(cross_platform_ci_status(project_root))
     } else {
         None
@@ -7048,7 +7050,8 @@ pub(crate) fn print_aida_dev_context(project_root: &std::path::Path) {
         let readiness = match cross_platform_ci.as_ref().map(|ci| ci.release_gate) {
             Some(CrossPlatformReleaseGate::Ready) => "ready to cut a release".green().to_string(),
             Some(CrossPlatformReleaseGate::Blocked) => "BLOCKED".red().bold().to_string(),
-            Some(CrossPlatformReleaseGate::Unknown) | None => "unknown".yellow().to_string(),
+            Some(CrossPlatformReleaseGate::Unknown) => "unknown".yellow().to_string(),
+            None => "ready to cut a release".green().to_string(),
         };
         println!(
             "  {} commits ahead of {} — release-readiness: {}",
@@ -7336,10 +7339,22 @@ pub(crate) fn summarize_cross_platform_ci_runs(
     }
 }
 
+/// ADR-72: AIDA is Linux-only and `cross-platform.yml` is workflow_dispatch
+/// only, so there is no scheduled cross-platform run to be red. Its historical
+/// scheduled failures stay in `gh run list --event schedule` forever, so the
+/// red signal must be switched off here rather than left to age out. Flip this
+/// only together with a new operator decision that re-adds the schedule.
+// trace:TASK-1723 | ai:claude
+pub(crate) const CROSS_PLATFORM_WORKFLOW_SCHEDULED: bool = false;
+
 // trace:STORY-1043 | ai:codex
 pub(crate) fn nightly_red_status(
     project_root: &std::path::Path,
 ) -> Option<awaiting_you::NightlyRedItem> {
+    // trace:TASK-1723 | ai:claude
+    if !CROSS_PLATFORM_WORKFLOW_SCHEDULED {
+        return None;
+    }
     let now = chrono::Utc::now();
     let latest_completed_main_run =
         fetch_cross_platform_ci_runs_with_args(project_root, &["--status", "completed"])
@@ -7368,6 +7383,11 @@ pub(crate) struct NightlyRedCache {
 pub(crate) fn cached_nightly_red_status(
     project_root: &std::path::Path,
 ) -> Option<awaiting_you::NightlyRedItem> {
+    // A cache written before ADR-72 must not resurrect the red line.
+    // trace:TASK-1723 | ai:claude
+    if !CROSS_PLATFORM_WORKFLOW_SCHEDULED {
+        return None;
+    }
     let path = project_root
         .join(".aida")
         .join("cache")

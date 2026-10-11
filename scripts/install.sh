@@ -13,10 +13,8 @@
 #   ./scripts/install.sh --host gitlab            # fetch from gitlab.joemooney.com
 #   ./scripts/install.sh --prefix /usr/local/bin  # install to a different directory (may need sudo)
 #
-# Auto-detects platform via `uname -sm`. Supported targets:
+# Auto-detects platform via `uname -sm`. Supported targets (Linux only):
 #   linux  x86_64  aarch64
-#   darwin x86_64  arm64
-#   windows x86_64 (Git Bash / MSYS / Cygwin)
 #
 # trace:EPIC-1-001 | ai:claude
 
@@ -70,16 +68,13 @@ done
 
 uname_s=$(uname -s)
 uname_m=$(uname -m)
+# ADR-72: AIDA is Linux-only. Refuse any other OS up front with a clear
+# message instead of failing later on a release asset that no longer exists.
+# trace:TASK-1723 | ai:claude
 case "$uname_s" in
     Linux)  os=linux  ;;
-    Darwin) os=darwin ;;
-    MINGW*|MSYS*|CYGWIN*) os=windows ;;
     *)
-        echo "error: unsupported OS: $uname_s (expected Linux, Darwin, Git Bash, MSYS, or Cygwin)" >&2
-        if [ "${OS:-}" = "Windows_NT" ]; then
-            echo "Download the Windows zip manually:" >&2
-            echo "  https://github.com/${REPO}/releases/latest/download/aida-windows-x86_64.zip" >&2
-        fi
+        echo "aida: only Linux is supported (Windows and macOS are not supported); detected $uname_s." >&2
         exit 1
         ;;
 esac
@@ -92,19 +87,6 @@ target="${os}-${arch}"
 archive_ext="tar.gz"
 download_name="aida.tar.gz"
 
-# WSL reports as Linux, so install the Linux binary there. Git Bash/MSYS/Cygwin
-# report Windows-flavored uname values and can install the Windows zip.
-# trace:TASK-1212 | ai:codex
-if [ "$os" = "windows" ]; then
-    if [ "$arch" != "x86_64" ]; then
-        echo "error: no Windows release asset for architecture: $uname_m" >&2
-        echo "Download the Windows zip manually when an asset is available:" >&2
-        echo "  https://github.com/${REPO}/releases/latest/download/aida-windows-x86_64.zip" >&2
-        exit 1
-    fi
-    archive_ext="zip"
-    download_name="aida.zip"
-fi
 
 # ---- URL resolution --------------------------------------------------------
 

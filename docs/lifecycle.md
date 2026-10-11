@@ -741,7 +741,8 @@ does **not** auto-release; releasing is a deliberate, separate act.
 - Command: `make release-minor` (or `scripts/release.sh {major|minor|patch}`)
   — bumps the workspace version, generates tag notes from the commit log,
   commits, tags, and pushes, which triggers the release workflow to build and
-  publish tarballs. Releases are gated on a green cross-platform CI run.
+  publish Linux tarballs. Releases do not require any cross-platform CI run
+  (AIDA is Linux-only).
 
 Better phrasing, in practice:
 

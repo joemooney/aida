@@ -204,7 +204,7 @@ or read the autonomy ladder in [`docs/aida-power-features.md`](docs/aida-power-f
 
 ### Install
 
-Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain needed) or a **build from source** (for platforms outside the release matrix, or for local development).
+Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain needed) or a **build from source** (for local development).
 
 #### Prebuilt binary
 
@@ -221,9 +221,9 @@ curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --prefix /usr/local/bin
 ```
 
-Prefer to do it by hand? Download the asset for your platform straight from the [releases page](https://github.com/joemooney/aida/releases). Linux and macOS tarballs unpack to `aida` and `aida-server`; the Windows zip unpacks to `aida.exe` and `aida-server.exe`.
+Prefer to do it by hand? Download the asset straight from the [releases page](https://github.com/joemooney/aida/releases). Release tarballs unpack to `aida` and `aida-server`.
 
-**Linux** (Tier 1 — primary alpha target):
+**Linux** (the only supported platform):
 
 ```bash
 curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64.tar.gz | tar xz
@@ -233,27 +233,7 @@ mv aida ~/.local/bin/       # or: sudo mv aida /usr/local/bin/
 
 On arm64, swap `aida-linux-x86_64` → `aida-linux-arm64`.
 
-**macOS** (Tier 2 — nightly-validated):
-
-```bash
-curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64.tar.gz | tar xz
-./aida --version
-mv aida ~/.local/bin/
-```
-
-On Intel Macs, swap `aida-darwin-arm64` → `aida-darwin-x86_64`.
-
-**Windows** (Tier 2 — nightly-validated):
-
-Download `aida-windows-x86_64.zip` from the [latest release](https://github.com/joemooney/aida/releases/latest), unzip it, then run:
-
-```powershell
-.\aida.exe --version
-```
-
-From Git Bash or MSYS/Cygwin, `scripts/install.sh` can also install the Windows zip automatically. On WSL, use the Linux install path above.
-
-Tier 1 vs Tier 2 is the [platform support](#platform-support) story: Linux is exercised on every PR, macOS and Windows by a nightly cross-platform CI run. After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
+AIDA is Linux-only; see [platform support](#platform-support). After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
 
 #### Build from source
 
@@ -512,7 +492,7 @@ Git is the canonical store: one YAML file per requirement on the orphan `aida-st
 
 ## Platform support
 
-Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Linux-only for a fast ~3-5 min cycle. macOS and Windows are **Tier 2**: supported, but validated by a nightly [cross-platform CI run](https://github.com/joemooney/aida/actions/workflows/cross-platform.yml) rather than on every change, so cross-platform regressions surface within ~24h. Pre-built Linux/macOS tarballs and a Windows x86_64 zip ship with each [release](https://github.com/joemooney/aida/releases). Releases are gated on a green cross-platform run.
+AIDA supports **Linux only**. Windows and macOS are unsupported: CI runs on Linux only, and each [release](https://github.com/joemooney/aida/releases) ships Linux x86_64 and arm64 tarballs only. Older releases that shipped macOS or Windows assets are not maintained.
 
 ## Documentation
 

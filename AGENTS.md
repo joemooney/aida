@@ -75,14 +75,13 @@ workspace build so feature-disabled stubs stay buildable. This check-only guard
 uses the existing full-CI filter and skips docs-only changes.
 <!-- trace:TASK-1601 | ai:codex -->
 
-Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
-manual dispatches fail before validation. Selected-path Windows PR checks stay
-informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
-required. Product's 24h weekly-windows-triage reminder records the tracking issue
-or no-issue result without queuing implementation. Releases still require a green
-platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+AIDA is Linux-only (ADR-72, no expiry). Windows and macOS are unsupported:
+there are no Windows/macOS PR legs, schedules, release artifacts, cross-target
+checks, or triage reminders, and releases do not require any cross-platform run.
+`cross-platform.yml` is kept as a manual-only workflow so a future reversal is
+cheap. Ubuntu Build plus merge-hold-gate remain the required checks.
 See [CI policy](docs/agents/aida-repository-guide.md).
-<!-- trace:TASK-1588 | ai:codex -->
+<!-- trace:TASK-1723 | ai:claude -->
 
 Ship ownership refusals exit non-zero. Direct human terminals get owning
 wave/run/phase and member-scoped activity evidence; `pr ship --wait [secs]`

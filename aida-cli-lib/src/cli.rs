@@ -11464,9 +11464,10 @@ pub enum Command {
         /// Refuses if the PR's checks fail.
         #[clap(long, value_name = "N")]
         after_pr: Option<u64>,
-        /// Skip the cross-platform CI pre-release gate (not recommended for a
-        /// published release).
-        #[clap(long)]
+        /// No-op, kept for compatibility: releases are Linux-only and have no
+        /// cross-platform CI gate.
+        // trace:TASK-1723 | ai:claude
+        #[clap(long, hide = true)]
         skip_xplat_check: bool,
 
         /// Release action. With no action, patch is the default.

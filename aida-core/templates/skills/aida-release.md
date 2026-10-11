@@ -47,7 +47,7 @@ Verify before proceeding:
 - **Correct branch** - warn if not on main/master
 - **Quiet main** - inspect live drains/sessions so no autonomous worker is pushing
 - **No release blockers** - search/list specs tagged `release-blocker`
-- **Cross-platform gate** - `scripts/pre-release-check.sh` reports a recent green run
+- **No cross-platform gate** - AIDA is Linux-only; releases do not wait on any Windows/macOS run
 
 ### Step 3: Determine Version Bump
 
@@ -98,8 +98,7 @@ scripts/release.sh --prepare-only {major|minor|patch|<version>}
 ```
 
 This performs the version bump, dependency-pin bump, `cargo check --workspace`,
-CHANGELOG refresh, docs gate, tag-note generation, and cross-platform release
-gate, then exits before any commit/tag/push. trace:STORY-1125 | ai:codex
+CHANGELOG refresh, docs gate, and tag-note generation, then exits before any commit/tag/push. trace:STORY-1125 | ai:codex
 
 ### Step 7: Stop For Operator Decision
 

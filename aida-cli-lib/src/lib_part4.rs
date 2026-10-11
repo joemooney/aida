@@ -10803,15 +10803,10 @@ pub(crate) fn handle_release(
                 "  after-pr: would wait for PR #{n}'s checks, merge it (--squash --delete-branch), and sync main FIRST"
             );
         }
-        println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (cross-platform gate + tag + push)  3) wait for tarballs  4) upgrade sibling installs");
-        println!(
-            "  cross-platform gate: {}",
-            if skip_xplat_check {
-                "SKIPPED (--skip-xplat-check)".yellow().to_string()
-            } else {
-                "enforced".to_string()
-            }
-        );
+        // ADR-72: no cross-platform pre-release gate; --skip-xplat-check is a
+        // no-op kept for compatibility. trace:TASK-1723 | ai:claude
+        println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (tag + push)  3) wait for tarballs  4) upgrade sibling installs");
+        println!("  cross-platform gate: none (Linux-only releases)");
         println!("\n  Re-run without --check to execute.");
         return Ok(());
     }
