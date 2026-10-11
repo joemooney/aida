@@ -109,8 +109,14 @@ fn closed_fences_are_not_malformed() {
     ] {
         assert!(render_markdown(src, 80, false).is_ok(), "{src:?}");
     }
-    assert!(fence_is_unclosed("```\n"));
-    assert!(fence_is_unclosed("````\ncode\n```\n"));
+    assert!(fence_is_unclosed("```\n", 0));
+    assert!(fence_is_unclosed("````\ncode\n```\n", 0));
+    // A quoted-looking fence line inside an unquoted fence is content.
+    assert!(fence_is_unclosed("```\ncode\n> ```", 0));
+    assert_eq!(
+        render_markdown("```\ncode\n> ```", 80, false),
+        Err(MarkdownRenderError::UnclosedCodeFence)
+    );
 }
 
 #[test]
@@ -166,6 +172,16 @@ fn multi_line_html_block_is_one_gutter_block() {
     assert_eq!(
         out,
         "  │ <details>\n  │ <summary>More</summary>\n  │ body\n  │ </details>\n\nafter"
+    );
+    // Inside a blockquote the `> ` prefixes sit between the events; the
+    // block still merges, and a quoted blank line still separates blocks.
+    let out = plain(
+        "> <div>\n> <p>x</p>\n> </div>\n>\n> <div>\n> y\n> </div>\n",
+        80,
+    );
+    assert_eq!(
+        out,
+        "│   │ <div>\n│   │ <p>x</p>\n│   │ </div>\n│\n│   │ <div>\n│   │ y\n│   │ </div>"
     );
 }
 

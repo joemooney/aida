@@ -228,13 +228,22 @@ fn heading_level(level: HeadingLevel) -> u8 {
 }
 
 /// True when a fenced block's source span ends without its closing fence.
-fn fence_is_unclosed(span: &str) -> bool {
-    // A fence inside a blockquote carries the `>` markers on every line of
-    // its source span; compare the fence text without them.
+/// `quote_depth` is how many blockquote `>` markers precede the opening
+/// fence on its line. The span starts at the fence itself, so its later lines
+/// carry exactly that many markers; only those are stripped, so a `> ```` line
+/// inside an unquoted fence stays content and does not close it.
+fn fence_is_unclosed(span: &str, quote_depth: usize) -> bool {
     let lines: Vec<&str> = span
         .trim_end_matches(['\n', '\r'])
         .lines()
-        .map(strip_quote_markers)
+        .enumerate()
+        .map(|(i, l)| {
+            if i == 0 {
+                l
+            } else {
+                strip_quote_markers(l, quote_depth)
+            }
+        })
         .collect();
     let Some(first) = lines.first() else {
         return true;
@@ -252,13 +261,32 @@ fn fence_is_unclosed(span: &str) -> bool {
     !(last.chars().all(|c| c == fence_char) && last.chars().count() >= open_len)
 }
 
-/// Strip leading whitespace and blockquote `>` markers from a source line.
-fn strip_quote_markers(line: &str) -> &str {
-    let mut rest = line.trim_start();
-    while let Some(after) = rest.strip_prefix('>') {
-        rest = after.trim_start();
+/// Strip up to `depth` leading blockquote `>` markers (and the whitespace
+/// around them) from a source line.
+fn strip_quote_markers(line: &str, depth: usize) -> &str {
+    let mut rest = line;
+    for _ in 0..depth {
+        match rest.trim_start().strip_prefix('>') {
+            Some(after) => rest = after,
+            None => break,
+        }
     }
     rest
+}
+
+/// Blockquote depth of the source line holding `offset`: the `>` markers
+/// between the start of that line and `offset`.
+fn quote_depth_at(src: &str, offset: usize) -> usize {
+    let line_start = src[..offset].rfind('\n').map_or(0, |i| i + 1);
+    src[line_start..offset].matches('>').count()
+}
+
+/// Whether two raw-HTML events belong to one block: the source between
+/// them holds only blockquote prefixes (`>`, spaces, tabs). Each event's
+/// range already ends after its newline, so any newline in the gap is a
+/// blank line, which separates blocks.
+fn html_gap_is_contiguous(gap: &str) -> bool {
+    gap.chars().all(|c| matches!(c, ' ' | '\t' | '>'))
 }
 
 struct Builder {
@@ -584,7 +612,7 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
         match event {
             Event::Start(tag) => {
                 if let Tag::CodeBlock(CodeBlockKind::Fenced(_)) = &tag {
-                    if fence_is_unclosed(&src[range.clone()]) {
+                    if fence_is_unclosed(&src[range.clone()], quote_depth_at(src, range.start)) {
                         return Err(MarkdownRenderError::UnclosedCodeFence);
                     }
                 }
@@ -603,7 +631,9 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
                 // Raw HTML is shown as written. pulldown-cmark emits an HTML
                 // block one line per event; events that abut in the source
                 // are one block and are merged into a single gutter block.
-                let contiguous = b.last_html_end == Some(range.start);
+                let contiguous = b.last_html_end.is_some_and(|end| {
+                    end <= range.start && html_gap_is_contiguous(&src[end..range.start])
+                });
                 b.last_html_end = Some(range.end);
                 if b.container_accepts_html() {
                     if !(contiguous && b.append_html(&t)) {
