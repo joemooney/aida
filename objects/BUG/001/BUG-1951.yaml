@@ -1,0 +1,48 @@
+id: 01a129d9-e4ff-7ef0-b716-d4152d88febb
+spec_id: BUG-1951
+agreed_id: BUG-1951
+title: Cache restamp stamps the post-write HEAD as fresh when an external commit lands between the pre-write HEAD capture and the store lock, hiding pulled rows until a manual rebuild
+description: |
+  Problem: the cache can be stamped fresh at a HEAD whose rows it never ingested. The non-atomic store write paths in aida-core/src/db/cached_git_backend.rs capture `pre_write_head` BEFORE the inner backend takes the store writer lock, so the comparison in `restamp_head` cannot tell "our own commit advanced HEAD" from "someone else's commit landed while we waited for the lock".
+
+  Code (main @ 2026-10-11):
+  - `add_requirement` :1534-1536 captures `pre_write_head = self.current_head_sha()` and only then calls `inner.add_requirement`, which takes `lock_store()` at git_backend.rs:1850. Same shape in `update_requirement` (:1552), `update_versioned` (:1567), `delete` (:1583), `bulk_update` (:1296) and `bulk_update_atomically` (:1340).
+  - `restamp_head` :1169-1200 stamps the post-write HEAD as fresh whenever `recorded == pre_write_head`.
+  - The atomic paths do it right: `update_spec_atomically_with_subject` :1379-1380 and `update_atomically` :1450-1452 take `lock_store()` first, then capture HEAD.
+
+  Failure scenario:
+  1. Cache fresh at store HEAD A (recorded = A).
+  2. Agent 2 runs `aida add` (or `edit`): captures pre_write_head = A, then blocks on the store lock (up to the 120 s contention wait) or simply loses the race.
+  3. Agent 1's `aida pull` rebases the store to B (pulled rows for other specs). Store sync does not take the writer lock today (TASK-1717 is in progress to add that) and it does not touch the cache stamp.
+  4. Agent 2 commits C on top of B. `restamp_head(A)` sees recorded A == pre_write_head A and stamps C.
+  5. B's rows are never ingested. `is_stale(C)` is false, the next incremental diffs C..D, so the hole persists until a manual `aida cache rebuild`. Symptom: `aida list`/`aida show` silently miss or show stale copies of specs pulled by another agent, with `stale: false` in the footer.
+
+  Note TASK-1717 does not close this: even with pull serialized on the lock, the capture still happens before the lock, so pull can run between capture and commit.
+
+  Evidence path: the existing test `local_write_after_external_commit_does_not_hide_pulled_rows` (cached_git_backend.rs:1975) only covers an external commit landing BEFORE the capture. A test that (a) captures the head, (b) commits an external change to the store repo, (c) then runs the inner write and `restamp_head` will stamp the new HEAD and `is_stale` will report false while the external row is absent from the cache.
+
+  Acceptance:
+  - Every write path that calls `restamp_head` captures `pre_write_head` while holding the store writer lock (as the atomic paths do), or `restamp_head` verifies that the new commit's first parent equals `pre_write_head` before stamping and clears the stamp otherwise.
+  - A regression test with the window above (external commit after the capture, before the write) leaves the cache stale and the pulled row visible after the next read.
+  - No new lock ordering: the lock is already taken by the inner call, so the change is to take it one frame earlier.
+
+  Found by the night-fable review sweep of the cache refresh/rebuild path. Related: TASK-712 (introduced the pre-write check), BUG-1670 (reads under a held cache lock), TASK-1717 (serialize sync with the writer lock). Size S–M.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T07:25:08.223791147Z
+modified_at: 2026-10-11T07:25:08.223791147Z
+req_type: Bug
+tags:
+- cache
+- found:night-2026-10-10
+- locking
+filed_at:
+  code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9116ba7f23
+  vendor: antigravity
+  session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
