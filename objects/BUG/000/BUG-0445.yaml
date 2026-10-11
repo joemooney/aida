@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: cli
 created_at: 2026-10-09T00:47:23.130722497Z
-modified_at: 2026-10-11T08:01:44.456113529Z
+modified_at: 2026-10-11T13:03:25.381758416Z
 req_type: Bug
 tags:
 - factory:night
@@ -110,6 +110,14 @@ comments:
   created_at: 2026-10-11T08:01:44.456113529Z
   modified_at: 2026-10-11T08:01:44.456113529Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12b0f-9ac5-7a72-b181-7bb6f7e1b2bd
+  author: joe
+  content: |-
+    REVIEW (night): APPROVE at 16078e0fba75107033844200afd04beb69c9e5ca (fresh reviewer).
+    Every acceptance item has a test. The side-channel uses mktemp (O_EXCL, 0600) with quoted paths. Old-binary/new-wrapper skew degrades safely, and a failed or malformed init never evals. The reviewer hand-ran bash in a real PTY with a path containing a space. Minors filed as BUG-1960: zsh untested in CI, no trap cleanup, env leak to children. Merging on green CI at this SHA.
+  created_at: 2026-10-11T13:03:25.381758416Z
+  modified_at: 2026-10-11T13:03:25.381758416Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a129e8-9016-7d23-a79d-bdb8b8d5b999
   author: joe
