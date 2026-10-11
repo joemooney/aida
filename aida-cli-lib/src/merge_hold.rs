@@ -3589,14 +3589,15 @@ mod tests {
         assert_eq!(clearance.detail, LABEL_ONLY_REASON);
 
         let lib_source = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("merge_hold_cmd.rs")
         );
         let clear = lib_source
             .split("crate::cli::MergeHoldAction::Clear { pr, stale } =>")
@@ -3646,14 +3647,15 @@ mod tests {
     #[test]
     fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
         let lib_source = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("merge_hold_cmd.rs")
         );
         let list = lib_source
             .split("crate::cli::MergeHoldAction::List { json, fix } =>")
@@ -4450,14 +4452,15 @@ mod tests {
         // closing-brace split below still finds the body end.
         // trace:BUG-1556 | ai:claude
         let lib_source = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("merge_hold_cmd.rs")
         )
         .replace("\r\n", "\n");
         let awaiting = lib_source
