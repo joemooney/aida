@@ -8,12 +8,12 @@ description: |
   Want: when docs/cli/** or the clap definitions change, check-ci-fast runs verify-manual.py's flags and completeness checks against an existing target/debug or target/release aida if present (warning if it is stale), or a static fast-tier variant parses --flag citations against cli.rs.
 
   Acceptance: re-introducing a citation of a hidden flag fails `make check-ci-fast` locally.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:23.618102809Z
-modified_at: 2026-10-11T13:59:33.236586087Z
+modified_at: 2026-10-11T14:55:26.983067027Z
 req_type: Bug
 tags:
 - ci
@@ -90,6 +90,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12b76-2b04-7581-9dbc-d6d60bcc962d
+  author: aida-auto-bump
+  timestamp: 2026-10-11T14:55:26.980300206Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12b76-2b07-76d0-ba70-e05343709193
+  timestamp: 2026-10-11T14:55:26.983065300Z
+  agent: implementer
+  commit_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
+  summary: Completed via merge e15fb4a9
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
@@ -98,3 +111,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-11T14:55:26.980295320Z
+  completion_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
