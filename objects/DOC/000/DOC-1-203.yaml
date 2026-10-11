@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T07:01:13.670342317Z
+modified_at: 2026-10-11T07:06:35.472538900Z
 req_type: Doc
 relationships:
 - rel_type: References
@@ -194,6 +194,31 @@ comments:
   content: 'Additional bounded maintained-guidance finding verified during advisor read: .aida/discipline/advisor-role.md section feedback_advisor_role_for_queue_after_647 still recommends AIDA_SESSION_ROLE=advisor prefixes to confer queue/approval authority and says internal storage.queue_add bypasses the CLI gate. Those historical instructions conflict with current validated-grant semantics and the actual MCP queue refusal; root did NOT follow them. Future B3 documentation work should reconcile the maintained/template source of this migrated lesson to current canonical ADR-66 without introducing a new authority convention. Preserve its historical provenance as historical; no environment elevation advice in current operating guidance. This is documentation-source inventory only, not a root patch or queue authorization.'
   created_at: 2026-10-08T20:19:53.440625238Z
   modified_at: 2026-10-08T20:19:53.440625238Z
+- id: 01a129c8-ea50-7d21-98f5-af5a44b4b38c
+  author: joe
+  content: |
+    FACTORY PLAN (night) — B3 doc slice only; no Rust changes; does not complete DOC-6.
+
+    Worktree /home/joe/ai/aida-doc-6-factory, branch doc-6-b3-docs. Source-linked facts checked once: `seat_authority.rs::issue_direct` (requires a direct human TTY, roster ceiling, delegable set must be roster-allowed, 24h max lifetime), `issue_child` (child inherits parent expiry, empty delegable set), `current_grant` (re-validated on every read: revocation, expiry, subject, roster, parent delegation), `permissions.rs::gated_effective_role_for_user` (grant seat else `implementer`; no env leg), `mcp.rs::role_active_env` (resolves the grant per call), `role.rs::advisor_authority_from` (TTY is never authority by itself). Canonical ADR-66 is Accepted 2026-10-04 (STORY-1473 completed; TASK-1594 amendment C = per-call validation; amendment D = hold carve-out).
+
+    Passages → replacement:
+    1. docs/cli/06-roles-sessions.md:11, :23 — "sets AIDA_SESSION_ROLE which gates read / everything authority-gated keys off it" → entering a role at a TTY issues a validated, roster-capped session grant; AIDA_SESSION_ROLE is exported only as a display/routing hint.
+    2. docs/cli/06-roles-sessions.md:27 — "prefix the command with AIDA_SESSION_ROLE=<role>" → an env prefix changes nothing authority-wise; for a one-off gated command enter the seat at a TTY and `aida role end` after; headless contexts receive child grants from a launcher.
+    3. docs/cli/06-roles-sessions.md key options/gotchas — add `enter --delegate-seat` (repeatable, empty by default, advisor prompt opt-in at a TTY); env var set by hand never confers authority.
+    4. docs/cli/06-roles-sessions.md — NEW subsection "Entering seats and delegating child seats" (DOC-6 description as source): eval form, roster via `aida team allow-seat/disallow-seat` at a TTY, per-child distinct grants, no onward delegation, MCP captures its grant at start and re-validates each call (restart/reconnect to change), lifetime/revocation, residual same-user limit.
+    5. docs/aida/05-decisions/ADR-66-tty-established-session-bound-seats.md:3-4, :42-55 — Draft → Accepted 2026-10-04 (canonical body), keeping the dated 2026-10-03 draft provenance, BUG-1669/SPIKE-91 broker references, the per-call amendment and the hold carve-out amendment as recorded amendments.
+    6. docs/aida/05-decisions/README.md:12 — "Draft — advisor signoff pending" → "Accepted 2026-10-04".
+    7. aida-core/templates/.aida/discipline/advisor-role.md:253-263 (+ copied mirror .aida/discipline/advisor-role.md) — section feedback_advisor_role_for_queue_after_647: keep the TASK-647 lesson under a dated "historical (pre-ADR-66)" note; current guidance = enter advisor at a TTY / delegate the seat to the loop; drop "storage.queue_add bypasses the gate" and env-prefix recipes.
+    8. docs/agents/codex-mcp-setup.md:93, :386 and docs/agents/aida-mcp-install-matrix.md:27 — add per-call re-validation to the process-capture wording (revocation applies immediately). The template copy of codex-mcp-setup.md has diverged and lacks this passage; left as is.
+    9. docs/environment-variables.md:80 — AIDA_SESSION_ROLE row: "Gates role-restricted writes" → hint only; gating reads the validated grant.
+    10. aida-core/templates/.aida/discipline/autonomous-burndown.md:156 (+ mirror) — drop the `AIDA_SESSION_ROLE=advisor` prefix from the queue recipe.
+
+    Left alone (outside B3, reported for routing): README.md:316-328 tutorial still teaches the env prefix; docs/agents/seat-parity.md and docs/architecture/roles-seats-and-personas.md use env values as launch/persona hints (not elevation); source comments permissions.rs:273-279, team.rs:357-360, `aida team` --help strings (Rust; B1/B2/R1 lane). `make sync-templates` runs `cargo run` so the discipline mirror is copied by hand (recipe is a plain `cp`).
+
+    Static readback: `rg -n 'AIDA_SESSION_ROLE=' docs .aida/discipline aida-core/templates` must return only historical notes, persona (`guest|requester`) hints, test-env `env -u` advice and plan/archive files — no current guidance that an env prefix confers authority.
+  created_at: 2026-10-11T07:06:35.472538900Z
+  modified_at: 2026-10-11T07:06:35.472538900Z
+  session_id: 01a129c3fefa
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
