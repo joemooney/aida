@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:11:01.493042018Z
-modified_at: 2026-10-11T06:50:25.447718624Z
+modified_at: 2026-10-11T06:58:36.928885192Z
 req_type: Story
 tags:
 - agent-surface
@@ -58,6 +58,37 @@ comments:
   created_at: 2026-10-11T02:22:09.029829218Z
   modified_at: 2026-10-11T02:22:09.029829218Z
   session_id: ce7b935f-d5da-41d3-94da-7ef94d2537e4
+- id: 01a129c1-9d00-7301-96a2-6b6b33ea374f
+  author: joe
+  content: |
+    FACTORY PLAN (night)
+
+    Approach
+    - One new focused module `aida-cli-lib/src/shipped_linkage.rs` (registered in lib.rs with a one-line `mod`), holding a CHEAP single-spec default-branch linkage scan plus both consumers. Nothing is added to lib_part*.rs beyond a few-line call-out; `collect_git_linkage` (lib_part3) is untouched.
+    - Cheap form, per A2: the scan runs only against the default branch refs — `origin/<default>` first, then local `<default>` — using `git log <ref> -F --grep=<ID>` (measured 65 ms on this 70k-commit repo vs 600 ms for the `--all` scan `--format json` runs) plus `git grep -I -F trace:<ID> <ref>` (70 ms). Messages are filtered by the doctor's own `referenced_spec_ids_from_messages` (plan-commit / bookkeeping exclusions), trace hits by exact token, so the rule is the doctor's rule (AC5).
+    - A1: both refs are scanned. Found on either → shipped / no warning. Found on neither → the warning names both refs and says "if the PR merged on the remote, run `git fetch`" instead of claiming nothing shipped.
+
+    Files / functions
+    - `aida-cli-lib/src/shipped_linkage.rs` (new): `default_branch_refs`, `scan_default_branch_linkage(root, ids) -> DefaultBranchLinkage {found_on, commits, trace_files, shipped_pr, scanned_refs}`, `toon_show_linkage_line`, `completion_linkage_warning(root, &Requirement) -> Option<String>` (applies `completed_without_commit_expects_code` + `doctor:no-code` opt-out), `spec_lookup_ids`.
+    - `aida-cli-lib/src/git_backend_cmd.rs`: TOON show block pushes one `linkage:` scalar unless `--no-git` (AC1/AC2); canonical `Command::Edit` prints the warning on stderr after the Updated/crescendo line when `into_completed` (AC3/AC4).
+    - `aida-cli-lib/src/lib_part1.rs` `edit_requirement_cli` (legacy backend): same warning, computed before `storage.save`, printed after.
+    - `aida-cli/tests/bug_1594_show_bounded.rs`: extended with the default TOON path + linkage (A2).
+
+    Tests
+    - In-process (`aida-cli-lib/src/tests/story_1649_shipped_linkage_tests.rs`): `toon_linkage_line_names_pr_and_commit`, `toon_linkage_line_not_shipped_is_honest`, `completed_without_shipped_commit_warns`, `completed_with_commit_on_origin_only_does_not_warn` (bare remote; commit pushed then local main reset), `completed_doc_spec_does_not_warn`, `completed_opted_out_tag_does_not_warn`, `warning_and_doctor_scan_agree_on_same_fixture` (AC5).
+    - Binary (`aida-cli/tests/story_1649_show_linkage.rs`): `toon_show_includes_linkage_line` (AC1), `toon_show_no_git_prints_no_linkage_line` (AC2), `completed_without_shipped_commit_warns` (AC3), `completed_with_commit_on_origin_only_does_not_warn` (A1), `completed_doc_spec_does_not_warn` (AC4).
+    - Perf: `bug_1594_toon_show_default_path_with_linkage_stays_in_budget` in the BUG-1594 suite (hung `gh` fixture; TOON path must finish in budget and carry `linkage:`).
+
+    Acceptance mapping
+    - AC1 linkage line → `toon_show_includes_linkage_line`; AC2 → `toon_show_no_git_prints_no_linkage_line`; AC3 → `completed_without_shipped_commit_warns`; AC4 → `completed_doc_spec_does_not_warn` + shipped case in the in-process suite; AC5 → `warning_and_doctor_scan_agree_on_same_fixture`; A1 → `completed_with_commit_on_origin_only_does_not_warn`; A2 → cheap scan + `bug_1594_toon_show_default_path_with_linkage_stays_in_budget`.
+
+    Risks
+    - Built only on CI (no local compile tonight); first CI run may need a fix-up round.
+    - TOON `shipped` is "a referencing commit or trace comment is on the default branch", which can differ from `--format json`'s ancestor-of-newest-commit rule only for specs with both merged and later in-flight commits; the line names the ref it was found on.
+    - The warning covers `--status completed` only (not Done) — Done is the queue's awaiting-merge transient and the doctor scan excludes it too.
+  created_at: 2026-10-11T06:58:36.928885192Z
+  modified_at: 2026-10-11T06:58:36.928885192Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
 history:
 - id: 01a128c4-83c8-7663-b10d-a3f5ec8926ac
   author: joe
