@@ -23,11 +23,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:21:40.054570618Z
-modified_at: 2026-10-11T01:21:40.054570618Z
+modified_at: 2026-10-11T15:12:40.854960731Z
 req_type: Faq
 tags:
 - audience:user
 - topic:sync
+comments:
+- id: 01a12b85-f196-77f2-9fd1-712b92d64097
+  author: joe
+  content: 'Update 2026-10-11: `aida remote reconcile --execute` refuses with ''the store worktree at .aida-store has uncommitted changes'' when an AIDA write left pending files (seen: an untracked timings/BUG/001/BUG-1940.json written by a relay). That''s normal pending state: AIDA sweeps it into its next store commit (''chore: sync pending changes ...''), usually within minutes. Don''t delete it. Wait for the next store write (or any aida add/edit), then re-run the reconcile. It succeeded about 30 minutes later.'
+  created_at: 2026-10-11T15:12:40.854960731Z
+  modified_at: 2026-10-11T15:12:40.854960731Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
   branch: main
