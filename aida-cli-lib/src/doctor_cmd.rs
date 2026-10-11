@@ -587,6 +587,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::config_cmd::scan_permission_posture_findings(
             &project_root,
         ));
+        findings.extend(contained_store_boundary_findings(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -873,6 +874,33 @@ fn unsynced_merge_hold_findings(root: &std::path::Path) -> Vec<DoctorFinding> {
                 action,
                 safe_heal: false,
             })
+        })
+        .collect()
+}
+
+/// BUG-1929: with contained mode on, report each way the contained write set
+/// would miss the store or cache this checkout resolves. Not auto-healed: the
+/// fix is to create the missing file or move the store/cache back under the
+/// main checkout.
+// trace:BUG-1929 | ai:claude
+fn contained_store_boundary_findings(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    if !crate::load_agents_contained(project_root).unwrap_or(false) {
+        return Vec::new();
+    }
+    let main = crate::main_worktree_root_from(project_root);
+    let store = aida_core::store_locate::detect_distributed_store_from(project_root);
+    let cache = project_root.join(".aida").join("cache.db");
+    crate::contained_boundary::contained_store_boundary_gaps(&main, store.as_deref(), &cache)
+        .into_iter()
+        .enumerate()
+        .map(|(n, gap)| DoctorFinding {
+            category: "permission-posture".to_string(),
+            id: format!("contained-store-boundary-{}", n + 1),
+            summary: format!("contained sessions: {gap}"),
+            action: "run any `aida` command from the main checkout, or keep the store and \
+                     cache under the main checkout"
+                .to_string(),
+            safe_heal: false,
         })
         .collect()
 }
@@ -7039,6 +7067,17 @@ fn heal_doctor_finding(
         // STORY-1128: permission-posture heal applies the contained profile
         // through the same merge-preserving writer as `config permissions set`.
         // trace:STORY-1128 | ai:codex
+        // BUG-1929: the contained store-boundary findings are report-only.
+        // trace:BUG-1929 | ai:claude
+        "permission-posture" if finding.id.starts_with("contained-store-boundary") => {
+            Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "skipped".to_string(),
+                detail: Some("not auto-healed; follow the action".to_string()),
+            })
+        }
         "permission-posture" => heal_doctor_permission_posture(project_root, finding),
         "parent-tag-drift" => heal_doctor_parent_tag_drift(project_root, finding),
         "orphan-branches" if opts.force && opts.yes => {
