@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-11T13:17:55.244920729Z
+modified_at: 2026-10-11T13:18:19.627954574Z
 req_type: Story
 tags:
 - batch:next
@@ -145,6 +145,12 @@ comments:
     Implementation lane: this changes how every relay merges, so it's guided or attended, not factory or drain.
   created_at: 2026-10-11T13:17:55.244920729Z
   modified_at: 2026-10-11T13:17:55.244920729Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b1d-3feb-7be2-9317-36276bc6eddb
+  author: joe
+  content: 'ADVISOR: the implementer half (Q2) is filed as STORY-1662 (draft, sequenced after this story).'
+  created_at: 2026-10-11T13:18:19.627954574Z
+  modified_at: 2026-10-11T13:18:19.627954574Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
