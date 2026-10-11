@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:04.928345393Z
-modified_at: 2026-10-11T15:20:54.128769207Z
+modified_at: 2026-10-11T15:20:54.800366294Z
 req_type: Story
 tags:
 - sweep:night
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-10-11T07:44:40.660410133Z
   modified_at: 2026-10-11T07:44:40.660410133Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b8d-7b10-7bc0-b89e-b7f4b3956618
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-11 (recorded by advisor): APPROVED. Review work for PR #2485. The STORY-1654 amendment A2 hold still applies: #2485 is not eligible to merge until STORY-1654''s e2e (positive Bash reviewer -> ship OK; negative Agent-tool reviewer -> AuthorSession) is recorded on STORY-1654. The reviewer must also check every item in the 01:10Z advisor REQUEST CHANGES and the night sweep findings (ledger append atomicity, same-home receipts, tests driving the real path).'
+  created_at: 2026-10-11T15:20:54.800366294Z
+  modified_at: 2026-10-11T15:20:54.800366294Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
 history:
 - id: 01a12b8d-7870-75c0-a1f0-ec4a28f6e9b4
   author: joe
