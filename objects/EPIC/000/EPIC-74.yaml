@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-11T07:10:57.092924495Z
+modified_at: 2026-10-11T07:45:15.923274462Z
 req_type: Epic
 tags:
 - architecture
@@ -1179,6 +1179,12 @@ comments:
   created_at: 2026-10-11T07:10:55.912797667Z
   modified_at: 2026-10-11T07:10:55.912797667Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a129ec-5293-7620-a081-20e22fa62ad4
+  author: joe
+  content: 'ADVISOR (overnight 00:45): left for the OPERATOR, not proxy-approved overnight. Approving an architecture container is the operator call; it is not factory feed.'
+  created_at: 2026-10-11T07:45:15.923274462Z
+  modified_at: 2026-10-11T07:45:15.923274462Z
+  session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
