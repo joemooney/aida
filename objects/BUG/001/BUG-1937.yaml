@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:25:23.618102809Z
-modified_at: 2026-10-11T13:26:58.872510017Z
+modified_at: 2026-10-11T13:28:09.049525083Z
 req_type: Bug
 tags:
 - ci
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-10-11T07:48:15.800442576Z
   modified_at: 2026-10-11T07:48:15.800442576Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12b26-3e59-7831-a1d3-9e682d4d030b
+  author: joe
+  content: 'FACTORY PLAN (night): Add a no-build static mode to docs/cli/verify-manual.py (--static). It parses #[clap(...)]/#[arg(...)] attributes across aida-cli-lib/src + aida-cli/src (tests excluded), collecting long-flag names that are visible somewhere vs only hidden (hide = true, or a hidden clap alias). It then scans docs/cli chapter command sections with the same scoping as the full guard (### `aida <cmd>` until ## or ---, skipping git/cargo/gh/... spans) and fails on any cited --flag that exists only as hidden. Conservative by design: a flag that''s visible on any command is never flagged, so false positives are impossible as long as the parser is correct; the full binary-backed guard stays in place. Wire it as a new CI step ''CLI-manual hidden-flag guard (static, no build)'' that runs python3 -m unittest tests/test_verify_manual.py plus verify-manual.py --static, tiered fast in scripts/ci-gate-tiers.toml with a rationale comment. Minimal edits to ci.yml/tiers to avoid conflicting with #2514. Tests (tests/test_verify_manual.py): test_static_clap_parse_visible_vs_hidden (single-line, multi-line, long="x", alias, r#ident), test_static_hidden_flag_citation_fails, test_static_flag_visible_elsewhere_passes, test_static_external_tool_span_ignored, test_static_mode_passes_on_current_manual. Acceptance check: re-add `--skip-xplat-check` to docs/cli/11-dev.md under aida release and confirm make check-ci-fast fails, then revert. Risks: the parser misses an unusual attribute form (that only misses a citation, so no false failure), and possible merge adjacency with #2514.'
+  created_at: 2026-10-11T13:28:09.049525083Z
+  modified_at: 2026-10-11T13:28:09.049525083Z
+  session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
 history:
 - id: 01a129ef-06c7-7843-b2ba-7e9cf8b9848c
   author: joe
