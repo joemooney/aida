@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:53:49.824465012Z
-modified_at: 2026-10-11T02:55:01.202994101Z
+modified_at: 2026-10-11T05:17:01.686537045Z
 req_type: Task
 tags:
 - refactor
@@ -223,6 +223,22 @@ comments:
   created_at: 2026-10-11T02:55:01.202994101Z
   modified_at: 2026-10-11T02:55:01.202994101Z
   session_id: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+- id: 01a12964-9b76-7eb1-b6a2-1125c18de22c
+  author: joe
+  content: |-
+    PR #2483 ready for advisor review at 947a2ba6de
+
+    Round-2 fixes:
+    - A: each removed -U0 block must land contiguous and same-order in one new module. Blocks may reorder relative to each other; in the FINAL slice a deleted lib_part block may split only at a module seam (two consecutive pieces in the same module = reorder = FAIL 3).
+    - B: MOVE/FINAL: any non-wiring line added to lib*.rs is FAIL 3; FAIL 3 if a new module gets nothing beyond its header.
+    - Tests: fixture A (reorder inside a block) FAILs; fixture B (lib_part1→lib_part2 relocation + empty extraction) FAILs with both messages; positive control (blocks from lib_part1 and lib_part2 in opposite order) PASSes. Also added: final-slice seam split passes; moved code that carries its own '// trace:' still matches. 31 tests, unittest discover form kept.
+
+    NEEDS YOUR EYES — one new allowance in check 4: a retarget: commit may add include_str!("<module moved earlier in the range>.rs"), the trailing comma on the previous include_str!, and the matching "{}\n…{}" placeholder string. These are excused and reported as NOTE 4. This exists because signed amendment 1e/1f puts the merge-hold source-scan retarget into lib_part5.rs, which check 4 otherwise FAILs. include_str! of a file that has NOT been moved still FAILs 4 (tested).
+
+    Validation on real history: runs 1 and 2 (merged) and run 3 (slice-10) show no check-3/4 findings; run 3's merge-hold retarget shows NOTE 4: 3 lines. make check-ci-fast is green.
+  created_at: 2026-10-11T05:17:01.686537045Z
+  modified_at: 2026-10-11T05:17:01.686537045Z
+  session_id: 26c63616-b019-4504-a8d9-08023c744952
 history:
 - id: 01a12798-32cd-7a00-93a3-e533eb0de4ae
   author: joe
