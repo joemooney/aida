@@ -8,16 +8,25 @@ description: |-
   Expected: rebuild doesn't depend on the old file being readable. On an open/integrity failure it moves cache.db, -wal and -shm into a quarantine path, prints that it did so, and builds from the git store. Read commands that hit SQLITE_CORRUPT should print the one-line fix (aida cache rebuild) instead of the raw sqlite error.
 
   Recurrence evidence for the underlying corruption is on STORY-1484.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T01:51:45.205677811Z
-modified_at: 2026-10-11T01:51:45.205677811Z
+modified_at: 2026-10-11T06:27:52.451114401Z
 req_type: Bug
 tags:
+- batch:night-2026-10-10
 - cache
 - recovery
+history:
+- id: 01a129a5-7803-72c1-b35a-2a4195dac725
+  author: joe
+  timestamp: 2026-10-11T06:27:52.451089249Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c6c0d9c3b23f258ab5ade50283f8c204dac9eff2
   branch: main
