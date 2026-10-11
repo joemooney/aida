@@ -57,6 +57,7 @@ mod config_cmd;
 // trace:BUG-1938 | ai:claude
 mod config_commit;
 mod config_edit;
+mod config_init;
 // trace:BUG-1928 | ai:claude — contained-posture write boundary (absolute allowed roots).
 mod contained_boundary;
 mod context_prompt;
@@ -170,6 +171,8 @@ use agent_registry_root::*;
 use autopilot_intake::*;
 use brief::*;
 use claim::*;
+use config_init::*;
+pub use config_init::{validate_priority_input, validate_status_input};
 use db_block::*;
 use db_reconcile::*;
 use doctor_root::*;
