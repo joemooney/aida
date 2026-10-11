@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T02:53:10.303215193Z
-modified_at: 2026-10-11T15:09:54.637310435Z
+modified_at: 2026-10-11T15:24:14.991679762Z
 req_type: Bug
 tags:
 - auto-bump
@@ -64,6 +64,12 @@ comments:
     3. LOW: live_work_tests.rs:281 tests bump_pr_specs, not the wrapper's Filed/AlreadyExists gate.
   created_at: 2026-10-11T15:09:54.637310435Z
   modified_at: 2026-10-11T15:09:54.637310435Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b90-890f-7141-bd3e-324a105b015b
+  author: joe
+  content: 'REVIEW (night): APPROVE at 47036e897d (fresh reviewer, round 3). The round-2 lost-update risk is fixed: the heal now writes each spec with update_spec_atomically and re-checks the status under the lock, and the injected-race test covers it. The bump_pr_specs root and the Filed/AlreadyExists gate test are also fixed, and the round-1 fixes are intact. Out of scope (STORY-1653): relay branches that are not named after the spec. Merging on green CI at this SHA.'
+  created_at: 2026-10-11T15:24:14.991679762Z
+  modified_at: 2026-10-11T15:24:14.991679762Z
   session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
 history:
 - id: 01a128e6-d6ea-78f0-884e-3cb09bf8043e
