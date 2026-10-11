@@ -1,0 +1,36 @@
+id: 01a1288c-c5a3-7d22-963d-53e26f134d20
+spec_id: FAQ-1-265
+title: Why did a headless relay agent get "The user doesn't want to proceed ... STOP" when nobody rejected anything?
+description: |
+  **Claude Code itself killed the subagent, not the operator. Headless `claude -p` stops background subagents 10 minutes after the orchestrator's turn ends, and the killed tool calls return Claude Code's standard rejection text.**
+
+  ## Why
+  Relay sessions run `claude -p` (print mode). When the orchestrator's turn ends while background subagents or background shell tasks are still running, print mode waits at most `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` (default 10 min), then stops them. A stopped tool call returns: "The user doesn't want to proceed with this tool use... STOP what you are doing". Agents read that as an operator rejection (2026-10-10: the fake "operator rejected builds", and reviewers dying mid-review).
+
+  ## How
+  - Set `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` (no ceiling) in `~/.claude/settings.json` under `env`. It only takes effect for sessions started afterwards, so restart running relays to pick it up.
+  - To tell the two apart: a real operator rejection comes from an interactive session. In a `claude -p` relay log, the same text arriving about 10 minutes after a turn ended means the ceiling.
+
+  ## Caveat
+  A permanent fix in the relay is tracked in aida-relay BUG-86.
+
+  ## See also
+  FAQ-20
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T01:21:16.707265627Z
+modified_at: 2026-10-11T01:21:16.707265627Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+filed_at:
+  code_sha: 3bb1454cf03bd88c38235dcfce089655b20c2e64
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
