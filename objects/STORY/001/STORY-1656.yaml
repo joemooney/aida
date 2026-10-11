@@ -1,0 +1,33 @@
+id: 01a12878-fcfd-75d3-83b8-480de7c27624
+spec_id: STORY-1656
+agreed_id: STORY-1656
+title: aida init creates the repo on every configured forge in one command (GitHub + GitLab group), creating GitLab projects via the API when push-to-create is refused
+description: |
+  Found 2026-10-10 while creating aida-host. Today `aida init DIR --github` creates the GitHub repo and publishes both legs. A second forge takes a separate `aida remote mirror gitlab --url ...`. On gitlab.joemooney.com, SSH push-to-create into the group namespace ai/ was refused ("project could not be found"), so mirroring failed until the project was created by hand through the API (`glab api -X POST projects` with the ai group's namespace_id and visibility=private).
+
+  Want:
+  1. `aida init DIR --github --gitlab <host>[/<group>]`, or a named profile in ~/.aida/forges.toml listing both, creates the repo on both forges, wires the second as a mirror hub, and publishes main + aida-store to both in the safe order.
+  2. When GitLab push-to-create is refused, fall back to creating the project via glab (or the REST API with the glab token) in the requested namespace, matching the GitHub repo's visibility (private by default).
+  3. `aida remote mirror --url` gets the same create-if-missing fallback.
+  4. The final summary verifies every hub with `aida remote status`.
+
+  Acceptance: from a fresh DIR, one command produces repos on github.com and gitlab.joemooney.com/ai/, both private, with main and aida-store in sync, and `aida remote status` reports that all hubs agree.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-11T00:59:40.157380366Z
+modified_at: 2026-10-11T00:59:40.157380366Z
+req_type: Story
+tags:
+- forge
+- gitlab
+- init
+filed_at:
+  code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: d1ebc976-deb4-4770-b036-20a1547772ad
