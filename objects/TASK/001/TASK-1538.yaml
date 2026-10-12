@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-11T22:15:23.483171425Z
+modified_at: 2026-10-12T00:39:52.509438183Z
 req_type: Task
 tags:
 - closure:pending
@@ -646,6 +646,37 @@ comments:
     TASK-1538 was auto-flipped to Done when #2530 merged (its (TASK-1538) trailer). I reopened it to Approved and kept closure:pending.
   created_at: 2026-10-11T22:15:23.483171425Z
   modified_at: 2026-10-11T22:15:23.483171425Z
+  session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+- id: 01a12d8d-39bd-78f3-8d0e-e99ed34ee9fc
+  author: joe
+  content: |-
+    RUNS 8 AND 9 READY TO MERGE. Both are on origin/main f373dfd3ce (run 7 landed). Merge #2526 first, then #2538.
+    - #2526 (run 8): slice-30 head fbcd695e2e, base main. Build green, MERGEABLE. Tags:
+      - slice-30-r3 rel_cards 988f9294ff (2144)
+      - slice-31-r3 requirements_cli d0c32d98db (2395)
+      - slice-32-r3 doctor_root efa21020f1 (2010)
+      - slice-33-r3 human 6683c8a93c (2015)
+      - slice-34-r3 config_init 24b9659847 (1225, with the 1n shim)
+      - slice-35-r3 agent_config fbcd695e2e (534)
+    - #2538 (run 9): slice-36 head 675b97628b, base slice-30. Its Build will run once it's retargeted to main after #2526 merges; CI only runs on PRs into main. Tags:
+      - slice-36-r2 session_misc eea5e00efb (1774)
+      - slice-37-r2 plan_report cb7761c215 (1503)
+      - slice-38-r2 drain_batch d917cad880 (2462)
+      - slice-39-r2 trace a8a5f4e91f (3200)
+      - slice-40-r2 worktree_gc 675b97628b (3123)
+    verify_stack f373dfd3ce..slice-36 --build: 16 commits (11 MOVE, 5 RETARGET), checks 1–9 PASS. check-ci-fast: 26 gates pass at both heads.
+    Conflicts carried into the MOVEs:
+    - rel_cards carries #2540's print_comment → print_comment_with (STORY-1652 markdown render).
+    - worktree_gc carries the BUG-1944 bump_spec_in_progress block.
+    - lib.rs mod list: contained_boundary.
+    PROOF CARRY (please confirm this is acceptable): each tag is 10306/10306 with warnings 0/0 (cargo test --workspace --no-fail-fast), but the proof ran at a tree-equal SHA. I cut the stack on a local squash of slice-25 on top of 95f15a20d4, whose tree is byte-identical to f373dfd3ce (02f9a1b946). Rebasing onto f373dfd3ce left all 16 trees unchanged, so the proofs carry by tree-equality as the protocol allows. Each tag message names its proof SHA and the shared tree hash.
+    Flakes, all outside moved code, each re-run to a full green proof at the same tree. Logs in /tmp/libsplit/fail2, fail3:
+    - BUG-1965 cached_git_backend (reader_incremental_lock_error, worker_crash_loop, writer_busy_next_reader)
+    - BUG-1966 two_hour_live_lock
+    - BUG-1968/1974 bug_1923/bug_1942
+    - auto_complete drain_caps_inactive_drains_normally (not filed yet)
+  created_at: 2026-10-12T00:39:52.509438183Z
+  modified_at: 2026-10-12T00:39:52.509438183Z
   session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
