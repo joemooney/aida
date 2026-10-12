@@ -1,10 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-10-11T01:35:16.101811203Z
+last_run: 2026-10-12T22:52:21.277690166Z
 last_by:
   seat: advisor
-  session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
-  vendor: antigravity
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+  vendor: claude
 result: done
-note: aida worktree reclaim --apply freed 166.6 GiB across 17 stale target dirs (live/open-PR worktrees skipped). Free space 64 GiB -> 213 GiB (floor 60). Floor unchanged.
-due_since: 2026-10-12T21:01:52.653137386Z
-due_reason: on CronJobFailed:disk-headroom-guard
