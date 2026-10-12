@@ -2024,6 +2024,10 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
 #[cfg(test)]
 thread_local! {
     static INDEX_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Tests: whether this thread's last [`serve_with_budget_at`] held the
+    /// indexer lock.
+    // trace:BUG-1974 | ai:claude
+    static LAST_SERVE_LOCKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Test hook: how many indexing passes (catch-up, back-fill or reset, all
@@ -2203,6 +2207,8 @@ fn serve_with_budget_at(
         e
     };
     let locked = lock.is_some();
+    #[cfg(test)]
+    LAST_SERVE_LOCKED.with(|c| c.set(locked));
     let mut cache = HistoryCache::open(db_path).map_err(|e| heal(e, locked))?;
     if locked {
         if let Err(e) = cache.ensure_fresh(
@@ -2490,5 +2496,44 @@ pub(crate) mod test_support {
     /// Hold the indexer lock (as another process would).
     pub(crate) fn hold_lock(db_path: &Path) -> IndexLock {
         IndexLock::acquire_blocking(db_path).unwrap()
+    }
+
+    /// Take the indexer lock, then drop it, keeping only a duplicate of its
+    /// fd: what a child forked while the lock was held keeps until it
+    /// execs. The lock stays held while the returned file lives.
+    // trace:BUG-1974 | ai:claude
+    pub(crate) fn inherited_lock_copy(db_path: &Path) -> std::fs::File {
+        let lock = IndexLock::acquire_blocking(db_path).unwrap();
+        lock._file.try_clone().unwrap()
+    }
+
+    /// [`serve_at`], retried until a call holds the indexer lock, for tests
+    /// whose assertions need the locked (indexing) path. Nothing else holds
+    /// a test's lock, yet a bare `serve_at` can still miss it: the lock is
+    /// an `flock`, and a child that another test thread is spawning at that
+    /// moment holds a copy of the lock fd from fork until exec, even after
+    /// this thread has dropped it. `serve_at` then reads the lock as held by
+    /// another indexer and falls back without indexing, and the caller sees
+    /// `Ok` where it expected an injected failure. An unlocked call writes
+    /// nothing and does not consume `fail_next_catch_up`, so the retry
+    /// changes no outcome; it only waits out the fork.
+    // trace:BUG-1974 | ai:claude
+    pub(crate) fn serve_locked(
+        store: &Path,
+        db_path: &Path,
+        opts: &HistoryOpts,
+        budget: Duration,
+    ) -> Result<Option<CacheAnswer>> {
+        let mut last = None;
+        for _ in 0..1000 {
+            LAST_SERVE_LOCKED.with(|c| c.set(false));
+            let got = serve_at(store, db_path, opts, budget);
+            if LAST_SERVE_LOCKED.with(std::cell::Cell::get) {
+                return got;
+            }
+            last = Some(got.map(|a| a.is_some()));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        panic!("serve_at never held the history index lock in 1000 tries (last: {last:?})");
     }
 }

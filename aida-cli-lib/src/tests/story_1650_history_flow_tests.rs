@@ -362,7 +362,14 @@ fn story_1650_the_behind_refresh_closes_the_gap_run_by_run() {
         feed.limit = 1;
         let mut lags = vec![];
         for _ in 0..3 {
-            history_cache::serve_at(&store, &db, &feed, std::time::Duration::ZERO).unwrap();
+            // trace:BUG-1974 | ai:claude
+            history_cache::test_support::serve_locked(
+                &store,
+                &db,
+                &feed,
+                std::time::Duration::ZERO,
+            )
+            .unwrap();
             lags.push(history_cache::status_at(&store, &db).lag);
         }
         assert_eq!(lags, vec![Some(4), Some(2), None], "two commits per run");

@@ -413,8 +413,9 @@ fn build_merged(fx: &mut Fixture) -> Vec<String> {
         .collect()
 }
 
+// trace:BUG-1974 | ai:claude
 fn serve(fx: &Fixture, o: &HistoryOpts) -> Option<history_cache::CacheAnswer> {
-    history_cache::serve_at(&fx.store, &fx.db, o, GENEROUS).unwrap()
+    test_support::serve_locked(&fx.store, &fx.db, o, GENEROUS).unwrap()
 }
 
 fn assert_parity(fx: &Fixture, o: &HistoryOpts, label: &str) {
@@ -752,7 +753,7 @@ fn history_cache_rebuilds_on_foreign_store_root() {
     // Point store B at store A's index file.
     let o = opts();
     let (walk, _, _) = collect_filtered_events_git(&b.store, &o).unwrap();
-    let got = history_cache::serve_at(&b.store, &a.db, &o, GENEROUS)
+    let got = test_support::serve_locked(&b.store, &a.db, &o, GENEROUS)
         .unwrap()
         .expect("served after reset");
     assert_eq!(got.events, walk);
@@ -853,7 +854,7 @@ fn history_cache_corrupt_file_self_heals_and_falls_back() {
     let mut fx = Fixture::new();
     build_linear(&mut fx);
     std::fs::write(&fx.db, "this is not a sqlite database\n".repeat(200)).unwrap();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(first.is_err(), "a corrupt index must not serve");
     assert!(!fx.db.exists(), "the corrupt file is removed");
     assert_parity(&fx, &opts(), "after self-heal");
@@ -950,7 +951,7 @@ fn history_cache_ignores_requirements_cache_and_store_locks() {
     // Index once, then move HEAD so the call under the locks has to write
     // (catch up) as well as read. A path that waited on any of these locks
     // would block for their whole multi-second timeout ladder, or fail.
-    history_cache::serve_at(&fx.store, &db, &opts(), GENEROUS)
+    test_support::serve_locked(&fx.store, &db, &opts(), GENEROUS)
         .unwrap()
         .expect("initial build");
     let s = Spec::new("STORY-16", "Story", "Written while locked");
@@ -958,7 +959,7 @@ fn history_cache_ignores_requirements_cache_and_store_locks() {
     fx.commit("add STORY-16");
     let (walk, _, _) = collect_filtered_events_git(&fx.store, &opts()).unwrap();
     let started = Instant::now();
-    let got = history_cache::serve_at(&fx.store, &db, &opts(), GENEROUS)
+    let got = test_support::serve_locked(&fx.store, &db, &opts(), GENEROUS)
         .unwrap()
         .expect("served while other locks are held");
     // Load-bearing, so the original 5s literal stays fatal as the ceiling:
@@ -985,14 +986,24 @@ fn history_cache_concurrent_indexer_serves_snapshot_or_falls_back() {
     build_linear(&mut fx);
     assert_parity(&fx, &opts(), "initial");
     let lock = test_support::hold_lock(&fx.db);
+    // The lock is held on purpose: bare `serve_at`, not the retrying `serve`.
+    // trace:BUG-1974 | ai:claude
     // Another process is indexing, and the snapshot is current: serve it.
     let started = Instant::now();
-    assert!(serve(&fx, &opts()).is_some());
+    assert!(
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS)
+            .unwrap()
+            .is_some()
+    );
     // HEAD moved and this reader cannot index: fall back, without waiting.
     let s = Spec::new("STORY-14", "Story", "While locked");
     fx.put(&s);
     fx.commit("add STORY-14");
-    assert!(serve(&fx, &opts()).is_none());
+    assert!(
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS)
+            .unwrap()
+            .is_none()
+    );
     // Load-bearing for the same reason as above: `serve` returning None is
     // the fallback, and only the clock shows it fell back *without waiting*
     // on the held indexer lock. Original 5s literal kept as the ceiling, at
@@ -1706,7 +1717,7 @@ fn task_1507_stale_or_diverged_reader_falls_back_without_reset() {
         );
     };
     // Behind the tip.
-    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+    assert!(test_support::serve_locked(&old, &fx.db, &opts(), GENEROUS)
         .unwrap()
         .is_none());
     unchanged("behind");
@@ -1717,7 +1728,7 @@ fn task_1507_stale_or_diverged_reader_falls_back_without_reset() {
     std::fs::write(old.join(&rel), s.yaml()).unwrap();
     git_in(&old, &["add", "-A"], fx.clock + 60);
     git_in(&old, &["commit", "-q", "-m", "diverge"], fx.clock + 60);
-    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+    assert!(test_support::serve_locked(&old, &fx.db, &opts(), GENEROUS)
         .unwrap()
         .is_none());
     unchanged("diverged");
@@ -2230,12 +2241,12 @@ fn task_1507_inconsistent_index_resets_instead_of_wedging() {
         .to_string();
     // Plant the wedged state: side1 indexed as the tip, beside merge^1.
     fx.git(&["checkout", "-q", "--detach", &side1]);
-    let one = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let one = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(one.is_ok(), "reader at side1 does not error: {one:?}");
     test_support::set_meta(&fx.db, "tip_sha", &side1);
     fx.git(&["checkout", "-q", "aida-store"]);
     let o = opts();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &o, GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &o, GENEROUS);
     assert!(first.is_err(), "the inconsistent catch-up falls back");
     assert_eq!(
         test_support::meta(&fx.db, "last_reset_reason").as_deref(),
@@ -2353,7 +2364,7 @@ fn task_1507_failed_reset_deletes_an_inconsistent_index() {
         .to_string();
     test_support::set_meta(&fx.db, "tip_sha", &side1);
     history_cache::fail_next_reset();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(first.is_err(), "the inconsistent catch-up falls back");
     assert!(!fx.db.exists(), "the unrepairable index is deleted");
     assert_parity(&fx, &opts(), "rebuilt");
@@ -3097,9 +3108,10 @@ mod sweep {
         }
         assert!(reached.is_some(), "a zero budget still reaches HEAD");
         let (walk, _, x) = collect_filtered_events_git(&d.fx.store, &opts()).unwrap();
-        let got = history_cache::serve_at(&d.fx.store, &d.fx.db, &opts(), Duration::from_millis(1))
-            .unwrap()
-            .expect("served once caught up");
+        let got =
+            test_support::serve_locked(&d.fx.store, &d.fx.db, &opts(), Duration::from_millis(1))
+                .unwrap()
+                .expect("served once caught up");
         assert_same(&got, &(walk, x), "after the long side branch");
     }
 
@@ -3183,7 +3195,7 @@ mod sweep {
         d.set_head(&a1);
         history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
         d.set_head(&z1);
-        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
+        test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
             Some(z1.as_str())
@@ -3641,7 +3653,7 @@ mod bug_1923 {
         while test_support::meta(&fx.db, "tip_sha").as_deref() != Some(head.as_str()) {
             calls += 1;
             assert!(calls <= bound, "not at HEAD after {bound} budgeted queries");
-            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
             let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
             let commits = test_support::commit_count(&fx.db);
             assert!(
@@ -3692,7 +3704,9 @@ mod bug_1923 {
         // Three failed attempts in a row pause inline catch-up.
         for n in 1..=3 {
             history_cache::fail_next_catch_up();
-            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
             assert_eq!(failures(), Some(n.to_string()));
         }
         assert_eq!(failures().as_deref(), Some("3"));
@@ -3713,7 +3727,7 @@ mod bug_1923 {
 
         // Paused: a budgeted query no longer tries (no failure injected,
         // yet nothing moves) and falls back to the walk.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_none());
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3732,6 +3746,7 @@ mod bug_1923 {
     /// An index at `old` with HEAD three commits on, paused by three failed
     /// inline catch-ups in a row. Returns (fixture, old tip).
     // trace:BUG-1942 | ai:claude
+    // trace:BUG-1974 | ai:claude
     fn stalled_three_behind() -> (Fixture, String) {
         let mut fx = Fixture::new();
         let mut s = Spec::new("STORY-1", "Story", "Cool-down");
@@ -3746,10 +3761,42 @@ mod bug_1923 {
         }
         for _ in 0..3 {
             history_cache::fail_next_catch_up();
-            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
         }
         assert!(history_cache::status_at(&fx.store, &fx.db).catch_up_stalled);
         (fx, old)
+    }
+
+    /// The BUG-1974 flake: a copy of the lock fd held by a child another
+    /// thread is forking makes `serve_at` read the lock as held, skip the
+    /// injected catch-up failure and answer `Ok` from the fall-back.
+    // trace:BUG-1974 | ai:claude
+    #[test]
+    fn bug_1974_an_inherited_lock_fd_skips_indexing_until_released() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Inherited lock");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        s.status = "Approved".into();
+        fx.put(&s);
+        fx.commit("update STORY-1");
+
+        let copy = test_support::inherited_lock_copy(&fx.db);
+        history_cache::fail_next_catch_up();
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+        assert!(got.unwrap().is_none(), "unlocked: falls back, no attempt");
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+
+        // Once the copy is gone, the still-pending injection is consumed.
+        drop(copy);
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("1")
+        );
     }
 
     fn rfc3339_ago(secs: i64) -> String {
@@ -3772,7 +3819,8 @@ mod bug_1923 {
 
         let commits = test_support::commit_count(&fx.db);
         for _ in 0..2 {
-            let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let got =
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
             assert!(got.is_none(), "paused: the git walk answers");
         }
         // No attempt ran and nothing was written.
@@ -3801,7 +3849,7 @@ mod bug_1923 {
 
         // No rebuild: the next budgeted query retries, keeps the gap and
         // clears the pause.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_some(), "served from the caught-up index");
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3824,7 +3872,7 @@ mod bug_1923 {
         test_support::set_meta(&fx.db, "catch_up_stalled_at", &stale);
 
         history_cache::fail_next_catch_up();
-        assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("4")
@@ -3833,7 +3881,7 @@ mod bug_1923 {
         assert_ne!(restamped, stale, "the failed retry restarts the cool-down");
 
         // Inside the new cool-down: no attempt.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_none());
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3858,7 +3906,7 @@ mod bug_1923 {
         let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
         assert!(lines.contains("retries on the next"), "{lines}");
         assert!(
-            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
                 .unwrap()
                 .is_some()
         );
@@ -3887,14 +3935,14 @@ mod bug_1923 {
         fx.commit("update STORY-1");
         for _ in 0..2 {
             history_cache::fail_next_catch_up();
-            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO);
         }
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("2")
         );
         assert!(
-            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
                 .unwrap()
                 .is_some()
         );
