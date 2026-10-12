@@ -1,0 +1,27 @@
+id: 01a130a9-57a0-7373-90f2-bb70f92fb7d3
+spec_id: TASK-1731
+agreed_id: TASK-1731
+title: 'Regen controls gate: reference, stub and clean-sandbox controls must pass before a trial score is reported'
+description: |-
+  Slice 3 of STORY-1669 (F27 + F14). Depends on slice 2.
+  ## Acceptance
+  - Reference control: the original system must score 100% across N repeats.
+  - Stub control: hollow checks are measured and excluded from the discriminating metric.
+  - Clean-sandbox check.
+  - `aida regen score` refuses to report a trial until all three have passed; a test for each refusal path.
+  - The discriminating metric excludes stub-passing checks (test).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T15:09:26.816691681Z
+modified_at: 2026-10-12T15:09:26.816691681Z
+req_type: Task
+filed_at:
+  code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
