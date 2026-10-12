@@ -320,6 +320,92 @@ class TestVerifyStack(unittest.TestCase):
         self.scan_guard("secrets.rs")
         self.assertFails("FAIL 4: retarget commit changes protected code")
 
+    # --- extend: append-mode MOVEs -------------------------------------------
+    # trace:TASK-1538 | ai:claude
+    def extend(self, mod, fn, prefix_edit=False, lib_wiring="", chunk_extra="", shim="", vis=""):
+        """Append `<vis>fn <fn>() {}` from lib_part1.rs to the existing <mod>.rs."""
+        line = f"{vis}fn {fn}() {{}}\n"
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace(line, ""))
+        body = self.read(f"{SRC}/{mod}.rs") if os.path.exists(self.path(f"{SRC}/{mod}.rs")) else ""
+        if prefix_edit:
+            body = body.replace("fn a() {}", "fn a() { evil(); }")
+        self.write(f"{SRC}/{mod}.rs", body + "\n" + chunk_extra + line)
+        if lib_wiring or shim:
+            self.write(f"{SRC}/lib.rs", lib_wiring + shim + self.read(f"{SRC}/lib.rs"))
+        self.write(MANIFEST, self.read(MANIFEST) + f"[{mod}_more]\n")
+        self.commit(f"refactor(cli-lib): extend {mod}.rs")
+
+    def moved_base(self):
+        """Rebase the fixture so m1.rs (holding `fn a`) already exists."""
+        self.move("m1", "a")
+        self.base = self.head()
+
+    def test_extend_passes(self):
+        self.moved_base()
+        self.extend("m1", "b")
+        self.retarget()
+        self.tag("slice-02-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+        self.assertIn("2 commit(s): 1 MOVE, 1 RETARGET", res.stdout)
+
+    def test_extend_with_pub_use_shim_passes(self):
+        self.write(f"{SRC}/lib_part1.rs", "fn a() {}\npub fn b() {}\nfn c() {}\n")
+        self.commit("visibility")
+        self.moved_base()
+        self.extend("m1", "b", shim="pub use m1::b;\n", vis="pub ")
+        self.tag("slice-02-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
+
+    def test_extend_editing_existing_lines_fails(self):
+        self.moved_base()
+        self.extend("m1", "b", prefix_edit=True)
+        self.tag("slice-02-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: extend edits already-moved text")
+
+    def test_extend_of_missing_module_fails(self):
+        self.extend("m1", "b")
+        self.tag("slice-01-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: extend must modify an existing")
+
+    def test_extend_adding_mod_line_fails(self):
+        self.moved_base()
+        self.extend("m1", "b", lib_wiring="mod m1;\n")
+        self.tag("slice-02-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: extend re-wires m1 in lib.rs (mod x1, use x0)")
+
+    def test_extend_adding_header_is_residue(self):
+        self.moved_base()
+        self.extend("m1", "b", chunk_extra="use crate::*;\n")
+        self.tag("slice-02-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: added/removed lines do not match a pure move")
+
+    def test_extend_appending_mod_declaration_fails(self):
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs") + "mod sneaky;\n")
+        self.commit("sneaky base")
+        self.moved_base()
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace("mod sneaky;\n", ""))
+        self.extend("m1", "b", chunk_extra="mod sneaky;\n")
+        self.tag("slice-02-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: extend appends a submodule declaration: mod sneaky;")
+
+    def test_extend_appending_path_attribute_fails(self):
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs") + "#[path = \"x.rs\"]\n")
+        self.commit("path base")
+        self.moved_base()
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace("#[path = \"x.rs\"]\n", ""))
+        self.extend("m1", "b", chunk_extra="#[path = \"x.rs\"]\n")
+        self.tag("slice-02-r1", self.proof("m1"))
+        self.assertFails("FAIL 3: extend appends a submodule declaration: #[path")
+
+    def test_extend_v7_records_post_append_size(self):
+        self.moved_base()
+        before = self.proof("m1")
+        self.extend("m1", "b")
+        self.tag("slice-02-r1", before)
+        self.assertFails("FAIL 6: tag slice-02-r1 says m1.rs=")
+
     # --- check 4/5 -----------------------------------------------------------
     def test_retarget_edits_lib_part(self):
         self.move("m1", "a")

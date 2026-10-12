@@ -93,6 +93,17 @@ def main():
         manifest = tomllib.load(f)
     spec = manifest["module"][args.module]
     purpose, selectors = spec["purpose"], spec["items"]
+    # trace:TASK-1538 | ai:claude
+    # Append mode: `into = "<mod>"` extends an existing <mod>.rs (the
+    # `refactor(cli-lib): extend <mod>.rs` MOVE form); no header is written
+    # and lib.rs is not re-wired.
+    into = spec.get("into")
+    if into is not None and not re.fullmatch(r"[a-z][a-z0-9_]*", into):
+        sys.exit(f"ERROR: into must be a plain snake_case identifier: {into!r}")
+    target = into or args.module
+    out_path = args.lib.rsplit("/", 1)[0] + f"/{target}.rs"
+    if into and not os.path.exists(out_path):
+        sys.exit(f"ERROR: append target {out_path} does not exist")
     
     parts = args.parts.split(",")
     
@@ -157,7 +168,22 @@ def main():
             n = len(text.splitlines())
             total += n
             print(f"  {r['kind']} {r['name']}  L{r['start']}-{r['end']}  ({n} lines)")
-        print(f"DRY RUN: {len(all_moved_chunks)} items, {total} lines -> {args.module}.rs")
+        print(f"DRY RUN: {len(all_moved_chunks)} items, {total} lines -> {target}.rs"
+              + (" (append)" if into else ""))
+        return
+
+    if into:
+        with open(out_path, encoding="utf-8") as f:
+            existing = f.read()
+        with open(out_path, "a", encoding="utf-8") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            for text, _ in all_moved_chunks:
+                if not text.startswith("\n"):
+                    f.write("\n")
+                f.write(text)
+        moved = sum(len(t.splitlines()) for t, _ in all_moved_chunks)
+        print(f"appended {len(all_moved_chunks)} items ({moved} lines) -> {out_path}")
         return
 
     # Update lib.rs
@@ -180,7 +206,6 @@ def main():
     if not (ok1 and ok2):
         sys.exit("ERROR: could not find mod/glob insertion anchors in lib.rs")
 
-    out_path = args.lib.rsplit("/", 1)[0] + f"/{args.module}.rs"
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(HEADER_FMT.format(purpose=purpose))
         for n, (text, _) in enumerate(all_moved_chunks):

@@ -12,6 +12,13 @@
 # map in the STORY-1488 sketch comment is the authoritative target list.
 # Process per PR: itemtool spans -> extract_module.py -> verify_pr.sh
 # (V2 multiset, V3 fmt, V4 tests, V5 golden, V7 caps) -> PR -> merge.
+#
+# Append entries (advisor signoff 2026-10-12): TOML cannot reopen an existing
+# [module.<m>] table, so items for a module that already exists get their own
+# key with `into = "<m>"`, e.g. [module.kernel_forge_timeout] into = "kernel".
+# extract_module.py appends them to <m>.rs (no header, no lib.rs wiring) and
+# the commit subject is `refactor(cli-lib): extend <m>.rs`; `purpose` is
+# recorded only.
 
 [module.claim]
 purpose = "`aida claim` / `aida unclaim` — operator spec-scoped claim leases (STORY-1488 slice 1)."

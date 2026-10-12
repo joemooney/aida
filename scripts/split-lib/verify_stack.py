@@ -5,7 +5,8 @@ usage: verify_stack.py <base> <head> [--build]
 
 Checks every commit in base..head (oldest first) against the pipelined slice
 protocol (TASK-1538 comments, 2026-10-10 plus the rule-7 amendment):
-  1 class      subject is a MOVE (`refactor(cli-lib): extract <m>.rs`), a
+  1 class      subject is a MOVE (`refactor(cli-lib): extract <m>.rs`, or the
+               append form `refactor(cli-lib): extend <m>.rs`), a
                `retarget:` / `tooling:` commit, or the final slice (detected
                from the diff: it deletes every remaining lib_part*.rs)
   2 spec-id    no spec ID in any subject except the final slice
@@ -17,7 +18,11 @@ protocol (TASK-1538 comments, 2026-10-10 plus the rule-7 amendment):
                lib.rs wiring); each new module receives moved lines; every
                removed -U0 block lands contiguous and in order in one module
                (blocks may reorder among themselves; a final-slice block may
-               split only at a module seam)
+               split only at a module seam). An extend appends to an
+               existing <m>.rs: the parent's file is a byte prefix of the new
+               one, it adds no module, no lib.rs mod/glob line (1n shims only)
+               and no header, and the appended chunk has no `mod ` declaration
+               or `#[path` attribute
   4 retarget   retarget:/tooling: commits change no code line in lib*.rs or in
                a module moved earlier in the range; a retarget may widen a
                source-scan corpus (signed amendment 1e) by adding
@@ -55,7 +60,10 @@ LIB_RS = SRC + "lib.rs"
 MANIFEST = "docs/plans/2026-10-04-story-1488-incremental-manifest.toml"
 SIZE_CAP = 6000
 
-MOVE_SUBJECT = re.compile(r"^refactor\(cli-lib\): extract ([a-z0-9_]+)\.rs\b")
+MOVE_SUBJECT = re.compile(r"^refactor\(cli-lib\): (extract|extend) ([a-z0-9_]+)\.rs\b")
+# trace:TASK-1538 | ai:claude
+# An extend's appended text must not pull in another file as a submodule.
+EXTEND_FORBIDDEN = re.compile(r"^\s*(#\[path\b|(pub(\([^)]*\))? )?mod \w+)")
 # Same set as the pre-commit hook's SPEC_ID_RE (aida-pre-commit.sh).
 SPEC_ID = re.compile(r"(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+")
 LIB_PART = re.compile(r"^aida-cli-lib/src/lib_part[0-9]+\.rs$")
@@ -173,12 +181,15 @@ def moved_pub_items(sha):
                      for m in [PUB_DECL.match(text)] if m)
 
 
-def wiring_ok(path, text, modules, deleted_parts, shim_names=frozenset()):
-    """Is this added/removed line allowed wiring for the file it sits in?"""
+def wiring_ok(path, text, modules, deleted_parts, shim_names=frozenset(), extend=False):
+    """Is this added/removed line allowed wiring for the file it sits in?
+
+    An extend's module is already wired and headed: only 1n shims are allowed.
+    """
     s = text.strip()
     if path == LIB_RS:
         for m in modules:
-            if re.fullmatch(r"(pub\(crate\) )?(mod {0};|use {0}::\*;)".format(m), s):
+            if not extend and re.fullmatch(r"(pub\(crate\) )?(mod {0};|use {0}::\*;)".format(m), s):
                 return True
             # Amendment 1n: a moved bare-`pub` item keeps its crate-root path
             # through a `pub use` shim naming that module; it must not widen
@@ -189,10 +200,29 @@ def wiring_ok(path, text, modules, deleted_parts, shim_names=frozenset()):
                 return all(n in shim_names for n in names)
         return any(s == f'include!("{os.path.basename(p)}");' for p in deleted_parts)
     m = NEW_MODULE.match(path)
-    return bool(m and m.group(1) in modules and HEADER_WIRING.match(s))
+    return bool(not extend and m and m.group(1) in modules and HEADER_WIRING.match(s))
 
 
-def check_purity(sha, modules, deleted_parts, allowed_files):
+# trace:TASK-1538 | ai:claude
+def check_extend(sha, module):
+    """Append-only rules for `refactor(cli-lib): extend <m>.rs`."""
+    path = f"{SRC}{module}.rs"
+    status = dict((p, s) for s, p in name_status(sha))
+    if status.get(path) != "M":
+        return [f"FAIL 3: extend must modify an existing {path} (status {status.get(path, 'unchanged')})"]
+    old = git("show", f"{sha}^:{path}")
+    new = git("show", f"{sha}:{path}")
+    if not new.startswith(old):
+        return [f"FAIL 3: extend edits already-moved text in {path} (parent is not a prefix)"]
+    issues = []
+    for l in new[len(old):].splitlines():
+        if EXTEND_FORBIDDEN.match(l):
+            issues.append(f"FAIL 3: extend appends a submodule declaration: {l.strip()[:80]}")
+            break
+    return issues
+
+
+def check_purity(sha, modules, deleted_parts, allowed_files, extend=False):
     issues = []
     files = [p for _, p in name_status(sha)]
     odd = [f for f in files if f not in allowed_files and not LIB_ANY.match(f)]
@@ -200,7 +230,7 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
         issues.append(f"FAIL 3: file outside move set: {', '.join(odd)}")
 
     shims = moved_pub_items(sha)
-    wiring = lambda path, text: wiring_ok(path, text, modules, deleted_parts, shims)
+    wiring = lambda path, text: wiring_ok(path, text, modules, deleted_parts, shims, extend)
     added, removed = collections.Counter(), collections.Counter()
     ok_add, ok_rem = collections.Counter(), collections.Counter()
     lib_adds = collections.Counter()
@@ -273,7 +303,9 @@ def check_purity(sha, modules, deleted_parts, allowed_files):
     for m in sorted(modules):
         mods = sum(n for l, n in lib_adds.items() if re.fullmatch(rf"(pub\(crate\) )?mod {m};", l))
         uses = sum(n for l, n in lib_adds.items() if re.fullmatch(rf"(pub\(crate\) )?use {m}::\*;", l))
-        if mods != 1 or uses != 1:
+        if extend and (mods or uses):
+            issues.append(f"FAIL 3: extend re-wires {m} in lib.rs (mod x{mods}, use x{uses})")
+        elif not extend and (mods != 1 or uses != 1):
             issues.append(f"FAIL 3: module {m} not wired exactly once in lib.rs (mod x{mods}, use x{uses})")
     return issues
 
@@ -412,9 +444,12 @@ def main():
             if cls in ("MOVE", "FINAL"):
                 added_mods = [NEW_MODULE.match(p).group(1) for s, p in status
                               if s == "A" and NEW_MODULE.match(p) and not LIB_PART.match(p)]
+                extend = cls == "MOVE" and mmove.group(1) == "extend"
                 if cls == "MOVE":
-                    modules = [mmove.group(1)]
-                    if modules[0] not in added_mods:
+                    modules = [mmove.group(2)]
+                    if extend:
+                        issues += check_extend(sha, modules[0])
+                    elif modules[0] not in added_mods:
                         issues.append(f"FAIL 3: commit does not create {SRC}{modules[0]}.rs")
                     stray = [m for m in added_mods if m not in modules]
                     if stray:
@@ -422,7 +457,7 @@ def main():
                 else:
                     modules = added_mods
                 allowed = {f"{SRC}{m}.rs" for m in modules} | {MANIFEST}
-                issues += check_purity(sha, set(modules), parts_deleted, allowed)
+                issues += check_purity(sha, set(modules), parts_deleted, allowed, extend)
                 for m in modules:
                     n = line_count(sha, f"{SRC}{m}.rs")
                     if n is not None and n > SIZE_CAP:
