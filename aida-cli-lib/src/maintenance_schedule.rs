@@ -4636,6 +4636,87 @@ enabled = true
         assert_eq!(ledger.failure_trips.last().unwrap().at, at(20));
     }
 
+    // BUG-1961: the tick persists through the batch writer, whose three-way
+    // merge dropped failure_trips (and the route job's due_failure) whenever
+    // the ledger file already existed. Two failing ticks must leave two trips,
+    // and a re-fired route job must name the NEW trip. trace:BUG-1961 | ai:claude
+    #[test]
+    fn two_failing_ticks_append_two_trips_and_route_names_the_newest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let guard = || {
+            config(vec![task(
+                "performance-guard",
+                "1h",
+                "doctor check performance --fail-on-findings",
+            )])
+        };
+        let failing = |_root: &Path, _cmd: &ScheduledCommand| {
+            Ok(TaskOutcome {
+                status: 1,
+                stdout: performance_json(96),
+                stderr: String::new(),
+            })
+        };
+        let route_cfg = || {
+            config(vec![seat_task(
+                "performance-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed"],
+            )])
+        };
+        let mut state = ScheduleState::default();
+        let mut route_state = ScheduleState::default();
+        route_state.tasks.insert(
+            "performance-guard-route".into(),
+            TaskState {
+                last_seen_event_ts: Some(at(11)),
+                ..Default::default()
+            },
+        );
+
+        let mut trip_ids = Vec::new();
+        for (n, hour) in [12u32, 14].into_iter().enumerate() {
+            tick_with_executor(tmp.path(), guard(), &mut state, at(hour), false, failing).unwrap();
+            let ledger = schedule_ledger::load(&store, "performance-guard").unwrap();
+            assert_eq!(ledger.result.as_deref(), Some("failed:1"));
+            assert_eq!(ledger.last_run, Some(at(hour)));
+            assert_eq!(ledger.failure_trips.len(), n + 1, "{ledger:?}");
+            let trip = ledger.failure_trips.last().unwrap();
+            assert_eq!(trip.at, at(hour));
+            assert_eq!(trip.performance[0].denominator, 96);
+            trip_ids.push(trip.trip_id.clone());
+
+            let events = events::read_all(tmp.path());
+            tick_core(
+                tmp.path(),
+                route_cfg(),
+                &mut route_state,
+                at(hour) + chrono::Duration::minutes(5),
+                false,
+                |_root, _cmd| unreachable!(),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let route = schedule_ledger::load(&store, "performance-guard-route").unwrap();
+            assert_eq!(
+                route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+                Some(trip.trip_id.as_str()),
+                "route job must point at the trip it was raised for"
+            );
+        }
+        assert_ne!(trip_ids[0], trip_ids[1]);
+        let ledger = schedule_ledger::load(&store, "performance-guard").unwrap();
+        let ids: Vec<_> = ledger
+            .failure_trips
+            .iter()
+            .map(|t| t.trip_id.clone())
+            .collect();
+        assert_eq!(ids, trip_ids);
+    }
+
     #[test]
     fn emit_cron_uses_valid_crontab_prefixes() {
         assert_eq!(cron_interval(parse_duration("1h").unwrap()), "0 * * * *");

@@ -447,9 +447,28 @@ pub(crate) fn reapply_delta(
         note,
         due_since,
         due_reason,
+        // BUG-1961: the routed-failure pointer the route job shows as its
+        // "trip evidence" was dropped whenever the route ledger already
+        // existed. trace:BUG-1961 | ai:claude
+        due_failure,
         episode,
         cold_boot_at
     );
+    // BUG-1961: failure_trips is an append-only history, not a scalar, so a
+    // whole-field take would clobber a concurrent writer's trips. Append the
+    // trips THIS tick added (in `next`, not in `base`) onto the fresh list by
+    // trip_id, then re-apply the cap. trace:BUG-1961 | ai:claude
+    for trip in &next.failure_trips {
+        let new_this_tick = !base.failure_trips.iter().any(|t| t.trip_id == trip.trip_id);
+        let already_on_disk = out.failure_trips.iter().any(|t| t.trip_id == trip.trip_id);
+        if new_this_tick && !already_on_disk {
+            out.failure_trips.push(trip.clone());
+        }
+    }
+    let excess = out.failure_trips.len().saturating_sub(MAX_FAILURE_TRIPS);
+    if excess > 0 {
+        out.failure_trips.drain(..excess);
+    }
     out
 }
 
@@ -666,6 +685,55 @@ mod tests {
         let yaml = serde_yaml::to_string(&current).unwrap();
         assert!(!yaml.contains("secret"));
         assert_eq!(serde_yaml::from_str::<JobLedger>(&yaml).unwrap(), current);
+    }
+
+    // trace:BUG-1961 | ai:claude
+    #[test]
+    fn reapply_delta_appends_new_trips_and_keeps_concurrent_ones() {
+        let trip = |id: &str| FailureTrip {
+            trip_id: id.into(),
+            at: at(0, 0),
+            status: 1,
+            performance: Vec::new(),
+            audit_error: None,
+        };
+        let mut base = JobLedger::new("performance-guard");
+        base.failure_trips.push(trip("old"));
+        // A concurrent writer appended "theirs" since this tick loaded base.
+        let mut fresh = base.clone();
+        fresh.failure_trips.push(trip("theirs"));
+        let mut next = base.clone();
+        next.failure_trips.push(trip("mine"));
+        next.result = Some("failed:1".into());
+        next.due_failure = Some(RoutedFailure {
+            trip_id: "mine".into(),
+            performance: Vec::new(),
+            job: None,
+            error: None,
+        });
+        let merged = reapply_delta(Some(&base), &next, Some(&fresh));
+        let ids: Vec<_> = merged
+            .failure_trips
+            .iter()
+            .map(|t| t.trip_id.as_str())
+            .collect();
+        assert_eq!(ids, ["old", "theirs", "mine"]);
+        assert_eq!(merged.due_failure.as_ref().unwrap().trip_id, "mine");
+        // Idempotent on retry: re-merging onto the result does not duplicate.
+        let again = reapply_delta(Some(&base), &next, Some(&merged));
+        assert_eq!(again.failure_trips.len(), 3);
+
+        // The cap still holds after the merge.
+        let mut full = JobLedger::new("performance-guard");
+        for i in 0..MAX_FAILURE_TRIPS {
+            full.failure_trips.push(trip(&format!("t{i}")));
+        }
+        let mut next = full.clone();
+        next.failure_trips.push(trip("newest"));
+        let merged = reapply_delta(Some(&full), &next, Some(&full));
+        assert_eq!(merged.failure_trips.len(), MAX_FAILURE_TRIPS);
+        assert_eq!(merged.failure_trips.last().unwrap().trip_id, "newest");
+        assert_eq!(merged.failure_trips.first().unwrap().trip_id, "t1");
     }
 
     #[test]
