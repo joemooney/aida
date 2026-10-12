@@ -162,6 +162,62 @@ rm -f "$FAKEHOME/.aida/solo.toml"
 # 9. advisor + no file_path (Bash-like input) → allow (0)
 assert_exit "no file_path → allowed" 0 "$(run "$(printf "$NOFILE" S7)")"
 
+# 10. BUG-1976: the guard is scoped to the session's repository and its linked
+# worktrees. A path outside them passes silently without arming the marker; a
+# path whose repository cannot be determined is still guarded.
+# trace:BUG-1976 | ai:claude
+FIX="$TMP/fixture-repo"
+SIB="$TMP/fixture-sibling"
+OUTSIDE="$TMP/outside"
+OTHER="$TMP/other-repo"
+mkdir -p "$FIX/src" "$OUTSIDE" "$OTHER/src"
+git -C "$FIX" init -q -b main
+git -C "$FIX" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+git -C "$FIX" worktree add -q -b sib "$SIB" >/dev/null 2>&1
+mkdir -p "$SIB/src"
+git -C "$OTHER" init -q -b main
+ln -s "$FIX" "$TMP/fixture-link"
+
+# run_in <cwd> <session> <file_path> — advisor hook run from <cwd>.
+run_in() {
+    (cd "$1" && printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$2" "$3" | \
+        env -u AIDA_AUTO_COMPLETE AIDA_SESSION_ROLE=advisor TMPDIR="$TMP" HOME="$FAKEHOME" \
+        "$HOOK" >/dev/null 2>&1; echo $?)
+}
+assert_no_marker() {
+    if [ -e "$TMP/aida-advisor-guard-$2" ]; then
+        echo "FAIL - $1 armed the fire-once marker"
+        fail=1
+    else
+        echo "ok   - $1 left no marker"
+    fi
+}
+
+assert_exit "outside .py from repo cwd → allowed" 0 "$(run_in "$FIX" out-py "$OUTSIDE/x.py")"
+assert_no_marker "outside .py" out-py
+assert_exit "outside .rs from repo cwd → allowed" 0 "$(run_in "$FIX" out-rs "$OUTSIDE/x.rs")"
+assert_no_marker "outside .rs" out-rs
+assert_exit "code in another repository → allowed" 0 "$(run_in "$FIX" other "$OTHER/src/x.rs")"
+assert_no_marker "another repository" other
+assert_exit "inside repo .py → soft-block" 2 "$(run_in "$FIX" in-py "$FIX/src/x.py")"
+assert_exit "inside repo .py repeats → allowed (fire-once)" 0 "$(run_in "$FIX" in-py "$FIX/src/x.py")"
+assert_exit "inside repo .rs → soft-block" 2 "$(run_in "$FIX" in-rs "$FIX/src/x.rs")"
+assert_exit "relative path inside repo → soft-block" 2 "$(run_in "$FIX/src" rel "x.rs")"
+assert_exit "sibling linked worktree → soft-block" 2 "$(run_in "$FIX" sib "$SIB/src/x.rs")"
+assert_exit "main checkout from a sibling cwd → soft-block" 2 "$(run_in "$SIB" sib-main "$FIX/src/x.rs")"
+assert_exit "symlinked path into the repo → soft-block" 2 "$(run_in "$OUTSIDE" link "$TMP/fixture-link/src/x.rs")"
+assert_exit "missing target directory → still guarded" 2 "$(run_in "$FIX" missing "$OUTSIDE/nope/x.rs")"
+assert_exit "cwd outside any repository → still guarded" 2 "$(run_in "$OUTSIDE" nocwd "$OUTSIDE/x.rs")"
+NOGIT="$TMP/no-git-bin"
+mkdir -p "$NOGIT"
+for tool in dirname basename cat awk touch; do
+    ln -sf "$(command -v "$tool")" "$NOGIT/$tool"
+done
+nogit_actual=$(cd "$FIX" && printf '{"session_id":"nogit","tool_input":{"file_path":"%s"}}' "$OUTSIDE/x.rs" | \
+    env -u AIDA_AUTO_COMPLETE AIDA_SESSION_ROLE=advisor TMPDIR="$TMP" HOME="$FAKEHOME" \
+    PATH="$NOGIT" "$HOOK" >/dev/null 2>&1; echo $?)
+assert_exit "git missing → still guarded" 2 "$nogit_actual"
+
 # BUG-1751: prove the parser works when grep has no PCRE support.
 REAL_GREP=$(command -v grep)
 PCRE_SHIM="$TMP/no-pcre"
