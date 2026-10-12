@@ -9,6 +9,24 @@ use std::process::{Child, Command, Output, Stdio};
 // validated advisor seat grant (delegating the launch seats) instead.
 mod support;
 
+/// Hang guard for each fixture `aida` invocation. It exists only to stop a
+/// launch route that slipped past the drain-lock gate (a real drive or a
+/// `--watch` loop) from hanging the suite. It is not a speed budget.
+///
+/// BUG-1966: the old 30 s guard made this test flaky under load. The commands
+/// that build a fresh SQLite cache are the fixture `add` and the sibling
+/// clone's first `queue work`. Each makes ~35 fsyncs, about 4 s on an idle
+/// host. With two `cargo test --workspace` lanes saturating the disk they ran
+/// past 30 s, and `timeout` killed them with exit 124. The `add` was killed
+/// mid-write (the line-84 failure). The sibling's `queue work` had already
+/// hit the gate and printed the "proceeding" warning. It was killed while its
+/// cache connection closed (checkpoint fsyncs) and before the refusal reached
+/// stderr: the "missed holder gate" failure. The gate itself was never
+/// skipped. Injecting fsync delay with `strace` reproduces both failures
+/// exactly.
+// trace:BUG-1966 | ai:claude
+const HANG_GUARD_SECS: &str = "600";
+
 struct Holder(Child);
 impl Drop for Holder {
     fn drop(&mut self) {
@@ -44,15 +62,19 @@ struct Fixture {
 impl Fixture {
     fn run(&self, cwd: &Path, args: &[&str]) -> Output {
         let mut cmd = Command::new("timeout");
-        cmd.args(["--kill-after=5", "30", env!("CARGO_BIN_EXE_aida")])
-            .args(args)
-            .current_dir(cwd)
-            .env_clear()
-            .env("PATH", format!("{}:/usr/bin:/bin", self.bin.display()))
-            .env("HOME", &self.home)
-            .env("TMPDIR", self._tmp.path())
-            .env("AIDA_USER", "fixture")
-            .env("AIDA_SESSION_ROLE", "advisor");
+        cmd.args([
+            "--kill-after=10",
+            HANG_GUARD_SECS,
+            env!("CARGO_BIN_EXE_aida"),
+        ])
+        .args(args)
+        .current_dir(cwd)
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", self.bin.display()))
+        .env("HOME", &self.home)
+        .env("TMPDIR", self._tmp.path())
+        .env("AIDA_USER", "fixture")
+        .env("AIDA_SESSION_ROLE", "advisor");
         // ADR-66: the role env is only a hint; the advisor-gated steps ride a
         // validated seat grant delegating the launchable seats (set after
         // env_clear so it survives). trace:STORY-1473 | ai:claude
@@ -65,14 +87,26 @@ impl Fixture {
         ) {
             cmd.env("AIDA_SESSION_GRANT", grant);
         }
-        cmd.env("AIDA_HEADLESS", "1")
+        let out = cmd
+            .env("AIDA_HEADLESS", "1")
             .env("AIDA_NO_HUMAN_ACKNOWLEDGED", "1")
             .env("AIDA_TELEMETRY", "0")
             .env("AIDA_DRAIN_LOCK_STALE_SECS", "0")
             .env("AIDA_OUTPUT_FORMAT", "human")
             .env("SENTINEL", &self.sentinel)
             .output()
-            .unwrap()
+            .unwrap();
+        // A guard kill truncates the output, so a later assertion would
+        // misreport it as a missed gate. Name the kill instead.
+        // trace:BUG-1966 | ai:claude
+        assert!(
+            !matches!(out.status.code(), Some(124) | Some(137)),
+            "{cwd:?} {args:?}: killed by the {HANG_GUARD_SECS}s hang guard ({}): {}{}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out
     }
     fn ok(&self, args: &[&str]) -> String {
         let out = self.run(&self.repo, args);
@@ -81,7 +115,7 @@ impl Fixture {
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
-        assert!(out.status.success(), "{args:?}: {text}");
+        assert!(out.status.success(), "{args:?} ({}): {text}", out.status);
         text
     }
     fn new() -> Self {
@@ -171,8 +205,9 @@ impl Fixture {
 fn two_hour_live_lock_blocks_all_launch_entry_points() {
     let f = Fixture::new();
     let mut holder = Holder(
+        // Outlive any slow run: Drop kills it. trace:BUG-1966 | ai:claude
         Command::new("sleep")
-            .arg("300")
+            .arg("infinity")
             .stdin(Stdio::null())
             .spawn()
             .unwrap(),
