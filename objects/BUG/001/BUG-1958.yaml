@@ -23,12 +23,12 @@ description: |
   5. docs/cli/01-getting-started.md (show / edit / done sections) documents the `linkage:` line and the completion warning with its `doctor:no-code` opt-out.
   6. The completion warning appends "(shallow clone)" when `git rev-parse --is-shallow-repository` is true; unit test on the formatter.
   7. The trace-hit parser handles paths containing ':' (e.g. split on `<ref>:<path>:` using `git grep --null` / `-z`); unit test with a ':' path.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:48:46.755538061Z
-modified_at: 2026-10-12T20:29:37.832122245Z
+modified_at: 2026-10-12T22:29:52.759887596Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -57,6 +57,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1323c-91f4-77b1-96f9-f51f8af8aa08
+  author: aida-auto-bump
+  timestamp: 2026-10-12T22:29:52.756848932Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1323c-91f7-7a10-b08f-4fc1582f9042
+  timestamp: 2026-10-12T22:29:52.759878833Z
+  agent: implementer
+  commit_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
+  summary: Completed via merge 6dfba7ac
+  review_verdict: approved
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
@@ -65,3 +79,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: acfbf100-b965-4582-a364-9323fd734a00
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-12T22:29:52.756844208Z
+  completion_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
