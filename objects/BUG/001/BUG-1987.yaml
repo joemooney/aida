@@ -10,12 +10,12 @@ description: |
   Impact: test flake in the STORY-1650 flow tests; in production a rare mislabelled "index busy" note (cosmetic, the fallback still answers).
 
   Acceptance: the flow tests that assert a specific IndexMiss are deterministic under fork pressure (e.g. a cfg(test) retry of the classification while Busy is spurious, mirroring test_support::serve_locked, or a test hook that pins indexer_running), with no assertion weakened; consider whether production should retry is_held briefly before reporting Busy.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T19:32:46.310077811Z
+modified_at: 2026-10-12T19:58:00.178095368Z
 req_type: Bug
 tags:
 - ci
@@ -56,6 +56,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a131b1-817d-7b52-b93f-a567d12e5c71
+  author: aida-auto-bump
+  timestamp: 2026-10-12T19:57:59.037503621Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a131b1-85f2-7832-b21d-5efa42e2efeb
+  timestamp: 2026-10-12T19:58:00.178087Z
+  agent: implementer
+  commit_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
+  summary: Completed via merge 84ff1cf0
+  review_verdict: approved
 filed_at:
   code_sha: 17ff749954bca6e86e47f1d3b237d8bb53f531ed
   branch: main
@@ -64,3 +78,7 @@ filed_at:
   aida_build_sha: 95f15a20d4
   vendor: claude
   session: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-12T19:57:59.037499756Z
+  completion_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
