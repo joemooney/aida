@@ -127,3 +127,125 @@ fn the_dirty_gate_ignores_only_the_sessions_own_runtime_links() {
         ]
     );
 }
+
+fn git_in(dir: &Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run git");
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+}
+
+/// BUG-1988: with `.aida/` NOT gitignored and nothing tracked under it, git
+/// collapses it to a bare `?? .aida/`. When everything under it is a session
+/// runtime link the dirty gate must not refuse; a real file under it still
+/// counts, and is named on its own.
+// trace:BUG-1988 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join("wt");
+    let parent = tmp.path().join("parent");
+    std::fs::create_dir_all(&wt).unwrap();
+    std::fs::create_dir_all(parent.join("sessions")).unwrap();
+    git_in(&wt, &["init", "-q", "-b", "main"]);
+    git_in(
+        &wt,
+        &[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    std::fs::create_dir_all(wt.join(".aida")).unwrap();
+    std::os::unix::fs::symlink(parent.join("sessions"), wt.join(".aida/sessions")).unwrap();
+    std::os::unix::fs::symlink(parent.join("cache.db"), wt.join(".aida/cache.db")).unwrap();
+    std::os::unix::fs::symlink(&parent, wt.join(".aida-store")).unwrap();
+
+    let raw = worktree_dirty_entries(&wt);
+    assert!(
+        raw.iter().any(|e| e == "?? .aida/"),
+        "fixture must reproduce the collapsed entry: {raw:?}"
+    );
+    assert!(
+        dirty_entries_ignoring_runtime_links(&wt, raw).is_empty(),
+        "runtime links alone are not work"
+    );
+
+    std::fs::write(wt.join(".aida/notes.txt"), "real work").unwrap();
+    assert_eq!(
+        dirty_entries_ignoring_runtime_links(&wt, worktree_dirty_entries(&wt)),
+        vec!["?? .aida/notes.txt".to_string()]
+    );
+}
+
+/// BUG-1988: an unverified scan (no holder seen) is downgraded on every
+/// call, but its warning is emitted once per session end. A visible holder
+/// still refuses and emits nothing.
+// trace:BUG-1988 | ai:claude
+#[test]
+fn an_unverified_scan_warns_once_across_the_three_checks() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path();
+    let unverified = |p: &Path| -> Result<(), WorktreeInUse> {
+        Err(WorktreeInUse {
+            worktree: p.to_path_buf(),
+            holders: Vec::new(),
+            unverified: Some("separate pid namespace".into()),
+            pid_namespace: true,
+        })
+    };
+    let warned = Cell::new(false);
+    let emitted = std::cell::RefCell::new(Vec::<String>::new());
+    let check = interactive_holder_check(unverified, &warned, |w| {
+        emitted.borrow_mut().push(w.to_string())
+    });
+    assert!(check(wt).is_ok());
+    assert!(recheck_holders_before_teardown(wt, false, &check).is_ok());
+    assert!(recheck_holders_before_teardown(wt, false, &check).is_ok());
+    drop(check);
+    let emitted = emitted.into_inner();
+    assert_eq!(emitted.len(), 1, "{emitted:?}");
+    assert!(emitted[0].contains("separate pid namespace"), "{emitted:?}");
+
+    let warned = Cell::new(false);
+    let check = interactive_holder_check(
+        |p: &Path| Err(holder_at(p)),
+        &warned,
+        |w| panic!("a holder must not be downgraded to a warning: {w}"),
+    );
+    let refusal =
+        recheck_holders_before_teardown(wt, false, &check).expect_err("a visible holder refuses");
+    assert!(refusal.contains("pid 4242"), "{refusal}");
+}
+
+/// BUG-1988: the failed-salvage refusal says the session was not ended and
+/// names the command that finishes it.
+// trace:BUG-1988 | ai:claude
+#[test]
+fn the_failed_salvage_refusal_names_the_recovery_command() {
+    let msg = session_end_salvage_failure_message(
+        "20261012-abc",
+        Path::new("/pool/wt-1"),
+        Path::new("/repo"),
+        &"Not a directory (os error 20)",
+        "",
+    );
+    assert!(msg.contains("/pool/wt-1"), "{msg}");
+    assert!(msg.contains("Not a directory"), "{msg}");
+    assert!(msg.contains("NOT ended"), "{msg}");
+    assert!(msg.contains("lease is kept"), "{msg}");
+    assert!(msg.contains("/repo/.aida/salvage"), "{msg}");
+    assert!(msg.contains("`aida session end 20261012-abc`"), "{msg}");
+}

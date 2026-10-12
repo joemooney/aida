@@ -497,6 +497,10 @@ fn session_end_from_inside_with_its_own_helper_running_ends_cleanly() {
 /// process in the tree while it waits, then lets it continue. Returns the
 /// output and the pid of the live process (still running).
 // trace:BUG-1986 | ai:claude
+// BUG-1988: the pause hook only exists in debug builds, so under
+// `--profile agent` (debug-assertions off) these would wait 60 s for a pause
+// that never comes and fail. trace:BUG-1988 | ai:claude
+#[cfg(debug_assertions)]
 fn end_with_a_holder_started_at(s: &Session, stage: &str) -> (Output, KillOnDrop) {
     let pause = tempfile::tempdir().expect("pause dir");
     let mut cmd = aida(&s.repo, &s.home);
@@ -526,6 +530,7 @@ fn end_with_a_holder_started_at(s: &Session, stage: &str) -> (Output, KillOnDrop
 // refuses before anything is touched.
 // trace:BUG-1986 | ai:claude
 #[test]
+#[cfg(debug_assertions)] // trace:BUG-1988 | ai:claude
 fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
@@ -550,6 +555,7 @@ fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
 // returns the tree to the pool.
 // trace:BUG-1986 | ai:claude
 #[test]
+#[cfg(debug_assertions)] // trace:BUG-1988 | ai:claude
 fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start_pooled();
@@ -592,4 +598,70 @@ fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
     );
     assert!(!s.lease_exists(), "lease released on the re-run");
     assert!(s.worktree.is_dir(), "pooled tree returned, not removed");
+}
+
+// BUG-1988: a dirty pooled tree whose pre-return salvage fails stops the end
+// before the lease is deleted: the session is not ended, the tree keeps its
+// work and its runtime links, and the error names the command that finishes
+// the end. Once the salvage can be written, that command does.
+// trace:BUG-1988 | ai:claude
+#[test]
+fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let branch_before = s.worktree_branch();
+    std::fs::write(s.worktree.join("work.txt"), "uncommitted work").unwrap();
+    // Make the salvage dir uncreatable: a regular file sits where it goes.
+    let blocker = s.repo.join(".aida").join("salvage");
+    let _ = std::fs::remove_dir_all(&blocker);
+    std::fs::write(&blocker, "not a dir").unwrap();
+
+    let out = s.end(&s.repo, &[]);
+    let msg = text(&out);
+    assert!(
+        !out.status.success(),
+        "a failed salvage must stop the end:\n{msg}"
+    );
+    assert!(
+        msg.contains("NOT ended"),
+        "says the session was not ended:\n{msg}"
+    );
+    assert!(
+        msg.contains(&format!("aida session end {}", s.id)),
+        "names the recovery command:\n{msg}"
+    );
+    assert!(s.lease_exists(), "lease must survive a failed salvage");
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert_eq!(s.worktree_branch(), branch_before, "tree must not be reset");
+    assert_eq!(
+        std::fs::read_to_string(s.worktree.join("work.txt")).unwrap(),
+        "uncommitted work",
+        "the uncommitted work must survive"
+    );
+    for link in [".aida-store", ".aida/sessions", ".aida/cache.db"] {
+        assert!(
+            s.worktree.join(link).is_symlink(),
+            "{link} must be restored after the failed salvage"
+        );
+    }
+
+    // Fix the cause and run the named command: the end goes through and the
+    // work is salvaged before the tree returns to the pool.
+    std::fs::remove_file(&blocker).unwrap();
+    let out = s.end(&s.repo, &[]);
+    assert!(
+        out.status.success(),
+        "the recovery command must end the session:\n{}",
+        text(&out)
+    );
+    assert!(!s.lease_exists(), "lease released on the re-run");
+    assert!(s.worktree.is_dir(), "pooled tree returned, not removed");
+    let salvaged: Vec<String> = std::fs::read_dir(&blocker)
+        .expect("salvage dir created on the re-run")
+        .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap_or_default())
+        .collect();
+    assert!(
+        salvaged.iter().any(|p| p.contains("uncommitted work")),
+        "the work was salvaged before the reset: {salvaged:?}"
+    );
 }

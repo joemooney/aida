@@ -350,12 +350,26 @@ pub fn check_removal_interactive_in(
 /// verdict with holders is never downgraded.
 // trace:BUG-1986 | ai:claude
 fn interactive_verdict(verdict: Result<(), WorktreeInUse>) -> Result<(), WorktreeInUse> {
-    match verdict {
-        Err(e) if e.unverified.is_some() && e.holders.is_empty() => {
-            eprintln!("warning: {e}; removing it without that check");
-            Ok(())
+    downgrade_unverified(verdict).map(|warning| {
+        if let Some(warning) = warning {
+            eprintln!("{warning}");
         }
-        other => other,
+    })
+}
+
+/// The interactive verdict without printing: `Ok(Some(warning))` when an
+/// unverified scan that found no holder is downgraded, so a caller that
+/// checks the same tree several times can print the warning once.
+// trace:BUG-1988 | ai:claude
+pub fn downgrade_unverified(
+    verdict: Result<(), WorktreeInUse>,
+) -> Result<Option<String>, WorktreeInUse> {
+    match verdict {
+        Ok(()) => Ok(None),
+        Err(e) if e.unverified.is_some() && e.holders.is_empty() => Ok(Some(format!(
+            "warning: {e}; removing it without that check"
+        ))),
+        Err(e) => Err(e),
     }
 }
 
