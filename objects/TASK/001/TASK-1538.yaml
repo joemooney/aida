@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T01:17:10.698334105Z
+modified_at: 2026-10-12T02:32:45.596734707Z
 req_type: Task
 tags:
 - closure:pending
@@ -705,6 +705,19 @@ comments:
   created_at: 2026-10-12T01:17:10.698334105Z
   modified_at: 2026-10-12T01:17:10.698334105Z
   session_id: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+- id: 01a12df4-931c-77d2-8109-9ff2df7e9227
+  author: joe
+  content: |-
+    RUN 10 READY FOR REVIEW (PR #2545, branch slice-41, head d6cd452383, base main 1e3d9aaddd). Four MOVEs and two RETARGETs, about 11.2k lines. Tags are pushed, each proven at its own SHA (warnings 0/0, cargo test --workspace --no-fail-fast 10309/10309, 8 ignored):
+    - slice-41-r1 phase_gates 2bf27618f2 (1774)
+    - slice-42-r1 status_prs 6b8be96d36 (4373)
+    - slice-43-r1 ps_integrate ca16e9006b (3261, + retarget: the bug_1683 drain-lock scan corpus gains ps_integrate.rs, because handle_integrate moved)
+    - slice-44-r1 drain_gate d6cd452383 (1787, + retarget: config-trust probe site, lib.rs 17->16; adr9 allowlist src/lib.rs -> src/drain_gate.rs, positive check reads drain_gate.rs)
+    NEEDS A RULING: the adr9 retarget. run_auto_complete, the queue work --auto-complete handler, was the last production orchestrate_with_resume caller in lib.rs. Its allowlist entry now follows it instead of staying as a dead lib.rs entry. This is the analogue of the run-7 adr9 ruling, but it moves the handler entry rather than adding a test-only one.
+    verify_stack origin/main..slice-41 --build: 6 commits (4 MOVE, 2 RETARGET), checks 1-9 PASS. check-ci-fast: 26 gates pass. Straddlers left for the Q8 sweep: run_worker_gc and worker_gc_target_still_dead (between queue_misc and drain_gate); pull_skip_warning, pull_code_start_line and pull_store_start_line (between burndown_run and status_sections; only store_push_pull calls them). Build is running on #2545. Q10 is still open.
+  created_at: 2026-10-12T02:32:45.596734707Z
+  modified_at: 2026-10-12T02:32:45.596734707Z
+  session_id: 1368f3cd-44f4-4634-a902-b4dfd9168161
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
