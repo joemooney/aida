@@ -2,7 +2,7 @@ id: 01a127c3-4180-7531-a745-c1560c8a4546
 spec_id: BUG-1930
 agreed_id: BUG-1930
 title: Drain misreports a clean phase-1 stop as lease-conflict and keeps draining into the same systemic failure
-description: |-
+description: |
   ## Problem
   Each implementer exited cleanly (result event, $0.52-$1.43) after explaining that writes were denied. The drain then retried phase 1, failed with 'phase 1 retry cannot reclaim predecessor lease <id> after 3 liveness re-probe(s)', and shelved the spec as 'lease-conflict — not auto-drafting a BUG'. Two problems:
   1. Wrong classification. The real cause, the agent stopping on permission denials, is reported as a lease conflict, so triage chases the wrong thing. The headless stream already says '⚠ permission denied: Edit, Edit, …', so the drain could classify it. The reclaim failure itself looks like a recurrence of BUG-1078 (transient-retry lease reclaim races predecessor teardown), here after a clean exit.
@@ -11,19 +11,23 @@ description: |-
   Evidence (aida-relay, 2026-10-10, aida 0.15.0 fe67235+dirty, user ~/.aida/agents.toml [agents] contained = true): 'aida drain start --no-human' on BUG-81, BUG-83, STORY-85 shipped 0 of 3 in 7m42s, using 1.79M tokens (~$2.66). Logs: /home/joe/ai/aida-relay/.aida/headless-logs/{bug-81-01a127b3,bug-83-01a127b4,story-85-01a127b6}-*.jsonl
 
   ## Acceptance
-  - A phase that ends with permission denials as its only blocker is shelved as 'permission-denied' (or 'environment'), naming the denied tools, and no retry is attempted.
-  - Retrying after a clean predecessor exit reclaims the lease; add a regression test next to BUG-1078's.
-  - After N (default 2) consecutive phase failures of the same environmental class, the drain halts with one message naming the cause and the fix, and leaves the rest of the queue untouched.
-  - The drain summary distinguishes 'environment blocked' from per-spec failures.
+  - A phase whose headless stream recorded permission denials, and which produced no commit or PR, is classified as a distinct environmental failure kind (permission-denied / environment), not LeaseConflict. The shelve text names the denied tools, and no phase-1 retry is attempted. Unit test over a synthetic headless stream.
+  - Retrying after a clean predecessor exit (result event seen, PID gone) reclaims the lease on the first probe instead of returning LeaseConflict. Regression test next to BUG-1078's tests.
+  - After N consecutive phase failures of the same environmental class (default 2, configurable in the orchestrator config), the drain halts with one message naming the cause and the fix, leaves the rest of the queue untouched, and exits non-zero. Unit test with three queued specs: the third is never dispatched.
+  - The drain summary has an "environment blocked" line distinct from per-spec failures, and the JSON/TOON output carries a `halt_reason` field.
+
+  ## Non-goals
+  - No change to lease liveness probing beyond the clean-exit case.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-11T07:17:39.145962611Z
+modified_at: 2026-10-12T05:49:10.245359004Z
 req_type: Bug
 tags:
 - drain
+- groomed:night
 - lease
 - regression
 - triage
