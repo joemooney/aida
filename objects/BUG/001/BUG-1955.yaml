@@ -3,12 +3,12 @@ spec_id: BUG-1955
 agreed_id: BUG-1955
 title: 'Flaky: task_1507 history_cache_merge_commit_decodes_like_git_show_cc fails with git ''unable to create temporary file'' on CI'
 description: 'Main CI on 36c906f453 (the STORY-1650 #2491 merge, run on 2026-10-11 08:11Z) failed in task_1507_history_cache_tests::history_cache_merge_commit_decodes_like_git_show_cc (tests/task_1507_history_cache_tests.rs:215). The fixture''s git commit -q --allow-empty failed: ''error: unable to create temporary file: No such file or directory / fatal: failed to write commit object''. The fixture repo or its .git/objects disappeared mid-test. The same run also panicked in global_queue::tests::bug_1682_process_child (bug_1682_global_queue_tests.rs:77). The next main run (c70c4b1cfa) passed, and so did PR #2491''s own Build, so this is nondeterministic. Suspects: a tempdir dropped early, or another test mutating shared HOME/TMPDIR/cwd while it runs (git_in sets HOME=dir). Acceptance: identify the interfering test or the early drop, fix the isolation, and show the test stable over repeated full-workspace runs.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:38:24.217096943Z
-modified_at: 2026-10-12T06:00:36.683682117Z
+modified_at: 2026-10-12T14:55:41.466890167Z
 req_type: Bug
 tags:
 - ci
@@ -23,6 +23,14 @@ comments:
   created_at: 2026-10-12T06:00:36.683682117Z
   modified_at: 2026-10-12T06:00:36.683682117Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309c-bf9a-73b3-8364-26cfc8adcdf0
+  author: joe
+  timestamp: 2026-10-12T14:55:41.466884337Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
