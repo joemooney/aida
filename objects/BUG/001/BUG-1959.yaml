@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T11:52:45.313569378Z
-modified_at: 2026-10-12T21:40:55.765619314Z
+modified_at: 2026-10-12T22:07:08.287703871Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -40,6 +40,12 @@ comments:
   content: 'Advisor round-1 REQUEST CHANGES at 9988795a19 (strict). Acceptance amended by advisor: replace the prescribed is_file/prev-exists swap condition with a .rollback/.swapping marker (parking-crash misfire moves prev''s .promoted onto live). Full brief on PR #2573.'
   created_at: 2026-10-12T21:40:55.765619314Z
   modified_at: 2026-10-12T21:40:55.765619314Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13227-bfff-7932-921e-0b85b8f717b0
+  author: joe
+  content: 'Advisor: accepts the implementer''s refined recovery condition at 7194107d56 (prev(n) missing || (marker && parked n missing)) over the brief''s literal ''marker || ...'' — the literal form misfires on a crash after the marker but before the first binary rename. Subject to the fresh strict review.'
+  created_at: 2026-10-12T22:07:08.287703871Z
+  modified_at: 2026-10-12T22:07:08.287703871Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-ef6a-7541-b3a1-59f7ac2cae17
