@@ -95,10 +95,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:42.829403010Z
-modified_at: 2026-10-11T20:12:42.829403010Z
+modified_at: 2026-10-12T06:00:08.427468173Z
 req_type: Story
 tags:
 - from:aida-host
+- groom:split
 - regenerability
 relationships:
 - rel_type: Child
