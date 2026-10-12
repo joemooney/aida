@@ -18,12 +18,12 @@ description: |
 
   ## Non-goals
   - No change to lease liveness probing beyond the clean-exit case.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-12T05:49:21.351822273Z
+modified_at: 2026-10-12T14:56:06.383108103Z
 req_type: Bug
 tags:
 - drain
@@ -78,6 +78,14 @@ comments:
   created_at: 2026-10-12T05:49:21.351822273Z
   modified_at: 2026-10-12T05:49:21.351822273Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309d-20ef-7d02-95ba-9172526ce25c
+  author: joe
+  timestamp: 2026-10-12T14:56:06.383102077Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
