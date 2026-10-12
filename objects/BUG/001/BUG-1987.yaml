@@ -15,13 +15,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T06:55:17.329044665Z
+modified_at: 2026-10-12T06:56:36.076573340Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - found:night-b
 - history-cache
+comments:
+- id: 01a12ee6-20ec-77b0-b903-af78781aad31
+  author: joe
+  content: 'Also exposed (from the BUG-1974 re-review): bug_1635_history_event_modes_tests.rs:400 and task_1512_history_transition_filters_tests.rs:580 call bare serve_at on an unbuilt index; one fork-window miss means ''index did not serve''. Fix: switch to history_cache::test_support::serve_locked (added by PR #2549). Nit: task_1507_history_cache_tests.rs:1008 comment still says ''serve returning None'' though the code now calls bare serve_at.'
+  created_at: 2026-10-12T06:56:36.076573340Z
+  modified_at: 2026-10-12T06:56:36.076573340Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 filed_at:
   code_sha: 17ff749954bca6e86e47f1d3b237d8bb53f531ed
   branch: main
