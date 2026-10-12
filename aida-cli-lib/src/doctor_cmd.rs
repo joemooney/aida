@@ -7270,6 +7270,21 @@ fn heal_doctor_lease(
             detail: Some("lease already ended".to_string()),
         });
     };
+    // A worktree a live process is using (or one the scan could not verify)
+    // is skipped before the salvage step: nothing is salvaged, ended or
+    // removed. trace:BUG-1947 | ai:claude
+    if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!(
+                "worktree {} — lease and worktree kept",
+                in_use.summary()
+            )),
+        });
+    }
     let salvage = salvage_worktree_patch(
         project_root,
         &lease.scope,

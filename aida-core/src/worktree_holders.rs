@@ -30,24 +30,53 @@
 //!
 //! 1. the current process and every ancestor (the `aida` invocation, the
 //!    shell that ran it, the agent that ran the shell, and so on up to init);
-//! 2. the whole process subtree of the *highest* ancestor in the unbroken run,
-//!    starting at this process, whose cwd is inside the worktree. When an agent
-//!    was started in the worktree and ends its own session, its own helpers
-//!    (MCP servers, language servers, background builds) are part of the
-//!    session being ended. The run must be unbroken: an orchestrator whose cwd
-//!    is the main checkout does not pass this exemption to the implementers it
-//!    spawned into other worktrees. That cross-worktree case is exactly what
-//!    this guard exists to refuse.
+//! 2. descendants of `T`, the *highest* ancestor in the unbroken run (starting
+//!    at this process) whose cwd is inside the worktree, but ONLY those whose
+//!    session id (`/proc/<pid>/stat` field 6) is the caller's own session or
+//!    `T`'s session. When an agent was started in the worktree and ends its
+//!    own session, its helpers (MCP servers, language servers) were forked by
+//!    the agent and share its session, so they are part of the session being
+//!    ended.
+//!
+//! The session bound keeps a terminal multiplexer or editor that was started
+//! in the worktree from exempting everything under it. A tmux server calls
+//! `setsid`, and so does every pane it opens; VS Code's integrated terminals
+//! each get their own session too. A codex or `cargo build` running in a
+//! SIBLING pane or terminal is therefore in a different session from both the
+//! caller and `T`, so it still counts as a holder. Claude Code's Bash tool
+//! also runs every command under `setsid`: the tool shell leads its own
+//! session, while the agent stays in the session it was started in. That is
+//! why `T`'s session is exempt as well as the caller's. Without it, the
+//! agent's own MCP servers would block it from ending its own session. A
+//! background command the agent started from a separate tool call has its own
+//! session, so it DOES block; stop it first, or pass the override flag.
+//!
+//! The run must be unbroken: an orchestrator whose cwd is the main checkout
+//! does not pass the exemption to the implementers it spawned into other
+//! worktrees. That cross-worktree case is exactly what this guard exists to
+//! refuse.
 //!
 //! The session's own *recorded* owner pid gets no special treatment. If that
 //! process is dead it is not in `/proc` and cannot block. If it is alive and
 //! outside the caller's own chain, it is a live implementer, and the guard
 //! refuses, as intended.
 //!
+//! ## When the scan cannot be trusted
+//!
+//! A single unreadable entry (another user's process, or one that exited
+//! mid-scan) is skipped. It cannot be attributed, and refusing on it would
+//! block every removal on a busy machine. The scan as a WHOLE is
+//! "unverified" when `/proc` itself cannot be listed, or when the caller
+//! cannot see its own pid there (a pid namespace or a `hidepid` mount hides
+//! other processes). [`check_worktree_removal`], which every bulk or
+//! automatic path uses, treats an unverified scan as a refusal, so those
+//! paths keep the tree. [`check_worktree_removal_interactive`], used when an
+//! operator ends one session by name, warns and proceeds.
+//!
 //! ## Other platforms
 //!
-//! Without `/proc` the scan cannot run. [`check_worktree_removal`] then allows
-//! the removal and prints a one-line warning that the check was skipped.
+//! Without `/proc` the scan cannot run. Both checks then allow the removal
+//! and print a one-line warning that the check was skipped.
 //!
 // trace:BUG-1947 | ai:claude
 
@@ -107,10 +136,21 @@ pub struct WorktreeHolder {
 pub struct WorktreeInUse {
     pub worktree: PathBuf,
     pub holders: Vec<WorktreeHolder>,
+    /// Set when the scan itself could not be trusted, so `holders` is empty
+    /// and the tree is NOT known to be free. The text says why. Bulk and
+    /// automatic paths keep the tree in that case.
+    pub unverified: Option<String>,
 }
 
 impl fmt::Display for WorktreeInUse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(why) = &self.unverified {
+            return write!(
+                f,
+                "could not check worktree {} for live processes: {why}",
+                self.worktree.display()
+            );
+        }
         let n = self.holders.len();
         write!(
             f,
@@ -138,6 +178,9 @@ impl WorktreeInUse {
     /// Short single-line form for table rows and skip reasons, e.g.
     /// `in use by live process(es): pid 123 (sleep 600), pid 456 (cargo build)`.
     pub fn summary(&self) -> String {
+        if let Some(why) = &self.unverified {
+            return format!("not verified free of live processes ({why})");
+        }
         let pids: Vec<String> = self
             .holders
             .iter()
@@ -148,6 +191,12 @@ impl WorktreeInUse {
 
     /// Full refusal text: the holder list plus how to override it with `flag`.
     pub fn refusal(&self, flag: &str) -> String {
+        if self.unverified.is_some() {
+            return format!(
+                "{self}\n\nThe worktree was kept because a live process may still be \
+                 using it. Pass {flag} to remove it anyway."
+            );
+        }
         format!(
             "{self}\n\nRemoving it now would break the work in progress. Stop those \
              processes first, or pass {flag} to remove the worktree anyway."
@@ -156,38 +205,64 @@ impl WorktreeInUse {
 }
 
 /// Fail with [`WorktreeInUse`] when a live process, other than the caller's
-/// own process chain, is using `worktree`. An empty or missing path never
-/// blocks: nothing is on disk to protect.
+/// own process chain, is using `worktree`, OR when the scan could not be
+/// trusted (see the module docs). Every bulk or automatic removal path uses
+/// this strict form. An empty or missing path never blocks: nothing is on
+/// disk to protect.
 // trace:BUG-1947 | ai:claude
 pub fn check_worktree_removal(worktree: &Path) -> Result<(), WorktreeInUse> {
     #[cfg(not(target_os = "linux"))]
     {
-        if !worktree.as_os_str().is_empty() && worktree.exists() {
-            eprintln!(
-                "warning: cannot check for live processes in {} on this platform; removing without that check",
-                worktree.display()
-            );
-        }
+        warn_unsupported_platform(worktree);
         return Ok(());
     }
     #[cfg(target_os = "linux")]
     {
-        let holders = live_worktree_holders(worktree);
-        if holders.is_empty() {
-            Ok(())
-        } else {
-            Err(WorktreeInUse {
+        match live_worktree_holders(worktree) {
+            Ok(holders) if holders.is_empty() => Ok(()),
+            Ok(holders) => Err(WorktreeInUse {
                 worktree: worktree.to_path_buf(),
                 holders,
-            })
+                unverified: None,
+            }),
+            Err(why) => Err(WorktreeInUse {
+                worktree: worktree.to_path_buf(),
+                holders: Vec::new(),
+                unverified: Some(why),
+            }),
         }
     }
 }
 
-/// Live processes using `worktree`, excluding the caller's own chain (see the
-/// module docs). Always empty off Linux, and for an empty or missing path.
+/// Like [`check_worktree_removal`], for an operator ending ONE session by
+/// name: an unverified scan prints a warning and allows the removal instead
+/// of refusing. Live holders still refuse.
 // trace:BUG-1947 | ai:claude
-pub fn live_worktree_holders(worktree: &Path) -> Vec<WorktreeHolder> {
+pub fn check_worktree_removal_interactive(worktree: &Path) -> Result<(), WorktreeInUse> {
+    match check_worktree_removal(worktree) {
+        Err(e) if e.unverified.is_some() => {
+            eprintln!("warning: {e}; removing it without that check");
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn warn_unsupported_platform(worktree: &Path) {
+    if !worktree.as_os_str().is_empty() && worktree.exists() {
+        eprintln!(
+            "warning: cannot check for live processes in {} on this platform; removing without that check",
+            worktree.display()
+        );
+    }
+}
+
+/// Live processes using `worktree`, excluding the caller's own chain (see the
+/// module docs). `Err` carries the reason the scan could not be trusted.
+/// Always `Ok(empty)` off Linux, and for an empty or missing path.
+// trace:BUG-1947 | ai:claude
+pub fn live_worktree_holders(worktree: &Path) -> Result<Vec<WorktreeHolder>, String> {
     #[cfg(target_os = "linux")]
     {
         scan_holders_in(Path::new("/proc"), worktree, std::process::id())
@@ -195,44 +270,53 @@ pub fn live_worktree_holders(worktree: &Path) -> Vec<WorktreeHolder> {
     #[cfg(not(target_os = "linux"))]
     {
         let _ = worktree;
-        Vec::new()
+        Ok(Vec::new())
     }
 }
 
 /// The scan behind [`live_worktree_holders`], parameterised over the proc root
 /// and the caller's pid so tests can drive it with a fake `/proc` tree.
+/// `Err` means the scan as a whole is unverified: `proc_root` cannot be
+/// listed, or `self_pid` is not visible in it.
 // trace:BUG-1947 | ai:claude
-pub fn scan_holders_in(proc_root: &Path, worktree: &Path, self_pid: u32) -> Vec<WorktreeHolder> {
+pub fn scan_holders_in(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+) -> Result<Vec<WorktreeHolder>, String> {
     // An empty base would match every path under `starts_with`.
     if worktree.as_os_str().is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let Ok(canon) = worktree.canonicalize() else {
-        return Vec::new(); // Missing worktree: nothing to protect.
+        return Ok(Vec::new()); // Missing worktree: nothing to protect.
     };
     let inside = |p: &Path| p.starts_with(&canon);
 
-    let Ok(entries) = std::fs::read_dir(proc_root) else {
-        return Vec::new();
-    };
+    let entries = std::fs::read_dir(proc_root)
+        .map_err(|e| format!("{} is not readable ({e})", proc_root.display()))?;
     // Sorted so refusal messages list pids deterministically.
     let pids: BTreeSet<u32> = entries
         .flatten()
         .filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok())
         .collect();
-
-    // The ppid map covers every visible process, so subtree membership can be
-    // decided without a second pass over /proc.
-    let mut ppid: BTreeMap<u32, u32> = BTreeMap::new();
-    for &pid in &pids {
-        if let Some(pp) = read_ppid(proc_root, pid) {
-            ppid.insert(pid, pp);
-        }
+    // If this process cannot see itself, it is looking at a different pid
+    // namespace (or a restricted mount) and other processes may be hidden.
+    if !pids.contains(&self_pid) {
+        return Err(format!(
+            "this process (pid {self_pid}) is not visible in {}, so other processes may be hidden",
+            proc_root.display()
+        ));
     }
-    // Self's ppid may be missing from the map if /proc/self is hidden.
-    if !ppid.contains_key(&self_pid) {
-        if let Some(pp) = read_ppid(proc_root, self_pid) {
-            ppid.insert(self_pid, pp);
+
+    // The ppid/session maps cover every visible process, so subtree
+    // membership can be decided without a second pass over /proc.
+    let mut ppid: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut sid: BTreeMap<u32, u32> = BTreeMap::new();
+    for &pid in &pids {
+        if let Some((pp, s)) = read_ppid_sid(proc_root, pid) {
+            ppid.insert(pid, pp);
+            sid.insert(pid, s);
         }
     }
 
@@ -240,7 +324,9 @@ pub fn scan_holders_in(proc_root: &Path, worktree: &Path, self_pid: u32) -> Vec<
     let chain = ancestry(&ppid, self_pid);
     let excluded: BTreeSet<u32> = chain.iter().copied().collect();
 
-    // Rule 2: the highest ancestor in the unbroken in-worktree run from self.
+    // Rule 2: T is the highest ancestor in the unbroken in-worktree run from
+    // self. Only T's descendants in the caller's session or T's session are
+    // exempt (see the module docs for why both sessions).
     let mut subtree_root: Option<u32> = None;
     for &pid in &chain {
         match read_link(proc_root, pid, "cwd") {
@@ -248,6 +334,11 @@ pub fn scan_holders_in(proc_root: &Path, worktree: &Path, self_pid: u32) -> Vec<
             _ => break,
         }
     }
+    let exempt_sessions: BTreeSet<u32> = subtree_root
+        .iter()
+        .chain(std::iter::once(&self_pid))
+        .filter_map(|p| sid.get(p).copied())
+        .collect();
 
     let mut holders = Vec::new();
     for &pid in &pids {
@@ -255,7 +346,8 @@ pub fn scan_holders_in(proc_root: &Path, worktree: &Path, self_pid: u32) -> Vec<
             continue;
         }
         if let Some(root) = subtree_root {
-            if ancestry(&ppid, pid).contains(&root) {
+            let same_session = sid.get(&pid).is_some_and(|s| exempt_sessions.contains(s));
+            if same_session && ancestry(&ppid, pid).contains(&root) {
                 continue;
             }
         }
@@ -267,7 +359,7 @@ pub fn scan_holders_in(proc_root: &Path, worktree: &Path, self_pid: u32) -> Vec<
             });
         }
     }
-    holders
+    Ok(holders)
 }
 
 /// `pid` followed by its ancestors, nearest first, bounded in depth.
@@ -313,13 +405,16 @@ fn read_link(proc_root: &Path, pid: u32, name: &str) -> Option<PathBuf> {
     std::fs::read_link(proc_root.join(pid.to_string()).join(name)).ok()
 }
 
-/// Parent pid from `/proc/<pid>/stat`. The comm field can contain spaces and
-/// parentheses, so parse after the LAST `)`.
-fn read_ppid(proc_root: &Path, pid: u32) -> Option<u32> {
+/// Parent pid and session id (fields 4 and 6) from `/proc/<pid>/stat`. The
+/// comm field can contain spaces and parentheses, so parse after the LAST `)`.
+fn read_ppid_sid(proc_root: &Path, pid: u32) -> Option<(u32, u32)> {
     let stat = std::fs::read_to_string(proc_root.join(pid.to_string()).join("stat")).ok()?;
     let rest = &stat[stat.rfind(')')? + 1..];
-    // rest = " <state> <ppid> ..."
-    rest.split_whitespace().nth(1)?.parse().ok()
+    // rest = " <state> <ppid> <pgrp> <session> ..."
+    let mut f = rest.split_whitespace();
+    let ppid = f.nth(1)?.parse().ok()?;
+    let session = f.nth(1)?.parse().ok()?;
+    Some((ppid, session))
 }
 
 /// Display command: the NUL-separated cmdline joined with spaces, falling back
@@ -366,11 +461,21 @@ mod tests {
             std::fs::create_dir_all(&root).unwrap();
             Self { root }
         }
+        /// A process in session 1 (every test that does not care about
+        /// sessions puts everything in one).
         fn add(&self, pid: u32, ppid: u32, cmd: &str, cwd: &Path) -> PathBuf {
+            self.add_in(1, pid, ppid, cmd, cwd)
+        }
+        /// A process in session `sid` (stat field 6).
+        fn add_in(&self, sid: u32, pid: u32, ppid: u32, cmd: &str, cwd: &Path) -> PathBuf {
             let dir = self.root.join(pid.to_string());
             std::fs::create_dir_all(dir.join("fd")).unwrap();
-            // comm containing ") " exercises the last-paren ppid parse.
-            std::fs::write(dir.join("stat"), format!("{pid} (we) ird) S {ppid} 1 1 0")).unwrap();
+            // comm containing ") " exercises the last-paren field parse.
+            std::fs::write(
+                dir.join("stat"),
+                format!("{pid} (we) ird) S {ppid} {sid} {sid} 0"),
+            )
+            .unwrap();
             std::fs::write(dir.join("cmdline"), cmd.replace(' ', "\0") + "\0").unwrap();
             symlink(cwd, dir.join("cwd")).unwrap();
             dir
@@ -399,7 +504,7 @@ mod tests {
         fake.add(1, 0, "init", Path::new("/"));
         fake.add(200, 1, "aida session end", &outside);
         fake.add(300, 1, "cargo build", &wt.join("target"));
-        let h = scan_holders_in(&fake.root, &wt, 200);
+        let h = scan_holders_in(&fake.root, &wt, 200).unwrap();
         assert_eq!(pids(&h), vec![300]);
         assert_eq!(h[0].command, "cargo build");
         assert_eq!(h[0].hold, HoldKind::Cwd);
@@ -417,7 +522,7 @@ mod tests {
         fake.add(200, 150, "aida session end", &wt); // self
         fake.add(160, 100, "aida mcp", &wt); // the agent's own helper
         fake.add(300, 50, "claude other", &wt); // a different live implementer
-        let h = scan_holders_in(&fake.root, &wt, 200);
+        let h = scan_holders_in(&fake.root, &wt, 200).unwrap();
         // 200/150/100/50/1 are self+ancestors; 160 is in the own-session
         // subtree rooted at 100; 300 descends from 50, which sits outside the
         // worktree, so it is NOT exempt.
@@ -432,7 +537,7 @@ mod tests {
         fake.add(100, 1, "shell", &wt); // ancestor in the worktree
         fake.add(200, 100, "aida", &outside); // self is OUTSIDE: run broken
         fake.add(110, 100, "cargo test", &wt); // sibling of self
-        let h = scan_holders_in(&fake.root, &wt, 200);
+        let h = scan_holders_in(&fake.root, &wt, 200).unwrap();
         assert_eq!(
             pids(&h),
             vec![110],
@@ -455,7 +560,7 @@ mod tests {
         fake.add(303, 1, "neighbour", &sibling); // `/wt-other` is not under `/wt`
                                                  // A pid dir with no readable links (another user's process) is skipped.
         std::fs::create_dir_all(fake.root.join("304")).unwrap();
-        let h = scan_holders_in(&fake.root, &wt, 200);
+        let h = scan_holders_in(&fake.root, &wt, 200).unwrap();
         assert_eq!(pids(&h), vec![301, 302]);
         assert!(matches!(h[0].hold, HoldKind::OpenFile(_)));
         assert_eq!(h[1].hold, HoldKind::Executable);
@@ -466,8 +571,93 @@ mod tests {
     fn empty_or_missing_worktree_never_blocks() {
         let (_t, fake, wt, _outside) = fixture();
         fake.add(300, 1, "anything", Path::new("/"));
-        assert!(scan_holders_in(&fake.root, Path::new(""), 1).is_empty());
-        assert!(scan_holders_in(&fake.root, &wt.join("gone"), 1).is_empty());
+        assert!(scan_holders_in(&fake.root, Path::new(""), 1)
+            .unwrap()
+            .is_empty());
+        assert!(scan_holders_in(&fake.root, &wt.join("gone"), 1)
+            .unwrap()
+            .is_empty());
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn tmux_started_in_the_worktree_does_not_exempt_a_sibling_pane() {
+        // The operator started tmux from the worktree. Pane A runs codex and
+        // a build; in pane B the operator runs aida. tmux's server and every
+        // pane lead their own sessions, as real tmux does.
+        let (_t, fake, wt, _outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add_in(500, 500, 1, "tmux new-session", &wt); // server
+        fake.add_in(510, 510, 500, "bash", &wt); // pane A
+        fake.add_in(510, 511, 510, "codex", &wt);
+        fake.add_in(510, 512, 511, "cargo build", &wt.join("target"));
+        fake.add_in(520, 520, 500, "bash", &wt); // pane B
+        fake.add_in(520, 521, 520, "aida session reap", &wt); // self
+        fake.add_in(520, 522, 520, "cargo check", &wt); // pane B's own job
+        let h = scan_holders_in(&fake.root, &wt, 521).unwrap();
+        // T is the tmux server (500); nothing else is in its session, and
+        // pane A is in a different session from the caller, so pane A's whole
+        // tree is held. Pane B's own job shares the caller's session.
+        assert_eq!(pids(&h), vec![510, 511, 512]);
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn claude_code_shape_keeps_its_helpers_exempt_but_not_a_detached_build() {
+        // An agent started from a terminal in the worktree. Claude Code's
+        // Bash tool runs each command under setsid, so the tool shell (and
+        // the caller) lead their own session while the agent and its MCP
+        // servers stay in the terminal's session.
+        let (_t, fake, wt, outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add_in(10, 10, 1, "terminal", &outside);
+        fake.add_in(20, 20, 10, "bash", &wt); // interactive shell, T
+        fake.add_in(20, 100, 20, "claude", &wt);
+        fake.add_in(20, 110, 100, "aida mcp-serve", &wt); // agent helper
+        fake.add_in(200, 200, 100, "bash -c", &wt); // tool shell
+        fake.add_in(200, 201, 200, "aida session end", &wt); // self
+        fake.add_in(300, 300, 100, "cargo test", &wt); // separate tool call
+        let h = scan_holders_in(&fake.root, &wt, 201).unwrap();
+        assert_eq!(pids(&h), vec![300]);
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn unreadable_proc_or_invisible_self_is_unverified_but_one_bad_entry_is_not() {
+        let (_t, fake, wt, _outside) = fixture();
+        let missing = fake.root.with_file_name("no-proc");
+        let err = scan_holders_in(&missing, &wt, 200).unwrap_err();
+        assert!(err.contains("not readable"), "{err}");
+
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add(300, 1, "cargo build", &wt);
+        // Self (200) is not in this proc tree: a pid namespace.
+        let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(err.contains("pid 200"), "{err}");
+
+        // Self visible, plus an entry with nothing readable: still verified.
+        fake.add(200, 1, "aida", Path::new("/"));
+        std::fs::create_dir_all(fake.root.join("400")).unwrap();
+        assert_eq!(
+            pids(&scan_holders_in(&fake.root, &wt, 200).unwrap()),
+            vec![300]
+        );
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn unverified_result_names_the_reason_and_the_override() {
+        let e = WorktreeInUse {
+            worktree: PathBuf::from("/w"),
+            holders: Vec::new(),
+            unverified: Some("/proc is not readable".into()),
+        };
+        assert!(e.summary().contains("not verified"), "{}", e.summary());
+        let r = e.refusal("--force");
+        assert!(
+            r.contains("/proc is not readable") && r.contains("--force"),
+            "{r}"
+        );
     }
 
     /// Kills the child on drop so a failed assertion never leaks a `sleep`.

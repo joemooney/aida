@@ -5276,6 +5276,25 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         return true;
     }
 
+    // Every caller of this function is automatic or bulk (doctor's lease
+    // heal, pickup and review stale-lease release, drain-retry predecessor
+    // release, escalated-worktree cleanup), so it uses the strict check:
+    // a tree a live process is using, or one the scan could not verify, keeps
+    // BOTH its lease and its worktree. Checked before anything is touched, so
+    // the lease still marks the scope as occupied and the caller's
+    // re-classification sees it as live instead of looping.
+    // trace:BUG-1947 | ai:claude
+    if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path) {
+        eprintln!(
+            "  {} kept session {} and its worktree {}: {}",
+            "Warning:".yellow().bold(),
+            &lease.id[..lease.id.len().min(8)],
+            lease.worktree_path.display(),
+            in_use.summary(),
+        );
+        return false;
+    }
+
     // Snapshot the lease's authoritative on-disk path before we strip the
     // worktree's symlinks (which can break the symlink chain). Mirrors
     // BUG-56's pattern in `session_end`.
@@ -5380,8 +5399,12 @@ pub(crate) fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, 
             spec_id.cyan(),
             lease.worktree_path.display().to_string().dimmed(),
         );
+        // A tree still in use keeps its lease (force_cleanup_lease says why);
+        // count only leases that were actually released. trace:BUG-1947 | ai:claude
         force_cleanup_lease(project_root, &lease);
-        cleaned += 1;
+        if !lease_path(project_root, &lease.id).exists() {
+            cleaned += 1;
+        }
     }
     if cleaned > 0 {
         eprintln!(

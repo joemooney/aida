@@ -87,8 +87,19 @@ struct Session {
 
 impl Session {
     /// A fresh repo with one approved bug and a live session (lease and
-    /// worktree) on it.
+    /// worktree) on it, taken with `worktree enter` (never pooled).
     fn start() -> Self {
+        Self::start_with(false)
+    }
+
+    /// Like [`Session::start`], but through `session start --pool`, so the
+    /// session runs in a warm-pool tree that `session end` RETURNS to the
+    /// pool (a forced checkout plus a hard reset) instead of removing.
+    fn start_pooled() -> Self {
+        Self::start_with(true)
+    }
+
+    fn start_with(pooled: bool) -> Self {
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().canonicalize().expect("canonical tempdir");
         let repo = root.join("repo");
@@ -138,6 +149,44 @@ impl Session {
             .find(|t| t.starts_with("BUG-"))
             .unwrap_or_else(|| panic!("no spec id in {}", text(&out)))
             .to_string();
+
+        if pooled {
+            let mut start = aida(&repo, &home);
+            start
+                .env("AIDA_SUPPRESS_SESSION_NEXT", "1")
+                .args(["session", "start", "--owns", &spec, "--pool"]);
+            let out = run_ok(start, "session start --pool");
+            let id = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .find_map(|l| {
+                    l.trim()
+                        .strip_prefix("export AIDA_SESSION_ID='")?
+                        .strip_suffix('\'')
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| panic!("no session id export in:\n{}", text(&out)));
+            let lease =
+                std::fs::read_to_string(repo.join(".aida/sessions").join(format!("{id}.toml")))
+                    .expect("lease written");
+            let worktree = lease
+                .lines()
+                .find_map(|l| {
+                    l.trim()
+                        .strip_prefix("worktree_path = \"")?
+                        .strip_suffix('"')
+                        .map(PathBuf::from)
+                })
+                .unwrap_or_else(|| panic!("no worktree_path in lease:\n{lease}"));
+            assert!(worktree.is_dir(), "worktree {} missing", worktree.display());
+            return Session {
+                _temp: temp,
+                repo,
+                home,
+                spec,
+                id,
+                worktree,
+            };
+        }
 
         let mut enter = aida(&repo, &home);
         enter.args(["worktree", "enter", &spec]);
@@ -195,6 +244,16 @@ impl Session {
                 .spawn()
                 .expect("spawn sleep"),
         )
+    }
+
+    /// The worktree's current branch (`HEAD` when detached).
+    fn worktree_branch(&self) -> String {
+        let mut cmd = Command::new("git");
+        cmd.current_dir(&self.worktree)
+            .args(["rev-parse", "--abbrev-ref", "HEAD"]);
+        hermetic(&mut cmd);
+        let out = cmd.output().expect("run git rev-parse");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 
     fn status_line(&self) -> String {
@@ -279,4 +338,50 @@ fn session_end_without_live_processes_removes_the_worktree_even_from_inside_it()
     );
     assert!(!s.worktree.exists(), "worktree removed");
     assert!(!s.lease_exists(), "lease released");
+}
+
+// Pooling is the default, and returning a pooled tree runs a forced checkout
+// and a hard reset, which rewrites the files under a running build just as a
+// removal deletes them. The return must refuse the same way, and `--force`
+// must override it the same way.
+#[test]
+fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let live = s.spawn_live_process();
+    let pid = live.0.id();
+    let branch_before = s.worktree_branch();
+    assert!(
+        branch_before != "HEAD",
+        "a live pooled session is on its own branch"
+    );
+
+    let out = s.end(&s.repo, &[]);
+    let msg = text(&out);
+    assert!(!out.status.success(), "pool return must refuse:\n{msg}");
+    assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
+    assert!(msg.contains("sleep 600"), "names the command:\n{msg}");
+    assert!(msg.contains("--force"), "names the override:\n{msg}");
+    assert!(s.lease_exists(), "lease must survive the refusal");
+    assert_eq!(
+        s.worktree_branch(),
+        branch_before,
+        "the tree must not be detached and reset under the live process"
+    );
+
+    let out = s.end(&s.repo, &["--force"]);
+    assert!(
+        out.status.success(),
+        "--force must proceed:\n{}",
+        text(&out)
+    );
+    assert!(!s.lease_exists(), "lease released");
+    // The tree went back to the pool rather than being deleted: proof this
+    // test exercised the pool-return path, not the removal path.
+    assert!(
+        s.worktree.is_dir(),
+        "a pooled tree is returned, not removed:\n{}",
+        text(&out)
+    );
+    drop(live);
 }

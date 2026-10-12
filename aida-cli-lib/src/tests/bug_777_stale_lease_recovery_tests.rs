@@ -252,6 +252,7 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         },
         dirty: Vec::new(),
         worktree_exists: true,
+        in_use: None,
     };
     assert!(
         clean.worktree_state_phrase().contains("CLEAN"),
@@ -263,6 +264,7 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         verdict: StaleLeaseRecovery::StaleDirty { dirty_entries: 2 },
         dirty: vec![" M src/a.rs".into(), "?? src/b.rs".into()],
         worktree_exists: true,
+        in_use: None,
     };
     let phrase = dirty.worktree_state_phrase();
     assert!(phrase.contains("DIRTY"), "got: {phrase}");
@@ -277,6 +279,7 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         },
         dirty: Vec::new(),
         worktree_exists: false,
+        in_use: None,
     };
     assert!(
         gone.worktree_state_phrase().contains("GONE"),
@@ -293,6 +296,7 @@ fn dirty_sample_is_bounded_and_reports_the_overflow() {
         verdict: StaleLeaseRecovery::StaleDirty { dirty_entries: 9 },
         dirty: (0..9).map(|i| format!("?? f{i}.rs")).collect(),
         worktree_exists: true,
+        in_use: None,
     };
     let sample = report.dirty_sample();
     assert!(sample.contains("f0.rs"));
@@ -490,6 +494,7 @@ fn implementer_retry_reprobes_live_predecessor_then_reclaims_after_death() {
             verdict: verdicts.pop().expect("expected a scripted verdict"),
             dirty: Vec::new(),
             worktree_exists: true,
+            in_use: None,
         },
         |delay| sleeps.push(delay),
     )
@@ -528,6 +533,7 @@ fn implementer_retry_refuses_when_predecessor_stays_live_after_reprobes() {
             verdict: StaleLeaseRecovery::Live,
             dirty: Vec::new(),
             worktree_exists: true,
+            in_use: None,
         },
         |delay| sleeps.push(delay),
     )
@@ -749,4 +755,88 @@ fn scope_conflict_failure_is_none_when_no_lease_holds_the_scope() {
         scope_conflict_lease_failure(repo.path(), "TASK-168").is_none(),
         "an unrelated-scope lease on disk must not be reported as a conflict"
     );
+}
+
+/// Kills the child on drop so a failed assertion never leaks a `sleep`.
+struct KillOnDrop(std::process::Child);
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// BUG-1947: a lease whose recorded owner is dead, over a clean worktree, is
+/// the textbook "dormant / reclaimable" case. But if a live process is still
+/// using that worktree (a build left running, a sibling agent), every
+/// automatic release path must treat the lease as occupied: neither
+/// classifier may call it dormant or recoverable, the shared cleanup must keep
+/// the lease AND the tree, and a sweep loop must stop rather than spin.
+/// Killing the process makes the very same lease reclaimable again.
+// trace:BUG-1947 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_1947_a_worktree_a_live_process_uses_is_never_auto_released() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "bug-1947-held");
+    let mut lease = lease_at(worktree.path(), 3600, Some(reaped_pid()), None);
+    lease.id = "019f1947held".to_string();
+    lease.scope = "PR-1947".to_string();
+    lease.slug = "pr-1947".to_string();
+    lease.branch = "bug-1947-held".to_string();
+    write_lease(project.path(), &lease);
+    let lease_file = lease_path(project.path(), &lease.id);
+    // Same knobs as crash-resume: release regardless of the mtime clock, so
+    // only the process check can keep the lease live.
+    let mut cfg = orchestrator::OrchestratorConfig::default();
+    cfg.auto_release_dormant_leases = true;
+    cfg.stale_lease_threshold_minutes = 0;
+
+    let child = KillOnDrop(
+        std::process::Command::new("sleep")
+            .arg("600")
+            .current_dir(worktree.path())
+            .spawn()
+            .expect("spawn sleep"),
+    );
+    let pid = child.0.id();
+
+    let report = stale_lease_recovery_for_lease(&lease);
+    assert_eq!(report.verdict, StaleLeaseRecovery::Live);
+    let phrase = report.worktree_state_phrase();
+    assert!(phrase.contains(&format!("pid {pid}")), "{phrase}");
+    assert_eq!(
+        auto_release_decision_for_lease(project.path(), &lease, &cfg),
+        orchestrator::AutoReleaseDecision::Live,
+    );
+
+    assert!(!force_cleanup_lease(project.path(), &lease));
+    assert!(lease_file.exists(), "the lease must still occupy the scope");
+    assert!(worktree.path().exists(), "the worktree must survive");
+
+    // Sweep loops terminate (no 16-iteration spin) and keep everything.
+    release_dead_leases_for_resume(project.path(), "PR-1947");
+    release_dead_phase_predecessor_leases(
+        project.path(),
+        "PR-1947",
+        auto_complete::Phase::Reviewer,
+    )
+    .expect("a live predecessor is left for the conflict path, not an error");
+    assert!(lease_file.exists() && worktree.path().exists());
+
+    drop(child);
+    assert_eq!(
+        stale_lease_recovery_for_lease(&lease).verdict,
+        StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: false
+        },
+        "once the process is gone the same lease is reclaimable"
+    );
+    release_dead_phase_predecessor_leases(
+        project.path(),
+        "PR-1947",
+        auto_complete::Phase::Reviewer,
+    )
+    .expect("dead, clean, unheld predecessor is released");
+    assert!(!lease_file.exists());
 }

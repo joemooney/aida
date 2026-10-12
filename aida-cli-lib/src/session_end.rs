@@ -1191,17 +1191,19 @@ pub(crate) fn session_end(
     // therefore safe by default, because each call refuses on its own. The
     // caller's own process chain (this command, its shell, the agent that
     // owns the session when run from inside the tree) is exempt, so ending
-    // your own session still works. `--force` overrides. Checked only when
-    // the tree will actually be deleted (not shared with a peer lease, not
-    // returned to the warm pool), and before the lease is touched, so a
-    // refusal changes nothing. trace:BUG-1947 | ai:claude
-    let will_remove_worktree = has_worktree
-        && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none()
-        && (remove
-            || !aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path));
-    if will_remove_worktree {
+    // your own session still works. `--force` overrides. Checked whenever
+    // the tree is torn down for this session (not shared with a peer lease),
+    // INCLUDING a return to the warm pool: that return runs a forced
+    // detached checkout and a hard reset, which rewrites every file under a
+    // running build just as surely as a removal does. Checked before the
+    // lease is touched, so a refusal changes nothing. This is the
+    // interactive form: a scan that cannot be verified warns and proceeds.
+    // trace:BUG-1947 | ai:claude
+    let tears_down_worktree = has_worktree
+        && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
+    if tears_down_worktree {
         if let Err(in_use) =
-            aida_core::worktree_holders::check_worktree_removal(&target.worktree_path)
+            aida_core::worktree_holders::check_worktree_removal_interactive(&target.worktree_path)
         {
             if !force {
                 anyhow::bail!(

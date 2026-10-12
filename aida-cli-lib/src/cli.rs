@@ -1646,11 +1646,13 @@ pub enum SessionCommand {
         ///      `session end` refuses to remove a worktree with live
         ///      claudes inside (prevents orphaned-claude-with-dangling-
         ///      cwd leak).
-        ///   2. Remove the worktree even while other live processes use
-        ///      it (a cwd, open file, or running program inside it, e.g.
-        ///      a cargo build). Without this, `session end` refuses and
-        ///      names each pid and command. Those processes are not
-        ///      killed. Your own shell and its parents are never counted.
+        ///   2. Remove the worktree, or reset it back into the warm pool,
+        ///      even while other live processes use it (a cwd, open file,
+        ///      or running program inside it, e.g. a cargo build). Without
+        ///      this, `session end` refuses and names each pid and command.
+        ///      Those processes are not killed. Your own shell, its
+        ///      parents, and the helpers of the agent you are ending from
+        ///      are never counted.
         ///   3. Discard uncommitted tracked/untracked-but-not-ignored
         ///      changes in the worktree. Without this, `session end`
         ///      refuses and prints the dirty file list. Gitignored
