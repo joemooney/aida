@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T21:02:01.748928563Z
-modified_at: 2026-10-12T19:37:15.307323179Z
+modified_at: 2026-10-12T21:37:52.105303768Z
 req_type: Bug
 tags:
 - groom:approve
@@ -66,6 +66,12 @@ comments:
     - A fresh reviewer gates the new head.
   created_at: 2026-10-12T19:37:15.307323179Z
   modified_at: 2026-10-12T19:37:15.307323179Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a1320c-f3e9-7430-b295-deec2a4f7429
+  author: joe
+  content: 'Advisor round-2 REQUEST CHANGES at 842a7f4c90 — see the rework brief on PR #2566 (AIDA_GLYPHS env race amplification in status_display tests; pin under EnvVarsGuard).'
+  created_at: 2026-10-12T21:37:52.105303768Z
+  modified_at: 2026-10-12T21:37:52.105303768Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309d-1362-7871-a262-d05e56252a49
