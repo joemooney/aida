@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T09:13:07.685216242Z
+modified_at: 2026-10-12T09:43:18.086020423Z
 req_type: Task
 tags:
 - closure:pending
@@ -831,6 +831,25 @@ comments:
   created_at: 2026-10-12T09:13:07.685216242Z
   modified_at: 2026-10-12T09:13:07.685216242Z
   session_id: 526a0d17-9998-4a2a-a5e7-e67f650c6b36
+- id: 01a12f7e-bf46-7120-b6b2-8f7346e82e4e
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (2026-10-12 02:50).
+
+    APPEND-MOVE SKETCH (comment 70): SIGNED OFF, with two conditions.
+    (1) Ship the tooling as its OWN PR off origin/main first ('tooling: append-mode MOVEs (extend <mod>.rs)', subject carrying (TASK-1538)). Do not open run 14 on top of #2550: we're keeping stacks shallow. After that PR merges, re-open TASK-1538 to approved with closure:pending if it auto-flips.
+    (2) The verify_stack extend check must also refuse an extend whose appended chunk contains a 'mod ' declaration or a '#[path' attribute, and the four test_verify_stack.py cases must be in that PR.
+    The order after the tooling: stale-check to review_gates, forge-timeout to kernel, then the residue in map order. Q8 straddlers go by the decl-line rule as each target comes up.
+
+    Q10 (re-proof cost): APPROVED for rebase-only re-cuts (r2+), on these terms:
+    (a) per-commit git range-diff, posted in the READY comment, shows only base changes and main's edits carried verbatim into moved text;
+    (b) cargo check -p aida-cli-lib --tests with 0 warnings at EVERY SHA;
+    (c) verify_stack <base> <head> --build all PASS;
+    (d) a full cargo test --workspace --no-fail-fast at the run HEAD.
+    Tags record 'r<N>: check at SHA, tests at head <sha>'. Full per-SHA proofs stay mandatory for first cuts (r1), for any extend, and for any rebase whose range-diff shows a non-verbatim resolution. The advisor gate re-runs verify_stack from the real base and spot-checks the range-diff.
+  created_at: 2026-10-12T09:43:18.086020423Z
+  modified_at: 2026-10-12T09:43:18.086020423Z
+  session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
