@@ -2,7 +2,7 @@ id: 01a12a94-55a3-7f00-9314-1c384b4d8469
 spec_id: BUG-1958
 agreed_id: BUG-1958
 title: 'show linkage follow-ups from STORY-1649 review: aida done skips the warning, double scan, missing --, docs'
-description: |-
+description: |
   Minor findings from the night review of PR #2501 (STORY-1649, merged 5ca72fd2b9):
   1. punt_done.rs:284 handle_done_command: `aida done` marks a spec Completed through transition_to_completed, but it never calls shipped_linkage::warn_if_completed_without_shipped_commit. Add the call and a binary test. Also check MCP status edits.
   2. shipped_linkage.rs:234-247: an unshipped spec pays for two full scans (origin/main and main, each a git log plus a git grep; about 270ms on this repo), which is the common case for TOON show. Skip the local ref when it is an ancestor of the remote, or when the two resolve to the same SHA.
@@ -11,15 +11,28 @@ description: |-
   5. docs/cli/01-getting-started.md (aida show, edit, done) doesn't mention the TOON linkage: line or the completion warning and its doctor:no-code opt-out.
   6. In a shallow clone, completing an old shipped spec warns falsely. Add '(shallow clone)' to the warning when git rev-parse --is-shallow-repository is true.
   7. shipped_linkage.rs:204: the trace-hit parser splits on the first ':', so a path containing ':' is miscounted. Cosmetic.
+
+  ## Acceptance
+
+  (groom:night, 2026-10-11: all seven items verified still open on origin/main 17ff749954.)
+
+  1. `aida done` (handle_done_command) calls `shipped_linkage::warn_if_completed_without_shipped_commit` after a successful completion; a binary test shows the warning for a spec with no shipped commit and none with `doctor:no-code`. If the MCP status-edit path completes specs without the warning, add the call there too (or note in the PR why not).
+  2. `scan_default_branch_linkage` skips the local ref when it resolves to the same SHA as the remote ref or is an ancestor of it; unit test asserts one scanned ref in that case.
+  3. `referencing_commits_on_ref` and `trace_files_on_ref` pass `--` after the ref; test with a file named like the branch.
+  4. The TOON token is `detail=--format=json` (no space); existing linkage-line tests updated.
+  5. docs/cli/01-getting-started.md (show / edit / done sections) documents the `linkage:` line and the completion warning with its `doctor:no-code` opt-out.
+  6. The completion warning appends "(shallow clone)" when `git rev-parse --is-shallow-repository` is true; unit test on the formatter.
+  7. The trace-hit parser handles paths containing ':' (e.g. split on `<ref>:<path>:` using `git grep --null` / `-z`); unit test with a ':' path.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:48:46.755538061Z
-modified_at: 2026-10-11T10:48:46.755538061Z
+modified_at: 2026-10-12T05:55:25.430587898Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
+- groomed:night
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
