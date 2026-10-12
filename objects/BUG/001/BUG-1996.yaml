@@ -1,0 +1,26 @@
+id: 01a131f4-4c96-7a02-bd27-3828ca2dc1d8
+spec_id: BUG-1996
+agreed_id: BUG-1996
+title: aida queue done does not print the completion linkage warning
+description: |
+  Follow-up from BUG-1958 (PR #2572). `aida queue done` (aida-cli-lib/src/queue_cmd.rs, the `crate::completion::transition_to_completed(..., "queue-done", ...)` call) completes a spec without calling `shipped_linkage::warn_if_completed_without_shipped_commit`. `aida edit --status completed` (STORY-1649) and `aida done` (BUG-1958) both print the warning.
+
+  ## Acceptance
+
+  1. When `aida queue done` moves a code spec into Completed, it calls `shipped_linkage::warn_if_completed_without_shipped_commit`. The warning goes to stderr and never refuses.
+  2. A binary test shows the warning for a spec with no shipped commit, and no warning for a spec tagged `doctor:no-code` or one with a shipped commit.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T21:10:56.406518104Z
+modified_at: 2026-10-12T21:10:56.406518104Z
+req_type: Bug
+filed_at:
+  code_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 01a131ce77b4
