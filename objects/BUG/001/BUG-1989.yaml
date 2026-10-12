@@ -13,13 +13,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:51:51.434814324Z
-modified_at: 2026-10-12T18:09:22.154718427Z
+modified_at: 2026-10-12T19:45:50.498070489Z
 req_type: Bug
 tags:
 - ci
 - flaky-test
 - night-b
 - store-lock
+comments:
+- id: 01a131a6-63a2-7150-aafd-77a664bac813
+  author: joe
+  content: Commit 11fcd15b49 references this requirement
+  created_at: 2026-10-12T19:45:50.498070489Z
+  modified_at: 2026-10-12T19:45:50.498070489Z
+  session_id: abd37323-5d22-48a8-84ee-1bff20c9a9e5
 history:
 - id: 01a13096-5ccd-7393-848b-bb04128c6332
   author: joe
