@@ -1,0 +1,46 @@
+id: 01a12d8f-6cee-7b11-b68c-d05bc1aac6a5
+spec_id: BUG-1981
+agreed_id: BUG-1981
+title: Stale pre-commit hook refusal recommends scaffold apply, which would overwrite project README.md and CLAUDE.md
+description: |
+  ## F31. A stale-hook refusal should offer a hook-only fix
+
+  **Seen (2026-10-11 14:3x):** `aida push --store-only` refused because `.git/hooks/pre-commit` was an older
+  AIDA-generated template (checksum c1428eea; current template 60fda5ad). The error recommends `aida scaffold apply`.
+  Its dry run would update 23 files, including the project's own **README.md and CLAUDE.md**, which hold this pilot's
+  charter.
+
+  **What we did:** `aida scaffold extract --output <tmp>`, then installed only `hooks/aida-pre-commit.sh` as
+  `.git/hooks/pre-commit`. The old hook was kept as `pre-commit.bak-c1428eea-20261011`. The push then succeeded.
+
+  **Proposal:**
+  - The refusal names a scoped fix, e.g. `aida scaffold apply --only .git/hooks/pre-commit` (the flag does not exist
+    yet), or `aida hooks install`.
+  - `scaffold apply` never rewrites user-owned project docs without `--force`.
+  - A regenerability pilot depends on CLAUDE.md being stable project memory.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T00:42:16.686825446Z
+modified_at: 2026-10-12T00:42:16.686825446Z
+req_type: Bug
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
