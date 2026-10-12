@@ -1,0 +1,20 @@
+id: 01a12d8d-5dcd-79b3-905c-44332cd83a89
+spec_id: BUG-1980
+agreed_id: BUG-1980
+title: 'Flaky: auto_complete drain_caps_inactive_drains_normally returns MaxReached instead of Drained under load'
+description: 'aida-cli-lib/src/auto_complete.rs:11856: assertion left==right failed, left: MaxReached, right: Drained. Seen once during lib-split proof runs (two concurrent cargo test --workspace lanes, load ~8–11) at 1b6c3aecda. A full re-run at the same tree passed. The test likely has a time-based cap that a slow host hits before the drain completes. Log: /tmp/libsplit/fail2/test-doctor_root.log.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T00:40:01.741783944Z
+modified_at: 2026-10-12T00:40:01.741783944Z
+req_type: Bug
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 95f15a20d4
+  vendor: claude
+  session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
