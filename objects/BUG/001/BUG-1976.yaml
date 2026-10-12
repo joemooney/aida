@@ -16,7 +16,25 @@ description: |
 
   ## Acceptance
 
-  To be written at triage; the proposals above are the starting point.
+  - `aida-core/templates/hooks/aida-advisor-code-guard.sh` resolves the target
+    `file_path` (relative paths against the hook's cwd) and fires only when that
+    path lies inside a worktree of the session's repository: the main checkout or
+    any linked worktree sharing the same `git rev-parse --git-common-dir`
+    (sibling worktrees still count as "inside", so an advisor editing code in a
+    sibling worktree is still guarded).
+  - A path outside every such worktree (for example `$TMPDIR/...`, `/tmp/...`, the
+    Claude session scratchpad) exits 0 silently and does NOT create the
+    per-session fire-once marker.
+  - If the path's repository cannot be determined (git missing, parent directory
+    does not exist), the hook keeps today's behaviour (guard applies) rather than
+    failing open.
+  - Shell test in the hook test suite: advisor role + `.py`/`.rs` write to a temp
+    directory outside the repo → exit 0 and no marker; the same write inside the
+    repo and inside a sibling linked worktree → exit 2 on first fire.
+  - `make sync-templates && make check-templates` clean.
+  - Audit the other PreToolUse guards (`aida-git-guardrails.sh` is command-based,
+    so out of scope) and note in the PR whether any other path-based guard needs
+    the same scoping.
 
   ## Evidence
 
@@ -26,11 +44,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:41.599443906Z
-modified_at: 2026-10-12T06:00:12.177802798Z
+modified_at: 2026-10-12T06:01:55.224110436Z
 req_type: Bug
 tags:
 - from:aida-host
 - groom:approve
+- groomed:night
 - regenerability
 relationships:
 - rel_type: Child
