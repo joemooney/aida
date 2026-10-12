@@ -26,7 +26,7 @@ enabled = false
 # only; a non-fast-forward mirror is reported for deliberate reconciliation.
 # Check drift anytime with `aida remote status`.
 [store.sync]
-mirror_remotes = ["gitlab"]
+mirror_remotes = ["gitlab", "github"]
 
 # Default vendor for agent launches (drives, drains, agent new). Set to codex so
 # `aida zen` / `aida burndown` / supervised drives use the Codex CLI without a
