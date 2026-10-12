@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-12T05:47:50.024515260Z
+modified_at: 2026-10-12T05:47:52.744967530Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -58,6 +58,27 @@ comments:
   created_at: 2026-10-11T15:20:53.256288971Z
   modified_at: 2026-10-11T15:20:53.256288971Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ea7-3628-7ca1-a5c1-993af2abc19b
+  author: joe
+  content: |-
+    NIGHT (lane A) PARKED 2026-10-11 22:55 MST: not started. The fix depends on code that only exists in PR #2485, which is on hold.
+
+    Why parked:
+    1. The operator decision (2026-10-11 15:20) says to sequence this on top of PR #2485 after it merges, not in parallel. #2485 is still OPEN with a recorded merge hold.
+    2. Ship-time acceptance needs `grant_authorized_at` and `RecorderAttestation.identity`. Neither exists on main; #2485 adds both.
+    3. #2485's `review_authority.rs` already builds the identity model this fix needs: token sets of env session ids, `pid@start`, `sid:`, `proc:` agent root and lease ids, plus an injectable `IdentitySource`. Building a second identity model on main now would create a duplicate hardening path that conflicts with #2485.
+
+    Design sketch, for advisor signoff when #2485 lands:
+    - At issue, `aida role enter` (a human at a TTY, before any agent exists) records `binding` on SeatGrant: the issuing shell's `shell:pid@start` token (the parent of the `aida role enter` process) and its `sid:` token. `issue_child` binds the launched worker the way #2485's launch paths do: `session:<lease-id>` / `AIDA_SESSION_ID`, plus the worker's `pid@start` once it is stamped.
+    - `current_grant()` computes the presenter's identity with `review_authority`'s recorder-identity function (ancestors up to the agent root, plus session ids and sid). It returns a refusal reason, not None, when the presenter's identity does not intersect `binding`. `doctor` and `role status` show that reason.
+    - At ship, `grant_authorized_at` also requires the attestation's recorder identity to intersect `grant.binding`.
+    - Legacy grants with no `binding` are refused. The 24h max age means they expire within a day anyway.
+    - Open fork (advisor): a grant entered in one shell and used by a claude started from that shell passes, because the shell is an ancestor. A tmux/nohup re-parented process fails. Recommendation: accept that, fail closed, matching #2485's out-of-scope note.
+
+    Recommendation: un-park once #2485 merges. Cut from main after the merge and reuse `review_authority`.
+  created_at: 2026-10-12T05:47:52.744967530Z
+  modified_at: 2026-10-12T05:47:52.744967530Z
+  session_id: 3f49f639-6fab-4c96-9189-7758c393f5b6
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
