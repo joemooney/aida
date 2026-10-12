@@ -8,12 +8,12 @@ description: |-
   Hypothesis: the same open-file-description inheritance window as BUG-1974/BUG-1987. A process forked while the store lock was held (for example a detached refresh/auto-push child, or a git child spawned inside the window) keeps a duplicate of the flock fd until exec or exit. So the lock still reads as held after the parent releases it. Note that aida_locks only inspects the parent.
 
   Acceptance: identify which process holds the duplicate fd (extend the probe to scan /proc/*/fd for the lock inode). Then either make the lock fd unreachable from any spawn (spawn only after release, or close-range in pre_exec), or make the assertion tolerate a lock held by a non-aida short-lived child, if that is legitimate. Do not weaken the push-unlocked invariant itself.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:51:51.434814324Z
-modified_at: 2026-10-12T14:48:42.957311841Z
+modified_at: 2026-10-12T18:09:22.154718427Z
 req_type: Bug
 tags:
 - ci
@@ -28,6 +28,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1314e-10ea-7672-b1ad-7a8b6e741732
+  author: aida-session-start
+  timestamp: 2026-10-12T18:09:22.154717697Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cd739cfb5f24200e1a7c45f0aaa6370bda8fcb70
   branch: main
