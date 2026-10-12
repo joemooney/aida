@@ -1190,6 +1190,10 @@ pub(crate) struct HistoryCacheStatus {
     /// `None` when fresh, unknown, or not an ancestor of HEAD.
     // trace:BUG-1923 | ai:claude
     pub(crate) lag: Option<usize>,
+    /// True when HEAD is a strict ancestor of the tip: this checkout's
+    /// store is behind a shared index that another checkout moved on.
+    // trace:BUG-1954 | ai:claude
+    pub(crate) head_behind_tip: bool,
     /// True when inline catch-up has paused after repeated attempts that
     /// kept nothing; queries read git until a rebuild or the next retry.
     pub(crate) catch_up_stalled: bool,
@@ -2064,9 +2068,14 @@ pub(crate) enum IndexMiss {
     /// than the flow catches up inline; an event view catches it up.
     Behind,
     /// The index is behind HEAD and cannot catch up incrementally: inline
-    /// catch-up paused after repeated failures, or HEAD does not descend
-    /// from the indexed tip. Only a rebuild fixes it.
+    /// catch-up paused after repeated failures, or HEAD has diverged from
+    /// the indexed tip. Only a rebuild fixes it.
     Stuck,
+    /// This checkout's store HEAD is behind the shared index (an ancestor
+    /// of its tip, which another checkout moved on). The index is right
+    /// for that checkout; a rebuild would reset it under it.
+    // trace:BUG-1954 | ai:claude
+    CheckoutBehind,
     /// The index is current but has not filled in enough older history to
     /// cover this query.
     Filling,
@@ -2090,7 +2099,10 @@ pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
         IndexMiss::Busy
     } else if st.tip != st.head {
         // trace:STORY-1650 | ai:claude
-        if st.catch_up_stalled || st.lag.is_none() {
+        if st.head_behind_tip {
+            // trace:BUG-1954 | ai:claude
+            IndexMiss::CheckoutBehind
+        } else if st.catch_up_stalled || st.lag.is_none() {
             IndexMiss::Stuck
         } else {
             IndexMiss::Behind
@@ -2403,6 +2415,10 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
         if let (Some(tip), Some(head)) = (&st.tip, &st.head) {
             if tip != head && aida_core::git_ops::is_ancestor(store, tip, head).unwrap_or(false) {
                 st.lag = aida_core::git_ops::rev_list_count(store, &format!("{tip}..{head}")).ok();
+            } else if tip != head {
+                // trace:BUG-1954 | ai:claude
+                st.head_behind_tip =
+                    aida_core::git_ops::is_ancestor(store, head, tip).unwrap_or(false);
             }
         }
         st.floor_commit_at = cache
