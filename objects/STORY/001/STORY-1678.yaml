@@ -1,0 +1,39 @@
+id: 01a12d8f-50a5-7563-ac94-a0ff7d6d4dc7
+spec_id: STORY-1678
+agreed_id: STORY-1678
+title: 'aida regen trial: enforce regenerator isolation with an OS sandbox and a scrubbed environment for every harness'
+description: |
+  ## F30. Enforce regenerator isolation with an OS sandbox for every harness
+
+  **Seen:** the bwrap-isolated runs (E7a, E7b) could not see the repo, transcripts, live wrapper or lock dirs. The
+  honor-system Claude subagent E2r-c accidentally ran the original `tmp-sweep`.
+
+  **Proposal:** `aida regen trial` launches every regenerator, whatever the harness, under the same sandbox
+  (read-only root, the project and transcripts hidden, only the work dir writable). Isolation then becomes a property
+  of the method, not of instruction-following.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T00:42:09.445577574Z
+modified_at: 2026-10-12T00:42:09.445577574Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
