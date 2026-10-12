@@ -1,0 +1,39 @@
+id: 01a12d8f-3823-7db3-aefb-fb4d05c88216
+spec_id: STORY-1677
+agreed_id: STORY-1677
+title: 'aida regen trial: run-until-done policy and a completeness check, so effort is not scored as spec quality'
+description: |
+  ## F29. Cross-family trials need a completeness check or a run-until-done policy
+
+  **Seen:** Gemini 3.1 Pro (agy, one print-mode turn, 4 minutes) wrote placeholders for two of the four tools and said
+  so in NOTES. It scored 34.1%. Claude and Codex worked until finished.
+
+  **Proposal:** before scoring, check that every required tool exists, is more than a stub, and handles `--help`. Give
+  every harness a continuation policy ("continue until all required files are complete"), or score only components
+  the agent claims to have finished, and report the two separately.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T00:42:03.171006858Z
+modified_at: 2026-10-12T00:42:03.171006858Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
