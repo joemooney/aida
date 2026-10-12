@@ -8,13 +8,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:38:24.217096943Z
-modified_at: 2026-10-12T06:00:12.723984175Z
+modified_at: 2026-10-12T06:00:36.683682117Z
 req_type: Bug
 tags:
 - ci
 - flaky-test
 - found:night-2026-10-10
 - groom:approve
+comments:
+- id: 01a12eb2-de4b-76d3-9d07-870647f0b933
+  author: joe
+  content: |
+    [groom:night] APPROVE as written (acceptance is inline and testable). No fix on origin/main (HEAD 17ff749954; no commit references this spec). The fixture TempDir is owned by Fixture for the whole test, so the early-drop suspect is unlikely. The stronger suspect is another test removing or retargeting shared temp state (TMPDIR, cwd, or a sweep of /tmp/.tmp*) while this test runs. The bug_1682 global_queue panic in the same run points the same way. Not a duplicate: no other spec reports "unable to create temporary file".
+  created_at: 2026-10-12T06:00:36.683682117Z
+  modified_at: 2026-10-12T06:00:36.683682117Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
