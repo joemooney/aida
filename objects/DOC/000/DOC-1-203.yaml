@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-11T20:26:15.153476351Z
+modified_at: 2026-10-12T02:47:07.421227815Z
 req_type: Doc
 tags:
 - factory:2026-10-11
@@ -307,6 +307,12 @@ comments:
   created_at: 2026-10-11T20:26:15.153476351Z
   modified_at: 2026-10-11T20:26:15.153476351Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12e01-b99d-7ed2-bb8c-5d70bb7c9e92
+  author: joe
+  content: 'FACTORY DRAFT (round 5): PR #2499 at 8564175390. Rebased on main; universal launch-grant sentences cut and replaced by a per-launcher table (role enter/add, session new/resume, agent new, queue work), every cell code-traced in the PR body; role add direct grant, exceptions listed without a count. Correction to round-4 starting points: session new --role issues no grant (session.rs:1221 is spawn_vendor_headless_with_seat), and queue work has two inherit paths (fresh --no-human non-review, resumed interactive PR review). check-ci-fast green. Still draft.'
+  created_at: 2026-10-12T02:47:07.421227815Z
+  modified_at: 2026-10-12T02:47:07.421227815Z
+  session_id: 41bae717-5469-4211-97a6-618c019ce287
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
