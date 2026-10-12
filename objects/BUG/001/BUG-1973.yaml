@@ -8,13 +8,21 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:20:16.023382481Z
-modified_at: 2026-10-12T06:03:05.512562133Z
+modified_at: 2026-10-12T06:03:30.650079586Z
 req_type: Bug
 tags:
 - docs
 - follow-up:advisor-review
 - groom:approve
 - ux
+comments:
+- id: 01a12eb5-85da-7503-bf83-243dc96ae324
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). Still real: the hint moved to aida-cli-lib/src/upgrade_release.rs:197, note_hidden_alias("aida usage --unused", "aida usage unused") with no duration placeholder. Acceptance (test asserting a duration placeholder) is testable; the drift-check extension may be satisfied by a recorded reason.
+  created_at: 2026-10-12T06:03:30.650079586Z
+  modified_at: 2026-10-12T06:03:30.650079586Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
