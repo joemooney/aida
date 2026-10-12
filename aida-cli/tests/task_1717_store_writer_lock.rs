@@ -1146,6 +1146,7 @@ fn push_probe_attributes_a_competitor_that_took_the_released_lock() {
 /// parent), by an ancestor that pushes from a child, or by a reparented
 /// helper the command started is still a violation, attributed to the holder.
 // trace:BUG-1989 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
 fn push_probe_still_fails_a_lock_held_by_the_pushing_process() {
     let push = "git push -q origin aida-store";
