@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:38:24.217096943Z
-modified_at: 2026-10-12T18:08:53.174607759Z
+modified_at: 2026-10-12T18:30:59.080698878Z
 req_type: Bug
 tags:
 - ci
@@ -50,6 +50,27 @@ comments:
   content: 'PR #2560 (head 843c6e43e4) is defensive hardening; root cause UNCONFIRMED. Acceptance status: (a) ''identify the interfering test or early drop'': NOT MET. The mechanism behind git''s ''unable to create temporary file'' on the fixture commit was not reproduced. Ruled out: TMPDIR mutation, GIT_DIR/GIT_OBJECT_DIRECTORY set_var, early TempDir drop, test_home sweep, temp_dir() sweeps, git auto-maintenance (traced git 2.55/2.56), cross-test rmdir (2 traced full lib runs). The round-1 ''foreign shim'' claim is retracted (441/441 execs were execvp ENOENT probes). (b) ''fix the isolation'': PARTIAL. Every fixture git spawn now uses a pinned binary, hermetic env and no auto-maintenance. (c) ''stable over repeated full-workspace runs'': NOT DEMONSTRATED at full-workspace scale. The target test passed 15/15 in 16-thread stress runs alongside the PATH-shimming modules and the module passes 70/0. Sibling history tests still flake through production git resolving the leaked process-wide PATH; that is tracked in BUG-1994.'
   created_at: 2026-10-12T18:08:53.174607759Z
   modified_at: 2026-10-12T18:08:53.174607759Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13161-db08-7030-9a8b-b4fd475c0dd7
+  author: joe
+  content: |-
+    **Advisor verdict — APPROVE at 843c6e43e4 (round 2) — READY-FOR-OPERATOR**
+
+    An independent re-review found all round-1 items resolved, and Build is green at this SHA. The change is test-only defensive hardening and cannot make the fixture less reliable than bare `git`. The advisor dispatched this implementer, so under ADR-73 cond. 1 the advisor will not merge it.
+
+    **Merge with an explicit body.** The repo squash default is COMMIT_MESSAGES, which would put commit dbebacaa64's retracted root-cause claim onto main:
+    ```
+    gh pr merge 2560 --squash --match-head-commit 843c6e43e44571242b72e1ccad9f8d6540b32790 \
+      --subject "[AI:claude] fix(tests): pin history-cache fixture git against PATH-shim leakage (BUG-1955) (#2560)" \
+      --body "Defensive hardening; the CI root cause is unconfirmed (see PR body and the BUG-1955 comment). Remaining PATH-leak flakes are tracked in BUG-1994.
+
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+    ```
+    **After merge:** the `(BUG-1955)` trailer will auto-complete BUG-1955, but its acceptance is only partly met (a: not met, b: partial, c: not shown). Re-open it, or re-scope it to hardening and leave the rest to BUG-1994.
+
+    Non-blocking: F2, a comment at ~L209-211 overstates the exit-127 path. F3, the PATH filter decides by location, not by what the file is (not a regression).
+  created_at: 2026-10-12T18:30:59.080698878Z
+  modified_at: 2026-10-12T18:30:59.080698878Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-bf9a-73b3-8364-26cfc8adcdf0
