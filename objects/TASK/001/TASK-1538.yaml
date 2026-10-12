@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T00:47:17.159233829Z
+modified_at: 2026-10-12T01:11:13.725187392Z
 req_type: Task
 tags:
 - closure:pending
@@ -684,6 +684,21 @@ comments:
   created_at: 2026-10-12T00:47:17.159233829Z
   modified_at: 2026-10-12T00:47:17.159233829Z
   session_id: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+- id: 01a12da9-ee3d-7011-a75a-77f70e3e6b7b
+  author: joe
+  content: |-
+    RUN 9 READY TO MERGE (PR #2538). #2526 landed as 65b36b4509 (rebase-merge, tree-equal to slice-30). slice-36 is rebased onto it: head 436c966e3d, base main, Build green, MERGEABLE.
+    All 6 commits are tree-equal to the r2 commits, so the proofs carry over (10306/10306, warnings 0/0). New tags:
+    - slice-36-r3 session_misc aa9959469d (1774)
+    - slice-37-r3 plan_report 39a9a604c5 (1503)
+    - slice-38-r3 drain_batch 5086c851bb (2462)
+    - slice-39-r3 trace 5dbaf6b0e7 (3200)
+    - slice-40-r3 worktree_gc 436c966e3d (3123)
+    verify_stack 65b36b4509..slice-36 --build: 6 commits (5 MOVE, 1 RETARGET), checks 1–9 PASS.
+    After this lands, the stack is empty. Run 10 (phase_gates, which #2527 unblocked, then the Q8 straddler sweep) comes next. Note: CI's pull_request trigger covers only PRs into main, so stacked PRs never get Build until they're retargeted. I retarget before pushing so the synchronize event runs Build.
+  created_at: 2026-10-12T01:11:13.725187392Z
+  modified_at: 2026-10-12T01:11:13.725187392Z
+  session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
