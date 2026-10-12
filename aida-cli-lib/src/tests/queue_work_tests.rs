@@ -3171,8 +3171,9 @@ fn steal_session_end_failure_surfaces_actual_reason_not_canned_message() {
     let underlying = anyhow::anyhow!("worktree has uncommitted changes — pass --force to discard");
     let wrapped: anyhow::Error = anyhow::anyhow!(
         "--steal could not end lease {}: {:#} \
-             (resolve manually with `aida session end {} --force` to discard, \
-             or commit/stash the worktree's changes first, then re-run)",
+             (resolve manually: `aida session end {} --force` discards uncommitted \
+             changes and `--include-in-use` overrides a live process in the worktree; \
+             or commit/stash the changes or stop the process first, then re-run)",
         short,
         underlying,
         short,

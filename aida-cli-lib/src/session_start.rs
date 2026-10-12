@@ -1539,7 +1539,7 @@ pub(crate) fn session_start(
                             .unwrap_or(false);
                         if !ended {
                             anyhow::bail!(
-                                "could not end dead lease {} holding `{}` — run `aida session end {} --force` and retry",
+                                "could not end dead lease {} holding `{}` — run `aida session end {}` to see why; add `--force` to discard uncommitted changes or `--include-in-use` to override a live process, then retry", // trace:BUG-1986 | ai:claude
                                 l.id,
                                 source_branch,
                                 l.id

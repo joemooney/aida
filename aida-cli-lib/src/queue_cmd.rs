@@ -11892,12 +11892,13 @@ pub(crate) fn handle_queue_work(
             .map_err(|e| {
                 anyhow::anyhow!(
                     "--steal could not end lease {}: {:#} \
-                     (resolve manually with `aida session end {} --force` to discard, \
-                     or commit/stash the worktree's changes first, then re-run)",
+                     (resolve manually: `aida session end {} --force` discards uncommitted \
+                     changes and `--include-in-use` overrides a live process in the worktree; \
+                     or commit/stash the changes or stop the process first, then re-run)",
                     short_id,
                     e,
                     short_id,
-                )
+                ) // trace:BUG-1986 | ai:claude
             })?;
             remaining -= 1;
             if remaining == 0 {

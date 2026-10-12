@@ -452,3 +452,133 @@ fn pool_return_refuses_a_worktree_a_live_process_is_using() {
     assert_eq!(s.worktree_branch(), "HEAD", "returned trees are detached");
     drop(live);
 }
+
+// BUG-1986: an agent ends its own session from inside its worktree while one
+// of its own helpers (an MCP server: same session, cwd in the tree) is still
+// running. The helper is exempt as part of the caller's in-worktree run, and
+// the final recheck must not lose that exemption by running after the chdir
+// to the project root. The end must succeed and remove the tree.
+// trace:BUG-1986 | ai:claude
+#[test]
+#[cfg(unix)]
+fn session_end_from_inside_with_its_own_helper_running_ends_cleanly() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    // The `sh` stands in for the agent: its cwd is the worktree, it starts a
+    // helper in the tree, then runs `session end` from there.
+    // It gets the same hermetic environment as every `aida` run here.
+    let env_donor = aida(&s.worktree, &s.home);
+    let mut cmd = Command::new("sh");
+    cmd.current_dir(&s.worktree).env_clear();
+    for (k, v) in env_donor.get_envs() {
+        if let Some(v) = v {
+            cmd.env(k, v);
+        }
+    }
+    cmd.env("AIDA_BIN", env!("CARGO_BIN_EXE_aida"))
+        .env("END_ID", &s.id)
+        .args([
+            "-c",
+            "sleep 600 & helper=$!; \
+             \"$AIDA_BIN\" session end \"$END_ID\" --yes --skip-ci; rc=$?; \
+             kill $helper; exit $rc",
+        ]);
+    let out = cmd.output().expect("run agent shell");
+    let msg = text(&out);
+    assert!(
+        out.status.success(),
+        "ending your own session with your own helper running must succeed:\n{msg}"
+    );
+    assert!(!s.worktree.exists(), "worktree removed:\n{msg}");
+    assert!(!s.lease_exists(), "lease released:\n{msg}");
+}
+
+/// Runs `session end` with the debug-build pause at `stage`, starts a live
+/// process in the tree while it waits, then lets it continue. Returns the
+/// output and the pid of the live process (still running).
+// trace:BUG-1986 | ai:claude
+fn end_with_a_holder_started_at(s: &Session, stage: &str) -> (Output, KillOnDrop) {
+    let pause = tempfile::tempdir().expect("pause dir");
+    let mut cmd = aida(&s.repo, &s.home);
+    cmd.env("AIDA_TEST_SESSION_END_PAUSE_AT", stage)
+        .env("AIDA_TEST_SESSION_END_PAUSE_DIR", pause.path())
+        .args(["session", "end", &s.id, "--yes", "--skip-ci"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let child = cmd.spawn().expect("spawn session end");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !pause.path().join("paused").exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "session end never reached the {stage} pause"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Nothing held the tree at the first check; this process appears after it.
+    let live = s.spawn_live_process();
+    std::fs::write(pause.path().join("resume"), "").unwrap();
+    let out = child.wait_with_output().expect("wait for session end");
+    (out, live)
+}
+
+// BUG-1986: a process that starts using the tree while the operator sits at
+// the confirmation is caught by the recheck inside `session end`, which
+// refuses before anything is touched.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    let (out, live) = end_with_a_holder_started_at(&s, "after-confirm");
+    let msg = text(&out);
+    assert!(!out.status.success(), "the recheck must refuse:\n{msg}");
+    assert!(
+        msg.contains(&format!("pid {}", live.0.id())),
+        "names the pid:\n{msg}"
+    );
+    assert!(
+        msg.contains("NOT ended"),
+        "says the session was not ended:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert!(s.lease_exists(), "lease must survive");
+}
+
+// BUG-1986: a holder that appears just before the teardown (after the dirty
+// gate) is caught by the final recheck. The lease and the pool entry are
+// left intact, so once the holder exits a plain re-run ends the session and
+// returns the tree to the pool.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let branch_before = s.worktree_branch();
+    let (out, live) = end_with_a_holder_started_at(&s, "before-teardown");
+    let msg = text(&out);
+    assert!(
+        !out.status.success(),
+        "the final recheck must refuse:\n{msg}"
+    );
+    assert!(
+        msg.contains(&format!("pid {}", live.0.id())),
+        "names the pid:\n{msg}"
+    );
+    assert!(
+        msg.contains("NOT ended"),
+        "says the session was not ended:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert_eq!(s.worktree_branch(), branch_before, "tree must not be reset");
+    assert!(s.lease_exists(), "lease must survive the late refusal");
+
+    drop(live);
+    let out = s.end(&s.repo, &[]);
+    assert!(
+        out.status.success(),
+        "once the holder exits, a re-run must end the session:\n{}",
+        text(&out)
+    );
+    assert!(!s.lease_exists(), "lease released on the re-run");
+    assert!(s.worktree.is_dir(), "pooled tree returned, not removed");
+}

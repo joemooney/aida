@@ -1184,12 +1184,10 @@ pub(crate) fn session_end(
             ); // trace:BUG-1986 | ai:claude
             anyhow::bail!(msg)
         }
-        eprintln!(
-            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
-            "→".dimmed(),
-            leaked.len()
-        );
-        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        // With --include-in-use they are terminated later, after the
+        // confirmation and the dirty gate: a declined prompt, a non-TTY
+        // refusal or a dirty-tree refusal must leave the agents running.
+        // trace:BUG-1986 | ai:claude
     }
 
     // Refuse to delete a worktree any live process is still using: a cwd
@@ -1291,6 +1289,7 @@ pub(crate) fn session_end(
     // BUG-1986: the operator may have sat at the prompt for a while; a build
     // started in the tree meanwhile must still stop the teardown. Nothing
     // has been touched yet, so a refusal here leaves everything as it was.
+    session_end_test_pause("after-confirm"); // trace:BUG-1986 | ai:claude
     if tears_down_worktree {
         if let Err(refusal) = recheck_holders_before_teardown(
             &target.worktree_path,
@@ -1408,6 +1407,40 @@ pub(crate) fn session_end(
                  (Gitignored files like target/ and .aida/cache.db never require --force.)",
             );
             anyhow::bail!(msg);
+        }
+    }
+
+    // BUG-61 under --include-in-use: terminate live claudes in the tree only
+    // now, once the confirmation and the dirty gate have both passed.
+    // trace:BUG-1986 | ai:claude
+    if !leaked.is_empty() {
+        eprintln!(
+            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
+            "→".dimmed(),
+            leaked.len()
+        );
+        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+    }
+
+    // BUG-1986: the last holder check before the tree is removed or reset.
+    // It runs here, before the lease is deleted and before the chdir to the
+    // project root below: after that chdir the caller is outside the tree,
+    // so the agent's own helpers (an MCP server with its cwd in the tree)
+    // would lose their self-chain exemption. Only the lease, claim and
+    // manifest unlinks sit between this check and the removal. A refusal
+    // leaves the lease, the pool entry and the worktree in place.
+    // trace:BUG-1986 | ai:claude
+    session_end_test_pause("before-teardown");
+    if tears_down_worktree {
+        if let Err(refusal) = recheck_holders_before_teardown(
+            &target.worktree_path,
+            include_in_use,
+            aida_core::worktree_holders::check_worktree_removal_interactive,
+        ) {
+            anyhow::bail!(
+                "{refusal}\n\nThe session was NOT ended; its lease is kept and its worktree \
+                 was not removed or reset."
+            );
         }
     }
 
@@ -1572,20 +1605,6 @@ pub(crate) fn session_end(
     // idle) instead of deleting it. The directory persists so the next acquire
     // reuses it warm. trace:STORY-714 | ai:claude
     let mut returned_to_pool = false;
-    // BUG-1986: the last holder check, immediately before the tree is reset
-    // or removed. The lease is already gone by now, so a refusal keeps the
-    // worktree on disk and fails the command at the end instead of bailing
-    // midway through the teardown. trace:BUG-1986 | ai:claude
-    let kept_in_use = if has_worktree && shared_peer.is_none() {
-        recheck_holders_before_teardown(
-            &target.worktree_path,
-            include_in_use,
-            aida_core::worktree_holders::check_worktree_removal_interactive,
-        )
-        .err()
-    } else {
-        None
-    };
     if !has_worktree {
         // BUG-734: worktree-less lease — the record is gone; nothing on disk
         // to remove or return. trace:BUG-734 | ai:claude
@@ -1602,12 +1621,6 @@ pub(crate) fn session_end(
             target.worktree_path.display(),
             peer.id.yellow(),
             peer.scope
-        );
-    } else if let Some(refusal) = &kept_in_use {
-        eprintln!(
-            "{} {refusal}\n\nThe session's lease was released, but its worktree {} was kept.",
-            "Error:".red().bold(),
-            target.worktree_path.display()
         );
     } else if !remove
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
@@ -1704,7 +1717,7 @@ pub(crate) fn session_end(
     // BUG-734: no worktree was ever created, so no Claude Code project dir
     // can have been orphaned by its removal. trace:BUG-734 | ai:claude
     // trace:TASK-70 BUG-483 STORY-714 | ai:claude
-    if has_worktree && shared_peer.is_none() && !returned_to_pool && kept_in_use.is_none() {
+    if has_worktree && shared_peer.is_none() && !returned_to_pool {
         if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
             if cc_dir.is_dir() {
                 if purge_cc {
@@ -1853,17 +1866,39 @@ pub(crate) fn session_end(
             eprintln!("{}", line);
         }
     }
-    // trace:BUG-1986 | ai:claude
-    if kept_in_use.is_some() {
-        anyhow::bail!(
-            "the session ended, but worktree {} was kept because a live process started \
-             using it during the teardown; stop it and remove the worktree by hand, or \
-             re-run the cleanup later",
-            target.worktree_path.display()
-        );
-    }
     Ok(())
 }
+
+/// Test-only pause inside `session end`, so an integration test can start a
+/// process in the worktree between two steps and prove the in-flow holder
+/// rechecks catch it. Active only in debug builds, and only when
+/// `AIDA_TEST_SESSION_END_PAUSE_AT` names `stage`: it then creates `paused`
+/// in `AIDA_TEST_SESSION_END_PAUSE_DIR` and waits (up to 60s) for `resume`.
+// trace:BUG-1986 | ai:claude
+#[cfg(debug_assertions)]
+fn session_end_test_pause(stage: &str) {
+    if std::env::var("AIDA_TEST_SESSION_END_PAUSE_AT")
+        .ok()
+        .as_deref()
+        != Some(stage)
+    {
+        return;
+    }
+    let Some(dir) = std::env::var_os("AIDA_TEST_SESSION_END_PAUSE_DIR") else {
+        return;
+    };
+    let dir = std::path::PathBuf::from(dir);
+    let _ = std::fs::write(dir.join("paused"), stage);
+    let resume = dir.join("resume");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !resume.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+// trace:BUG-1986 | ai:claude
+#[cfg(not(debug_assertions))]
+fn session_end_test_pause(_stage: &str) {}
 
 /// The session-end override flag for the live-process refusal.
 // trace:BUG-1986 | ai:claude

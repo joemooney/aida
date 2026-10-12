@@ -6459,8 +6459,11 @@ pub enum QueueCommand {
         /// refuses and names the holding lease. With --steal, the holding
         /// session is ended first (`aida session end <id>` — clean exit;
         /// uncommitted work still blocks, exit those manually or use
-        /// `aida session end --force`) and the new session takes over.
+        /// `aida session end --force`; a live process using the worktree
+        /// also blocks, stop it or use `aida session end --include-in-use`)
+        /// and the new session takes over.
         // trace:TASK-81 | ai:claude
+        // trace:BUG-1986 | ai:claude
         #[clap(long)]
         steal: bool,
         /// Claim a spec whose status is ambiguous: already In Progress with
