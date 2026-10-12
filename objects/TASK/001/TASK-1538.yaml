@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T08:05:03.986010652Z
+modified_at: 2026-10-12T08:05:39.139435829Z
 req_type: Task
 tags:
 - closure:pending
@@ -792,6 +792,25 @@ comments:
     #2548 is still open and touches no lib_part files, so there is no ordering conflict.
   created_at: 2026-10-12T08:05:03.986010652Z
   modified_at: 2026-10-12T08:05:03.986010652Z
+  session_id: b131bd29-8831-46b7-adfc-cad6b631bdcb
+- id: 01a12f25-58c3-7e51-9276-cf2553e047c9
+  author: joe
+  content: |-
+    SKETCH for advisor signoff: append-MOVE tooling for run 14. It is needed for ruling (b), and for all remaining mapped residue (output_format ~579, statusline_root ~401, role ~376, scaffold_init ~343, requirements_cli ~212, agent_config ~134, db_block ~123), because every one of those modules already exists. The ~8.8k UNMAPPED lines stay in the root.
+    1. Subject: a new MOVE form 'refactor(cli-lib): extend <mod>.rs' (MOVE_EXTEND regex). It classifies as MOVE, so the retarget, pairing, tag and size checks apply unchanged. The tag's module is <mod>.
+    2. Manifest: TOML can't reopen [module.kernel], so an append entry gets its own key with a target: [module.kernel_forge_timeout] into = "kernel", purpose = ..., items = [...]. The purpose is recorded only; no header is written.
+    3. extract_module.py: when an entry has 'into', it requires src/<into>.rs to exist, appends the chunks after one blank line at EOF, and does NOT touch the mod/glob lines in lib.rs. Selector matching, the overlap checks and comment extend-back are unchanged.
+    4. verify_stack check 3 for an extend:
+       - <mod>.rs must have status M, not A, and must exist at the parent;
+       - the parent's file must be a byte prefix of the new file (append-only; no edits to already-moved code);
+       - it adds no other new modules;
+       - the same added/removed multiset purity applies;
+       - lib.rs wiring allows only 1n 'pub use <mod>::...' shims for moved bare-pub items. Mod/glob lines are not allowed (already wired).
+       - Check 7 measures the post-append size against the 6000 cap.
+    5. Tests: test_verify_stack.py cases for extend-pass, extend-with-edit-to-existing-lines (FAIL 3), an extend of a missing module (FAIL 3), and an extend that adds a mod line (FAIL 3).
+    Delivery: one 'tooling: append-mode MOVEs (extend <mod>.rs)' commit opening run 14, stacked on #2550 (3 deep, the limit). Then the extends: stale-check -> review_gates, forge-timeout -> kernel, then the residue modules above in map order, with the Q8 straddlers resolved by the decl-line rule as each target comes up. Alternatively, the tooling commit could be its own PR off main first, so the stack doesn't hit 3 deep. I'll wait for signoff on this sketch before implementing.
+  created_at: 2026-10-12T08:05:39.139435829Z
+  modified_at: 2026-10-12T08:05:39.139435829Z
   session_id: b131bd29-8831-46b7-adfc-cad6b631bdcb
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
