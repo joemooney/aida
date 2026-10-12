@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-12T06:55:49.432832578Z
+modified_at: 2026-10-12T06:57:12.601438795Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -33,6 +33,12 @@ comments:
   created_at: 2026-10-11T16:33:29.395267398Z
   modified_at: 2026-10-11T16:33:29.395267398Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ee6-af99-7eb1-a50e-6e6bd0f9ef77
+  author: joe
+  content: 'NIGHT-B root cause (telemetry + code read): the 25.5 s calls are the SQLite retry ladder DEFAULT_CACHE_RETRY_DELAYS_MS in aida-core/src/db/cache.rs (100+200+...+12800 = exactly 25,500 ms), run to exhaustion. In usage.jsonl, all nine slow calls between 07:18:14 and 07:20:33Z (show x6, list x2, comment list x1) EXITED 1. They overlapped a single 157 s ''aida edit'' (07:18:02-07:20:39, about 6x25.5 s), and reads went back to ~200 ms the moment it ended. Refresh workers logged LockHeld and then hit the 120 s runtime cap. Mutations write to cache.db without the refresh flock, so a reader can hold the flock and still hit the SQLite write lock. BUG-1674 bounded only one reader branch; the remaining reader-side fallbacks in cached_git_backend.rs (no_detach, spawning_suppressed, refresh-lock error, no usable snapshot, loser re-check, tolerant_read) and the schema stamp in Cache::open still use the full ladder. The fix, in progress on bug-1956-work, bounds these to WriterBusy/stale-with-note within the ceiling, plus a contended-path CLI test. Possible contributing factor, unverified: from 07:11 to 07:43 the stale labels showed cache_head null (source_head_sha empty), which would keep every reader trying to refresh.'
+  created_at: 2026-10-12T06:57:12.601438795Z
+  modified_at: 2026-10-12T06:57:12.601438795Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12bcf-cb9a-74f0-9d98-21e0a6befc37
   author: joe
