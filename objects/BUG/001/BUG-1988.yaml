@@ -16,13 +16,34 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:20:18.276952554Z
-modified_at: 2026-10-12T14:57:21.236224904Z
+modified_at: 2026-10-12T16:28:37.621070549Z
 req_type: Bug
 tags:
 - data-safety
 - from-review:2548
 - sessions
 - worktree
+comments:
+- id: 01a130f1-d575-75d0-811f-0a66aba85cb6
+  author: joe
+  content: |-
+    NIGHT READY: PR #2555 green at 117e16b61aef4f9d85a65f47a1d5b889fead9ce6
+
+    All five acceptance items are done:
+    - (1) Only local steps sit between the final recheck and remove/return. release_claim, the needs-human clear and the manifest/activity deletes now run after it. Deliberate deviation: the mcp-claim reap stays before removal, because otherwise the shared-worktree peer check counts the session's own claim as a peer. It is a local unlink, so the window doesn't grow.
+    - (2) A failed salvage keeps the lease, relinks the runtime links, and names `aida session end <id>`. Integration-tested.
+    - (3) The pause tests are cfg(debug_assertions). The debug build ran all 10 tests in that file, including both pause tests.
+    - (4) A bare `?? .aida/` is expanded with -uall. `agents` is now in WORKTREE_AIDA_RUNTIME_LINKS, which link, strip and the gate share.
+    - (5) The pid-namespace warning prints once.
+
+    Review: a fresh review at 0c1d465006 was APPROVE. Its Medium (the .aida/agents link) and a Low wording nit were folded in. A fresh re-review at 117e16b61a is APPROVE (174 lib + 8 integration tests pass). Build is green. The first red on 0c1d465006 was the BUG-1990 flake (test_show_latency teardown), and its re-run was green.
+
+    Follow-ups, not blocking:
+    - BUG-1991 (filed, high, data-safety, predates this PR): when the session's own MCP claim shares the worktree path, every holder check is skipped.
+    - Low: leases.rs force_cleanup_lease (~:2840) keeps its own inline strip list without `agents`. There is no practical impact (it uses `worktree remove --force`), but it should call worktree_gc::unlink_worktree_aida_runtime.
+  created_at: 2026-10-12T16:28:37.621070549Z
+  modified_at: 2026-10-12T16:28:37.621070549Z
+  session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
 history:
 - id: 01a13096-3396-7f11-ba90-ba809a8e59b1
   author: joe
