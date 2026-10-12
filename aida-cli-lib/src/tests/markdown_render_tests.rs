@@ -206,3 +206,145 @@ fn deeply_nested_lists_keep_a_readable_body_width() {
     // body) instead of being split a character at a time.
     assert!(out.lines().count() <= 12 * 3, "{out}");
 }
+
+// ---------------------------------------------------------------------------
+// Glyph profile (BUG-1979): AIDA_GLYPHS=ascii draws ASCII-only line art.
+// trace:BUG-1979 | ai:claude
+// ---------------------------------------------------------------------------
+
+const QUOTE_AND_RULE: &str = "> quoted line\n> > nested quote\n\n---\n\n```\ncode\n```\n";
+
+fn ascii(src: &str, width: usize) -> String {
+    render_markdown_with(src, width, false, GlyphProfile::Ascii).expect("renders")
+}
+
+fn assert_all_ascii(out: &str) {
+    if let Some(c) = out.chars().find(|c| !c.is_ascii()) {
+        panic!("non-ASCII glyph {c:?} in ascii-profile output:\n{out}");
+    }
+}
+
+#[test]
+fn ascii_profile_headings_use_ascii_rules() {
+    let out = ascii(HEADINGS, 80);
+    assert_all_ascii(&out);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "Top heading");
+    assert_eq!(lines[1], "===========");
+    let second = lines.iter().position(|l| *l == "Second level").unwrap();
+    assert_eq!(lines[second + 1], "------------");
+}
+
+#[test]
+fn ascii_profile_bullets_use_the_registry_bullet() {
+    let out = ascii(NESTED_LISTS, 40);
+    assert_all_ascii(&out);
+    assert!(out.starts_with("* first item"), "{out}");
+    assert!(out.contains("  * nested one"), "{out}");
+    assert_snapshot("nested_lists_40_ascii", &out);
+}
+
+#[test]
+fn ascii_profile_blockquote_code_and_rule_use_pipes_and_dashes() {
+    let out = ascii(QUOTE_AND_RULE, 80);
+    assert_all_ascii(&out);
+    assert_eq!(
+        out,
+        "| quoted line\n|\n| | nested quote\n\n----------------------------------------\n\n  | code"
+    );
+}
+
+#[test]
+fn ascii_profile_table_uses_plus_dash_pipe_borders() {
+    let out = ascii(WIDE_TABLE, 80);
+    assert_all_ascii(&out);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("+-") && lines[0].ends_with("-+"),
+        "{out}"
+    );
+    assert!(
+        lines[1].starts_with("| ") && lines[1].ends_with(" |"),
+        "{out}"
+    );
+    assert!(lines.last().unwrap().starts_with("+-"), "{out}");
+    // Same geometry as the Unicode table: only the glyphs differ.
+    let unicode = plain(WIDE_TABLE, 80);
+    let widths = |s: &str| s.lines().map(|l| l.width()).collect::<Vec<_>>();
+    assert_eq!(widths(&out), widths(&unicode));
+    assert_snapshot("wide_table_80_ascii", &out);
+}
+
+#[test]
+fn ascii_profile_styled_output_is_ascii_too() {
+    for src in [HEADINGS, EMPHASIS, NESTED_LISTS, WIDE_TABLE, QUOTE_AND_RULE] {
+        let out = render_markdown_with(src, 80, true, GlyphProfile::Ascii).unwrap();
+        assert_all_ascii(&out);
+    }
+}
+
+#[test]
+fn unicode_profile_is_the_default_and_unchanged() {
+    for src in [HEADINGS, EMPHASIS, NESTED_LISTS, WIDE_TABLE, QUOTE_AND_RULE] {
+        assert_eq!(
+            render_markdown_with(src, 80, false, GlyphProfile::Unicode).unwrap(),
+            plain(src, 80)
+        );
+    }
+    // The historical box-drawing literals, byte for byte.
+    assert_eq!(
+        plain(QUOTE_AND_RULE, 80),
+        "│ quoted line\n│\n│ │ nested quote\n\n────────────────────────────────────────\n\n  │ code"
+    );
+    assert!(plain(HEADINGS, 80).contains("═══"));
+    assert!(plain(NESTED_LISTS, 80).starts_with("• first"));
+    let table = plain(WIDE_TABLE, 80);
+    for corner in ["┌", "┬", "┐", "├", "┼", "┤", "└", "┴", "┘"] {
+        assert!(table.contains(corner), "missing {corner}");
+    }
+}
+
+#[test]
+fn aida_glyphs_env_drives_the_terminal_renderer() {
+    let home = tempfile::tempdir().unwrap();
+    let home_str = home.path().to_str().unwrap();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_GLYPHS", Some("ascii")),
+            ("AIDA_TEST_HOME", Some(home_str)),
+        ]);
+        let out = render_markdown_for_terminal(WIDE_TABLE, 80);
+        assert_all_ascii(&out);
+        assert!(out.starts_with("+-"), "{out}");
+    }
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_GLYPHS", Some("unicode")),
+        ("AIDA_TEST_HOME", Some(home_str)),
+    ]);
+    assert!(render_markdown_for_terminal(WIDE_TABLE, 80).starts_with("┌"));
+}
+
+#[test]
+fn empty_no_color_is_ignored_per_no_color_org() {
+    // Unset or empty NO_COLOR leaves colour on at a terminal.
+    assert!(styling_decision(None, None, None, true));
+    assert!(styling_decision(Some(""), None, None, true));
+    // A non-empty NO_COLOR turns it off, whatever its value.
+    assert!(!styling_decision(Some("1"), None, None, true));
+    assert!(!styling_decision(Some("0"), None, None, true));
+    // CLICOLOR_FORCE wins over NO_COLOR; CLICOLOR=0 and a pipe turn it off.
+    assert!(styling_decision(Some("1"), Some("1"), None, false));
+    assert!(!styling_decision(None, Some("0"), None, false));
+    assert!(!styling_decision(None, None, Some("0"), true));
+    assert!(!styling_decision(None, None, None, false));
+}
+
+#[test]
+fn quiet_render_hook_only_silences_render_panics() {
+    install_quiet_render_hook();
+    // Outside a render, the flag is clear, so other panics still reach the
+    // previous hook.
+    assert!(!RENDERING.with(|r| r.get()));
+    let _ = render_markdown_for_terminal("text", 80);
+    assert!(!RENDERING.with(|r| r.get()), "flag reset after render");
+}

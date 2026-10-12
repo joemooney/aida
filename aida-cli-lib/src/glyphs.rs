@@ -333,6 +333,62 @@ impl GlyphProfile {
     }
 }
 
+/// Line-art glyphs for rendered markdown: heading rules, the quote / code
+/// gutter, and table borders. Selected by [`GlyphProfile`] like the registry.
+///
+/// Deliberately NOT [`Glyph`] variants: these are layout chrome whose width
+/// must stay exactly one column (a table border is repeated per column, so a
+/// custom `[glyphs]` override like `"--"` would break alignment), and adding
+/// box-drawing to [`Glyph::ALL`] would make the skill-body glyph count and
+/// `aida config glyph list` treat ordinary box-drawing text as registry
+/// glyphs. The list bullet is a real registry glyph ([`Glyph::Bullet`]).
+// trace:BUG-1979 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LineArt {
+    /// Level-1 heading underline (═ / =).
+    pub(crate) rule_heavy: &'static str,
+    /// Level-2 heading underline, thematic break, table horizontal (─ / -).
+    pub(crate) rule_light: &'static str,
+    /// Blockquote bar, code gutter, table cell separator (│ / |).
+    pub(crate) vertical: &'static str,
+    /// Table top border: left corner, column junction, right corner.
+    pub(crate) top: [&'static str; 3],
+    /// Table header separator: left tee, cross, right tee.
+    pub(crate) middle: [&'static str; 3],
+    /// Table bottom border: left corner, column junction, right corner.
+    pub(crate) bottom: [&'static str; 3],
+}
+
+impl LineArt {
+    /// Box-drawing line art — the historical literals, byte for byte.
+    pub(crate) const UNICODE: LineArt = LineArt {
+        rule_heavy: "═",
+        rule_light: "─",
+        vertical: "│",
+        top: ["┌", "┬", "┐"],
+        middle: ["├", "┼", "┤"],
+        bottom: ["└", "┴", "┘"],
+    };
+
+    /// ASCII line art for terminals that cannot draw box characters.
+    pub(crate) const ASCII: LineArt = LineArt {
+        rule_heavy: "=",
+        rule_light: "-",
+        vertical: "|",
+        top: ["+", "+", "+"],
+        middle: ["+", "+", "+"],
+        bottom: ["+", "+", "+"],
+    };
+
+    /// The line art for `profile`.
+    pub(crate) const fn for_profile(profile: GlyphProfile) -> LineArt {
+        match profile {
+            GlyphProfile::Unicode => LineArt::UNICODE,
+            GlyphProfile::Ascii => LineArt::ASCII,
+        }
+    }
+}
+
 /// A named, binary-embedded glyph *theme* (phase 4 / STORY-633).
 ///
 /// A theme is a curated preset of `{base profile + per-symbol override bundle}`.
