@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T15:13:11.489068138Z
+modified_at: 2026-10-12T15:13:31.241048479Z
 req_type: Task
 tags:
 - closure:pending
@@ -882,6 +882,12 @@ comments:
   created_at: 2026-10-12T15:13:11.489068138Z
   modified_at: 2026-10-12T15:13:11.489068138Z
   session_id: 48e84170-72c5-41ec-b833-86038c00cf8c
+- id: 01a130ad-1269-7772-9aa3-9e1d82c4d84f
+  author: joe
+  content: 'ADVISOR 2026-10-12 08:15: #2554 (append-mode tooling) MERGED as 28dbd53b82 after fresh APPROVE at d4d0de51 + green Build 38265909512. TASK-1538 stays approved (closure:pending). Run 14 is cleared to start. Carry the reviewer''s non-blocking follow-ups into run 14''s first ''tooling:'' commit: widen EXTEND_FORBIDDEN (one-line ''#[cfg(..)] mod x;'', ''# [path'', ''mod\tx;'', cfg_attr path) with a test; byte-level prefix check; a test for the ''not extend'' wiring_ok guard. Details on #2554.'
+  created_at: 2026-10-12T15:13:31.241048479Z
+  modified_at: 2026-10-12T15:13:31.241048479Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
