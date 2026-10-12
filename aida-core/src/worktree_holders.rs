@@ -152,16 +152,63 @@ pub struct WorktreeInUse {
     /// and the tree is NOT known to be free. The text says why. Bulk and
     /// automatic paths keep the tree in that case.
     pub unverified: Option<String>,
+    /// True when the scan was unverified because this process runs in a
+    /// separate pid namespace, the one case [`TRUST_PID_NAMESPACE_ENV`]
+    /// waives. Callers print the opt-out hint only then.
+    // trace:BUG-1947 | ai:claude
+    pub pid_namespace: bool,
+}
+
+/// Why a live-process scan could not be trusted. `pid_namespace` marks the
+/// separate-pid-namespace case, the only one [`TRUST_PID_NAMESPACE_ENV`]
+/// waives; `Display` adds the opt-out hint only for that case.
+// trace:BUG-1947 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanUnverified {
+    pub reason: String,
+    pub pid_namespace: bool,
+}
+
+impl ScanUnverified {
+    fn other(reason: String) -> Self {
+        Self {
+            reason,
+            pid_namespace: false,
+        }
+    }
+}
+
+impl fmt::Display for ScanUnverified {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.reason)?;
+        if self.pid_namespace {
+            f.write_str(&trust_pid_namespace_hint())?;
+        }
+        Ok(())
+    }
+}
+
+/// The opt-out hint appended to a pid-namespace refusal, starting with `; `.
+// trace:BUG-1947 | ai:claude
+pub fn trust_pid_namespace_hint() -> String {
+    format!(
+        "; if nothing outside this pid namespace uses these worktrees, set \
+         {TRUST_PID_NAMESPACE_ENV}=1 to trust the scan"
+    )
 }
 
 impl fmt::Display for WorktreeInUse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(why) = &self.unverified {
-            return write!(
+            write!(
                 f,
                 "could not check worktree {} for live processes: {why}",
                 self.worktree.display()
-            );
+            )?;
+            if self.pid_namespace {
+                f.write_str(&trust_pid_namespace_hint())?;
+            }
+            return Ok(());
         }
         let n = self.holders.len();
         write!(
@@ -236,11 +283,13 @@ pub fn check_worktree_removal(worktree: &Path) -> Result<(), WorktreeInUse> {
                 worktree: worktree.to_path_buf(),
                 holders,
                 unverified: None,
+                pid_namespace: false,
             }),
             Err(why) => Err(WorktreeInUse {
                 worktree: worktree.to_path_buf(),
                 holders: Vec::new(),
-                unverified: Some(why),
+                unverified: Some(why.reason),
+                pid_namespace: why.pid_namespace,
             }),
         }
     }
@@ -274,7 +323,7 @@ fn warn_unsupported_platform(worktree: &Path) {
 /// module docs). `Err` carries the reason the scan could not be trusted.
 /// Always `Ok(empty)` off Linux, and for an empty or missing path.
 // trace:BUG-1947 | ai:claude
-pub fn live_worktree_holders(worktree: &Path) -> Result<Vec<WorktreeHolder>, String> {
+pub fn live_worktree_holders(worktree: &Path) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
     #[cfg(target_os = "linux")]
     {
         scan_holders_in(Path::new("/proc"), worktree, std::process::id())
@@ -295,7 +344,7 @@ pub fn scan_holders_in(
     proc_root: &Path,
     worktree: &Path,
     self_pid: u32,
-) -> Result<Vec<WorktreeHolder>, String> {
+) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
     // An empty base would match every path under `starts_with`.
     if worktree.as_os_str().is_empty() {
         return Ok(Vec::new());
@@ -305,8 +354,9 @@ pub fn scan_holders_in(
     };
     let inside = |p: &Path| p.starts_with(&canon);
 
-    let entries = std::fs::read_dir(proc_root)
-        .map_err(|e| format!("{} is not readable ({e})", proc_root.display()))?;
+    let entries = std::fs::read_dir(proc_root).map_err(|e| {
+        ScanUnverified::other(format!("{} is not readable ({e})", proc_root.display()))
+    })?;
     // Sorted so refusal messages list pids deterministically.
     let pids: BTreeSet<u32> = entries
         .flatten()
@@ -315,18 +365,21 @@ pub fn scan_holders_in(
     // If this process cannot see itself, it is looking at a different pid
     // namespace (or a restricted mount) and other processes may be hidden.
     if !pids.contains(&self_pid) {
-        return Err(format!(
+        return Err(ScanUnverified::other(format!(
             "this process (pid {self_pid}) is not visible in {}, so other processes may be hidden",
             proc_root.display()
-        ));
+        )));
     }
 
     // The operator can vouch that nothing outside this pid namespace uses
     // the worktrees (a dev container that owns its checkout), which would
     // otherwise leave every automatic cleanup refusing. trace:BUG-1947 | ai:claude
     if !trust_pid_namespace() {
-        if let Some(why) = separate_pid_namespace(proc_root, self_pid) {
-            return Err(why);
+        if let Some(reason) = separate_pid_namespace(proc_root, self_pid) {
+            return Err(ScanUnverified {
+                reason,
+                pid_namespace: true,
+            });
         }
     }
 
@@ -412,11 +465,9 @@ fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
         .parse()
         .ok()?;
     (inode != INITIAL_PID_NAMESPACE_INODE).then(|| {
-        format!(
-            "this process runs in a separate pid namespace (a container?), so processes \
-             outside it are hidden; if nothing outside this namespace uses these \
-             worktrees, set {TRUST_PID_NAMESPACE_ENV}=1 to trust the scan"
-        )
+        "this process runs in a separate pid namespace (a container?), so processes \
+         outside it are hidden"
+            .to_string()
     })
 }
 
@@ -737,9 +788,15 @@ mod tests {
         std::fs::remove_file(me.join("ns").join("pid")).unwrap();
         symlink("pid:[4026533285]", me.join("ns").join("pid")).unwrap();
         let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
-        assert!(err.contains("separate pid namespace"), "{err}");
-        // The refusal names its opt-out.
-        assert!(err.contains("AIDA_TRUST_PID_NAMESPACE=1"), "{err}");
+        assert!(err.pid_namespace, "{err}");
+        assert!(err.reason.contains("separate pid namespace"), "{err}");
+        // The refusal names its opt-out, once.
+        let text = err.to_string();
+        assert_eq!(
+            text.matches("AIDA_TRUST_PID_NAMESPACE=1").count(),
+            1,
+            "{text}"
+        );
 
         // Unparsable link: no signal, scan proceeds.
         std::fs::remove_file(me.join("ns").join("pid")).unwrap();
@@ -772,7 +829,8 @@ mod tests {
             assert_eq!(pids(&h), vec![300], "holders inside are still found");
             // Invisible self stays unverified even with the opt-out.
             let err = scan_holders_in(&fake.root, &wt, 999).unwrap_err();
-            assert!(err.contains("pid 999"), "{err}");
+            assert!(err.reason.contains("pid 999"), "{err}");
+            assert!(!err.pid_namespace, "{err}");
         }
         {
             let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "0");
@@ -786,13 +844,17 @@ mod tests {
         let (_t, fake, wt, _outside) = fixture();
         let missing = fake.root.with_file_name("no-proc");
         let err = scan_holders_in(&missing, &wt, 200).unwrap_err();
-        assert!(err.contains("not readable"), "{err}");
+        assert!(err.reason.contains("not readable"), "{err}");
+        // The opt-out does nothing here, so it is not suggested.
+        assert!(!err.pid_namespace, "{err}");
+        assert!(!err.to_string().contains(TRUST_PID_NAMESPACE_ENV), "{err}");
 
         fake.add(1, 0, "init", Path::new("/"));
         fake.add(300, 1, "cargo build", &wt);
         // Self (200) is not in this proc tree: a pid namespace.
         let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
-        assert!(err.contains("pid 200"), "{err}");
+        assert!(err.reason.contains("pid 200"), "{err}");
+        assert!(!err.to_string().contains(TRUST_PID_NAMESPACE_ENV), "{err}");
 
         // Self visible, plus an entry with nothing readable: still verified.
         fake.add(200, 1, "aida", Path::new("/"));
@@ -810,6 +872,7 @@ mod tests {
             worktree: PathBuf::from("/w"),
             holders: Vec::new(),
             unverified: Some("/proc is not readable".into()),
+            pid_namespace: false,
         };
         assert!(e.summary().contains("not verified"), "{}", e.summary());
         let r = e.refusal("--force");
@@ -817,6 +880,14 @@ mod tests {
             r.contains("/proc is not readable") && r.contains("--force"),
             "{r}"
         );
+        assert!(!r.contains(TRUST_PID_NAMESPACE_ENV), "{r}");
+        let ns = WorktreeInUse {
+            unverified: Some("this process runs in a separate pid namespace".into()),
+            pid_namespace: true,
+            ..e
+        };
+        let r = ns.refusal("--force");
+        assert_eq!(r.matches("AIDA_TRUST_PID_NAMESPACE=1").count(), 1, "{r}");
     }
 
     /// Kills the child on drop so a failed assertion never leaks a `sleep`.

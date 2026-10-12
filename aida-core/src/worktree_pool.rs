@@ -558,6 +558,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
                     if let Some(why) = in_use.unverified {
                         skipped.unverified.get_or_insert(why);
                         skipped.unverified_count += 1;
+                        // trace:BUG-1947 | ai:claude
+                        skipped.pid_namespace |= in_use.pid_namespace;
                     }
                     continue;
                 }
@@ -677,6 +679,9 @@ struct ReclaimSkips {
     /// Trees the live-process scan could not verify, and the first reason.
     unverified_count: usize,
     unverified: Option<String>,
+    /// Any of those was unverified because of a separate pid namespace, the
+    /// only case the opt-out env var fixes.
+    pid_namespace: bool,
     /// Trees kept because a reset could lose work (git error, untracked
     /// files, failed salvage).
     unsafe_to_reset: usize,
@@ -690,16 +695,19 @@ fn pool_full_message(in_pool: usize, max_trees: usize, skipped: &ReclaimSkips) -
     if skipped.unverified_count > 0 {
         msg.push_str(&format!(
             "; {} idle or expired tree(s) were not reused because they could not be \
-             checked for live processes ({}). Set {}=1 if nothing outside this pid \
-             namespace uses these worktrees",
+             checked for live processes ({})",
             skipped.unverified_count,
             skipped.unverified.as_deref().unwrap_or("scan unverified"),
-            crate::worktree_holders::TRUST_PID_NAMESPACE_ENV
         ));
+        // Only the pid-namespace cause is waived by the opt-out; for an
+        // unreadable /proc or hidepid it would do nothing. trace:BUG-1947 | ai:claude
+        if skipped.pid_namespace {
+            msg.push_str(&crate::worktree_holders::trust_pid_namespace_hint());
+        }
     }
     if skipped.unsafe_to_reset > 0 {
         msg.push_str(&format!(
-            "; {} expired tree(s) were kept because resetting them could lose \
+            "; {} idle or expired tree(s) were kept because resetting them could lose \
              uncommitted work (see the warnings above; inspect them with \
              `aida worktree pool status` and remove with `aida worktree pool destroy`)",
             skipped.unsafe_to_reset
@@ -1634,7 +1642,8 @@ mod git_integration_tests {
         let skipped = ReclaimSkips {
             unverified_count: 2,
             unverified: Some("this process runs in a separate pid namespace".into()),
-            unsafe_to_reset: 0,
+            pid_namespace: true,
+            unsafe_to_reset: 1,
         };
         let msg = pool_full_message(2, 2, &skipped);
         assert!(
@@ -1642,7 +1651,24 @@ mod git_integration_tests {
             "{msg}"
         );
         assert!(msg.contains("separate pid namespace"), "{msg}");
-        assert!(msg.contains("AIDA_TRUST_PID_NAMESPACE=1"), "{msg}");
+        assert_eq!(
+            msg.matches("AIDA_TRUST_PID_NAMESPACE=1").count(),
+            1,
+            "{msg}"
+        );
+        assert!(msg.contains("1 idle or expired tree(s) were kept"), "{msg}");
+
+        // An unreadable /proc or hidepid: the opt-out would not help, so it
+        // is not suggested.
+        let other = ReclaimSkips {
+            unverified_count: 1,
+            unverified: Some("/proc is not readable".into()),
+            pid_namespace: false,
+            unsafe_to_reset: 0,
+        };
+        let msg = pool_full_message(2, 2, &other);
+        assert!(msg.contains("/proc is not readable"), "{msg}");
+        assert!(!msg.contains("AIDA_TRUST_PID_NAMESPACE"), "{msg}");
     }
 
     /// The full session lifecycle the warm-pool relies on: acquire a detached

@@ -1990,7 +1990,10 @@ pub fn preserve_dirty_worktree(
     salvage_dir: &Path,
     label: &str,
 ) -> Result<Option<PathBuf>> {
-    if !worktree_is_dirty(worktree_path) {
+    // A git error here is a salvage error, not "clean": treating it as clean
+    // would return Ok(None) and let the caller reset unsaved work.
+    // trace:BUG-1947 | ai:claude
+    if worktree_status_porcelain(worktree_path)?.is_empty() {
         return Ok(None);
     }
     // Raw (untrimmed) diff capture — the shared `git()` helper trims, which we
@@ -4341,6 +4344,21 @@ mod tests {
 
     // trace:BUG-1677 | ai:claude — an exclude file that exists but cannot be
     // read must not be treated as empty and overwritten with only our entries.
+
+    /// BUG-1947: a git failure while checking for changes is a salvage
+    /// error, never "clean", so pool acquire skips the tree instead of
+    /// resetting it with nothing saved.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn preserve_dirty_worktree_errors_when_git_cannot_read_the_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("no-such-worktree");
+        let salvage = dir.path().join("salvage");
+        let err = preserve_dirty_worktree(&gone, &salvage, "spec-1")
+            .expect_err("a git error must not read as a clean tree");
+        assert!(format!("{err:#}").contains("git status"), "{err:#}");
+        assert!(!salvage.exists(), "no patch is written");
+    }
     #[test]
     fn bug_1677_append_exclude_entries_refuses_an_unreadable_exclude_file() {
         let tmp = tempfile::tempdir().unwrap();
