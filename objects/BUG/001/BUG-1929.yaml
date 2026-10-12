@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T02:38:52.346523003Z
+modified_at: 2026-10-12T04:10:25.525225820Z
 req_type: Bug
 tags:
 - contained
@@ -152,6 +152,12 @@ comments:
   created_at: 2026-10-12T02:38:52.346523003Z
   modified_at: 2026-10-12T02:38:52.346523003Z
   session_id: 41bae717-5469-4211-97a6-618c019ce287
+- id: 01a12e4d-fd75-7b83-9f46-ab4641c3396d
+  author: joe
+  content: 'FACTORY READY: PR #2541 green at dd00453964. Advisor D1 (deny writes to <main>/.aida-store/.git, both spellings, fail-closed) and D2 (real-claude fixture outside TMPDIR, negative checks, store-commit and queue-done checks) are done. CI fix: in task_1717 allocation_pull_and_push the parked `aida edit` takes the store lock when `aida add` releases it, so it could still hold the lock while add pushes. The pre-push hook now records the lock holder from /proc/locks, and that one test accepts a held lock only when every holder is that edit; any other holder, including add or its children, still fails. Still draft; please re-review (D3 is left for a follow-up spec).'
+  created_at: 2026-10-12T04:10:25.525225820Z
+  modified_at: 2026-10-12T04:10:25.525225820Z
+  session_id: 5299b498-823f-4adc-9eeb-6b89a5088d15
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
