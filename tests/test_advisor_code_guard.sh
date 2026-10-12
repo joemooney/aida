@@ -181,8 +181,8 @@ ln -s "$FIX" "$TMP/fixture-link"
 # run_in <cwd> <session> <file_path> — advisor hook run from <cwd>.
 run_in() {
     (cd "$1" && printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$2" "$3" | \
-        env -u AIDA_AUTO_COMPLETE AIDA_SESSION_ROLE=advisor TMPDIR="$TMP" HOME="$FAKEHOME" \
-        "$HOOK" >/dev/null 2>&1; echo $?)
+        env -u AIDA_AUTO_COMPLETE -u CLAUDE_PROJECT_DIR AIDA_SESSION_ROLE=advisor \
+        TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)
 }
 assert_no_marker() {
     if [ -e "$TMP/aida-advisor-guard-$2" ]; then
@@ -208,14 +208,36 @@ assert_exit "main checkout from a sibling cwd → soft-block" 2 "$(run_in "$SIB"
 assert_exit "symlinked path into the repo → soft-block" 2 "$(run_in "$OUTSIDE" link "$TMP/fixture-link/src/x.rs")"
 assert_exit "missing target directory → still guarded" 2 "$(run_in "$FIX" missing "$OUTSIDE/nope/x.rs")"
 assert_exit "cwd outside any repository → still guarded" 2 "$(run_in "$OUTSIDE" nocwd "$OUTSIDE/x.rs")"
+assert_exit "missing directory inside the repo → still guarded" 2 "$(run_in "$FIX" missing-in "$FIX/new/x.rs")"
+ln -s "$FIX/src/real.rs" "$OUTSIDE/link.rs"
+assert_exit "outside symlink to a repo file → still guarded" 2 "$(run_in "$FIX" final-link "$OUTSIDE/link.rs")"
+mkdir -p "$TMP/wt dir [x]"
+git -C "$FIX" worktree add -q -b odd "$TMP/wt dir [x]/odd" >/dev/null 2>&1
+assert_exit "sibling worktree with spaces and glob characters → soft-block" 2 \
+    "$(run_in "$FIX" odd "$TMP/wt dir [x]/odd/x.rs")"
+# The project directory anchors the repository even when the cwd has moved
+# into another checkout; both repositories stay guarded.
+run_project() {
+    (cd "$1" && printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$2" "$3" | \
+        env -u AIDA_AUTO_COMPLETE CLAUDE_PROJECT_DIR="$FIX" AIDA_SESSION_ROLE=advisor \
+        TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)
+}
+assert_exit "project repo from a cwd in another repo → soft-block" 2 "$(run_project "$OTHER" proj "$FIX/src/x.rs")"
+assert_exit "cwd repo while the project is elsewhere → soft-block" 2 "$(run_project "$OTHER" cwdrepo "$OTHER/src/x.rs")"
+assert_exit "outside path with a project dir → allowed" 0 "$(run_project "$OUTSIDE" proj-out "$OUTSIDE/y.rs")"
+assert_no_marker "outside path with a project dir" proj-out
+assert_exit "inherited GIT_DIR does not redirect the repository" 2 \
+    "$(cd "$FIX" && printf '{"session_id":"gitdir","tool_input":{"file_path":"%s"}}' "$FIX/src/g.rs" | \
+        env -u AIDA_AUTO_COMPLETE -u CLAUDE_PROJECT_DIR GIT_DIR="$OTHER/.git" AIDA_SESSION_ROLE=advisor \
+        TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)"
 NOGIT="$TMP/no-git-bin"
 mkdir -p "$NOGIT"
-for tool in dirname basename cat awk touch; do
+for tool in dirname basename cat awk touch env; do
     ln -sf "$(command -v "$tool")" "$NOGIT/$tool"
 done
 nogit_actual=$(cd "$FIX" && printf '{"session_id":"nogit","tool_input":{"file_path":"%s"}}' "$OUTSIDE/x.rs" | \
     env -u AIDA_AUTO_COMPLETE AIDA_SESSION_ROLE=advisor TMPDIR="$TMP" HOME="$FAKEHOME" \
-    PATH="$NOGIT" "$HOOK" >/dev/null 2>&1; echo $?)
+    PATH="$NOGIT" CLAUDE_PROJECT_DIR="$FIX" "$HOOK" >/dev/null 2>&1; echo $?)
 assert_exit "git missing → still guarded" 2 "$nogit_actual"
 
 # BUG-1751: prove the parser works when grep has no PCRE support.

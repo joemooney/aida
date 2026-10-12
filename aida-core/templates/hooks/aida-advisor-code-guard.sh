@@ -123,22 +123,35 @@ esac
 # A path outside every worktree of this repository (a temp dir, the Claude
 # session scratchpad) is not the code this guard protects: pass silently and
 # leave the fire-once marker untouched. Sibling linked worktrees share the
-# repository, so they stay guarded. When the answer cannot be determined (git
-# missing, cwd not in a repository, the target's directory does not exist) the
-# guard applies as before rather than failing open.
+# repository, so they stay guarded. The repository is the project's
+# (CLAUDE_PROJECT_DIR) and the cwd's: a session that cd'd into another
+# checkout still guards both. When the answer cannot be determined (git
+# missing, neither in a repository, the target's directory does not exist,
+# or the target is itself a symlink) the guard applies as before rather
+# than failing open.
 __aida_guard_target_outside_repo() {
-    local target="$1" parent canon_parent root canon_root roots
+    local target="$1" parent canon_parent root canon_root roots="" anchor listed
     case "$target" in
         /*) ;;
         *) target="$PWD/$target" ;;
     esac
+    [ -L "$target" ] && return 1
     parent=$(dirname -- "$target")
     canon_parent=$(cd -- "$parent" 2>/dev/null && pwd -P) || return 1
     [ -n "$canon_parent" ] || return 1
     target="${canon_parent%/}/$(basename -- "$target")"
     command -v git >/dev/null 2>&1 || return 1
-    roots=$(git worktree list --porcelain 2>/dev/null) || return 1
-    [ -n "$roots" ] || return 1
+    for anchor in "${CLAUDE_PROJECT_DIR:-}" "$PWD"; do
+        [ -n "$anchor" ] || continue
+        listed=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR \
+            git -C "$anchor" worktree list --porcelain 2>/dev/null) || continue
+        roots="$roots
+$listed"
+    done
+    case "$roots" in
+        *"worktree "*) ;;
+        *) return 1 ;;
+    esac
     while IFS= read -r root; do
         case "$root" in
             "worktree "*) root="${root#worktree }" ;;
@@ -147,7 +160,7 @@ __aida_guard_target_outside_repo() {
         canon_root=$(cd -- "$root" 2>/dev/null && pwd -P) || continue
         canon_root="${canon_root%/}"
         case "$target" in
-            "$canon_root"/*) return 1 ;;
+            "$canon_root" | "$canon_root"/*) return 1 ;;
         esac
     done <<EOF
 $roots
