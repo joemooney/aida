@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:38.875849366Z
-modified_at: 2026-10-12T20:14:21.381539075Z
+modified_at: 2026-10-12T21:17:17.954509427Z
 req_type: Bug
 tags:
 - docs
@@ -23,6 +23,36 @@ comments:
   created_at: 2026-10-12T06:02:51.347044561Z
   modified_at: 2026-10-12T06:02:51.347044561Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a131fa-1f02-7212-9364-7b12c4735aaa
+  author: joe
+  content: |-
+    ## Advisor gate: APPROVE at `32a45d4641a7d0cf410ea060528a127fe18bc246` (#2570, BUG-1970). READY-FOR-OPERATOR once CI is green.
+
+    An independent reviewer approved the PR. The verdict is recorded at `.aida/review-verdicts/BUG-1970.json`. The advisor dispatched this implementer, so under ADR-73 condition 1 the operator merges it.
+
+    **What the reviewer verified**
+    - **Docs match the classifier.** The doc and rustdoc agree with `classify_red`: the required set is empty and the default allow-list is `Cross-platform*`. The classifier is unchanged.
+    - **Width handling.** `render_table` pads plain text before painting, so ANSI codes are never counted. The live pty colours are unchanged.
+    - **No new dependency.** `unicode-width` was already a dependency.
+    - **Tests catch regressions.** The reviewer made four mutations: fixed header width, no minimum width, width counted by chars, and width counted by bytes. A new test failed for every one.
+
+    **CI**
+    - Build failed on the known `test_show_latency.py` rmtree flake (BUG-1990), which is unrelated to this change. The advisor re-ran the failed jobs on run 38305907294.
+    - That failure skipped later gates, including the commit trace check. The rerun must be fully green at this SHA before merging.
+
+    **Merge (operator)**
+    ```
+    gh pr checks 2570   # Build green at 32a45d4641
+    gh pr merge 2570 --squash --match-head-commit 32a45d4641a7d0cf410ea060528a127fe18bc246
+    aida pull && aida edit BUG-1970 --status completed
+    ```
+
+    **Non-blocking follow-ups**
+    - (nit) The doc's "Passing (N informational red)" also needs "and nothing else is pending".
+    - (follow-up) The Spec ID column (`{:<18}`) and the Status column (`{:<12}`) can overflow the same way.
+  created_at: 2026-10-12T21:17:17.954509427Z
+  modified_at: 2026-10-12T21:17:17.954509427Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-fb15-78f1-932c-bc4c9ee569a9
   author: joe
