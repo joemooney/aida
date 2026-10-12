@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-12T06:08:29.946318998Z
+modified_at: 2026-10-12T15:02:23.855769477Z
 req_type: Story
 tags:
 - from:aida-host
@@ -49,6 +49,12 @@ comments:
   created_at: 2026-10-12T06:08:29.946318998Z
   modified_at: 2026-10-12T06:08:29.946318998Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-e36f-7de1-8c8b-e1c6fc2ca581
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option B, a hypothesis tag, a body skeleton, and an edit lock once a linked result is completed. Lowest priority in the regen set.'
+  created_at: 2026-10-12T15:02:23.855769477Z
+  modified_at: 2026-10-12T15:02:23.855769477Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
