@@ -1269,12 +1269,29 @@ pub(crate) fn push_store_after_id_allocation(
             // The CAS-reject retry above is untouched — that's the real
             // serialize-the-winners guard and only fires when online.
             // trace:TASK-857 | ai:claude
-            AllocationPushStep::Defer => {
+            AllocationPushStep::Defer { detail: None } => {
                 eprintln!(
                     "{} {} filed locally but not yet published (origin unreachable). \
                      It syncs on the next online `aida add` or `aida db sync --push`.",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     spec_id
+                );
+                return Ok(());
+            }
+            // trace:BUG-1969 | ai:claude — an unrecognised push failure is
+            // most often a flaky network (proxy, 5xx, dropped ssh), and the
+            // spec is already committed locally, so defer with git's own
+            // words rather than fail `aida add` (and skip its `--queue`).
+            AllocationPushStep::Defer {
+                detail: Some(stderr),
+            } => {
+                eprintln!(
+                    "{} {} filed locally, not yet published: the store push failed.\n\
+                     git said:\n{}\n\
+                     It syncs on the next successful `aida add` or `aida db sync --push`.",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    spec_id,
+                    stderr
                 );
                 return Ok(());
             }
@@ -1291,18 +1308,22 @@ pub(crate) enum AllocationPushStep {
     Published,
     /// Non-fast-forward: pull/rebase and retry (or give up when exhausted).
     Retry,
-    /// Origin unreachable: keep the local commit and publish later.
-    Defer,
+    /// Keep the local commit and publish later. `detail: None` is the
+    /// recognised offline case; `Some(stderr)` an unclassified failure.
+    Defer {
+        detail: Option<String>,
+    },
     /// A push that can never succeed by retrying or waiting (permission,
-    /// protected branch, server hook, unknown failure): stop with git's
-    /// real message and the recovery hint.
+    /// protected branch, server hook) or that could not run at all: stop
+    /// with the real message and the recovery hint.
     Fail(String),
 }
 
-/// Map one classified push attempt to the allocation's next step. Only a
-/// genuinely unreachable origin defers as "offline"; permission, protected
-/// ref and hook failures used to print the offline guidance too, so the
-/// operator retried a push that could never succeed.
+/// Map one classified push attempt to the allocation's next step. Only the
+/// positively identified persistent causes (permission, protected ref,
+/// server hook) fail; they used to print the offline guidance too, so the
+/// operator retried a push that could never succeed. Unreachable and
+/// unclassified failures defer, as every push error did before.
 // trace:BUG-1969 | ai:claude
 pub(crate) fn allocation_push_step(
     pushed: Result<aida_core::git_ops::PushOutcome>,
@@ -1310,39 +1331,44 @@ pub(crate) fn allocation_push_step(
     branch: &str,
 ) -> AllocationPushStep {
     use aida_core::git_ops::{PushFailure, PushOutcome};
-    // `persistent`: retrying cannot succeed until the operator fixes the cause.
-    let (cause, persistent, detail) = match pushed {
+    let (kind, stderr) = match pushed {
         Ok(PushOutcome::Pushed) => return AllocationPushStep::Published,
-        Ok(PushOutcome::Failed {
-            kind: PushFailure::NonFastForward,
-            ..
-        }) => return AllocationPushStep::Retry,
-        Ok(PushOutcome::Failed {
-            kind: PushFailure::Unreachable,
-            ..
-        }) => return AllocationPushStep::Defer,
-        Ok(PushOutcome::Failed { kind, stderr }) => {
-            let cause = match kind {
-                PushFailure::PermissionDenied => {
-                    "origin refused the push: missing credentials or no write permission"
-                        .to_string()
-                }
-                PushFailure::ProtectedRef => {
-                    format!("origin refused the push: branch `{branch}` is protected")
-                }
-                PushFailure::RemoteDeclined => {
-                    "origin refused the push: a server-side hook or policy declined it".to_string()
-                }
-                _ => "the store push failed".to_string(),
-            };
-            (cause, kind != PushFailure::Other, stderr)
+        Ok(PushOutcome::Failed { kind, stderr }) => (kind, stderr),
+        Err(e) => {
+            return fail_step(
+                spec_id,
+                "the store push could not run",
+                false,
+                &format!("{e:#}"),
+            )
         }
-        Err(e) => (
-            "the store push could not run".to_string(),
-            false,
-            format!("{e:#}"),
-        ),
     };
+    let cause = match kind {
+        PushFailure::NonFastForward => return AllocationPushStep::Retry,
+        PushFailure::Unreachable => return AllocationPushStep::Defer { detail: None },
+        PushFailure::Other => {
+            return AllocationPushStep::Defer {
+                detail: Some(stderr),
+            }
+        }
+        PushFailure::PermissionDenied => {
+            "origin refused the push: missing credentials or no write permission".to_string()
+        }
+        PushFailure::ProtectedRef => {
+            format!("origin refused the push: branch `{branch}` is protected")
+        }
+        PushFailure::RemoteDeclined => {
+            "origin refused the push: a server-side hook or policy declined it".to_string()
+        }
+    };
+    fail_step(spec_id, &cause, true, &stderr)
+}
+
+/// The `Fail` step's operator message: cause, the real detail, and the
+/// recovery hint. `persistent`: retrying cannot succeed until the operator
+/// fixes the cause.
+// trace:BUG-1969 | ai:claude
+fn fail_step(spec_id: &str, cause: &str, persistent: bool, detail: &str) -> AllocationPushStep {
     let retry_note = if persistent {
         "Retrying will not help until that is fixed. "
     } else {

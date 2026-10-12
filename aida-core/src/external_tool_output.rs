@@ -111,7 +111,7 @@ pub const GIT_PUSH_PERMISSION_DENIED: &[&str] = &[
     "returned error: 401",
     "returned error: 403",
     "write access to repository not granted",
-    "access denied",
+    "remote: access denied",
 ];
 /// Git 2.43.x: a server-side hook or policy declined the ref update
 /// (`! [remote rejected] ... (pre-receive hook declined)`). Must be checked
@@ -119,7 +119,8 @@ pub const GIT_PUSH_PERMISSION_DENIED: &[&str] = &[
 // trace:BUG-1969 | ai:claude
 pub const GIT_PUSH_REMOTE_DECLINED: &[&str] = &["[remote rejected]", "hook declined"];
 /// Git 2.43.x over ssh, https (libcurl), git://, and local paths: the remote
-/// could not be reached at all — the offline case.
+/// could not be reached, or the connection dropped (proxy, 5xx, broken
+/// ssh/TLS session) — the offline / flaky-network case.
 // trace:BUG-1969 | ai:claude
 pub const GIT_REMOTE_UNREACHABLE: &[&str] = &[
     "could not resolve host",
@@ -138,6 +139,12 @@ pub const GIT_REMOTE_UNREACHABLE: &[&str] = &[
     "unable to connect to",
     "timeout was reached",
     "does not appear to be a git repository",
+    "could not resolve proxy",
+    "returned error: 50",
+    "connection closed by",
+    "remote end hung up unexpectedly",
+    "broken pipe",
+    "ssl_error_syscall",
 ];
 /// Git 2.43.x: fetch refused because another worktree owns the branch.
 pub const GIT_BRANCH_CHECKED_OUT: &[&str] = &["checked out at", "refusing to fetch into branch"];

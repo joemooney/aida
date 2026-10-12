@@ -1,6 +1,7 @@
-//! BUG-1969: `push_store_after_id_allocation` defers as "offline" only when
-//! origin is genuinely unreachable; every other push failure stops with the
-//! real git message and the recovery hint.
+//! BUG-1969: `push_store_after_id_allocation` fails only for positively
+//! identified persistent push causes (permission, protected ref, server
+//! hook), with the real git message and the recovery hint; an unreachable
+//! origin and any unclassified failure still defer.
 // trace:BUG-1969 | ai:claude
 
 use super::{allocation_push_step, AllocationPushStep};
@@ -51,7 +52,7 @@ fn unreachable_origin_still_defers_as_offline() {
         "TASK-9",
         "aida-store",
     );
-    assert_eq!(step, AllocationPushStep::Defer);
+    assert_eq!(step, AllocationPushStep::Defer { detail: None });
 }
 
 #[test]
@@ -109,16 +110,20 @@ fn hook_rejection_fails_with_hook_output() {
 }
 
 #[test]
-fn unclassified_failure_fails_without_claiming_permanence() {
-    let msg = fail_message(allocation_push_step(
+fn unclassified_failure_defers_with_git_message() {
+    // Round-1 review: proxy / 5xx / dropped-ssh wording git may grow must not
+    // turn offline filing into a failed `aida add`.
+    let step = allocation_push_step(
         failed(PushFailure::Other, "error: failed to push some refs"),
         "TASK-9",
         "aida-store",
-    ));
-    assert!(msg.contains("the store push failed"), "{msg}");
-    assert!(msg.contains("error: failed to push some refs"), "{msg}");
-    assert!(!msg.contains("Retrying will not help"), "{msg}");
-    assert!(msg.contains("do not re-file it"), "{msg}");
+    );
+    assert_eq!(
+        step,
+        AllocationPushStep::Defer {
+            detail: Some("error: failed to push some refs".to_string())
+        }
+    );
 }
 
 #[test]
@@ -130,4 +135,5 @@ fn push_that_cannot_run_fails_instead_of_deferring() {
     ));
     assert!(msg.contains("the store push could not run"), "{msg}");
     assert!(msg.contains("Failed to run: git push"), "{msg}");
+    assert!(!msg.contains("Retrying will not help"), "{msg}");
 }

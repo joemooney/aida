@@ -36,9 +36,17 @@ pub struct GitResult {
 /// child session's own stale `aida` can't inherit it.
 // trace:BUG-766 | ai:claude
 fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
+    git_with_env(cwd, args, &[])
+}
+
+/// [`git`] with extra environment for this one subprocess (e.g. a C locale
+/// where the caller classifies git's stderr).
+// trace:BUG-1969 | ai:claude
+fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
     let output = Command::new("git")
         .current_dir(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
+        .envs(envs.iter().copied())
         .args(transaction_git_config())
         .args(args)
         .output()
@@ -411,7 +419,13 @@ pub fn push_exact_outcome(
     );
     reject_option_like("branch", branch)?;
     let refspec = format!("{sha}:refs/heads/{branch}");
-    let result = git(repo, &["push", "--end-of-options", remote, &refspec])?;
+    // The failure is classified from stderr prose, so pin git's (and ssh's /
+    // libcurl's) messages to untranslated English. trace:BUG-1969 | ai:claude
+    let result = git_with_env(
+        repo,
+        &["push", "--end-of-options", remote, &refspec],
+        &[("LC_ALL", "C"), ("LANGUAGE", "C")],
+    )?;
     if result.success {
         return Ok(PushOutcome::Pushed);
     }
@@ -7329,6 +7343,42 @@ mod tests {
             (
                 " ! [remote rejected] abc -> main (shallow update not allowed)",
                 PushFailure::RemoteDeclined,
+            ),
+            (
+                "fatal: unable to access 'https://h/r.git/': Could not resolve proxy: proxy.corp",
+                PushFailure::Unreachable,
+            ),
+            (
+                "error: RPC failed; HTTP 503 curl 22 The requested URL returned error: 503\nsend-pack: unexpected disconnect while reading sideband packet",
+                PushFailure::Unreachable,
+            ),
+            (
+                "fatal: unable to access 'https://h/r.git/': The requested URL returned error: 502",
+                PushFailure::Unreachable,
+            ),
+            (
+                "kex_exchange_identification: Connection closed by remote host\nConnection closed by 140.82.112.3 port 22\nfatal: Could not read from remote repository.",
+                PushFailure::Unreachable,
+            ),
+            (
+                "fatal: the remote end hung up unexpectedly\nerror: failed to push some refs",
+                PushFailure::Unreachable,
+            ),
+            (
+                "client_loop: send disconnect: Broken pipe\nsend-pack: unexpected disconnect while reading sideband packet",
+                PushFailure::Unreachable,
+            ),
+            (
+                "error: RPC failed; curl 56 OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 104",
+                PushFailure::Unreachable,
+            ),
+            (
+                "remote: Access denied\nfatal: unable to access 'https://h/r.git/': The requested URL returned error: 403",
+                PushFailure::PermissionDenied,
+            ),
+            (
+                "fatal: unable to access 'https://h/r.git/': Received HTTP code 403 from proxy after CONNECT",
+                PushFailure::Other,
             ),
             (
                 "error: failed to push some refs to 'origin'",

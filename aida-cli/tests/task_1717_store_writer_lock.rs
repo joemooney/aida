@@ -2144,6 +2144,31 @@ fn hook_declined_push_fails_with_the_real_message_not_offline() {
         .any(|s| s.contains("filed under audit")));
 }
 
+/// BUG-1969: a push failure git describes in words no class recognises (here
+/// a local pre-push hook) defers like the offline case: `add` exits 0, keeps
+/// the commit, and shows git's message without claiming "unreachable".
+// trace:BUG-1969 | ai:claude
+#[cfg(unix)]
+#[test]
+fn unclassified_push_failure_defers_with_exit_zero() {
+    let fx = fixture();
+    install(
+        &fx.hooks.join("pre-push"),
+        "#!/bin/sh\necho 'pre-push: transient hiccup' >&2\nexit 1\n",
+    );
+    let add = fx.run(&["add", "filed through a hiccup", "--type", "task"]);
+    let out = text(&add);
+    assert!(add.status.success(), "{out}");
+    assert!(out.contains("filed locally, not yet published"), "{out}");
+    assert!(out.contains("pre-push: transient hiccup"), "{out}");
+    assert!(out.contains("aida db sync --push"), "{out}");
+    assert!(!out.contains("unreachable"), "{out}");
+    assert!(fx
+        .subjects("HEAD")
+        .iter()
+        .any(|s| s.contains("filed through a hiccup")));
+}
+
 /// Group 4: both sides edit the same spec object; the pull's window unions
 /// the structural conflict and the rebase completes.
 #[test]
