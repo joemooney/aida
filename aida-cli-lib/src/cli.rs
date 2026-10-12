@@ -1640,18 +1640,27 @@ pub enum SessionCommand {
         #[clap(long, short = 'y')]
         yes: bool,
 
-        /// Force through safety checks. Two effects:
+        /// Force through safety checks. Three effects:
         ///   1. Force-terminate any live `claude` processes inside the
         ///      worktree (SIGTERM, 5s grace, then SIGKILL). Without this,
         ///      `session end` refuses to remove a worktree with live
         ///      claudes inside (prevents orphaned-claude-with-dangling-
         ///      cwd leak).
-        ///   2. Discard uncommitted tracked/untracked-but-not-ignored
+        ///   2. Remove the worktree, or reset it back into the warm pool,
+        ///      even while other live processes use it (a cwd, open file,
+        ///      or running program inside it, e.g. a cargo build). Without
+        ///      this, `session end` refuses and names each pid and command.
+        ///      Those processes are not killed. Your own shell, its
+        ///      parents and background jobs, and the helpers of the agent
+        ///      you are ending from (such as its MCP server) are never
+        ///      counted.
+        ///   3. Discard uncommitted tracked/untracked-but-not-ignored
         ///      changes in the worktree. Without this, `session end`
         ///      refuses and prints the dirty file list. Gitignored
         ///      differences — `target/`, `.aida/cache.db`, etc. — never
         ///      require `--force` and are always discarded.
         // trace:BUG-61 | ai:claude
+        // trace:BUG-1947 | ai:claude
         // trace:BUG-67 | ai:claude
         // trace:TASK-487 | ai:claude
         #[clap(long)]

@@ -512,19 +512,84 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         // 1. Prefer a reclaimable entry → reset + hand out. "Reclaimable" is a
         //    plain idle tree, OR a stale lease whose TTL has elapsed with no
         //    live owner (the reservation-leak backstop, TASK-1008). An idle
-        //    tree must be clean; a stale-expired lease is reset regardless of
-        //    dirtiness (the dead session's uncommitted changes are abandoned),
-        //    so a leaked dirty reservation can't pin the tree forever.
-        let idle_idx = pool.entries.iter().position(|e| {
+        //    tree must be clean; a stale-expired lease with tracked changes
+        //    is salvaged to `.aida/salvage/` and then reset, so a leaked dirty
+        //    reservation can't pin the tree forever.
+        //
+        //    An expired lease's `owner_pid` is the short-lived `session start`,
+        //    so "owner dead" does not mean the session is gone: its agent or
+        //    build may still be running in the tree. A tree a live process is
+        //    using (or one the process scan could not verify) is never
+        //    reclaimed or reset here, idle or expired. trace:BUG-1947 | ai:claude
+        //
+        //    The cheap state checks run first; the /proc holder scan runs only
+        //    for a tree that would otherwise be reclaimed. A tree that is not
+        //    known safe to reset (a git error probing it, untracked files that
+        //    `clean -fd` would delete, a failed salvage) is skipped, and a
+        //    fresh tree is created instead. trace:BUG-1947 | ai:claude
+        let mut skipped = ReclaimSkips::default();
+        let mut idle_idx = None;
+        for (idx, e) in pool.entries.iter().enumerate() {
             if e.destroying || !e.path.exists() {
-                return false;
+                continue;
             }
-            if e.is_lease_expired(now, lease_ttl) {
-                true
-            } else {
-                e.is_idle() && !git_ops::worktree_is_dirty(&e.path)
+            let expired = e.is_lease_expired(now, lease_ttl);
+            if !expired && !e.is_idle() {
+                continue;
             }
-        });
+            let status = match git_ops::worktree_status_porcelain(&e.path) {
+                Ok(status) => status,
+                Err(err) => {
+                    eprintln!(
+                        "  warning: not reusing pooled worktree {}: {err:#}",
+                        e.path.display()
+                    );
+                    skipped.unsafe_to_reset += 1;
+                    continue;
+                }
+            };
+            let dirty = !status.is_empty();
+            if dirty && !expired {
+                continue; // An idle tree must be clean to be reused.
+            }
+            match crate::worktree_holders::check_worktree_removal(&e.path) {
+                Ok(()) => {}
+                Err(in_use) => {
+                    if let Some(why) = in_use.unverified {
+                        skipped.unverified.get_or_insert(why);
+                        skipped.unverified_count += 1;
+                        // trace:BUG-1947 | ai:claude
+                        skipped.pid_namespace |= in_use.pid_namespace;
+                    }
+                    continue;
+                }
+            }
+            if dirty {
+                if status.lines().any(|l| l.starts_with("??")) {
+                    eprintln!(
+                        "  keeping pooled worktree {}: it has untracked files that a reset \
+                         would delete; salvage or destroy it by hand",
+                        e.path.display()
+                    );
+                    skipped.unsafe_to_reset += 1;
+                    continue;
+                }
+                // An expired reservation may still hold the dead session's
+                // uncommitted work; save it before the reset, exactly as a
+                // return does. No reset without a saved copy.
+                if let Err(err) = salvage_dirty_before_reset(project_root, &e.path) {
+                    eprintln!(
+                        "  keeping pooled worktree {}: could not salvage its uncommitted \
+                         work before a reset: {err:#}",
+                        e.path.display()
+                    );
+                    skipped.unsafe_to_reset += 1;
+                    continue;
+                }
+            }
+            idle_idx = Some(idx);
+            break;
+        }
 
         if let Some(idx) = idle_idx {
             let path = pool.entries[idx].path.clone();
@@ -546,10 +611,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         // 2. None idle — create a new one if under the cap.
         if pool.entries.len() >= max_trees {
             anyhow::bail!(
-                "worktree pool is full ({} of {} in use); raise [worktree_pool] max_trees \
-                 or wait for an in-flight worktree to be returned",
-                pool.entries.len(),
-                max_trees
+                "{}",
+                pool_full_message(pool.entries.len(), max_trees, &skipped)
             );
         }
 
@@ -586,6 +649,74 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         pool.create_count = pool.create_count.saturating_add(1);
         Ok(path)
     })
+}
+
+/// Save a dirty pooled tree's uncommitted diff to `.aida/salvage/` before it
+/// is reset. `Err` when the save failed: acquire then keeps the tree rather
+/// than resetting it; a return still resets (see [`return_to_pool`]).
+// trace:BUG-660 trace:BUG-1947 | ai:claude
+fn salvage_dirty_before_reset(project_root: &Path, path: &Path) -> Result<()> {
+    let salvage_dir = project_root.join(".aida").join("salvage");
+    let label = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "worktree".to_string());
+    if let Some(saved) = git_ops::preserve_dirty_worktree(path, &salvage_dir, &label)? {
+        eprintln!(
+            "  preserved uncommitted work from {} to {} before reset",
+            path.display(),
+            saved.display()
+        );
+    }
+    Ok(())
+}
+
+/// Why acquire passed over otherwise reclaimable trees, for the pool-full
+/// error.
+// trace:BUG-1947 | ai:claude
+#[derive(Debug, Default)]
+struct ReclaimSkips {
+    /// Trees the live-process scan could not verify, and the first reason.
+    unverified_count: usize,
+    unverified: Option<String>,
+    /// Any of those was unverified because of a separate pid namespace, the
+    /// only case the opt-out env var fixes.
+    pid_namespace: bool,
+    /// Trees kept because a reset could lose work (git error, untracked
+    /// files, failed salvage).
+    unsafe_to_reset: usize,
+}
+
+/// The pool-full error, naming any reclaimable trees that were passed over
+/// and why, so "full" is never the whole story.
+// trace:BUG-1947 | ai:claude
+fn pool_full_message(in_pool: usize, max_trees: usize, skipped: &ReclaimSkips) -> String {
+    let mut msg = format!("worktree pool is full ({in_pool} of {max_trees} trees)");
+    if skipped.unverified_count > 0 {
+        msg.push_str(&format!(
+            "; {} idle or expired tree(s) were not reused because they could not be \
+             checked for live processes ({})",
+            skipped.unverified_count,
+            skipped.unverified.as_deref().unwrap_or("scan unverified"),
+        ));
+        // Only the pid-namespace cause is waived by the opt-out; for an
+        // unreadable /proc or hidepid it would do nothing. trace:BUG-1947 | ai:claude
+        if skipped.pid_namespace {
+            msg.push_str(&crate::worktree_holders::trust_pid_namespace_hint());
+        }
+    }
+    if skipped.unsafe_to_reset > 0 {
+        msg.push_str(&format!(
+            "; {} idle or expired tree(s) were kept because resetting them could lose \
+             uncommitted work (see the warnings above; inspect them with \
+             `aida worktree pool status` and remove with `aida worktree pool destroy`)",
+            skipped.unsafe_to_reset
+        ));
+    }
+    msg.push_str(
+        "; raise [worktree_pool] max_trees or wait for an in-flight worktree to be returned",
+    );
+    msg
 }
 
 fn stamp_acquired(entry: &mut PoolEntry, opts: &AcquireOptions) {
@@ -634,24 +765,11 @@ pub fn return_to_pool(project_root: &Path, worktree_path: &Path) -> Result<()> {
         // be inspected/replayed. Best-effort: a salvage failure must not block
         // the return (the tree still needs to reset to be reusable).
         // trace:BUG-660 | ai:claude
-        if git_ops::worktree_is_dirty(&path) {
-            let salvage_dir = project_root.join(".aida").join("salvage");
-            let label = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "worktree".to_string());
-            match git_ops::preserve_dirty_worktree(&path, &salvage_dir, &label) {
-                Ok(Some(saved)) => eprintln!(
-                    "  preserved uncommitted work from {} to {} before reset",
-                    path.display(),
-                    saved.display()
-                ),
-                Ok(None) => {}
-                Err(e) => eprintln!(
-                    "  warning: could not salvage uncommitted work from {} before reset: {e}",
-                    path.display()
-                ),
-            }
+        if let Err(err) = salvage_dirty_before_reset(project_root, &path) {
+            eprintln!(
+                "  warning: could not salvage uncommitted work from {} before reset: {err:#}",
+                path.display()
+            );
         }
         git_ops::reset_worktree_to(&path, &base_ref)
             .with_context(|| format!("reset returned worktree {}", path.display()))?;
@@ -1364,6 +1482,193 @@ mod git_integration_tests {
             err.to_string().contains("pool is full"),
             "fresh lease must stay reserved; got: {err}"
         );
+    }
+
+    /// Lease a pooled tree, then make it look like a session whose
+    /// `session start` process exited hours ago: dead owner, ancient lease.
+    fn expired_lease_fixture(root: &Path) -> PathBuf {
+        let leasing = AcquireOptions {
+            max_trees: Some(1),
+            lease_holder: Some("long-running-session".into()),
+            ..Default::default()
+        };
+        let p = acquire(root, &leasing).unwrap();
+        with_state_lock(root, |pool| {
+            pool.entries[0].owner_pid = None;
+            pool.entries[0].owner_started_at = None;
+            pool.entries[0].leased_at = Some(1);
+            Ok(())
+        })
+        .unwrap();
+        p
+    }
+
+    fn reclaiming_opts() -> AcquireOptions {
+        AcquireOptions {
+            max_trees: Some(1),
+            lease_ttl_secs: Some(1),
+            ..Default::default()
+        }
+    }
+
+    /// BUG-1947: an expired pooled lease only means the short-lived
+    /// `session start` exited. If a live process (the session's agent, a
+    /// build) is still inside the tree, acquire must NOT reset it out from
+    /// under that process. With a cap of 1 it reports the pool full instead.
+    // trace:BUG-1947 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn acquire_does_not_reclaim_an_expired_lease_a_live_process_is_using() {
+        struct KillOnDrop(std::process::Child);
+        impl Drop for KillOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("README.md"), "in progress\n").unwrap();
+        let live = KillOnDrop(
+            std::process::Command::new("sleep")
+                .arg("600")
+                .current_dir(&p1)
+                .spawn()
+                .unwrap(),
+        );
+
+        let err = acquire(root, &reclaiming_opts()).unwrap_err();
+        assert!(err.to_string().contains("pool is full"), "got: {err}");
+        assert_eq!(
+            std::fs::read_to_string(p1.join("README.md")).unwrap(),
+            "in progress\n",
+            "tree must not be reset/cleaned"
+        );
+        let pool = read_state(root).unwrap();
+        assert!(pool.entries[0].leased, "reservation must survive");
+        assert_eq!(
+            pool.entries[0].lease_holder.as_deref(),
+            Some("long-running-session")
+        );
+
+        // Once the process is gone the reservation is reclaimable again.
+        drop(live);
+        assert_eq!(acquire(root, &reclaiming_opts()).unwrap(), p1);
+    }
+
+    /// BUG-1947: reclaiming an expired, dirty reservation saves its
+    /// uncommitted work to `.aida/salvage/` before the reset, as a return does.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn acquire_salvages_a_dirty_expired_lease_before_resetting_it() {
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("README.md"), "abandoned work\n").unwrap();
+
+        assert_eq!(acquire(root, &reclaiming_opts()).unwrap(), p1);
+        assert_eq!(
+            std::fs::read_to_string(p1.join("README.md")).unwrap(),
+            "seed",
+            "tree was reset"
+        );
+        let salvaged: Vec<_> = std::fs::read_dir(root.join(".aida").join("salvage"))
+            .expect("salvage dir created")
+            .flatten()
+            .collect();
+        assert_eq!(salvaged.len(), 1, "the dirty diff must be salvaged");
+        let patch = std::fs::read_to_string(salvaged[0].path()).unwrap();
+        assert!(patch.contains("abandoned work"), "{patch}");
+    }
+
+    /// BUG-1947: untracked files in an expired reservation are only listed by
+    /// name in a salvage patch, and `clean -fd` would delete them, so acquire
+    /// keeps that tree untouched and creates a fresh one instead; at the cap
+    /// it reports the pool full and says why.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn acquire_keeps_an_expired_lease_with_untracked_files_and_creates_fresh() {
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("wip.txt"), "untracked work\n").unwrap();
+
+        let err = acquire(root, &reclaiming_opts()).unwrap_err().to_string();
+        assert!(err.contains("pool is full"), "{err}");
+        assert!(err.contains("could lose uncommitted work"), "{err}");
+        assert!(p1.join("wip.txt").exists(), "untracked work must survive");
+
+        let roomy = AcquireOptions {
+            max_trees: Some(2),
+            ..reclaiming_opts()
+        };
+        let p2 = acquire(root, &roomy).unwrap();
+        assert_ne!(p2, p1, "a fresh tree is created instead of resetting p1");
+        assert!(p1.join("wip.txt").exists(), "untracked work must survive");
+        let pool = read_state(root).unwrap();
+        assert_eq!(pool.entries.len(), 2);
+        assert!(pool.entries[0].leased, "p1's reservation is left alone");
+    }
+
+    /// BUG-1947: a git error probing a tree (here: a broken worktree link)
+    /// means it is not known safe to reset, so acquire passes it over.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn acquire_skips_a_tree_git_cannot_read() {
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("README.md"), "work\n").unwrap();
+        std::fs::write(p1.join(".git"), "gitdir: /nonexistent/aida-bug-1947\n").unwrap();
+
+        let err = acquire(root, &reclaiming_opts()).unwrap_err().to_string();
+        assert!(err.contains("could lose uncommitted work"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(p1.join("README.md")).unwrap(),
+            "work\n"
+        );
+    }
+
+    /// BUG-1947: when trees were passed over because the live-process scan
+    /// was unverified, the pool-full error says so and names the opt-out.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn pool_full_message_names_unverified_skips_and_the_opt_out() {
+        let plain = pool_full_message(2, 2, &ReclaimSkips::default());
+        assert!(plain.contains("pool is full (2 of 2 trees)"), "{plain}");
+        assert!(!plain.contains("AIDA_TRUST_PID_NAMESPACE"), "{plain}");
+
+        let skipped = ReclaimSkips {
+            unverified_count: 2,
+            unverified: Some("this process runs in a separate pid namespace".into()),
+            pid_namespace: true,
+            unsafe_to_reset: 1,
+        };
+        let msg = pool_full_message(2, 2, &skipped);
+        assert!(
+            msg.contains("2 idle or expired tree(s) were not reused"),
+            "{msg}"
+        );
+        assert!(msg.contains("separate pid namespace"), "{msg}");
+        assert_eq!(
+            msg.matches("AIDA_TRUST_PID_NAMESPACE=1").count(),
+            1,
+            "{msg}"
+        );
+        assert!(msg.contains("1 idle or expired tree(s) were kept"), "{msg}");
+
+        // An unreadable /proc or hidepid: the opt-out would not help, so it
+        // is not suggested.
+        let other = ReclaimSkips {
+            unverified_count: 1,
+            unverified: Some("/proc is not readable".into()),
+            pid_namespace: false,
+            unsafe_to_reset: 0,
+        };
+        let msg = pool_full_message(2, 2, &other);
+        assert!(msg.contains("/proc is not readable"), "{msg}");
+        assert!(!msg.contains("AIDA_TRUST_PID_NAMESPACE"), "{msg}");
     }
 
     /// The full session lifecycle the warm-pool relies on: acquire a detached

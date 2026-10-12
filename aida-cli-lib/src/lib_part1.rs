@@ -1756,6 +1756,20 @@ pub(crate) fn run() -> Result<()> {
         eprintln!("note: `aida {verb}` is deprecated — use `aida groom` (the canonical disposition verb).");
     }
 
+    // The detached cache refresh worker carries explicit `--store`/`--cache`
+    // paths and runs from a neutral cwd (never a removable session worktree),
+    // so it is dispatched before any cwd-based project discovery, which
+    // would find no project there and fail. trace:BUG-1947 | ai:claude
+    if let Command::Cache(CacheCommand::Refresh {
+        worker: true,
+        store: Some(store),
+        cache: Some(cache),
+        ..
+    }) = &cli.command
+    {
+        return cache_cmd::run_explicit_refresh_worker(store, cache);
+    }
+
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
             std::process::exit(exit_code);

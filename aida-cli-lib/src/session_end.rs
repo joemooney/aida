@@ -1185,6 +1185,40 @@ pub(crate) fn session_end(
         let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
     }
 
+    // Refuse to delete a worktree any live process is still using: a cwd
+    // inside it, an open file under it, or a program running from it. A bulk
+    // sweep that loops `session end` over sessions it believes are stale is
+    // therefore safe by default, because each call refuses on its own. The
+    // caller's own process chain (this command, its shell, the agent that
+    // owns the session when run from inside the tree) is exempt, so ending
+    // your own session still works. `--force` overrides. Checked whenever
+    // the tree is torn down for this session (not shared with a peer lease),
+    // INCLUDING a return to the warm pool: that return runs a forced
+    // detached checkout and a hard reset, which rewrites every file under a
+    // running build just as surely as a removal does. Checked before the
+    // lease is touched, so a refusal changes nothing. This is the
+    // interactive form: a scan that cannot be verified warns and proceeds.
+    // trace:BUG-1947 | ai:claude
+    let tears_down_worktree = has_worktree
+        && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
+    if tears_down_worktree {
+        if let Err(in_use) =
+            aida_core::worktree_holders::check_worktree_removal_interactive(&target.worktree_path)
+        {
+            if !force {
+                anyhow::bail!(
+                    "{}\n\nThe session was NOT ended; its lease and worktree are unchanged.",
+                    in_use.refusal("--force")
+                );
+            }
+            eprintln!(
+                "{} worktree {} — removing anyway (--force)",
+                "Warning:".yellow().bold(),
+                in_use.summary()
+            );
+        }
+    }
+
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
     // when wrapped — same shape as session_start's `export`. Stdin/stderr
     // for the prompt still works inside `eval "$(...)"` because $(...)

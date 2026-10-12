@@ -4041,6 +4041,17 @@ impl RealPhaseDriver {
                 ));
             }
             auto_complete::RecoveryTeardown::Remove => {
+                // Never tear down a tree a live process is still using.
+                // trace:BUG-1947 | ai:claude
+                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&worktree)
+                {
+                    log(format!(
+                        "keeping the failed attempt's worktree {} — {}",
+                        worktree.display(),
+                        in_use.summary()
+                    ));
+                    return;
+                }
                 match aida_core::git_ops::remove_worktree_at(&self.project_root, &worktree, false) {
                     Ok(()) => {
                         log(format!(
@@ -8431,6 +8442,14 @@ pub(crate) fn auto_release_decision_for_lease(
         return orchestrator::AutoReleaseDecision::Live;
     }
 
+    // A worktree that a live process is using (a cwd, an open file, or a
+    // program running from it), or one the process scan could not verify, is
+    // never dormant, whatever the pid and mtime say: releasing it would tear
+    // the tree out from under that process. trace:BUG-1947 | ai:claude
+    if aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path).is_err() {
+        return orchestrator::AutoReleaseDecision::Live;
+    }
+
     // Signal 1: creator shell still alive? A lease without a recorded
     // `creator_pid` (pre-STORY-73) defaults to "dead" — those leases also
     // pre-date the orchestrator drain and are the canonical leaked-lease
@@ -8496,6 +8515,17 @@ pub(crate) struct StaleLeaseRecoveryReport {
     /// tree is clean, missing, or the lease is worktree-less (advisory lock).
     pub(crate) dirty: Vec<String>,
     pub(crate) worktree_exists: bool,
+    /// Why the worktree is occupied by a live process (or could not be
+    /// verified free), when it is. Forces the verdict to `Live`.
+    // trace:BUG-1947 | ai:claude
+    pub(crate) in_use: Option<String>,
+    /// The verdict before the in-use override: what the lease's own owner
+    /// liveness and worktree state say. Only non-destructive recovery that
+    /// keeps the worktree untouched (the implementer retry reusing the same
+    /// tree) may act on it; anything that removes or resets a tree must use
+    /// `verdict`.
+    // trace:BUG-1947 | ai:claude
+    pub(crate) base_verdict: StaleLeaseRecovery,
 }
 
 impl StaleLeaseRecoveryReport {
@@ -8506,6 +8536,9 @@ impl StaleLeaseRecoveryReport {
     pub(crate) fn worktree_state_phrase(&self) -> String {
         if !self.worktree_exists {
             return "worktree GONE (nothing to lose)".to_string();
+        }
+        if let Some(why) = &self.in_use {
+            return format!("worktree {why}"); // trace:BUG-1947 | ai:claude
         }
         if self.dirty.is_empty() {
             return "worktree CLEAN (no uncommitted changes)".to_string();
@@ -8561,12 +8594,28 @@ pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLease
     } else {
         Vec::new()
     };
-    let verdict =
+    let base_verdict =
         classify_stale_lease_recovery(lease_state, owner_gone, worktree_exists, dirty.len());
+    let mut verdict = base_verdict.clone();
+    // A tree a live process is using (or one the scan could not verify) is
+    // occupied, so it is never recoverable, even when the recorded owner is
+    // dead. trace:BUG-1947 | ai:claude
+    let in_use = if worktree_exists {
+        aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path)
+            .err()
+            .map(|e| e.summary())
+    } else {
+        None
+    };
+    if in_use.is_some() {
+        verdict = StaleLeaseRecovery::Live;
+    }
     StaleLeaseRecoveryReport {
         verdict,
         dirty,
         worktree_exists,
+        in_use,
+        base_verdict,
     }
 }
 
@@ -8698,7 +8747,12 @@ pub(crate) fn reclaim_implementer_retry_predecessor_with(
             return Ok(None);
         };
         let report = recovery_for_lease(&conflict);
-        match report.verdict {
+        // This retry only drops the lease RECORD and relaunches into the same
+        // worktree — nothing is removed or reset — so a live process still in
+        // the tree (an orphaned `cargo test` from attempt 1) must not block it.
+        // Judge the predecessor by its own owner liveness, not the in-use
+        // override. trace:BUG-1947 | ai:claude
+        match report.base_verdict {
             StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
                 if !remove_session_lease_record_only(project_root, &conflict.id) {
                     return Err(auto_complete::PhaseFailure::of(

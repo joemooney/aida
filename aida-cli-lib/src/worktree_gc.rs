@@ -331,6 +331,19 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     let mut removed = 0usize;
     let mut skipped = 0usize;
     for (path, _branch) in &eligible {
+        // A live process inside the tree (cwd, open file, running program)
+        // keeps it: gc never removes a worktree that is in use, and has no
+        // override. trace:BUG-1947 | ai:claude
+        if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(path) {
+            skipped += 1;
+            println!(
+                "  {} {} — kept: {}",
+                "skip".yellow(),
+                path.display(),
+                in_use.summary()
+            );
+            continue;
+        }
         // `git worktree remove` (NOT --force): git re-checks the worktree is
         // clean and unlocked and refuses otherwise — a second guard on top of
         // our predicate. On refusal we SKIP (never force) and report.
