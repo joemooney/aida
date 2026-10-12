@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-12T03:41:06.661504378Z
+modified_at: 2026-10-12T03:50:03.744527737Z
 req_type: Story
 tags:
 - batch:next
@@ -141,6 +141,12 @@ comments:
   created_at: 2026-10-12T03:41:06.661504378Z
   modified_at: 2026-10-12T03:41:06.661504378Z
   session_id: bfa4262c-a911-4a31-a9b9-e564f5a1a33f
+- id: 01a12e3b-58e0-7ef0-9283-41b45fb6101f
+  author: joe
+  content: 'ADVISOR SIGNOFF 2026-10-11 20:52 on the ACCEPTANCE AMENDMENT (comment 5): APPROVED. AC4 on STORY-1653 is now: ''A spec with no lease and no covering driver shows idle.'' The aida awaiting idle-threshold clause, its config key and idle age from branch commits move to STORY-1680 (child; draft, awaiting triage). STORY-1653 may complete when PR #2542 merges.'
+  created_at: 2026-10-12T03:50:03.744527737Z
+  modified_at: 2026-10-12T03:50:03.744527737Z
+  session_id: 7cc6ad83-d782-4236-bf8a-091eebcd8144
 history:
 - id: 01a1283c-a28e-72a3-91be-5fa6ae98d1bc
   author: joe
