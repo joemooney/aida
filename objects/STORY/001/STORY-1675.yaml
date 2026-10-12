@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-12T06:08:25.416100221Z
+modified_at: 2026-10-12T06:08:29.946318998Z
 req_type: Story
 tags:
 - from:aida-host
@@ -34,6 +34,21 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:13:36.407255961Z
+comments:
+- id: 01a12eba-16fa-7072-93bd-42347c6de136
+  author: joe
+  content: |
+    [groom:night] NEEDS-DECISION. Nothing like this exists (no hypothesis type or lock-on-result semantics). Spikes are the closest existing experimental row; git timestamps on the store branch already give the "prediction predates result" evidence the pilot got from commit 9348eeb.
+
+    Options:
+    - A. New requirement type `hypothesis` with prediction / refutation-criterion fields, a `tests` relationship to experiment rows, and an edit lock once a linked experiment records a result (amendments become appended comments). Biggest: type + relationship + new mutability rule.
+    - B. No new type: a `hypothesis` tag on a spike or decision, a body skeleton (`## Prediction`, `## Refuted if`, `## Experiments`), and a lock rule keyed on the tag: once a linked spec carrying a result is completed, `aida edit --description*` on it is refused and points at `aida comment add`.
+    - C. Convention only: document the skeleton and rely on store history (description FieldChange history already keeps prior text) to show any post-hoc edit. No enforcement.
+
+    Recommendation: B. It delivers the lock (the part that makes pre-registration credible) without a type migration, and C alone does not stop silent edits. Lowest priority of the regenerability set; only the pilot needs it today.
+  created_at: 2026-10-12T06:08:29.946318998Z
+  modified_at: 2026-10-12T06:08:29.946318998Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
