@@ -39,6 +39,7 @@ pub(crate) enum IdleAgeSource {
     /// The spec's last modification — the fallback when its history records
     /// no status change at all.
     // trace:STORY-1680 | ai:claude
+    #[serde(rename = "last-modified")]
     Modified,
 }
 
@@ -306,8 +307,9 @@ pub(crate) fn collect_idle_in_progress(
 
 /// PURE: the orphans that may be listed as idle — driver `idle`, and neither
 /// a likely live fan-out (`likely_fanout`) nor possibly worked by a subagent
-/// (`possibly_subagent`, BUG-1656). Those stay on the orphan channel, whose
-/// wording already says the spec may be being worked.
+/// (`possibly_subagent`, BUG-1656). A possibly-subagent spec stays on the
+/// orphan channel, whose wording says it may be being worked; a likely
+/// fan-out is not listed by `aida awaiting` at all (only `aida ps`).
 // trace:STORY-1680 | ai:claude
 pub(crate) fn idle_orphans(orphans: &[PsOrphan]) -> Vec<&PsOrphan> {
     orphans

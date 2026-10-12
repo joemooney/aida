@@ -213,6 +213,10 @@ fn modified_at_dates_the_age_only_when_no_status_change_is_on_record() {
     assert_eq!(items[0].age_source, IdleAgeSource::Modified);
     assert_eq!(items[0].age_source.as_str(), "last-modified");
     assert_eq!(
+        serde_json::to_value(IdleAgeSource::Modified).unwrap(),
+        serde_json::json!("last-modified")
+    );
+    assert_eq!(
         items[0].age_label(),
         "no commits or status change for 30h (dated from its last modification)"
     );
@@ -243,11 +247,14 @@ fn a_possibly_subagent_orphan_is_not_idle_and_stays_orphaned() {
     let mut idle = sample_item();
     idle.spec_id = "TASK-20".into();
     let kept = orphans_not_idle(orphans, &[idle]);
-    let kept: Vec<(&str, bool)> = kept
+    // Through to the awaiting `orphaned_in_progress` channel: the subagent
+    // spec is there, flagged; the likely fan-out is not listed at all.
+    let orphaned = crate::ps_integrate::orphaned_in_progress_items(kept, |_| String::new());
+    let orphaned: Vec<(&str, bool)> = orphaned
         .iter()
-        .map(|o| (o.spec.as_str(), o.possibly_subagent))
+        .map(|o| (o.spec_id.as_str(), o.possibly_subagent))
         .collect();
-    assert_eq!(kept, [("TASK-19", true), ("TASK-21", false)]);
+    assert_eq!(orphaned, [("TASK-19", true)]);
 }
 
 #[test]
