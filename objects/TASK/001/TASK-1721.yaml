@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:23.867040641Z
-modified_at: 2026-10-12T05:49:51.477100642Z
+modified_at: 2026-10-12T05:49:55.831762661Z
 req_type: Task
 tags:
 - branch-protection
@@ -62,6 +62,13 @@ comments:
   created_at: 2026-10-11T07:17:41.821426061Z
   modified_at: 2026-10-11T07:17:41.821426061Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a12ea9-16f7-7360-927f-b8ec04e6fd18
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised, security). Verified still open on main: scripts/release.sh:363 and :439 `git push origin HEAD`, :411 tells the operator to `git push origin main`, and there is no `gh pr create` / `--match-head-commit` path. Tightened Acceptance with the night triage's testable items: dry-run sequence, bare-remote fixture with a pre-receive refusal, tag-ancestry check, AIDA_RELEASE=1 hook suppression kept, artifact-wait timeout, operator runbook step. Flagged security because it is the precondition for branch protection requiring PRs on main. Supervised: release path, and the final step needs the operator.
+  created_at: 2026-10-12T05:49:55.831762661Z
+  modified_at: 2026-10-12T05:49:55.831762661Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
