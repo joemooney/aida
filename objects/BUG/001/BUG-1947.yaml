@@ -16,12 +16,12 @@ description: |-
   (b) Bulk session end (any loop or script) is safe by default, because (a) applies per session.
   (c) Releasing a lease never reverts the spec status while its branch has an open PR (shared with BUG-1944 a).
   (d) A test with a fake live process inside the worktree.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:15:16.929822029Z
-modified_at: 2026-10-12T05:16:43.239177681Z
+modified_at: 2026-10-12T05:28:59.238835614Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -108,6 +108,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12e95-e4f8-73c1-81b9-6bfba7bbf6a2
+  author: aida-auto-bump
+  timestamp: 2026-10-12T05:28:57.848803993Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12e95-ea66-76a1-89a2-fa71e692c30d
+  timestamp: 2026-10-12T05:28:59.238812863Z
+  agent: implementer
+  commit_sha: 2d27eafa85609576bd8231055fb4a9c9e2465e8b
+  summary: 'Round 4. All four round-3 items are fixed and verified locally: A (rebased; changes in the moved modules; uses #2543''s root), B (refresh worker dispatched before discovery from the main checkout, real-spawn test; bug_1674 3x at 2.1/2.6/2.9 s vs 25.6 s), C (AIDA_TRUST_PID_NAMESPACE opt-out, honest pool-full message), D (acquire skips instead of resetting). bug_1947 4/4, task_1527 7/7, core worktree_ 94/94. Approved with deferred follow-ups in BUG-1986: interactive session end in a non-host pid namespace warns instead of refusing on a visible holder; check-to-remove gap; --force overload; pool return; mmaps. Rationale: the incident host is the host namespace (covered), and main has no protection today.'
+  review_verdict: approved
 filed_at:
   code_sha: b01c8752e723bd4687af197177043859bdec05ae
   branch: main
@@ -116,3 +130,7 @@ filed_at:
   aida_build_sha: 3bb1454cf0
   vendor: antigravity
   session: aa8f2a6f-6d1c-4e5a-8f8a-9c0925485057
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-12T05:28:57.848792662Z
+  completion_sha: 2d27eafa85609576bd8231055fb4a9c9e2465e8b
