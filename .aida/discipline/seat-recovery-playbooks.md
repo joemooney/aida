@@ -38,7 +38,9 @@ a PR stacked on that base still carries the originals and now conflicts.
 
 1. Before merging the base, record its last head SHA (`OLD_BASE`, the base PR's
    final head commit) and the stacked PR's current head (`OLD_HEAD`). Merge the
-   base WITHOUT deleting its branch: deleting it first auto-closes the stacked PR.
+   base WITHOUT deleting its branch: deleting it first can close the stacked PR
+   instead of retargeting it (depending on how the branch is deleted).
+   `OLD_BASE` must be an ancestor of the stacked head.
 2. Retarget the stacked PR's base to `main` (for example
    `gh pr edit <stacked-pr> --base main`).
 3. Only now delete the base branch.
@@ -50,5 +52,6 @@ a PR stacked on that base still carries the originals and now conflicts.
    Re-run the gates (for example `make check-ci-fast`) and let CI go green.
 5. Verify with `git range-diff "$OLD_BASE".."$OLD_HEAD" origin/main..<stacked-branch>`
    against the approved head before merging. The head changed, so any approval
-   on the old head is stale; a changed patch (not just a new base) needs a
-   fresh review.
+   on the old head no longer covers it: the reviewer must re-record the verdict
+   at the new head. If range-diff shows every commit unchanged (`=`), that is a
+   re-check of the rebase; a changed patch needs a fresh review.
