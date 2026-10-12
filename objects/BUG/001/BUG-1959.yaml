@@ -20,11 +20,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T11:52:45.313569378Z
-modified_at: 2026-10-12T05:57:12.967635390Z
+modified_at: 2026-10-12T05:58:12.160845690Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - dev-tooling
+- groom:approve
 - groomed:night
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
