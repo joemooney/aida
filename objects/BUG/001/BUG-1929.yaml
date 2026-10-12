@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T15:02:35.863065845Z
+modified_at: 2026-10-12T15:07:57.726120929Z
 req_type: Bug
 tags:
 - contained
@@ -182,6 +182,12 @@ comments:
   created_at: 2026-10-12T15:02:35.863065845Z
   modified_at: 2026-10-12T15:02:35.863065845Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a130a7-fb9e-7c63-ae86-bed6c5cdbd02
+  author: joe
+  content: 'ADVISOR 2026-10-12: per the operator''s 08:05 decision, the host-owned store redesign is filed as STORY-1681 (draft, sketch with options A spool+ingest / B broker / C status quo; recommendation A with a sync fast path). #2541 remains the stopgap.'
+  created_at: 2026-10-12T15:07:57.726120929Z
+  modified_at: 2026-10-12T15:07:57.726120929Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
