@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-12T05:51:39.652254067Z
+modified_at: 2026-10-12T05:56:27.354928425Z
 req_type: Story
 tags:
 - from:aida-host
@@ -40,6 +40,14 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-12T00:42:05.674807592Z
+comments:
+- id: 01a12eaf-105a-7050-bb82-cf275dfc2c03
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised). Replaced the placeholder Acceptance section with testable criteria derived from the proposals; text above it is unchanged. Blocked on STORY-1669 (no `aida regen` exists on main yet) - do not queue until the 1669 slice-0 decision and sketch are signed off; acceptance names the specific 1669 slices it builds on.
+  created_at: 2026-10-12T05:56:27.354928425Z
+  modified_at: 2026-10-12T05:56:27.354928425Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
