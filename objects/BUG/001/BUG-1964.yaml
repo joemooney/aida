@@ -17,11 +17,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-12T06:01:55.384439094Z
+modified_at: 2026-10-12T06:02:12.929062165Z
 req_type: Bug
 tags:
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb4-5641-7b70-b51d-903320bfc3a0
+  author: joe
+  content: |
+    [groom:night] APPROVE. Rewrote acceptance around a concrete suspect: serve_with_budget_at skips ensure_fresh and answers Ok whenever IndexLock::try_acquire finds the flock busy, which matches "serve_at returned Ok". The busy holder is most plausibly a child forked by a parallel test that still holds the inherited descriptor before exec (BUG-1939 class). The same symptom covers BUG-1968 (closed as duplicate of BUG-1974) and BUG-1974. Whoever fixes BUG-1974 should check this hypothesis first; if its fix removes the lock-skip race for the whole family, close this as done with that PR. No commit on origin/main (HEAD 17ff749954) addresses it yet.
+  created_at: 2026-10-12T06:02:12.929062165Z
+  modified_at: 2026-10-12T06:02:12.929062165Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
   branch: main
