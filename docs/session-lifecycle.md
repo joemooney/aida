@@ -249,7 +249,7 @@ The historical model treats a per-spec worktree as disposable: create a sibling 
 
 ```bash
 aida worktree pool acquire [--json] [--lease-holder NAME]   # reuse an idle warm tree (reset) or create one
-aida worktree pool return [PATH]                            # reset + mark idle; DIRECTORY PERSISTS (cache kept)
+aida worktree pool return [PATH] [--include-in-use]         # reset + mark idle; DIRECTORY PERSISTS (cache kept)
 aida worktree pool status [--json]                          # available / in-use / leased / dirty / here + HEAD
 aida worktree pool adopt [--all | PATH...] [--no-dry-run]   # register EXISTING worktrees; dry-run by default
         [--include-unlanded] [--json]
@@ -286,7 +286,7 @@ Three properties make it safe to run against a live workspace:
 
 - **It never touches a worktree** — no reset, no checkout, no removal, no hooks. Only `pool.json` changes, so a mis-adoption is undone by dropping the entry.
 - **Preview by default**, like its sibling `destroy`; `--no-dry-run` applies.
-- **Unlanded work is adopted RESERVED, never idle.** A tree with uncommitted changes or unmerged commits is registered with a durable lease carrying **no timestamp**, so `acquire` skips it *and* the lease-TTL backstop can never judge it stale and reclaim it. It shows as `leased` in `pool status` until you release it deliberately with `pool return <path>` (which salvages the dirty diff first) or `pool destroy --include-unlanded`. Without `--include-unlanded` such a tree is simply skipped, naming the flag.
+- **Unlanded work is adopted RESERVED, never idle.** A tree with uncommitted changes or unmerged commits is registered with a durable lease carrying **no timestamp**, so `acquire` skips it *and* the lease-TTL backstop can never judge it stale and reclaim it. It shows as `leased` in `pool status` until you release it deliberately with `pool return <path>` (which salvages the dirty diff first, keeps the tree untouched if that salvage fails, and refuses while a live process uses the tree unless you pass `--include-in-use`) or `pool destroy --include-unlanded`. Without `--include-unlanded` such a tree is simply skipped, naming the flag.
 
 Ambiguous cases are **refused, not guessed**: the main checkout, any worktree nested inside it (e.g. the `.aida-store` worktree), a path that isn't a registered worktree of this repo, a missing directory, and a tree a **live session lease** is holding are each skipped with a reason. Adoption also stops at `[worktree_pool] max_trees` rather than silently growing the pool past the cap, and re-running is a no-op (already-pooled trees report `already-pooled`).
 

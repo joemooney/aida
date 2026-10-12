@@ -1075,6 +1075,18 @@ pub(crate) fn link_worktree_runtime_state(
     Ok(())
 }
 
+/// The runtime symlinks session start places inside a worktree's `.aida/`,
+/// which [`unlink_worktree_aida_runtime`] strips before removal.
+// trace:BUG-52 trace:BUG-1986 | ai:claude
+pub(crate) const WORKTREE_AIDA_RUNTIME_LINKS: &[&str] = &[
+    "sessions",
+    "roles",
+    "cache.db",
+    "cache.db-shm",
+    "cache.db-wal",
+    "pgdata",
+];
+
 /// Strip the runtime symlinks `link_worktree_runtime_state` created inside a
 /// worktree's `.aida/` (BUG-52), so `git worktree remove` doesn't count them
 /// as untracked files. `.aida/` itself holds tracked content and stays.
@@ -1085,14 +1097,7 @@ pub(crate) fn unlink_worktree_aida_runtime(aida_dir: &std::path::Path) {
     // it is still distinguishable from the shared sidecar.
     // trace:BUG-1644 | ai:claude
     retire_stray_worktree_lock_info(aida_dir);
-    for runtime in &[
-        "sessions",
-        "roles",
-        "cache.db",
-        "cache.db-shm",
-        "cache.db-wal",
-        "pgdata",
-    ] {
+    for runtime in WORKTREE_AIDA_RUNTIME_LINKS {
         let p = aida_dir.join(runtime);
         if p.is_symlink() {
             let _ = std::fs::remove_file(&p);
@@ -2079,11 +2084,26 @@ pub(crate) fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<
             }
             Ok(())
         }
-        WorktreePoolCommand::Return { path } => {
+        WorktreePoolCommand::Return {
+            path,
+            include_in_use,
+        } => {
             let target = match path {
                 Some(p) => std::path::PathBuf::from(p),
                 None => std::env::current_dir()?,
             };
+            // BUG-1986: a return runs a forced checkout and a hard reset,
+            // which rewrites every file under a running build. Apply the
+            // strict check: a live holder, or a scan that cannot be
+            // verified, refuses unless --include-in-use. trace:BUG-1986 | ai:claude
+            if !*include_in_use {
+                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&target) {
+                    anyhow::bail!(
+                        "{}\n\nThe worktree was NOT returned; it is unchanged.",
+                        in_use.refusal("--include-in-use")
+                    );
+                }
+            }
             aida_core::worktree_pool::return_to_pool(&project_root, &target)?;
             println!(
                 "{} returned {} to the warm-pool (reset to a clean base, marked idle — directory + build cache kept)",

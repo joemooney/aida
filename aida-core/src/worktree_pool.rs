@@ -762,15 +762,17 @@ pub fn return_to_pool(project_root: &Path, worktree_path: &Path) -> Result<()> {
         // BUG-660: never SILENTLY discard uncommitted work on the reset below —
         // if a returning tree is dirty (e.g. a drive shelved a spec mid-edit, or
         // a commit failed), salvage its diff to `.aida/salvage/` first so it can
-        // be inspected/replayed. Best-effort: a salvage failure must not block
-        // the return (the tree still needs to reset to be reusable).
-        // trace:BUG-660 | ai:claude
-        if let Err(err) = salvage_dirty_before_reset(project_root, &path) {
-            eprintln!(
-                "  warning: could not salvage uncommitted work from {} before reset: {err:#}",
+        // be inspected/replayed. trace:BUG-660 | ai:claude
+        // BUG-1986: no reset without a saved copy. A failed salvage keeps the
+        // tree as it is (still leased, work intact) and fails the return,
+        // exactly as acquire skips such a tree. trace:BUG-1986 | ai:claude
+        salvage_dirty_before_reset(project_root, &path).with_context(|| {
+            format!(
+                "could not salvage uncommitted work from {} before the reset; the \
+                 worktree was kept as it is",
                 path.display()
-            );
-        }
+            )
+        })?;
         git_ops::reset_worktree_to(&path, &base_ref)
             .with_context(|| format!("reset returned worktree {}", path.display()))?;
         let e = &mut pool.entries[idx];
@@ -1261,6 +1263,41 @@ mod git_integration_tests {
             "returned worktree dir must persist (TASK-0396)"
         );
         assert_eq!(read_state(root).unwrap().entries.len(), 1);
+    }
+
+    /// A failed salvage keeps the tree: no reset, the uncommitted edit is
+    /// still there, and the entry stays leased.
+    // trace:BUG-1986 | ai:claude
+    #[test]
+    fn return_keeps_a_dirty_tree_when_its_salvage_fails() {
+        let repo = init_repo();
+        let root = repo.path();
+        let path = acquire(root, &opts()).unwrap();
+        std::fs::write(path.join("README.md"), "unsaved edit").unwrap();
+        // Make the salvage dir uncreatable: a regular file sits where it goes.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida").join("salvage"), "not a dir").unwrap();
+
+        let err = return_to_pool(root, &path).expect_err("salvage failure must fail the return");
+        assert!(format!("{err:#}").contains("kept"), "{err:#}");
+        assert_eq!(
+            std::fs::read_to_string(path.join("README.md")).unwrap(),
+            "unsaved edit",
+            "the tree must not be reset"
+        );
+        let pool = read_state(root).unwrap();
+        assert!(
+            pool.entries[0].owner_pid.is_some() && !pool.entries[0].is_idle(),
+            "the entry keeps its owner, not marked idle"
+        );
+
+        // Once the salvage can be written, the return goes through.
+        std::fs::remove_file(root.join(".aida").join("salvage")).unwrap();
+        return_to_pool(root, &path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(path.join("README.md")).unwrap(),
+            "seed"
+        );
     }
 
     #[test]

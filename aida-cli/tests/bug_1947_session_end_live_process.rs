@@ -282,7 +282,10 @@ fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
     assert!(!out.status.success(), "session end must refuse:\n{msg}");
     assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
     assert!(msg.contains("sleep 600"), "names the command:\n{msg}");
-    assert!(msg.contains("--force"), "names the override:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
     assert!(
         !msg.contains("BUG-1947"),
         "no internal ids in user prose:\n{msg}"
@@ -292,10 +295,31 @@ fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
     drop(live);
 }
 
-// (a): `--force` overrides the refusal and removes the worktree.
+// BUG-1986: `--force` (skip the prompt, discard dirt) alone no longer
+// overrides the live-process refusal; a sweep that passes it for those
+// reasons must still keep a tree that is in use.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn session_end_force_alone_does_not_override_the_live_process_refusal() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    let live = s.spawn_live_process();
+    let out = s.end(&s.repo, &["--force"]);
+    let msg = text(&out);
+    assert!(!out.status.success(), "--force alone must refuse:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert!(s.lease_exists(), "lease must survive");
+    drop(live);
+}
+
+// (a): `--include-in-use` overrides the refusal and removes the worktree.
 // (c): releasing the lease does not move the spec back out of In Progress.
 #[test]
-fn session_end_force_removes_a_worktree_with_a_live_process_inside() {
+fn session_end_include_in_use_removes_a_worktree_with_a_live_process_inside() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let before = s.status_line();
@@ -305,15 +329,15 @@ fn session_end_force_removes_a_worktree_with_a_live_process_inside() {
     );
     let live = s.spawn_live_process();
 
-    let out = s.end(&s.repo, &["--force"]);
+    let out = s.end(&s.repo, &["--include-in-use"]);
     assert!(
         out.status.success(),
-        "--force must proceed:\n{}",
+        "--include-in-use must proceed:\n{}",
         text(&out)
     );
     assert!(
         !s.worktree.exists(),
-        "worktree must be removed under --force"
+        "worktree must be removed under --include-in-use"
     );
     assert!(!s.lease_exists(), "lease released");
     assert_eq!(
@@ -342,8 +366,8 @@ fn session_end_without_live_processes_removes_the_worktree_even_from_inside_it()
 
 // Pooling is the default, and returning a pooled tree runs a forced checkout
 // and a hard reset, which rewrites the files under a running build just as a
-// removal deletes them. The return must refuse the same way, and `--force`
-// must override it the same way.
+// removal deletes them. The return must refuse the same way, and
+// `--include-in-use` must override it the same way.
 #[test]
 fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -361,7 +385,10 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
     assert!(!out.status.success(), "pool return must refuse:\n{msg}");
     assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
     assert!(msg.contains("sleep 600"), "names the command:\n{msg}");
-    assert!(msg.contains("--force"), "names the override:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
     assert!(s.lease_exists(), "lease must survive the refusal");
     assert_eq!(
         s.worktree_branch(),
@@ -369,10 +396,10 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
         "the tree must not be detached and reset under the live process"
     );
 
-    let out = s.end(&s.repo, &["--force"]);
+    let out = s.end(&s.repo, &["--include-in-use"]);
     assert!(
         out.status.success(),
-        "--force must proceed:\n{}",
+        "--include-in-use must proceed:\n{}",
         text(&out)
     );
     assert!(!s.lease_exists(), "lease released");
@@ -384,4 +411,185 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
         text(&out)
     );
     drop(live);
+}
+
+// BUG-1986: `aida worktree pool return` resets the tree the same way, so it
+// applies the strict holder check, and `--include-in-use` overrides it.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn pool_return_refuses_a_worktree_a_live_process_is_using() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let live = s.spawn_live_process();
+    let pid = live.0.id();
+    let branch_before = s.worktree_branch();
+
+    let wt = s.worktree.to_str().unwrap().to_string();
+    let mut ret = aida(&s.repo, &s.home);
+    ret.args(["worktree", "pool", "return", &wt]);
+    let out = ret.output().expect("run pool return");
+    let msg = text(&out);
+    assert!(!out.status.success(), "pool return must refuse:\n{msg}");
+    assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
+    assert_eq!(
+        s.worktree_branch(),
+        branch_before,
+        "the tree must not be reset under the live process"
+    );
+
+    let mut ret = aida(&s.repo, &s.home);
+    ret.args(["worktree", "pool", "return", &wt, "--include-in-use"]);
+    let out = ret.output().expect("run pool return --include-in-use");
+    assert!(
+        out.status.success(),
+        "--include-in-use must proceed:\n{}",
+        text(&out)
+    );
+    assert_eq!(s.worktree_branch(), "HEAD", "returned trees are detached");
+    drop(live);
+}
+
+// BUG-1986: an agent ends its own session from inside its worktree while one
+// of its own helpers (an MCP server: same session, cwd in the tree) is still
+// running. The helper is exempt as part of the caller's in-worktree run, and
+// the final recheck must not lose that exemption by running after the chdir
+// to the project root. The end must succeed and remove the tree.
+// trace:BUG-1986 | ai:claude
+#[test]
+#[cfg(unix)]
+fn session_end_from_inside_with_its_own_helper_running_ends_cleanly() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    // The `sh` stands in for the agent: its cwd is the worktree, it starts a
+    // helper in the tree, then runs `session end` from there.
+    // It gets the same hermetic environment as every `aida` run here.
+    let env_donor = aida(&s.worktree, &s.home);
+    let mut cmd = Command::new("sh");
+    cmd.current_dir(&s.worktree).env_clear();
+    for (k, v) in env_donor.get_envs() {
+        if let Some(v) = v {
+            cmd.env(k, v);
+        }
+    }
+    cmd.env("AIDA_BIN", env!("CARGO_BIN_EXE_aida"))
+        .env("END_ID", &s.id)
+        .args([
+            "-c",
+            "sleep 600 & helper=$!; \
+             \"$AIDA_BIN\" session end \"$END_ID\" --yes --skip-ci; rc=$?; \
+             kill $helper; exit $rc",
+        ]);
+    let out = cmd.output().expect("run agent shell");
+    let msg = text(&out);
+    assert!(
+        out.status.success(),
+        "ending your own session with your own helper running must succeed:\n{msg}"
+    );
+    assert!(!s.worktree.exists(), "worktree removed:\n{msg}");
+    assert!(!s.lease_exists(), "lease released:\n{msg}");
+}
+
+/// Runs `session end` with the debug-build pause at `stage`, starts a live
+/// process in the tree while it waits, then lets it continue. Returns the
+/// output and the pid of the live process (still running).
+// trace:BUG-1986 | ai:claude
+fn end_with_a_holder_started_at(s: &Session, stage: &str) -> (Output, KillOnDrop) {
+    let pause = tempfile::tempdir().expect("pause dir");
+    let mut cmd = aida(&s.repo, &s.home);
+    cmd.env("AIDA_TEST_SESSION_END_PAUSE_AT", stage)
+        .env("AIDA_TEST_SESSION_END_PAUSE_DIR", pause.path())
+        .args(["session", "end", &s.id, "--yes", "--skip-ci"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let child = cmd.spawn().expect("spawn session end");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !pause.path().join("paused").exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "session end never reached the {stage} pause"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Nothing held the tree at the first check; this process appears after it.
+    let live = s.spawn_live_process();
+    std::fs::write(pause.path().join("resume"), "").unwrap();
+    let out = child.wait_with_output().expect("wait for session end");
+    (out, live)
+}
+
+// BUG-1986: a process that starts using the tree while the operator sits at
+// the confirmation is caught by the recheck inside `session end`, which
+// refuses before anything is touched.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    let (out, live) = end_with_a_holder_started_at(&s, "after-confirm");
+    let msg = text(&out);
+    assert!(!out.status.success(), "the recheck must refuse:\n{msg}");
+    assert!(
+        msg.contains(&format!("pid {}", live.0.id())),
+        "names the pid:\n{msg}"
+    );
+    assert!(
+        msg.contains("NOT ended"),
+        "says the session was not ended:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert!(s.lease_exists(), "lease must survive");
+}
+
+// BUG-1986: a holder that appears just before the teardown (after the dirty
+// gate) is caught by the final recheck. The lease and the pool entry are
+// left intact, so once the holder exits a plain re-run ends the session and
+// returns the tree to the pool.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let branch_before = s.worktree_branch();
+    let (out, live) = end_with_a_holder_started_at(&s, "before-teardown");
+    let msg = text(&out);
+    assert!(
+        !out.status.success(),
+        "the final recheck must refuse:\n{msg}"
+    );
+    assert!(
+        msg.contains(&format!("pid {}", live.0.id())),
+        "names the pid:\n{msg}"
+    );
+    assert!(
+        msg.contains("NOT ended"),
+        "says the session was not ended:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert_eq!(s.worktree_branch(), branch_before, "tree must not be reset");
+    assert!(s.lease_exists(), "lease must survive the late refusal");
+    // The session's runtime links must survive too, or `aida` run from
+    // inside the tree would see a bare `.aida/` (a fresh local cache, no
+    // lease).
+    for link in [".aida-store", ".aida/sessions", ".aida/cache.db"] {
+        assert!(
+            s.worktree.join(link).is_symlink(),
+            "{link} must still be a symlink after the late refusal"
+        );
+    }
+
+    // Re-run from INSIDE the tree: it must find its lease through the
+    // tree's own links and finish the end.
+    drop(live);
+    let out = s.end(&s.worktree, &[]);
+    assert!(
+        out.status.success(),
+        "once the holder exits, a re-run must end the session:\n{}",
+        text(&out)
+    );
+    assert!(!s.lease_exists(), "lease released on the re-run");
+    assert!(s.worktree.is_dir(), "pooled tree returned, not removed");
 }

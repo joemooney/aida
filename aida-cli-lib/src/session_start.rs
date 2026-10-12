@@ -1539,7 +1539,7 @@ pub(crate) fn session_start(
                             .unwrap_or(false);
                         if !ended {
                             anyhow::bail!(
-                                "could not end dead lease {} holding `{}` — run `aida session end {} --force` and retry",
+                                "could not end dead lease {} holding `{}` — run `aida session end {}` to see why; add `--force` to discard uncommitted changes or `--include-in-use` to override a live process, then retry", // trace:BUG-1986 | ai:claude
                                 l.id,
                                 source_branch,
                                 l.id
@@ -1579,7 +1579,7 @@ pub(crate) fn session_start(
                     eprintln!("    Options:");
                     eprintln!("      1. End that session: `aida session end {}`", l.id);
                     eprintln!(
-                    "      2. Force-end (kills any live claude there): `aida session end {} --force`",
+                    "      2. Force-end (kills any live claude there): `aida session end {} --force --include-in-use`",
                     l.id
                 );
                     eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
@@ -1613,7 +1613,7 @@ pub(crate) fn session_start(
                         }
                         "2" => {
                             anyhow::bail!(
-                            "stopping; run `aida session end {} --force` then re-run this command",
+                            "stopping; run `aida session end {} --force --include-in-use` then re-run this command",
                             l.id
                         );
                         }

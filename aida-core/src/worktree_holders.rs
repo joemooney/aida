@@ -15,11 +15,16 @@
 //! - `cwd`: its working directory (a shell, an agent, `cargo build`),
 //! - `root`: its root directory (a chroot inside the tree),
 //! - `exe`: its executable (a test binary built into the tree's `target/`),
-//! - any `fd/*` link: an open file (a cargo lock, an editor buffer).
+//! - any `fd/*` link: an open file (a cargo lock, an editor buffer),
+//! - any `map_files/*` link: a file mapped into memory (a shared library or
+//!   an mmapped database), which holds the tree even with no open fd.
 //!
 //! Entries the caller cannot read, such as other users' processes or ones that
 //! exit mid-scan, are skipped. The scan is bounded: at most
-//! [`MAX_FDS_PER_PROCESS`] fd links are read per process.
+//! [`MAX_FDS_PER_PROCESS`] fd links and [`MAX_MAPPINGS_PER_PROCESS`] mapping
+//! links are read per process. `map_files` needs ptrace-read access to the
+//! process (the same user, unless Yama or a container policy restricts it);
+//! where it is unreadable, mappings are not checked for that process.
 //!
 //! ## Who is NOT counted (the self-exclusion rule)
 //!
@@ -76,14 +81,19 @@
 //! `/proc/<self>/ns/pid`: the kernel reserves a fixed inode for the initial
 //! namespace, and that is the one signal that still holds when the namespace
 //! mounts its own `/proc` (there it looks complete and `NSpid` shows a single
-//! level). Setting `AIDA_TRUST_PID_NAMESPACE=1` waives the namespace check
+//! level). In a separate pid namespace the processes inside it are still
+//! scanned, and any holder found there is reported as a holder, so every
+//! check refuses on it. Only a scan that finds no holder is unverified there,
+//! since a holder outside the namespace would be hidden.
+//! Setting `AIDA_TRUST_PID_NAMESPACE=1` waives the namespace check
 //! for a container that owns its worktrees (nothing outside it can be using
-//! them); the other two unverified cases still apply. A `hidepid` mount that still shows the caller's own pid is NOT
-//! detected; other users' processes are then skipped like any unreadable
-//! entry. [`check_worktree_removal`], which every bulk or
-//! automatic path uses, treats an unverified scan as a refusal, so those
-//! paths keep the tree. [`check_worktree_removal_interactive`], used when an
-//! operator ends one session by name, warns and proceeds.
+//! them); the other two unverified cases still apply. A `hidepid` mount that
+//! still shows the caller's own pid is NOT detected; other users' processes
+//! are then skipped like any unreadable entry. [`check_worktree_removal`],
+//! which every bulk or automatic path uses, treats an unverified scan as a
+//! refusal, so those paths keep the tree. [`check_worktree_removal_interactive`],
+//! used when an operator ends one session by name, warns and proceeds when
+//! the scan is unverified and found no holder; a visible holder refuses.
 //!
 //! ## Other platforms
 //!
@@ -101,6 +111,11 @@ use std::path::{Path, PathBuf};
 // trace:BUG-1947 | ai:claude
 pub const MAX_FDS_PER_PROCESS: usize = 4096;
 
+/// Upper bound on `map_files` links read per process, for the same reason as
+/// [`MAX_FDS_PER_PROCESS`].
+// trace:BUG-1986 | ai:claude
+pub const MAX_MAPPINGS_PER_PROCESS: usize = 8192;
+
 /// Upper bound on parent-chain hops. It protects against a corrupt or cyclic
 /// ppid map.
 const MAX_ANCESTRY_DEPTH: usize = 128;
@@ -117,6 +132,9 @@ pub enum HoldKind {
     Executable,
     /// It has this file under the worktree open.
     OpenFile(PathBuf),
+    /// It has this file under the worktree mapped into memory.
+    // trace:BUG-1986 | ai:claude
+    MappedFile(PathBuf),
 }
 
 impl HoldKind {
@@ -126,6 +144,7 @@ impl HoldKind {
             HoldKind::Root => "root directory is inside the worktree".to_string(),
             HoldKind::Executable => "running a program from inside the worktree".to_string(),
             HoldKind::OpenFile(p) => format!("has {} open", p.display()),
+            HoldKind::MappedFile(p) => format!("has {} mapped into memory", p.display()),
         }
     }
 }
@@ -277,31 +296,62 @@ pub fn check_worktree_removal(worktree: &Path) -> Result<(), WorktreeInUse> {
     }
     #[cfg(target_os = "linux")]
     {
-        match live_worktree_holders(worktree) {
-            Ok(holders) if holders.is_empty() => Ok(()),
-            Ok(holders) => Err(WorktreeInUse {
-                worktree: worktree.to_path_buf(),
-                holders,
-                unverified: None,
-                pid_namespace: false,
-            }),
-            Err(why) => Err(WorktreeInUse {
-                worktree: worktree.to_path_buf(),
-                holders: Vec::new(),
-                unverified: Some(why.reason),
-                pid_namespace: why.pid_namespace,
-            }),
-        }
+        check_removal_in(Path::new("/proc"), worktree, std::process::id())
+    }
+}
+
+/// [`check_worktree_removal`] over an explicit proc root and caller pid, so
+/// tests can drive the strict verdict with a fake `/proc` tree.
+// trace:BUG-1986 | ai:claude
+pub fn check_removal_in(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+) -> Result<(), WorktreeInUse> {
+    match scan_holders_in(proc_root, worktree, self_pid) {
+        Ok(holders) if holders.is_empty() => Ok(()),
+        Ok(holders) => Err(WorktreeInUse {
+            worktree: worktree.to_path_buf(),
+            holders,
+            unverified: None,
+            pid_namespace: false,
+        }),
+        Err(why) => Err(WorktreeInUse {
+            worktree: worktree.to_path_buf(),
+            holders: Vec::new(),
+            unverified: Some(why.reason),
+            pid_namespace: why.pid_namespace,
+        }),
     }
 }
 
 /// Like [`check_worktree_removal`], for an operator ending ONE session by
-/// name: an unverified scan prints a warning and allows the removal instead
-/// of refusing. Live holders still refuse.
+/// name: an unverified scan that found no holder prints a warning and allows
+/// the removal instead of refusing. Any visible holder still refuses, in a
+/// separate pid namespace too.
+// trace:BUG-1986 | ai:claude
 // trace:BUG-1947 | ai:claude
 pub fn check_worktree_removal_interactive(worktree: &Path) -> Result<(), WorktreeInUse> {
-    match check_worktree_removal(worktree) {
-        Err(e) if e.unverified.is_some() => {
+    interactive_verdict(check_worktree_removal(worktree))
+}
+
+/// [`check_worktree_removal_interactive`] over an explicit proc root and
+/// caller pid, for tests with a fake `/proc` tree.
+// trace:BUG-1986 | ai:claude
+pub fn check_removal_interactive_in(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+) -> Result<(), WorktreeInUse> {
+    interactive_verdict(check_removal_in(proc_root, worktree, self_pid))
+}
+
+/// Downgrade an unverified scan that found no holder to a warning. A
+/// verdict with holders is never downgraded.
+// trace:BUG-1986 | ai:claude
+fn interactive_verdict(verdict: Result<(), WorktreeInUse>) -> Result<(), WorktreeInUse> {
+    match verdict {
+        Err(e) if e.unverified.is_some() && e.holders.is_empty() => {
             eprintln!("warning: {e}; removing it without that check");
             Ok(())
         }
@@ -338,7 +388,8 @@ pub fn live_worktree_holders(worktree: &Path) -> Result<Vec<WorktreeHolder>, Sca
 /// The scan behind [`live_worktree_holders`], parameterised over the proc root
 /// and the caller's pid so tests can drive it with a fake `/proc` tree.
 /// `Err` means the scan as a whole is unverified: `proc_root` cannot be
-/// listed, or `self_pid` is not visible in it.
+/// listed, `self_pid` is not visible in it, or the caller runs in a separate
+/// pid namespace and no holder was visible (a visible holder is `Ok`).
 // trace:BUG-1947 | ai:claude
 pub fn scan_holders_in(
     proc_root: &Path,
@@ -374,14 +425,16 @@ pub fn scan_holders_in(
     // The operator can vouch that nothing outside this pid namespace uses
     // the worktrees (a dev container that owns its checkout), which would
     // otherwise leave every automatic cleanup refusing. trace:BUG-1947 | ai:claude
-    if !trust_pid_namespace() {
-        if let Some(reason) = separate_pid_namespace(proc_root, self_pid) {
-            return Err(ScanUnverified {
-                reason,
-                pid_namespace: true,
-            });
-        }
-    }
+    //
+    // In a separate pid namespace the processes inside it are still visible,
+    // so the scan still runs: a holder it can see is a definite refusal. Only
+    // a scan that finds nothing is unverified, because a holder outside the
+    // namespace would be hidden. trace:BUG-1986 | ai:claude
+    let namespace_unverified = if trust_pid_namespace() {
+        None
+    } else {
+        separate_pid_namespace(proc_root, self_pid)
+    };
 
     // The ppid/session maps cover every visible process, so subtree
     // membership can be decided without a second pass over /proc.
@@ -438,7 +491,14 @@ pub fn scan_holders_in(
             });
         }
     }
-    Ok(holders)
+    // trace:BUG-1986 | ai:claude
+    match namespace_unverified {
+        Some(reason) if holders.is_empty() => Err(ScanUnverified {
+            reason,
+            pid_namespace: true,
+        }),
+        _ => Ok(holders),
+    }
 }
 
 /// Inode of the initial (host) pid namespace. The kernel reserves it
@@ -516,12 +576,26 @@ fn holds(proc_root: &Path, pid: u32, inside: &dyn Fn(&Path) -> bool) -> Option<H
     if read_link(proc_root, pid, "exe").is_some_and(|p| inside(&p)) {
         return Some(HoldKind::Executable);
     }
-    let fd_dir = proc_root.join(pid.to_string()).join("fd");
-    let fds = std::fs::read_dir(fd_dir).ok()?; // Unreadable: another user's process.
-    for fd in fds.flatten().take(MAX_FDS_PER_PROCESS) {
-        if let Ok(target) = std::fs::read_link(fd.path()) {
+    let dir = proc_root.join(pid.to_string());
+    // Unreadable: another user's process.
+    if let Ok(fds) = std::fs::read_dir(dir.join("fd")) {
+        for fd in fds.flatten().take(MAX_FDS_PER_PROCESS) {
+            if let Ok(target) = std::fs::read_link(fd.path()) {
+                if inside(&target) {
+                    return Some(HoldKind::OpenFile(target));
+                }
+            }
+        }
+    }
+    // A file mapped into memory (a shared library or an mmapped database
+    // under the tree) holds it even after its fd is closed. Each
+    // `map_files/<range>` link resolves to the mapped file's path.
+    // trace:BUG-1986 | ai:claude
+    let maps = std::fs::read_dir(dir.join("map_files")).ok()?;
+    for map in maps.flatten().take(MAX_MAPPINGS_PER_PROCESS) {
+        if let Ok(target) = std::fs::read_link(map.path()) {
             if inside(&target) {
-                return Some(HoldKind::OpenFile(target));
+                return Some(HoldKind::MappedFile(target));
             }
         }
     }
@@ -820,7 +894,10 @@ mod tests {
         {
             let _env = crate::test_env::EnvVarGuard::unset(TRUST_PID_NAMESPACE_ENV);
             assert!(!trust_pid_namespace());
-            assert!(scan_holders_in(&fake.root, &wt, 200).is_err());
+            // A visible holder is reported even without the opt-out
+            // (BUG-1986); only an empty result would be unverified.
+            let h = scan_holders_in(&fake.root, &wt, 200).expect("visible holder");
+            assert_eq!(pids(&h), vec![300]);
         }
         {
             let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "1");
@@ -836,6 +913,60 @@ mod tests {
             let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "0");
             assert!(!trust_pid_namespace());
         }
+    }
+
+    /// In a container's own pid namespace, a holder the scan CAN see makes
+    /// every form refuse, the interactive one included; only an empty scan
+    /// there is unverified (and only then does the interactive form warn).
+    // trace:BUG-1986 | ai:claude
+    #[test]
+    fn a_visible_holder_in_a_separate_pid_namespace_refuses_every_form() {
+        let _env = crate::test_env::EnvVarGuard::unset(TRUST_PID_NAMESPACE_ENV);
+        let (_t, fake, wt, outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        let me = fake.add(200, 1, "aida session end", &outside);
+        std::fs::create_dir_all(me.join("ns")).unwrap();
+        symlink("pid:[4026533285]", me.join("ns").join("pid")).unwrap();
+
+        // No holder visible: unverified, and the interactive form proceeds.
+        let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(err.pid_namespace, "{err}");
+        let strict = check_removal_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(strict.unverified.is_some() && strict.holders.is_empty());
+        assert!(check_removal_interactive_in(&fake.root, &wt, 200).is_ok());
+
+        // A visible `cargo build` in the tree: a holder, never "unverified".
+        fake.add(300, 1, "cargo build", &wt.join("target"));
+        let h = scan_holders_in(&fake.root, &wt, 200).expect("holder is a verdict");
+        assert_eq!(pids(&h), vec![300]);
+        let strict = check_removal_in(&fake.root, &wt, 200).unwrap_err();
+        assert_eq!(pids(&strict.holders), vec![300]);
+        assert!(strict.unverified.is_none());
+        let interactive = check_removal_interactive_in(&fake.root, &wt, 200)
+            .expect_err("interactive end must refuse a visible holder");
+        assert_eq!(pids(&interactive.holders), vec![300]);
+        assert!(interactive.refusal("--include-in-use").contains("pid 300"));
+    }
+
+    /// A process that only has a file from the tree mapped into memory (no
+    /// cwd, exe or fd there) is a holder.
+    // trace:BUG-1986 | ai:claude
+    #[test]
+    fn a_memory_mapped_file_under_the_tree_is_a_holder() {
+        let (_t, fake, wt, outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add(200, 1, "aida", &outside);
+        let p = fake.add(310, 1, "db server", &outside);
+        std::fs::create_dir_all(p.join("map_files")).unwrap();
+        symlink("/usr/lib/libc.so.6", p.join("map_files/7f00-7f10")).unwrap();
+        symlink(wt.join("target/data.db"), p.join("map_files/7f20-7f30")).unwrap();
+        let p = fake.add(311, 1, "unrelated", &outside);
+        std::fs::create_dir_all(p.join("map_files")).unwrap();
+        symlink("/usr/lib/libc.so.6", p.join("map_files/7f00-7f10")).unwrap();
+        let h = scan_holders_in(&fake.root, &wt, 200).unwrap();
+        assert_eq!(pids(&h), vec![310]);
+        assert_eq!(h[0].hold, HoldKind::MappedFile(wt.join("target/data.db")));
+        assert!(h[0].hold.describe().contains("mapped into memory"));
     }
 
     // trace:BUG-1947 | ai:claude

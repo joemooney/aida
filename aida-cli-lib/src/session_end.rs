@@ -979,6 +979,9 @@ pub(crate) fn session_end(
     // default). TASK-985: --remove forces deletion instead of returning.
     return_to_pool: bool,
     remove: bool,
+    // BUG-1986: the dedicated live-process override. `--force` alone no
+    // longer removes a tree another live process is using.
+    include_in_use: bool,
 ) -> Result<()> {
     // Returning is now the default; the flag is kept for compat.
     let _ = return_to_pool;
@@ -1154,7 +1157,9 @@ pub(crate) fn session_end(
     // claude keeps running with `(deleted)` as its cwd — leaking memory,
     // confusing future liveness probes, and potentially firing hooks at
     // paths that no longer exist. Default refuses with a clear message;
-    // `--force` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // `--include-in-use` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // `--force` alone no longer does: a sweep passing `--force` for a dirty
+    // tree or a missing TTY must not kill a live agent. trace:BUG-1986 | ai:claude
     // trace:BUG-61 | ai:claude
     // BUG-734: worktree-less lease ⇒ no process-leak check — nothing to
     // remove, so nothing can leak. trace:BUG-734 | ai:claude
@@ -1164,7 +1169,7 @@ pub(crate) fn session_end(
         Vec::new()
     };
     if !leaked.is_empty() {
-        if !force {
+        if !include_in_use {
             let mut msg = format!(
                 "{} live claude process{} inside worktree {} — would leak with `(deleted)` cwd if we removed the worktree:",
                 leaked.len(),
@@ -1174,15 +1179,15 @@ pub(crate) fn session_end(
             for p in &leaked {
                 msg.push_str(&format!("\n  pid {} cwd {}", p.pid, p.cwd.display()));
             }
-            msg.push_str("\n\nExit those claude(s) first, or pass --force to SIGTERM them.");
+            msg.push_str(
+                "\n\nExit those claude(s) first, or pass --include-in-use to SIGTERM them.",
+            ); // trace:BUG-1986 | ai:claude
             anyhow::bail!(msg)
         }
-        eprintln!(
-            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
-            "→".dimmed(),
-            leaked.len()
-        );
-        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        // With --include-in-use they are terminated later, after the
+        // confirmation and the dirty gate: a declined prompt, a non-TTY
+        // refusal or a dirty-tree refusal must leave the agents running.
+        // trace:BUG-1986 | ai:claude
     }
 
     // Refuse to delete a worktree any live process is still using: a cwd
@@ -1191,13 +1196,16 @@ pub(crate) fn session_end(
     // therefore safe by default, because each call refuses on its own. The
     // caller's own process chain (this command, its shell, the agent that
     // owns the session when run from inside the tree) is exempt, so ending
-    // your own session still works. `--force` overrides. Checked whenever
+    // your own session still works. `--include-in-use` overrides; `--force`
+    // does not (trace:BUG-1986 | ai:claude). Checked whenever
     // the tree is torn down for this session (not shared with a peer lease),
     // INCLUDING a return to the warm pool: that return runs a forced
     // detached checkout and a hard reset, which rewrites every file under a
     // running build just as surely as a removal does. Checked before the
     // lease is touched, so a refusal changes nothing. This is the
-    // interactive form: a scan that cannot be verified warns and proceeds.
+    // interactive form: a scan that cannot be verified, and found no holder,
+    // warns and proceeds. It is re-run after the confirmation and again
+    // immediately before the tree is removed or reset (BUG-1986).
     // trace:BUG-1947 | ai:claude
     let tears_down_worktree = has_worktree
         && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
@@ -1205,14 +1213,14 @@ pub(crate) fn session_end(
         if let Err(in_use) =
             aida_core::worktree_holders::check_worktree_removal_interactive(&target.worktree_path)
         {
-            if !force {
+            if !include_in_use {
                 anyhow::bail!(
                     "{}\n\nThe session was NOT ended; its lease and worktree are unchanged.",
-                    in_use.refusal("--force")
+                    in_use.refusal(INCLUDE_IN_USE_FLAG)
                 );
             }
             eprintln!(
-                "{} worktree {} — removing anyway (--force)",
+                "{} worktree {} — removing anyway ({INCLUDE_IN_USE_FLAG})",
                 "Warning:".yellow().bold(),
                 in_use.summary()
             );
@@ -1278,6 +1286,112 @@ pub(crate) fn session_end(
         }
     }
 
+    // BUG-1986: the operator may have sat at the prompt for a while; a build
+    // started in the tree meanwhile must still stop the teardown. Nothing
+    // has been touched yet, so a refusal here leaves everything as it was.
+    session_end_test_pause("after-confirm"); // trace:BUG-1986 | ai:claude
+    if tears_down_worktree {
+        if let Err(refusal) = recheck_holders_before_teardown(
+            &target.worktree_path,
+            include_in_use,
+            aida_core::worktree_holders::check_worktree_removal_interactive,
+        ) {
+            anyhow::bail!(
+                "{refusal}\n\nThe session was NOT ended; its lease and worktree are unchanged."
+            );
+        }
+    }
+
+    // BUG-67: refuse to nuke a worktree that has real uncommitted work.
+    // `git status --porcelain` excludes ignored entries by default, so
+    // `target/`, `.aida/cache.db`, etc. don't trip this check — those are
+    // by definition disposable. Tracked-but-modified or untracked-and-
+    // unignored files DO trip it and require `--force`. We run this BEFORE
+    // deleting the lease, so a refusal leaves the session intact and
+    // recoverable. trace:BUG-67 | ai:claude
+    // BUG-1986: it also runs before the session's runtime symlinks are
+    // stripped (they are only stripped once the final holder recheck has
+    // passed), so the links themselves are filtered out of the entries
+    // here. A refusal therefore leaves the tree fully usable.
+    // trace:BUG-1986 | ai:claude
+    // BUG-734: no worktree ⇒ no dirty gate — `git -C ""` would report the
+    // caller's cwd, refusing on unrelated dirt. trace:BUG-734 | ai:claude
+    let dirty_entries = if has_worktree {
+        dirty_entries_ignoring_runtime_links(
+            &target.worktree_path,
+            worktree_dirty_entries(&target.worktree_path),
+        )
+    } else {
+        Vec::new()
+    };
+    // BUG-652: `--return` resets the worktree (reset --hard + clean -fd), so a
+    // dirty pooled tree must NOT be refused here — refusing leaves the tree
+    // leased and silently breaks reuse (the next acquire creates a fresh tree).
+    // Instead salvage a patch (so no work is lost) and let it through to the
+    // return path. Non-pool trees / non-return still refuse without --force.
+    // TASK-985: a pooled tree returns by DEFAULT now — `--remove` opts out.
+    // BUG-1986: the salvage itself runs later, after the final recheck and
+    // the link strip, so a late refusal writes no patch and the patch never
+    // captures the runtime links. trace:BUG-1986 | ai:claude
+    // trace:BUG-652 trace:STORY-714 trace:TASK-985 | ai:claude
+    let returning_pool_tree = !remove
+        && has_worktree
+        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
+    let salvage_before_return =
+        match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
+            DirtyGateOutcome::Proceed => false,
+            DirtyGateOutcome::Salvage => true,
+            DirtyGateOutcome::Refuse => {
+                let mut msg = format!(
+                    "worktree {} has uncommitted changes:\n",
+                    target.worktree_path.display()
+                );
+                for line in &dirty_entries {
+                    msg.push_str(&format!("  {}\n", line));
+                }
+                msg.push_str(
+                "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
+                 (Gitignored files like target/ and .aida/cache.db never require --force.)",
+            );
+                anyhow::bail!(msg);
+            }
+        };
+
+    // BUG-61 under --include-in-use: terminate live claudes in the tree only
+    // now, once the confirmation and the dirty gate have both passed.
+    // trace:BUG-1986 | ai:claude
+    if !leaked.is_empty() {
+        eprintln!(
+            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
+            "→".dimmed(),
+            leaked.len()
+        );
+        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+    }
+
+    // BUG-1986: the last holder check before the tree is removed or reset.
+    // It runs here, before the lease is deleted and before the chdir to the
+    // project root below: after that chdir the caller is outside the tree,
+    // so the agent's own helpers (an MCP server with its cwd in the tree)
+    // would lose their self-chain exemption. Nothing has been written yet
+    // (no punt-ledger record, role activity, symlink strip, salvage patch or
+    // lease delete), so a refusal leaves the lease, the pool entry and the
+    // worktree, runtime links included, exactly as they were.
+    // trace:BUG-1986 | ai:claude
+    session_end_test_pause("before-teardown");
+    if tears_down_worktree {
+        if let Err(refusal) = recheck_holders_before_teardown(
+            &target.worktree_path,
+            include_in_use,
+            aida_core::worktree_holders::check_worktree_removal_interactive,
+        ) {
+            anyhow::bail!(
+                "{refusal}\n\nThe session was NOT ended; its lease is kept and its worktree \
+                 was not removed or reset."
+            );
+        }
+    }
+
     if let Some(work) = &session_end_unshipped_work {
         record_session_end_unshipped_work(&project_root, work);
     }
@@ -1326,61 +1440,23 @@ pub(crate) fn session_end(
         unlink_worktree_aida_runtime(&target.worktree_path.join(".aida"));
     }
 
-    // BUG-67: refuse to nuke a worktree that has real uncommitted work.
-    // `git status --porcelain` excludes ignored entries by default, so
-    // `target/`, `.aida/cache.db`, etc. don't trip this check — those are
-    // by definition disposable. Tracked-but-modified or untracked-and-
-    // unignored files DO trip it and require `--force`. We run this AFTER
-    // stripping the runtime symlinks (which would otherwise show up as
-    // untracked) and BEFORE deleting the lease, so a refusal leaves the
-    // session intact and recoverable. trace:BUG-67 | ai:claude
-    // BUG-734: no worktree ⇒ no dirty gate — `git -C ""` would report the
-    // caller's cwd, refusing on unrelated dirt. trace:BUG-734 | ai:claude
-    let dirty_entries = if has_worktree {
-        worktree_dirty_entries(&target.worktree_path)
-    } else {
-        Vec::new()
-    };
-    // BUG-652: `--return` resets the worktree (reset --hard + clean -fd), so a
-    // dirty pooled tree must NOT be refused here — refusing leaves the tree
-    // leased and silently breaks reuse (the next acquire creates a fresh tree).
-    // Instead salvage a patch (so no work is lost) and let it through to the
-    // return path. Non-pool trees / non-return still refuse without --force.
-    // TASK-985: a pooled tree returns by DEFAULT now — `--remove` opts out.
-    // trace:BUG-652 trace:STORY-714 trace:TASK-985 | ai:claude
-    let returning_pool_tree = !remove
-        && has_worktree
-        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
-    match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
-        DirtyGateOutcome::Proceed => {}
-        DirtyGateOutcome::Salvage => {
-            match salvage_worktree_patch(&project_root, "pool-return", None, &target.worktree_path) {
-                Ok(Some(p)) => eprintln!(
-                    "{} salvaged uncommitted changes to {} before returning the pooled worktree (it will be reset)",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    p.display().to_string().dimmed()
-                ),
-                Ok(None) => {}
-                Err(e) => eprintln!(
-                    "{} could not salvage uncommitted changes before return: {} — proceeding (they will be reset away)",
-                    "Warning:".yellow().bold(),
-                    e
-                ),
-            }
-        }
-        DirtyGateOutcome::Refuse => {
-            let mut msg = format!(
-                "worktree {} has uncommitted changes:\n",
-                target.worktree_path.display()
-            );
-            for line in &dirty_entries {
-                msg.push_str(&format!("  {}\n", line));
-            }
-            msg.push_str(
-                "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
-                 (Gitignored files like target/ and .aida/cache.db never require --force.)",
-            );
-            anyhow::bail!(msg);
+    // BUG-652 salvage for a dirty pooled tree, now that the links are gone.
+    // trace:BUG-1986 | ai:claude
+    if salvage_before_return {
+        match salvage_worktree_patch(&project_root, "pool-return", None, &target.worktree_path) {
+            Ok(Some(p)) => eprintln!(
+                "{} salvaged uncommitted changes to {} before returning the pooled worktree (it will be reset)",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                p.display().to_string().dimmed()
+            ),
+            Ok(None) => {}
+            // BUG-1986: the return salvages again and keeps the tree
+            // (no reset) if that fails too. trace:BUG-1986 | ai:claude
+            Err(e) => eprintln!(
+                "{} could not salvage uncommitted changes before return: {} — the return will retry and keep the tree if it fails again",
+                "Warning:".yellow().bold(),
+                e
+            ),
         }
     }
 
@@ -1809,6 +1885,86 @@ pub(crate) fn session_end(
     Ok(())
 }
 
+/// Test-only pause inside `session end`, so an integration test can start a
+/// process in the worktree between two steps and prove the in-flow holder
+/// rechecks catch it. Active only in debug builds, and only when
+/// `AIDA_TEST_SESSION_END_PAUSE_AT` names `stage`: it then creates `paused`
+/// in `AIDA_TEST_SESSION_END_PAUSE_DIR` and waits (up to 60s) for `resume`.
+// trace:BUG-1986 | ai:claude
+#[cfg(debug_assertions)]
+fn session_end_test_pause(stage: &str) {
+    if std::env::var("AIDA_TEST_SESSION_END_PAUSE_AT")
+        .ok()
+        .as_deref()
+        != Some(stage)
+    {
+        return;
+    }
+    let Some(dir) = std::env::var_os("AIDA_TEST_SESSION_END_PAUSE_DIR") else {
+        return;
+    };
+    let dir = std::path::PathBuf::from(dir);
+    let _ = std::fs::write(dir.join("paused"), stage);
+    let resume = dir.join("resume");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !resume.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+// trace:BUG-1986 | ai:claude
+#[cfg(not(debug_assertions))]
+fn session_end_test_pause(_stage: &str) {}
+
+/// Drop the session's own runtime symlinks (`.aida-store` and the links
+/// inside `.aida/`) from `git status --porcelain` entries. The dirty gate
+/// runs while those links are still in place, and they are not work: the
+/// teardown strips them itself. Only an untracked entry that IS a symlink at
+/// one of those exact paths is dropped; anything else, including a real
+/// file or directory at the same path, still counts.
+// trace:BUG-1986 | ai:claude
+pub(crate) fn dirty_entries_ignoring_runtime_links(
+    worktree: &std::path::Path,
+    entries: Vec<String>,
+) -> Vec<String> {
+    let is_runtime_link = |entry: &str| {
+        let Some(path) = entry.strip_prefix("?? ") else {
+            return false;
+        };
+        let path = path.trim_end_matches('/');
+        let known = path == ".aida-store"
+            || path.strip_prefix(".aida/").is_some_and(|rest| {
+                crate::worktree_gc::WORKTREE_AIDA_RUNTIME_LINKS.contains(&rest)
+            });
+        known && worktree.join(path).is_symlink()
+    };
+    entries
+        .into_iter()
+        .filter(|entry| !is_runtime_link(entry))
+        .collect()
+}
+
+/// The session-end override flag for the live-process refusal.
+// trace:BUG-1986 | ai:claude
+pub(crate) const INCLUDE_IN_USE_FLAG: &str = "--include-in-use";
+
+/// Re-run the live-process check right before a destructive teardown step.
+/// `check` is the scan (injectable for tests). `Err` carries the full
+/// refusal text naming each holder and the override flag. With
+/// `include_in_use` the scan is skipped: the operator already chose to
+/// remove the tree regardless.
+// trace:BUG-1986 | ai:claude
+pub(crate) fn recheck_holders_before_teardown(
+    worktree: &std::path::Path,
+    include_in_use: bool,
+    check: impl Fn(&std::path::Path) -> Result<(), aida_core::worktree_holders::WorktreeInUse>,
+) -> std::result::Result<(), String> {
+    if include_in_use || worktree.as_os_str().is_empty() {
+        return Ok(());
+    }
+    check(worktree).map_err(|in_use| in_use.refusal(INCLUDE_IN_USE_FLAG))
+}
+
 /// BUG-59: ready-to-print hint lines telling the caller to leave the deleted
 /// worktree cwd before running anything else (so a follow-on `/bin/sh` spawn —
 /// e.g. Claude Code's Stop hook — doesn't ENOENT on the dangling inode). The
@@ -1823,3 +1979,7 @@ pub(crate) fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -
         format!("      cd '{}'", escaped),
     ]
 }
+
+#[cfg(test)]
+#[path = "tests/bug_1986_teardown_recheck_tests.rs"]
+mod bug_1986_teardown_recheck_tests;
