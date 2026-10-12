@@ -8,11 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-12T08:33:48.227892621Z
+modified_at: 2026-10-12T08:33:57.305223842Z
 req_type: Story
 tags:
 - history
 - index
+- parked:night
 - performance
 - plan:night
 - triaged:night
