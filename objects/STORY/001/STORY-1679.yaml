@@ -1,0 +1,40 @@
+id: 01a12d8f-854b-7be0-955a-33b56763ff52
+spec_id: STORY-1679
+agreed_id: STORY-1679
+title: Cross-model consensus failure as an automatic store-gap detector
+description: |
+  ## F32. Cross-model consensus failure as an automatic store-gap detector
+
+  **Seen (round 3, F-13):** of 44 discriminating checks, one failed in all 15 regenerations (3 vendors, 8 models,
+  3 specs) and one in all 11 store regenerations. Those two checks are exactly the contract clauses the store leaves
+  unsaid. Checks failed by only some models track model capability instead.
+
+  **Proposal:** `aida regen score` across N regenerators, ideally from more than one vendor, reports consensus
+  failures as *store gaps*, linked to the contract clause the test exercises (F13), and opens them as draft
+  spec-amendment tasks. It needs no human classification and is robust to any single model's quirks.
+
+  ## Acceptance
+
+  To be written at triage; the proposals above are the starting point.
+
+  ## Evidence
+
+  Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T00:42:22.923740686Z
+modified_at: 2026-10-12T00:42:22.923740686Z
+req_type: Story
+tags:
+- from:aida-host
+- regenerability
+filed_at:
+  code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
