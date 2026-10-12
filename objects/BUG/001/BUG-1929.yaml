@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T15:36:16.640488724Z
+modified_at: 2026-10-12T16:02:19.328701645Z
 req_type: Bug
 tags:
 - contained
@@ -200,6 +200,12 @@ comments:
     - **Docs.** Details are in the PR body (F1 section, Real-claude run). PR #2541.
   created_at: 2026-10-12T15:36:16.640488724Z
   modified_at: 2026-10-12T15:36:16.640488724Z
+  session_id: 296fdf1d-8ee7-4bef-9ac3-e2e12f973b18
+- id: 01a130d9-c040-7640-afe2-5cc33bd8f94b
+  author: joe
+  content: 'FACTORY READY: PR #2541 green at c6174e7545 (Build run 38269271396 success; merge-hold-gate awaits the human/advisor clearance by design).'
+  created_at: 2026-10-12T16:02:19.328701645Z
+  modified_at: 2026-10-12T16:02:19.328701645Z
   session_id: 296fdf1d-8ee7-4bef-9ac3-e2e12f973b18
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
