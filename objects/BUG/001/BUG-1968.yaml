@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:57.026279964Z
-modified_at: 2026-10-12T06:00:43.252799853Z
+modified_at: 2026-10-12T06:00:47.391408350Z
 req_type: Bug
 tags:
 - groom:close-dup
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-10-11T18:09:49.263144002Z
   modified_at: 2026-10-11T18:09:49.263144002Z
   session_id: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+- id: 01a12eb3-081f-7f01-b86f-a3309794bcfe
+  author: joe
+  content: |
+    [groom:night] CLOSE-DUP of BUG-1974 (in-progress, high). Same catch-up/cool-down test family with the same symptom: a serve_at that should have attempted (and failed) the injected catch-up did not. Failure count 1 instead of 2 means one of the two serve_at calls never reached catch_up_guarded. This spec's own comment already lists the bug_1942 sibling that BUG-1974 tracks. Suspected shared cause (see BUG-1964): serve_with_budget_at skips ensure_fresh when IndexLock::try_acquire is contended, which a parallel test's fork-before-exec can cause. BUG-1974's fix should make bug_1923_a_kept_chunk_clears_the_failure_count deterministic too.
+  created_at: 2026-10-12T06:00:47.391408350Z
+  modified_at: 2026-10-12T06:00:47.391408350Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
