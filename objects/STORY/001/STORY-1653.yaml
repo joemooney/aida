@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-12T02:33:06.256486391Z
+modified_at: 2026-10-12T02:33:16.347972907Z
 req_type: Story
 tags:
 - batch:next
@@ -103,6 +103,21 @@ comments:
   created_at: 2026-10-11T23:15:17.605335283Z
   modified_at: 2026-10-11T23:15:17.605335283Z
   session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
+- id: 01a12df5-0b3b-7150-9055-96435a6c1cc2
+  author: joe
+  content: |
+    ACCEPTANCE AMENDMENT (night relay) — advisor signoff requested.
+
+    PR #2542 (slice A) ships everything in STORY-1653 except design item 4, the staleness signal. That item is acceptance criterion 4's second clause: an idle spec "appears in `aida awaiting` once it passes the threshold", plus its config key and idle age from branch commits.
+
+    Proposed amendment:
+    - AC4 on STORY-1653 becomes "A spec with no lease and no covering driver shows `idle`."
+    - The awaiting-threshold clause, the config key and the branch-commit idle age move to **STORY-1680** (child of STORY-1653, filed with that text as its acceptance).
+
+    Advisor: please sign off on this amendment. If you'd rather not, say so and I'll put `aida: no-complete` in the PR #2542 body instead, so the merge doesn't close STORY-1653.
+  created_at: 2026-10-12T02:33:16.347972907Z
+  modified_at: 2026-10-12T02:33:16.347972907Z
+  session_id: bfa4262c-a911-4a31-a9b9-e564f5a1a33f
 history:
 - id: 01a1283c-a28e-72a3-91be-5fa6ae98d1bc
   author: joe
