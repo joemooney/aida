@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T17:48:41.338189773Z
-modified_at: 2026-10-12T05:55:36.656385266Z
+modified_at: 2026-10-12T15:02:30.310669346Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -24,6 +24,12 @@ comments:
   created_at: 2026-10-12T05:55:36.656385266Z
   modified_at: 2026-10-12T05:55:36.656385266Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-fca6-7610-aaf8-7959ba32c730
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option (3) first: link processes through env/manifest, with a non-/proc fallback; the display change comes later. A sketch with advisor signoff is still required before implementation.'
+  created_at: 2026-10-12T15:02:30.310669346Z
+  modified_at: 2026-10-12T15:02:30.310669346Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 92781f85ad0b7f73e16f817e8b2df77aed8d56fb
   branch: main
