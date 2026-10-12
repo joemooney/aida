@@ -22,12 +22,12 @@ description: |
   - BUG-1947's live-process check, when it lands, is evaluated against the same resolved root.
 
   Found by the night-fable review sweep of worktree/session end paths. Related: BUG-56, BUG-61, BUG-483, BUG-694, BUG-734, BUG-1947. Size M.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:23.888391365Z
-modified_at: 2026-10-11T23:23:54.632184792Z
+modified_at: 2026-10-12T01:39:16.082665110Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -91,6 +91,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12dc3-9987-7461-9a77-4fe5e86f24f6
+  author: aida-auto-bump
+  timestamp: 2026-10-12T01:39:15.975812213Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12dc3-99f2-7442-b45f-015bc1ff4a4b
+  timestamp: 2026-10-12T01:39:16.082656348Z
+  agent: implementer
+  commit_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
+  summary: 'Root-cause fix: session_end resolves the main checkout once, at line 990, before any early return or symlink strip; every downstream use (claim, manifest, peer guard, pool, store) sees it. All 3 new e2e tests pass with the fix and fail with it reverted (verified). No wrong-root case found; falls back to the old behaviour on bare, submodule or git failure. Non-blocking: a --separate-git-dir main checkout is rejected by the .git-is-dir check (no worse than before). Merge is gated on the lib-split freeze.'
+  review_verdict: approved
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
@@ -99,3 +113,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-12T01:39:15.975808679Z
+  completion_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
