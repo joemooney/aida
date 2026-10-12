@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:25.717576851Z
-modified_at: 2026-10-12T06:04:43.375518746Z
+modified_at: 2026-10-12T06:05:03.379849417Z
 req_type: Bug
 tags:
 - capture
@@ -27,6 +27,14 @@ tags:
 - hooks
 - scaffold
 - ux
+comments:
+- id: 01a12eb6-f013-7cd3-8681-f0cc2ebdc7a8
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised: changes how AIDA replaces git hooks and the store-write gate's guidance). SURVIVOR over BUG-1981 (same refusal, same root cause). Still real: aida-core/src/git_ops.rs HookKind::OtherAidaGenerated still bails on the first stale hook and recommends `aida scaffold apply` / `aida init --force`. Found that `aida scaffold upgrade` already handles .git/hooks/* as Template and leaves README/CLAUDE/AGENTS alone, but it also overwrites every other drifted Template file, so a hook-only path is still needed. Rewrote acceptance: hook-only refresh command (no other file touched, backup kept, custom hooks never replaced), refusal names it and lists ALL stale hooks, three tests, FAQ-49 updated. Dropped "scaffold apply refreshes hooks without --force" in favour of the scoped command, to avoid changing apply's create-only contract.
+  created_at: 2026-10-12T06:05:03.379849417Z
+  modified_at: 2026-10-12T06:05:03.379849417Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
