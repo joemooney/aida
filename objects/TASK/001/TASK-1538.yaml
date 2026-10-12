@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T02:54:19.770641919Z
+modified_at: 2026-10-12T05:09:26.108546518Z
 req_type: Task
 tags:
 - closure:pending
@@ -725,6 +725,19 @@ comments:
   created_at: 2026-10-12T02:54:19.770641919Z
   modified_at: 2026-10-12T02:54:19.770641919Z
   session_id: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+- id: 01a12e84-03dc-7f22-a249-928f5f3e90f5
+  author: joe
+  content: |-
+    RUN 11 READY FOR REVIEW (PR #2546, branch slice-45, head 3b0cb81d4d, base main ac67eb831f). Four MOVEs and two RETARGETs, about 8.5k lines; lib*.rs goes 38,617 -> 30,106. Tags are pushed, each proven at its own SHA (warnings 0/0, cargo test --workspace --no-fail-fast 10330/10330, 8 ignored):
+    - slice-45-r1 status_sections 34359b145c (3046). The cfg(test) fixture mods bug_1638_race_seam_tests and stale_cache_fixture stay at the root, because other modules reach them as crate::<mod>.
+    - slice-46-r1 burndown_run 73ebe33a1f (2875, + retarget: config-trust 6 sites worktree+home, lib.rs 16->10; the task_1244 merge-lease corpus gains burndown_run.rs, because merge_wave_pr moved)
+    - slice-47-r1 queue_misc 4d6946b974 (840)
+    - slice-48-r1 store_sync 3b0cb81d4d (1794, + retarget: config-trust 3 sites probe+worktree, lib.rs 10->7). The StoreDriftVerdict group (mapped to both statusline_root and store_sync) stays for Q8.
+    verify_stack ac67eb831f..slice-45 --build: checks 1-9 PASS. check-ci-fast: 26 gates pass. Flakes were re-run to full green; logs are in /tmp/libsplit/fail5 and fail6. One is new and unfiled: auto_complete drain_batch_mismatch_summary_is_self_consistent.
+    Q10 CASE: main has since gained ae606ce935 (#2499, docs only, 9 .md files). I did not rebase. Say if you want a rebase with carried proofs. Straddlers left for Q8: pull_skip_warning, pull_code_start_line, pull_store_start_line, run_worker_gc, worker_gc_target_still_dead, and the StoreDriftVerdict group.
+  created_at: 2026-10-12T05:09:26.108546518Z
+  modified_at: 2026-10-12T05:09:26.108546518Z
+  session_id: 9f6b4f04-252d-4d06-977a-3d2bd787f781
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
