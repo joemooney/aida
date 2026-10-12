@@ -4115,6 +4115,7 @@ fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
             store_text.push('\n');
         }
     }
+    // raw-git-ok(BUG-1929): read-only `log` in the code checkout, naming the ref.
     if let Ok(out) = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -7675,9 +7676,7 @@ fn heal_doctor_store_tracked_runtime(
     // Re-confirm the file is still tracked on the orphan branch before removing —
     // between scan and heal another heal (or a manual `git rm`) may have already
     // dropped it.
-    let still_tracked = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_worktree)
+    let still_tracked = aida_core::git_ops::host_git_command(&store_worktree)
         .args(["ls-files", "--error-unmatch", path])
         .output()
         .map(|o| o.status.success())
@@ -7697,9 +7696,7 @@ fn heal_doctor_store_tracked_runtime(
 
     // Untrack but KEEP the working copy — this clone still needs its own
     // per-clone runtime file; only the orphan branch must stop carrying it.
-    let status = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_worktree)
+    let status = aida_core::git_ops::host_git_command(&store_worktree)
         .args(["rm", "--cached", "--quiet", "--"])
         .arg(path)
         .status()
@@ -7719,15 +7716,11 @@ fn heal_doctor_store_tracked_runtime(
     // Stage the gitignore (if we touched it) and commit the untrack on the
     // store worktree so the orphan branch stops carrying the per-clone file.
     if appended {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&store_worktree)
+        let _ = aida_core::git_ops::host_git_command(&store_worktree)
             .args(["add", ".gitignore"])
             .status();
     }
-    let commit = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_worktree)
+    let commit = aida_core::git_ops::host_git_command(&store_worktree)
         .args([
             "commit",
             "--quiet",
@@ -7858,9 +7851,7 @@ fn is_intended_store_worktree(
     if std::fs::canonicalize(canonical_store).ok().as_ref() != Some(&expected_root) {
         return false;
     }
-    let Ok(output) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_worktree)
+    let Ok(output) = aida_core::git_ops::host_git_command(store_worktree)
         .args(["rev-parse", "--show-toplevel"])
         .output()
     else {
@@ -7882,9 +7873,7 @@ fn is_intended_store_worktree(
         return false;
     }
     let git_value = |args: &[&str]| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(store_worktree)
+        aida_core::git_ops::host_git_command(store_worktree)
             .args(args)
             .output()
             .ok()
@@ -7950,18 +7939,14 @@ fn heal_doctor_store_staging_ignore(
     }
     let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
     if appended {
-        let add = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&store_worktree)
+        let add = aida_core::git_ops::host_git_command(&store_worktree)
             .args(["add", ".gitignore"])
             .status()
             .with_context(|| "staging store .gitignore".to_string())?;
         if !add.success() {
             anyhow::bail!("git add .gitignore failed in store worktree");
         }
-        let commit = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&store_worktree)
+        let commit = aida_core::git_ops::host_git_command(&store_worktree)
             .args([
                 "commit",
                 "--only",

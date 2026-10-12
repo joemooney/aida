@@ -500,9 +500,7 @@ pub(crate) fn store_sha_is_ancestor(
     if !store_path.exists() {
         return false;
     }
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    aida_core::git_ops::host_git_command(store_path)
         .args([
             "merge-base",
             "--is-ancestor",
@@ -558,9 +556,7 @@ pub(crate) fn current_store_head_sha(project_root: &std::path::Path) -> Option<S
     if !store_path.exists() {
         return None;
     }
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_path)
+    aida_core::git_ops::host_git_command(&store_path)
         .args(["rev-parse", "HEAD"])
         .output()
         .ok()

@@ -130,9 +130,7 @@ pub(crate) fn origin_push_url_matches_fetch(project_root: &std::path::Path) -> b
             args.push("--push");
         }
         args.push("origin");
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
+        let out = aida_core::git_ops::host_git_command(project_root)
             .args(&args)
             .output()
             .ok()
@@ -435,9 +433,7 @@ pub(crate) fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bo
 pub(crate) fn commit_count(repo: &std::path::Path, spec: &[&str]) -> usize {
     let mut args = vec!["rev-list", "--count"];
     args.extend_from_slice(spec);
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    aida_core::git_ops::host_git_command(repo)
         .args(&args)
         .output()
         .ok()
@@ -452,9 +448,7 @@ pub(crate) fn commit_subjects(repo: &std::path::Path, spec: &[&str], limit: usiz
     let limit_arg = format!("-n{}", limit);
     let mut args = vec!["log", "--format=%h %s", limit_arg.as_str()];
     args.extend_from_slice(spec);
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    aida_core::git_ops::host_git_command(repo)
         .args(&args)
         .output()
         .ok()
@@ -523,10 +517,11 @@ pub(crate) fn run_git_with_timeout(
     timeout: std::time::Duration,
 ) -> Result<std::process::ExitStatus> {
     // BUG-1626: output is discarded, so a credential prompt would be an
-    // invisible hang until the timeout — fail fast instead.
-    // trace:BUG-1626 | ai:claude
-    let mut child = std::process::Command::new("git")
-        .current_dir(cwd)
+    // invisible hang until the timeout — fail fast instead. BUG-1929 F1: the
+    // hardened builder, since `cwd` is the store for the push-plan fetch and
+    // the auto-push.
+    // trace:BUG-1626 trace:BUG-1929 | ai:claude
+    let mut child = aida_core::git_ops::host_git_command(cwd)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null())
@@ -583,6 +578,15 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
             return;
         }
     };
+    // The same refusal `git_ops::push_exact` makes: never publish a store
+    // holding an embedded repository. trace:BUG-1929 | ai:claude
+    if let Err(e) = git_ops::refuse_embedded_repos_for_push(store_path, &sha) {
+        eprintln!(
+            "  {} stored locally; push deferred ({reason}: {e:#})",
+            "Warning:".yellow().bold()
+        );
+        return;
+    }
     let refspec = format!("{sha}:refs/heads/{branch}");
     match run_git_with_timeout(
         store_path,
@@ -1108,9 +1112,7 @@ pub(crate) fn handle_pull_dry_run(
 /// changed path (staged and/or unstaged), so the line count is the change
 /// count. trace:TASK-863 | ai:claude
 pub(crate) fn uncommitted_change_count(repo: &std::path::Path) -> Option<usize> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(["status", "--porcelain"])
         .output()
         .ok()?;
@@ -1472,9 +1474,7 @@ pub(crate) fn handle_push_command(
                 None
             } else {
                 Some(
-                    std::process::Command::new("git")
-                        .arg("-C")
-                        .arg(&project_root)
+                    aida_core::git_ops::host_git_command(&project_root)
                         .args(["push", "origin", &branch])
                         .status(),
                 )
@@ -2511,14 +2511,10 @@ pub(crate) fn handle_pull_command(
                 // pull.rebase config (which can fail with "Cannot rebase onto
                 // multiple branches"). Do fetch + merge instead.
                 // trace:BUG-1780 | ai:codex
-                let _ = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(&project_root)
+                let _ = aida_core::git_ops::host_git_command(&project_root)
                     .args(["fetch", "origin", &branch])
                     .status();
-                let res = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(&project_root)
+                let res = aida_core::git_ops::host_git_command(&project_root)
                     .args(["merge", "--ff-only", &format!("origin/{}", branch)])
                     .status();
                 match res {
@@ -2926,9 +2922,7 @@ pub(crate) fn reconcile_state_path(
     project_root: &std::path::Path,
     name: &str,
 ) -> Option<std::path::PathBuf> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let out = aida_core::git_ops::host_git_command(project_root)
         .args(["rev-parse", "--git-path", name])
         .output()
         .ok()
@@ -3047,9 +3041,7 @@ pub(crate) fn load_pending_reconcile_base(project_root: &std::path::Path) -> Opt
     if base.starts_with('-') {
         return None;
     }
-    let is_ancestor = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let is_ancestor = aida_core::git_ops::host_git_command(project_root)
         .args(["merge-base", "--is-ancestor", &base, "HEAD"])
         .status()
         .map(|s| s.success())
@@ -3319,9 +3311,7 @@ pub(crate) fn cascade_rebase_stacked_branches(
         // rebase target is the freshly-merged tip, not a stale ref.
         // Best-effort — offline / fetch failure still tries the rebase
         // against whatever cached ref we have.
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&lease.worktree_path)
+        let _ = aida_core::git_ops::host_git_command(&lease.worktree_path)
             .args([
                 "fetch",
                 git_arg_guard::END_OF_OPTIONS,
@@ -3339,9 +3329,7 @@ pub(crate) fn cascade_rebase_stacked_branches(
         // non-zero means conflict, which the conflict arm below handles.
         // trace:STORY-248 | ai:claude
         let onto = format!("origin/{}", default_short);
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&lease.worktree_path)
+        let res = aida_core::git_ops::host_git_command(&lease.worktree_path)
             .args([
                 "rebase",
                 "--onto",
@@ -3560,8 +3548,9 @@ pub(crate) fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) ->
     // The branch can be a forge-reported PR head a fork author named, so
     // refuse a dash-led one and end options before it. trace:BUG-1622 | ai:claude
     git_arg_guard::reject_option_like("branch", branch)?;
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C").arg(repo).args([
+    // trace:BUG-1929 | ai:claude
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    cmd.args([
         "fetch",
         "--prune",
         git_arg_guard::END_OF_OPTIONS,
@@ -3595,9 +3584,7 @@ pub(crate) fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) ->
 /// the caller uses None to mean "no comparison baseline".
 /// trace:TASK-107 | ai:claude
 pub(crate) fn rev_parse_remote(repo: &std::path::Path, branch: &str) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(["rev-parse", &format!("origin/{}", branch)])
         .output()
         .ok()?;
@@ -3637,9 +3624,7 @@ pub(crate) fn print_fetch_delta(
         Some(pre) if pre == post => 0,
         Some(pre) => {
             let range = format!("{}..{}", pre, post);
-            std::process::Command::new("git")
-                .arg("-C")
-                .arg(repo)
+            aida_core::git_ops::host_git_command(repo)
                 .args(["rev-list", "--count", &range])
                 .output()
                 .ok()

@@ -43,12 +43,9 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
 /// where the caller classifies git's stderr).
 // trace:BUG-1969 | ai:claude
 fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
-    let output = Command::new("git")
-        .current_dir(cwd)
+    let output = host_git_command(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .envs(envs.iter().copied())
-        .args(host_git_hardening(cwd))
-        .args(transaction_git_config())
         .args(args)
         .output()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
@@ -58,6 +55,25 @@ fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitR
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
     })
+}
+
+/// The one way to build a host `git` command over a repository that may be an
+/// AIDA store (BUG-1929 F1): `git` run in `cwd`, carrying
+/// [`host_git_hardening`] and [`transaction_git_config`]. Callers add the
+/// subcommand, its arguments and any stdio or environment. Every
+/// execution-capable git call on the store (fetch, pull, push, status, diff,
+/// add, commit, anything that walks the tree, runs hooks or contacts a remote)
+/// must start here; a raw `Command::new("git")` aimed at the store skips the
+/// hardening and lets a planted embedded repository run its config on the
+/// host. `aida-cli-lib`'s `bug_1929_store_git_guard` test enforces it.
+// trace:BUG-1929 | ai:claude
+pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
+    let cwd = cwd.as_ref();
+    let mut cmd = Command::new("git");
+    cmd.current_dir(cwd)
+        .args(host_git_hardening(cwd))
+        .args(transaction_git_config());
+    cmd
 }
 
 /// `-c` options for a git command run inside a store-writer transaction:
@@ -87,9 +103,11 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 /// `GIT_CONFIG_PARAMETERS`.
 ///
 /// - Always: `core.fsmonitor=false`.
-/// - In a store tree ([`is_store_tree`]) also `diff.ignoreSubmodules=all`
-///   and `submodule.recurse=false`, so git never descends into a gitlink at
-///   all. A code checkout keeps git's submodule handling: a user project
+/// - In a store tree ([`is_store_tree`]) also `diff.ignoreSubmodules=all`,
+///   `submodule.recurse=false` and `fetch.recurseSubmodules=false`, so git
+///   never descends into a gitlink at all. A fetch that recursed on demand
+///   into a planted `objects/zz/.git` would run its `remote.origin.uploadpack`
+///   (F1). A code checkout keeps git's submodule handling: a user project
 ///   with real submodules must still see them as dirty.
 // trace:BUG-1929 | ai:claude
 pub fn host_git_hardening(cwd: &Path) -> &'static [&'static str] {
@@ -101,6 +119,8 @@ pub fn host_git_hardening(cwd: &Path) -> &'static [&'static str] {
             "diff.ignoreSubmodules=all",
             "-c",
             "submodule.recurse=false",
+            "-c",
+            "fetch.recurseSubmodules=false",
         ]
     } else {
         &["-c", "core.fsmonitor=false"]
@@ -184,7 +204,7 @@ pub fn refuse_embedded_repos(store: &Path) -> Result<()> {
 /// [`refuse_embedded_repos`] plus a gitlink check over the tree of `rev`, for a
 /// push: a gitlink an older binary already committed is not published either.
 // trace:BUG-1929 | ai:claude
-fn refuse_embedded_repos_for_push(store: &Path, rev: &str) -> Result<()> {
+pub fn refuse_embedded_repos_for_push(store: &Path, rev: &str) -> Result<()> {
     refuse_embedded_repos(store)?;
     if !is_store_tree(store) {
         return Ok(());
@@ -255,8 +275,7 @@ pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
 /// `git rev-parse --git-path info/exclude`, absolutized.
 // trace:BUG-914 trace:BUG-1612 | ai:claude
 fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {
-    let output = Command::new("git")
-        .current_dir(worktree)
+    let output = host_git_command(worktree)
         .args(["rev-parse", "--git-path", "info/exclude"])
         .output()
         .with_context(|| {
@@ -1444,8 +1463,7 @@ pub fn is_ancestor_with_timeout(
         return Ok(result.success);
     }
 
-    let mut child = std::process::Command::new("git")
-        .current_dir(repo)
+    let mut child = host_git_command(repo) // trace:BUG-1929 | ai:claude
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .args(args)
         .stdout(std::process::Stdio::null())
@@ -3409,9 +3427,8 @@ pub fn register_node_full_identity(
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = std::process::Command::new("git")
+                let _ = host_git_command(aida_repo)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(aida_repo)
                     .output();
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
@@ -3515,9 +3532,8 @@ pub fn register_node_remote_only(
         match push(aida_repo, "origin", &branch) {
             Ok(true) => return Ok(id),
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = host_git_command(aida_repo)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(aida_repo)
                     .output();
                 eprintln!(
                     "Remote-only node backfill: push rejected (attempt {}), retrying...",
@@ -3642,9 +3658,8 @@ pub fn set_node_identity_field(
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly. trace:BUG-1-069
-                let _ = std::process::Command::new("git")
+                let _ = host_git_command(aida_repo)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(aida_repo)
                     .output();
                 eprintln!(
                     "Node identity update: push rejected (attempt {}), retrying...",
@@ -3834,9 +3849,8 @@ pub fn hijack_node(
                 if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
                     let _ = std::fs::remove_file(marker_path);
                 }
-                let _ = std::process::Command::new("git")
+                let _ = host_git_command(aida_repo)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(aida_repo)
                     .output();
                 continue;
             }
@@ -3890,9 +3904,8 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = std::process::Command::new("git")
+                let _ = host_git_command(aida_repo)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(aida_repo)
                     .output();
                 continue;
             }
@@ -7948,6 +7961,7 @@ mod tests {
             "core.fsmonitor=false",
             "diff.ignoreSubmodules=all",
             "submodule.recurse=false",
+            "fetch.recurseSubmodules=false",
         ] {
             assert!(h.contains(flag), "{h}");
         }

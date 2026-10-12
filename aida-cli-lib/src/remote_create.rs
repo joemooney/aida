@@ -2194,10 +2194,8 @@ const STORE_BRANCH: &str = "aida-store";
 
 /// Run git in `repo`, returning stdout on success, None otherwise.
 fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(aida_core::git_ops::transaction_git_config())
+    // `repo` is the store for reconcile's merge. trace:BUG-1929 | ai:claude
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(args)
         .output()
         .ok()?;
@@ -2283,9 +2281,7 @@ pub fn handle_remote_reconcile(
     for r in &remotes {
         let sha = git_ops::remote_branch_head_sha(project_root, r, STORE_BRANCH);
         if sha.is_some() {
-            let _ = Command::new("git")
-                .arg("-C")
-                .arg(&store_dir)
+            let _ = aida_core::git_ops::host_git_command(&store_dir)
                 .args(["fetch", "--quiet", r, &format!("refs/heads/{STORE_BRANCH}")])
                 .status();
         }
@@ -2727,9 +2723,7 @@ fn merge_and_validate(
 // trace:TASK-1717 | ai:claude
 fn rollback_to_preimage(store_dir: &Path, pre: &str, err: anyhow::Error) -> anyhow::Error {
     use aida_core::git_ops;
-    let reset = Command::new("git")
-        .arg("-C")
-        .arg(store_dir)
+    let reset = aida_core::git_ops::host_git_command(store_dir)
         .args(git_ops::transaction_git_config())
         .args(["reset", "--hard", pre])
         .output();

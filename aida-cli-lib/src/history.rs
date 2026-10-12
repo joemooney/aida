@@ -2259,9 +2259,8 @@ pub(crate) fn parse_log_line(line: &str) -> Option<CommitMeta> {
 
 // trace:STORY-1478 | ai:claude
 pub(crate) fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
-    let out = ProcessCommand::new("git")
-        .arg("-C")
-        .arg(cwd)
+    // `cwd` is often the store. trace:BUG-1929 | ai:claude
+    let out = aida_core::git_ops::host_git_command(cwd)
         .args(args)
         .output()
         .with_context(|| format!("failed to run git in {}", cwd.display()))?;

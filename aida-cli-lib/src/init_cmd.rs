@@ -4477,9 +4477,7 @@ pub(crate) fn handle_init_distributed_worktree(
         }
 
         // The orphan-store push (unchanged behavior).
-        let push_result = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&store_path)
+        let push_result = aida_core::git_ops::host_git_command(&store_path)
             .args(["push", "-u", "origin", branch_name])
             .output();
         match push_result {
@@ -5362,16 +5360,14 @@ pub(crate) fn handle_init_distributed_sibling(
         // Add remote if specified
         if let Some(remote) = registry_remote {
             // Check if remote already exists
-            let has_remote = std::process::Command::new("git")
-                .current_dir(&store_dir)
+            let has_remote = aida_core::git_ops::host_git_command(&store_dir)
                 .args(["remote", "get-url", "origin"])
                 .output()
                 .map(|o| o.status.success())
                 .unwrap_or(false);
 
             if !has_remote {
-                std::process::Command::new("git")
-                    .current_dir(&store_dir)
+                aida_core::git_ops::host_git_command(&store_dir)
                     .args(["remote", "add", "origin", remote])
                     .output()?;
                 println!("  {} remote: {}", "Added".green(), remote.white().bold());

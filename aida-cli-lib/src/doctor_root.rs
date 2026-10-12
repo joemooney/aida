@@ -284,9 +284,7 @@ pub(crate) fn config_declares_distributed(content: &str) -> bool {
 /// about a file rather than falling silent.
 // trace:BUG-1734 | ai:claude
 pub(crate) fn path_is_tracked(project_root: &std::path::Path, relative: &str) -> bool {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    aida_core::git_ops::host_git_command(project_root)
         .args(["ls-files", "--error-unmatch", "--", relative])
         .output()
         .is_ok_and(|o| o.status.success())
@@ -479,9 +477,7 @@ pub(crate) fn detect_store_tracked_runtime(project_root: &std::path::Path) -> Ve
     // `git ls-files` in the STORE worktree lists only paths TRACKED on the
     // orphan branch — an untracked-but-gitignored `node.toml` (the post-heal
     // state) is correctly NOT flagged.
-    let Ok(output) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_worktree)
+    let Ok(output) = aida_core::git_ops::host_git_command(&store_worktree)
         .args(["ls-files", "-z"])
         .output()
     else {

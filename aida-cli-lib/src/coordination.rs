@@ -770,9 +770,8 @@ pub(crate) fn acquire_claim(
                 // commit + working-tree change so the next iteration's
                 // pull --rebase has a clean tree, then re-decide. Mirrors
                 // register_node_full's BUG-1-069 reset.
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 let _ = attempt; // loop continues
                 continue;
@@ -780,9 +779,8 @@ pub(crate) fn acquire_claim(
             Err(e) => {
                 // Push errored for a non-contention reason (network mid-flight).
                 // Roll back our commit and proceed local-only rather than wedge.
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 return Ok(AcquireOutcome::Unavailable(format!(
                     "could not push lease claim ({e})"
@@ -1168,16 +1166,14 @@ pub(crate) fn acquire_lock_claim(
                 });
             }
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 continue;
             }
             Err(e) => {
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 return Ok(LockAcquireOutcome::Unavailable(format!(
                     "could not push {} claim ({e})",

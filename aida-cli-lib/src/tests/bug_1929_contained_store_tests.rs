@@ -12,9 +12,17 @@
 //!   contained session in a linked worktree, probes writes inside and outside
 //!   the write set, plants an embedded repository in the store (E1) and
 //!   checks the host's store sync refuses it without running its
-//!   `core.fsmonitor`, and reads the result from main. Its fixture lives under
+//!   `core.fsmonitor`, plants a second one whose `uploadpack` a recursing
+//!   fetch would run (F1) and checks `aida fetch --store-only` does not, and
+//!   reads the result from main. Its fixture lives under
 //!   the operator's real `~/.cache`, outside every sandbox-writable temp
 //!   directory.
+//! - Guard: `bug_1929_store_git_guard` fails on any new raw
+//!   `Command::new("git")` aimed at the store; build host store git through
+//!   `aida_core::git_ops::host_git_command`.
+//! - F1 regression: `bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack`
+//!   moves a gitlink on origin over a planted embedded repository and checks
+//!   `fetch_branch`, `refresh_remote_branch_state` and the push refusal.
 //!
 //! trace:BUG-1929 | ai:claude
 
@@ -463,6 +471,27 @@ fn real_claude_contained_session_claims_and_comments() {
         store = store.display(),
         out = probe_out.display()
     ));
+    // F1: plant a second embedded repository outside `objects`, whose config
+    // names an `uploadpack` that appends to a marker outside the write set. A
+    // host `git fetch` that recurses into it on demand runs that command.
+    // trace:BUG-1929 | ai:claude
+    let up_marker = parent.join("uploadpack-ran");
+    let up_hook = store.join(".evil-up.sh");
+    let f1_sub = store.join("f1-sub");
+    let f1_origin = parent.join("f1-origin.git");
+    script.push_str(&format!(
+        "if printf '#!/bin/sh\\necho ran >> {marker}\\nexit 1\\n' > '{hook}' \
+         && chmod 755 '{hook}' && git init -q '{sub}' \
+         && git -C '{sub}' config remote.origin.url '{origin}' \
+         && git -C '{sub}' config remote.origin.uploadpack '{hook}' \
+         && git -C '{sub}' config protocol.file.allow always; \
+         then echo f1-planted; else echo f1-plant-failed; fi >> {out} 2>&1\n",
+        hook = up_hook.display(),
+        sub = f1_sub.display(),
+        origin = f1_origin.display(),
+        marker = up_marker.display(),
+        out = probe_out.display()
+    ));
     let script_path = worktree.join("probe.sh");
     std::fs::write(&script_path, script).unwrap();
 
@@ -621,4 +650,372 @@ fn real_claude_contained_session_claims_and_comments() {
         dirty.trim().is_empty(),
         "contained writes left uncommitted in the store: {dirty}"
     );
+
+    // F1: give the store an origin whose history carries a gitlink at the
+    // plant, merge it, then move the gitlink on origin. The host's store fetch
+    // must bring the new tip without running the plant's `uploadpack`. The
+    // fixture's own git runs carry the hardening flags so only aida's run is
+    // under test.
+    // trace:BUG-1929 | ai:claude
+    assert!(
+        probe.lines().any(|l| l.trim() == "f1-planted"),
+        "the uploadpack plant did not land: {probe}\n{transcript}"
+    );
+    let hg = |dir: &Path, args: &[&str]| -> String {
+        let mut all = vec![
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "submodule.recurse=false",
+            "-c",
+            "fetch.recurseSubmodules=false",
+            "-c",
+            "diff.ignoreSubmodules=all",
+            "-c",
+            "user.email=f1@example.com",
+            "-c",
+            "user.name=f1",
+        ];
+        all.extend_from_slice(args);
+        run(dir, "git", &all)
+    };
+    let origin_s = f1_origin.to_str().unwrap();
+    let seed = parent.join("f1-seed");
+    hg(&parent, &["init", "-q", "--bare", origin_s]);
+    hg(&main, &["remote", "add", "origin", origin_s]);
+    hg(
+        &store,
+        &["push", "-q", "origin", "HEAD:refs/heads/aida-store"],
+    );
+    hg(
+        &parent,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "aida-store",
+            origin_s,
+            seed.to_str().unwrap(),
+        ],
+    );
+    let move_gitlink = |msg: &str| -> String {
+        let head = hg(&seed, &["rev-parse", "HEAD"]).trim().to_string();
+        hg(
+            &seed,
+            &[
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                &format!("160000,{head},f1-sub"),
+            ],
+        );
+        hg(&seed, &["commit", "-q", "-m", msg]);
+        hg(&seed, &["push", "-q", "origin", "aida-store"]);
+        hg(&seed, &["rev-parse", "HEAD"]).trim().to_string()
+    };
+    std::fs::write(
+        seed.join(".gitmodules"),
+        "[submodule \"f1\"]\n\tpath = f1-sub\n\turl = ./f1\n",
+    )
+    .unwrap();
+    hg(&seed, &["add", ".gitmodules"]);
+    move_gitlink("f1: gitlink");
+    hg(&store, &["fetch", "-q", "origin", "aida-store"]);
+    hg(&store, &["merge", "-q", "--ff-only", "origin/aida-store"]);
+    let tip = move_gitlink("f1: move gitlink");
+    let fetch = Command::new(&aida)
+        .args(["fetch", "--store-only"])
+        .current_dir(&main)
+        .output()
+        .expect("spawn aida fetch");
+    let fetch_text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&fetch.stdout),
+        String::from_utf8_lossy(&fetch.stderr)
+    );
+    assert!(
+        !up_marker.exists(),
+        "a host-side store fetch ran the planted uploadpack: {fetch_text}\n{probe}"
+    );
+    let fetched = hg(&store, &["rev-parse", "origin/aida-store"]);
+    assert_eq!(
+        fetched.trim(),
+        tip,
+        "the host store fetch must still bring the new tip: {fetch_text}"
+    );
+    // The plant is live: an unhardened fetch over the next gitlink move runs it.
+    move_gitlink("f1: move gitlink again");
+    let _ = Command::new("git")
+        .args(["fetch", "-q", "origin", "aida-store"])
+        .current_dir(&store)
+        .output();
+    assert!(
+        up_marker.exists(),
+        "control: a raw fetch should have run the planted uploadpack: {probe}"
+    );
+}
+
+/// Line indexes of `src` that are test code: every line of an inline
+/// `#[cfg(test)] mod name {` block, up to its closing `}` in column 0.
+fn bug_1929_test_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
+    let module = regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap();
+    let mut skip = std::collections::HashSet::new();
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].trim() == "#[cfg(test)]" && lines.get(i + 1).is_some_and(|l| module.is_match(l))
+        {
+            let mut j = i + 1;
+            while j < lines.len() && lines[j] != "}" {
+                skip.insert(j);
+                j += 1;
+            }
+            i = j;
+        }
+        i += 1;
+    }
+    skip
+}
+
+/// The raw `Command::new("git")` sites in `src` (1-based lines) whose builder
+/// chain, up to its first `;` and at most 12 lines, names a store path, and
+/// that carry no `raw-git-ok(BUG-1929): <why>` comment in the three lines
+/// above. With `any_raw`, every raw site counts, store-named or not.
+fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let store = regex::Regex::new(
+        r"\b(store|store_path|store_root|store_dir|store_worktree|store_full|aida_repo)\b|\.aida-store",
+    )
+    .unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let chain = lines[i..lines.len().min(i + 12)].join(" ");
+        let chain = chain.split(';').next().unwrap_or_default();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1929):"));
+        if (any_raw || store.is_match(chain)) && !justified {
+            found.push(i + 1);
+        }
+    }
+    found
+}
+
+// F1 guard: every host git command over the store starts at
+// `aida_core::git_ops::host_git_command`, which carries the hardening
+// (`fetch.recurseSubmodules=false`, `submodule.recurse=false`, ...). Scans the
+// non-test source of aida-core and aida-cli-lib for a raw `Command::new("git")`
+// whose builder names a store path; `store_push_pull.rs`, which runs both the
+// code and the store legs through shared helpers, may hold no raw git call at
+// all. A read-only call that names a store ref but runs in the code checkout
+// may stay raw with a `raw-git-ok(BUG-1929): <why>` comment just above it.
+// trace:BUG-1929 | ai:claude
+#[test]
+fn bug_1929_store_git_guard() {
+    // The scanner itself: a raw store call is caught, a justified one is not,
+    // and test modules are skipped.
+    let sample = "fn a(store_path: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \
+                  .args([\"fetch\"])\n        .current_dir(store_path)\n        .output();\n}\n\
+                  fn b(store_path: &Path) {\n    // raw-git-ok(BUG-1929): read-only.\n    \
+                  let _ = Command::new(\"git\").arg(store_path).output();\n}\n\
+                  #[cfg(test)]\nmod t {\n    fn c(store: &Path) { Command::new(\"git\").arg(store); }\n}\n";
+    assert_eq!(bug_1929_raw_store_git(sample, false), vec![2]);
+
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut offenders = Vec::new();
+    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
+        let mut stack = vec![workspace.join(crate_src)];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+                if path.is_dir() {
+                    if name != "tests" {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+                    continue;
+                }
+                let src = std::fs::read_to_string(&path).unwrap();
+                let any_raw = name == "store_push_pull.rs";
+                for line in bug_1929_raw_store_git(&src, any_raw) {
+                    let rel = path.strip_prefix(workspace).unwrap_or(&path);
+                    offenders.push(format!("{}:{line}", rel.display()));
+                }
+            }
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "raw `Command::new(\"git\")` over the store; build it with \
+         `aida_core::git_ops::host_git_command` (or justify a read-only call in the code \
+         checkout with `// raw-git-ok(BUG-1929): <why>`): {offenders:?}"
+    );
+}
+
+/// Run git in `dir` with a fixed identity; panics on failure.
+fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?} in {}: {}",
+        dir.display(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// F1 fixture under `dir`: a bare `origin` whose `aida-store` branch commits a
+/// gitlink `objects/zz` plus `.gitmodules` (as an older binary or a direct
+/// push could), a store `<dir>/.aida-store` cloned from it, a newer origin
+/// commit that moves the gitlink, and an embedded repository planted at
+/// `<store>/objects/zz/.git` the way a contained session could, whose own
+/// config sets `remote.origin.uploadpack` to a script that appends to
+/// `marker`. A fetch that recursed into the submodule would run the script.
+/// Returns (store, marker, the origin's new tip).
+// trace:BUG-1929 | ai:claude
+fn bug_1929_f1_fixture(dir: &Path) -> (PathBuf, PathBuf, String) {
+    std::fs::create_dir_all(dir).unwrap();
+    let origin = dir.join("origin.git");
+    bug_1929_git(dir, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    let seed = dir.join("seed");
+    bug_1929_git(
+        dir,
+        &["init", "-q", "-b", "aida-store", seed.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(seed.join("objects")).unwrap();
+    std::fs::write(seed.join("objects/a.yaml"), "id: A\n").unwrap();
+    bug_1929_git(&seed, &["add", "objects/a.yaml"]);
+    bug_1929_git(&seed, &["commit", "-qm", "init"]);
+    std::fs::write(
+        seed.join(".gitmodules"),
+        "[submodule \"zz\"]\n\tpath = objects/zz\n\turl = ./zz\n",
+    )
+    .unwrap();
+    bug_1929_git(&seed, &["add", ".gitmodules"]);
+    let link = |seed: &Path| {
+        let head = bug_1929_git(seed, &["rev-parse", "HEAD"]);
+        let info = format!("160000,{head},objects/zz");
+        bug_1929_git(seed, &["update-index", "--add", "--cacheinfo", &info]);
+    };
+    link(&seed);
+    bug_1929_git(&seed, &["commit", "-qm", "gitlink"]);
+    bug_1929_git(
+        &seed,
+        &["push", "-q", origin.to_str().unwrap(), "aida-store"],
+    );
+
+    let store = dir.join(".aida-store");
+    bug_1929_git(
+        dir,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "aida-store",
+            origin.to_str().unwrap(),
+            store.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(seed.join("objects/b.yaml"), "id: B\n").unwrap();
+    bug_1929_git(&seed, &["add", "objects/b.yaml"]);
+    link(&seed);
+    bug_1929_git(&seed, &["commit", "-qm", "move the gitlink"]);
+    bug_1929_git(
+        &seed,
+        &["push", "-q", origin.to_str().unwrap(), "aida-store"],
+    );
+    let tip = bug_1929_git(&seed, &["rev-parse", "HEAD"]);
+
+    let marker = dir.join("uploadpack-ran");
+    let script = dir.join("evil-uploadpack.sh");
+    crate::test_exec::write_executable(
+        &script,
+        format!("#!/bin/sh\necho ran >> '{}'\nexit 1\n", marker.display()),
+    );
+    let sub = store.join("objects/zz");
+    std::fs::create_dir_all(&sub).unwrap();
+    bug_1929_git(&sub, &["init", "-q"]);
+    for (key, value) in [
+        ("remote.origin.url", origin.to_str().unwrap()),
+        ("remote.origin.uploadpack", script.to_str().unwrap()),
+        ("protocol.file.allow", "always"),
+    ] {
+        bug_1929_git(&sub, &["config", key, value]);
+    }
+    (store, marker, tip)
+}
+
+// F1 regression: the store fetch legs never recurse into a planted embedded
+// repository. On 04b529c167 `fetch_branch` and `refresh_remote_branch_state`
+// ran a raw `git fetch` that recursed on demand into `objects/zz` and ran its
+// `uploadpack` on the host.
+// trace:BUG-1929 | ai:claude
+#[test]
+fn bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = std::fs::canonicalize(tmp.path()).unwrap();
+
+    // The plant is live: an unhardened fetch runs it.
+    let (store, marker, _) = bug_1929_f1_fixture(&base.join("raw"));
+    let _ = std::process::Command::new("git")
+        .args(["fetch", "-q", "origin", "aida-store"])
+        .current_dir(&store)
+        .output()
+        .unwrap();
+    assert!(
+        marker.exists(),
+        "precondition: a plain git fetch must run the planted uploadpack"
+    );
+
+    // `aida fetch` / `aida pull`: the store fetch leg.
+    let (store, marker, tip) = bug_1929_f1_fixture(&base.join("fetch"));
+    crate::store_push_pull::fetch_branch(&store, "aida-store", true).unwrap();
+    assert!(
+        !marker.exists(),
+        "the store fetch leg ran the planted uploadpack on the host"
+    );
+    assert_eq!(
+        bug_1929_git(&store, &["rev-parse", "origin/aida-store"]),
+        tip
+    );
+
+    // `aida push`: the plan's bounded refresh of origin/aida-store.
+    let (store, marker, tip) = bug_1929_f1_fixture(&base.join("refresh"));
+    let fresh = crate::store_push_pull::refresh_remote_branch_state(
+        &store,
+        "aida-store",
+        std::time::Duration::from_secs(60),
+    );
+    assert_eq!(fresh, crate::store_push_pull::RemoteBranchFreshness::Fresh);
+    assert!(
+        !marker.exists(),
+        "the push plan's store refresh ran the planted uploadpack on the host"
+    );
+    assert_eq!(
+        bug_1929_git(&store, &["rev-parse", "origin/aida-store"]),
+        tip
+    );
+
+    // The auto-push leg refuses the store outright: it holds an embedded
+    // repository.
+    let (store, marker, _) = bug_1929_f1_fixture(&base.join("push"));
+    let head = bug_1929_git(&store, &["rev-parse", "HEAD"]);
+    let err = aida_core::git_ops::refuse_embedded_repos_for_push(&store, &head)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("embedded git repository"), "{err}");
+    assert!(!marker.exists());
 }
