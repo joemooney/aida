@@ -67,7 +67,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:14.771299093Z
-modified_at: 2026-10-12T06:06:20.318684788Z
+modified_at: 2026-10-12T06:07:02.468614606Z
 req_type: Story
 tags:
 - from:aida-host
@@ -77,6 +77,22 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:12:19.319026974Z
+comments:
+- id: 01a12eb8-c144-7c63-81c1-27c0994e330e
+  author: joe
+  content: |
+    [groom:night] SPLIT. Four independent proposals; one is largely already there.
+
+    Already present: an edit through `aida edit --description-from-file` already records the old description as a `description` FieldChange in history (aida-core/src/models.rs diff_snapshot_to_requirement), and `--carve-out` moves a criterion out with a pointer. So the "--amend moves old text to history" part needs no new verb, only discoverability. Partial overlap for F17: `aida harvest` (ADR-42/ADR-45) already proposes acceptance criteria / micro-decisions / ADRs from a diff and runs as an advisory drain step, but nothing fires it at fix-commit time.
+
+    Proposed slices:
+    1. Description drift lint: `aida lint --drift` (or a doctor check) flags completed specs whose post-completion comments contain change words ("widened", "changed to", "also", "at ... request") or numbers absent from the description. Acceptance: fixture spec with such a comment is flagged; one without is not; report-only.
+    2. Implement close-out question: the /aida-implement template ends by asking whether the description still describes what shipped and, if not, points to `aida edit --description-from-file` (history keeps the old text). Acceptance: template text present and synced; check-templates passes.
+    3. Mid-turn remark capture: a UserPromptSubmit hook records remarks that arrive while a spec is claimed; the Stop hook (next to aida-capture-prompt.sh) lists them and asks whether to amend the claimed spec. Acceptance: hook unit test with a synthetic transcript yields the candidate list; silent when none. Hook-semantics work -> supervised.
+    4. Fix-time decision prompt: a `fix:` commit touching lines with a trace marker makes /aida-commit (advisory, not the blocking commit-msg hook) ask "symptom / cause / fix / rejected alternative / what would a rewrite get wrong", offering `aida harvest --from` or a draft ADR; an explicit "lost knowledge" marker is the documented answer when the scenario is gone. Acceptance: skill text + a test that the classifier fires on fix: + traced hunk only.
+  created_at: 2026-10-12T06:07:02.468614606Z
+  modified_at: 2026-10-12T06:07:02.468614606Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
