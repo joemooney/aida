@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:00.283963835Z
-modified_at: 2026-10-12T06:07:44.446379053Z
+modified_at: 2026-10-12T06:07:46.759475677Z
 req_type: Story
 tags:
 - from:aida-host
@@ -56,6 +56,20 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:13:03.334080762Z
+comments:
+- id: 01a12eb9-6e47-73f0-bab5-895c1d64bad2
+  author: joe
+  content: |
+    [groom:night] SPLIT. Related prior work: TASK-496 (Stop hook verbal-tic capture safety net, aida-capture-prompt.sh), SPIKE-41 (lifecycle hook bundle incl. PreCompact -> snapshot, completed), `aida harvest` (diff -> candidate ACs/ADRs), `aida reconstitute` (store-only rebuild probe). None mines a transcript or fires at PreCompact.
+
+    Proposed slices:
+    1. PreCompact capture hook: a PreCompact hook runs the existing /aida-capture sweep logic over the about-to-be-compacted transcript and emits candidates (never writes specs). Acceptance: hook test with a synthetic transcript emits candidates; silent and exit 0 when none or on error. Supervised (hook semantics).
+    2. `aida distill --session <transcript> [--since <ts>]`: headless distillation that files ONE draft spec linked to the session's commits, tagged as distilled/unreviewed. Acceptance: --dry-run prints the brief; a mock-vendor run files a draft with the session id and commit links. Open question to settle on this slice: run automatically at session end (token cost, transcript content landing in a shared store) or only on demand; recommend on demand plus an opt-in config key.
+    3. Trial comparison: `aida reconstitute` (or the trial harness) reports clauses present in the distilled draft but absent from the curated specs as capture gaps. Acceptance: fixture pair yields the expected gap list.
+    Note the evidence caveat in the spec (n=1, distiller saw the tests) before claiming distill beats curation.
+  created_at: 2026-10-12T06:07:46.759475677Z
+  modified_at: 2026-10-12T06:07:46.759475677Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
