@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-11T16:33:51.372960831Z
+modified_at: 2026-10-12T09:25:21.631086868Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -37,6 +37,20 @@ comments:
   created_at: 2026-10-11T16:33:51.372960831Z
   modified_at: 2026-10-11T16:33:51.372960831Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12f6e-525f-78c0-a947-665dfaf235f8
+  author: joe
+  content: |-
+    NIGHT-B PARK (relay 20261011-224638): BUG-1953 is parked on its sequencing gate, not on a design question. The advisor (2026-10-11) routed it to run after BUG-1918 / PR #2485 merges, because both touch the pr ship path (pr_cmd.rs and pr_ship.rs). At 02:25 on 2026-10-12, #2485 was still OPEN with no review decision; it was last updated 2026-10-12T01:34Z. This relay may not touch #2485.
+
+    Options:
+    - (A) Recommended: keep the gate. The next relay or session picks this up right after #2485 merges. The fix is S-sized: step 5 matches the lease on ship_branch (falling back to the cwd branch), the no-lease message names ship_branch, and a test ships a PR by number from main with a lease on the PR head branch.
+    - (B) Waive the gate and land it first. #2485 would then rebase over a small hunk near pr_cmd.rs:2961/:3035.
+    - (C) Fold the fix into #2485 itself.
+
+    No worktree or code yet.
+  created_at: 2026-10-12T09:25:21.631086868Z
+  modified_at: 2026-10-12T09:25:21.631086868Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
   author: joe
