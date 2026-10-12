@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T11:52:45.313569378Z
-modified_at: 2026-10-12T22:36:13.765284677Z
+modified_at: 2026-10-12T23:37:41.794948284Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -52,6 +52,12 @@ comments:
   content: 'Advisor round-2 REQUEST CHANGES at 7194107d56 (strict): leftover-marker windows (after swap_meta_forward; mid remove_dir_all) move a record onto the wrong pair — regression vs main. Required: park BOTH records in .rollback/ before the marker so every record move is idempotent. Full brief on PR #2573.'
   created_at: 2026-10-12T22:36:13.765284677Z
   modified_at: 2026-10-12T22:36:13.765284677Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a1327a-a8a2-7c52-b104-c8e6d3589c70
+  author: joe
+  content: 'Round-3 strict APPROVE at f90eb0aa08 (independent crash walk incl. mid-recovery; 1248 probe runs pass). READY-FOR-OPERATOR (advisor-dispatched). Follow-ups in BUG-1999 (draft). Verdict on PR #2573.'
+  created_at: 2026-10-12T23:37:41.794948284Z
+  modified_at: 2026-10-12T23:37:41.794948284Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-ef6a-7541-b3a1-59f7ac2cae17
