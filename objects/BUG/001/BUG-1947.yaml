@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:15:16.929822029Z
-modified_at: 2026-10-11T23:21:00.857483044Z
+modified_at: 2026-10-12T00:39:29.576673657Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -35,6 +35,32 @@ comments:
   created_at: 2026-10-11T13:22:12.027533937Z
   modified_at: 2026-10-11T13:22:12.027533937Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12d8c-e028-77d1-ba04-92fb6d02b210
+  author: joe
+  content: |-
+    **Parked by night relay (Session #4) after review round 3: CHANGES REQUESTED at c515fa4b.** The PR is left open, and the worktree `/home/joe/ai/aida-bug1947` and branch `bug-1947-work` are kept for whoever picks this up.
+
+    Blockers:
+    1. **HIGH: the cache refresh worker can no longer start** (`aida-core/src/db/refresh_worker.rs` ~150–165). The worker's cwd is now `/`, but store discovery runs before `cache refresh --worker --store/--cache` is parsed. So every worker exits non-zero, the reader suppresses respawns, and background cache refresh is dead for all users. The spawn code is `#[cfg(not(test))]`, so no test caught it.
+       - Fix: run the worker from the canonicalized store root's parent (the main checkout).
+       - Or better: handle `cache refresh --worker --store --cache` before discovery (amendment A8).
+       - Add a test that spawns the real worker from a cwd outside any project.
+    2. **MEDIUM-HIGH: in any non-host pid namespace, all automatic cleanup refuses** (`worktree_holders.rs` `separate_pid_namespace` ~398; `worktree_pool.rs` ~528). This covers Docker/Podman dev containers, Codespaces, CI `container:` jobs, LXD and probably WSL2. There, every scan is Unverified, so:
+       - pool acquire never reuses a tree, and the pool ends in a misleading "pool is full";
+       - gc, reap, doctor heals and stale-lease release never clean anything;
+       - no message names an escape hatch.
+       - Minimal fix: an opt-out (`AIDA_TRUST_PID_NAMESPACE=1` or a `[worktree]` config key), named in the reason text, plus a reworded pool-full error.
+       - Better default (follow-up): trust the scan when `/proc/self/mountinfo` shows the tree on the container's own root overlay, and stay Unverified for bind, virtiofs, 9p, fuse or nfs mounts.
+
+    Follow-ups:
+    3. **MEDIUM: pool salvage-before-reset can be skipped, and the reset still runs.** This happens when salvage returns an error, when `worktree_is_dirty` returns false on a git error, or when the patch builder ignores git errors. Untracked files are recorded by name only before `git clean -fd`.
+       - Fix: on any salvage error, or when untracked files exist, skip that tree and create a fresh one instead.
+    4. **LOW:** the holder scan runs before the cheap idle/expired check, under the pool lock. Move it after that check.
+
+    Verified correct: the `base_verdict` retry, the chain-session exemption, the drift-guard docs fix and the in-bounds slicing. On the host, `cargo test -p aida-core worktree_` passes (89 tests).
+  created_at: 2026-10-12T00:39:29.576673657Z
+  modified_at: 2026-10-12T00:39:29.576673657Z
+  session_id: 0a74bb87-1ff6-4526-92bf-8087ff97b53b
 history:
 - id: 01a129a5-9381-7d03-a327-42ae5b997c03
   author: joe
