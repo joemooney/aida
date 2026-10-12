@@ -63,6 +63,7 @@ fn candidate(spec: &str, tags: &[&str], status_hours_ago: i64) -> IdleCandidate 
         driver: Some(ctx().resolve(&[spec], &tags, None, false, status_changed_at)),
         branch_commit: None,
         status_changed_at,
+        modified_at: None,
     }
 }
 
@@ -75,7 +76,10 @@ fn idle_spec_past_the_threshold_is_listed_with_its_age() {
     assert_eq!(i.idle_secs, 30 * 3600);
     assert_eq!(i.age_source, IdleAgeSource::StatusChange);
     assert_eq!(i.threshold_hours, 24);
-    assert_eq!(i.age_label(), "idle 30h since its last status change");
+    assert_eq!(
+        i.age_label(),
+        "no commits or status change for 30h (dated from its last status change)"
+    );
 }
 
 #[test]
@@ -149,7 +153,7 @@ fn an_older_status_change_dates_the_age_by_the_newer_branch_commit() {
     assert_eq!(items[0].branch.as_deref(), Some("task-13-work"));
     assert_eq!(
         items[0].age_label(),
-        "idle 40h since its last branch commit (task-13-work)"
+        "no commits or status change for 40h (dated from its last branch commit, task-13-work)"
     );
 }
 
@@ -196,6 +200,54 @@ fn a_spec_reported_idle_is_dropped_from_the_orphan_list() {
     let kept = orphans_not_idle(vec![orphan("task-16"), orphan("TASK-17")], &[idle]);
     let ids: Vec<&str> = kept.iter().map(|o| o.spec.as_str()).collect();
     assert_eq!(ids, ["TASK-17"]);
+}
+
+// trace:STORY-1680 | ai:claude
+#[test]
+fn modified_at_dates_the_age_only_when_no_status_change_is_on_record() {
+    let mut c = candidate("TASK-18", &[], 0);
+    c.status_changed_at = None;
+    c.modified_at = Some(hours_ago(30));
+    let items = select_idle(vec![c.clone()], now(), 24);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].age_source, IdleAgeSource::Modified);
+    assert_eq!(items[0].age_source.as_str(), "last-modified");
+    assert_eq!(
+        items[0].age_label(),
+        "no commits or status change for 30h (dated from its last modification)"
+    );
+    // A recorded status change wins over the modification time.
+    c.status_changed_at = Some(hours_ago(50));
+    let items = select_idle(vec![c], now(), 24);
+    assert_eq!(items[0].age_source, IdleAgeSource::StatusChange);
+    assert_eq!(items[0].idle_secs, 50 * 3600);
+}
+
+// M1 (advisor review): a stale-leased spec with a live subagent in its
+// worktree (BUG-1656) may be being worked; it is not listed as idle and
+// stays on the orphan channel ("possibly worked by a subagent").
+// trace:STORY-1680 | ai:claude
+#[test]
+fn a_possibly_subagent_orphan_is_not_idle_and_stays_orphaned() {
+    let mut sub = orphan("TASK-19");
+    sub.stale_lease = true;
+    sub.possibly_subagent = true;
+    let mut fanout = orphan("TASK-21");
+    fanout.likely_fanout = true;
+    let orphans = vec![sub, orphan("TASK-20"), fanout];
+    let ids: Vec<&str> = idle_orphans(&orphans)
+        .iter()
+        .map(|o| o.spec.as_str())
+        .collect();
+    assert_eq!(ids, ["TASK-20"]);
+    let mut idle = sample_item();
+    idle.spec_id = "TASK-20".into();
+    let kept = orphans_not_idle(orphans, &[idle]);
+    let kept: Vec<(&str, bool)> = kept
+        .iter()
+        .map(|o| (o.spec.as_str(), o.possibly_subagent))
+        .collect();
+    assert_eq!(kept, [("TASK-19", true), ("TASK-21", false)]);
 }
 
 #[test]
@@ -364,7 +416,7 @@ fn json_and_toon_carry_the_entry() {
         "{human}"
     );
     assert!(
-        human.contains("idle 2d since its last branch commit"),
+        human.contains("no commits or status change for 2d (dated from its last branch commit"),
         "{human}"
     );
 }

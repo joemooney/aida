@@ -3,9 +3,10 @@
 //! covers them) and whose idle age exceeds a configurable threshold — "in
 //! progress, but nothing is working it".
 //!
-//! Idle age is the time since the spec's last activity: the newest commit on
-//! a branch belonging to the spec (ahead of the default branch) when one
-//! exists, otherwise its last status change. The driver itself is NOT
+//! Idle age is the time since the spec's last activity: the later of the
+//! newest commit on a branch belonging to the spec (ahead of the default
+//! branch) and its last status change (its last modification when no status
+//! change is on record). The driver itself is NOT
 //! re-derived here; the candidates are `aida ps`'s orphans, whose driver
 //! [`crate::driver_view`] already resolved.
 //!
@@ -35,6 +36,10 @@ pub(crate) enum IdleAgeSource {
     BranchCommit,
     /// The spec's last status change.
     StatusChange,
+    /// The spec's last modification — the fallback when its history records
+    /// no status change at all.
+    // trace:STORY-1680 | ai:claude
+    Modified,
 }
 
 impl IdleAgeSource {
@@ -42,13 +47,15 @@ impl IdleAgeSource {
         match self {
             IdleAgeSource::BranchCommit => "branch-commit",
             IdleAgeSource::StatusChange => "status-change",
+            IdleAgeSource::Modified => "last-modified",
         }
     }
 
     fn phrase(self) -> &'static str {
         match self {
-            IdleAgeSource::BranchCommit => "since its last branch commit",
-            IdleAgeSource::StatusChange => "since its last status change",
+            IdleAgeSource::BranchCommit => "its last branch commit",
+            IdleAgeSource::StatusChange => "its last status change",
+            IdleAgeSource::Modified => "its last modification",
         }
     }
 }
@@ -69,16 +76,21 @@ pub(crate) struct IdleInProgressItem {
 }
 
 impl IdleInProgressItem {
-    /// `idle 26h since its last branch commit (story-1-work)`.
+    /// `no commits or status change for 26h (dated from its last branch
+    /// commit, story-1-work)`. Worded as activity, not "idle", so it does not
+    /// read as contradicting `aida ps`'s shorter `idle` age (measured from
+    /// the spec's last modification).
+    // trace:STORY-1680 | ai:claude
     pub(crate) fn age_label(&self) -> String {
         let mut s = format!(
-            "idle {} {}",
+            "no commits or status change for {} (dated from {}",
             aida_core::driver_registry::short_age(self.idle_secs),
             self.age_source.phrase()
         );
         if let Some(b) = &self.branch {
-            s.push_str(&format!(" ({b})"));
+            s.push_str(&format!(", {b}"));
         }
+        s.push(')');
         s
     }
 }
@@ -93,6 +105,9 @@ pub(crate) struct IdleCandidate {
     /// Newest commit (and its branch) on a branch belonging to the spec.
     pub branch_commit: Option<(String, DateTime<Utc>)>,
     pub status_changed_at: Option<DateTime<Utc>>,
+    /// The spec's last modification; dates the age only when no status
+    /// change is on record.
+    pub modified_at: Option<DateTime<Utc>>,
 }
 
 /// PURE: keep the candidates whose driver is `idle` and whose idle age — time
@@ -116,10 +131,17 @@ pub(crate) fn select_idle(
             // branch (e.g. an earlier, squash-merged slice) must not make a
             // spec just sent back to In Progress read as long idle.
             // trace:STORY-1680 | ai:claude
-            let (at, source, branch) = match (c.branch_commit, c.status_changed_at) {
-                (Some((branch, b)), Some(s)) if s > b => (s, IdleAgeSource::StatusChange, None),
+            let status = c
+                .status_changed_at
+                .map(|s| (s, IdleAgeSource::StatusChange))
+                .or(c.modified_at.map(|m| (m, IdleAgeSource::Modified)));
+            let (at, source, branch) = match (c.branch_commit, status) {
+                (Some((_, b)), Some((s, src))) if s > b => (s, src, None),
                 (Some((branch, b)), _) => (b, IdleAgeSource::BranchCommit, Some(branch)),
-                (None, s) => (s?, IdleAgeSource::StatusChange, None),
+                (None, s) => {
+                    let (s, src) = s?;
+                    (s, src, None)
+                }
             };
             let idle_secs = now.signed_duration_since(at).num_seconds().max(0);
             (idle_secs > threshold_secs).then_some(IdleInProgressItem {
@@ -240,8 +262,8 @@ fn newest_commit_ahead(root: &Path, branch: &str, base: &str) -> Option<DateTime
 /// orphans `aida ps` already derived (driver included). A spec's branch is
 /// its stale lease's branch plus every local branch named for it; the newest
 /// commit ahead of the default branch across them dates the age. Specs a
-/// live fan-out plausibly builds (`likely_fanout`) are skipped, as on the
-/// orphan channel.
+/// live fan-out plausibly builds (`likely_fanout`) or a subagent may be
+/// working (`possibly_subagent`) are skipped — see [`idle_orphans`].
 // trace:STORY-1680 | ai:claude
 pub(crate) fn collect_idle_in_progress(
     project_root: &Path,
@@ -250,11 +272,7 @@ pub(crate) fn collect_idle_in_progress(
     now: DateTime<Utc>,
 ) -> Vec<IdleInProgressItem> {
     use aida_core::db::DatabaseBackend as _;
-    let idle: Vec<&PsOrphan> = orphans
-        .iter()
-        .filter(|o| !o.likely_fanout)
-        .filter(|o| matches!(o.driver, Some(DerivedDriver::Idle { .. })))
-        .collect();
+    let idle = idle_orphans(orphans);
     if idle.is_empty() {
         return Vec::new();
     }
@@ -272,21 +290,31 @@ pub(crate) fn collect_idle_in_progress(
                 .into_iter()
                 .filter_map(|b| newest_commit_ahead(project_root, &b, base).map(|t| (b, t)))
                 .max_by_key(|(_, t)| *t);
-            let status_changed_at = backend
-                .get_requirement_by_spec_id(&o.spec)
-                .ok()
-                .flatten()
-                .and_then(|r| last_status_change(&r).or(Some(r.modified_at)));
+            let req = backend.get_requirement_by_spec_id(&o.spec).ok().flatten();
             IdleCandidate {
                 spec_id: o.spec.clone(),
                 title: o.title.clone(),
                 driver: o.driver.clone(),
                 branch_commit,
-                status_changed_at,
+                status_changed_at: req.as_ref().and_then(last_status_change),
+                modified_at: req.as_ref().map(|r| r.modified_at),
             }
         })
         .collect();
     select_idle(candidates, now, threshold)
+}
+
+/// PURE: the orphans that may be listed as idle — driver `idle`, and neither
+/// a likely live fan-out (`likely_fanout`) nor possibly worked by a subagent
+/// (`possibly_subagent`, BUG-1656). Those stay on the orphan channel, whose
+/// wording already says the spec may be being worked.
+// trace:STORY-1680 | ai:claude
+pub(crate) fn idle_orphans(orphans: &[PsOrphan]) -> Vec<&PsOrphan> {
+    orphans
+        .iter()
+        .filter(|o| !o.likely_fanout && !o.possibly_subagent)
+        .filter(|o| matches!(o.driver, Some(DerivedDriver::Idle { .. })))
+        .collect()
 }
 
 /// PURE: the branches that belong to `spec` — every local branch named for
