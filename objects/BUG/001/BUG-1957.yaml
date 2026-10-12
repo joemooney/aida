@@ -26,7 +26,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-12T23:18:51.170449710Z
+modified_at: 2026-10-12T23:40:01.481422103Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -51,6 +51,12 @@ comments:
   content: 'Round-2 strict review REQUEST CHANGES at ccf9ad2896: marker matcher regresses on sentence punctuation (no-complete. / ! / ) / … / ?) vs main; fix = deny-list after marker. Plus 3 Lows (held-closure test, single loader, legacy-path comment). Full brief on PR #2571. Round 3 = last before park.'
   created_at: 2026-10-12T23:18:51.170449710Z
   modified_at: 2026-10-12T23:18:51.170449710Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a1327c-ca49-77d1-b7f7-ac31d1391c46
+  author: joe
+  content: 'Advisor adjudication (round 3, head 45b8d2637d): ACCEPTED implementer deviation on brief Low-1. In rework_pr_head_matches_spec a branch-id match decides before the hold is consulted and title trailers complete held specs too, so the hold closure cannot change the result; the brief''s literal ''held -> false'' test would require a drain-behaviour change out of scope. Pinning the real behaviour (bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr) satisfies the intent. Follow-up: drop the dead hold argument (added to BUG-1997 scope). ACCEPTED Low-2: ship keeps its fail-closed loader (unreadable store must stop the merge), justified by comment. Strict round-3 reviewer to verify both claims.'
+  created_at: 2026-10-12T23:40:01.481422103Z
+  modified_at: 2026-10-12T23:40:01.481422103Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-e7eb-7fb1-8857-ff0dcdcda374
