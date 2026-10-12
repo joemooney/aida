@@ -749,7 +749,10 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
 /// mid-swap (the parked live binary is moved into `prev/`); leftover staging
 /// dirs. Not repairable here: a crash between the two per-binary renames
 /// leaves a mixed live pair (new `aida`, old `aida-server` or the reverse);
-/// re-run `aida dev build` or `aida dev rollback` to fix that.
+/// re-run `aida dev build` to fix that. A rollback that crashes between its
+/// two binary swaps leaves a mixed pair the same way, and its `.promoted`
+/// records follow `aida`. Running `aida dev rollback` again only swaps that
+/// mixed pair with the equally mixed `prev/`; `aida dev build` is the fix.
 pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
@@ -771,13 +774,16 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
         // A binary already swapped means the rollback was under way: finish
         // the `.promoted` swap too; otherwise put the parked record back.
         // trace:BUG-1959 | ai:claude
-        // A binary counts as swapped once its parked copy has moved on into
-        // `prev/` (gone from `.rollback/`) or once its prev slot has moved
-        // live. With both binaries swapped, `.rollback/` holds only the
-        // parked `.promoted`, which must go to `prev/`, not back onto live.
+        // A binary counts as swapped once its prev slot has moved live, or,
+        // after parking finished (the marker), once its parked copy has moved
+        // on into `prev/`. With both swapped, `.rollback/` holds only the
+        // marker and the parked `.promoted`, which goes to `prev/`, not back
+        // onto live. Without the marker a parked binary missing from
+        // `.rollback/` only means parking had not finished: nothing swapped.
+        let parked_all = swap.join(ROLLBACK_MARKER).exists();
         let swapped = LIVE_BINARIES
             .iter()
-            .any(|n| !swap.join(n).is_file() || !layout.prev(n).exists());
+            .any(|n| !layout.prev(n).exists() || (parked_all && !swap.join(n).is_file()));
         let parked_meta = swap.join(PROMOTED_FILE);
         if swapped {
             swap_meta_forward(layout, &swap)?;
@@ -823,6 +829,11 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
     }
     Ok(incoming)
 }
+
+/// Marker `rollback` writes into `.rollback/` once the live pair and its
+/// record are parked, before the first binary swap.
+// trace:BUG-1959 | ai:claude
+pub(crate) const ROLLBACK_MARKER: &str = ".swapping";
 
 /// Name of the promotion record kept beside each live pair (and in `prev/`).
 // trace:STORY-1646 | ai:claude
@@ -965,12 +976,17 @@ pub(crate) fn rollback(layout: &DevLayout) -> Result<Vec<String>> {
     if live_meta.is_file() {
         std::fs::rename(&live_meta, swap.join(PROMOTED_FILE))?;
     }
+    // trace:BUG-1959 | ai:claude
+    // Parking is complete; from here a parked binary missing from `.rollback/`
+    // means it was swapped into `prev/` (see [`recover_live_dir`]).
+    std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
     for name in LIVE_BINARIES {
         std::fs::rename(layout.prev(name), layout.live(name))
             .with_context(|| format!("restoring {}", layout.live(name).display()))?;
         std::fs::rename(swap.join(name), layout.prev(name))?;
     }
     swap_meta_forward(layout, &swap)?;
+    let _ = std::fs::remove_file(swap.join(ROLLBACK_MARKER));
     let _ = std::fs::remove_dir(&swap);
     Ok(notes)
 }

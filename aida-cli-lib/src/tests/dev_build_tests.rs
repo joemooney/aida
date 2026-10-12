@@ -1378,6 +1378,7 @@ fn recovery_finishes_the_record_swap_after_both_binaries_were_swapped() {
     write_meta(&f.layout.prev_dir(), &prev_rec);
     let swap = f.layout.live_dir.join(".rollback");
     write_meta(&swap, &live_rec);
+    write(&swap.join(ROLLBACK_MARKER), "");
 
     let _lock = lock_live_dir(&f.layout).unwrap();
     recover_live_dir(&f.layout).unwrap();
@@ -1443,4 +1444,120 @@ fn status_shows_unknown_for_an_empty_promoted_sha() {
         notes.iter().any(|n| n.contains("HEAD unknown")),
         "{notes:?}"
     );
+}
+
+/// Live A (no record) / prev B (with a record): the reachable shape after
+/// rolling back onto a build promoted before records existed.
+fn live_a_prev_b(f: &Fixture) -> PromotionMeta {
+    put_live(&f.layout, "A");
+    write(&f.layout.prev("aida"), "B-aida");
+    write(&f.layout.prev("aida-server"), "B-aida-server");
+    let b = meta("bbbbbbbbbb", false);
+    write_meta(&f.layout.prev_dir(), &b);
+    b
+}
+
+#[test]
+fn recovery_after_a_crash_while_parking_leaves_the_records_alone() {
+    // `.rollback/` holding only `aida`, and empty (crash right after
+    // fresh_dir): parking never finished, so nothing was swapped.
+    for parked in [&["aida"][..], &[][..]] {
+        let f = fixture();
+        let b = live_a_prev_b(&f);
+        let swap = f.layout.live_dir.join(".rollback");
+        fs::create_dir_all(&swap).unwrap();
+        for n in parked {
+            write(&swap.join(n), &format!("A-{n}"));
+        }
+        let _lock = lock_live_dir(&f.layout).unwrap();
+        recover_live_dir(&f.layout).unwrap();
+        assert_eq!(read_promotion_meta(&f.layout.live_dir), None, "{parked:?}");
+        assert_eq!(
+            read_promotion_meta(&f.layout.prev_dir()),
+            Some(b),
+            "{parked:?}"
+        );
+        assert_eq!(read(&f.layout.live("aida")), "A-aida");
+        assert_eq!(read(&f.layout.prev("aida")), "B-aida");
+        assert!(!swap.exists());
+    }
+}
+
+#[test]
+fn recovery_after_parking_but_before_any_swap_restores_the_parked_record() {
+    // The marker is down but no prev -> live rename happened yet.
+    let f = fixture();
+    put_live(&f.layout, "A");
+    write(&f.layout.prev("aida"), "B-aida");
+    write(&f.layout.prev("aida-server"), "B-aida-server");
+    let a = meta("aaaaaaaaaa", false);
+    let b = meta("bbbbbbbbbb", false);
+    write_meta(&f.layout.prev_dir(), &b);
+    let swap = f.layout.live_dir.join(".rollback");
+    write(&swap.join("aida"), "A-aida");
+    write(&swap.join("aida-server"), "A-aida-server");
+    write_meta(&swap, &a);
+    write(&swap.join(ROLLBACK_MARKER), "");
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), Some(a));
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), Some(b));
+    assert_eq!(read(&f.layout.live("aida")), "A-aida");
+    assert!(!swap.exists());
+}
+
+#[test]
+fn recovery_between_the_two_binary_swaps_moves_the_records_with_aida() {
+    // `aida` fully swapped (A parked into prev/), `aida-server` not started.
+    let f = fixture();
+    write(&f.layout.live("aida"), "B-aida");
+    write(&f.layout.live("aida-server"), "A-aida-server");
+    write(&f.layout.prev("aida"), "A-aida");
+    write(&f.layout.prev("aida-server"), "B-aida-server");
+    let a = meta("aaaaaaaaaa", false);
+    let b = meta("bbbbbbbbbb", false);
+    write_meta(&f.layout.prev_dir(), &b);
+    let swap = f.layout.live_dir.join(".rollback");
+    write(&swap.join("aida-server"), "A-aida-server");
+    write_meta(&swap, &a);
+    write(&swap.join(ROLLBACK_MARKER), "");
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), Some(b));
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), Some(a));
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert!(!swap.exists());
+}
+
+#[test]
+fn recovery_mid_record_swap_keeps_the_parked_record() {
+    // Both binaries swapped; swap_meta_forward moved prev's record live,
+    // then died before moving the parked record into prev/.
+    let f = fixture();
+    write(&f.layout.live("aida"), "B-aida");
+    write(&f.layout.live("aida-server"), "B-aida-server");
+    write(&f.layout.prev("aida"), "A-aida");
+    write(&f.layout.prev("aida-server"), "A-aida-server");
+    let a = meta("aaaaaaaaaa", false);
+    let b = meta("bbbbbbbbbb", false);
+    write_meta(&f.layout.live_dir, &b);
+    let swap = f.layout.live_dir.join(".rollback");
+    write_meta(&swap, &a);
+    write(&swap.join(ROLLBACK_MARKER), "");
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), Some(b));
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), Some(a));
+    assert!(!swap.exists());
+}
+
+#[test]
+fn a_completed_rollback_leaves_no_marker_or_swap_dir() {
+    let f = fixture();
+    put_live(&f.layout, "A");
+    write(&f.layout.prev("aida"), "B-aida");
+    write(&f.layout.prev("aida-server"), "B-aida-server");
+    rollback(&f.layout).unwrap();
+    assert!(!f.layout.live_dir.join(".rollback").exists());
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
 }
