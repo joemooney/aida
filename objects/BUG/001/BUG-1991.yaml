@@ -1,0 +1,33 @@
+id: 01a130d1-910f-7990-8c30-f944582998ff
+spec_id: BUG-1991
+agreed_id: BUG-1991
+title: Session end skips every live-process holder check when the session's own MCP claim shares the worktree path
+description: |-
+  Found by the fresh review of PR #2555 (BUG-1988), in code that predates it.
+
+  aida-cli-lib/src/session_end.rs ~:1210: leases::list_leases parses mcp-claim.<spec>.toml as a SessionLease, because it skips only .manifest/.activity. A claim_task claim with the same scope and worktree_path therefore counts as a peer, tears_down_worktree reads false, and every BUG-1947/BUG-1986 holder check is skipped. The claim is then reaped (~:1527), the later peer check (~:1590) finds no peer, and the tree is removed or reset with no live-process check at all. That defeats the guarantee that session end never removes a tree a live process is using.
+
+  Acceptance:
+  1. Both peer checks ignore an mcp-claim whose scope matches the ending session's target scope. Equivalently, tears_down_worktree is computed from a lease list without the session's own claim.
+  2. An integration test writes such a claim, starts a live holder in the worktree, runs session end, and asserts the refusal and that the tree is intact.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T15:53:22.959521365Z
+modified_at: 2026-10-12T15:53:22.959521365Z
+req_type: Bug
+tags:
+- data-safety
+- found:night
+- from-review:2555
+- sessions
+- worktree
+filed_at:
+  code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2057f093-34f4-4dd8-8426-9a0077db8580
