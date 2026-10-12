@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T17:18:29.547931164Z
+modified_at: 2026-10-12T17:55:31.926194831Z
 req_type: Bug
 tags:
 - groom:approve
@@ -57,6 +57,12 @@ comments:
     Re-run the narrow tests and `make check-ci-fast` (confirm it passes before pushing), then push to the same branch. The advisor will put a fresh reviewer on the new head.
   created_at: 2026-10-12T17:18:29.547931164Z
   modified_at: 2026-10-12T17:18:29.547931164Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13141-65d6-7591-9ff0-6ac1580e7924
+  author: joe
+  content: 'Acceptance deviation (stress criterion), recorded by the implementer at PR #2559 head 8f242ed2fb: the ''50 consecutive runs while a second cargo test --workspace runs in parallel'' was run as 50 consecutive runs of the prebuilt aida-core test binary filtered to reader_incremental_lock_error (--test-threads=16, equivalent to the cargo command minus the build step) while the FULL aida-core test binary looped alongside at --test-threads=16 (host load average 9-25; another 20 runs on the reworked head, 20/20). Result 50/50 + 20/20 pass. Why not a parallel cargo test --workspace: it needs a full workspace test build on the shared cargo slots (host load average reached ~79 during this work), and it contributes only cross-process CPU/IO load, which is what the looping aida-core suite already provides. Neither load can trigger the in-process cause (a sibling thread''s fork inheriting the refresh flock happens only inside the same test process), so both causes are instead covered by deterministic injection: a transient foreign flock holder (retried as refresh_lock_contended) and a forced ancestor-check timeout (retried as ancestor_check_failed); forcing either on every attempt still fails the test.'
+  created_at: 2026-10-12T17:55:31.926194831Z
+  modified_at: 2026-10-12T17:55:31.926194831Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-c749-7e22-a179-4a9fde487355
