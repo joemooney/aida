@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:06.125560871Z
-modified_at: 2026-10-12T19:09:28.652174948Z
+modified_at: 2026-10-12T20:02:32.838029197Z
 req_type: Bug
 tags:
 - follow-up:merge-relay
@@ -57,6 +57,39 @@ comments:
     Run the narrow tests (bug_1969, store_sync, task_1717_store_writer_lock). Then `make check-ci-fast` must PASS; push as a separate step to the same branch.
   created_at: 2026-10-12T19:09:28.652174948Z
   modified_at: 2026-10-12T19:09:28.652174948Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a131b5-af06-75c3-a45c-a7b7f01ca02e
+  author: joe
+  content: |-
+    ## Advisor gate: READY-FOR-OPERATOR (#2563, BUG-1969)
+
+    A fresh, independent STRICT reviewer approved round 2 at `2b657c85566a9a6d0469feb1498d2b1b10d12c14`. The verdict is recorded at `.aida/review-verdicts/BUG-1969.json`. CI is green at that SHA (Build passed, merge-hold-gate passed), and the PR is CLEAN.
+
+    **Why the advisor isn't merging:** the advisor dispatched this implementer, which counts as authoring it under ADR-73 condition 1. The operator has to merge.
+
+    **What the reviewer verified:**
+    - All four round-1 asks are met.
+    - A rejected non-fast-forward can never be hidden as offline or deferred, because the classification order checks it before both deferral classes.
+    - Every deferral happens after the local commit.
+    - Running the push under `LC_ALL=C` only makes `push_exact` more robust.
+    - Two mutation checks were done, and the tests failed under both.
+
+    **Merge (operator).** The round-1 commit body is out of date, so pass an explicit body:
+    ```
+    gh pr merge 2563 --squash --match-head-commit 2b657c85566a9a6d0469feb1498d2b1b10d12c14 \
+      --subject "[AI:claude] fix(store): classify store push failures instead of treating every error as offline (BUG-1969) (#2563)" \
+      --body "Permission/protected-branch/server-hook refusals fail; unreachable and unclassified failures defer with git's message and a db sync hint; push runs under LC_ALL=C.
+
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+    aida pull && aida edit BUG-1969 --status completed
+    ```
+
+    **Non-blocking follow-ups:**
+    - (low) `Defer { detail: None }` for Unreachable drops git's stderr. Persistent server errors such as a 413 followed by "hung up" get reported as "unreachable". Carry the stderr through.
+    - (low) No test covers the `LC_ALL=C` environment. A pre-push hook test that echoes `LC_ALL` would cover it.
+    - (nit) `permission denied` also matches local filesystem errors, which then get a misleading cause line. They still fail visibly.
+  created_at: 2026-10-12T20:02:32.838029197Z
+  modified_at: 2026-10-12T20:02:32.838029197Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-f76a-7eb3-8c59-cbd1c2d0dfd8
