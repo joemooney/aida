@@ -26,7 +26,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-12T20:24:15.935458889Z
+modified_at: 2026-10-12T21:43:26.499871435Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-12T06:09:54.895114525Z
   modified_at: 2026-10-12T06:09:54.895114525Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13212-0e23-7d22-94f5-961763b51dfc
+  author: joe
+  content: 'Advisor round-1 REQUEST CHANGES at 9f8f1f2754 (strict): marker matcher misses bold/colon/comma forms (silent completion risk). Acceptance item 1 amended to include them. Full brief on PR #2571.'
+  created_at: 2026-10-12T21:43:26.499871435Z
+  modified_at: 2026-10-12T21:43:26.499871435Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-e7eb-7fb1-8857-ff0dcdcda374
   author: joe
