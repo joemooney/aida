@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:16:08.851780217Z
-modified_at: 2026-10-12T05:57:02.372332919Z
+modified_at: 2026-10-12T05:57:43.544413169Z
 req_type: Bug
 tags:
 - groom:approve
@@ -43,6 +43,13 @@ comments:
   created_at: 2026-10-11T07:17:49.567835122Z
   modified_at: 2026-10-11T07:17:49.567835122Z
   session_id: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+- id: 01a12eb0-39f8-7743-8463-238370d2e244
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised). Re-verified on main: `__aida_staged_rs_diffs` in aida-core/templates/hooks/aida-pre-commit.sh still runs each per-parent `git diff --cached` with `2>/dev/null` and an unconditional `return 0`, and the awk pipeline has no sentinel or PIPESTATUS check, so both failures still yield an empty offender list. The night-triage acceptance criteria in the previous comment are testable as written; no description edit. Marked supervised rather than drain-safe because it changes refusal semantics of the pre-commit hook every agent commits through: a wrong sentinel check blocks every commit fleet-wide.
+  created_at: 2026-10-12T05:57:43.544413169Z
+  modified_at: 2026-10-12T05:57:43.544413169Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
