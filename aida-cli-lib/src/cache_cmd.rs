@@ -143,35 +143,7 @@ fn handle_cache_refresh(
     };
 
     if worker {
-        // The runtime cap (sketch: max(120 s, 2x the last full rebuild)) is a
-        // watchdog that exits nonzero: the transaction rolls back under WAL,
-        // the flock dies with the process, and the request file survives for
-        // the next reader or tick.
-        let cap = refresh_worker::worker_runtime_cap(backend);
-        std::thread::spawn(move || {
-            std::thread::sleep(cap);
-            eprintln!(
-                "refresh worker exceeded its runtime cap ({}s); exiting",
-                cap.as_secs()
-            );
-            std::process::exit(3);
-        });
-        let cache_path = backend.cache().path().to_path_buf();
-        return match refresh_worker::run_refresh_worker(backend) {
-            Ok(outcome) => {
-                eprintln!(
-                    "{}: refresh worker: {:?} at {}",
-                    chrono::Utc::now().to_rfc3339(),
-                    outcome,
-                    cache_path.display()
-                );
-                Ok(())
-            }
-            Err(e) => {
-                refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
-                Err(e)
-            }
-        };
+        return run_refresh_worker_on(backend);
     }
 
     if if_requested {
@@ -585,5 +557,54 @@ mod bug_1940_tests {
             out.contains("cause: database disk image is malformed"),
             "{out}"
         );
+    }
+}
+
+/// `aida cache refresh --worker --store <dir> --cache <file>` dispatched
+/// before project discovery. The detached worker runs from a neutral cwd
+/// (never a removable session worktree), so it must not depend on finding a
+/// project from its cwd: it trusts only its explicit paths (amendment A8).
+// trace:BUG-1947 | ai:claude
+pub(crate) fn run_explicit_refresh_worker(
+    store: &std::path::Path,
+    cache: &std::path::Path,
+) -> Result<()> {
+    let backend = aida_core::CachedGitBackend::open(store, cache)?;
+    run_refresh_worker_on(&backend)
+}
+
+/// The detached refresh worker body: run one single-flight refresh under the
+/// runtime-cap watchdog and record a failed attempt on error.
+// trace:TASK-1527 | ai:claude
+fn run_refresh_worker_on(backend: &aida_core::CachedGitBackend) -> Result<()> {
+    use aida_core::db::{refresh_request, refresh_worker};
+    // The runtime cap (sketch: max(120 s, 2x the last full rebuild)) is a
+    // watchdog that exits nonzero: the transaction rolls back under WAL,
+    // the flock dies with the process, and the request file survives for
+    // the next reader or tick.
+    let cap = refresh_worker::worker_runtime_cap(backend);
+    std::thread::spawn(move || {
+        std::thread::sleep(cap);
+        eprintln!(
+            "refresh worker exceeded its runtime cap ({}s); exiting",
+            cap.as_secs()
+        );
+        std::process::exit(3);
+    });
+    let cache_path = backend.cache().path().to_path_buf();
+    match refresh_worker::run_refresh_worker(backend) {
+        Ok(outcome) => {
+            eprintln!(
+                "{}: refresh worker: {:?} at {}",
+                chrono::Utc::now().to_rfc3339(),
+                outcome,
+                cache_path.display()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
+            Err(e)
+        }
     }
 }
