@@ -50,3 +50,64 @@ fn branch_head_commit_message_reads_branch_not_cwd_head() {
     // Unknown branch (no local, no origin) → None.
     assert!(branch_head_commit_message(root, "no-such-branch").is_none());
 }
+
+/// BUG-1957: `derive_pr_ship_squash_subject` returns the completion trailer
+/// it derived (ids + provenance), store-qualified: a branch-name id completes
+/// a plain spec, and is withheld (with a note) when the spec is closure-held.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "t@t.t"]);
+    git(root, &["config", "user.name", "t"]);
+    std::fs::write(root.join("a"), "1").unwrap();
+    git(root, &["add", "a"]);
+    git(root, &["commit", "-q", "-m", "fix: prose"]);
+    git(root, &["checkout", "-q", "-b", "task-1538-x"]);
+
+    let bin = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &bin.path().join("gh"),
+        "#!/bin/sh\necho '{\"title\":\"fix: prose\",\"body\":\"\"}'\n",
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(bin.path());
+
+    let save = |tags: &[&str]| {
+        let mut req = aida_core::Requirement::new("t".to_string(), String::new());
+        req.spec_id = Some("TASK-1538".to_string());
+        req.req_type = aida_core::RequirementType::Task;
+        req.status = aida_core::RequirementStatus::InProgress;
+        for tag in tags {
+            req.tags.insert(tag.to_string());
+        }
+        let store = aida_core::RequirementsStore {
+            requirements: vec![req],
+            ..Default::default()
+        };
+        let backend = aida_core::GitBackend::new(&root.join(".aida-store")).unwrap();
+        aida_core::DatabaseBackend::save(&backend, &store).unwrap();
+    };
+
+    save(&[]);
+    let (subject, trailer) =
+        derive_pr_ship_squash_subject(root, 1957, "task-1538-x", false).unwrap();
+    assert_eq!(trailer.ids, vec!["TASK-1538".to_string()]);
+    assert_eq!(trailer.source, pr_ship::TrailerSource::Branch);
+    assert_eq!(subject.as_deref(), Some("fix: prose (TASK-1538)"));
+
+    save(&[aida_core::pickability::CLOSURE_PENDING_TAG]);
+    let (subject, trailer) =
+        derive_pr_ship_squash_subject(root, 1957, "task-1538-x", false).unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+    assert_eq!(trailer.source, pr_ship::TrailerSource::None);
+    assert!(trailer.notes[0].contains("TASK-1538"), "{trailer:?}");
+    assert!(
+        !subject.unwrap_or_default().contains("TASK-1538"),
+        "a withheld id must not reach the squash subject"
+    );
+
+    let (_, trailer) = derive_pr_ship_squash_subject(root, 1957, "task-1538-x", true).unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+}

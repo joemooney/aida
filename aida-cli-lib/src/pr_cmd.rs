@@ -2032,6 +2032,20 @@ pub(crate) fn pr_ship_handler(
     if dry_run {
         let plan = format_dry_run_plan(&opts, &steps, forge_kind);
         print!("{}", plan);
+        // Show which specs the merge would complete, and why, without merging.
+        // trace:BUG-1957 | ai:claude
+        let provenance = if pr_number == 0 {
+            pr_ship::format_dry_run_trailer_provenance(Err(
+                "the PR does not exist yet; it is derived from the PR title at merge time",
+            ))
+        } else {
+            match derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch, no_complete)
+            {
+                Ok((_, trailer)) => pr_ship::format_dry_run_trailer_provenance(Ok(&trailer)),
+                Err(e) => pr_ship::format_dry_run_trailer_provenance(Err(&e.to_string())),
+            }
+        };
+        print!("{}", provenance);
         eprintln!(
             "  → PR target: {}",
             if pr_number == 0 {
