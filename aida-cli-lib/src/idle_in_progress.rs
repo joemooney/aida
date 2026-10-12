@@ -95,7 +95,8 @@ pub(crate) struct IdleCandidate {
     pub status_changed_at: Option<DateTime<Utc>>,
 }
 
-/// PURE: keep the candidates whose driver is `idle` and whose idle age
+/// PURE: keep the candidates whose driver is `idle` and whose idle age — time
+/// since the later of the newest branch commit and the last status change —
 /// exceeds `threshold_hours`, oldest first. A driven (`relay`/`drain`/
 /// `agent`) or `queued` candidate is never listed, whatever its age; nor is
 /// one whose age cannot be measured at all.
@@ -110,9 +111,15 @@ pub(crate) fn select_idle(
         .into_iter()
         .filter(|c| matches!(c.driver, Some(DerivedDriver::Idle { .. })))
         .filter_map(|c| {
-            let (at, source, branch) = match c.branch_commit {
-                Some((branch, at)) => (at, IdleAgeSource::BranchCommit, Some(branch)),
-                None => (c.status_changed_at?, IdleAgeSource::StatusChange, None),
+            // Idle age runs from the LAST activity: whichever of the newest
+            // branch commit and the last status change is later. An old
+            // branch (e.g. an earlier, squash-merged slice) must not make a
+            // spec just sent back to In Progress read as long idle.
+            // trace:STORY-1680 | ai:claude
+            let (at, source, branch) = match (c.branch_commit, c.status_changed_at) {
+                (Some((branch, b)), Some(s)) if s > b => (s, IdleAgeSource::StatusChange, None),
+                (Some((branch, b)), _) => (b, IdleAgeSource::BranchCommit, Some(branch)),
+                (None, s) => (s?, IdleAgeSource::StatusChange, None),
             };
             let idle_secs = now.signed_duration_since(at).num_seconds().max(0);
             (idle_secs > threshold_secs).then_some(IdleInProgressItem {
@@ -258,16 +265,10 @@ pub(crate) fn collect_idle_in_progress(
     let candidates = idle
         .into_iter()
         .map(|o| {
-            let key = o.spec.to_ascii_uppercase();
-            let mut branches: Vec<String> = named.get(&key).cloned().unwrap_or_default();
-            if let Some((l, _)) =
+            let lease_branch =
                 crate::driver_view::lease_for_spec(&leases, &[o.spec.as_str()], |_| false)
-            {
-                if !l.branch.trim().is_empty() && !branches.contains(&l.branch) {
-                    branches.push(l.branch.clone());
-                }
-            }
-            let branch_commit = branches
+                    .map(|(l, _)| l.branch.as_str());
+            let branch_commit = spec_branches(&named, &o.spec, lease_branch)
                 .into_iter()
                 .filter_map(|b| newest_commit_ahead(project_root, &b, base).map(|t| (b, t)))
                 .max_by_key(|(_, t)| *t);
@@ -286,6 +287,43 @@ pub(crate) fn collect_idle_in_progress(
         })
         .collect();
     select_idle(candidates, now, threshold)
+}
+
+/// PURE: the branches that belong to `spec` — every local branch named for
+/// it plus its best lease's branch (when set and not already named).
+// trace:STORY-1680 | ai:claude
+pub(crate) fn spec_branches(
+    named: &HashMap<String, Vec<String>>,
+    spec: &str,
+    lease_branch: Option<&str>,
+) -> Vec<String> {
+    let mut branches = named
+        .get(&spec.to_ascii_uppercase())
+        .cloned()
+        .unwrap_or_default();
+    if let Some(b) = lease_branch.map(str::trim).filter(|b| !b.is_empty()) {
+        if !branches.iter().any(|x| x == b) {
+            branches.push(b.to_string());
+        }
+    }
+    branches
+}
+
+/// PURE: drop the orphans already reported as idle, so a spec appears in
+/// `aida awaiting` once — under idle-in-progress, not also as orphaned.
+// trace:STORY-1680 | ai:claude
+pub(crate) fn orphans_not_idle(
+    orphans: Vec<PsOrphan>,
+    idle: &[IdleInProgressItem],
+) -> Vec<PsOrphan> {
+    let idle_specs: std::collections::HashSet<String> = idle
+        .iter()
+        .map(|i| i.spec_id.to_ascii_uppercase())
+        .collect();
+    orphans
+        .into_iter()
+        .filter(|o| !idle_specs.contains(&o.spec.to_ascii_uppercase()))
+        .collect()
 }
 
 /// TOON rows for agent-mode `idle_in_progress`.

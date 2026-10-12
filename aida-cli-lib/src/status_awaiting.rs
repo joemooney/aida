@@ -974,14 +974,7 @@ pub(crate) fn collect_awaiting_report_inner(
             &orphans,
             chrono::Utc::now(),
         );
-        let idle_specs: std::collections::HashSet<String> = idle
-            .iter()
-            .map(|i| i.spec_id.to_ascii_uppercase())
-            .collect();
-        let orphans: Vec<PsOrphan> = orphans
-            .into_iter()
-            .filter(|o| !idle_specs.contains(&o.spec.to_ascii_uppercase()))
-            .collect();
+        let orphans = crate::idle_in_progress::orphans_not_idle(orphans, &idle);
         let orphaned = orphaned_in_progress_items(orphans, |spec| {
             summaries
                 .iter()

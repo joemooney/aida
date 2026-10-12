@@ -113,23 +113,89 @@ fn a_candidate_with_no_resolved_driver_or_no_measurable_age_is_skipped() {
 }
 
 #[test]
-fn branch_commit_age_is_preferred_over_status_change_age() {
-    // Fresh branch commit, ancient status change: NOT idle past threshold.
+fn a_newer_branch_commit_keeps_a_spec_out_of_the_idle_list() {
+    // Fresh branch commit, ancient status change: the branch is the last
+    // activity, so the spec is NOT idle past the threshold.
     let mut fresh_branch = candidate("TASK-8", &[], 500);
     fresh_branch.branch_commit = Some(("task-8-work".into(), hours_ago(2)));
-    // Old branch commit, fresh status change: listed, dated by the branch.
-    let mut old_branch = candidate("TASK-9", &[], 1);
-    old_branch.branch_commit = Some(("task-9-work".into(), hours_ago(40)));
-    let items = select_idle(vec![fresh_branch, old_branch], now(), 24);
+    assert!(select_idle(vec![fresh_branch], now(), 24).is_empty());
+}
+
+#[test]
+fn a_newer_status_change_wins_over_an_old_branch_commit() {
+    // An old branch (e.g. a squash-merged earlier slice) must not make a spec
+    // sent back to In Progress an hour ago read as long idle.
+    let mut reopened = candidate("TASK-9", &[], 1);
+    reopened.branch_commit = Some(("task-9-work".into(), hours_ago(48)));
+    assert!(select_idle(vec![reopened], now(), 24).is_empty());
+    // Both old: the age runs from the later one (status change, 30h).
+    let mut both_old = candidate("TASK-9", &[], 30);
+    both_old.branch_commit = Some(("task-9-work".into(), hours_ago(48)));
+    let items = select_idle(vec![both_old], now(), 24);
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].spec_id, "TASK-9");
+    assert_eq!(items[0].age_source, IdleAgeSource::StatusChange);
+    assert_eq!(items[0].idle_secs, 30 * 3600);
+    assert_eq!(items[0].branch, None);
+}
+
+#[test]
+fn an_older_status_change_dates_the_age_by_the_newer_branch_commit() {
+    let mut c = candidate("TASK-13", &[], 100);
+    c.branch_commit = Some(("task-13-work".into(), hours_ago(40)));
+    let items = select_idle(vec![c], now(), 24);
+    assert_eq!(items.len(), 1);
     assert_eq!(items[0].age_source, IdleAgeSource::BranchCommit);
     assert_eq!(items[0].idle_secs, 40 * 3600);
-    assert_eq!(items[0].branch.as_deref(), Some("task-9-work"));
+    assert_eq!(items[0].branch.as_deref(), Some("task-13-work"));
     assert_eq!(
         items[0].age_label(),
-        "idle 40h since its last branch commit (task-9-work)"
+        "idle 40h since its last branch commit (task-13-work)"
     );
+}
+
+#[test]
+fn spec_branches_merge_named_branches_with_the_lease_branch() {
+    let named = std::collections::HashMap::from([(
+        "TASK-14".to_string(),
+        vec!["task-14-work".to_string()],
+    )]);
+    // Lease branch not named for the spec is added.
+    assert_eq!(
+        spec_branches(&named, "task-14", Some("relay/abc")),
+        ["task-14-work", "relay/abc"]
+    );
+    // Already-named lease branch is not duplicated; blank is ignored.
+    assert_eq!(
+        spec_branches(&named, "TASK-14", Some("task-14-work")),
+        ["task-14-work"]
+    );
+    assert_eq!(
+        spec_branches(&named, "TASK-14", Some("  ")),
+        ["task-14-work"]
+    );
+    // No named branch: the lease branch alone.
+    assert_eq!(spec_branches(&named, "TASK-15", Some("wt-15")), ["wt-15"]);
+    assert!(spec_branches(&named, "TASK-15", None).is_empty());
+}
+
+fn orphan(spec: &str) -> PsOrphan {
+    PsOrphan {
+        spec: spec.into(),
+        title: format!("{spec} title"),
+        stale_lease: false,
+        likely_fanout: false,
+        possibly_subagent: false,
+        driver: Some(DerivedDriver::Idle { since_secs: None }),
+    }
+}
+
+#[test]
+fn a_spec_reported_idle_is_dropped_from_the_orphan_list() {
+    let mut idle = sample_item();
+    idle.spec_id = "TASK-16".into();
+    let kept = orphans_not_idle(vec![orphan("task-16"), orphan("TASK-17")], &[idle]);
+    let ids: Vec<&str> = kept.iter().map(|o| o.spec.as_str()).collect();
+    assert_eq!(ids, ["TASK-17"]);
 }
 
 #[test]
@@ -209,6 +275,8 @@ fn git(dir: &Path, args: &[&str], date: &str) {
             "core.hooksPath=/dev/null",
         ])
         .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_AUTHOR_DATE", date)
         .env("GIT_COMMITTER_DATE", date)
         .output()
