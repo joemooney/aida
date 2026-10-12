@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-12T06:57:12.601438795Z
+modified_at: 2026-10-12T09:04:41.824870898Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -38,6 +38,20 @@ comments:
   content: 'NIGHT-B root cause (telemetry + code read): the 25.5 s calls are the SQLite retry ladder DEFAULT_CACHE_RETRY_DELAYS_MS in aida-core/src/db/cache.rs (100+200+...+12800 = exactly 25,500 ms), run to exhaustion. In usage.jsonl, all nine slow calls between 07:18:14 and 07:20:33Z (show x6, list x2, comment list x1) EXITED 1. They overlapped a single 157 s ''aida edit'' (07:18:02-07:20:39, about 6x25.5 s), and reads went back to ~200 ms the moment it ended. Refresh workers logged LockHeld and then hit the 120 s runtime cap. Mutations write to cache.db without the refresh flock, so a reader can hold the flock and still hit the SQLite write lock. BUG-1674 bounded only one reader branch; the remaining reader-side fallbacks in cached_git_backend.rs (no_detach, spawning_suppressed, refresh-lock error, no usable snapshot, loser re-check, tolerant_read) and the schema stamp in Cache::open still use the full ladder. The fix, in progress on bug-1956-work, bounds these to WriterBusy/stale-with-note within the ceiling, plus a contended-path CLI test. Possible contributing factor, unverified: from 07:11 to 07:43 the stale labels showed cache_head null (source_head_sha empty), which would keep every reader trying to refresh.'
   created_at: 2026-10-12T06:57:12.601438795Z
   modified_at: 2026-10-12T06:57:12.601438795Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a12f5b-6760-7e43-b386-6de4dcb92de2
+  author: joe
+  content: |-
+    NIGHT READY: PR #2552 green at 00ff2b9d40b55aee872705e8310d3d99ae77e131
+
+    - Fresh re-review: APPROVE. All four first-round findings are fixed. The cap is scoped to budgeted reads, so mutations keep the full ladder; there is a migration check; the unbounded paths are documented; and the tests clear the env.
+    - Build: the first run failed on task_1717 allocation_pull_and_push_follow_the_window_discipline (store lock read as held during pre-push). That code is outside this diff, and the test passed 5 of 5 local runs at the same SHA. I filed it as flaky BUG-1989. The re-run of the same SHA is green.
+    - LOW notes for follow-up, not blocking:
+      1. A first-build show behind a writer only counts sleep time against the 3 s allowance, so on a large store it can take about 6 s before it errors. A wall-clock deadline would close this.
+      2. read_ladder_budget_caps_the_retry_ladder doesn't clear AIDA_CACHE_RETRY_* (a false-pass risk only).
+    - The PR body lists the remaining unbounded paths (schema-drift rebuild, unbudgeted list and comment list, MIGRATION_WAIT).
+  created_at: 2026-10-12T09:04:41.824870898Z
+  modified_at: 2026-10-12T09:04:41.824870898Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12bcf-cb9a-74f0-9d98-21e0a6befc37
