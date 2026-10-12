@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T05:09:26.108546518Z
+modified_at: 2026-10-12T05:31:46.910147604Z
 req_type: Task
 tags:
 - closure:pending
@@ -738,6 +738,12 @@ comments:
   created_at: 2026-10-12T05:09:26.108546518Z
   modified_at: 2026-10-12T05:09:26.108546518Z
   session_id: 9f6b4f04-252d-4d06-977a-3d2bd787f781
+- id: 01a12e98-795e-7ec3-a2fe-bee5968cb0a4
+  author: joe
+  content: 'ADVISOR 22:35: #2546 (run 11) MERGED as 17ff749954 (rebase-merge; APPROVE at 3b0cb81d4d; verify_stack 9/9 from base ac67eb831f; cargo check of the PR merged onto 2d27eafa85 clean). Main moved under it (#2499, #2544), so run 12 must be cut on or rebased onto origin/main 17ff749954 or later.'
+  created_at: 2026-10-12T05:31:46.910147604Z
+  modified_at: 2026-10-12T05:31:46.910147604Z
+  session_id: 7cc6ad83-d782-4236-bf8a-091eebcd8144
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
