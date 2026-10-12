@@ -10,12 +10,12 @@ description: |-
   Want: the orchestrator or advisor launches each implementer as a separate process with a child implementer grant (issue_child seat=implementer, parent entered with --delegate-seat implementer). Candidates: `aida queue work <SPEC> --no-human` (implementer phase only) or `aida agent new claude --role implementer`. Pick one, document it, and update the aida-orchestrate / aida-burndown skill masters and the relay prompts.
 
   Acceptance: an advisor-launched implementer edits code without tripping the advisor guard; the orchestrator session is not recorded as an author of a spec it only orchestrated; throughput cost is measured as in STORY-1654; template gates pass. Sequence it after STORY-1654 lands.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-12T15:02:15.164423069Z
+modified_at: 2026-10-12T15:02:15.825941312Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -40,6 +40,14 @@ comments:
   created_at: 2026-10-12T15:02:15.164423069Z
   modified_at: 2026-10-12T15:02:15.164423069Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+history:
+- id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
+  author: joe
+  timestamp: 2026-10-12T15:02:15.825932435Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
