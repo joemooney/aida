@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:06.125560871Z
-modified_at: 2026-10-12T18:15:11.821117413Z
+modified_at: 2026-10-12T19:09:28.652174948Z
 req_type: Bug
 tags:
 - follow-up:merge-relay
@@ -22,6 +22,42 @@ comments:
   created_at: 2026-10-12T05:58:33.023127236Z
   modified_at: 2026-10-12T05:58:33.023127236Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13185-18cc-7711-bf47-06e95c7dc119
+  author: joe
+  content: |-
+    **Advisor rework brief — round 1/3 — PR #2563 (BUG-1969), REQUEST CHANGES at 44e658542e**
+
+    The strict reviewer confirmed the following:
+    - The `push_exact` contract is byte-identical for the other 5 callers.
+    - The new Fail path runs after the local commit and after the store-lock release.
+    - The recovery hint is sufficient.
+    - The mutation check fails the tests.
+    - Accepting a spawn failure as a hard fail is fine.
+
+    But the default for unrecognised errors breaks offline filing (TASK-857).
+
+    **Must fix**
+    1. **`PushFailure::Other` must defer, not fail** (MEDIUM-HIGH; `aida-cli-lib/src/store_sync.rs:1336-1338`, `:1281`).
+       - With git 2.43, the reviewer reproduced three real offline or flaky-network failures that land in Other and now make `aida add` exit non-zero:
+         - `Could not resolve proxy` (the normal offline symptom on a proxied laptop)
+         - HTTP `returned error: 502/503/504`
+         - ssh `Broken pipe`
+       - By pattern, these also land in Other: `kex_exchange_identification: Connection closed by remote host`, `the remote end hung up unexpectedly`, `SSL_ERROR_SYSCALL`/`gnutls_handshake() failed` and `RPC failed`.
+       - With `aida add --queue`, the `?` at `git_backend_cmd.rs:4537` then leaves the spec filed but never enqueued.
+       - The local write has already happened, so failing protects nothing.
+       - Map Other to a warning that carries git's stderr, says "filed locally, not yet published" (without claiming "unreachable") and gives the `aida db sync --push` hint, then return `Ok(())`.
+       - Keep the hard Fail only for positively identified persistent causes: PermissionDenied, ProtectedRef and RemoteDeclined.
+       - **Done when:** an unknown-stderr push defers with exit 0, and a test asserts it.
+    2. **Widen `GIT_REMOTE_UNREACHABLE`** (`aida-core/src/external_tool_output.rs:124`) with `could not resolve proxy`, `returned error: 50`, `connection closed by`, `remote end hung up unexpectedly`, `broken pipe` and `ssl_error_syscall`. Add each of these to the classifier test table, then regenerate the classifier inventory doc.
+
+    **Should fix**
+    3. **Locale:** set `LC_ALL=C` and `LANGUAGE=C` on the push subprocess (`git_ops.rs` ~414), so git's own messages classify the same under a translated locale.
+    4. **Optional:** narrow the broad `"access denied"` pattern (`external_tool_output.rs:114`), which could match proxy or captive-portal pages.
+
+    Run the narrow tests (bug_1969, store_sync, task_1717_store_writer_lock). Then `make check-ci-fast` must PASS; push as a separate step to the same branch.
+  created_at: 2026-10-12T19:09:28.652174948Z
+  modified_at: 2026-10-12T19:09:28.652174948Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-f76a-7eb3-8c59-cbd1c2d0dfd8
   author: joe
