@@ -200,18 +200,64 @@ impl Fixture {
     }
 }
 
-fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
+/// The real `git` binary, resolved once from a PATH stripped of temp-dir
+/// entries.
+///
+/// The lib test binary runs thousands of tests in one process, and several
+/// tests prepend a temp-dir `git` shim to the process-wide PATH (under
+/// `test_env::EnvVarsGuard`). A bare `Command::new("git")` here resolves
+/// through whatever PATH is live at spawn time, so the fixture could run a
+/// foreign test's shim, whose tempdir that test may tear down mid-command
+/// (CI: `unable to create temporary file` on `commit`). Pinning the absolute
+/// binary makes the fixture immune to concurrent PATH swaps.
+// trace:BUG-1955 | ai:claude
+fn real_git() -> &'static Path {
+    static GIT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    GIT.get_or_init(|| {
+        let tmp = std::env::temp_dir();
+        let tmp = tmp.canonicalize().unwrap_or(tmp);
+        std::env::var_os("PATH")
+            .into_iter()
+            .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+            .filter(|dir| {
+                let dir = dir.canonicalize().unwrap_or_else(|_| dir.clone());
+                !dir.starts_with(&tmp)
+            })
+            .map(|dir| dir.join("git"))
+            .find(|p| p.is_file())
+            .unwrap_or_else(|| PathBuf::from("/usr/bin/git"))
+    })
+}
+
+/// A hermetic fixture `git` command: pinned binary, no system/global config,
+/// no inherited repo-locating env, no background auto-maintenance.
+// trace:BUG-1955 | ai:claude
+fn fixture_git(dir: &Path, clock: i64) -> Command {
     let date = format!("@{clock} +0000");
-    let out = Command::new("git")
+    let mut cmd = Command::new(real_git());
+    cmd.args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .arg("-C")
         .arg(dir)
-        .args(args)
         .env("GIT_AUTHOR_DATE", &date)
         .env("GIT_COMMITTER_DATE", &date)
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("HOME", dir)
-        .output()
-        .unwrap();
+        .env("HOME", dir);
+    for var in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CEILING_DIRECTORIES",
+    ] {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
+fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
+    let out = fixture_git(dir, clock).args(args).output().unwrap();
     assert!(
         out.status.success(),
         "git {args:?} failed: {}",
@@ -376,15 +422,10 @@ fn build_merged(fx: &mut Fixture) -> Vec<String> {
 
     // Conflicting merge, resolved by hand.
     fx.clock += 60;
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(&fx.store)
+    // Same isolation as `git_in`. trace:BUG-1648 | ai:claude
+    // Pinned binary, immune to PATH-shim leakage. trace:BUG-1955 | ai:claude
+    let out = fixture_git(&fx.store, fx.clock)
         .args(["merge", "--no-ff", "--no-edit", "side"])
-        .env("GIT_AUTHOR_DATE", format!("@{} +0000", fx.clock))
-        .env("GIT_COMMITTER_DATE", format!("@{} +0000", fx.clock))
-        // Same isolation as `git_in`. trace:BUG-1648 | ai:claude
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("HOME", &fx.store)
         .output()
         .unwrap();
     assert!(!out.status.success(), "fixture merge should conflict");
@@ -2188,7 +2229,7 @@ fn task_1507_budgeted_catch_up_never_moves_the_tip_onto_a_side_branch() {
     history_cache::set_catch_up_chunk(None);
     let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
     let is_anc = |a: &str, b: &str| {
-        Command::new("git")
+        Command::new(real_git()) // trace:BUG-1955 | ai:claude
             .arg("-C")
             .arg(&fx.store)
             .args(["merge-base", "--is-ancestor", a, b])
@@ -3318,7 +3359,7 @@ mod sweep {
 
     pub(super) fn fast_import(store: &Path, stream: &str) {
         use std::io::Write;
-        let mut ch = Command::new("git")
+        let mut ch = Command::new(super::real_git()) // trace:BUG-1955 | ai:claude
             .arg("-C")
             .arg(store)
             .args(["fast-import", "--quiet", "--force"])
@@ -3611,7 +3652,7 @@ mod bug_1923 {
     }
 
     fn is_ancestor(fx: &Fixture, a: &str, b: &str) -> bool {
-        Command::new("git")
+        Command::new(super::real_git()) // trace:BUG-1955 | ai:claude
             .arg("-C")
             .arg(&fx.store)
             .args(["merge-base", "--is-ancestor", a, b])
