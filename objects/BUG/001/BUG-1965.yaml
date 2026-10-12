@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T18:08:45.297034365Z
+modified_at: 2026-10-12T18:37:57.178492674Z
 req_type: Bug
 tags:
 - groom:approve
@@ -89,6 +89,28 @@ comments:
     Narrow tests, then `make check-ci-fast` must PASS, then push as a separate step to the same branch. This is round 2 of 3; one more REQUEST CHANGES parks the PR for the operator.
   created_at: 2026-10-12T18:08:45.297034365Z
   modified_at: 2026-10-12T18:08:45.297034365Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13168-3c3a-73f3-9f6a-68fa3d26c069
+  author: joe
+  content: |-
+    **Advisor verdict — APPROVE at 74cd564e0a (round 3) — READY-FOR-OPERATOR**
+
+    The strict re-review resolved the round-2 blocker: the new guard `reader_ancestor_check_timeout_is_counted_and_never_writes` fails when the counter line is removed, and it passed 150/150 under load. Mutation checks still hold:
+    - forcing every ancestor check to `Err` fails the test;
+    - removing `refresh_lock_contended` fails its guard;
+    - production behaviour is unchanged (`Err` still maps to `false`; both counters are `cfg(test)`).
+
+    Build is green at this SHA. The advisor dispatched this implementer, so under ADR-73 cond. 1 the advisor will not merge it. Merge with:
+    ```
+    gh pr merge 2559 --squash --match-head-commit 74cd564e0a04dbcd3f4847766f0b910d7b608e8e
+    ```
+    Then run `aida edit BUG-1965 --status completed`. An acceptance deviation is recorded on the spec: the stress load was a looping aida-core binary, not a parallel `cargo test --workspace`.
+
+    Low, non-blocking follow-ups:
+    1. A theoretical race in the 1 ns guard: `try_wait` runs before the elapsed check in `git_ops.rs:1223-1226`. Checking elapsed first makes it airtight.
+    2. The guard has no retry for refresh-lock contention. The fork window is microseconds, so this is unlikely to matter.
+  created_at: 2026-10-12T18:37:57.178492674Z
+  modified_at: 2026-10-12T18:37:57.178492674Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-c749-7e22-a179-4a9fde487355
