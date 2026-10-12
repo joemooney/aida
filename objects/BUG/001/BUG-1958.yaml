@@ -28,12 +28,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:48:46.755538061Z
-modified_at: 2026-10-12T05:55:41.439977844Z
+modified_at: 2026-10-12T05:56:38.495315180Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eaf-3bdf-7211-b280-5c50d98c06b2
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). All seven items remain on origin/main 17ff749954: (1) the only warn_if_completed_without_shipped_commit caller is git_backend_cmd.rs (edit path); punt_done.rs never calls it; (2) scan_default_branch_linkage scans both refs with no same-SHA/ancestor skip; (3) no '--' in either git invocation; (4) shipped_linkage.rs:289 still pushes 'detail=--format json'; (5) docs/cli/01-getting-started.md has no linkage:/warning text; (6) no shallow check; (7) split_once(':') unchanged. Added a ## Acceptance section with a test per item.
+  created_at: 2026-10-12T05:56:38.495315180Z
+  modified_at: 2026-10-12T05:56:38.495315180Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
