@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T04:10:25.525225820Z
+modified_at: 2026-10-12T04:23:05.036459047Z
 req_type: Bug
 tags:
 - contained
@@ -192,7 +192,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: The write set matches the operator's narrow ruling, and the store git commit works in a real sandbox (the 'fails silently' note is wrong). But the rw bind of <main>/.aida-store includes the .git pointer file, a host code-execution escape (verified with core.fsmonitor). The real-claude test fixture lives under the sandbox-writable TMPDIR, so it passes without proving the boundary.
+  detail: 'D1 fixed and verified in a real sandbox (the .git pointer is a ro bind; append, rm, mv and ln all fail). D2 fixed in code but never run. New HIGH escape reproduced end to end: the rw store lets a contained agent plant an embedded repo (objects/zz/.git -> gitdir with core.fsmonitor); the host''s routine git status on store sync/push recurses into it and runs the attacker''s fsmonitor on the host. Introduced by this PR.'
   recovery_hint: address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-10-12T02:23:44.524349712Z
+  shelved_at: 2026-10-12T04:23:05.036459047Z
