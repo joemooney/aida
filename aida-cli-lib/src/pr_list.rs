@@ -56,45 +56,89 @@ pub(crate) fn pr_list_handler(json: bool, mapped_only: bool) -> Result<()> {
         return Ok(());
     }
 
-    use colored::Colorize;
+    for line in render_table(&entries, true) {
+        println!("{line}");
+    }
 
-    println!(
+    Ok(())
+}
+
+/// Minimum width of the CI column; it widens to the longest label present.
+const CI_COLUMN_MIN_WIDTH: usize = 12;
+
+/// Left-align `s` in a cell of `width` terminal columns. Pads by display
+/// width (not bytes) so a non-ASCII label keeps the following columns aligned;
+/// a label wider than `width` is returned unpadded.
+// trace:BUG-1970 | ai:claude
+fn pad_display(s: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthStr;
+    let w = UnicodeWidthStr::width(s);
+    format!("{s}{}", " ".repeat(width.saturating_sub(w)))
+}
+
+/// Render the human `aida pr list` table (header + one line per entry).
+/// The CI column is sized to its widest label so "Passing (N informational
+/// red)" never pushes the later columns out of alignment. `paint` applies
+/// colour; tests pass `false` to inspect the plain layout.
+// trace:BUG-1970 | ai:claude
+fn render_table(entries: &[PrListEntry], paint: bool) -> Vec<String> {
+    use colored::{ColoredString, Colorize};
+    use unicode_width::UnicodeWidthStr;
+
+    let ci_width = entries
+        .iter()
+        .map(|e| UnicodeWidthStr::width(e.ci.as_str()))
+        .chain(std::iter::once(CI_COLUMN_MIN_WIDTH))
+        .max()
+        .unwrap_or(CI_COLUMN_MIN_WIDTH);
+    let paint_with = |s: String, f: fn(&str) -> ColoredString| -> String {
+        if paint {
+            f(&s).to_string()
+        } else {
+            s
+        }
+    };
+
+    let mut lines = Vec::with_capacity(entries.len() + 1);
+    lines.push(format!(
         "{} {} {} {} {} {} {}",
-        format!("{:<18}", "Spec ID").bold(),
-        format!("{:<8}", "PR").bold(),
-        format!("{:<12}", "Status").bold(),
-        format!("{:<12}", "CI").bold(),
-        format!("{:<15}", "Rebase Needed?").bold(),
-        format!("{:<10}", "Updated").bold(),
-        "Title".bold()
-    );
+        paint_with(format!("{:<18}", "Spec ID"), |s| s.bold()),
+        paint_with(format!("{:<8}", "PR"), |s| s.bold()),
+        paint_with(format!("{:<12}", "Status"), |s| s.bold()),
+        paint_with(pad_display("CI", ci_width), |s| s.bold()),
+        paint_with(format!("{:<15}", "Rebase Needed?"), |s| s.bold()),
+        paint_with(format!("{:<10}", "Updated"), |s| s.bold()),
+        paint_with("Title".to_string(), |s| s.bold()),
+    ));
 
     for e in entries {
         let rebase_str = if e.rebase_needed {
-            format!("{:<15}", "Yes").red()
+            paint_with(format!("{:<15}", "Yes"), |s| s.red())
         } else {
-            format!("{:<15}", "No").green()
+            paint_with(format!("{:<15}", "No"), |s| s.green())
         };
+        let ci_cell = pad_display(&e.ci, ci_width);
         let ci_str = match e.ci.as_str() {
             // trace:BUG-1935 | ai:claude — "Passing (N informational red)" is still green.
-            ci if ci == "SUCCESS" || ci.starts_with("Passing") => format!("{:<12}", e.ci).green(),
-            "Failing" | "FAILURE" => format!("{:<12}", e.ci).red(),
-            "Pending" | "PENDING" | "IN_PROGRESS" => format!("{:<12}", e.ci).yellow(),
-            _ => format!("{:<12}", e.ci).normal(),
+            ci if ci == "SUCCESS" || ci.starts_with("Passing") => {
+                paint_with(ci_cell, |s| s.green())
+            }
+            "Failing" | "FAILURE" => paint_with(ci_cell, |s| s.red()),
+            "Pending" | "PENDING" | "IN_PROGRESS" => paint_with(ci_cell, |s| s.yellow()),
+            _ => ci_cell,
         };
-        println!(
+        lines.push(format!(
             "{} {} {} {} {} {} {}",
-            format!("{:<18}", spec_column(&e)).bold(),
+            paint_with(format!("{:<18}", spec_column(e)), |s| s.bold()),
             format!("{:<8}", format!("#{}", e.pr_number)),
             format!("{:<12}", e.status),
             ci_str,
             rebase_str,
             format!("{:<10}", e.updated_at),
             e.title
-        );
+        ));
     }
-
-    Ok(())
+    lines
 }
 
 #[derive(Deserialize)]
@@ -257,10 +301,11 @@ fn pr_list_gitlab(
 }
 
 /// BUG-1935: classify a GitHub `statusCheckRollup` through the same
-/// informational-aware matcher `aida pr ship` uses, so "Failing" means a red
-/// check that gates the merge. Branch-protection required checks are not
-/// fetched here (one extra call per PR); with an empty required set the
-/// `[ci]` informational allow-list alone decides, exactly as in `ci_gate`.
+/// informational-aware matcher `aida pr ship` uses. Branch-protection required
+/// checks are not fetched here (one extra call per PR), so with an empty
+/// required set the `[ci]` informational allow-list alone decides: "Failing"
+/// means some red check is NOT on that allow-list, whether or not branch
+/// protection actually requires it.
 // trace:BUG-1935 | ai:claude
 fn github_rollup_ci_status(
     rollup: &[serde_json::Value],
@@ -664,6 +709,58 @@ mod tests {
             rebase_needed: false,
             updated_at: "1h ago".to_string(),
         }
+    }
+
+    /// Display column at which `needle` starts in `line`.
+    fn display_col(line: &str, needle: &str) -> usize {
+        use unicode_width::UnicodeWidthStr;
+        let byte = line
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle:?} not in {line:?}"));
+        UnicodeWidthStr::width(&line[..byte])
+    }
+
+    // trace:BUG-1970 | ai:claude
+    #[test]
+    fn pr_list_table_long_ci_label_keeps_columns_aligned() {
+        let mut short = entry("TASK-1", 1);
+        short.ci = "Failing".to_string();
+        let mut long = entry("TASK-2", 2);
+        long.ci = "Passing (12 informational red)".to_string();
+        long.rebase_needed = true;
+        let mut wide = entry("TASK-3", 3);
+        // Double-width glyphs: byte length and display width differ.
+        wide.ci = "検査中".to_string();
+        let lines = render_table(&[short, long, wide], false);
+        let snapshot = lines.join("\n");
+        assert_eq!(
+            snapshot,
+            "Spec ID            PR       Status       CI                             Rebase Needed?  Updated    Title\n\
+             TASK-1             #1       Open         Failing                        No              1h ago     title 1\n\
+             TASK-2             #2       Open         Passing (12 informational red) Yes             1h ago     title 2\n\
+             TASK-3             #3       Open         検査中                         No              1h ago     title 3"
+        );
+        let header_col = display_col(&lines[0], "Rebase Needed?");
+        for (line, rebase) in lines[1..].iter().zip(["No", "Yes", "No"]) {
+            assert_eq!(
+                display_col(line, &format!(" {rebase} ")) + 1,
+                header_col,
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn pr_list_table_short_labels_keep_minimum_ci_width() {
+        let lines = render_table(&[entry("TASK-1", 1)], false);
+        assert_eq!(
+            display_col(&lines[0], "Rebase"),
+            display_col(&lines[1], "No ")
+        );
+        assert_eq!(
+            display_col(&lines[0], "Rebase") - display_col(&lines[0], "CI"),
+            CI_COLUMN_MIN_WIDTH + 1
+        );
     }
 
     #[test]
