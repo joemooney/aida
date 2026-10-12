@@ -76,10 +76,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:30.005895096Z
-modified_at: 2026-10-11T20:12:30.005895096Z
+modified_at: 2026-10-12T06:07:33.281557666Z
 req_type: Story
 tags:
 - from:aida-host
+- groom:needs-decision
 - regenerability
 relationships:
 - rel_type: Child
