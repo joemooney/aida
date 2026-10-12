@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T06:43:44.164549388Z
+modified_at: 2026-10-12T07:42:22.835490436Z
 req_type: Task
 tags:
 - closure:pending
@@ -766,6 +766,18 @@ comments:
   created_at: 2026-10-12T06:43:44.164549388Z
   modified_at: 2026-10-12T06:43:44.164549388Z
   session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
+- id: 01a12f10-0a73-7e72-9163-1d596f31c0ea
+  author: joe
+  content: |-
+    RUN 12 RE-CUT (r2) READY FOR REVIEW: PR #2547 now targets main (head 779ce22fde, base origin/main 17ff749954, after run 11 landed). A plain rebase conflicted, because #2544 (BUG-1947) edited lease functions this run moves. I regenerated every MOVE with the extractor from the same manifest entries. range-diff against r1: pr_lookup, review_gates and ci_probe are identical; the retargets cherry-picked clean. The leases MOVE differs only by its thread_local selector (@L4425 -> @L4448) and the BUG-1947 lines it now carries (leases.rs 4075 -> 4141). Tags pushed, each proven fresh at its own SHA (warnings 0/0, cargo test --workspace 10358/10358, 8 ignored):
+    - slice-49-r2 leases 53191e7cef (4141)
+    - slice-50-r2 pr_lookup 6919232f0f (1979, 1n shim; the first proof hit BUG-1965 x2 and BUG-1968/1974, and the re-run was green; log in /tmp/libsplit/fail8)
+    - slice-51-r2 review_gates 4e910c9ef9 (1322)
+    - slice-52-r2 ci_probe 779ce22fde (852)
+    verify_stack origin/main..779ce22fde --build: 9/9 PASS. check-ci-fast: 26 gates pass. lib*.rs goes 30,197 -> 21,932. Build is running (I closed and reopened the PR, because the force-push landed before the retarget). The r1 rulings (a) 1n gap and (b) map overlaps are still open. Run 13 (drain_next_n, phase_driver, phase_driver_trait per Q9 (a)) is cut on slice-53 and being proven; it will be stacked on this.
+  created_at: 2026-10-12T07:42:22.835490436Z
+  modified_at: 2026-10-12T07:42:22.835490436Z
+  session_id: b131bd29-8831-46b7-adfc-cad6b631bdcb
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
