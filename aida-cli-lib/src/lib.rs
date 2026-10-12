@@ -78,6 +78,7 @@ mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
 // Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
+mod drain_next_n;
 mod driver_cmd;
 mod driver_view;
 // trace:STORY-1646 | ai:claude
@@ -203,6 +204,7 @@ use doctor_root::*;
 use drain_batch::*;
 use drain_cmd::*;
 use drain_gate::*;
+use drain_next_n::*;
 use findings_gate::*;
 use help::*;
 use human::*;
