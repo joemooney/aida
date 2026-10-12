@@ -18,11 +18,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-12T06:00:21.993313876Z
+modified_at: 2026-10-12T06:00:27.216995416Z
 req_type: Bug
 tags:
 - contained
 - follow-up:advisor-review
+- groom:approve
 - groomed:night
 - sandbox
 comments:
