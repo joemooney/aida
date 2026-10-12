@@ -8,7 +8,7 @@
 #      through unchecked;
 #   2. MERGE_HEAD names a commit the clone does not have at all.
 # A healthy merge still goes through. Then, outside a merge:
-#   3. a `diff.external` driver cannot hide new debt from the scan;
+#   3. a `diff.external` driver or `-diff` attribute cannot hide new debt;
 #   4. a `git diff` killed mid-line still reports its failure.
 #
 # Drives the REAL template (aida-core/templates/hooks/aida-pre-commit.sh)
@@ -113,7 +113,10 @@ fi
 side_tip=$(git rev-parse side-blob)
 assert_exit "a merge parent with a missing blob refuses the commit" 1 "$(commit "merge side-blob")"
 assert_stderr_contains "the refusal names the parent whose diff failed" "against $side_tip failed"
-git merge --abort
+assert_stderr_contains "the refusal shows git's own reason for the missing blob" "  git: "
+# `|| true`: if the hook regressed and committed, there is no merge to abort,
+# and the remaining cases should still run and report.
+git merge --abort 2>/dev/null || git reset -q --hard HEAD~1
 git branch -q -D side-blob
 
 # 2. MERGE_HEAD also names a commit this clone does not have.
@@ -138,6 +141,17 @@ assert_stderr_contains "the refusal names the debt the external diff would hide"
 git config --unset diff.external
 git rm -q --cached src/ext.rs
 rm src/ext.rs
+
+# 3b. A `-diff` (binary) attribute on `*.rs` would print "Binary files ...
+#     differ" with no `+` lines; `--text` keeps the debt visible.
+echo '*.rs -diff' >.git/info/attributes
+printf '/// trace:BUG-4252 | ai:claude\npub fn bin() {}\n' >src/bin.rs
+git add -A
+assert_exit "new debt is refused even with a -diff attribute on *.rs" 1 "$(commit "feat: bin")"
+assert_stderr_contains "the refusal names the debt the binary diff would hide" "BUG-4252"
+rm .git/info/attributes
+git rm -q --cached src/bin.rs
+rm src/bin.rs
 
 # 4. A `git diff` killed mid-line: its partial last line must not swallow the
 #    failure marker, so the scan still sees the failure.

@@ -117,6 +117,11 @@ EOF
 git add -A
 assert_exit "the healthy scan still refuses new debt" 1 "$(commit "" "feat: debt")"
 assert_stderr_contains "the refusal names the debt line" "BUG-4243"
+# Offender lines without the sentinel are still an incomplete scan.
+assert_exit "a scan cut short after listing debt refuses the commit" 1 \
+    "$(commit truncate "feat: debt")"
+assert_stderr_contains "the cut-short debt scan is reported as incomplete" \
+    "provenance scan did not complete"
 git rm -q --cached src/debt.rs
 rm src/debt.rs
 assert_exit "the healthy scan allows a clean commit" 0 "$(commit "" "feat: clean")"

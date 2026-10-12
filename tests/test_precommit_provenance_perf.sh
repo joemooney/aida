@@ -354,7 +354,7 @@ printf '/// trace:TASK-930 | ai:claude\npub fn dup() {}\n/// trace:TASK-930 | ai
 git add -A
 assert_exit "a resolution duplicating an existing debt line is refused" 1 "$(commit "merge dup-side")"
 assert_offenders "the duplicate is reported once" 1
-git merge --abort
+git merge --abort 2>/dev/null || true
 
 if [ "$fail" -ne 0 ]; then
     echo "PRE-COMMIT PROVENANCE PERF + MERGE DELTA (BUG-1925): FAILURES"

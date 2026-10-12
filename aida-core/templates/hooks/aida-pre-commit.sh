@@ -444,21 +444,22 @@ fi
 # contribute no `+` lines, so the added-lines side is unaffected. A failed diff
 # appends `#AIDA-DIFF-FAILED <parent>` (`index` outside a merge) on a line of
 # its own: the leading newline ends a partial line a killed `git diff` left.
-# `--no-ext-diff --no-textconv` keep a user's `diff.external` (difftastic) or
-# textconv driver from replacing the unified diff this scan parses.
+# `--no-ext-diff --no-textconv --text` keep a user's `diff.external`
+# (difftastic), textconv driver, or `-diff`/`binary` attribute from replacing
+# the unified diff this scan parses.
 # trace:TASK-144 trace:BUG-1925 trace:BUG-1933 | ai:claude
 __aida_staged_rs_diffs() {
     local parent
     if [ -z "$__aida_prov_parents" ]; then
         printf '#AIDA-DIFF index\n'
-        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv \
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
             --diff-filter=ACDMR -- '*.rs' 2>/dev/null \
             || printf '\n#AIDA-DIFF-FAILED index\n'
         return 0
     fi
     for parent in $__aida_prov_parents; do
         printf '#AIDA-DIFF %s\n' "$parent"
-        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv \
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
             --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null \
             || printf '\n#AIDA-DIFF-FAILED %s\n' "$parent"
     done
@@ -580,10 +581,11 @@ esac
 if [ -n "$__aida_prov_failed" ]; then
     echo -e "${RED}Refusing commit: \`git diff --cached\` against ${__aida_prov_failed} failed," >&2
     echo -e "so the staged \`///\` lines could not be checked for SPEC-ID provenance.${NC}" >&2
-    # Re-run each failed diff quietly to show git's own reason.
+    # Re-run each failed diff in full (`--quiet` stops before reading blobs,
+    # so it would miss a missing one) to show git's own reason.
     for __aida_parent in $__aida_prov_failed; do
         if [ "$__aida_parent" = "index" ]; then __aida_parent=""; fi
-        git diff --cached --quiet --no-ext-diff --no-textconv $__aida_parent -- '*.rs' 2>&1 >/dev/null \
+        git diff --cached --unified=0 --no-ext-diff --no-textconv --text $__aida_parent -- '*.rs' 2>&1 >/dev/null \
             | head -n 3 | sed 's/^/  git: /' >&2
     done
     echo -e "${YELLOW}A shallow or partial clone may be missing a commit or blob: fetch it" >&2
