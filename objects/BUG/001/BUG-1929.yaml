@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T06:12:43.134827906Z
+modified_at: 2026-10-12T15:02:35.863065845Z
 req_type: Bug
 tags:
 - contained
@@ -176,6 +176,12 @@ comments:
   created_at: 2026-10-12T06:12:43.134827906Z
   modified_at: 2026-10-12T06:12:43.134827906Z
   session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
+- id: 01a130a3-1257-7c71-a8d8-036f1bd38775
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor): finish round 4 (route all store git calls through git_ops, plus a guard test) and merge it as a stopgap once approved. Separately file an architecture spec, with a sketch, for a store the host owns so the host never runs git over a tree the sandbox can write (a host-owned clone fed by validated YAML, or a broker for object writes).'
+  created_at: 2026-10-12T15:02:35.863065845Z
+  modified_at: 2026-10-12T15:02:35.863065845Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
