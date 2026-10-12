@@ -1,0 +1,32 @@
+id: 01a12ee4-ed51-79e1-91ef-b6716808ca19
+spec_id: BUG-1987
+agreed_id: BUG-1987
+title: History index classify_miss reports Busy when a forked child briefly holds an inherited index-lock fd (BUG-1974 class)
+description: |
+  Problem: `IndexLock::is_held` (history_cache.rs) probes the flock with try_lock_exclusive. A child that another thread of the same process is spawning (git via posix_spawn/fork) holds a duplicate of a just-released lock fd from fork until exec, so the probe briefly reads the lock as held. `classify_miss` then returns `IndexMiss::Busy` instead of the true miss (NotBuilt/Behind/Stuck/Filling), and `flow_catch_up`'s try_acquire skips catch-up.
+
+  Evidence: BUG-1974 (PR #2549) proved the mechanism for serve_at (test bug_1974_an_inherited_lock_fd_skips_indexing_until_released). During its verification, story_1650_history_flow_tests::story_1650_half_built_index_falls_back_without_back_filling failed once at story_1650_history_flow_tests.rs:225 (assert_eq!(answer.unwrap_err(), want) in assert_cheap_fallback) under --test-threads=16 and did not reproduce in 6 re-runs; a Busy misclassification fits.
+
+  Impact: test flake in the STORY-1650 flow tests; in production a rare mislabelled "index busy" note (cosmetic, the fallback still answers).
+
+  Acceptance: the flow tests that assert a specific IndexMiss are deterministic under fork pressure (e.g. a cfg(test) retry of the classification while Busy is spurious, mirroring test_support::serve_locked, or a test hook that pins indexer_running), with no assertion weakened; consider whether production should retry is_held briefly before reporting Busy.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T06:55:17.329044665Z
+modified_at: 2026-10-12T06:55:17.329044665Z
+req_type: Bug
+tags:
+- ci
+- flaky
+- found:night-b
+- history-cache
+filed_at:
+  code_sha: 17ff749954bca6e86e47f1d3b237d8bb53f531ed
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 95f15a20d4
+  vendor: claude
+  session: e2bad11d-5e52-4b29-b5d0-6238d10778dd
