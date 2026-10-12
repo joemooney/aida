@@ -734,3 +734,42 @@ fn driver_registered_from_linked_worktree_is_seen_from_primary_checkout() {
     assert!(!record.exists(), "deregister from the worktree hits main");
     drop(relay);
 }
+
+/// A pid with no readable start identity (here: already dead) has no
+/// pid-reuse guard, so `register` refuses it unless `--ttl` supplies a
+/// heartbeat backstop instead.
+// trace:STORY-1653 | ai:claude
+#[test]
+fn register_refuses_a_dead_pid_without_ttl() {
+    let (_tmp, repo, home) = init_repo();
+    let pid = dead_pid().to_string();
+    let out = aida(
+        &repo,
+        &home,
+        &["driver", "register", "--run", "ghost", "--pid", &pid],
+    );
+    assert!(!out.status.success(), "dead pid without --ttl is refused");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains("--ttl"), "{text}");
+    assert!(!repo
+        .join(".aida")
+        .join("drivers")
+        .join("relay-ghost.json")
+        .exists());
+    let out = aida(
+        &repo,
+        &home,
+        &[
+            "driver", "register", "--run", "ghost", "--pid", &pid, "--ttl", "60",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "--ttl allows it: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

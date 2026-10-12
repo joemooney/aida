@@ -36,7 +36,8 @@ pub enum DriverCommand {
         /// The driver's own long-lived process id. Pass `--pid "$$"` from the
         /// driver's loop: the parent of `aida` is a throwaway subshell when
         /// called from `$(...)` or a pipe. Required for relays; other kinds
-        /// fall back to the parent process.
+        /// fall back to the parent process. The pid must be running unless
+        /// `--ttl` is given.
         #[clap(long)]
         pid: Option<u32>,
         /// Seat the driver occupies, if any.
@@ -139,6 +140,14 @@ pub(crate) fn handle_driver_command(cmd: &DriverCommand) -> Result<()> {
                 ttl_secs: *ttl,
             };
             let start = aida_core::liveness::process_start_identity(pid);
+            // trace:STORY-1653 | ai:claude — with no start identity and no
+            // TTL the record has no guard against pid reuse, so it would
+            // never read live; refuse instead of writing a dead record.
+            if start.is_none() && ttl.filter(|t| *t > 0).is_none() {
+                anyhow::bail!(
+                    "pid {pid} is not running (or its start time cannot be read), so the record could never be trusted as live; pass the driver's own live pid with `--pid \"$$\"`, or add `--ttl <secs>` to register with heartbeat expiry instead"
+                );
+            }
             let rec = driver_registry::register(&root, reg, start, now)
                 .with_context(|| format!("registering driver {}:{run}", kind.as_str()))?;
             let live = rec.is_live(now);

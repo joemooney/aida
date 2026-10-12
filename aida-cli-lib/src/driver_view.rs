@@ -587,7 +587,7 @@ mod tests {
                 kind: DriverKind::Relay,
                 id: "lib-split".into(),
                 pid: 4242,
-                pid_start_time: None,
+                pid_start_time: Some("2026-10-10T00:00:00+00:00".into()),
                 selector: Some("batch:next".into()),
                 started_at: now,
                 heartbeat_at: now,

@@ -11,7 +11,8 @@
 //! heartbeat TTL applies only when the registrant asked for one (`--ttl`):
 //! a relay registers once per claude session, which can run far longer than
 //! any fixed cadence, so an un-TTL'd record stays live exactly as long as its
-//! process does. Dead or stale records are ignored by every reader and never
+//! process does. A record with neither a recorded start identity nor a TTL
+//! has no PID-reuse backstop at all, so it never reads live. Dead or stale records are ignored by every reader and never
 //! deleted here — only an explicit [`deregister`] removes a file.
 //!
 //! The per-spec driver ([`DerivedDriver`]) is likewise computed on every read
@@ -100,9 +101,15 @@ impl DriverRecord {
     }
 
     /// Pure liveness: pid alive (per `pid_alive`) AND, only when an explicit
-    /// TTL was registered, heartbeat within it.
+    /// TTL was registered, heartbeat within it. Without a TTL the recorded
+    /// start identity is the only guard against a recycled pid, so a record
+    /// lacking both is never live (it could otherwise read live forever once
+    /// the OS reuses its pid).
     // trace:STORY-1653 | ai:claude
     pub fn is_live_with(&self, now: DateTime<Utc>, pid_alive: impl Fn(&Self) -> bool) -> bool {
+        if self.ttl_secs().is_none() && self.pid_start_time.is_none() {
+            return false;
+        }
         let fresh = self
             .ttl_secs()
             .is_none_or(|ttl| now.signed_duration_since(self.heartbeat_at).num_seconds() <= ttl);
@@ -446,7 +453,7 @@ mod tests {
             kind,
             id: id.into(),
             pid: 4242,
-            pid_start_time: None,
+            pid_start_time: Some("2026-10-10T00:00:00+00:00".into()),
             selector: selector.map(String::from),
             started_at: now,
             heartbeat_at: now - chrono::Duration::seconds(hb_age),
@@ -478,11 +485,29 @@ mod tests {
         assert_eq!(ttl.ttl_secs(), None);
         // Records written before TTLs became opt-in parse with no TTL.
         let legacy: DriverRecord = serde_json::from_str(
-            r#"{"kind":"relay","id":"x","pid":7,"started_at":"2026-10-10T00:00:00Z","heartbeat_at":"2026-10-10T00:00:00Z"}"#,
+            r#"{"kind":"relay","id":"x","pid":7,"pid_start_time":"2026-10-10T00:00:00+00:00","started_at":"2026-10-10T00:00:00Z","heartbeat_at":"2026-10-10T00:00:00Z"}"#,
         )
         .unwrap();
         assert_eq!(legacy.ttl_secs(), None);
         assert!(legacy.is_live_with(now, |_| true));
+    }
+
+    // trace:STORY-1653 | ai:claude
+    #[test]
+    fn no_start_identity_and_no_ttl_is_never_live() {
+        let now = Utc::now();
+        // Registered against a pid whose start time could not be read (e.g.
+        // it was already dead): a later process reusing that pid must not
+        // make the record live.
+        let mut r = rec(DriverKind::Relay, "r", None, 10);
+        r.pid_start_time = None;
+        assert!(!r.is_live_with(now, |_| true));
+        // An explicit TTL is a backstop of its own: live while fresh, and it
+        // still expires.
+        r.ttl_secs = Some(600);
+        assert!(r.is_live_with(now, |_| true));
+        r.heartbeat_at = now - chrono::Duration::seconds(601);
+        assert!(!r.is_live_with(now, |_| true));
     }
 
     #[test]
