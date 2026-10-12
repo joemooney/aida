@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:32:57.266716488Z
-modified_at: 2026-10-12T08:31:53.142098061Z
+modified_at: 2026-10-12T09:08:56.871572345Z
 req_type: Story
 tags:
 - awaiting
@@ -35,6 +35,18 @@ relationships:
   target_id: 01a1283c-0780-70e1-a2a4-04fe8268a4be
   created_at: 2026-10-12T02:33:05.726366923Z
   created_by: joe
+comments:
+- id: 01a12f5f-4ba7-7522-b778-e6accf770b67
+  author: joe
+  content: |-
+    Implementation note (PR #2553): idle age is now measured from the LATEST activity: max(newest branch commit ahead of origin/main or main, last status change). The literal rule "branch commits when a branch exists" would list a spec reopened an hour ago as idle for days, if an older squash-merged slice branch still had commits ahead of origin/main. A newer branch commit still keeps a spec off the list. Follow-ups are in the PR body:
+    - hide no-lease, idle-driver orphan rows under the threshold, but keep stale_lease and possibly_subagent rows;
+    - reuse the leases already loaded;
+    - the modified_at fallback label;
+    - skip git when the status change is already inside the threshold.
+  created_at: 2026-10-12T09:08:56.871572345Z
+  modified_at: 2026-10-12T09:08:56.871572345Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12e52-065f-7f50-a7c3-efc49b10a544
   author: joe
