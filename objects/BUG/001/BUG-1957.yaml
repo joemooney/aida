@@ -21,12 +21,12 @@ description: |
   4. The withheld-trailer note no longer claims the id is "traced in the PR body only" unless that is checked; simplest acceptable fix is rewording the note (e.g. "not completed by this merge"). Existing note tests updated.
   5. Tests: a clap parse test for `aida pr ship --no-complete`; a unit test that `derive_pr_ship_squash_subject` returns the completion trailer; `--dry-run` output includes the trailer-provenance line (test on the dry-run plan).
   6. The two drain-side `derive_squash_subject_spec_ids` callers in queue_cmd.rs pass the store-backed hold check (`spec_completion_hold_reason`) instead of `|_| None`, so a held spec is not credited. Unit test with a `closure-pending`-tagged spec.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-12T06:09:54.895114525Z
+modified_at: 2026-10-12T14:55:51.787759096Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -40,6 +40,14 @@ comments:
   created_at: 2026-10-12T06:09:54.895114525Z
   modified_at: 2026-10-12T06:09:54.895114525Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309c-e7eb-7fb1-8857-ff0dcdcda374
+  author: joe
+  timestamp: 2026-10-12T14:55:51.787753271Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0c62bfd7eaff1a03da00e8fd4e234040110b2e70
   branch: main
