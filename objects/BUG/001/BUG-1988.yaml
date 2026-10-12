@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:20:18.276952554Z
-modified_at: 2026-10-12T16:52:35.151701976Z
+modified_at: 2026-10-12T16:52:39.721583103Z
 req_type: Bug
 tags:
 - data-safety
@@ -44,6 +44,12 @@ comments:
   created_at: 2026-10-12T16:28:37.621070549Z
   modified_at: 2026-10-12T16:28:37.621070549Z
   session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
+- id: 01a13107-d6a9-79e1-a22b-b377a2b37986
+  author: joe
+  content: 'Advisor gate (relay 20261012, advisor-relay): merged #2555 as 11fcd15b49, pinned to head 117e16b61a. Independent strict reviewer APPROVE at that SHA (all 5 AC met; items 2 and 4 have tests shown to prove the change, by reverting it). Build green at that SHA, no holds, not advisor-authored (night relay). Non-blocking follow-ups: (1) MEDIUM: no test locks the item-1 release_claim-after-remove ordering; add a stand-in or source-shape test. (2) LOW: put the recheck-window comment in one place. (3) LOW: on a failed salvage under --include-in-use, the SIGTERM has already fired. (4) LOW: force_cleanup_lease strip list is missing agents.'
+  created_at: 2026-10-12T16:52:39.721583103Z
+  modified_at: 2026-10-12T16:52:39.721583103Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a13096-3396-7f11-ba90-ba809a8e59b1
   author: joe
