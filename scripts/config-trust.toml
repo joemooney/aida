@@ -162,6 +162,12 @@ sites = 3
 channels = ["worktree"]
 sites = 1
 
+# Distributed-store detection: an existence probe for a project root, the
+# walk-up that reads mode, and the [id_format] reader (policy values only).
+[readers."aida-cli-lib/src/store_sync.rs"]
+channels = ["worktree", "probe"]
+sites = 3
+
 [readers."aida-cli-lib/src/usage_mcp_helpers.rs"]
 channels = ["worktree"]
 sites = 1
@@ -212,7 +218,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 10
+sites = 7
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
