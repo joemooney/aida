@@ -3,22 +3,26 @@ spec_id: FAQ-49
 agreed_id: FAQ-49
 title: 'How do I fix ''refusing AIDA store write: hook is not this build''s shipped hook''?'
 description: |
-  **Back up the stale AIDA hooks under `.git/hooks`, delete them, and run `aida scaffold apply`, which recreates missing files. Never use `--force`.**
+  **Run `aida scaffold upgrade --only git-hooks` (the refusal prints the exact command, with `--project-root`). Never use `aida init --force`.**
 
   ## Why
-  Before committing to the store, AIDA refuses to run an AIDA-generated git hook whose body differs from the hook this build ships. Plain `aida scaffold apply` skips files that already exist, so it won't replace the stale hook. `--force` replaces EVERY scaffold file, including the repo's own README.md, CLAUDE.md and AGENTS.md. Each refusal names only one hook, so refresh all the AIDA git hooks at once.
+  Before committing to the store, AIDA refuses to run an AIDA-generated git hook whose body differs from the hook this build ships, because git runs it while the write holds the store lock. The refusal lists every such hook at once. `aida scaffold upgrade --only git-hooks` copies each stale hook beside itself as `<name>.aida-stale-<seconds>` and replaces it with this build's hook. It does not touch any other file: custom hooks, symlinked hooks, README.md, CLAUDE.md, AGENTS.md and skills are all left alone. Plain `aida scaffold apply` skips existing files, and `--force` overwrites README.md, CLAUDE.md and AGENTS.md, so neither one is the fix.
 
   ## How
+  ```bash
+  aida scaffold upgrade --only git-hooks --dry-run   # see what would be replaced
+  aida scaffold upgrade --only git-hooks
+  ```
+  Git hooks aren't tracked, so there's nothing to commit. If you customised a hook on purpose, remove its `# AIDA Generated` / `# To customize` header lines instead, and AIDA checks it as a custom hook.
+
+  ## Older aida builds (before BUG-1977)
+  If `--only git-hooks` is not recognised, back up the stale hooks, delete them, and recreate the missing files:
   ```bash
   cd <repo> && mkdir -p ~/hooks-bak-<repo> && \
     cp .git/hooks/{pre-commit,prepare-commit-msg,commit-msg,post-commit} ~/hooks-bak-<repo>/ && \
     rm .git/hooks/{pre-commit,prepare-commit-msg,commit-msg,post-commit} && \
     aida scaffold apply 2>&1 | grep -v skipped
   ```
-  Git hooks aren't tracked, so there's nothing to commit. If you customised a hook on purpose, remove its `# AIDA Generated` / `# To customize` header lines instead, and AIDA checks it as a custom hook.
-
-  ## Caveat
-  BUG-1977 tracks a hooks-only refresh and a refusal message that lists every stale hook.
 
   ## See also
   BUG-1977
@@ -27,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:28:23.292998169Z
-modified_at: 2026-10-11T20:28:23.292998169Z
+modified_at: 2026-10-12T23:53:59.103853185Z
 req_type: Faq
 tags:
 - audience:user
