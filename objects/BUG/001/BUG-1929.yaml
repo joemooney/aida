@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T05:30:05.492967743Z
+modified_at: 2026-10-12T06:12:22.270397105Z
 req_type: Bug
 tags:
 - contained
@@ -204,7 +204,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'D1 fixed and verified in a real sandbox (the .git pointer is a ro bind; append, rm, mv and ln all fail). D2 fixed in code but never run. New HIGH escape reproduced end to end: the rw store lets a contained agent plant an embedded repo (objects/zz/.git -> gitdir with core.fsmonitor); the host''s routine git status on store sync/push recurses into it and runs the attacker''s fsmonitor on the host. Introduced by this PR.'
+  detail: 'Round 3: status/commit/push vector fixed; NEW escape F1: host git fetch over the store recurses into a planted submodule and runs its uploadpack on the host'
   recovery_hint: address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-10-12T04:23:05.036459047Z
+  shelved_at: 2026-10-12T06:12:22.270397105Z
