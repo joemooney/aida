@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:30.005895096Z
-modified_at: 2026-10-12T06:07:41.618120484Z
+modified_at: 2026-10-12T15:02:17.077830268Z
 req_type: Story
 tags:
 - from:aida-host
@@ -105,6 +105,12 @@ comments:
   created_at: 2026-10-12T06:07:41.618120484Z
   modified_at: 2026-10-12T06:07:41.618120484Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-c8f5-7a52-a75a-ebfd097a6df6
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option B, a structured ''## Contract'' section in any spec, not a new type. Split into the 4 slices groom proposed before implementing.'
+  created_at: 2026-10-12T15:02:17.077830268Z
+  modified_at: 2026-10-12T15:02:17.077830268Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
