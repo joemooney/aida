@@ -571,9 +571,20 @@ fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
     assert!(s.worktree.is_dir(), "worktree must survive");
     assert_eq!(s.worktree_branch(), branch_before, "tree must not be reset");
     assert!(s.lease_exists(), "lease must survive the late refusal");
+    // The session's runtime links must survive too, or `aida` run from
+    // inside the tree would see a bare `.aida/` (a fresh local cache, no
+    // lease).
+    for link in [".aida-store", ".aida/sessions", ".aida/cache.db"] {
+        assert!(
+            s.worktree.join(link).is_symlink(),
+            "{link} must still be a symlink after the late refusal"
+        );
+    }
 
+    // Re-run from INSIDE the tree: it must find its lease through the
+    // tree's own links and finish the end.
     drop(live);
-    let out = s.end(&s.repo, &[]);
+    let out = s.end(&s.worktree, &[]);
     assert!(
         out.status.success(),
         "once the holder exits, a re-run must end the session:\n{}",

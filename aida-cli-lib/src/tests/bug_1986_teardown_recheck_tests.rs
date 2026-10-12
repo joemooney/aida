@@ -92,3 +92,38 @@ fn the_real_scan_catches_a_process_started_after_the_first_check() {
     );
     assert!(refusal.contains("--include-in-use"), "{refusal}");
 }
+
+/// The dirty gate now runs while the session's runtime links are still in
+/// place, so it must not count those links as uncommitted work. A real file
+/// at a link path, or any other untracked entry, still counts.
+// trace:BUG-1986 | ai:claude
+#[cfg(unix)]
+#[test]
+fn the_dirty_gate_ignores_only_the_sessions_own_runtime_links() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path();
+    let target = tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::create_dir_all(wt.join(".aida")).unwrap();
+    std::os::unix::fs::symlink(&target, wt.join(".aida-store")).unwrap();
+    std::os::unix::fs::symlink(&target, wt.join(".aida/sessions")).unwrap();
+    std::os::unix::fs::symlink(target.join("c"), wt.join(".aida/cache.db")).unwrap();
+    // A real file at a runtime path is not a link, so it is work.
+    std::fs::write(wt.join(".aida/roles"), "real").unwrap();
+    let entries = vec![
+        "?? .aida-store".to_string(),
+        "?? .aida/sessions".to_string(),
+        "?? .aida/cache.db".to_string(),
+        "?? .aida/roles".to_string(),
+        "?? notes.txt".to_string(),
+        " M src/lib.rs".to_string(),
+    ];
+    assert_eq!(
+        dirty_entries_ignoring_runtime_links(wt, entries),
+        vec![
+            "?? .aida/roles".to_string(),
+            "?? notes.txt".to_string(),
+            " M src/lib.rs".to_string(),
+        ]
+    );
+}
