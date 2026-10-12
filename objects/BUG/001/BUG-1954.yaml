@@ -22,12 +22,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:04:12.111447364Z
-modified_at: 2026-10-12T06:01:53.374461702Z
+modified_at: 2026-10-12T06:01:59.001783177Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb4-1fd9-7690-ab81-52a816c52dd4
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). All three items remain on origin/main 17ff749954: fallback_note still uses the rebuild FIX for NotBuilt and Filling (REFRESH is used only for Behind); classify_miss still maps lag.is_none() to Stuck; docs/cli/10-storage.md line 113 still says 'fills itself in on normal aida history queries'. Added a ## Acceptance section.
+  created_at: 2026-10-12T06:01:59.001783177Z
+  modified_at: 2026-10-12T06:01:59.001783177Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
