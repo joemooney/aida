@@ -441,7 +441,10 @@ fn story_1650_half_built_index_falls_back_without_back_filling() {
 /// Holds a copy of the index lock fd, as a child forked by another thread
 /// keeps until it execs, and releases it after `hold` on another thread.
 // trace:BUG-1987 | ai:claude
-fn inherited_lock_released_after(db: &Path, hold: std::time::Duration) -> std::thread::JoinHandle<()> {
+fn inherited_lock_released_after(
+    db: &Path,
+    hold: std::time::Duration,
+) -> std::thread::JoinHandle<()> {
     let copy = history_cache::test_support::inherited_lock_copy(db);
     std::thread::spawn(move || {
         std::thread::sleep(hold);
@@ -461,7 +464,10 @@ fn bug_1987_an_inherited_lock_fd_does_not_classify_as_busy() {
     history_cache::test_support::partial_build(&store, &db, 1, 1).unwrap();
     let release = inherited_lock_released_after(&db, std::time::Duration::from_millis(100));
     let st = history_cache::status_at(&store, &db);
-    assert!(!st.indexer_running, "an inherited fd is not a running indexer");
+    assert!(
+        !st.indexer_running,
+        "an inherited fd is not a running indexer"
+    );
     assert_eq!(history_cache::classify_miss(&st), IndexMiss::Filling);
     release.join().unwrap();
 
