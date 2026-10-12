@@ -17,12 +17,12 @@ description: |
   1. `fallback_note` for `NotBuilt` and `Filling` names the cheap refresh (`aida history events --limit 1`, the existing REFRESH const) first and `aida cache rebuild --history` second. Unit tests on both notes.
   2. `classify_miss` gives a store worktree whose HEAD is an ancestor of the shared index tip its own IndexMiss variant (not Stuck), and its note does not suggest a rebuild. Unit test on classify_miss and the note.
   3. docs/cli/10-storage.md no longer says the index "fills itself in on normal `aida history` queries": it says bare `aida history` catches up only gaps of up to 16 commits, while `aida history events` and single-spec views do the full catch-up.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:04:12.111447364Z
-modified_at: 2026-10-12T06:01:59.001783177Z
+modified_at: 2026-10-12T14:55:50.860392536Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -36,6 +36,14 @@ comments:
   created_at: 2026-10-12T06:01:59.001783177Z
   modified_at: 2026-10-12T06:01:59.001783177Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309c-e44c-7193-b6aa-fb1693227b42
+  author: joe
+  timestamp: 2026-10-12T14:55:50.860387545Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 36c906f453b4a0a62dfe97161d26d0752c069768
   branch: main
