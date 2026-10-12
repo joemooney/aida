@@ -27,7 +27,9 @@ use std::path::{Path, PathBuf};
 // trace:ADR-9 | ai:claude
 const ENGINE_CALLER_ALLOWLIST: &[&str] = &[
     "src/auto_complete.rs", // the engine module itself (the orchestrate wrapper)
-    "src/lib.rs", // the `aida queue work --auto-complete` handler (STORY-772: was main.rs)
+    // the `aida queue work --auto-complete` handler (STORY-772: was main.rs;
+    // the STORY-1488 split moved run_auto_complete out of lib.rs)
+    "src/drain_gate.rs",
     // test-only: `#[cfg(test)] mod bug_1265_finish_ci_tests` drives the engine
     // through a harness; the STORY-1488 split moved it out of lib.rs.
     "src/upgrade_release.rs",
@@ -104,21 +106,16 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
     );
 }
 
-/// The positive side of the invariant: the allow-listed `lib.rs` handler must
+/// The positive side of the invariant: the allow-listed `drain_gate.rs` handler must
 /// still actually route through the engine, so the allow-list can't rot into a
 /// dead entry that quietly permits a bypass.
 #[test]
 fn the_queue_work_handler_still_routes_through_the_engine() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut lib_rs = fs::read_to_string(root.join("src/lib.rs")).unwrap();
-    for i in 1..=6 {
-        if let Ok(s) = fs::read_to_string(root.join(format!("src/lib_part{i}.rs"))) {
-            lib_rs.push_str(&s);
-        }
-    }
+    let handler = fs::read_to_string(root.join("src/drain_gate.rs")).unwrap();
     assert!(
-        production_engine_calls(&lib_rs) >= 1,
-        "ADR-9: `lib.rs` no longer calls `orchestrate_with_resume` — the \
+        production_engine_calls(&handler) >= 1,
+        "ADR-9: `drain_gate.rs` no longer calls `orchestrate_with_resume` — the \
          `queue work --auto-complete` handler must route through the one engine."
     );
 }

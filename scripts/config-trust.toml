@@ -168,6 +168,10 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
+[readers."aida-cli-lib/src/drain_gate.rs"]
+channels = ["probe"]
+sites = 1
+
 [readers."aida-cli-lib/src/worktree_gc.rs"]
 channels = ["worktree", "home", "prose"]
 sites = 9
@@ -202,7 +206,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 17
+sites = 16
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
