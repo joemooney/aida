@@ -277,11 +277,12 @@ credits. When the title is empty, the branch-head subject supplies the title.
 One PR of a multi-PR spec can declare itself a non-completing slice —
 `aida pr ship --no-complete`, or a PR-body line `aida: no-complete` /
 `Non-completing slice` — and ship then writes no completing trailer from any
-source; the spec id stays traced in the PR body only. The branch-name recovery
+source, so no spec is completed by that merge. The branch-name recovery
 is also skipped on its own for a spec that carries `closure:pending` or still
-has open slice children (an explicit title trailer remains a deliberate
-directive). Ship prints the derived trailer and its source — PR title, branch
-name, or none with the reason — before it merges.
+has open slice children (Done children count as finished; an explicit title
+trailer remains a deliberate directive). Ship prints the derived trailer and
+its source — PR title, branch name, or none with the reason — before it
+merges, and `--dry-run` prints the same line.
 
 Status edits and CLI/MCP rework record the code-repository HEAD when a spec
 leaves Done or Completed for further work. Live auto-bump and manual

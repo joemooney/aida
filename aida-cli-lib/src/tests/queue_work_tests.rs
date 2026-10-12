@@ -4334,19 +4334,46 @@ fn bug_1957_review_calibration_skips_closure_pending_branch_spec() {
         requirements: vec![held, open],
         ..Default::default()
     };
-    assert!(review_calibration_spec_ids(Some(&store), "fix: prose", "task-1538-x", "").is_empty());
+    assert!(
+        review_calibration_spec_ids_in(Some(&store), "fix: prose", "task-1538-x", "").is_empty()
+    );
     assert_eq!(
-        review_calibration_spec_ids(Some(&store), "fix: prose", "task-1601-x", ""),
+        review_calibration_spec_ids_in(Some(&store), "fix: prose", "task-1601-x", ""),
         vec!["TASK-1601".to_string()]
     );
     // An explicit title trailer is a deliberate directive, exactly as in ship.
     assert_eq!(
-        review_calibration_spec_ids(Some(&store), "fix: prose (TASK-1538)", "x", ""),
+        review_calibration_spec_ids_in(Some(&store), "fix: prose (TASK-1538)", "x", ""),
         vec!["TASK-1538".to_string()]
     );
     // No readable store: nothing is known to be held.
     assert_eq!(
-        review_calibration_spec_ids(None, "fix: prose", "task-1538-x", ""),
+        review_calibration_spec_ids_in(None, "fix: prose", "task-1538-x", ""),
+        vec!["TASK-1538".to_string()]
+    );
+}
+
+/// BUG-1957: the reviewer call site's entry point reads the project's own
+/// store for the hold, so a `closure:pending` spec on disk is not credited.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_review_calibration_reads_project_store() {
+    let root = tempfile::TempDir::new().unwrap();
+    let mut held = aida_core::Requirement::new("held".to_string(), String::new());
+    held.spec_id = Some("TASK-1538".to_string());
+    held.tags
+        .insert(aida_core::pickability::CLOSURE_PENDING_TAG.to_string());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![held],
+        ..Default::default()
+    };
+    Storage::new(root.path().join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    assert!(review_calibration_spec_ids(root.path(), "fix: prose", "task-1538-x", "").is_empty());
+    let empty = tempfile::TempDir::new().unwrap();
+    assert_eq!(
+        review_calibration_spec_ids(empty.path(), "fix: prose", "task-1538-x", ""),
         vec!["TASK-1538".to_string()]
     );
 }

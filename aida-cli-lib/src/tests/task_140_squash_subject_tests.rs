@@ -64,7 +64,7 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
     git(root, &["config", "user.name", "t"]);
     std::fs::write(root.join("a"), "1").unwrap();
     git(root, &["add", "a"]);
-    git(root, &["commit", "-q", "-m", "fix: prose"]);
+    git(root, &["commit", "-q", "-m", "wip"]);
     git(root, &["checkout", "-q", "-b", "task-1538-x"]);
 
     let bin = tempfile::tempdir().unwrap();
@@ -103,11 +103,27 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
     assert!(trailer.ids.is_empty(), "{trailer:?}");
     assert_eq!(trailer.source, pr_ship::TrailerSource::None);
     assert!(trailer.notes[0].contains("TASK-1538"), "{trailer:?}");
-    assert!(
-        !subject.unwrap_or_default().contains("TASK-1538"),
-        "a withheld id must not reach the squash subject"
-    );
+    // The PR title differs from the head commit subject, so a subject is
+    // always produced here; the withheld id must not reach it.
+    assert_eq!(subject.as_deref(), Some("fix: prose"));
 
     let (_, trailer) = derive_pr_ship_squash_subject(root, 1957, "task-1538-x", true).unwrap();
     assert!(trailer.ids.is_empty(), "{trailer:?}");
+
+    // The dry-run output carries the provenance line after the plan.
+    save(&[]);
+    let out = pr_ship_dry_run_output("PLAN\n".to_string(), root, 1957, "task-1538-x", false);
+    assert_eq!(
+        out,
+        "PLAN\n  · completion trailer (TASK-1538) — from the branch name\n"
+    );
+    let out = pr_ship_dry_run_output("PLAN\n".to_string(), root, 0, "task-1538-x", false);
+    assert!(
+        out.starts_with("PLAN\n  · completion trailer: not resolved — "),
+        "{out}"
+    );
+    assert!(
+        out.contains("PR title or branch name at merge time"),
+        "{out}"
+    );
 }

@@ -341,7 +341,8 @@ pub(crate) fn derive_squash_subject_spec_ids_held(
 /// BUG-1919: PR-body lines that declare the PR a non-completing slice of a
 /// multi-PR spec. A whole line (after stripping list/emphasis markup and
 /// trailing punctuation, case-insensitively) must equal one of these or start
-/// with one followed by whitespace or an em-dash; a mid-prose mention (or a
+/// with one followed (after any closing emphasis) by whitespace, an em/en-dash,
+/// `:`, `;`, `,` or `(`; a mid-prose mention (or a
 /// backticked mention such as a changelog bullet) stays descriptive, exactly as
 /// TASK-1600 keeps body ids descriptive.
 // trace:BUG-1919 | ai:claude
@@ -358,13 +359,25 @@ pub fn pr_body_declares_non_completing(pr_body: &str) -> bool {
             .trim_end_matches(|c: char| matches!(c, '.' | ':' | ';' | '!'))
             .trim()
             .to_ascii_lowercase();
+        // The marker may be followed by closing emphasis, then end of line,
+        // whitespace, a dash, or clause punctuation. A backtick, `/`, `-`, or
+        // a word character means the marker is quoted or part of a longer
+        // word, so the line only mentions it.
         // trace:BUG-1957 | ai:claude
         NO_COMPLETE_BODY_MARKERS.iter().any(|&marker| {
-            line == marker
-                || line
-                    .strip_prefix(marker)
-                    .and_then(|rest| rest.chars().next())
-                    .is_some_and(|c| c.is_whitespace() || c == '\u{2014}')
+            line.strip_prefix(marker).is_some_and(|rest| {
+                match rest
+                    .trim_start_matches(|c: char| matches!(c, '*' | '_'))
+                    .chars()
+                    .next()
+                {
+                    None => true,
+                    Some(c) => {
+                        c.is_whitespace()
+                            || matches!(c, '\u{2014}' | '\u{2013}' | ':' | ';' | ',' | '(')
+                    }
+                }
+            })
         })
     })
 }
@@ -477,9 +490,12 @@ pub(crate) fn derive_squash_trailer(
 /// BUG-1919: the reason `spec` must not be completed by a branch-name
 /// fallback, or `None` when nothing holds it: the spec carries the
 /// `closure:pending` tag, or its slice subtree still has open children
-/// (anything not Done / Completed / Rejected / Superseded / Deferred — a Done
-/// child's work has merged, so it does not hold the parent). An id that does not resolve
-/// yields `None`; `resolves` already filters those out.
+/// (anything not Done / Completed / Rejected / Superseded / Deferred). A Done
+/// child is finished on its branch but not yet merged; it is treated as
+/// resolved anyway, accepting that the parent can be completed while that
+/// child's merge is still pending, rather than holding the parent on work
+/// that is already finished. An id that does not resolve yields `None`;
+/// `resolves` already filters those out.
 // trace:BUG-1919 | ai:claude
 pub(crate) fn spec_completion_hold_reason(
     store: &aida_core::RequirementsStore,
@@ -3288,9 +3304,18 @@ mod tests {
             "Non-completing slice.",
             "Non-completing slice (3 of 45): pure move",
             "intro\n\n> aida: no-complete — slice 1\n\nmore",
-            // BUG-1957: whitespace, an em-dash, or end of line after the marker.
+            // BUG-1957: whitespace, a dash, clause punctuation, or end of
+            // line after the marker, with closing emphasis skipped first.
             "aida: no-complete\tslice 2",
             "aida: no-complete—slice 3",
+            "**aida: no-complete** — slice 1 of 3",
+            "**Non-completing slice**: pure move",
+            "Non-completing slice: pure move",
+            "_Non-completing slice_ (3 of 45)",
+            "aida: no-complete, slice 2",
+            "aida: no-complete(slice 2)",
+            "aida: no-complete–slice",
+            "aida: no-complete; slice 4",
         ] {
             assert!(pr_body_declares_non_completing(body), "{body:?}");
         }
@@ -3305,6 +3330,8 @@ mod tests {
             "- `aida: no-complete` marker is now recognised",
             "- `Non-completing slice` bodies now withhold the trailer",
             "aida: no-complete/slice",
+            "aida: no-complete-ish",
+            "**aida: no-complete**ness",
         ] {
             assert!(!pr_body_declares_non_completing(body), "{body:?}");
         }

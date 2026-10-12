@@ -8872,10 +8872,12 @@ fn rework_pr_head_branch_override(
     let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
         .map(|meta| meta.body)
         .unwrap_or_default();
+    // Loaded only if the hold check actually runs.
     // trace:BUG-1957 | ai:claude
-    let store = crate::load_store_for_lookup(project_root);
+    let store = std::cell::OnceCell::new();
     rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body, |id| {
         store
+            .get_or_init(|| crate::load_store_for_lookup(project_root))
             .as_ref()
             .and_then(|s| pr_ship::spec_completion_hold_reason(s, id))
     })
@@ -12686,10 +12688,22 @@ pub(crate) fn handle_queue_work(
 
 /// The specs a reviewed PR credits for calibration: the same title / branch
 /// derivation `aida pr ship` uses, including its store-backed closure hold, so
-/// a held spec ship would not complete is not credited either. With no
-/// readable store nothing is known to be held.
+/// a held spec ship would not complete is not credited either. The hold reads
+/// `project_root`'s store; with no readable store nothing is known to be held.
 // trace:BUG-1957 | ai:claude
 pub(crate) fn review_calibration_spec_ids(
+    project_root: &std::path::Path,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+) -> Vec<String> {
+    let store = crate::load_store_for_lookup(project_root);
+    review_calibration_spec_ids_in(store.as_ref(), pr_title, branch, pr_body)
+}
+
+/// [`review_calibration_spec_ids`] over an already-loaded store.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn review_calibration_spec_ids_in(
     store: Option<&aida_core::RequirementsStore>,
     pr_title: &str,
     branch: &str,
@@ -12914,8 +12928,7 @@ pub(crate) fn run_standalone_reviewer(
     // slot per spec. Best-effort; never blocks the summary print.
     // trace:STORY-439 | ai:claude
     if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
-        let store = crate::load_store_for_lookup(project_root);
-        for spec in review_calibration_spec_ids(store.as_ref(), &meta.title, branch, &meta.body) {
+        for spec in review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body) {
             capture_review_calibration_for_spec(project_root, verdict_path, &spec);
         }
     }

@@ -91,12 +91,13 @@ trailer first, then from the branch name — so a slice PR with no id in its
 title but a `<spec-id>-…` branch would complete `<spec-id>` after one of many
 PRs. Three things stop that: `aida pr ship --no-complete`, a PR-body line
 reading `aida: no-complete` or `Non-completing slice` (either one withholds
-the trailer from every source — the spec id stays in the PR body as a trace),
-and, with no declaration at all, the branch-name fallback is skipped when the
-spec carries `closure:pending` or still has open slice children. An explicit
-title trailer is always honoured. Before merging, ship prints the trailer it
-derived and its source — `from the PR title`, `from the branch name`, or
-`none` with the reason it was withheld.
+the trailer from every source, so the merge completes no spec), and, with no
+declaration at all, the branch-name fallback is skipped when the spec carries
+`closure:pending` or still has open slice children (a Done child counts as
+finished). An explicit title trailer is always honoured. Before merging, ship
+prints the trailer it derived and its source — `from the PR title`, `from the
+branch name`, or `none` with the reason it was withheld; `--dry-run` prints
+the same line.
 <!-- trace:BUG-1919 | ai:claude -->
 
 **Drive-owned PRs.** A live drive's PR remains protected by its independent

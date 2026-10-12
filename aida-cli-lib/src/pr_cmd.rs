@@ -2031,21 +2031,11 @@ pub(crate) fn pr_ship_handler(
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
         let plan = format_dry_run_plan(&opts, &steps, forge_kind);
-        print!("{}", plan);
-        // Show which specs the merge would complete, and why, without merging.
         // trace:BUG-1957 | ai:claude
-        let provenance = if pr_number == 0 {
-            pr_ship::format_dry_run_trailer_provenance(Err(
-                "the PR does not exist yet; it is derived from the PR title at merge time",
-            ))
-        } else {
-            match derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch, no_complete)
-            {
-                Ok((_, trailer)) => pr_ship::format_dry_run_trailer_provenance(Ok(&trailer)),
-                Err(e) => pr_ship::format_dry_run_trailer_provenance(Err(&e.to_string())),
-            }
-        };
-        print!("{}", provenance);
+        print!(
+            "{}",
+            pr_ship_dry_run_output(plan, &project_root, pr_number, &ship_branch, no_complete)
+        );
         eprintln!(
             "  → PR target: {}",
             if pr_number == 0 {
@@ -3686,6 +3676,31 @@ pub(crate) fn derive_pr_ship_squash_subject(
         return Ok((None, trailer));
     }
     Ok((Some(normalized), trailer))
+}
+
+/// The `aida pr ship --dry-run` output: the step plan followed by the
+/// completion-trailer provenance line, so the operator sees which specs the
+/// merge would complete, and why, without merging. `pr_number == 0` means
+/// the PR would be created, so there is no title to derive from yet.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn pr_ship_dry_run_output(
+    plan: String,
+    project_root: &std::path::Path,
+    pr_number: u64,
+    ship_branch: &str,
+    no_complete: bool,
+) -> String {
+    let provenance = if pr_number == 0 {
+        pr_ship::format_dry_run_trailer_provenance(Err(
+            "the PR does not exist yet; it is derived from the PR title or branch name at merge time",
+        ))
+    } else {
+        match derive_pr_ship_squash_subject(project_root, pr_number, ship_branch, no_complete) {
+            Ok((_, trailer)) => pr_ship::format_dry_run_trailer_provenance(Ok(&trailer)),
+            Err(e) => pr_ship::format_dry_run_trailer_provenance(Err(&e.to_string())),
+        }
+    };
+    plan + &provenance
 }
 
 /// BUG-1919: the one store-qualified completion-trailer derivation the ship
