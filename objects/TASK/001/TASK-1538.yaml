@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T09:43:18.086020423Z
+modified_at: 2026-10-12T14:51:05.666828690Z
 req_type: Task
 tags:
 - closure:pending
@@ -850,6 +850,12 @@ comments:
   created_at: 2026-10-12T09:43:18.086020423Z
   modified_at: 2026-10-12T09:43:18.086020423Z
   session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
+- id: 01a13098-8a42-7973-a3de-09851906a8ba
+  author: joe
+  content: 'READY (#2554, append-mode tooling): own PR off origin/main d57f76a277, head d4d0de51b6, subject ''tooling: append-mode MOVEs (extend <mod>.rs) (TASK-1538)''. Both signoff conditions are met: (1) it is a standalone PR, not stacked; (2) the extend check refuses an appended ''mod '' declaration or ''#[path'' attribute. Check 3 for an extend requires <mod>.rs status M, the parent''s file as a byte prefix of the new one, no new module, no lib.rs mod/glob line (1n shims only), no header lines, and the same multiset and block purity. V7 is the post-append size. Tests: 9 new (44 total, unittest discover form), covering extend pass, extend+shim pass, prefix edit FAIL 3, missing module FAIL 3, mod line FAIL 3, header residue FAIL 3, appended mod FAIL 3, appended #[path FAIL 3, stale V7 FAIL 6. verify_stack on run 13 (cd739cfb5f..a487090b93) still passes. check-ci-fast: 26 pass. Build is pending. After merge, I''ll reopen TASK-1538 to approved + closure:pending if it auto-flips, then cut run 14: stale-check -> review_gates, forge-timeout -> kernel.'
+  created_at: 2026-10-12T14:51:05.666828690Z
+  modified_at: 2026-10-12T14:51:05.666828690Z
+  session_id: 48e84170-72c5-41ec-b833-86038c00cf8c
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
