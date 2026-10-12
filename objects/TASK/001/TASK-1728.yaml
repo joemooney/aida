@@ -17,10 +17,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-12T06:00:45.467346402Z
+modified_at: 2026-10-12T06:01:19.430780730Z
 req_type: Task
 tags:
 - follow-up:advisor-review
+- groom:approve
 - groomed:night
 - hooks
 - main-checkout
