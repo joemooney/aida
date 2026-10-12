@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T19:16:08.798006191Z
-modified_at: 2026-10-12T06:03:48.027066731Z
+modified_at: 2026-10-12T06:04:21.984195668Z
 req_type: Bug
 tags:
 - follow-up:factory
@@ -25,6 +25,14 @@ tags:
 - groomed:night
 - output
 - toon
+comments:
+- id: 01a12eb6-4e60-78b3-a04a-0abdc48b16a2
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). Still real: cache_output::finish prints the footer with println!("{}", toon_cache(..)) after the command returns, with no knowledge of the body's last byte. Tightened acceptance: footer always on its own line, no extra blank line when the body already ends in a newline, unit test for both, regression test on piped `aida docs glossary`. Left the mechanism to the implementer (stdout-tracking writer vs fixing at the source) with a note on where the footer is emitted.
+  created_at: 2026-10-12T06:04:21.984195668Z
+  modified_at: 2026-10-12T06:04:21.984195668Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: eb0a08cd5fa64cce8193bdde47ce2efaac3e6cac
   branch: main
