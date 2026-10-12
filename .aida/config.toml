@@ -19,14 +19,14 @@ workflow_hints = true
 [field_study]
 enabled = false
 
-# STORY-760: store-sync fan-out. This project mirrors to a personal GitLab
-# (gitlab.joemooney.com) alongside GitHub `origin`. Store fan-out runs from
+# STORY-760: store-sync fan-out. This project mirrors to GitHub `github`
+# alongside the self-hosted GitLab `origin`. Store fan-out runs from
 # `aida db sync --push`, `aida pull`, `aida remote mirror-sync`, and the
 # `hub-mirror-sync` scheduled cadence below. Each path pushes by fast-forward
 # only; a non-fast-forward mirror is reported for deliberate reconciliation.
 # Check drift anytime with `aida remote status`.
 [store.sync]
-mirror_remotes = ["gitlab", "github"]
+mirror_remotes = ["github"]
 
 # Default vendor for agent launches (drives, drains, agent new). Set to codex so
 # `aida zen` / `aida burndown` / supervised drives use the Codex CLI without a
