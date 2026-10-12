@@ -25,13 +25,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-12T06:07:38.105985772Z
+modified_at: 2026-10-12T06:07:42.802831053Z
 req_type: Bug
 tags:
 - authority
 - groom:approve
 - roles
 - seats
+comments:
+- id: 01a12eb9-5ed2-7cb3-9bc6-1fc56347cdc4
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised, security/authority). Confirmed: role.rs has_advisor_authority() decides from effective_role_with_roster + TTY + orchestrator only. It never consults seat_authority::current_grant/current_seat, which validate grant expiry, revocation, subject, roster and parent delegation and are what the statusline (BUG-1924) and review record's seat display use. Note that review record does not actually check advisor authority today. It only gates the operator-fallback identity (see BUG-1978) and refuses the implementer seat. So the "one shared helper" acceptance means introducing an advisor-authority check that both paths call, not reusing review record's. This widens authority, so it needs a sketch + advisor signoff, and the forged/stale-grant tests are mandatory. BUG-1978 is related but separate (error text for a grant with no agent identity).
+  created_at: 2026-10-12T06:07:42.802831053Z
+  modified_at: 2026-10-12T06:07:42.802831053Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
   branch: main
