@@ -1,0 +1,25 @@
+id: 01a130a9-8315-7d92-a6fb-e45e25bf8416
+spec_id: TASK-1732
+agreed_id: TASK-1732
+title: 'Regen seam-adapter score (R2): score through a name-mapping adapter and report R1, R2 and the delta'
+description: |-
+  Slice 4 of STORY-1669 (F15). Depends on slice 2.
+  ## Acceptance
+  - R2 runs the oracle through a name-mapping adapter generated from the trial's GAPS file.
+  - The report shows R1, R2 and the delta.
+  - Fixture test: a renamed env var flips R1 fail -> R2 pass.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T15:09:37.941801Z
+modified_at: 2026-10-12T15:09:37.941801Z
+req_type: Task
+filed_at:
+  code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
