@@ -409,6 +409,14 @@ def reflection_misses(spec_deltas, manual_text, top_level_cmds):
 # A path is a miss only when clap itself answers `unrecognized subcommand` —
 # a command that takes a positional parses the word as an argument and never
 # errors, so the check cannot false-fail on `aida show <ID>`-shaped prose.
+#
+# Deliberately NOT checked: whether a citation supplies a command's required
+# positional arguments. The manual names commands by path in prose and verb
+# lists (`usage unused`, `start` / `end`) without their arguments on purpose,
+# so flagging a missing positional would fail nearly every verb list. The
+# runnable-command guarantee belongs where a command is printed for the user
+# to paste — CLI hints, which are tested at their source.
+# trace:BUG-1973 | ai:claude
 SUBCMD_WORD_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 VERB_LIST_RE = re.compile(
     r"`([a-z][a-z0-9-]*)`(?:\s*(?:/|vs\.?)\s*`[a-z][a-z0-9-]*`)+"

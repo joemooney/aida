@@ -136,6 +136,17 @@ pub(crate) fn normalize_upgrade_mode(
     }
 }
 
+/// The replacement command named in the deprecation note for the hidden
+/// `--unused <window>` alias of `aida usage`. `aida usage unused` errors
+/// without its DURATION positional, so the hint must carry one to be
+/// runnable as printed.
+// trace:BUG-1973 | ai:claude
+pub(crate) fn usage_unused_alias_target(window: &str) -> String {
+    let window = window.trim();
+    let window = if window.is_empty() { "30d" } else { window };
+    format!("aida usage unused {window}")
+}
+
 // trace:STORY-1028 | ai:codex
 #[allow(clippy::type_complexity)]
 pub(crate) fn normalize_usage_mode<'a>(
@@ -193,8 +204,14 @@ pub(crate) fn normalize_usage_mode<'a>(
             if slowest {
                 note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
             }
-            if unused.is_some() {
-                note_hidden_alias(concat!("aida usage ", "--unused"), "aida usage unused");
+            if let Some(window) = unused {
+                // `unused` requires its DURATION positional, so carry the
+                // window the old flag was given into the suggested command.
+                // trace:BUG-1973 | ai:claude
+                note_hidden_alias(
+                    concat!("aida usage ", "--unused"),
+                    &usage_unused_alias_target(window),
+                );
             }
             if errors {
                 note_hidden_alias(concat!("aida usage ", "--errors"), "aida usage errors");
@@ -300,6 +317,40 @@ pub(crate) fn classify_drain_merge_failure(
         "{merge_tool} merge failed for {}-{pr}: {detail}",
         forge.change_noun()
     ))
+}
+
+#[cfg(test)]
+mod bug_1973_usage_unused_hint_tests {
+    // trace:BUG-1973 | ai:claude
+    use super::usage_unused_alias_target;
+    use clap::Parser;
+
+    #[test]
+    fn hint_carries_the_duration_from_the_old_flag() {
+        assert_eq!(usage_unused_alias_target("60d"), "aida usage unused 60d");
+        assert_eq!(usage_unused_alias_target(" 2w "), "aida usage unused 2w");
+    }
+
+    #[test]
+    fn hint_never_suggests_a_bare_unused_without_a_duration() {
+        assert_eq!(usage_unused_alias_target(""), "aida usage unused 30d");
+    }
+
+    #[test]
+    fn hinted_command_parses_while_bare_form_does_not() {
+        for window in ["30d", "90d", "2w", ""] {
+            let hint = usage_unused_alias_target(window);
+            let argv: Vec<&str> = hint.split_whitespace().collect();
+            assert!(
+                crate::cli::Cli::try_parse_from(&argv).is_ok(),
+                "hinted command must parse: {hint}"
+            );
+        }
+        assert!(
+            crate::cli::Cli::try_parse_from(["aida", "usage", "unused"]).is_err(),
+            "bare `aida usage unused` requires DURATION"
+        );
+    }
 }
 
 #[cfg(test)]
