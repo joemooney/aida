@@ -932,14 +932,15 @@ mod bug_1195_review_story_lookup_tests {
     #[test]
     fn review_story_lookup_uses_the_role_fallback_listing() {
         let src = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("pr_lookup.rs")
         );
         let start = src
             .find(concat!("fn queued_review_story_for_pr", "("))
