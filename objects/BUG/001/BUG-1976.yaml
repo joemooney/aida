@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:41.599443906Z
-modified_at: 2026-10-12T06:00:06.607911720Z
+modified_at: 2026-10-12T06:00:12.177802798Z
 req_type: Bug
 tags:
 - from:aida-host
@@ -36,6 +36,14 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:13:44.847111888Z
+comments:
+- id: 01a12eb2-7e91-75b3-8b7b-8053527f80f1
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised). Rewrote the "To be written at triage" Acceptance section into testable criteria. Verified: aida-core/templates/hooks/aida-advisor-code-guard.sh fires on any code-extension path (`*.py`, `*.rs`, ...) with no check that the path is inside the repository, so scratchpad writes from an advisor's subagent (which inherits AIDA_SESSION_ROLE=advisor) trip it. Key nuance added to acceptance: "inside the repo" must include sibling linked worktrees (same git-common-dir), otherwise scoping would open a hole for advisor edits in sibling worktrees. Supervised: it narrows a seat-boundary guard.
+  created_at: 2026-10-12T06:00:12.177802798Z
+  modified_at: 2026-10-12T06:00:12.177802798Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
