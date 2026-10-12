@@ -583,3 +583,154 @@ fn tag_covered_crashed_session_is_listed_under_driven_by_default() {
     assert!(toon.lines().any(|l| l == "driven: 1"), "{toon}");
     drop(relay);
 }
+
+/// Register a relay over `batch:next` with the given extra args, asserting
+/// success. Runs from `cwd` (the primary checkout or a linked worktree).
+fn register_relay(cwd: &Path, home: &Path, run: &str, pid: u32, extra: &[&str]) {
+    let pid = pid.to_string();
+    let mut args = vec![
+        "driver",
+        "register",
+        "--run",
+        run,
+        "--tag",
+        "batch:next",
+        "--pid",
+        pid.as_str(),
+    ];
+    args.extend_from_slice(extra);
+    let reg = aida(cwd, home, &args);
+    assert!(
+        reg.status.success(),
+        "register: {}",
+        String::from_utf8_lossy(&reg.stderr)
+    );
+}
+
+/// Move a record's heartbeat `secs` into the past — equivalent to resolving
+/// at `now = heartbeat + secs` without a clock seam in the binary.
+fn backdate_heartbeat(repo: &Path, run: &str, secs: i64) {
+    let path = repo
+        .join(".aida")
+        .join("drivers")
+        .join(format!("relay-{run}.json"));
+    let mut v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).expect("read record")).unwrap();
+    let then = (chrono::Utc::now() - chrono::Duration::seconds(secs)).to_rfc3339();
+    v["heartbeat_at"] = then.clone().into();
+    v["started_at"] = then.into();
+    std::fs::write(&path, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
+/// The relay registers once per claude session (30–90 min) with no `--ttl`:
+/// an hour after its last heartbeat, with its pid still alive, it must still
+/// drive the spec, and a lease naming it whose own pid is dead stays lifted
+/// out of stalled.
+// trace:STORY-1653 | ai:claude
+#[test]
+fn relay_without_ttl_stays_live_an_hour_past_its_heartbeat() {
+    let (_tmp, repo, home) = init_repo();
+    let spec = add_in_progress(&repo, &home, Some("batch:next"));
+    write_lease(
+        &repo,
+        "11112222aaaa",
+        &spec,
+        dead_pid(),
+        Some("relay:lib-split"),
+    );
+    let relay = sleeper();
+    register_relay(&repo, &home, "lib-split", relay.id(), &[]);
+    backdate_heartbeat(&repo, "lib-split", 60 * 60);
+
+    let listed = json(
+        &aida(&repo, &home, &["driver", "list", "--json"]),
+        "driver list",
+    );
+    assert_eq!(listed["drivers"][0]["live"], true, "{listed}");
+    let (section, row) = ps_entry(&repo, &home, &spec);
+    assert_eq!(section, "sessions", "{row}");
+    assert_eq!(row["driver"], "relay:lib-split", "{row}");
+    assert_eq!(row["liveness"], "live", "still lifted: {row}");
+    assert!(row["dispatch_state"].is_null(), "no stalled framing: {row}");
+    assert_eq!(list_row(&repo, &home, &spec)["driver"], "relay:lib-split");
+    drop(relay);
+}
+
+/// An explicit `--ttl` still expires the record on its heartbeat even while
+/// the pid is alive: the spec falls back to `queued (batch:X)`.
+// trace:STORY-1653 | ai:claude
+#[test]
+fn explicit_ttl_expires_a_live_pid_record() {
+    let (_tmp, repo, home) = init_repo();
+    let spec = add_in_progress(&repo, &home, Some("batch:next"));
+    let relay = sleeper();
+    register_relay(&repo, &home, "wedged", relay.id(), &["--ttl", "60"]);
+    assert_eq!(
+        list_row(&repo, &home, &spec)["driver"],
+        "relay:wedged",
+        "fresh heartbeat within --ttl is live"
+    );
+    backdate_heartbeat(&repo, "wedged", 120);
+    let listed = json(
+        &aida(&repo, &home, &["driver", "list", "--json"]),
+        "driver list",
+    );
+    assert_eq!(listed["drivers"][0]["live"], false, "{listed}");
+    assert_eq!(listed["drivers"][0]["ttl_secs"], 60, "{listed}");
+    let lrow = list_row(&repo, &home, &spec);
+    assert_eq!(lrow["driver"], "queued (batch:next)", "{lrow}");
+    drop(relay);
+}
+
+/// A driver registered from inside a linked worktree lands in the MAIN
+/// checkout's registry (like session leases), so `aida ps` / `aida list` /
+/// `aida driver list` from the primary checkout see it, and `deregister`
+/// from the worktree removes it.
+// trace:STORY-1653 | ai:claude
+#[test]
+fn driver_registered_from_linked_worktree_is_seen_from_primary_checkout() {
+    let (tmp, repo, home) = init_repo();
+    let spec = add_in_progress(&repo, &home, Some("batch:next"));
+    let wt = tmp.path().canonicalize().unwrap().join("wt-relay");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "relay-branch",
+            wt.to_str().unwrap(),
+        ],
+    );
+    let relay = sleeper();
+    register_relay(&wt, &home, "from-wt", relay.id(), &[]);
+
+    let record = repo
+        .join(".aida")
+        .join("drivers")
+        .join("relay-from-wt.json");
+    assert!(record.exists(), "record lands under the main checkout");
+    assert!(
+        !wt.join(".aida").join("drivers").exists(),
+        "nothing is written under the linked worktree"
+    );
+    let listed = json(
+        &aida(&repo, &home, &["driver", "list", "--json"]),
+        "driver list",
+    );
+    assert_eq!(listed["drivers"][0]["driver"], "relay:from-wt", "{listed}");
+    assert_eq!(listed["drivers"][0]["live"], true, "{listed}");
+    assert_eq!(list_row(&repo, &home, &spec)["driver"], "relay:from-wt");
+    let (_, row) = ps_entry(&repo, &home, &spec);
+    assert_eq!(row["driver"], "relay:from-wt", "{row}");
+
+    let dereg = aida(&wt, &home, &["driver", "deregister", "--run", "from-wt"]);
+    assert!(
+        dereg.status.success(),
+        "deregister: {}",
+        String::from_utf8_lossy(&dereg.stderr)
+    );
+    assert!(!record.exists(), "deregister from the worktree hits main");
+    drop(relay);
+}

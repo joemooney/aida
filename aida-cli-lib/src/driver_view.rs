@@ -10,7 +10,7 @@
 // trace:STORY-1653 | ai:claude
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use aida_core::driver_registry::{self, DerivedDriver, DriverInputs, DriverRecord};
 use chrono::{DateTime, Utc};
@@ -36,10 +36,20 @@ pub(crate) struct DriverContext {
     pub(crate) drain: Option<DrainCover>,
 }
 
+/// Where driver records live for a checkout: the MAIN worktree root, as for
+/// session leases. A linked worktree's own `.aida/drivers/` is never used, so
+/// a driver registered from any checkout is seen from every other one.
+// trace:STORY-1653 | ai:claude
+pub(crate) fn driver_registry_root(project_root: &Path) -> PathBuf {
+    crate::main_worktree_root_from(project_root)
+}
+
 impl DriverContext {
-    /// Probe the registry and the drain lock under `project_root`.
+    /// Probe the registry (under the main checkout) and the drain lock under
+    /// `project_root`.
     pub(crate) fn load(project_root: &Path, now: DateTime<Utc>) -> Self {
-        let live = driver_registry::live_drivers(project_root, now);
+        // trace:STORY-1653 | ai:claude
+        let live = driver_registry::live_drivers(&driver_registry_root(project_root), now);
         let drain = crate::drain_lock::read_pid_live_lock(project_root).map(|lock| {
             let mut specs: HashSet<String> =
                 lock.specs.iter().map(|s| s.to_ascii_uppercase()).collect();

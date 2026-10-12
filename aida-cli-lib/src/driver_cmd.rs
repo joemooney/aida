@@ -4,8 +4,10 @@
 //! drain, a headless agent) registers itself so `aida ps` / `aida list` can
 //! say WHO is driving an in-progress spec even when no session of the spec's
 //! own is alive. Re-running `register` refreshes the heartbeat; `deregister`
-//! removes only the caller's own record. Records are never reaped by readers:
-//! a dead pid or a stale heartbeat simply reads as not live.
+//! removes the named record. Records are never reaped by readers: a dead pid
+//! (or, with an explicit `--ttl`, a stale heartbeat) simply reads as not live.
+//! Records live under the MAIN checkout, like session leases, so a driver
+//! registered from a linked worktree is seen from every checkout.
 // trace:STORY-1653 | ai:claude
 
 use anyhow::{Context, Result};
@@ -16,9 +18,10 @@ use aida_core::driver_registry::{self, DriverKind, DriverRecord, Registration};
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum DriverCommand {
-    /// Register (or refresh the heartbeat of) a driver. Re-run at least every
-    /// 15 minutes while the driver is working; a record whose pid has exited
-    /// or whose heartbeat is older than its TTL reads as not live.
+    /// Register (or refresh the heartbeat of) a driver. The record stays live
+    /// for as long as the registered pid is alive; it reads as not live once
+    /// that process exits. Pass `--ttl` to also expire it when the heartbeat
+    /// is not refreshed within that many seconds.
     Register {
         /// Driver kind: relay, drain or agent.
         #[clap(long, default_value = "relay")]
@@ -42,14 +45,17 @@ pub enum DriverCommand {
         /// Path to the driver's handoff/notes file, if any.
         #[clap(long)]
         handoff: Option<String>,
-        /// Heartbeat TTL in seconds (default 900).
+        /// Heartbeat TTL in seconds. When set, the record also stops being
+        /// live if `register` is not re-run within this window. Default: no
+        /// heartbeat expiry (liveness follows the pid alone).
         #[clap(long)]
         ttl: Option<i64>,
         /// Machine-readable JSON.
         #[clap(long)]
         json: bool,
     },
-    /// Remove your own driver record.
+    /// Remove the driver record registered under this kind and id. There is
+    /// no ownership check: any caller can remove any record by name.
     Deregister {
         /// Driver kind: relay, drain or agent.
         #[clap(long, default_value = "relay")]
@@ -71,8 +77,14 @@ fn parse_kind(kind: &str) -> Result<DriverKind> {
         .with_context(|| format!("unknown driver kind `{kind}`; valid kinds: relay, drain, agent"))
 }
 
+/// The MAIN checkout's root: driver records are shared across worktrees the
+/// way session leases are, so register/list/deregister from a linked worktree
+/// all address the same `.aida/drivers/`.
+// trace:STORY-1653 | ai:claude
 fn project_root() -> std::path::PathBuf {
-    crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default())
+    let start =
+        crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    crate::driver_view::driver_registry_root(&start)
 }
 
 fn record_json(r: &DriverRecord, live: bool) -> serde_json::Value {

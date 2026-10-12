@@ -7,11 +7,12 @@
 //! (stage + rename), and refresh it by re-registering.
 //!
 //! Liveness is DERIVED, never stored: a record is live iff its pid is alive
-//! (with the kernel start identity guarding PID reuse when recorded) AND its
-//! heartbeat is fresher than the record's TTL (default
-//! [`DEFAULT_HEARTBEAT_TTL_SECS`]). Dead or stale records are ignored by every
-//! reader and never deleted here — only an explicit [`deregister`] of a
-//! caller's own id removes a file.
+//! (with the kernel start identity guarding PID reuse when recorded). A
+//! heartbeat TTL applies only when the registrant asked for one (`--ttl`):
+//! a relay registers once per claude session, which can run far longer than
+//! any fixed cadence, so an un-TTL'd record stays live exactly as long as its
+//! process does. Dead or stale records are ignored by every reader and never
+//! deleted here — only an explicit [`deregister`] removes a file.
 //!
 //! The per-spec driver ([`DerivedDriver`]) is likewise computed on every read
 //! from the registry, the spec's lease, the drain lock and the spec's batch
@@ -22,11 +23,6 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-/// A heartbeat older than this (seconds) makes a record stale even when its
-/// pid is still alive — a wedged driver stops covering specs on its own.
-// trace:STORY-1653 | ai:claude
-pub const DEFAULT_HEARTBEAT_TTL_SECS: i64 = 15 * 60;
 
 /// Environment variable a relay exports to its sessions: the relay run id.
 /// Lease-minting verbs stamp `relay:<value>` as the lease's driver.
@@ -80,7 +76,10 @@ pub struct DriverRecord {
     pub selector: Option<String>,
     pub started_at: DateTime<Utc>,
     pub heartbeat_at: DateTime<Utc>,
-    /// Heartbeat TTL override in seconds; `None` means the default.
+    /// Heartbeat TTL in seconds, set only when the registrant passed `--ttl`.
+    /// `None` (and every record written before TTLs became opt-in) means no
+    /// heartbeat expiry: liveness is the pid alone.
+    // trace:STORY-1653 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ttl_secs: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -95,16 +94,19 @@ impl DriverRecord {
         format!("{}:{}", self.kind.as_str(), self.id)
     }
 
-    pub fn ttl_secs(&self) -> i64 {
-        self.ttl_secs
-            .filter(|t| *t > 0)
-            .unwrap_or(DEFAULT_HEARTBEAT_TTL_SECS)
+    /// The explicit heartbeat TTL, if the registrant set a positive one.
+    pub fn ttl_secs(&self) -> Option<i64> {
+        self.ttl_secs.filter(|t| *t > 0)
     }
 
-    /// Pure liveness: pid alive (per `pid_alive`) AND heartbeat within TTL.
+    /// Pure liveness: pid alive (per `pid_alive`) AND, only when an explicit
+    /// TTL was registered, heartbeat within it.
+    // trace:STORY-1653 | ai:claude
     pub fn is_live_with(&self, now: DateTime<Utc>, pid_alive: impl Fn(&Self) -> bool) -> bool {
-        let age = now.signed_duration_since(self.heartbeat_at).num_seconds();
-        age <= self.ttl_secs() && pid_alive(self)
+        let fresh = self
+            .ttl_secs()
+            .is_none_or(|ttl| now.signed_duration_since(self.heartbeat_at).num_seconds() <= ttl);
+        fresh && pid_alive(self)
     }
 
     /// Liveness against the real process table.
@@ -210,7 +212,8 @@ pub fn register(
     Ok(rec)
 }
 
-/// Remove one driver's own record. Returns `false` when there was none.
+/// Remove the record registered under `kind`+`id`, whoever wrote it (there is
+/// no ownership check). Returns `false` when there was none.
 pub fn deregister(project_root: &Path, kind: DriverKind, id: &str) -> std::io::Result<bool> {
     let id = validate_id(id).map_err(invalid_input)?;
     let path = record_path(project_root, kind, id);
@@ -453,14 +456,33 @@ mod tests {
         }
     }
 
+    // trace:STORY-1653 | ai:claude
     #[test]
-    fn liveness_needs_pid_and_fresh_heartbeat() {
+    fn liveness_is_the_pid_unless_an_explicit_ttl_was_registered() {
         let now = Utc::now();
         let fresh = rec(DriverKind::Relay, "r", None, 10);
-        let stale = rec(DriverKind::Relay, "r", None, DEFAULT_HEARTBEAT_TTL_SECS + 5);
         assert!(fresh.is_live_with(now, |_| true));
         assert!(!fresh.is_live_with(now, |_| false));
-        assert!(!stale.is_live_with(now, |_| true));
+        // No --ttl: a heartbeat hours old is still live while the pid is.
+        let old = rec(DriverKind::Relay, "r", None, 6 * 3600);
+        assert!(old.is_live_with(now, |_| true));
+        assert!(!old.is_live_with(now, |_| false));
+        // Explicit --ttl: expires on the heartbeat even with a live pid.
+        let mut ttl = rec(DriverKind::Relay, "r", None, 120);
+        ttl.ttl_secs = Some(60);
+        assert!(!ttl.is_live_with(now, |_| true));
+        ttl.ttl_secs = Some(600);
+        assert!(ttl.is_live_with(now, |_| true));
+        // Non-positive TTLs mean "none".
+        ttl.ttl_secs = Some(0);
+        assert_eq!(ttl.ttl_secs(), None);
+        // Records written before TTLs became opt-in parse with no TTL.
+        let legacy: DriverRecord = serde_json::from_str(
+            r#"{"kind":"relay","id":"x","pid":7,"started_at":"2026-10-10T00:00:00Z","heartbeat_at":"2026-10-10T00:00:00Z"}"#,
+        )
+        .unwrap();
+        assert_eq!(legacy.ttl_secs(), None);
+        assert!(legacy.is_live_with(now, |_| true));
     }
 
     #[test]
