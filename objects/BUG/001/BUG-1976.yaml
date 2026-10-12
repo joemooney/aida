@@ -26,10 +26,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:41.599443906Z
-modified_at: 2026-10-11T20:13:41.599443906Z
+modified_at: 2026-10-12T06:00:06.607911720Z
 req_type: Bug
 tags:
 - from:aida-host
+- groom:approve
 - regenerability
 relationships:
 - rel_type: Child
