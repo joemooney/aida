@@ -17,10 +17,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-12T06:02:12.929062165Z
+modified_at: 2026-10-12T14:51:08.679975945Z
 req_type: Bug
 tags:
-- groom:approve
+- groom:close-done
 - groomed:night
 comments:
 - id: 01a12eb4-5641-7b70-b51d-903320bfc3a0
