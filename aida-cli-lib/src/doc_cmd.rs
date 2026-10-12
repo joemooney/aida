@@ -533,10 +533,7 @@ pub(crate) fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStor
             machinery,
             lifecycle,
         } => {
-            // The embedded glossary ends without a newline; print_body lets the
-            // agent-mode `cache:` footer start on its own line.
-            // trace:BUG-1975 | ai:claude
-            crate::cache_output::print_body(&render_discipline_glossary(*machinery, *lifecycle)?);
+            print!("{}", render_discipline_glossary(*machinery, *lifecycle)?);
         }
     }
     Ok(())

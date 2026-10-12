@@ -12,31 +12,63 @@ pub(crate) fn set_toon_cache_output(enabled: bool) {
     TOON_CACHE_OUTPUT.with(|c| c.set(enabled));
 }
 
-// Whether the last body text written through [`print_body`] left stdout
-// mid-line (no trailing newline). The footer is printed by the dispatcher
-// after the command returns and cannot see the body, so a command whose body
-// may lack a trailing newline prints it via [`print_body`] and the footer
-// emitter consults this to start `cache:` on its own line.
+// Whether the last non-empty stdout write through the crate's `print!` /
+// `println!` (see lib.rs) left stdout mid-line. The footer is printed by the
+// dispatcher after the command returns and cannot see the body, so it consults
+// this to start `cache:` on its own line. Thread-local like TOON_CACHE_OUTPUT:
+// the dispatcher and command bodies share the main thread, and per-thread
+// state keeps parallel unit tests independent.
 // trace:BUG-1975 | ai:claude
-static STDOUT_LINE_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    static STDOUT_LINE_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
-/// Print a command body to stdout verbatim (no newline added) and record
-/// whether it ended mid-line, so a following `cache:` footer is separated
-/// from it by exactly one newline.
+// Forwards formatting to the real formatter while remembering the last byte
+// of the last non-empty chunk, so tracking costs no second format pass.
 // trace:BUG-1975 | ai:claude
-pub(crate) fn print_body(body: &str) {
-    print!("{body}");
-    note_stdout_tail(body);
+struct TailTracked<'a>(std::fmt::Arguments<'a>);
+
+impl std::fmt::Display for TailTracked<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct Tail<'f, 'g> {
+            inner: &'f mut std::fmt::Formatter<'g>,
+            last: Option<u8>,
+        }
+        impl std::fmt::Write for Tail<'_, '_> {
+            fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                if let Some(&b) = s.as_bytes().last() {
+                    self.last = Some(b);
+                }
+                self.inner.write_str(s)
+            }
+        }
+        let mut tail = Tail {
+            inner: f,
+            last: None,
+        };
+        let result = std::fmt::write(&mut tail, self.0);
+        if let Some(b) = tail.last {
+            note_line_open(b != b'\n');
+        }
+        result
+    }
+}
+
+// Backs the crate-local `print!`. trace:BUG-1975 | ai:claude
+pub(crate) fn print_tracked(args: std::fmt::Arguments<'_>) {
+    ::std::print!("{}", TailTracked(args));
+}
+
+// Backs the crate-local `println!`; its output always ends the line.
+// trace:BUG-1975 | ai:claude
+pub(crate) fn println_tracked(args: std::fmt::Arguments<'_>) {
+    ::std::println!("{args}");
+    note_line_open(false);
 }
 
 // trace:BUG-1975 | ai:claude
-fn note_stdout_tail(written: &str) {
-    if !written.is_empty() {
-        STDOUT_LINE_OPEN.store(
-            !written.ends_with('\n'),
-            std::sync::atomic::Ordering::Relaxed,
-        );
-    }
+fn note_line_open(open: bool) {
+    STDOUT_LINE_OPEN.with(|c| c.set(open));
 }
 
 /// The footer text to print (followed by a newline): prefixed with one
@@ -100,7 +132,7 @@ pub(crate) fn finish(scope: &CacheReadScope, success: bool, argv: &[String]) {
         .any(|arg| matches!(arg.as_str(), "--notice" | "statusline" | "statusbar"));
     if !json && !advisory && crate::agent_output_mode() {
         // trace:BUG-1975 | ai:claude
-        let line_open = STDOUT_LINE_OPEN.load(std::sync::atomic::Ordering::Relaxed);
+        let line_open = STDOUT_LINE_OPEN.with(|c| c.get());
         println!(
             "{}",
             footer_after_body(&toon_cache(&scope.metadata()), line_open)
@@ -202,13 +234,27 @@ mod tests {
 
     // trace:BUG-1975 | ai:claude
     #[test]
-    fn stdout_tail_tracks_the_last_non_empty_write() {
-        use std::sync::atomic::Ordering::Relaxed;
-        note_stdout_tail("no newline");
-        assert!(STDOUT_LINE_OPEN.load(Relaxed));
-        note_stdout_tail("");
-        assert!(STDOUT_LINE_OPEN.load(Relaxed), "empty writes keep state");
-        note_stdout_tail("terminated\n");
-        assert!(!STDOUT_LINE_OPEN.load(Relaxed));
+    fn plain_print_macros_track_whether_stdout_is_mid_line() {
+        let line_open = || STDOUT_LINE_OPEN.with(|c| c.get());
+        print!("body ending mid-line");
+        assert!(line_open());
+        // The footer after that plain print! starts on its own line.
+        assert_eq!(
+            footer_after_body("cache:", line_open()),
+            "\ncache:".to_string()
+        );
+        print!("");
+        assert!(line_open(), "empty writes keep state");
+        let n = 3;
+        print!("{n} items\n");
+        assert!(!line_open());
+        print!("{}", "x");
+        assert!(line_open());
+        println!();
+        assert!(!line_open());
+        print!("y");
+        println!("{n}");
+        assert!(!line_open());
+        assert_eq!(footer_after_body("cache:", line_open()), "cache:");
     }
 }
