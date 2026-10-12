@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:41:31.433481965Z
-modified_at: 2026-10-12T23:33:19.838217509Z
+modified_at: 2026-10-12T23:45:45.632424112Z
 req_type: Task
 tags:
 - docs
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-10-12T06:07:47.793583077Z
   modified_at: 2026-10-12T06:07:47.793583077Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13282-0aa0-7392-8fa5-fa5fcd072d8e
+  author: joe
+  content: 'Round-1 fresh review REQUEST CHANGES at 726ec1062a: slice-stack exception drops ADR-73 gates (verify_stack.py from origin/main against PR base; slice tags carry proofs; ''only when''). Plus 3 Lows restoring ADR wording (cond 1 own-judgment, cond 2 advisor-review clarification, cond 5 recorded-before-merge). Brief on PR #2578.'
+  created_at: 2026-10-12T23:45:45.632424112Z
+  modified_at: 2026-10-12T23:45:45.632424112Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-dcd2-7f92-8bb8-52e8f409d2e5
   author: joe
