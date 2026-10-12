@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:37.738378336Z
-modified_at: 2026-10-12T17:13:37.289174370Z
+modified_at: 2026-10-12T18:43:56.496137254Z
 req_type: Bug
 tags:
 - groom:approve
@@ -30,6 +30,23 @@ comments:
   created_at: 2026-10-12T14:51:12.311833916Z
   modified_at: 2026-10-12T14:51:12.311833916Z
   session_id: 5b9fd23c-85f8-4544-821c-3c769b4609b6
+- id: 01a1316d-b7d0-76d2-9891-bf3085816104
+  author: joe
+  content: |-
+    **Advisor verdict — APPROVE at e61e3b7547 — READY-FOR-OPERATOR**
+
+    An independent review found that the test still guards BUG-1674. A mutation restoring the original shape (inline rebuild on an uncapped ladder) fails the full-rebuild case at the 60 s ceiling. The `AIDA_CACHE_RETRY_MS` stretch is real (`cache.rs` ~1203-1219, clamped by `ladder_delay`), and the cleanup on panic or kill is sound. Build is green at this SHA and the merge state is CLEAN. The advisor dispatched this work, so under ADR-73 cond. 1 the operator merges:
+    ```
+    gh pr merge 2562 --squash --match-head-commit e61e3b7547273f6c58d4d1b904a9417066de0624
+    aida edit BUG-1967 --status completed
+    ```
+    Low, non-blocking follow-ups, folded into BUG-1995:
+    - **Orphaned worker.** The detached `aida cache refresh --worker` inherits `AIDA_CACHE_RETRY_MS=120000` and sleeps about 120 s after each run. Reap it in a Fixture Drop, or wait for the refresh lock to free after ROLLBACK.
+    - **5 s figure has no hard guard.** The ADR-53 5 s figure is no longer fatal. Add a const-level aida-core test asserting `READ_LADDER_CAP` stays well under 5 s.
+    - **Doc nits.** The doc cites a 1.5 s flock budget, but `show` runs with a zero budget. The `#[cfg(linux)]` on `load_average` is redundant.
+  created_at: 2026-10-12T18:43:56.496137254Z
+  modified_at: 2026-10-12T18:43:56.496137254Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-d0f4-79b1-b0f4-2f72c8536fca
   author: joe
