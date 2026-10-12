@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-12T06:01:19.430780730Z
+modified_at: 2026-10-12T06:01:24.357016674Z
 req_type: Task
 tags:
 - follow-up:advisor-review
@@ -25,6 +25,14 @@ tags:
 - groomed:night
 - hooks
 - main-checkout
+comments:
+- id: 01a12eb3-9885-7a12-93d6-cc02cbe30c8e
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised: pre-commit hook semantics). All three items remain on origin/main 17ff749954: no CHERRY_PICK_HEAD/REVERT_HEAD exemption in aida-core/templates/hooks/aida-pre-commit.sh; refusal message does not mention --amend or merge --squash; the */.aida-store pwd case is still the last elif of the exemption chain. Item (1) decision fork resolved in the new ## Acceptance as EXEMPT, because clean cherry-picks/reverts already skip pre-commit and merge/rebase replays are already exempt; operator may override to 'document only' at approval.
+  created_at: 2026-10-12T06:01:24.357016674Z
+  modified_at: 2026-10-12T06:01:24.357016674Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
