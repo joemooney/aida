@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:45.851893206Z
-modified_at: 2026-10-12T05:58:57.706776002Z
+modified_at: 2026-10-12T05:59:13.224077543Z
 req_type: Bug
 tags:
 - follow-up:advisor-review
@@ -16,6 +16,14 @@ tags:
 - gitlab
 - groom:approve
 - security
+comments:
+- id: 01a12eb1-9848-7590-aad2-9f88a8a03ca6
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised, SECURITY). Re-verified on main: `gitlab_token_for_host` (aida-cli-lib/src/remote_create.rs:920) still returns `gitlab_release_token_from_env()` before the host-scoped glab token, so an unscoped gitlab.com env token can be sent to a self-hosted `--gitlab` host. Note the same env-first ordering in `gitlab_release_token_for_api_url` (:925): include it in the fix or justify why release uploads may keep it. Items (2) mirror re-run create-if-missing and (3) tests + GIT_TERMINAL_PROMPT=0 are small and can ride in the same PR. Supervised because it changes which credential is sent to which host.
+  created_at: 2026-10-12T05:59:13.224077543Z
+  modified_at: 2026-10-12T05:59:13.224077543Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
