@@ -114,8 +114,8 @@ side_tip=$(git rev-parse side-blob)
 assert_exit "a merge parent with a missing blob refuses the commit" 1 "$(commit "merge side-blob")"
 assert_stderr_contains "the refusal names the parent whose diff failed" "against $side_tip failed"
 assert_stderr_contains "the refusal shows git's own reason for the missing blob" "  git: "
-# `|| true`: if the hook regressed and committed, there is no merge to abort,
-# and the remaining cases should still run and report.
+# If the hook regressed and committed, there is no merge to abort: undo the
+# commit instead, so the remaining cases still run and report.
 git merge --abort 2>/dev/null || git reset -q --hard HEAD~1
 git branch -q -D side-blob
 
