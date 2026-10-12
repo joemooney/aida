@@ -597,13 +597,24 @@ impl CachedGitBackend {
                     if let Some(from) = recorded.filter(|s| !s.is_empty()) {
                         if !head.is_empty()
                             // trace:BUG-1809 | ai:antigravity
-                            && crate::git_ops::is_ancestor_with_timeout(
+                            && match crate::git_ops::is_ancestor_with_timeout(
                                 self.inner.path(),
                                 &from,
                                 &head,
                                 budget.0,
-                            )
-                            .unwrap_or(false)
+                            ) {
+                                Ok(ancestor) => ancestor,
+                                // A timed-out check (a loaded host) reads as
+                                // "not an ancestor": the read hands off and
+                                // makes no write attempt. Count it so a test
+                                // can tell this branch apart.
+                                // trace:BUG-1965 | ai:claude
+                                Err(_) => {
+                                    #[cfg(test)]
+                                    cache_refresh::test_count("ancestor_check_failed");
+                                    false
+                                }
+                            }
                         {
                             let attempt = super::cache::ReadRefreshAttempt::new();
                             let result = self.try_incremental_update(&from, &head);
@@ -4154,20 +4165,26 @@ mod tests {
     // trace:TASK-1526 | ai:codex
     //
     // BUG-1965: the write-lock path is only reached by the refresh-lock
-    // WINNER. A `fork` on any sibling test thread while this reader holds the
-    // refresh flock duplicates the descriptor into a child that keeps the
-    // lock until it reaches `exec` (see `acquire_past_fork_window`), so under
-    // a loaded parallel run the next read can lose the refresh lock to that
-    // child. The loser hands off to the detached worker (`deferred` in tests,
-    // where the spawn is refused) and never makes a write attempt, which is
-    // what `write_attempt == None` was. A run whose read reports
-    // `refresh_lock_contended` did not exercise this test's path: it must
-    // still never full-rebuild, and is retried rather than asserted on.
+    // WINNER that also proves the cache HEAD is an ancestor of the store HEAD.
+    // Two unrelated conditions skip it, and both hand the read off to the
+    // detached worker (`deferred` in tests, where the spawn is refused) with
+    // no write attempt — the `write_attempt == None` flake:
+    // - `refresh_lock_contended`: a `fork` on a sibling test thread while this
+    //   reader held the refresh flock leaves a child holding it until `exec`
+    //   (see `acquire_past_fork_window`), so the next read loses the lock.
+    // - `ancestor_check_failed`: the winner's ancestry check runs under the
+    //   read budget and can time out on a loaded host. The budget is pinned
+    //   well above any plausible `git merge-base` time so this is not
+    //   expected; a run that still reports it is retried like contention.
+    // A run reporting either says nothing about this path: it must still
+    // never full-rebuild, and at most `MAX_RETRIES` such runs are retried, so
+    // a regression that makes this reader skip its own path cannot hide.
     // trace:BUG-1965 | ai:claude
     #[test]
     fn reader_incremental_lock_error_does_not_full_rebuild() {
         use super::super::cache_refresh::*;
-        const ATTEMPTS: usize = 10;
+        const MAX_RETRIES: usize = 3;
+        const SKIPPED_PATH: [&str; 2] = ["refresh_lock_contended", "ancestor_check_failed"];
         for sidecar in [false, true] {
             let dir = tempdir().unwrap();
             let (backend, store_root, cache_path) = task_1515_backend(dir.path());
@@ -4180,26 +4197,28 @@ mod tests {
             let holder = rusqlite::Connection::open(&cache_path).unwrap();
             holder.execute_batch("BEGIN IMMEDIATE").unwrap();
             for constructor in [false, true] {
-                let mut contended_runs = Vec::new();
-                let asserted = (0..ATTEMPTS).any(|_| {
+                let mut skipped_runs = Vec::new();
+                let asserted = (0..=MAX_RETRIES).any(|_| {
                     let scope = CacheReadScope::new();
+                    scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
                     test_counts();
-                    // `Some(counts)` when the read lost the refresh lock to
-                    // another holder; that run says nothing about this path.
-                    let contended = |counts: std::collections::HashMap<&'static str, usize>| {
+                    // `Some(counts)` when the read never reached this test's
+                    // path; that run is retried, not asserted on.
+                    let skipped = |counts: std::collections::HashMap<&'static str, usize>| {
                         assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
-                        counts
-                            .contains_key("refresh_lock_contended")
+                        SKIPPED_PATH
+                            .iter()
+                            .any(|k| counts.contains_key(k))
                             .then_some(counts)
                     };
                     if constructor {
                         let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
                         let counts = test_counts();
-                        if let Some(c) = contended(counts.clone()) {
-                            contended_runs.push(c);
+                        if let Some(c) = skipped(counts.clone()) {
+                            skipped_runs.push(c);
                             return false;
                         }
-                        assert_eq!(counts.get("write_attempt"), Some(&1));
+                        assert_eq!(counts.get("write_attempt"), Some(&1), "{counts:?}");
                         assert!(!scope.touched(), "a constructor has not served rows");
                         assert_eq!(
                             opened.list_summaries(&ListFilter::default()).unwrap().len(),
@@ -4215,29 +4234,29 @@ mod tests {
                         );
                     }
                     let counts = test_counts();
-                    if let Some(c) = contended(counts.clone()) {
-                        contended_runs.push(c);
+                    if let Some(c) = skipped(counts.clone()) {
+                        skipped_runs.push(c);
                         return false;
                     }
-                    assert_eq!(counts.get("write_attempt"), Some(&1));
-                    assert_eq!(counts.get("retry_sleep"), None);
                     let m = scope.metadata();
-                    assert_eq!(m["refreshing"], "writer_busy");
+                    assert_eq!(counts.get("write_attempt"), Some(&1), "{counts:?} {m}");
+                    assert_eq!(counts.get("retry_sleep"), None, "{counts:?} {m}");
+                    assert_eq!(m["refreshing"], "writer_busy", "{counts:?} {m}");
                     assert_eq!(m["cache_head"], from);
                     assert_eq!(m["built_at"], serde_json::json!(built_at));
                     true
                 });
                 assert!(
                     asserted,
-                    "every one of {ATTEMPTS} reads lost the refresh lock to another \
-                     holder: {contended_runs:?}; {}",
+                    "all {} reads skipped the write-lock path: {skipped_runs:?}; {}",
+                    MAX_RETRIES + 1,
                     RefreshLock::diagnose_unavailable(&cache_path)
                 );
-                if !contended_runs.is_empty() {
+                if !skipped_runs.is_empty() {
                     eprintln!(
-                        "BUG-1965: {} read(s) lost the refresh lock to another holder \
-                         and were retried: {contended_runs:?}",
-                        contended_runs.len()
+                        "BUG-1965: {} read(s) skipped the write-lock path and were \
+                         retried: {skipped_runs:?}",
+                        skipped_runs.len()
                     );
                 }
             }
