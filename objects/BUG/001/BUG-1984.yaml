@@ -2,21 +2,29 @@ id: 01a12e66-0115-7101-a3aa-9e9d3026dd97
 spec_id: BUG-1984
 agreed_id: BUG-1984
 title: 'Contained cache binds pin an inode: detect a deleted or replaced cache.db-wal/-shm under a running contained session'
-description: |-
+description: |
   Follow-up D3 from the advisor review of PR #2541 (BUG-1929). Claude Code's Linux sandbox binds each allowWrite file as an inode, not a name. When the host deletes or replaces <main>/.aida/cache.db-wal or -shm while a contained session runs (remove_corrupt_cache_files, quarantine_cache_files in aida-core/src/db/cache.rs, or an older binary that does not persist the WAL), the session keeps writing to the deleted inode, or the two sides use a split WAL/shm.
 
-  The cache is derived data, so this is not a data-loss bug, but the split is silent. Acceptance: a contained session's cache open fails loudly when a bound sidecar's link count is 0 or its inode no longer matches the path, and aida doctor reports the condition. A test covers both.
+  The cache is derived data, so this is not a data-loss bug, but the split is silent.
+
+  ## Acceptance
+
+  - When the cache is opened from a contained session, a check runs over the bound sidecars (`cache.db`, `cache.db-wal`, `cache.db-shm`): if any open/bound file has link count 0 (`st_nlink == 0`), or its `(dev, ino)` differs from a fresh `stat` of the path where both are visible, the open fails with an error naming the file and the recovery (restart the contained session).
+  - `aida doctor` reports the same condition as a finding (category under cache health) when run in the affected session.
+  - Unit test (Unix): open a cache, unlink and recreate `cache.db-wal` behind it, assert the check reports it; a second case unlinks `cache.db-shm` without recreating it (link count 0).
+  - Uncontained sessions are unaffected (no new failure on the normal host path; existing cache tests pass unchanged).
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-12T06:00:29.632910239Z
+modified_at: 2026-10-12T06:02:13.847662567Z
 req_type: Bug
 tags:
 - cache
 - contained
 - groom:approve
+- groomed:night
 - sandbox
 comments:
 - id: 01a12eb2-c2c0-75f3-abac-28f1f8c0d837
