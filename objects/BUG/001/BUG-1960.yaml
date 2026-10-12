@@ -17,11 +17,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:03:14.762751326Z
-modified_at: 2026-10-12T05:59:50.887573438Z
+modified_at: 2026-10-12T06:00:08.239502839Z
 req_type: Bug
 tags:
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb2-6f2f-7843-a421-f9a2825b892f
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). All three items remain on origin/main 17ff749954: (1) .github/workflows has no zsh install, so the zsh leg still skips; (2) no trap around the mktemp aida-init-cd file in dev_cmd.rs; (3) AIDA_INIT_CD_FILE is read in init_bootstrap.rs emit_enter_dir but never removed for children. Added a ## Acceptance section choosing 'install zsh in CI' for (1).
+  created_at: 2026-10-12T06:00:08.239502839Z
+  modified_at: 2026-10-12T06:00:08.239502839Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 1c9eca9bfff30c98da93f471f7f6d334f79482b7
   branch: main
