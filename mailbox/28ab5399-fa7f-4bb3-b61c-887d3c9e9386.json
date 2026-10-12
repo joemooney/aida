@@ -1,0 +1,17 @@
+{
+  "id": "28ab5399-fa7f-4bb3-b61c-887d3c9e9386",
+  "thread_id": "28ab5399-fa7f-4bb3-b61c-887d3c9e9386",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "L4425"
+  },
+  "timestamp": 1791790943502,
+  "body": "You were mentioned on TASK-1538 by joe: RUN 12 RE-CUT (r2) READY FOR REVIEW: PR #2547 now targets main (head 779ce22fde,…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
