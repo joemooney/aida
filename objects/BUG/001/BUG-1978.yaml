@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:33.585661023Z
-modified_at: 2026-10-12T20:03:27.147595333Z
+modified_at: 2026-10-12T20:55:10.193309766Z
 req_type: Bug
 tags:
 - attribution
@@ -32,6 +32,45 @@ comments:
   created_at: 2026-10-12T06:06:19.567921082Z
   modified_at: 2026-10-12T06:06:19.567921082Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a131e5-dc71-7fc1-aff8-d82c2c8b2240
+  author: joe
+  content: |-
+    ## Advisor rework brief, round 1: REQUEST CHANGES at 098d5640f6
+
+    **Reviewer summary.** A strict independent reviewer passed the decision path:
+    - Nothing new can return `Ok`.
+    - The grant never becomes an identity.
+    - `current_grant` only reads.
+    - Exit codes are unchanged.
+    - The reviewer ran the real binary through all 4 cases and both mutations.
+    - The messages meet the acceptance criteria.
+
+    **Two items to address.**
+
+    ### Must fix
+    1. **Agent-mode `help:` points at a command that will fail again.** See `aida-cli-lib/src/lib_part5.rs:3432-3434`.
+       - In agent output mode, `extract_aida_suggestion` (`lib_part1.rs:555`) takes the first backticked `aida …` in the message and prints it as `help:`.
+       - The new message therefore yields `help: aida review record`. Running that again without exporting an identity fails the same way. This bug was reported through that very `help:` line.
+       - **Fix:** remove the backticks around `aida review record` (and around any other `aida …` command in the grant-case text) so no `help:` line is emitted. Alternatively, phrase the text so the first backticked `aida` command is not a retry.
+       - **Test:** assert that `extract_aida_suggestion(<grant-case message>)` is `None`, or at least not `aida review record`.
+    2. **CI Build is red at this SHA.** The failure is the known `test_show_latency.py` rmtree flake (BUG-1990), unrelated to this PR. Your new push triggers a fresh run; if it hits the flake again, the advisor re-runs it.
+
+    ### Optional (cheap; do it if it stays small)
+    3. Add an end-to-end test in `aida-cli/tests` that:
+       - uses `support::ensure_seat` to mint a grant,
+       - leaves `AIDA_AGENT_TYPE` and `AIDA_AGENT_NAME` unset,
+       - runs with piped stdio,
+       - asserts the new message and exit code 1, plus the old message when there is no grant.
+       This guards the `#[cfg(not(test))]` call site.
+
+    ### Done when
+    - No `help:` retry hint appears in the grant case, and a test locks that in.
+    - The commit follows `[AI:claude] fix(review): … (BUG-1978)`.
+    - `make check-ci-fast` passes, with no `--no-verify`.
+    - A fresh reviewer gates the new head.
+  created_at: 2026-10-12T20:55:10.193309766Z
+  modified_at: 2026-10-12T20:55:10.193309766Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309d-08c7-7743-9b13-e1476515c8bd
   author: joe
