@@ -313,6 +313,63 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     }
 }
 
+/// Why a `git push` failed. Git reports no structured reason (only an exit
+/// status and stderr prose), so [`classify_push_failure`] derives this from
+/// stderr through the central `external_tool_output` registry.
+// trace:BUG-1969 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushFailure {
+    /// The remote ref moved (non-fast-forward / fetch first): pull and retry.
+    NonFastForward,
+    /// The remote refused because the target branch is protected.
+    ProtectedRef,
+    /// Missing credentials or no write permission on the remote.
+    PermissionDenied,
+    /// A server-side hook or policy declined the ref update.
+    RemoteDeclined,
+    /// The remote could not be reached at all (offline / network down).
+    Unreachable,
+    /// Anything else: surface git's own message.
+    Other,
+}
+
+/// Classify a failed `git push`'s stderr. Order matters: protected-ref,
+/// permission and server-declined wording all overlap the bare "rejected"
+/// that marks a non-fast-forward, and git appends "check access rights"
+/// prose to unreachable-host failures too, so the specific classes are
+/// tested first and unknown prose falls through to [`PushFailure::Other`]
+/// rather than being mistaken for the retryable or offline cases.
+// trace:BUG-1969 | ai:claude
+pub fn classify_push_failure(stderr: &str) -> PushFailure {
+    // external-prose-classifier: git_ops::classify_push_failure
+    use crate::external_tool_output::{
+        contains_any_case_insensitive as has, GIT_PUSH_PERMISSION_DENIED, GIT_PUSH_PROTECTED_REF,
+        GIT_PUSH_REJECTED, GIT_PUSH_REMOTE_DECLINED, GIT_REMOTE_UNREACHABLE,
+    };
+    if has(stderr, GIT_PUSH_PROTECTED_REF) {
+        PushFailure::ProtectedRef
+    } else if has(stderr, GIT_PUSH_PERMISSION_DENIED) {
+        PushFailure::PermissionDenied
+    } else if has(stderr, GIT_PUSH_REMOTE_DECLINED) {
+        PushFailure::RemoteDeclined
+    } else if has(stderr, GIT_PUSH_REJECTED) {
+        PushFailure::NonFastForward
+    } else if has(stderr, GIT_REMOTE_UNREACHABLE) {
+        PushFailure::Unreachable
+    } else {
+        PushFailure::Other
+    }
+}
+
+/// Result of [`push_exact_outcome`]: pushed, or failed with git's stderr and
+/// its [`PushFailure`] class.
+// trace:BUG-1969 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushOutcome {
+    Pushed,
+    Failed { kind: PushFailure, stderr: String },
+}
+
 /// Push exactly commit `sha` to `remote`'s `branch` (`<sha>:refs/heads/<branch>`).
 /// Returns true on success, false if rejected (non-fast-forward), like
 /// [`push`]. Store writers capture `sha` under the store write lock and push
@@ -323,6 +380,31 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
 #[cfg(feature = "native")]
 pub fn push_exact(repo: &Path, remote: &str, sha: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push_exact
+    match push_exact_outcome(repo, remote, sha, branch)? {
+        PushOutcome::Pushed => Ok(true),
+        PushOutcome::Failed { stderr, .. }
+            if crate::external_tool_output::contains_any_case_insensitive(
+                &stderr,
+                crate::external_tool_output::GIT_PUSH_REJECTED,
+            ) =>
+        {
+            Ok(false)
+        }
+        PushOutcome::Failed { stderr, .. } => anyhow::bail!("git push failed: {}", stderr),
+    }
+}
+
+/// [`push_exact`] with the failure classified rather than collapsed to
+/// rejected-or-error. `Err` is reserved for not being able to run the push at
+/// all (a held store write lock, an option-like branch, git missing).
+// trace:BUG-1969 trace:TASK-1717 | ai:claude
+#[cfg(feature = "native")]
+pub fn push_exact_outcome(
+    repo: &Path,
+    remote: &str,
+    sha: &str,
+    branch: &str,
+) -> Result<PushOutcome> {
     anyhow::ensure!(
         !crate::db::any_store_write_lock_held(),
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
@@ -331,15 +413,12 @@ pub fn push_exact(repo: &Path, remote: &str, sha: &str, branch: &str) -> Result<
     let refspec = format!("{sha}:refs/heads/{branch}");
     let result = git(repo, &["push", "--end-of-options", remote, &refspec])?;
     if result.success {
-        Ok(true)
-    } else if crate::external_tool_output::contains_any_case_insensitive(
-        &result.stderr,
-        crate::external_tool_output::GIT_PUSH_REJECTED,
-    ) {
-        Ok(false)
-    } else {
-        anyhow::bail!("git push failed: {}", result.stderr);
+        return Ok(PushOutcome::Pushed);
     }
+    Ok(PushOutcome::Failed {
+        kind: classify_push_failure(&result.stderr),
+        stderr: result.stderr,
+    })
 }
 
 /// Refuse a dash-led `value` that git would read as an option. Used where
@@ -7184,5 +7263,157 @@ mod tests {
         assert!(load_requirements_strict(dir.path()).is_err());
         let empty = tempfile::tempdir().unwrap();
         assert!(load_requirements_strict(empty.path()).unwrap().is_empty());
+    }
+
+    // trace:BUG-1969 | ai:claude — each push-failure class from real git /
+    // ssh / libcurl / GitHub / GitLab stderr shapes.
+    #[test]
+    fn bug_1969_classify_push_failure_each_class() {
+        let cases: &[(&str, PushFailure)] = &[
+            (
+                "To github.com:o/r.git\n ! [rejected]        abc -> aida-store (fetch first)\nerror: failed to push some refs",
+                PushFailure::NonFastForward,
+            ),
+            (
+                " ! [rejected]        abc -> main (non-fast-forward)",
+                PushFailure::NonFastForward,
+            ),
+            (
+                "fatal: unable to access 'https://github.com/o/r.git/': Could not resolve host: github.com",
+                PushFailure::Unreachable,
+            ),
+            (
+                "ssh: Could not resolve hostname github.com: Temporary failure in name resolution\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+                PushFailure::Unreachable,
+            ),
+            (
+                "ssh: connect to host github.com port 22: Connection timed out\nfatal: Could not read from remote repository.",
+                PushFailure::Unreachable,
+            ),
+            (
+                "fatal: unable to access 'https://h/r.git/': Failed to connect to h port 443 after 3 ms: Couldn't connect to server",
+                PushFailure::Unreachable,
+            ),
+            (
+                "fatal: '/nonexistent/origin.git' does not appear to be a git repository\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+                PushFailure::Unreachable,
+            ),
+            (
+                "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+                PushFailure::PermissionDenied,
+            ),
+            (
+                "remote: Permission to o/r.git denied to someone.\nfatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 403",
+                PushFailure::PermissionDenied,
+            ),
+            (
+                "remote: Invalid username or password.\nfatal: Authentication failed for 'https://github.com/o/r.git/'",
+                PushFailure::PermissionDenied,
+            ),
+            (
+                "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+                PushFailure::PermissionDenied,
+            ),
+            (
+                "remote: error: GH006: Protected branch update failed for refs/heads/main.\nTo github.com:o/r.git\n ! [remote rejected] abc -> main (protected branch hook declined)",
+                PushFailure::ProtectedRef,
+            ),
+            (
+                "remote: GitLab: You are not allowed to push code to protected branches on this project.\n ! [remote rejected] abc -> main (pre-receive hook declined)",
+                PushFailure::ProtectedRef,
+            ),
+            (
+                "remote: commit message lacks a ticket\n ! [remote rejected] abc -> main (pre-receive hook declined)\nerror: failed to push some refs",
+                PushFailure::RemoteDeclined,
+            ),
+            (
+                " ! [remote rejected] abc -> main (shallow update not allowed)",
+                PushFailure::RemoteDeclined,
+            ),
+            (
+                "error: failed to push some refs to 'origin'",
+                PushFailure::Other,
+            ),
+            ("", PushFailure::Other),
+        ];
+        for (stderr, want) in cases {
+            assert_eq!(classify_push_failure(stderr), *want, "stderr: {stderr}");
+        }
+    }
+
+    // trace:BUG-1969 | ai:claude — real git: a declining pre-receive hook is
+    // RemoteDeclined (not a retryable non-fast-forward, though git's stderr
+    // says "rejected"), a missing path origin is Unreachable, a moved remote
+    // ref is NonFastForward, and `push_exact`'s bool/Err contract is kept.
+    #[cfg(unix)]
+    #[test]
+    fn bug_1969_push_exact_outcome_against_real_remotes() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        run_git(
+            dir.path(),
+            &["init", "-q", "--bare", "-b", "main", bare.to_str().unwrap()],
+        );
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        let seed = run_git(&repo, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            push_exact_outcome(&repo, "origin", &seed, "main").unwrap(),
+            PushOutcome::Pushed
+        );
+
+        // Non-fast-forward: an unrelated root commit cannot replace `main`.
+        run_git(&repo, &["checkout", "-q", "--orphan", "other"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "unrelated"]);
+        let unrelated = run_git(&repo, &["rev-parse", "HEAD"]);
+        match push_exact_outcome(&repo, "origin", &unrelated, "main").unwrap() {
+            PushOutcome::Failed { kind, stderr } => {
+                assert_eq!(kind, PushFailure::NonFastForward, "{stderr}")
+            }
+            other => panic!("expected a rejection, got {other:?}"),
+        }
+        assert!(!push_exact(&repo, "origin", &unrelated, "main").unwrap());
+
+        // Server hook declines every update.
+        let hook = bare.join("hooks/pre-receive");
+        std::fs::write(
+            &hook,
+            "#!/bin/sh\necho 'policy: no pushes today' >&2\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        run_git(&repo, &["checkout", "-q", "main"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "next"]);
+        let next = run_git(&repo, &["rev-parse", "HEAD"]);
+        match push_exact_outcome(&repo, "origin", &next, "main").unwrap() {
+            PushOutcome::Failed { kind, stderr } => {
+                assert_eq!(kind, PushFailure::RemoteDeclined, "{stderr}");
+                assert!(stderr.contains("policy: no pushes today"), "{stderr}");
+            }
+            other => panic!("expected a declined push, got {other:?}"),
+        }
+        // `push_exact` keeps its contract: other callers still see Ok(false).
+        assert!(!push_exact(&repo, "origin", &next, "main").unwrap());
+
+        // Unreachable: origin points at a path that does not exist.
+        let gone = dir.path().join("gone.git");
+        run_git(
+            &repo,
+            &["remote", "set-url", "origin", gone.to_str().unwrap()],
+        );
+        match push_exact_outcome(&repo, "origin", &next, "main").unwrap() {
+            PushOutcome::Failed { kind, stderr } => {
+                assert_eq!(kind, PushFailure::Unreachable, "{stderr}")
+            }
+            other => panic!("expected unreachable, got {other:?}"),
+        }
+        let err = push_exact(&repo, "origin", &next, "main").unwrap_err();
+        assert!(err.to_string().starts_with("git push failed:"), "{err:#}");
     }
 }

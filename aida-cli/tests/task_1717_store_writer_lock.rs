@@ -2116,6 +2116,34 @@ fn unreachable_origin_files_locally_and_defers() {
     assert_eq!(fx.subjects("HEAD")[0], "update TASK-1");
 }
 
+/// BUG-1969: a reachable origin whose server hook declines the push is not
+/// the offline case: `add` keeps the local commit but fails with the hook's
+/// own message instead of the "origin unreachable" deferral.
+// trace:BUG-1969 | ai:claude
+#[cfg(unix)]
+#[test]
+fn hook_declined_push_fails_with_the_real_message_not_offline() {
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture();
+    let hook = fx.origin.join("hooks/pre-receive");
+    std::fs::write(
+        &hook,
+        "#!/bin/sh\necho 'store is frozen for audit' >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let add = fx.run(&["add", "filed under audit", "--type", "task"]);
+    let out = text(&add);
+    assert!(!add.status.success(), "{out}");
+    assert!(out.contains("hook or policy declined"), "{out}");
+    assert!(out.contains("store is frozen for audit"), "{out}");
+    assert!(!out.contains("unreachable"), "{out}");
+    assert!(fx
+        .subjects("HEAD")
+        .iter()
+        .any(|s| s.contains("filed under audit")));
+}
+
 /// Group 4: both sides edit the same spec object; the pull's window unions
 /// the structural conflict and the rebase completes.
 #[test]
