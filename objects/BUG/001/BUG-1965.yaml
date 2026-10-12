@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T17:55:31.926194831Z
+modified_at: 2026-10-12T18:08:45.297034365Z
 req_type: Bug
 tags:
 - groom:approve
@@ -63,6 +63,32 @@ comments:
   content: 'Acceptance deviation (stress criterion), recorded by the implementer at PR #2559 head 8f242ed2fb: the ''50 consecutive runs while a second cargo test --workspace runs in parallel'' was run as 50 consecutive runs of the prebuilt aida-core test binary filtered to reader_incremental_lock_error (--test-threads=16, equivalent to the cargo command minus the build step) while the FULL aida-core test binary looped alongside at --test-threads=16 (host load average 9-25; another 20 runs on the reworked head, 20/20). Result 50/50 + 20/20 pass. Why not a parallel cargo test --workspace: it needs a full workspace test build on the shared cargo slots (host load average reached ~79 during this work), and it contributes only cross-process CPU/IO load, which is what the looping aida-core suite already provides. Neither load can trigger the in-process cause (a sibling thread''s fork inheriting the refresh flock happens only inside the same test process), so both causes are instead covered by deterministic injection: a transient foreign flock holder (retried as refresh_lock_contended) and a forced ancestor-check timeout (retried as ancestor_check_failed); forcing either on every attempt still fails the test.'
   created_at: 2026-10-12T17:55:31.926194831Z
   modified_at: 2026-10-12T17:55:31.926194831Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a1314d-80f1-7fa3-af6f-1b1f74604efe
+  author: joe
+  content: |-
+    **Advisor rework brief — round 2/3 — PR #2559 (BUG-1965), REQUEST CHANGES at 8f242ed2fb**
+
+    Round-1 items 2–4 are resolved, and item 1 is resolved in code. The strict re-review confirmed that production behaviour is unchanged (`Err` still maps to `false`) and that the budget pin stays scope-local. Its mutation checks: forcing every check to `Err` fails the test, holding the lock for the whole test fails it, and removing `refresh_lock_contended` fails its guard.
+
+    **Must fix (the only blocker)**
+    1. **`ancestor_check_failed` has no guard test** (`aida-core/src/db/cached_git_backend.rs:612-613`). Deleting the counter passes all 290 `db::` tests. Add a guard modelled on `reader_path_never_calls_with_cache_write`, without the held lock. The reviewer prototyped one that passes on this PR and fails when the counter line is removed:
+       ```rust
+       scope.configure(false, Some(ReadBudget(Duration::from_nanos(1))));
+       test_counts();
+       backend.list_summaries(&ListFilter::default()).unwrap();
+       let counts = test_counts();
+       assert!(counts.contains_key("ancestor_check_failed"), "{counts:?}");
+       assert_eq!(counts.get("write_attempt"), None);
+       ```
+       **Done when:** the guard passes, and it fails with the counter line removed (show that once).
+
+    **Optional**
+    2. Bump `refresh_lock_contended` only on the final hand-off. This is slightly more precise now that the 10 s pin lets a briefly contended read still win. Not required.
+
+    Narrow tests, then `make check-ci-fast` must PASS, then push as a separate step to the same branch. This is round 2 of 3; one more REQUEST CHANGES parks the PR for the operator.
+  created_at: 2026-10-12T18:08:45.297034365Z
+  modified_at: 2026-10-12T18:08:45.297034365Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-c749-7e22-a179-4a9fde487355
