@@ -4,12 +4,12 @@ agreed_id: DOC-6
 title: Entering session-bound seats and delegating child seats
 description: |
   Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...])"` at an interactive human TTY to establish a session seat. The requested seat must be in the user's team roster; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>` at a TTY. Child delegation is empty by default: list each permitted child seat with a repeated `--delegate-seat`. AIDA launchers issue a distinct grant for each requested child seat; children cannot delegate onward unless explicitly issued delegation scope. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An MCP server captures the grant it starts with, so enter advisor at a TTY and restart/reconnect the server to change its authority.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-12T04:10:27.535766667Z
+modified_at: 2026-10-12T04:20:17.621675449Z
 req_type: Doc
 tags:
 - factory:2026-10-11
@@ -325,6 +325,11 @@ comments:
   created_at: 2026-10-12T04:10:27.535766667Z
   modified_at: 2026-10-12T04:10:27.535766667Z
   session_id: 5299b498-823f-4adc-9eeb-6b89a5088d15
+- id: 01a12e57-0655-79f0-95ca-48a74e4b9d12
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 5: all five rework-brief items done; the per-launcher table verified row by row against origin/main; the roles chapter is now accurate. Three textual inaccuracies remain in hunks this PR rewrote (advisor-role.md x2, environment-variables.md). Text-only fix; no re-architecture.. No triage reason was given.'
+  created_at: 2026-10-12T04:20:17.621668658Z
+  modified_at: 2026-10-12T04:20:17.621668658Z
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
@@ -340,6 +345,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a12e57-0655-79f0-95ca-4897ed0c9eb6
+  author: joe
+  timestamp: 2026-10-12T04:20:17.621658009Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
   branch: story-1473
@@ -350,11 +362,3 @@ filed_at:
 custom_fields:
   audience: user,agent
   scenario: session-authority
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 5: all five rework-brief items done; the per-launcher table verified row by row against origin/main; the roles chapter is now accurate. Three textual inaccuracies remain in hunks this PR rewrote (advisor-role.md x2, environment-variables.md). Text-only fix; no re-architecture.'
-  recovery_hint: address the review findings, move DOC-6 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-12T03:35:53.499515547Z
