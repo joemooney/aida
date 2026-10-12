@@ -19,10 +19,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-12T09:25:21.631086868Z
+modified_at: 2026-10-12T09:25:22.484493849Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
+- parked:night
 - pr-ship
 comments:
 - id: 01a12b8a-adb7-7d33-affc-bf558989a6f9
