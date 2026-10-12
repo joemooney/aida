@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-12T06:08:07.977309721Z
+modified_at: 2026-10-12T15:02:19.221627518Z
 req_type: Story
 tags:
 - from:aida-host
@@ -54,6 +54,12 @@ comments:
   created_at: 2026-10-12T06:08:07.977309721Z
   modified_at: 2026-10-12T06:08:07.977309721Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-d155-7532-82bd-3baa09225738
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option A, built-in probes only; no shell commands from the synced store. Drift results are report-only and never run implicitly by sync or drain. B (trust-pinned commands) is deferred. Security: operator merges.'
+  created_at: 2026-10-12T15:02:19.221627518Z
+  modified_at: 2026-10-12T15:02:19.221627518Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
