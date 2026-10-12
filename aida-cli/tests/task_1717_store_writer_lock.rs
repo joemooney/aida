@@ -235,10 +235,12 @@ aida_pid=$(ps -o ppid= -p "$git_pid" | tr -d ' ')
 locks() { for f in /proc/"$1"/fd/*; do readlink "$f"; done 2>/dev/null | grep '\.lock$' | sort | tr '\n' ' '; }
 # trace:BUG-1989 | ai:claude
 # Who holds the store lock when the probe reads it held: the flock owners
-# /proc/locks names for the lock file's inode (waiters, "->", excluded), each
-# with whether it belongs to the command under test.
+# /proc/locks names for the lock file's device and inode (waiters, "->",
+# excluded), each with whether it belongs to the command under test. The device
+# is matched too: an ancestor (cargo, the test binary) may hold an unrelated
+# flock whose inode number collides on another filesystem.
 lock_file=$(readlink -f "$T1717_LOCK")
-lock_ino=$(stat -c %i "$lock_file" 2>/dev/null)
+lock_id=$(printf '%02x:%02x:%s' $(stat -c '%Hd %Ld %i' "$lock_file" 2>/dev/null))
 ppid_of() { awk '/^PPid:/ { print $2 }' /proc/"$1"/status 2>/dev/null; }
 # The aida process and its ancestors: a parent that holds the lock and pushes
 # from a child (a wrapper, a refresh or auto-push worker) is in the tree too.
@@ -276,7 +278,7 @@ proc_info() {
     "$(pf "$1" cmdline | tr '\0' ' ')"
 }
 holders() {
-  awk -v ino="$lock_ino" '$2 != "->" { n = split($6, a, ":"); if (a[n] == ino) print $5 }' /proc/locks | sort -u |
+  awk -v id="$lock_id" '$2 != "->" && $6 == id { print $5 }' /proc/locks | sort -u |
   while read -r pid; do
     echo "lock_holder=pid=$pid tree=$(in_tree "$pid") $(proc_info "$pid")"
   done
@@ -1158,8 +1160,9 @@ fn push_probe_still_fails_a_lock_held_by_the_pushing_process() {
         (
             "reparented",
             format!(
-                r#"(flock "$L" -c ': > "$H"; while [ ! -f "$R" ]; do sleep 0.02; done' &)
-while [ ! -f "$H" ]; do sleep 0.02; done
+                r#"(flock "$L" -c ': > "$H"; i=0; while [ ! -f "$R" ] && [ $i -lt 1500 ]; do sleep 0.02; i=$((i+1)); done' &)
+i=0; while [ ! -f "$H" ] && [ $i -lt 1500 ]; do sleep 0.02; i=$((i+1)); done
+[ -f "$H" ] || {{ : > "$R"; echo "helper never took the lock" >&2; exit 1; }}
 {push}; s=$?; : > "$R"; exit $s"#
             ),
         ),
