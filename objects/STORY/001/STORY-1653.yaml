@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T23:53:05.152941407Z
-modified_at: 2026-10-11T23:16:50.020156264Z
+modified_at: 2026-10-12T02:33:06.256486391Z
 req_type: Story
 tags:
 - batch:next
@@ -54,6 +54,11 @@ tags:
 - observability
 - ps
 - relay
+relationships:
+- rel_type: Child
+  target_id: 01a12df4-c0b2-75e1-ab09-5bc4cc36d368
+  created_at: 2026-10-12T02:33:06.256483031Z
+  created_by: joe
 comments:
 - id: 01a128e6-cdba-7123-9faa-a9d1063817ff
   author: joe
