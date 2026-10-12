@@ -4856,6 +4856,26 @@ mod tests {
         );
     }
 
+    // Guards the counter the write-lock test relies on to discard a run whose
+    // ancestry check timed out: with a 1 ns read budget the lock winner's
+    // check cannot finish, the read hands off, and no write is attempted.
+    // trace:BUG-1965 | ai:claude
+    #[test]
+    fn reader_ancestor_check_timeout_is_counted_and_never_writes() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, _path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::from_nanos(1))));
+        test_counts();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        let counts = test_counts();
+        assert!(counts.contains_key("ancestor_check_failed"), "{counts:?}");
+        assert_eq!(counts.get("write_attempt"), None, "{counts:?}");
+        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+    }
+
     // trace:TASK-1526 | ai:codex
     #[test]
     fn reader_path_never_calls_with_cache_write() {
