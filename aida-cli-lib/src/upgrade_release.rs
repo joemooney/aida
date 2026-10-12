@@ -389,7 +389,7 @@ mod task_1244_drain_merge_lease_tests {
     #[test]
     fn drain_merge_and_wave_merge_take_the_merge_lease() {
         let src = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
@@ -397,7 +397,8 @@ mod task_1244_drain_merge_lease_tests {
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
             include_str!("lib_part6.rs"),
-            include_str!("burndown_run.rs")
+            include_str!("burndown_run.rs"),
+            include_str!("phase_driver_trait.rs")
         );
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
@@ -804,14 +805,15 @@ mod bug_1205_ci_phase_fallthrough_tests {
     #[test]
     fn informational_red_falls_through_to_the_green_steps() {
         let src = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("phase_driver_trait.rs")
         );
         // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
         // so searching the file for the first `fn finish_ci` now lands on a mock
