@@ -2307,3 +2307,36 @@ items = [
   "fn handle_burndown_plan",
 ]
 
+[module.queue_misc]
+purpose = "queue helpers: batch tags, role and user filters, mail identity, effort load, stack/headless/worker commands (STORY-1488 slice 1)"
+items = [
+  "fn maybe_hint_after_queue_drain",
+  "fn parse_squash_pr_number",
+  "fn format_tag_chip",
+  "fn tag_matches_exact",
+  "fn tag_matches_prefix",
+  "fn batch_tag_of",
+  "fn strip_batch_prefix",
+  "fn normalize_batch_name",
+  "fn parse_batch_chain",
+  "fn is_next_keyword_id",
+  "fn resolve_queue_work_batch",
+  "fn resolve_mail_sender_identity",
+  "fn resolve_mail_sender_role",
+  "fn drain_queue_user_id",
+  "fn resolve_list_user_filter",
+  "fn resolve_node_name",
+  "fn default_queue_collision_fingerprint",
+  "fn resolve_queue_role_filter",
+  "fn entry_matches_role_filter",
+  "fn build_queue_warn_subset",
+  "fn warn_if_queued_ahead_of_blocker",
+  "fn effort_display_id",
+  "fn latest_effort_for_req",
+  "fn print_effort_load_for_requirements",
+  "fn queued_requirement_ids",
+  "fn handle_stack_command",
+  "fn handle_headless_command",
+  "fn handle_worker_command",
+]
+
