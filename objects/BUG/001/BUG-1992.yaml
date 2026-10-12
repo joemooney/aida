@@ -1,0 +1,35 @@
+id: 01a130f9-789c-74f1-9291-ee33199ad895
+spec_id: BUG-1992
+agreed_id: BUG-1992
+title: 'BUG-1929 follow-up: harden the raw-store-git guard test and route the remaining store/worktree git calls through host_git_command'
+description: |-
+  Found by the strict round-4 review of #2541 (BUG-1929) at c6174e7545 (APPROVE; these are non-blocking).
+  ## Findings
+  1. MEDIUM: bug_1929_store_git_guard (bug_1929_contained_store_tests.rs ~:777 regex, ~:818 scan) flags a raw git call only when nearby code names a store-ish variable. Not flagged: `let dir = detect_distributed_store().unwrap(); Command::new("git").arg("-C").arg(&dir)...`, `self.root`/`root` (git_backend.rs:621 already passes unflagged), aliased `PCmd::new("git")`, helper indirection, crates other than aida-core/aida-cli-lib.
+  2. LOW: aida-core/src/db/git_backend.rs:621 auto_commit_paths runs raw `git -C self.root diff --cached --quiet` over the store without a justification comment (tested not exec-capable).
+  3. LOW: worktree_dirty_entries (status_sections.rs:58; callers :168, status_awaiting.rs:50, doctor_cmd.rs:5914, worktree_gc.rs:269) runs raw git status per worktree, skipping the store only by branch name read from a HEAD under <main>/.git/worktrees (writable via BUG-1982).
+  4. LOW: the F1 regression test fails at fetch_branch(..).unwrap() (~:985) before its marker assertion on old code; assert the marker first for a clearer message.
+  ## Acceptance
+  - The guard treats store-owning modules (db/git_backend.rs, db/cached_git_backend.rs, store_sync.rs, store_cmd.rs, store_locate.rs, store_push_pull.rs) as raw-call-forbidden, matches `\w+::new("git")` aliases, and fails on each bypass shape above (test per shape).
+  - git_backend.rs:621 routed through host_git_command or annotated raw-git-ok(BUG-1929).
+  - worktree_dirty_entries built with host_git_command.
+  - May be folded into BUG-1985 if that lands first. Superseded entirely if STORY-1681 (host-owned store) lands.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T16:36:58.140844454Z
+modified_at: 2026-10-12T16:36:58.140844454Z
+req_type: Bug
+tags:
+- sandbox
+- security
+- store
+filed_at:
+  code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
