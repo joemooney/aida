@@ -460,6 +460,8 @@ struct Collected {
     interactive: bool,
     budget: Option<ReadBudget>,
     stale: Option<StaleServe>,
+    // trace:BUG-1956 | ai:claude
+    ladder_waited: Duration,
 }
 thread_local! {
     static COLLECTED: RefCell<Collected> = RefCell::new(Collected::default());
@@ -520,6 +522,7 @@ pub fn reset_cache_read_observations() {
         c.touched = false;
         c.stale = None;
         c.wait_deadline = None;
+        c.ladder_waited = Duration::ZERO;
     });
 }
 
@@ -572,6 +575,27 @@ pub(super) fn wait_remaining(budget: Duration) -> Duration {
         *deadline = (*deadline).min(proposed);
         deadline.saturating_duration_since(now)
     })
+}
+
+/// The SQLite-ladder wait a read may still spend in this invocation, or
+/// `None` when the invocation has no explicit read budget (a mutation, or a
+/// plain command keeping the default policy): those keep the full ladder.
+/// The allowance is shared by every refresh in the invocation, so a backend
+/// constructor and the query after it never get `cap` each.
+// trace:BUG-1956 | ai:claude
+pub(super) fn read_ladder_allowance(cap: Duration) -> Option<Duration> {
+    COLLECTED.with(|c| {
+        let c = c.borrow();
+        c.budget.map(|_| cap.saturating_sub(c.ladder_waited))
+    })
+}
+
+// trace:BUG-1956 | ai:claude
+pub(super) fn record_ladder_wait(waited: Duration) {
+    COLLECTED.with(|c| {
+        let mut c = c.borrow_mut();
+        c.ladder_waited = c.ladder_waited.saturating_add(waited);
+    });
 }
 
 // trace:TASK-1526 | ai:codex

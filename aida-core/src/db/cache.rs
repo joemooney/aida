@@ -659,50 +659,53 @@ impl Drop for HoldingWrite {
 }
 
 // BUG-1956: a reader-side backstop on the SQLite retry ladder. While a
-// `ReadLadderDeadline` is alive on this thread, every ladder stops sleeping
-// once the deadline passes, so a reader that still has to write (first
-// build, pending migration) fails with the usual lock-holder error inside
-// ADR-53's 5 s ceiling instead of riding the full ~25.5 s ladder.
+// `ReadLadderBudget` guard is alive on this thread AND the invocation is an
+// explicitly budgeted read (see `cache_refresh::read_ladder_allowance`), the
+// ladder's sleeps draw on one invocation-wide wait allowance. A reader that
+// still has to write (first build, pending migration) then fails with the
+// usual lock-holder error inside ADR-53's 5 s ceiling instead of riding the
+// full ~25.5 s ladder. Only time spent WAITING counts, so a slow store load
+// never spends it; mutations (no explicit read budget) keep the full ladder.
 // trace:BUG-1956 | ai:claude
 pub(super) const READ_LADDER_CAP: Duration = Duration::from_secs(3);
 
 thread_local! {
     // trace:BUG-1956 | ai:claude
-    static READ_LADDER_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
-        const { std::cell::Cell::new(None) };
+    static READ_LADDER_ARMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Caps every retry ladder on this thread at `now + cap` until dropped.
-/// Nested guards keep the earliest deadline and restore their caller's.
+/// Arms the read wait allowance for ladders on this thread until dropped.
 // trace:BUG-1956 | ai:claude
-pub(super) struct ReadLadderDeadline(Option<std::time::Instant>);
-impl ReadLadderDeadline {
-    pub(super) fn new(cap: Duration) -> Self {
-        let proposed = std::time::Instant::now() + cap;
-        Self(READ_LADDER_DEADLINE.with(|c| {
-            let prev = c.get();
-            c.set(Some(prev.map_or(proposed, |p| p.min(proposed))));
-            prev
-        }))
+pub(super) struct ReadLadderBudget(());
+impl ReadLadderBudget {
+    pub(super) fn arm() -> Self {
+        READ_LADDER_ARMED.with(|n| n.set(n.get() + 1));
+        Self(())
     }
 }
-impl Drop for ReadLadderDeadline {
+impl Drop for ReadLadderBudget {
     fn drop(&mut self) {
-        READ_LADDER_DEADLINE.with(|c| c.set(self.0));
+        READ_LADDER_ARMED.with(|n| n.set(n.get() - 1));
     }
+}
+
+/// The armed read allowance left, or `None` when this ladder is uncapped.
+// trace:BUG-1956 | ai:claude
+fn read_ladder_allowance() -> Option<Duration> {
+    if READ_LADDER_ARMED.with(|n| n.get()) == 0 {
+        return None;
+    }
+    super::cache_refresh::read_ladder_allowance(READ_LADDER_CAP)
 }
 
 /// The sleep before retry `attempts`, or `None` when the ladder (or the
-/// reader's deadline) is spent.
+/// reader's wait allowance) is spent.
 // trace:BUG-1956 | ai:claude
 fn ladder_delay(delays: &[Duration], attempts: usize) -> Option<Duration> {
     let delay = *delays.get(attempts)?;
-    match READ_LADDER_DEADLINE.with(|c| c.get()) {
+    match read_ladder_allowance() {
         None => Some(delay),
-        Some(deadline) => {
-            let left = deadline.saturating_duration_since(std::time::Instant::now());
-            (!left.is_zero()).then(|| delay.min(left))
-        }
+        Some(left) => (!left.is_zero()).then(|| delay.min(left)),
     }
 }
 
@@ -1156,6 +1159,10 @@ where
                 #[cfg(test)]
                 super::cache_refresh::test_count("retry_sleep");
                 std::thread::sleep(delay);
+                // trace:BUG-1956 | ai:claude
+                if READ_LADDER_ARMED.with(|n| n.get()) > 0 {
+                    super::cache_refresh::record_ladder_wait(delay);
+                }
                 attempts += 1;
             }
             Err(err) => return Err(err),
@@ -6224,49 +6231,65 @@ mod tests {
         remove_cache_lock_info(&cache_path);
     }
 
-    /// BUG-1956: a reader's ladder deadline caps the whole retry ladder, so
-    /// a busy SQLite writer costs at most the cap, never the ~25.5 s ladder,
-    /// and the terminal error still names the lock.
+    fn busy_ladder(cache_path: &Path) -> anyhow::Error {
+        with_cache_retry(cache_path, "read-side cache write", || -> Result<()> {
+            Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: rusqlite::ErrorCode::DatabaseBusy,
+                    extended_code: 5,
+                },
+                None,
+            )))
+        })
+        .expect_err("a held lock must exhaust the ladder")
+    }
+
+    /// BUG-1956: an armed, explicitly budgeted read caps the whole retry
+    /// ladder at what is left of the invocation's wait allowance, and the
+    /// terminal error still names the lock.
     // trace:BUG-1956 | ai:claude
     #[test]
-    fn read_ladder_deadline_caps_the_retry_ladder() {
+    fn read_ladder_budget_caps_the_retry_ladder() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        // An earlier refresh in this invocation already waited most of it.
+        record_ladder_wait(READ_LADDER_CAP - Duration::from_millis(300));
         let started = std::time::Instant::now();
         let err = {
-            let _deadline = ReadLadderDeadline::new(Duration::from_millis(300));
-            with_cache_retry(&cache_path, "read-side cache write", || -> Result<()> {
-                Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
-                    rusqlite::ffi::Error {
-                        code: rusqlite::ErrorCode::DatabaseBusy,
-                        extended_code: 5,
-                    },
-                    None,
-                )))
-            })
-            .expect_err("a held lock must exhaust the capped ladder")
+            let _armed = ReadLadderBudget::arm();
+            busy_ladder(&cache_path)
         };
         let elapsed = started.elapsed();
         assert!(elapsed < Duration::from_secs(2), "ladder ran {elapsed:?}");
         assert!(is_cache_lock_error(&err), "{err:#}");
         assert!(err.to_string().contains("database is locked"), "{err}");
-        // The guard restores the caller's (absent) deadline on drop.
-        assert!(READ_LADDER_DEADLINE.with(|c| c.get()).is_none());
+        // The allowance is spent for the rest of this invocation.
+        let _armed = ReadLadderBudget::arm();
+        assert_eq!(read_ladder_allowance(), Some(Duration::ZERO));
+        assert_eq!(ladder_delay(&[Duration::from_millis(100)], 0), None);
     }
 
-    /// BUG-1956: nested deadlines keep the earliest one.
+    /// BUG-1956: without an explicit read budget (a mutation's invocation)
+    /// or without an armed guard, the ladder is never capped.
     // trace:BUG-1956 | ai:claude
     #[test]
-    fn nested_read_ladder_deadline_keeps_the_earliest() {
-        let outer = ReadLadderDeadline::new(Duration::from_millis(50));
-        let outer_at = READ_LADDER_DEADLINE.with(|c| c.get()).unwrap();
+    fn read_ladder_budget_leaves_unbudgeted_ladders_alone() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        let full = [Duration::from_millis(100)];
+        let scope = CacheReadScope::new();
+        scope.configure(false, None);
+        record_ladder_wait(READ_LADDER_CAP);
         {
-            let _inner = ReadLadderDeadline::new(Duration::from_secs(60));
-            assert_eq!(READ_LADDER_DEADLINE.with(|c| c.get()), Some(outer_at));
+            let _armed = ReadLadderBudget::arm();
+            assert_eq!(read_ladder_allowance(), None);
+            assert_eq!(ladder_delay(&full, 0), Some(full[0]));
         }
-        assert_eq!(READ_LADDER_DEADLINE.with(|c| c.get()), Some(outer_at));
-        drop(outer);
-        assert!(READ_LADDER_DEADLINE.with(|c| c.get()).is_none());
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        assert_eq!(read_ladder_allowance(), None, "not armed");
+        assert_eq!(ladder_delay(&full, 0), Some(full[0]));
     }
 
     #[test]

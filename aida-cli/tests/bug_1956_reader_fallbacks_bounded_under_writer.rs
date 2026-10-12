@@ -42,6 +42,8 @@ fn aida_env(fixture: &Fixture, args: &[&str], envs: &[(&str, &str)]) -> Output {
         .env_remove("AIDA_CACHE_RETRY_COUNT")
         .env_remove("AIDA_CACHE_RETRY_MS")
         .env_remove("AIDA_CACHE_NO_DETACH")
+        .env_remove("AIDA_CACHE_FAST_FAIL")
+        .env_remove("AIDA_CACHE_READ_WAIT_MS")
         .args(args);
     for (key, value) in envs {
         cmd.env(key, value);
@@ -250,4 +252,46 @@ fn show_is_bounded_when_the_schema_stamp_is_missing() {
     conn.execute_batch("ROLLBACK").unwrap();
     drop(conn);
     show_refreshes(&fixture, &envs, "missing stamp");
+}
+
+/// A mutation keeps the full ladder: with a schema migration pending (no
+/// compatible snapshot) and a writer that outlasts the read cap, `aida edit`
+/// waits for the writer instead of failing at the read cap.
+// trace:BUG-1956 | ai:claude
+#[test]
+fn edit_outlasts_a_writer_when_no_compatible_snapshot_exists() {
+    let fixture = init_fixture();
+    rusqlite::Connection::open(cache_path(&fixture))
+        .unwrap()
+        .execute(
+            "UPDATE cache_meta SET value = '1' WHERE key = 'schema_version'",
+            [],
+        )
+        .unwrap();
+    make_store_rewritten(&fixture);
+    let conn = hold_writer(&fixture);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(4));
+        conn.execute_batch("ROLLBACK").unwrap();
+    });
+    let start = Instant::now();
+    let out = aida_env(
+        &fixture,
+        &["edit", "TASK-1", "--title", "edited behind a writer"],
+        &[("AIDA_CACHE_NO_DETACH", "1")],
+    );
+    let elapsed = start.elapsed();
+    release.join().unwrap();
+    assert!(
+        out.status.success(),
+        "edit must wait out the writer, not fail at the read cap ({elapsed:?})\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        elapsed >= Duration::from_secs(3),
+        "edit must have waited for the writer: {elapsed:?}"
+    );
+    let show = aida_env(&fixture, &["show", "TASK-1"], &[]);
+    assert!(String::from_utf8_lossy(&show.stdout).contains("edited behind a writer"));
 }

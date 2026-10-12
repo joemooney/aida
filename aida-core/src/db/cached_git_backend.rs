@@ -468,22 +468,24 @@ impl CachedGitBackend {
     }
 
     /// A reader's inline refresh, bounded inside ADR-53's 5 s ceiling. With
-    /// a usable committed snapshot it makes ONE attempt (no SQLite retry
+    /// a compatible committed snapshot it makes ONE attempt (no SQLite retry
     /// ladder): a live writer holding the cache write lock degrades it to
     /// `WriterBusy`, the same labelled stale serve BUG-1674 introduced, and
-    /// `None` means the cache is current. With no usable snapshot there is
-    /// nothing to serve, so it keeps the full refresh but under the read
-    /// deadline, failing with a clear error when the writer outlasts it.
+    /// `None` means the cache is current. With no usable snapshot, or one a
+    /// pending migration makes incompatible, there is nothing to serve, so it
+    /// keeps the full refresh with the read wait allowance armed: an
+    /// explicitly budgeted read fails with a clear error when the writer
+    /// outlasts it, while a mutation's constructor keeps the full ladder.
     // trace:BUG-1956 | ai:claude
     fn bounded_inline_refresh(&self) -> Result<Option<super::cache_refresh::RefreshState>> {
-        use super::cache::{is_cache_lock_error, ReadLadderDeadline, ReadRefreshAttempt};
-        if !self.cache.has_usable_snapshot() {
-            let _deadline = ReadLadderDeadline::new(super::cache::READ_LADDER_CAP);
+        use super::cache::{is_cache_lock_error, ReadLadderBudget, ReadRefreshAttempt};
+        if self.cache.recheck_migration() || !self.cache.has_usable_snapshot() {
+            let _armed = ReadLadderBudget::arm();
             return self.ensure_cache_fresh().map(|()| None).map_err(|e| {
                 if is_cache_lock_error(&e) {
                     e.context(
-                        "the cache has no usable snapshot yet and another process holds its \
-                         write lock; re-run shortly",
+                        "the cache has no compatible snapshot yet (first build or schema \
+                         upgrade) and another process holds its write lock; re-run shortly",
                     )
                 } else {
                     e
@@ -556,9 +558,9 @@ impl CachedGitBackend {
     ) -> Result<Option<super::cache_refresh::RefreshState>> {
         use super::cache_refresh::{self, RefreshLock, RefreshState};
         use std::time::Duration;
-        // Backstop: no ladder below may outlast the read deadline.
+        // Backstop: an explicitly budgeted read never waits out the ladder.
         // trace:BUG-1956 | ai:claude
-        let _deadline = super::cache::ReadLadderDeadline::new(super::cache::READ_LADDER_CAP);
+        let _armed = super::cache::ReadLadderBudget::arm();
         loop {
             let head = self.current_head_sha();
             let migration = self.cache.recheck_migration();
@@ -585,14 +587,10 @@ impl CachedGitBackend {
                         return Ok(None);
                     }
                     if migration || !self.cache.has_usable_snapshot() {
-                        // Nothing compatible to serve: refresh inline, but
-                        // never past the read deadline (the backstop above).
+                        // Nothing compatible to serve: refresh inline, with
+                        // the read wait allowance armed.
                         // trace:BUG-1956 | ai:claude
-                        if !migration {
-                            return self.bounded_inline_refresh();
-                        }
-                        self.ensure_cache_fresh()?;
-                        return Ok(None);
+                        return self.bounded_inline_refresh();
                     }
                     let head = self.current_head_sha();
                     let recorded = self.cache.source_head_sha()?;
@@ -3176,6 +3174,110 @@ mod tests {
             &b.path().parent().unwrap().join(".aida").join("cache.db"),
         )
         .unwrap()
+    }
+
+    /// BUG-1956 fixture: a cache with one committed row whose schema stamp
+    /// is older than this binary (a migration is pending, so the snapshot is
+    /// incompatible), behind a store that has moved on.
+    // trace:BUG-1956 | ai:claude
+    fn bug_1956_migration_pending_fixture(root: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+        let store_root = root.join(".aida-store");
+        let cache_path = root.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        {
+            let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+            backend
+                .add_requirement(sample_req("BUG-1", "first"))
+                .unwrap();
+        }
+        rusqlite::Connection::open(&cache_path)
+            .unwrap()
+            .execute(
+                "UPDATE cache_meta SET value = '1' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("BUG-2", "second"))
+            .unwrap();
+        (store_root, cache_path)
+    }
+
+    /// BUG-1956: a pending migration makes the committed snapshot
+    /// incompatible, so a bounded read refresh must never degrade to a
+    /// `WriterBusy` stale serve of old-schema rows. Behind a live writer an
+    /// explicitly budgeted read fails inside the ceiling with a clear error.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn bug_1956_bounded_refresh_never_serves_a_pending_migration() {
+        use super::super::cache_refresh::{CacheReadScope, ReadBudget};
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        assert!(backend.cache.recheck_migration(), "fixture shape changed");
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        let started = std::time::Instant::now();
+        let err = backend
+            .bounded_inline_refresh()
+            .expect_err("an incompatible snapshot must not be served as WriterBusy");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "budgeted read waited {elapsed:?}"
+        );
+        assert!(is_cache_lock_error(&err), "{err:#}");
+        assert!(
+            format!("{err:#}").contains("no compatible snapshot yet"),
+            "{err:#}"
+        );
+        holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    /// BUG-1956: a mutation's constructor (no explicit read budget) keeps the
+    /// full ladder on the same no-compatible-snapshot path, so it succeeds
+    /// once a writer that outlasts the read cap (~4 s) releases.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn bug_1956_unbudgeted_refresh_outlasts_a_four_second_writer() {
+        use super::super::cache_refresh::CacheReadScope;
+        // The production ladder: no retry overrides from a sibling test.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            holder.execute_batch("ROLLBACK").unwrap();
+        });
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, None);
+        let started = std::time::Instant::now();
+        let backend = CachedGitBackend::open(&store_root, &cache_path)
+            .expect("an unbudgeted open must wait out the writer");
+        let elapsed = started.elapsed();
+        release.join().unwrap();
+        assert!(
+            elapsed >= std::time::Duration::from_secs(3),
+            "the open must have waited for the writer: {elapsed:?}"
+        );
+        assert!(!backend.cache.recheck_migration());
+        assert!(!backend.cache_snapshot_is_stale().unwrap());
     }
 
     /// BUG-1644 (SPIKE-90 case W): a reader in a sibling worktree whose
