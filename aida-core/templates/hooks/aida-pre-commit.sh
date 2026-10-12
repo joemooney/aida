@@ -411,6 +411,13 @@ DOC_COMMENT_RE='^[[:space:]]*///([^/]|$)'
 # Progress: the scan reports on stderr every 100000 diff lines, and the shell
 # reports the total when it took 3 s or more, so an agent can tell a slow hook
 # from a hung one. trace:BUG-1925 | ai:claude
+#
+# FAIL CLOSED (BUG-1933): an empty offender list must mean "scanned, nothing
+# found", never "the scan broke". A `git diff` that fails (a parent object
+# missing in a shallow or partial clone) puts a `#AIDA-DIFF-FAILED <parent>`
+# marker in the stream, which awk reports back; awk prints `#AIDA-PROV-END` as
+# its last line, so a crashed or killed awk is caught by the missing sentinel.
+# Either refuses the commit. trace:BUG-1933 | ai:claude
 __aida_prov_parents=""
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
     && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
@@ -434,18 +441,27 @@ fi
 # Emit the staged `*.rs` diff(s), each introduced by a `#AIDA-DIFF` boundary
 # line (no unified-diff line starts with `#`). `D` is included so lines removed
 # by deleting a whole source file still register as move credits; deleted files
-# contribute no `+` lines, so the added-lines side is unaffected.
-# trace:TASK-144 trace:BUG-1925 | ai:claude
+# contribute no `+` lines, so the added-lines side is unaffected. A failed diff
+# appends `#AIDA-DIFF-FAILED <parent>` (`index` outside a merge) on a line of
+# its own: the leading newline ends a partial line a killed `git diff` left.
+# `--no-ext-diff --no-textconv --text` keep a user's `diff.external`
+# (difftastic), textconv driver, or `-diff`/`binary` attribute from replacing
+# the unified diff this scan parses.
+# trace:TASK-144 trace:BUG-1925 trace:BUG-1933 | ai:claude
 __aida_staged_rs_diffs() {
     local parent
     if [ -z "$__aida_prov_parents" ]; then
         printf '#AIDA-DIFF index\n'
-        git diff --cached --unified=0 --no-color --diff-filter=ACDMR -- '*.rs' 2>/dev/null
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
+            --diff-filter=ACDMR -- '*.rs' 2>/dev/null \
+            || printf '\n#AIDA-DIFF-FAILED index\n'
         return 0
     fi
     for parent in $__aida_prov_parents; do
         printf '#AIDA-DIFF %s\n' "$parent"
-        git diff --cached --unified=0 --no-color --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
+            --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null \
+            || printf '\n#AIDA-DIFF-FAILED %s\n' "$parent"
     done
     return 0
 }
@@ -493,6 +509,7 @@ function settle(    i, key, off) {
     split("", cand_off)
     ncand = 0
 }
+/^#AIDA-DIFF-FAILED / { failed = failed " " substr($0, 19); next }
 /^#AIDA-DIFF / { settle(); ndiff++; current_file = ""; next }
 {
     lines++
@@ -534,10 +551,46 @@ END {
             print off
         }
     }
+    if (failed != "") print "#AIDA-PROV-FAILED" failed
+    print "#AIDA-PROV-END"
 }')
 __aida_prov_elapsed=$((SECONDS - __aida_prov_started))
 if [ "$__aida_prov_elapsed" -ge 3 ]; then
     printf 'pre-commit: /// provenance scan took %ss.\n' "$__aida_prov_elapsed" >&2
+fi
+
+# The sentinel must be the last line; strip it, then any failed-diff report.
+# trace:BUG-1933 | ai:claude
+case "$__aida_prov_offenders" in
+    '#AIDA-PROV-END'|*$'\n''#AIDA-PROV-END') ;;
+    *)
+        echo -e "${RED}Refusing commit: the \`///\` provenance scan did not complete" >&2
+        echo -e "(awk exited before its end marker), so staged \`///\` lines were not" >&2
+        echo -e "checked. Re-run the commit; if it keeps failing, check \`awk\` on PATH.${NC}" >&2
+        exit 1
+        ;;
+esac
+__aida_prov_offenders=${__aida_prov_offenders%'#AIDA-PROV-END'}
+__aida_prov_offenders=${__aida_prov_offenders%$'\n'}
+__aida_prov_failed=""
+case "$__aida_prov_offenders" in
+    '#AIDA-PROV-FAILED '*|*$'\n''#AIDA-PROV-FAILED '*)
+        __aida_prov_failed=${__aida_prov_offenders##*'#AIDA-PROV-FAILED '}
+        ;;
+esac
+if [ -n "$__aida_prov_failed" ]; then
+    echo -e "${RED}Refusing commit: \`git diff --cached\` against ${__aida_prov_failed} failed," >&2
+    echo -e "so the staged \`///\` lines could not be checked for SPEC-ID provenance.${NC}" >&2
+    # Re-run each failed diff in full (`--quiet` stops before reading blobs,
+    # so it would miss a missing one) to show git's own reason.
+    for __aida_parent in $__aida_prov_failed; do
+        if [ "$__aida_parent" = "index" ]; then __aida_parent=""; fi
+        git diff --cached --unified=0 --no-ext-diff --no-textconv --text $__aida_parent -- '*.rs' 2>&1 >/dev/null \
+            | head -n 3 | sed 's/^/  git: /' >&2
+    done
+    echo -e "${YELLOW}A shallow or partial clone may be missing a commit or blob: fetch it" >&2
+    echo -e "(\`git fetch\`) and commit again. Emergency skip: --no-verify.${NC}" >&2
+    exit 1
 fi
 
 DOC_TRACE_OFFENDERS=()

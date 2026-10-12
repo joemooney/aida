@@ -11,6 +11,9 @@
 #    parent (the conflict resolution) are checked. Debt that already landed on
 #    the merged-in branch is not re-checked; new debt typed into the resolution
 #    is still refused.
+# 3. MERGE SHAPES (BUG-1933): an octopus merge, a file renamed on one side, and
+#    a resolution duplicating an existing debt line, each with its exact
+#    offender count.
 #
 # Drives the REAL template (aida-core/templates/hooks/aida-pre-commit.sh)
 # installed as .git/hooks/pre-commit in a throwaway repo, via real `git commit`.
@@ -256,6 +259,102 @@ pub fn shared() -> u32 {
 EOF
 git add -A
 assert_exit "a clean conflict resolution is allowed" 0 "$(commit "merge main (resolved)")"
+
+# ---------------------------------------------------------------------------
+# 3. MERGE SHAPES (BUG-1933, from the BUG-1925 review). Each asserts the exact
+#    number of offenders the refusal lists.
+# ---------------------------------------------------------------------------
+# offenders — how many lines the last refusal listed.
+offenders() {
+    grep -c '^  - ' "$STDERR_LOG" || true
+}
+
+assert_offenders() {
+    local desc="$1" expected="$2" actual
+    actual=$(offenders)
+    if [ "$actual" -eq "$expected" ]; then
+        echo "ok   - $desc ($actual offender(s))"
+    else
+        echo "FAIL - $desc (expected $expected offender(s), got $actual)"
+        head -n 20 "$STDERR_LOG" | sed 's/^/       | /'
+        fail=1
+    fi
+}
+
+git checkout -q main
+git reset -q --hard
+# Strip colours so the offender count can anchor on the "  - " prefix.
+sed -i.bak 's/^RED=.*/RED=""/; s/^YELLOW=.*/YELLOW=""/; s/^NC=.*/NC=""/' .git/hooks/pre-commit
+rm -f .git/hooks/pre-commit.bak
+
+# 3a. Octopus merge (MERGE_HEAD has two lines): debt each side already landed
+#     is not re-checked; one new debt line in the resolution is the only offender.
+git checkout -q -b octo-a main
+printf '/// trace:TASK-910 | ai:claude\npub fn octo_a() {}\n' >src/octo_a.rs
+git add -A
+git commit --no-verify -qm "feat(octo-a): land debt"
+git checkout -q -b octo-b main
+printf '/// trace:TASK-911 | ai:claude\npub fn octo_b() {}\n' >src/octo_b.rs
+git add -A
+git commit --no-verify -qm "feat(octo-b): land debt"
+git checkout -q main
+git merge -q --no-ff --no-commit octo-a octo-b >/dev/null 2>&1
+if [ "$(wc -l <"$(git rev-parse --git-path MERGE_HEAD)")" -ne 2 ]; then
+    echo "FAIL - setup: expected a two-line MERGE_HEAD for the octopus merge"
+    fail=1
+fi
+printf '/// trace:BUG-912 | ai:claude\npub fn glue() {}\n' >src/octo_glue.rs
+git add -A
+assert_exit "octopus merge with new debt in the resolution is refused" 1 "$(commit "merge octo")"
+assert_offenders "octopus refusal lists only the resolution's debt" 1
+assert_stderr_contains "octopus refusal names the new debt" "BUG-912"
+git rm -q --cached src/octo_glue.rs
+rm src/octo_glue.rs
+assert_exit "octopus merge without new debt is allowed" 0 "$(commit "merge octo")"
+
+# 3b. A debt-carrying file renamed on one side: the move is not new debt, but a
+#     debt line added to the renamed file in the resolution is.
+printf '/// trace:TASK-920 | ai:claude\npub fn renamed() {}\n' >src/old_name.rs
+git add -A
+git commit --no-verify -qm "chore: seed rename debt"
+git checkout -q -b renamer main
+git mv src/old_name.rs src/new_name.rs
+git commit --no-verify -qm "refactor: rename"
+git checkout -q main
+echo 'pub fn unrelated() {}' >src/unrelated.rs
+git add -A
+git commit --no-verify -qm "feat(main): unrelated"
+git merge -q --no-ff --no-commit renamer >/dev/null 2>&1
+if ! git diff --cached -M --name-status HEAD | grep -q '^R'; then
+    echo "FAIL - setup: expected the merge to stage old_name.rs -> new_name.rs as a rename"
+    fail=1
+fi
+printf '/// trace:BUG-921 | ai:claude\npub fn added_in_resolution() {}\n' >>src/new_name.rs
+git add -A
+assert_exit "new debt in a renamed file's resolution is refused" 1 "$(commit "merge renamer")"
+assert_offenders "rename refusal lists only the new line" 1
+assert_stderr_contains "rename refusal names the new debt" "BUG-921"
+assert_stderr_lacks "the renamed debt is not flagged" "TASK-920"
+git show renamer:src/new_name.rs >src/new_name.rs
+git add -A
+assert_exit "merge of a one-sided rename is allowed" 0 "$(commit "merge renamer")"
+
+# 3c. A resolution that duplicates a debt line one parent already has: the
+#     extra copy differs from every parent once, so exactly one offender.
+git checkout -q -b dup-side main
+echo 'pub fn dup_side() {}' >src/dup_side.rs
+git add -A
+git commit --no-verify -qm "feat(dup-side): work"
+git checkout -q main
+printf '/// trace:TASK-930 | ai:claude\npub fn dup() {}\n' >src/dup.rs
+git add -A
+git commit --no-verify -qm "chore: seed dup debt"
+git merge -q --no-ff --no-commit dup-side >/dev/null 2>&1
+printf '/// trace:TASK-930 | ai:claude\npub fn dup() {}\n/// trace:TASK-930 | ai:claude\npub fn dup_copy() {}\n' >src/dup.rs
+git add -A
+assert_exit "a resolution duplicating an existing debt line is refused" 1 "$(commit "merge dup-side")"
+assert_offenders "the duplicate is reported once" 1
+git merge --abort 2>/dev/null || true
 
 if [ "$fail" -ne 0 ]; then
     echo "PRE-COMMIT PROVENANCE PERF + MERGE DELTA (BUG-1925): FAILURES"
