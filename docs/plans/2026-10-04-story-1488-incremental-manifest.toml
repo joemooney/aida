@@ -2781,3 +2781,9 @@ items = [
   "impl impl:AutonomyMode",
   "fn resolve_autonomy_mode",
 ]
+
+[module.phase_driver_trait]
+purpose = "the impl auto_complete::PhaseDriver for RealPhaseDriver trait impl (STORY-1488 slice 1; Q9 split)"
+items = [
+  "impl impl:auto_complete::PhaseDriver:for:RealPhaseDriver",
+]
