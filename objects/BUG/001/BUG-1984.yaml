@@ -1,0 +1,27 @@
+id: 01a12e66-0115-7101-a3aa-9e9d3026dd97
+spec_id: BUG-1984
+agreed_id: BUG-1984
+title: 'Contained cache binds pin an inode: detect a deleted or replaced cache.db-wal/-shm under a running contained session'
+description: |-
+  Follow-up D3 from the advisor review of PR #2541 (BUG-1929). Claude Code's Linux sandbox binds each allowWrite file as an inode, not a name. When the host deletes or replaces <main>/.aida/cache.db-wal or -shm while a contained session runs (remove_corrupt_cache_files, quarantine_cache_files in aida-core/src/db/cache.rs, or an older binary that does not persist the WAL), the session keeps writing to the deleted inode, or the two sides use a split WAL/shm.
+
+  The cache is derived data, so this is not a data-loss bug, but the split is silent. Acceptance: a contained session's cache open fails loudly when a bound sidecar's link count is 0 or its inode no longer matches the path, and aida doctor reports the condition. A test covers both.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T04:36:39.317607675Z
+modified_at: 2026-10-12T04:36:39.317607675Z
+req_type: Bug
+tags:
+- cache
+- contained
+- sandbox
+filed_at:
+  code_sha: ae606ce935abe9808782078688b96d1d35773798
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 845d3d28-f833-432b-80f6-59de8c09084f
