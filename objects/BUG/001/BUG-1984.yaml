@@ -11,13 +11,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-12T06:00:19.986641507Z
+modified_at: 2026-10-12T06:00:29.632910239Z
 req_type: Bug
 tags:
 - cache
 - contained
 - groom:approve
 - sandbox
+comments:
+- id: 01a12eb2-c2c0-75f3-abac-28f1f8c0d837
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised). Not implemented on main (no nlink / sidecar inode check in aida-core/src/db/cache.rs; remove_corrupt_cache_files at :814 and quarantine_cache_files at :937 still unlink by name). Tightened Acceptance into concrete checks: link count 0 or (dev, ino) mismatch fails the open loudly; doctor finding; Unix unit test that unlinks/recreates the WAL and unlinks the shm. Supervised: touches contained-session cache open semantics, hard to validate unattended.
+  created_at: 2026-10-12T06:00:29.632910239Z
+  modified_at: 2026-10-12T06:00:29.632910239Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
   branch: main
