@@ -1,0 +1,25 @@
+id: 01a13159-ca38-7aa2-975c-6f8efb73e099
+spec_id: BUG-1995
+agreed_id: BUG-1995
+title: Wall-clock ceilings in bug_1956 and bug_1594 show-bounded tests are load-sensitive (convert to budget + hard ceiling like BUG-1967)
+description: |-
+  Noted by the BUG-1967 implementer (PR #2562). aida-cli/tests/bug_1956_reader_fallbacks_bounded_under_writer.rs (bare 5 s ceiling) and aida-cli/tests/bug_1594_show_bounded.rs use plain elapsed-time asserts. These are load-sensitive, as BUG-1967 showed: on an oversubscribed host, CPU starvation is reported as a product failure.
+
+  ## Acceptance
+  - Each converts to the BUG-1967 pattern: the soft budget logs BUDGET-MISSED with loadavg; locks are held for the whole call; retry delays are stretched so a regression trips a hard ceiling (~60 s).
+  - A mutation check shows each still catches the regression it guards.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T18:22:10.488159011Z
+modified_at: 2026-10-12T18:22:10.488159011Z
+req_type: Bug
+filed_at:
+  code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
