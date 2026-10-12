@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:30.005895096Z
-modified_at: 2026-10-12T06:07:33.281557666Z
+modified_at: 2026-10-12T06:07:41.618120484Z
 req_type: Story
 tags:
 - from:aida-host
@@ -86,6 +86,25 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:12:33.359413306Z
+comments:
+- id: 01a12eb9-5a32-7901-b6e2-c29a46d0637e
+  author: joe
+  content: |
+    [groom:night] NEEDS-DECISION (then split). Five proposals behind one fork.
+
+    Already done: F13 (acceptance bullets with stable ids that tests reference). Criterion-level trace tokens `trace:<SPEC>.<criterion>` exist and `aida criteria <SPEC>` / `aida criteria coverage` report criterion-to-test coverage (aida-cli-lib/src/criteria_coverage.rs). Precedent for a guarded interface: STORY-1352's versioned monitor contract for the --json surfaces.
+
+    The fork: what is a contract?
+    - A. A new requirement type `contract` with a structured (YAML/TOML) body: CLI flags, env vars with defaults (test seams included), file formats, exit codes, `verified-by:`. Checker is generic. Cost: schema/type change, every surface learns a new type.
+    - B. A structured `## Contract` section allowed in any spec (fenced machine-readable block), parsed by a checker. No new type; contract lives next to the story it constrains.
+    - C. Contract as a checked-in file in the code repo (e.g. contracts/*.toml) referenced from the spec, checked by `aida contract check` in CI. The store only links it.
+
+    Recommendation: B. It avoids a type migration, keeps the clause next to its acceptance (so `<SPEC>.<criterion>` ids can name contract clauses too, which serves F19), and STORY-1352 shows the check-against-reality half is buildable per surface.
+
+    Once decided, slices: (1) contract block format + parser + `aida contract show`; (2) checker diffing the block against `--help`, env-var reads and JSON keys, report-only then `--block`; (3) `verified-by:` field and a probe-test convention (F20); (4) oracle-coverage report: test assertions carrying `trace:<SPEC>.<clause>` vs clauses with no test, and tests with no clause (F19). Architecture change -> sketch + advisor signoff before slice 1.
+  created_at: 2026-10-12T06:07:41.618120484Z
+  modified_at: 2026-10-12T06:07:41.618120484Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
