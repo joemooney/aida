@@ -10,7 +10,9 @@
 //! - Real claude (env-gated, `AIDA_TEST_REAL_CLAUDE=1`):
 //!   `real_claude_contained_session_claims_and_comments` runs `aida` inside a
 //!   contained session in a linked worktree, probes writes inside and outside
-//!   the write set, and reads the result from main. Its fixture lives under
+//!   the write set, plants an embedded repository in the store (E1) and
+//!   checks the host's store sync refuses it without running its
+//!   `core.fsmonitor`, and reads the result from main. Its fixture lives under
 //!   `$HOME/.cache`, outside every sandbox-writable temp directory.
 //!
 //! trace:BUG-1929 | ai:claude
@@ -434,6 +436,30 @@ fn real_claude_contained_session_claims_and_comments() {
             out = probe_out.display()
         ));
     }
+    // E1: plant an embedded repository in the store the way a contained agent
+    // could, its own config naming a hook that appends to a marker outside the
+    // write set. Inside the sandbox the marker cannot be written; it appears
+    // only if a host-side git run over the store executes the hook.
+    // trace:BUG-1929 | ai:claude
+    let marker = parent.join("fsmonitor-ran");
+    let evil_hook = store.join(".evil-fsm.sh");
+    let evil_sub = store.join("objects/zz");
+    script.push_str(&format!(
+        "if git init -q --separate-git-dir='{gitdir}' '{sub}' \
+         && printf '#!/bin/sh\\necho ran >> {marker}\\nexit 1\\n' > '{hook}' \
+         && chmod 755 '{hook}' && echo x > '{sub}/x.txt' && git -C '{sub}' add x.txt \
+         && git -C '{sub}' -c user.email=p@example.com -c user.name=p commit -qm planted \
+         && git -C '{sub}' config core.fsmonitor '{hook}'; \
+         then echo planted; else echo plant-failed; fi >> {out} 2>&1\n\
+         if git -C '{store}' add objects/zz >/dev/null 2>&1; then echo staged; \
+         else echo not-staged; fi >> {out}\n",
+        gitdir = store.join(".evil.git").display(),
+        sub = evil_sub.display(),
+        hook = evil_hook.display(),
+        marker = marker.display(),
+        store = store.display(),
+        out = probe_out.display()
+    ));
     let script_path = worktree.join("probe.sh");
     std::fs::write(&script_path, script).unwrap();
 
@@ -509,6 +535,32 @@ fn real_claude_contained_session_claims_and_comments() {
         );
     }
 
+    // E1: the plant landed, and the host's store sync refuses it without
+    // running its hook.
+    // trace:BUG-1929 | ai:claude
+    assert!(
+        probe.lines().any(|l| l.trim() == "planted"),
+        "the embedded-repository plant did not land: {probe}\n{transcript}"
+    );
+    let sync = Command::new(&aida)
+        .args(["db", "sync"])
+        .current_dir(&main)
+        .output()
+        .expect("spawn aida db sync");
+    let sync_text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&sync.stdout),
+        String::from_utf8_lossy(&sync.stderr)
+    );
+    assert!(
+        !marker.exists(),
+        "a host-side store sync ran the planted fsmonitor: {sync_text}\n{probe}"
+    );
+    assert!(
+        !sync.status.success() && sync_text.contains("embedded git repository"),
+        "the host store sync must refuse the planted repository: {sync_text}\n{probe}"
+    );
+
     let status_is = |text: &str, want: &str| {
         text.lines()
             .any(|l| l.trim_start().starts_with("status:") && l.contains(want))
@@ -527,6 +579,20 @@ fn real_claude_contained_session_claims_and_comments() {
         status_is(&done, "completed"),
         "queue done must be visible from main: {done}\n{transcript}"
     );
+
+    assert!(
+        !marker.exists(),
+        "a host-side aida read ran the planted fsmonitor: {probe}"
+    );
+    // Remove the plant (the host's own raw git below would run its hook).
+    let _ = Command::new("git")
+        .args(["rm", "-q", "--cached", "--ignore-unmatch", "objects/zz"])
+        .current_dir(&store)
+        .output();
+    for planted in [evil_sub, store.join(".evil.git")] {
+        let _ = std::fs::remove_dir_all(planted);
+    }
+    let _ = std::fs::remove_file(&evil_hook);
 
     // The writes are committed to the store, not left in its working tree.
     let log = run(
