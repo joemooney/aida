@@ -2,16 +2,26 @@ id: 01a12c64-d7de-7a13-9ad0-91a36c7f2e6e
 spec_id: BUG-1975
 agreed_id: BUG-1975
 title: TOON output appends the 'cache:' footer with no preceding newline when the body doesn't end in a newline
-description: 'Reported in the factory''s 2026-10-11 handoff (seen with ''aida docs glossary'' piped, which defaults to TOON): when a command''s body doesn''t end in a newline, the cache: footer is glued onto its last line. That also broke the BUG-1950 drift guard until the generator pinned --format human. Acceptance: the TOON footer writer emits a newline first when the body doesn''t end in one; a unit test with a body lacking a trailing newline.'
+description: |
+  Reported in the factory's 2026-10-11 handoff (seen with 'aida docs glossary' piped, which defaults to TOON): when a command's body doesn't end in a newline, the cache: footer is glued onto its last line. That also broke the BUG-1950 drift guard until the generator pinned --format human.
+
+  Note (groom): the footer is emitted by the dispatcher (`cache_output::finish`, aida-cli-lib/src/cache_output.rs) via `println!` after the command returns, so it cannot see the body. The fix therefore needs either a record of whether stdout's last byte was a newline (e.g. a small stdout-tracking writer used by the agent-output path) or a guarantee at the source.
+
+  ## Acceptance
+  - In agent/TOON output mode, the `cache:` footer always starts on its own line, whether or not the command body ended with a newline.
+  - `aida docs glossary` piped (TOON default) ends with its last body line, a newline, then `cache:` on its own line.
+  - A body that already ends in a newline does not gain an extra blank line before the footer.
+  - Unit test: footer emission after a body lacking a trailing newline, and after one that has it. Regression test for `aida docs glossary` piped output.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T19:16:08.798006191Z
-modified_at: 2026-10-11T19:16:08.798006191Z
+modified_at: 2026-10-12T05:50:04.002980836Z
 req_type: Bug
 tags:
 - follow-up:factory
+- groomed:night
 - output
 - toon
 filed_at:
