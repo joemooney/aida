@@ -3,12 +3,12 @@ spec_id: STORY-1665
 agreed_id: STORY-1665
 title: 'aida ps: one row per live process on the main checkout, and relay processes linked to their spec leases'
 description: 'Follow-up from BUG-1941, acceptance (c), deferred by the night seat 2026-10-11. PR #2535 made the main-checkout pid deterministic and stopped labelling placeholder leases ''subagent''. Rows are still per lease, though, and processes whose cwd is the project root (the advisor, claude -p relays that drive other worktrees through absolute paths) are grouped under old harness-worktree leases. Options: (1) keep per-lease rows (today''s behaviour); (2) one row per live process whose cwd is the project root, with its role taken from per-process env or the session manifest, folding or hiding the legacy harness leases; (3) link relay processes to their spec leases through env/manifest (e.g. AIDA_SESSION_ID in /proc/<pid>/environ) instead of cwd, which would give relay leases a real pid. Implementer recommendation: (3) plus (2). Needs an architecture sketch and advisor signoff. Related: STORY-1653 (driver column).'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T17:48:41.338189773Z
-modified_at: 2026-10-12T15:02:30.310669346Z
+modified_at: 2026-10-12T15:02:31.428040123Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -30,6 +30,14 @@ comments:
   created_at: 2026-10-12T15:02:30.310669346Z
   modified_at: 2026-10-12T15:02:30.310669346Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+history:
+- id: 01a130a3-0104-7640-ac77-de3041b98663
+  author: joe
+  timestamp: 2026-10-12T15:02:31.428033561Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 92781f85ad0b7f73e16f817e8b2df77aed8d56fb
   branch: main
