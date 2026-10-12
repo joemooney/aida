@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T06:12:22.270397105Z
+modified_at: 2026-10-12T06:12:43.134827906Z
 req_type: Bug
 tags:
 - contained
@@ -170,6 +170,12 @@ comments:
   created_at: 2026-10-12T05:30:05.492967743Z
   modified_at: 2026-10-12T05:30:05.492967743Z
   session_id: 845d3d28-f833-432b-80f6-59de8c09084f
+- id: 01a12ebd-f3fe-7cc1-9ce8-67ea74d30301
+  author: joe
+  content: 'Advisor design note (round 3, 04b529c167): F1 (host git fetch recursing into a planted submodule and running its uploadpack) is the THIRD escape of the class ''sandbox-writable git working tree + host git over it'', after the status/fsmonitor vector and the embedded-repo/commondir vector (BUG-1982 is the same class). Each fix has closed one git entry point while the class stays open. Recommendation to the operator: decide whether to keep patching (finish centralising hardening in git_ops plus a guard against raw store git calls, which round 4 does) or revisit ''narrow write set, no broker'', e.g. so the host never runs git over a tree the sandbox can write (a host-owned store clone fed by validated YAML, or a broker that applies object writes). Round 4 is queued for the factory either way; the guard test makes it a reasonable stopgap.'
+  created_at: 2026-10-12T06:12:43.134827906Z
+  modified_at: 2026-10-12T06:12:43.134827906Z
+  session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
