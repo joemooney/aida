@@ -2102,3 +2102,34 @@ items = [
   "fn collapse_salvageable_by_worktree",
   "fn handle_ps",
 ]
+
+[module.drain_gate]
+purpose = "drain human-gate refusals, from-pr entry, plan prelude, and auto-complete run (STORY-1488 slice 1)"
+items = [
+  "enum NoHumanGate",
+  "fn classify_no_human_gate",
+  "fn no_human_scope_line",
+  "fn non_tty_interactive_implementer_preflight",
+  "fn no_human_machine_marker",
+  "fn no_human_project_marker",
+  "fn no_human_ack_source",
+  "fn handle_no_human_command",
+  "fn no_human_kickoff_gate",
+  "fn handle_from_pr",
+  "fn handle_auto_complete",
+  "fn guarded_execution_mode_for_drain",
+  "fn guarded_execution_mode_drain_message",
+  "fn spec_is_keyboard_only",
+  "fn keyboard_only_dispatch_refusal",
+  "enum DrainStateProbe",
+  "fn probe_drain_state",
+  "fn unattended_git_mutation_refusal_for",
+  "fn config_toml_exists_upward",
+  "fn config_toml_exists_upward_with_roots",
+  "fn has_open_refusal_finding",
+  "fn record_headless_refusal_finding",
+  "fn unattended_git_mutation_refusal",
+  "mod bug_1574_unattended_git_mutation_tests",
+  "fn run_plan_prelude",
+  "fn run_auto_complete",
+]
