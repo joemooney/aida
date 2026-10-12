@@ -165,6 +165,7 @@ mod status_prs;
 mod status_sections;
 mod statusline_root;
 mod store_push_pull;
+mod store_sync;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
@@ -235,6 +236,7 @@ use status_prs::*;
 use status_sections::*;
 use statusline_root::*;
 use store_push_pull::*;
+use store_sync::*;
 use trace::*;
 use tui_entry::*;
 use upgrade_release::*;

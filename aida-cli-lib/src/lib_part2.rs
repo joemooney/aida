@@ -412,28 +412,6 @@ pub(crate) fn human_route_is_open(archived: bool, status: &aida_core::Requiremen
         )
 }
 
-pub(crate) fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
-    let now = chrono::Utc::now();
-    let delta = now.signed_duration_since(t);
-    let secs = delta.num_seconds();
-    if secs < 0 {
-        return "just now".to_string();
-    }
-    if secs < 60 {
-        return format!("{}s ago", secs);
-    }
-    let mins = secs / 60;
-    if mins < 60 {
-        return format!("{}m ago", mins);
-    }
-    let hours = mins / 60;
-    if hours < 24 {
-        return format!("{}h ago", hours);
-    }
-    let days = hours / 24;
-    format!("{}d ago", days)
-}
-
 // ----------------------------------------------------------------------------
 // `aida statusline` — fast one-liner for shell prompts and Claude Code's
 // statusLine.command setting. Cache-only; no git operations, no API calls.
