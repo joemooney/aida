@@ -13,8 +13,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T18:22:10.488159011Z
-modified_at: 2026-10-12T18:22:10.488159011Z
+modified_at: 2026-10-12T18:43:59.770216416Z
 req_type: Bug
+comments:
+- id: 01a1316d-c49a-7e82-8c3e-aca7ad3508f8
+  author: joe
+  content: 'Added from the #2562 review (BUG-1967 pattern): (1) the detached refresh worker inherits a stretched AIDA_CACHE_RETRY_MS and is orphaned for about 120 s per run; reap it in a Fixture Drop. (2) Add a const-level aida-core test asserting READ_LADDER_CAP stays well under 5 s, since the 5 s wall-clock is now only a soft budget. (3) Doc nit: show''s flock budget is zero, not 1.5 s.'
+  created_at: 2026-10-12T18:43:59.770216416Z
+  modified_at: 2026-10-12T18:43:59.770216416Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
