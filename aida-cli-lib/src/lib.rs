@@ -37,6 +37,7 @@ mod brief;
 mod brief_cmd;
 mod burndown;
 // trace:TASK-1500 | ai:codex
+mod burndown_run;
 mod bypass_confirm;
 mod cache_cmd;
 mod cache_output;
@@ -185,6 +186,7 @@ use agent_launch::*;
 use agent_registry_root::*;
 use autopilot_intake::*;
 use brief::*;
+use burndown_run::*;
 use claim::*;
 use config_init::*;
 pub use config_init::{validate_priority_input, validate_status_input};
