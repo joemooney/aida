@@ -26,7 +26,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-12T21:43:26.499871435Z
+modified_at: 2026-10-12T23:18:51.170449710Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -45,6 +45,12 @@ comments:
   content: 'Advisor round-1 REQUEST CHANGES at 9f8f1f2754 (strict): marker matcher misses bold/colon/comma forms (silent completion risk). Acceptance item 1 amended to include them. Full brief on PR #2571.'
   created_at: 2026-10-12T21:43:26.499871435Z
   modified_at: 2026-10-12T21:43:26.499871435Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13269-6822-7c31-ae48-44c41105c5c2
+  author: joe
+  content: 'Round-2 strict review REQUEST CHANGES at ccf9ad2896: marker matcher regresses on sentence punctuation (no-complete. / ! / ) / … / ?) vs main; fix = deny-list after marker. Plus 3 Lows (held-closure test, single loader, legacy-path comment). Full brief on PR #2571. Round 3 = last before park.'
+  created_at: 2026-10-12T23:18:51.170449710Z
+  modified_at: 2026-10-12T23:18:51.170449710Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-e7eb-7fb1-8857-ff0dcdcda374
