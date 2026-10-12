@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:38:24.217096943Z
-modified_at: 2026-10-12T17:48:27.152758066Z
+modified_at: 2026-10-12T18:08:53.174607759Z
 req_type: Bug
 tags:
 - ci
@@ -44,6 +44,12 @@ comments:
     Narrow tests plus `make check-ci-fast` must PASS before pushing (don't chain the push). Push to the same branch.
   created_at: 2026-10-12T17:48:27.152758066Z
   modified_at: 2026-10-12T17:48:27.152758066Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a1314d-9fb6-7940-bc2a-a118ddf54eb8
+  author: joe
+  content: 'PR #2560 (head 843c6e43e4) is defensive hardening; root cause UNCONFIRMED. Acceptance status: (a) ''identify the interfering test or early drop'': NOT MET. The mechanism behind git''s ''unable to create temporary file'' on the fixture commit was not reproduced. Ruled out: TMPDIR mutation, GIT_DIR/GIT_OBJECT_DIRECTORY set_var, early TempDir drop, test_home sweep, temp_dir() sweeps, git auto-maintenance (traced git 2.55/2.56), cross-test rmdir (2 traced full lib runs). The round-1 ''foreign shim'' claim is retracted (441/441 execs were execvp ENOENT probes). (b) ''fix the isolation'': PARTIAL. Every fixture git spawn now uses a pinned binary, hermetic env and no auto-maintenance. (c) ''stable over repeated full-workspace runs'': NOT DEMONSTRATED at full-workspace scale. The target test passed 15/15 in 16-thread stress runs alongside the PATH-shimming modules and the module passes 70/0. Sibling history tests still flake through production git resolving the leaked process-wide PATH; that is tracked in BUG-1994.'
+  created_at: 2026-10-12T18:08:53.174607759Z
+  modified_at: 2026-10-12T18:08:53.174607759Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-bf9a-73b3-8364-26cfc8adcdf0
