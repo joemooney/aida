@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:00.630404907Z
-modified_at: 2026-10-12T05:58:57.843825875Z
+modified_at: 2026-10-12T05:59:50.518528902Z
 req_type: Epic
 tags:
 - from:aida-host
@@ -76,6 +76,23 @@ relationships:
 - rel_type: Parent
   target_id: 01a12d8f-854b-7be0-955a-33b56763ff52
   created_at: 2026-10-12T00:42:25.979009981Z
+comments:
+- id: 01a12eb2-29f6-74f2-88ab-8a65cec0d9cd
+  author: joe
+  content: |
+    [groom:night] APPROVE as a container (supervised). The goal is coherent and well evidenced by the aida-host pilot (results-2026-10-11*.md, scripts/regen-*.{sh,py} in /home/joe/ai/aida-host). Nothing named `aida regen` exists on main yet; the pilot's scripts (regen-corpus.sh, regen-sandbox.sh, regen-score.sh, regen-xfamily.sh, regen-analyze.py) are the reference implementation to port.
+
+    Grooming of the regen-tooling children (B1 group):
+    - STORY-1669 is the keystone and is too big for one PR: SPLIT proposed, with a slice 0 decision (built-in CLI vs skill+scripts, and how a project declares its oracle/installer/harnesses). Architecture sketch + advisor signoff needed before any slice.
+    - STORY-1670: SPLIT (three independent ideas).
+    - STORY-1676, STORY-1677, STORY-1678, STORY-1679: acceptance tightened and approved, but all are BLOCKED on STORY-1669's slices (they extend `aida regen trial`/`score`); none should be queued before the 1669 sketch is signed off.
+
+    Container hygiene notes for the operator:
+    - BUG-1976 (advisor guard hook blocks subagent scratchpad writes) and BUG-1981 (stale pre-commit refusal recommends scaffold apply) are general hook bugs surfaced during the pilot, not regenerability work; consider reparenting them so EPIC-77 completion is not gated on them.
+    - The epic spans two themes: store-authoring (STORY-1666..1675) and measurement tooling (regen cluster). If it grows further, a sub-epic for the regen tooling would keep it legible.
+  created_at: 2026-10-12T05:59:50.518528902Z
+  modified_at: 2026-10-12T05:59:50.518528902Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
