@@ -371,80 +371,17 @@ fn remove_db_files(db_path: &Path) {
 /// process dies, so no stale-lock healing is needed.
 pub(crate) struct IndexLock {
     _file: std::fs::File,
-    /// Tests: the key this lock is registered under in [`held_registry`].
-    // trace:BUG-1987 | ai:claude
-    #[cfg(test)]
-    registered: PathBuf,
 }
 
-/// How long a lock that reads as held is re-probed before that is believed.
-///
-/// The lock is an `flock`, so a child that another thread of the *same*
-/// process is spawning (git, via fork/exec) holds a duplicate of every open
-/// lock fd from fork until exec, even one this process has just dropped. A
-/// single probe in that window reads the lock as held by another indexer.
-/// The window is the fork-to-exec gap (microseconds to a few milliseconds),
-/// so production re-probes for a few ms: that waits out a typical window,
-/// and a genuinely busy indexer, which holds the lock for far longer, costs
-/// this probe at most that much extra latency. Tests run with many threads
-/// forking git at once, so they wait much longer; a lock that a test
-/// genuinely holds is known from [`held_registry`] and reads as held at once.
+/// Unlock explicitly before the fd closes. An `flock` belongs to the open
+/// file description, which a child forked by another thread (git, via
+/// fork/exec) shares until it execs; merely closing this fd would leave the
+/// lock held by the child's copy, so a probe in that window would read the
+/// index as busy (BUG-1974, BUG-1987). `LOCK_UN` releases it for every copy.
 // trace:BUG-1987 | ai:claude
-#[cfg(not(test))]
-const HELD_SETTLE: Duration = Duration::from_millis(5);
-// trace:BUG-1987 | ai:claude
-#[cfg(test)]
-const HELD_SETTLE: Duration = Duration::from_secs(2);
-
-/// Tests: the lock files some in-process [`IndexLock`] genuinely holds, so a
-/// probe that reads one of them as held needs no settling, while a probe
-/// that reads an unregistered one as held is waiting out a forked child's
-/// inherited fd (or a test's deliberate [`test_support::inherited_lock_copy`]).
-// trace:BUG-1987 | ai:claude
-#[cfg(test)]
-mod held_registry {
-    use std::collections::HashMap;
-    use std::path::{Path, PathBuf};
-    use std::sync::{Mutex, PoisonError};
-
-    static HELD: Mutex<Option<HashMap<PathBuf, usize>>> = Mutex::new(None);
-
-    pub(super) fn key(lock_path: &Path) -> PathBuf {
-        std::fs::canonicalize(lock_path).unwrap_or_else(|_| lock_path.to_path_buf())
-    }
-
-    pub(super) fn add(key: &Path) {
-        let mut held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
-        *held
-            .get_or_insert_with(HashMap::new)
-            .entry(key.to_path_buf())
-            .or_default() += 1;
-    }
-
-    pub(super) fn remove(key: &Path) {
-        let mut held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(map) = held.as_mut() {
-            if let Some(n) = map.get_mut(key) {
-                *n -= 1;
-                if *n == 0 {
-                    map.remove(key);
-                }
-            }
-        }
-    }
-
-    pub(super) fn contains(lock_path: &Path) -> bool {
-        let key = key(lock_path);
-        let held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
-        held.as_ref().is_some_and(|m| m.contains_key(&key))
-    }
-}
-
-// trace:BUG-1987 | ai:claude
-#[cfg(test)]
 impl Drop for IndexLock {
     fn drop(&mut self) {
-        held_registry::remove(&self.registered);
+        let _ = FileExt::unlock(&self._file);
     }
 }
 
@@ -459,46 +396,12 @@ impl IndexLock {
             .with_context(|| format!("cannot open history index lock {}", path.display()))
     }
 
-    // trace:BUG-1987 | ai:claude
-    #[cfg(not(test))]
-    fn new(file: std::fs::File, _db_path: &Path) -> IndexLock {
-        IndexLock { _file: file }
-    }
-
-    // trace:BUG-1987 | ai:claude
-    #[cfg(test)]
-    fn new(file: std::fs::File, db_path: &Path) -> IndexLock {
-        let registered = held_registry::key(&lock_path(db_path));
-        held_registry::add(&registered);
-        IndexLock {
-            _file: file,
-            registered,
-        }
-    }
-
     /// `Ok(None)` when another process holds the lock.
     fn try_acquire(db_path: &Path) -> Result<Option<IndexLock>> {
         let file = Self::open_file(db_path)?;
         match file.try_lock_exclusive() {
-            Ok(()) => Ok(Some(Self::new(file, db_path))),
+            Ok(()) => Ok(Some(IndexLock { _file: file })),
             Err(_) => Ok(None),
-        }
-    }
-
-    /// [`Self::try_acquire`], re-probed for [`HELD_SETTLE`] before reporting
-    /// the lock as held, so a forked child's inherited fd does not read as
-    /// another indexer.
-    // trace:BUG-1987 | ai:claude
-    fn try_acquire_settled(db_path: &Path) -> Result<Option<IndexLock>> {
-        let deadline = Instant::now() + HELD_SETTLE;
-        loop {
-            if let Some(lock) = Self::try_acquire(db_path)? {
-                return Ok(Some(lock));
-            }
-            if Self::known_held(db_path) || Instant::now() >= deadline {
-                return Ok(None);
-            }
-            std::thread::sleep(Duration::from_millis(1));
         }
     }
 
@@ -506,27 +409,10 @@ impl IndexLock {
         let file = Self::open_file(db_path)?;
         file.lock_exclusive()
             .context("cannot lock the history index")?;
-        Ok(Self::new(file, db_path))
-    }
-
-    /// Tests: an in-process [`IndexLock`] genuinely holds the lock, so a
-    /// probe that reads it as held needs no settling. Production cannot tell.
-    // trace:BUG-1987 | ai:claude
-    #[cfg(test)]
-    fn known_held(db_path: &Path) -> bool {
-        held_registry::contains(&lock_path(db_path))
-    }
-
-    // trace:BUG-1987 | ai:claude
-    #[cfg(not(test))]
-    fn known_held(_db_path: &Path) -> bool {
-        false
+        Ok(IndexLock { _file: file })
     }
 
     /// Whether some process currently holds the lock (diagnostic only).
-    /// A probe that reads it as held is retried for [`HELD_SETTLE`], so a
-    /// forked child's inherited fd is not reported as a running indexer.
-    // trace:BUG-1987 | ai:claude
     fn is_held(db_path: &Path) -> bool {
         let Ok(file) = std::fs::OpenOptions::new()
             .write(true)
@@ -534,16 +420,12 @@ impl IndexLock {
         else {
             return false;
         };
-        let deadline = Instant::now() + HELD_SETTLE;
-        loop {
-            if file.try_lock_exclusive().is_ok() {
+        match file.try_lock_exclusive() {
+            Ok(()) => {
                 let _ = FileExt::unlock(&file);
-                return false;
+                false
             }
-            if Self::known_held(db_path) || Instant::now() >= deadline {
-                return true;
-            }
-            std::thread::sleep(Duration::from_millis(1));
+            Err(_) => true,
         }
     }
 }
@@ -2283,9 +2165,7 @@ fn flow_catch_up(store: &Path, db_path: &Path, st: &HistoryCacheStatus) -> Resul
     let (Some(tip), Some(head)) = (st.tip.as_deref(), st.head.as_deref()) else {
         return Ok(());
     };
-    // A forked child's inherited fd must not read as another indexer.
-    // trace:BUG-1987 | ai:claude
-    let Some(_lock) = IndexLock::try_acquire_settled(db_path)? else {
+    let Some(_lock) = IndexLock::try_acquire(db_path)? else {
         return Ok(());
     };
     #[cfg(test)]
@@ -2631,13 +2511,28 @@ pub(crate) mod test_support {
         IndexLock::acquire_blocking(db_path).unwrap()
     }
 
-    /// Take the indexer lock, then drop it, keeping only a duplicate of its
-    /// fd: what a child forked while the lock was held keeps until it
-    /// execs. The lock stays held while the returned file lives.
+    /// A duplicate of a locked fd whose original was closed *without* an
+    /// explicit unlock: what a forked child kept until it execed before
+    /// [`IndexLock`] unlocked on drop. The lock stays held while the
+    /// returned file lives. Built from a raw `File`, not an [`IndexLock`],
+    /// whose drop would release it.
     // trace:BUG-1974 | ai:claude
+    // trace:BUG-1987 | ai:claude
     pub(crate) fn inherited_lock_copy(db_path: &Path) -> std::fs::File {
+        let file = IndexLock::open_file(db_path).unwrap();
+        file.lock_exclusive().unwrap();
+        file.try_clone().unwrap()
+    }
+
+    /// Take the indexer lock and duplicate its fd, as a child forked by
+    /// another thread does, then drop the lock while the copy lives: the
+    /// copy must not keep the index locked.
+    // trace:BUG-1987 | ai:claude
+    pub(crate) fn copy_then_release(db_path: &Path) -> std::fs::File {
         let lock = IndexLock::acquire_blocking(db_path).unwrap();
-        lock._file.try_clone().unwrap()
+        let copy = lock._file.try_clone().unwrap();
+        drop(lock);
+        copy
     }
 
     /// [`serve_at`], retried until a call holds the indexer lock, for tests
@@ -2645,7 +2540,9 @@ pub(crate) mod test_support {
     /// a test's lock, yet a bare `serve_at` can still miss it: the lock is
     /// an `flock`, and a child that another test thread is spawning at that
     /// moment holds a copy of the lock fd from fork until exec, even after
-    /// this thread has dropped it. `serve_at` then reads the lock as held by
+    /// this thread has dropped it. ([`IndexLock`] now unlocks explicitly on
+    /// drop, which closes that window; the retry stays as a guard.)
+    /// `serve_at` then reads the lock as held by
     /// another indexer and falls back without indexing, and the caller sees
     /// `Ok` where it expected an injected failure. An unlocked call writes
     /// nothing and does not consume `fail_next_catch_up`, so the retry

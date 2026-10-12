@@ -438,67 +438,52 @@ fn story_1650_half_built_index_falls_back_without_back_filling() {
     assert!(!history_cache::status_at(&store, &db).complete);
 }
 
-/// Holds a copy of the index lock fd, as a child forked by another thread
-/// keeps until it execs, and releases it after `hold` on another thread.
-// trace:BUG-1987 | ai:claude
-fn inherited_lock_released_after(
-    db: &Path,
-    hold: std::time::Duration,
-) -> std::thread::JoinHandle<()> {
-    let copy = history_cache::test_support::inherited_lock_copy(db);
-    std::thread::spawn(move || {
-        std::thread::sleep(hold);
-        drop(copy);
-    })
-}
-
-/// The BUG-1987 flake: a forked child's copy of a just-released lock fd made
-/// `status_at` read the lock as held, so a half-built index classified as
-/// `Busy` instead of `Filling`. The probe now waits out the copy.
+/// The BUG-1987 flake: a child forked by another thread kept a copy of a
+/// just-dropped lock fd until it execed, so `status_at` read the lock as held
+/// and a half-built index classified as `Busy` instead of `Filling`. The
+/// lock is now unlocked explicitly on drop, so the copy (alive across every
+/// call here) holds nothing.
 // trace:BUG-1987 | ai:claude
 #[test]
-fn bug_1987_an_inherited_lock_fd_does_not_classify_as_busy() {
+fn bug_1987_a_forked_copy_of_a_released_lock_does_not_classify_as_busy() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
     let db = history_cache::history_db_path(&store);
     history_cache::test_support::partial_build(&store, &db, 1, 1).unwrap();
-    let release = inherited_lock_released_after(&db, std::time::Duration::from_millis(100));
+    let copy = history_cache::test_support::copy_then_release(&db);
     let st = history_cache::status_at(&store, &db);
     assert!(
         !st.indexer_running,
-        "an inherited fd is not a running indexer"
+        "a forked copy of a released lock is not a running indexer"
     );
     assert_eq!(history_cache::classify_miss(&st), IndexMiss::Filling);
-    release.join().unwrap();
-
-    let release = inherited_lock_released_after(&db, std::time::Duration::from_millis(100));
     assert_cheap_fallback(&store, IndexMiss::Filling);
-    release.join().unwrap();
+    drop(copy);
 }
 
-/// The flow's inline catch-up waits out an inherited fd too, rather than
-/// skipping the catch-up as if another process were indexing.
+/// Nor does such a copy make the flow's inline catch-up skip as if another
+/// process were indexing.
 // trace:BUG-1987 | ai:claude
 #[test]
-fn bug_1987_an_inherited_lock_fd_does_not_skip_the_flow_catch_up() {
+fn bug_1987_a_forked_copy_of_a_released_lock_does_not_skip_the_flow_catch_up() {
     let tmp = tempfile::tempdir().unwrap();
     let store = store_with_flow(tmp.path());
     warm(&store);
     advance(&store, 1);
     let db = history_cache::history_db_path(&store);
-    let release = inherited_lock_released_after(&db, std::time::Duration::from_millis(100));
+    let copy = history_cache::test_support::copy_then_release(&db);
     with_index_on(|| {
         let passes = history_cache::index_pass_count();
         history_flow::answer(&store, &opts()).expect("caught up and served");
         assert_eq!(history_cache::index_pass_count(), passes + 1);
     });
-    release.join().unwrap();
+    drop(copy);
     let st = history_cache::status_at(&store, &db);
     assert_eq!(st.tip, st.head, "the index reached HEAD");
 }
 
 /// A genuinely held lock, here by another thread, still classifies `Busy`,
-/// and at once: the settling retry only waits out locks nobody holds.
+/// and at once.
 // trace:BUG-1987 | ai:claude
 #[test]
 fn bug_1987_a_genuinely_held_lock_still_classifies_busy_at_once() {
@@ -525,7 +510,7 @@ fn bug_1987_a_genuinely_held_lock_still_classifies_busy_at_once() {
     assert_cheap_fallback(&store, IndexMiss::Busy);
     assert!(
         took < std::time::Duration::from_secs(1),
-        "a known holder skips the settling wait (took {took:?})"
+        "a real holder reads as busy without waiting (took {took:?})"
     );
     done_tx.send(()).unwrap();
     holder.join().unwrap();
