@@ -1593,10 +1593,12 @@ pub fn has_changes(repo: &Path) -> Result<bool> {
 /// its tolerant contract for its other callers.
 // trace:TASK-1717 | ai:claude
 pub fn has_changes_checked(repo: &Path) -> Result<bool> {
-    // BUG-1929 E1: a store holding an embedded repository is an error before
-    // any status runs, and the status never recurses into a submodule.
+    // BUG-1929 E1: the status never recurses into a submodule (hardened in
+    // `git`), and a store holding an embedded repository is an error before
+    // any answer. `--ignore-submodules=all` hides a staged gitlink, so the
+    // refusal checks the index and tree itself. Status goes first so an
+    // unreadable store still reports as a status failure.
     // trace:BUG-1929 | ai:claude
-    refuse_embedded_repos(repo)?;
     let result = git(repo, &["status", "--porcelain", "--ignore-submodules=all"])?;
     anyhow::ensure!(
         result.success,
@@ -1604,6 +1606,7 @@ pub fn has_changes_checked(repo: &Path) -> Result<bool> {
         repo.display(),
         result.stderr.trim()
     );
+    refuse_embedded_repos(repo)?;
     Ok(!result.stdout.is_empty())
 }
 

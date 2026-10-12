@@ -13,7 +13,8 @@
 //!   the write set, plants an embedded repository in the store (E1) and
 //!   checks the host's store sync refuses it without running its
 //!   `core.fsmonitor`, and reads the result from main. Its fixture lives under
-//!   `$HOME/.cache`, outside every sandbox-writable temp directory.
+//!   the operator's real `~/.cache`, outside every sandbox-writable temp
+//!   directory.
 //!
 //! trace:BUG-1929 | ai:claude
 
@@ -304,7 +305,7 @@ fn store_boundary_gaps_name_each_exclusion() {
 // `<main>/.aida-store/objects` was writable, and that `<main>/.aida-store/.git`,
 // `<main>/.aida/config.toml` and `<main>/README.md` are unchanged.
 //
-// The fixture lives under `$HOME/.cache`, not `tempfile::tempdir()`: inside
+// The fixture lives under the real `~/.cache`, not `tempfile::tempdir()`: inside
 // Claude Code `TMPDIR` is sandbox-writable, so a temp-dir fixture would pass
 // with or without the write set. Costs a model call, so CI skips it unless
 // `AIDA_TEST_REAL_CLAUDE=1`. Optional: `AIDA_TEST_CLAUDE_BIN` (default
@@ -336,9 +337,11 @@ fn real_claude_contained_session_claims_and_comments() {
         text
     };
 
-    // The real home on purpose: under cfg(test) `crate::home_dir` redirects to
-    // a temp home, which is the sandbox-writable place this fixture must avoid.
-    let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set")); // allow-direct-home-dir
+    // The operator's real home on purpose: the lib-test harness points `$HOME`
+    // at a temp home under `TMPDIR`, the sandbox-writable place this fixture
+    // must avoid. `claude` gets this home too, for its credentials; contained
+    // writes there stay outside the write set.
+    let home = crate::test_home::passwd_home().expect("password-database home");
     let cache_home = home.join(".cache");
     std::fs::create_dir_all(&cache_home).unwrap();
     let fixture = tempfile::Builder::new()
@@ -493,6 +496,7 @@ fn real_claude_contained_session_claims_and_comments() {
             "Bash",
         ])
         .current_dir(&worktree)
+        .env("HOME", &home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -576,7 +580,7 @@ fn real_claude_contained_session_claims_and_comments() {
     );
     let done = run(&main, &aida, &["show", "BUG-2"]);
     assert!(
-        status_is(&done, "completed"),
+        status_is(&done, "done"),
         "queue done must be visible from main: {done}\n{transcript}"
     );
 
