@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T06:56:36.076573340Z
+modified_at: 2026-10-12T08:06:12.991723487Z
 req_type: Bug
 tags:
 - ci
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-10-12T06:56:36.076573340Z
   modified_at: 2026-10-12T06:56:36.076573340Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a12f25-dcff-7180-b883-9a3ce7a193c5
+  author: joe
+  content: 'Advisor, from the #2549 review: two more tests have the same inherited-lock race: bug_1635_history_event_modes_tests.rs:400 and task_1512_history_transition_filters_tests.rs:580, both bare serve_at on a fresh index. Switch them to test_support::serve_locked. Also: serve_locked (history_cache.rs ~2521) should return a pre-lock error at once instead of spinning for ~1s and then panicking ''never held the lock''.'
+  created_at: 2026-10-12T08:06:12.991723487Z
+  modified_at: 2026-10-12T08:06:12.991723487Z
+  session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
 filed_at:
   code_sha: 17ff749954bca6e86e47f1d3b237d8bb53f531ed
   branch: main
