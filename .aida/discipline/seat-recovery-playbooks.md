@@ -29,3 +29,26 @@ shelved and route a concrete rework brief.
 Use `aida pull` first. Inspect both store histories, reconcile rather than
 overwriting, and validate with `aida cache verify` after the rebase. Never hard
 reset or force-push the canonical store to make the warning disappear.
+
+## Stacked PR after its base is squash-merged
+
+A squash merge rewrites the base PR's commits into one new commit on `main`, so
+a PR stacked on that base still carries the originals and now conflicts.
+<!-- trace:TASK-1726 | ai:claude -->
+
+1. Before merging the base, record its last head SHA (`OLD_BASE`, the base PR's
+   final head commit) and the stacked PR's current head (`OLD_HEAD`). Merge the
+   base WITHOUT deleting its branch: deleting it first auto-closes the stacked PR.
+2. Retarget the stacked PR's base to `main` (for example
+   `gh pr edit <stacked-pr> --base main`).
+3. Only now delete the base branch.
+4. Replay just the stacked commits onto the new `main`, then push with the lease
+   pinned to the head you inspected:
+   `git fetch origin`,
+   `git rebase --onto origin/main "$OLD_BASE" <stacked-branch>`,
+   `git push --force-with-lease=<stacked-branch>:"$OLD_HEAD" origin <stacked-branch>`.
+   Re-run the gates (for example `make check-ci-fast`) and let CI go green.
+5. Verify with `git range-diff "$OLD_BASE".."$OLD_HEAD" origin/main..<stacked-branch>`
+   against the approved head before merging. The head changed, so any approval
+   on the old head is stale; a changed patch (not just a new base) needs a
+   fresh review.
