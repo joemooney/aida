@@ -2680,3 +2680,30 @@ items = [
   "fn render_auto_queue_outcome",
   "fn current_git_branch",
 ]
+
+[module.ci_probe]
+purpose = "CI probing: CiProbe, decide_ci_action and wait_for_ci_terminal (STORY-1488 slice 1)"
+items = [
+  "fn branch_behind_main",
+  "enum CiProbe",
+  "fn ci_probe_change_id",
+  "enum CiProbeFailureAction",
+  "fn decide_ci_probe_failure",
+  "enum CiAction",
+  "fn decide_ci_action",
+  "fn ci_probe_from_ci_probe_result",
+  "fn ci_probe_with_forge",
+  "fn watch_ci_for_context_via_forge",
+  "fn watch_ci_for_context_with_forge",
+  "fn parse_ci_probe",
+  "fn ci_ceiling_verdict_from_rollup",
+  "fn wait_for_ci_terminal",
+  "fn emit_ci_terminal",
+  "fn ci_rollup_json_for_branch",
+  "fn git_rev_parse_quiet",
+  "fn should_stream_ci_watch",
+  "fn watch_ci_for_context",
+  "fn watch_ci_for_context_github",
+  "fn first_run_id_from_gh_json",
+  "mod task1165_events_root_tests",
+]
