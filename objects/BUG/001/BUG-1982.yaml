@@ -2,13 +2,25 @@ id: 01a12dec-8524-7393-a872-6e0f88806ac6
 spec_id: BUG-1982
 agreed_id: BUG-1982
 title: Contained sessions can redirect main .git worktree commondir to run host code via core.fsmonitor
-description: placeholder
+description: |
+  Found in the advisor review of #2541 (BUG-1929). The reviewer verified it against Claude Code 2.1.296 with bwrap 0.9.0. The problem predates #2541 and does not depend on it.
+
+  When a contained session runs in a linked worktree, Claude Code's sandbox makes the main checkout's shared git directory (<main>/.git) writable. It protects only .git/hooks and .git/config.
+
+  A contained agent can therefore rewrite <main>/.git/worktrees/<wt>/commondir, or other per-worktree metadata, to point at a git directory it controls. If that directory's config sets core.fsmonitor=<cmd>, the next host-side git command that touches the worktree runs <cmd> outside the sandbox. That includes any unsandboxed aida or git run by the operator or another seat.
+
+  This breaks the operator's ruling that contained sessions get no write access to <main>/.git. #2541's D1 is the same kind of escape, reached through <main>/.aida-store/.git.
+
+  ## Acceptance
+  - A contained session cannot write <main>/.git/worktrees/** metadata that changes which git directory or config the host's git uses (commondir, gitdir, config.worktree). The contained boundary emits denyWrite entries for these, or an equivalent bind.
+  - A real-sandbox test shows that writes to commondir and gitdir fail while ordinary commits in the session worktree still succeed. Its fixture lives outside every sandbox-writable temp directory.
+  - The remaining <main>/.git write surface that Claude Code grants is documented, with the reason each remaining path is safe.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:23:57.732653120Z
-modified_at: 2026-10-12T02:23:57.732653120Z
+modified_at: 2026-10-12T02:24:17.629979587Z
 req_type: Bug
 tags:
 - contained
