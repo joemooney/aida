@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-12T06:01:39.230484814Z
+modified_at: 2026-10-12T06:01:44.243301648Z
 req_type: Task
 tags:
 - adr-9
@@ -25,6 +25,14 @@ tags:
 - groom:approve
 - groomed:night
 - guardrail
+comments:
+- id: 01a12eb3-e633-76f0-8a64-9577d847c8f0
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe; test-only guard change). Still open on origin/main 17ff749954: ENGINE_CALLER_ALLOWLIST still exempts src/upgrade_release.rs as a whole file. The lib.rs half of the concern is moot: lib.rs and lib_part*.rs are no longer allowlisted, so they are fully guarded already. The 'wait for the lib.rs split' caveat no longer matters, since the split does not touch the guard test. Added a ## Acceptance section scoped to upgrade_release.rs plus a negative test.
+  created_at: 2026-10-12T06:01:44.243301648Z
+  modified_at: 2026-10-12T06:01:44.243301648Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
