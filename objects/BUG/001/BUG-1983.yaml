@@ -25,10 +25,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-12T02:49:36.141263854Z
+modified_at: 2026-10-12T06:07:38.105985772Z
 req_type: Bug
 tags:
 - authority
+- groom:approve
 - roles
 - seats
 filed_at:
