@@ -81,6 +81,8 @@ mod deps_cmd;
 mod drain_next_n;
 mod driver_cmd;
 mod driver_view;
+// Idle in-progress specs in `aida awaiting`. trace:STORY-1680 | ai:claude
+mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
 mod dev_cmd;

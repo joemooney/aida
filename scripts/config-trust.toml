@@ -124,6 +124,12 @@ sites = 2
 channels = ["worktree", "home", "write"]
 sites = 2
 
+# STORY-1680: `[awaiting] idle_in_progress_hours`, read from the project copy
+# and then ~/.aida through one path helper (a policy threshold only).
+[readers."aida-cli-lib/src/idle_in_progress.rs"]
+channels = ["worktree", "home"]
+sites = 1
+
 [readers."aida-cli-lib/src/implementer_preflight.rs"]
 channels = ["worktree"]
 # 2 sites since BUG-1714 (#2350): configured_guard_names ([preflight] guards,
@@ -377,6 +383,9 @@ sites = 1
 store_path = "location"
 mode = "policy"            # distributed-mode detection line scan
 use_agreed_blocks = "policy"
+
+[keys.worktree.awaiting]
+idle_in_progress_hours = "policy" # STORY-1680
 
 [keys.worktree.deployment]
 store_path = "location"
