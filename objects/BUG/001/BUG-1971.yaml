@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-12T06:00:27.216995416Z
+modified_at: 2026-10-12T06:00:32.036287084Z
 req_type: Bug
 tags:
 - contained
@@ -39,6 +39,13 @@ comments:
   created_at: 2026-10-11T20:14:33.495324529Z
   modified_at: 2026-10-11T20:14:33.495324529Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12eb2-cc24-78d3-908e-cd151fa11113
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised; security: contained write boundary). Status on origin/main 17ff749954: item 1's one-off real run is DONE (advisor, see BUG-1928), but the advisor's new requirement (give the claude child the real HOME) is open: the test at bug_1928_contained_boundary_tests.rs:282 sets no HOME. Item 2 open (queue_cmd.rs ~12602 still announces from lease.worktree_path while flags come from headless_worktree_root()). Item 3 open (session.rs:1251 still falls back to cwd). Item 4 open (spawn_claude_headless_resume ~3056 builds flags via claude_headless_resume_args_with_posture -> claude_contained_flags(), ignoring cwd). Added a ## Acceptance section. Warm-pool question from the advisor: no existing spec covers 'warm pool overrides an explicit --path' (searched). RECOMMEND a separate bug, since it is worktree-selection behaviour rather than the write boundary; I did not create it. Supervised because it changes sandbox/boundary semantics.
+  created_at: 2026-10-12T06:00:32.036287084Z
+  modified_at: 2026-10-12T06:00:32.036287084Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
