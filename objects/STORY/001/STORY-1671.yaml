@@ -46,10 +46,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:00.283963835Z
-modified_at: 2026-10-11T20:13:00.283963835Z
+modified_at: 2026-10-12T06:07:44.446379053Z
 req_type: Story
 tags:
 - from:aida-host
+- groom:split
 - regenerability
 relationships:
 - rel_type: Child
