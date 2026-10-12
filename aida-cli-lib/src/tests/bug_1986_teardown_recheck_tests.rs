@@ -171,6 +171,9 @@ fn a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty() {
     std::fs::create_dir_all(wt.join(".aida")).unwrap();
     std::os::unix::fs::symlink(parent.join("sessions"), wt.join(".aida/sessions")).unwrap();
     std::os::unix::fs::symlink(parent.join("cache.db"), wt.join(".aida/cache.db")).unwrap();
+    // Session start links `.aida/agents` too when the parent has one.
+    std::fs::create_dir_all(parent.join("agents")).unwrap();
+    std::os::unix::fs::symlink(parent.join("agents"), wt.join(".aida/agents")).unwrap();
     std::os::unix::fs::symlink(&parent, wt.join(".aida-store")).unwrap();
 
     let raw = worktree_dirty_entries(&wt);
@@ -188,6 +191,15 @@ fn a_bare_untracked_aida_dir_of_runtime_links_is_not_dirty() {
         dirty_entries_ignoring_runtime_links(&wt, worktree_dirty_entries(&wt)),
         vec!["?? .aida/notes.txt".to_string()]
     );
+
+    // The strip removes every one of those links, `agents` included.
+    crate::worktree_gc::unlink_worktree_aida_runtime(&wt.join(".aida"));
+    for link in ["sessions", "cache.db", "agents"] {
+        assert!(
+            std::fs::symlink_metadata(wt.join(".aida").join(link)).is_err(),
+            ".aida/{link} must be stripped"
+        );
+    }
 }
 
 /// BUG-1988: an unverified scan (no holder seen) is downgraded on every

@@ -615,6 +615,7 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
     let blocker = s.repo.join(".aida").join("salvage");
     let _ = std::fs::remove_dir_all(&blocker);
     std::fs::write(&blocker, "not a dir").unwrap();
+    std::fs::create_dir_all(s.repo.join(".aida/agents")).unwrap(); // trace:BUG-1988 | ai:claude
 
     let out = s.end(&s.repo, &[]);
     let msg = text(&out);
@@ -644,6 +645,13 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
             "{link} must be restored after the failed salvage"
         );
     }
+    // `.aida/agents` is linked only when the parent has one. The fixture's
+    // parent gained one after session start, so the relink is what creates
+    // it here. trace:BUG-1988 | ai:claude
+    assert!(
+        s.worktree.join(".aida/agents").is_symlink(),
+        ".aida/agents must be linked after the failed salvage"
+    );
 
     // Fix the cause and run the named command: the end goes through and the
     // work is salvaged before the tree returns to the pool.
@@ -656,6 +664,10 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
     );
     assert!(!s.lease_exists(), "lease released on the re-run");
     assert!(s.worktree.is_dir(), "pooled tree returned, not removed");
+    assert!(
+        std::fs::symlink_metadata(s.worktree.join(".aida/agents")).is_err(),
+        "the end strips the .aida/agents link"
+    );
     let salvaged: Vec<String> = std::fs::read_dir(&blocker)
         .expect("salvage dir created on the re-run")
         .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap_or_default())

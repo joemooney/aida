@@ -1046,15 +1046,9 @@ pub(crate) fn link_worktree_runtime_state(
     let worktree_aida = worktree_path.join(".aida");
     if parent_aida.exists() {
         std::fs::create_dir_all(&worktree_aida)?;
-        for runtime in &[
-            "sessions",
-            "agents",
-            "roles",
-            "cache.db",
-            "cache.db-shm",
-            "cache.db-wal",
-            "pgdata",
-        ] {
+        // BUG-1988: one list for link, strip and the dirty-gate filter, so
+        // they cannot drift apart again. trace:BUG-1988 | ai:claude
+        for runtime in WORKTREE_AIDA_RUNTIME_LINKS {
             let src = parent_aida.join(runtime);
             let dst = worktree_aida.join(runtime);
             if src.exists() && !dst.exists() {
@@ -1075,11 +1069,15 @@ pub(crate) fn link_worktree_runtime_state(
     Ok(())
 }
 
-/// The runtime symlinks session start places inside a worktree's `.aida/`,
-/// which [`unlink_worktree_aida_runtime`] strips before removal.
-// trace:BUG-52 trace:BUG-1986 | ai:claude
+/// The runtime symlinks session start ([`link_worktree_runtime_state`])
+/// places inside a worktree's `.aida/`, which [`unlink_worktree_aida_runtime`]
+/// strips before removal.
+// BUG-1988: `agents` was linked at session start but missing here, so the
+// strip left it behind and the dirty gate counted it as work.
+// trace:BUG-52 trace:BUG-1986 trace:BUG-1988 | ai:claude
 pub(crate) const WORKTREE_AIDA_RUNTIME_LINKS: &[&str] = &[
     "sessions",
+    "agents",
     "roles",
     "cache.db",
     "cache.db-shm",

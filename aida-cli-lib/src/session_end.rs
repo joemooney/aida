@@ -1993,6 +1993,7 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
     entries
         .into_iter()
         .flat_map(|entry| {
+            // Porcelain v1 (`worktree_dirty_entries`). trace:BUG-1988 | ai:claude
             if entry == "?? .aida/" {
                 untracked_entries_under(worktree, ".aida/").unwrap_or_else(|| vec![entry])
             } else {
@@ -2060,7 +2061,7 @@ pub(crate) fn session_end_salvage_failure_message(
         "could not salvage the uncommitted changes in pooled worktree {} before returning it \
          to the pool: {error}\n\n\
          The session was NOT ended; its lease is kept and its worktree was not reset.{extra}\n\
-         Fix the cause (the patch is written under {}), or commit or stash the changes in the \
+         Fix the cause (salvage patches go under {}), or commit or stash the changes in the \
          worktree, then re-run `aida session end {session_id}`.",
         worktree.display(),
         project_root.join(".aida").join("salvage").display(),
