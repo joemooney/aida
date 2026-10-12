@@ -2,17 +2,25 @@ id: 01a12ca6-3951-7252-83a2-b2d92c4c9392
 spec_id: BUG-1978
 agreed_id: BUG-1978
 title: '''aida review record'' attribution-fallback error points at ''aida role enter'' even when the seat grant is valid; the real fix is AIDA_AGENT_NAME/TYPE'
-description: 'Seen 2026-10-11 in an advisor session with a valid AIDA_SESSION_GRANT and AIDA_SESSION_ROLE=advisor. ''aida review record'' failed with ''aida review record attribution fallback'', help: ''aida role enter''. Cause (lib_part5.rs ~11720 and review_recorded_by_from ~12142): with neither AIDA_AGENT_NAME nor AIDA_AGENT_TYPE set, recorded_by becomes ''aida review record (operator)'', which then requires require_direct_human(). An agent seat with a grant is never told to identify itself. Exporting AIDA_AGENT_TYPE=claude fixed it. Acceptance: when a seat grant is present but no agent identity is set, the error says so and names AIDA_AGENT_TYPE / AIDA_AGENT_NAME. Consider having Claude Code sessions export AIDA_AGENT_TYPE automatically (the SessionStart hook already sets the role). Test the message for both cases (no grant; grant but no agent identity).'
+description: |
+  Seen 2026-10-11 in an advisor session with a valid AIDA_SESSION_GRANT and AIDA_SESSION_ROLE=advisor. 'aida review record' failed with 'aida review record attribution fallback', help: 'aida role enter'. Cause (lib_part5.rs ~3700 `review_recorded_by` / `review_recorded_by_from` ~4120 after the lib split): with neither AIDA_AGENT_NAME nor AIDA_AGENT_TYPE set, recorded_by becomes 'aida review record (operator)', which then requires require_direct_human(). An agent seat with a grant is never told to identify itself. Exporting AIDA_AGENT_TYPE=claude fixed it.
+
+  ## Acceptance
+  - When a valid seat grant is present (seat_authority::current_grant) but neither AIDA_AGENT_NAME nor AIDA_AGENT_TYPE is set, `aida review record` refuses with a message that says a seat grant was found but no agent identity is set, and names AIDA_AGENT_TYPE / AIDA_AGENT_NAME as the fix. It does not point at `aida role enter` in that case.
+  - With no grant and no agent identity, the existing human/role-enter guidance is unchanged.
+  - Tests assert the message for both cases (no grant; grant but no agent identity).
+  - Out of scope: auto-exporting AIDA_AGENT_TYPE from the SessionStart hook, and treating the grant itself as recording identity (an authority change; see BUG-1983's shared advisor-authority helper).
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:33.585661023Z
-modified_at: 2026-10-11T20:27:33.585661023Z
+modified_at: 2026-10-12T05:50:18.864969535Z
 req_type: Bug
 tags:
 - attribution
 - capture
+- groomed:night
 - review
 - ux
 filed_at:
