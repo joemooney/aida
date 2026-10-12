@@ -5,3 +5,5 @@ last_by:
   session: ea9198d0-8b3a-47c4-8d68-c250d14af770
   vendor: claude
 result: done
+due_since: 2026-10-12T15:03:52.476259800Z
+due_reason: on CronJobFailed:hub-drift-guard
