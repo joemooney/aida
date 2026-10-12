@@ -2,14 +2,25 @@ id: 01a12b88-d79e-7461-8c94-b27f82ec712f
 spec_id: BUG-1965
 agreed_id: BUG-1965
 title: 'Flaky: reader_incremental_lock_error_does_not_full_rebuild (aida-core cached_git_backend) fails under load'
-description: 'Seen 2026-10-11 during a TASK-1538 lib-split proof (cargo test --workspace at da0202019d, with a second workspace test run in parallel): aida-core/src/db/cached_git_backend.rs:3804 assert_eq!(counts.get("write_attempt"), Some(&1)) got None. The commit only moves aida-cli-lib code. test_counts() looks like shared counter state, so a concurrent test or a slow lock path can change what the assertion sees. Isolate the counters per test (thread-local or scoped), or serialise the tests that read them.'
+description: |
+  Seen 2026-10-11 during a TASK-1538 lib-split proof (cargo test --workspace at da0202019d, with a second workspace test run in parallel): aida-core/src/db/cached_git_backend.rs:3804 assert_eq!(counts.get("write_attempt"), Some(&1)) got None. The commit only moves aida-cli-lib code. test_counts() looks like shared counter state, so a concurrent test or a slow lock path can change what the assertion sees. Isolate the counters per test (thread-local or scoped), or serialise the tests that read them.
+
+  ## Groom note (2026-10-11)
+  The counters are already thread-local (`COUNTS` in aida-core/src/db/cache_refresh.rs), so cross-test counter sharing is not the cause. `write_attempt` is only counted inside `with_cache_retry_observed` (aida-core/src/db/cache.rs) when `holding_write()` is true, so `None` means this reader never took the refresh write lock. The likely cause is that the refresh flock was briefly held by something else, for example a child forked by a parallel test that inherited the descriptor before exec (the BUG-1939 class), or the read scope's deadline ran out before the attempt on a loaded host.
+
+  ## Acceptance
+  - Root cause named: which branch skipped the write attempt on the failing run (lock contention, deadline, or something else), shown by a test-only counter or log.
+  - reader_incremental_lock_error_does_not_full_rebuild asserts its invariant (a reader that hits a SQLite write lock serves the stale rows labelled `writer_busy` and never does a full rebuild) without depending on winning a lock race against unrelated tests.
+  - The test passes 50 consecutive runs of `cargo test -p aida-core reader_incremental_lock_error -- --test-threads=16` while a second `cargo test --workspace` runs in parallel.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-11T15:15:50.814508895Z
+modified_at: 2026-10-12T05:57:44.532599877Z
 req_type: Bug
+tags:
+- groomed:night
 filed_at:
   code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
   branch: main
