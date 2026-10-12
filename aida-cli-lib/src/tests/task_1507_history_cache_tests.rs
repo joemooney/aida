@@ -3692,7 +3692,9 @@ mod bug_1923 {
         // Three failed attempts in a row pause inline catch-up.
         for n in 1..=3 {
             history_cache::fail_next_catch_up();
-            assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
             assert_eq!(failures(), Some(n.to_string()));
         }
         assert_eq!(failures().as_deref(), Some("3"));
@@ -3747,7 +3749,9 @@ mod bug_1923 {
         }
         for _ in 0..3 {
             history_cache::fail_next_catch_up();
-            assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
         }
         assert!(history_cache::status_at(&fx.store, &fx.db).catch_up_stalled);
         (fx, old)
@@ -3776,9 +3780,7 @@ mod bug_1923 {
 
         // Once the copy is gone, the still-pending injection is consumed.
         drop(copy);
-        assert!(
-            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
-        );
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("1")
@@ -3805,7 +3807,8 @@ mod bug_1923 {
 
         let commits = test_support::commit_count(&fx.db);
         for _ in 0..2 {
-            let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let got =
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
             assert!(got.is_none(), "paused: the git walk answers");
         }
         // No attempt ran and nothing was written.
