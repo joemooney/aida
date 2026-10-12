@@ -226,6 +226,10 @@ assert_exit "project repo from a cwd in another repo → soft-block" 2 "$(run_pr
 assert_exit "cwd repo while the project is elsewhere → soft-block" 2 "$(run_project "$OTHER" cwdrepo "$OTHER/src/x.rs")"
 assert_exit "outside path with a project dir → allowed" 0 "$(run_project "$OUTSIDE" proj-out "$OUTSIDE/y.rs")"
 assert_no_marker "outside path with a project dir" proj-out
+unlisted_actual=$(cd "$OTHER" && printf '{"session_id":"unlisted","tool_input":{"file_path":"%s"}}' "$OUTSIDE/u.rs" | \
+    env -u AIDA_AUTO_COMPLETE CLAUDE_PROJECT_DIR="$OUTSIDE" AIDA_SESSION_ROLE=advisor \
+    TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)
+assert_exit "project dir git cannot list → still guarded" 2 "$unlisted_actual"
 assert_exit "inherited GIT_DIR does not redirect the repository" 2 \
     "$(cd "$FIX" && printf '{"session_id":"gitdir","tool_input":{"file_path":"%s"}}' "$FIX/src/g.rs" | \
         env -u AIDA_AUTO_COMPLETE -u CLAUDE_PROJECT_DIR GIT_DIR="$OTHER/.git" AIDA_SESSION_ROLE=advisor \

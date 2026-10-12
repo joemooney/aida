@@ -144,7 +144,11 @@ __aida_guard_target_outside_repo() {
     for anchor in "${CLAUDE_PROJECT_DIR:-}" "$PWD"; do
         [ -n "$anchor" ] || continue
         listed=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR \
-            git -C "$anchor" worktree list --porcelain 2>/dev/null) || continue
+            git -C "$anchor" worktree list --porcelain 2>/dev/null) || {
+            # A project directory git cannot list is not "outside": stay guarded.
+            [ "$anchor" = "${CLAUDE_PROJECT_DIR:-}" ] && return 1
+            continue
+        }
         roots="$roots
 $listed"
     done
