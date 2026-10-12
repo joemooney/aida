@@ -151,6 +151,8 @@ fn headless_env_launches_route_through_shared_argv_builders() {
     );
     // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
     assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
+    // STORY-1488: the phase driver moved out of lib_part6.rs.
+    assert_env_setter_has_builder_context("phase_driver.rs", include_str!("../phase_driver.rs"));
 }
 
 /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`

@@ -963,14 +963,15 @@ mod bug_1173_detection_hold_tests {
     #[test]
     fn set_pr_number_stamps_marker_and_syncs_label_surfacing_failure() {
         let src = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("phase_driver.rs")
         );
         // build the needle from split pieces so this test's own source cannot self-match
         // (the test module sits before the real function in the file).
