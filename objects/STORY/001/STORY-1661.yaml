@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-11T13:40:02.675853307Z
+modified_at: 2026-10-12T08:33:48.227892621Z
 req_type: Story
 tags:
 - history
@@ -95,6 +95,26 @@ comments:
   created_at: 2026-10-11T13:40:01.450391004Z
   modified_at: 2026-10-11T13:40:01.450391004Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a12f3f-1ec3-73b3-982b-122559f4ee18
+  author: joe
+  content: |
+    NIGHT-B PARK (relay 20261011-224638): STORY-1661 is parked waiting on the advisor's signoff of the design sketch in comments[3]. No worktree or code yet.
+
+    The relay brief says to park this if it needs the STORY-1484 single-flight machinery or any architecture choice. It needs both: the trigger/spawn model is the open fork.
+
+    **Decision needed:** which trigger.
+    - **(a) Recommended for slice 1:** a schedule tick, `cache refresh --history --if-behind`. It runs inline in the existing maintenance tick and reuses only the single-flight IndexLock, so it spawns nothing new and meets "within one tick".
+    - **(b)** A detached worker spawned after a store commit when lag > FLOW_CATCH_UP_CAP. This is STORY-1484-style `spawn_detached_worker`, so it adds process churn on hot write paths. Ship it later behind a config knob if (a) proves too slow.
+    - **(c)** Both.
+
+    **Also needs an explicit ruling** (it's the BUG-1942/BUG-1974 coordination point): the background path must bypass the stall refusal without incrementing `catch_up_failures`, so a killed worker can't stall foreground reads. A kept chunk clears the counter through `finish_append`.
+
+    One input from BUG-1974 (#2549, merged): a released IndexLock can still read as held while another thread is fork/exec'ing a child. The tick's Busy outcome and `classify_miss` need to tolerate that (see BUG-1987). For a single-flight tick this is benign, because it just skips one tick.
+
+    Once (a) is signed off, this becomes a mechanical slice: the new module `history_indexer.rs` plus the named tests in comments[3].
+  created_at: 2026-10-12T08:33:48.227892621Z
+  modified_at: 2026-10-12T08:33:48.227892621Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12a01-9e8b-7502-ae6d-15a3366a2b21
   author: joe
