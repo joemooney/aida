@@ -214,6 +214,8 @@ fn trace_hit_parser_handles_colon_in_path() {
     assert_eq!(count_trace_hit_files(hits, "main", &ids), 2);
 }
 
+/// Two colon paths sharing the `a` prefix: the old first-':' parser read
+/// both as path `a` and counted 1.
 #[test]
 fn trace_files_on_ref_counts_colon_path() {
     let (_tmp, root) = init_repo();
@@ -225,9 +227,9 @@ fn trace_files_on_ref_counts_colon_path() {
     );
     commit(
         &root,
-        "c.rs",
+        "a:c.rs",
         "// trace:TASK-9 | ai:claude\n",
-        "feat: plain path",
+        "feat: second colon path, same prefix",
     );
     assert_eq!(trace_files_on_ref(&root, "main", &wanted(&["TASK-9"])), 2);
 }

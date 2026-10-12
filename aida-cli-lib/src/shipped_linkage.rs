@@ -229,24 +229,22 @@ fn count_trace_hit_files(hits: &str, git_ref: &str, wanted: &HashSet<String>) ->
     files.len()
 }
 
-fn resolve_sha(project_root: &std::path::Path, git_ref: &str) -> Option<String> {
-    git_out(
-        project_root,
-        &[
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            &format!("{git_ref}^{{commit}}"),
-        ],
-    )
-}
-
 /// The refs worth scanning, in scan order. BUG-1958: when the local default
-/// branch resolves to the same commit as the remote-tracking ref, or is an
-/// ancestor of it, every commit and tracked file it could show is already
-/// covered by the remote scan — so it is dropped, halving the cost of the
-/// common unshipped-spec read. A local branch ahead of (or diverged from)
-/// the remote is still scanned.
+/// branch is the same commit as the remote-tracking ref, or an ancestor of
+/// it, it is dropped, halving the cost of the common unshipped-spec read. A
+/// local branch ahead of (or diverged from) the remote is still scanned.
+///
+/// For commit history the drop loses nothing: every commit on local is also
+/// on the remote. The `git grep <ref>` trace scan is different: it reads the
+/// tip tree only, so a `trace:` comment deleted upstream while local is
+/// behind would have corroborated on local and now does not (shipped=false).
+/// That is acceptable — the remote tip is the truthful current answer, and
+/// local's stale tree only reflects an older state of the same history.
+///
+/// One `git merge-base --is-ancestor <local> <remote>` covers both cases (a
+/// commit is its own ancestor). Fail-safe: any git error (missing ref, no
+/// merge base, git unavailable) reads as "not covered", so both refs are
+/// scanned.
 // trace:BUG-1958 | ai:claude
 pub(crate) fn refs_worth_scanning(
     project_root: &std::path::Path,
@@ -255,19 +253,13 @@ pub(crate) fn refs_worth_scanning(
     let (Some(remote), Some(local)) = (refs.remote.as_deref(), refs.local.as_deref()) else {
         return refs.in_scan_order();
     };
-    let covered = match (
-        resolve_sha(project_root, remote),
-        resolve_sha(project_root, local),
-    ) {
-        (Some(r), Some(l)) if r == l => true,
-        (Some(r), Some(l)) => std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["merge-base", "--is-ancestor", &l, &r])
-            .output()
-            .is_ok_and(|o| o.status.success()),
-        _ => false,
-    };
+    // `git_out` is `Some` only on exit 0: exit 1 (not an ancestor) and any
+    // error both come back `None`.
+    let covered = git_out(
+        project_root,
+        &["merge-base", "--is-ancestor", local, remote],
+    )
+    .is_some();
     if covered {
         vec![remote.to_string()]
     } else {
