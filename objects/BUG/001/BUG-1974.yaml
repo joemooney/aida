@@ -3,12 +3,12 @@ spec_id: BUG-1974
 agreed_id: BUG-1974
 title: 'Flaky on main: bug_1942_stalled_catch_up_skips_inside_cooldown fails at stalled_three_behind (serve_at returned Ok during injected catch-up failures)'
 description: 'Main CI went red at 34e3fe48e1 (#2533, a docs-only glossary PR, unrelated), run 38163356542, then green on the next commit 0095daaf6f with no relevant change. Failure: task_1507_history_cache_tests::bug_1923::bug_1942_stalled_catch_up_skips_inside_cooldown panicked at aida-cli-lib/src/tests/task_1507_history_cache_tests.rs:3749 (the helper stalled_three_behind): ''assertion failed: history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()''. 8088 passed, 1 failed. Added by BUG-1942 (#2521, merged 2026-10-11). FAIL_NEXT_CATCH_UP is thread-local (history_cache.rs:207), so it isn''t cross-test consumption of the injection. Suspect: by the 2nd or 3rd injected failure, the new BUG-1942 cooldown / stall logic (or a wall-clock / RFC3339 seconds-granularity comparison) makes serve_at skip the inline catch-up, so the injected failure isn''t consumed and serve_at returns Ok. Acceptance: root cause named; the helper drives the stall deterministically (injected clock, or set the failure count directly) with no wall-clock dependence; 50 consecutive runs pass under ''cargo test -p aida-cli-lib bug_1942 -- --test-threads=16'' alongside the full suite.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:46:33.091000129Z
-modified_at: 2026-10-12T07:16:26.412482116Z
+modified_at: 2026-10-12T09:13:58.026132229Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -44,6 +44,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12f63-e40a-7ee3-a1c3-428f8a2ce683
+  author: joe
+  timestamp: 2026-10-12T09:13:58.026123917Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: eb0a08cd5fa64cce8193bdde47ce2efaac3e6cac
   branch: main
@@ -52,3 +59,6 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-12T09:13:58.026106492Z
