@@ -12,12 +12,12 @@ description: |
   - The cause of each failure mode is named: the fixture `aida add` failure at line 84 and the missing holder-gate line at line 228.
   - If the gate can be skipped under load, that is a production bug and is fixed (a live drain lock must block every launch entry point regardless of host load), with a test that proves it. If the failure is fixture-only (for example a timeout, or a lock-holder process that has not started yet), the fixture waits for its holder deterministically instead of relying on timing.
   - The test passes 20 consecutive runs of `cargo test -p aida-cli --test bug_1683_live_drain_lock` while a second `cargo test --workspace` runs in parallel.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:15.246332312Z
-modified_at: 2026-10-12T06:01:40.808672122Z
+modified_at: 2026-10-12T14:55:44.908372840Z
 req_type: Bug
 tags:
 - groom:approve
@@ -30,6 +30,14 @@ comments:
   created_at: 2026-10-12T06:01:40.808672122Z
   modified_at: 2026-10-12T06:01:40.808672122Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309c-cd0c-7902-8e3e-e97f557dbf47
+  author: joe
+  timestamp: 2026-10-12T14:55:44.908367287Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
