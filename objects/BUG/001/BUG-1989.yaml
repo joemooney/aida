@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:51:51.434814324Z
-modified_at: 2026-10-12T21:48:49.449634651Z
+modified_at: 2026-10-12T21:48:54.344201488Z
 req_type: Bug
 tags:
 - ci
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-10-12T19:45:50.498070489Z
   modified_at: 2026-10-12T19:45:50.498070489Z
   session_id: abd37323-5d22-48a8-84ee-1bff20c9a9e5
+- id: 01a13217-0ec8-7483-8a97-703464cc5aac
+  author: joe
+  content: 'Advisor merge audit: PR #2567 merged at b79a124777 (pinned 946aadc5ff, strict APPROVE, Build green). Low follow-ups (untested ancestry path in in_tree; non-atomic holder read; btrfs/overlayfs dev matching) in the PR audit.'
+  created_at: 2026-10-12T21:48:54.344201488Z
+  modified_at: 2026-10-12T21:48:54.344201488Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a13096-5ccd-7393-848b-bb04128c6332
   author: joe
