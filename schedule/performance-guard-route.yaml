@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: 'Advisor triage 2026-10-11 15:18: NOT a code regression; budget unchanged. The over-budget aida show calls concentrate in 9116ba7f23 (13.8% of 617), a lib-split slice build run from the relay''s worktree while parallel cargo-test proof lanes saturated the CPU. The live binaries are at or under tolerance: 4cced67be8 9.7%, 97453570d6 6.9%, current 95f15a20d4/18428db14c 0% of 6. The overall proportion is 9.6%, below the 10% tolerance. The trip is the single 27.9s call against the 5s ceiling, consistent with load/lock contention during the proof runs. Re-check after the lib-split lands; if the ceiling trips again on a live main binary under normal load, file a regression bug.'
+due_since: 2026-10-12T04:28:34.455921199Z
+due_reason: on CronJobFailed:performance-guard
