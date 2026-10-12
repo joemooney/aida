@@ -467,6 +467,45 @@ impl CachedGitBackend {
         self.full_rebuild(true)
     }
 
+    /// A reader's inline refresh, bounded inside ADR-53's 5 s ceiling. With
+    /// a usable committed snapshot it makes ONE attempt (no SQLite retry
+    /// ladder): a live writer holding the cache write lock degrades it to
+    /// `WriterBusy`, the same labelled stale serve BUG-1674 introduced, and
+    /// `None` means the cache is current. With no usable snapshot there is
+    /// nothing to serve, so it keeps the full refresh but under the read
+    /// deadline, failing with a clear error when the writer outlasts it.
+    // trace:BUG-1956 | ai:claude
+    fn bounded_inline_refresh(&self) -> Result<Option<super::cache_refresh::RefreshState>> {
+        use super::cache::{is_cache_lock_error, ReadLadderDeadline, ReadRefreshAttempt};
+        if !self.cache.has_usable_snapshot() {
+            let _deadline = ReadLadderDeadline::new(super::cache::READ_LADDER_CAP);
+            return self.ensure_cache_fresh().map(|()| None).map_err(|e| {
+                if is_cache_lock_error(&e) {
+                    e.context(
+                        "the cache has no usable snapshot yet and another process holds its \
+                         write lock; re-run shortly",
+                    )
+                } else {
+                    e
+                }
+            });
+        }
+        let attempt = ReadRefreshAttempt::new();
+        let result = self.ensure_cache_fresh();
+        drop(attempt);
+        match result {
+            Ok(()) => Ok(None),
+            Err(e) if is_cache_lock_error(&e) => {
+                Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                    Some(super::cache_refresh::RefreshState::WriterBusy)
+                } else {
+                    None
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// A reader that cannot refresh inline files the durable request and
     /// spawns the detached worker (STORY-1484 slice C). Returns `None` when
     /// the cache was brought current on the spot (`AIDA_CACHE_NO_DETACH`, or
@@ -478,8 +517,8 @@ impl CachedGitBackend {
         use super::cache_refresh::RefreshState;
         use super::{refresh_request, refresh_worker};
         if refresh_worker::no_detach() {
-            self.ensure_cache_fresh()?;
-            return Ok(None);
+            // trace:BUG-1956 | ai:claude
+            return self.bounded_inline_refresh();
         }
         let cache_path = self.cache.path();
         let head = self.current_head_sha();
@@ -492,8 +531,8 @@ impl CachedGitBackend {
             }
         };
         if request.spawning_suppressed(chrono::Utc::now()) {
-            self.ensure_cache_fresh()?;
-            return Ok(None);
+            // trace:BUG-1956 | ai:claude
+            return self.bounded_inline_refresh();
         }
         match refresh_worker::spawn_detached_worker(self.inner.path(), cache_path) {
             Ok(_) => Ok(Some(RefreshState::Requested)),
@@ -517,6 +556,9 @@ impl CachedGitBackend {
     ) -> Result<Option<super::cache_refresh::RefreshState>> {
         use super::cache_refresh::{self, RefreshLock, RefreshState};
         use std::time::Duration;
+        // Backstop: no ladder below may outlast the read deadline.
+        // trace:BUG-1956 | ai:claude
+        let _deadline = super::cache::ReadLadderDeadline::new(super::cache::READ_LADDER_CAP);
         loop {
             let head = self.current_head_sha();
             let migration = self.cache.recheck_migration();
@@ -532,10 +574,8 @@ impl CachedGitBackend {
                 return Ok(None);
             }
             match RefreshLock::try_acquire(self.cache.path()) {
-                Err(_) => {
-                    self.ensure_cache_fresh()?;
-                    return Ok(None);
-                }
+                // trace:BUG-1956 | ai:claude
+                Err(_) => return self.bounded_inline_refresh(),
                 Ok(Some(guard)) => {
                     if guard.is_nested() {
                         return Ok(None);
@@ -545,6 +585,12 @@ impl CachedGitBackend {
                         return Ok(None);
                     }
                     if migration || !self.cache.has_usable_snapshot() {
+                        // Nothing compatible to serve: refresh inline, but
+                        // never past the read deadline (the backstop above).
+                        // trace:BUG-1956 | ai:claude
+                        if !migration {
+                            return self.bounded_inline_refresh();
+                        }
                         self.ensure_cache_fresh()?;
                         return Ok(None);
                     }
@@ -637,10 +683,11 @@ impl CachedGitBackend {
                                     Some(state) => state,
                                 }
                             }
-                            Err(_) => {
-                                self.ensure_cache_fresh()?;
-                                return Ok(None);
-                            }
+                            // trace:BUG-1956 | ai:claude
+                            Err(_) => match self.bounded_inline_refresh()? {
+                                None => return Ok(None),
+                                Some(state) => state,
+                            },
                         };
                         return Ok(if self.cache.is_stale(&self.current_head_sha())? {
                             Some(state)
@@ -723,8 +770,11 @@ impl CachedGitBackend {
                     Ok(Some(_)) => Some(cache_refresh::RefreshState::Deferred),
                     Err(_) => {
                         drop(snapshot);
-                        self.ensure_cache_fresh()?;
-                        continue;
+                        // trace:BUG-1956 | ai:claude
+                        match self.bounded_inline_refresh()? {
+                            None => continue,
+                            busy => busy,
+                        }
                     }
                 }
             } else {

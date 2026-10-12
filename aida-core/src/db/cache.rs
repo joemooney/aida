@@ -658,6 +658,54 @@ impl Drop for HoldingWrite {
     }
 }
 
+// BUG-1956: a reader-side backstop on the SQLite retry ladder. While a
+// `ReadLadderDeadline` is alive on this thread, every ladder stops sleeping
+// once the deadline passes, so a reader that still has to write (first
+// build, pending migration) fails with the usual lock-holder error inside
+// ADR-53's 5 s ceiling instead of riding the full ~25.5 s ladder.
+// trace:BUG-1956 | ai:claude
+pub(super) const READ_LADDER_CAP: Duration = Duration::from_secs(3);
+
+thread_local! {
+    // trace:BUG-1956 | ai:claude
+    static READ_LADDER_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Caps every retry ladder on this thread at `now + cap` until dropped.
+/// Nested guards keep the earliest deadline and restore their caller's.
+// trace:BUG-1956 | ai:claude
+pub(super) struct ReadLadderDeadline(Option<std::time::Instant>);
+impl ReadLadderDeadline {
+    pub(super) fn new(cap: Duration) -> Self {
+        let proposed = std::time::Instant::now() + cap;
+        Self(READ_LADDER_DEADLINE.with(|c| {
+            let prev = c.get();
+            c.set(Some(prev.map_or(proposed, |p| p.min(proposed))));
+            prev
+        }))
+    }
+}
+impl Drop for ReadLadderDeadline {
+    fn drop(&mut self) {
+        READ_LADDER_DEADLINE.with(|c| c.set(self.0));
+    }
+}
+
+/// The sleep before retry `attempts`, or `None` when the ladder (or the
+/// reader's deadline) is spent.
+// trace:BUG-1956 | ai:claude
+fn ladder_delay(delays: &[Duration], attempts: usize) -> Option<Duration> {
+    let delay = *delays.get(attempts)?;
+    match READ_LADDER_DEADLINE.with(|c| c.get()) {
+        None => Some(delay),
+        Some(deadline) => {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            (!left.is_zero()).then(|| delay.min(left))
+        }
+    }
+}
+
 thread_local! {
     // Armed by the `aida awaiting --notice` path before the cache is opened, so
     // BOTH the connection open and the summary reads honor the short ladder.
@@ -1093,7 +1141,12 @@ where
         }
         match f() {
             Ok(value) => return Ok(value),
-            Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+            Err(err) if is_sqlite_lock_error(&err) => {
+                // trace:BUG-1956 | ai:claude
+                let Some(delay) = ladder_delay(&delays, attempts) else {
+                    let observation = observe_lock_info_file(lock_info_path).ok().flatten();
+                    return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
+                };
                 if owns_sidecar {
                     touch_own_lock_info_at(
                         lock_info_path,
@@ -1102,12 +1155,8 @@ where
                 }
                 #[cfg(test)]
                 super::cache_refresh::test_count("retry_sleep");
-                std::thread::sleep(delays[attempts]);
+                std::thread::sleep(delay);
                 attempts += 1;
-            }
-            Err(err) if is_sqlite_lock_error(&err) => {
-                let observation = observe_lock_info_file(lock_info_path).ok().flatten();
-                return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
         }
@@ -1609,7 +1658,23 @@ impl Cache {
                 .unwrap_or(current_version_num)
                 .to_string();
             if on_disk_version.as_deref() != Some(target_version.as_str()) {
-                cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                if tables_present {
+                    // BUG-1956: the tables are already usable, so the stamp
+                    // is bookkeeping (a missing stamp never forces a
+                    // migration). One attempt only: a live writer must not
+                    // park this open in the ~25 s ladder; a later open
+                    // stamps it.
+                    // trace:BUG-1956 | ai:claude
+                    let attempt = ReadRefreshAttempt::new();
+                    let stamped = cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version);
+                    drop(attempt);
+                    match stamped {
+                        Err(err) if !is_cache_lock_error(&err) => return Err(err),
+                        _ => {}
+                    }
+                } else {
+                    cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                }
             }
         }
         Ok(cache)
@@ -6157,6 +6222,51 @@ mod tests {
         assert!(msg.contains("pid="), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
+    }
+
+    /// BUG-1956: a reader's ladder deadline caps the whole retry ladder, so
+    /// a busy SQLite writer costs at most the cap, never the ~25.5 s ladder,
+    /// and the terminal error still names the lock.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn read_ladder_deadline_caps_the_retry_ladder() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let started = std::time::Instant::now();
+        let err = {
+            let _deadline = ReadLadderDeadline::new(Duration::from_millis(300));
+            with_cache_retry(&cache_path, "read-side cache write", || -> Result<()> {
+                Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error {
+                        code: rusqlite::ErrorCode::DatabaseBusy,
+                        extended_code: 5,
+                    },
+                    None,
+                )))
+            })
+            .expect_err("a held lock must exhaust the capped ladder")
+        };
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_secs(2), "ladder ran {elapsed:?}");
+        assert!(is_cache_lock_error(&err), "{err:#}");
+        assert!(err.to_string().contains("database is locked"), "{err}");
+        // The guard restores the caller's (absent) deadline on drop.
+        assert!(READ_LADDER_DEADLINE.with(|c| c.get()).is_none());
+    }
+
+    /// BUG-1956: nested deadlines keep the earliest one.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn nested_read_ladder_deadline_keeps_the_earliest() {
+        let outer = ReadLadderDeadline::new(Duration::from_millis(50));
+        let outer_at = READ_LADDER_DEADLINE.with(|c| c.get()).unwrap();
+        {
+            let _inner = ReadLadderDeadline::new(Duration::from_secs(60));
+            assert_eq!(READ_LADDER_DEADLINE.with(|c| c.get()), Some(outer_at));
+        }
+        assert_eq!(READ_LADDER_DEADLINE.with(|c| c.get()), Some(outer_at));
+        drop(outer);
+        assert!(READ_LADDER_DEADLINE.with(|c| c.get()).is_none());
     }
 
     #[test]
