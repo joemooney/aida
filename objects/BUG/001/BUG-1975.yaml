@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T19:16:08.798006191Z
-modified_at: 2026-10-12T18:22:25.375576729Z
+modified_at: 2026-10-12T19:15:06.492738200Z
 req_type: Bug
 tags:
 - follow-up:factory
@@ -33,6 +33,34 @@ comments:
   created_at: 2026-10-12T06:04:21.984195668Z
   modified_at: 2026-10-12T06:04:21.984195668Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a1318a-407c-7d50-a0ae-fc16ff8e80b5
+  author: joe
+  content: |-
+    **Advisor rework brief — round 1/3 — PR #2564 (BUG-1975), REQUEST CHANGES at e0b981632d**
+
+    The independent reviewer found the following:
+    - The glossary fix is correct: a mutation check fails the regression test, human output is byte-identical, and JSON is unaffected.
+    - The spec's first acceptance bullet asks for the footer to start on its own line *always*, whatever the body. This PR covers 1 of about 135 `print!` sites.
+    - CI's Build failed on the known `test_show_latency.py` cleanup flake (BUG-1990), not this PR; it has been re-run.
+
+    **Must fix (advisor decision: the general mechanism is signed off)**
+    1. **Track every stdout write crate-wide.**
+       - In `aida-cli-lib/src/lib.rs`, before the first `mod` (~L14), define crate-local `macro_rules! print` and `macro_rules! println`. They route through `cache_output::write_stdout(format_args!(..))`, which records whether the last non-empty write ended in `\n`.
+       - Textual macro scope shadows the prelude macros throughout the crate, so no call site changes. `finish` then relies on that tracker, and `print_body` goes away or becomes a thin alias.
+       - **Constraints:**
+         - Semantics identical to std's `print!`/`println!`: the same locking and line buffering, and the same panic on a failed write (EPIPE, e.g. `| head`). Write a test or a manual check for the `| head` case.
+         - No extra flush per call beyond std's own behaviour.
+         - Check that no `std::print!`-qualified call escapes the shadowing.
+       - Direct `io::stdout()` writes and child processes that inherit stdout are accepted residuals; list them in the PR body.
+       - **Done when:** a test proves the footer starts on its own line for a body written with plain `print!` (not `print_body`) and ending mid-line, and the glossary regression test still passes.
+    2. **Flag hygiene.** Use `thread_local!` like `TOON_CACHE_OUTPUT`, or reset it in tests, so the unit test can't leak global state.
+
+    **Note (not required):** when no footer prints, output that ended mid-line still ends without a final newline. That is outside this spec; mention it in the PR as a possible follow-up.
+
+    Run the narrow tests (`cache_output` and `bug_1975_glossary_cache_footer`), plus the full `aida-cli-lib` lib tests, since the macro touches the whole crate. `make check-ci-fast` must PASS before you push, as a separate step, to the same branch.
+  created_at: 2026-10-12T19:15:06.492738200Z
+  modified_at: 2026-10-12T19:15:06.492738200Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309d-0511-7e50-9391-a622aa4d69f9
   author: joe
