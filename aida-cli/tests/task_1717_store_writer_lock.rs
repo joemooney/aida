@@ -236,15 +236,32 @@ locks() { for f in /proc/"$1"/fd/*; do readlink "$f"; done 2>/dev/null | grep '\
 # trace:BUG-1989 | ai:claude
 # Who holds the store lock when the probe reads it held: the flock owners
 # /proc/locks names for the lock file's inode (waiters, "->", excluded), each
-# with whether it is the aida process under test or one of its descendants.
+# with whether it belongs to the command under test.
 lock_file=$(readlink -f "$T1717_LOCK")
 lock_ino=$(stat -c %i "$lock_file" 2>/dev/null)
+ppid_of() { awk '/^PPid:/ { print $2 }' /proc/"$1"/status 2>/dev/null; }
+# The aida process and its ancestors: a parent that holds the lock and pushes
+# from a child (a wrapper, a refresh or auto-push worker) is in the tree too.
+ancestors=" $aida_pid "
+p=$aida_pid
+while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+  p=$(ppid_of "$p"); [ -n "$p" ] && ancestors="$ancestors$p "
+done
+# yes: the holder carries the command's T1717_DIR marker (inherited by every
+# process the test spawned for it, however reparented), is an ancestor of the
+# aida process, or descends from it. unknown: its parent chain could not be
+# read (the probe retries, then counts it held). gone: it already exited.
 in_tree() {
   [ -d /proc/"$1" ] || { echo gone; return; }
+  if tr '\0' '\n' < /proc/"$1"/environ 2>/dev/null | grep -qxF "T1717_DIR=$d"; then
+    echo yes; return
+  fi
+  case "$ancestors" in *" $1 "*) echo yes; return ;; esac
   p=$1
-  while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+  while [ "$p" -gt 1 ]; do
+    p=$(ppid_of "$p")
+    [ -n "$p" ] || { echo unknown; return; }
     [ "$p" = "$aida_pid" ] && { echo yes; return; }
-    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
   done
   echo no
 }
@@ -272,14 +289,14 @@ openers() {
   done
 }
 # A held reading whose owner is already gone from /proc/locks or /proc lost
-# a race with the owner's release or exit: probe again (bounded) rather than
-# log an owner-less "held".
+# a race with the owner's release or exit, and one whose owner could not be
+# placed may have: probe again (bounded) rather than log an owner-less "held".
 probe() {
   n=0
   while :; do
     if flock -n "$T1717_LOCK" true; then echo "lock=free"; return; fi
     h=$(holders)
-    case "$h" in *" tree=gone "*) gone=1 ;; *) gone= ;; esac
+    case "$h" in *" tree=gone "*|*" tree=unknown "*) gone=1 ;; *) gone= ;; esac
     if { [ -n "$h" ] && [ -z "$gone" ]; } || [ $n -ge 50 ]; then
       echo "lock=held"
       [ -n "$h" ] && printf '%s\n' "$h"
@@ -293,7 +310,9 @@ probe() {
 if [ -f "$d/probe-after-$name" ]; then
   gate=$(cat "$d/probe-after-$name"); rm -f "$d/probe-after-$name"
   i=0
-  while [ ! -f "$gate" ] && [ $i -lt 1200 ]; do sleep 0.05; i=$((i+1)); done
+  # 30s, under the test's 60s WAIT, so a push that still holds the lock (the
+  # competitor never gets it) fails on the violation, not a pre-push timeout.
+  while [ ! -f "$gate" ] && [ $i -lt 600 ]; do sleep 0.05; i=$((i+1)); done
 fi
 {
   probe
@@ -581,10 +600,10 @@ fn assert_hook_saw_lock_held_without_inheritance(fx: &Fx, hook: &str) {
 /// push" (empty: nothing does).
 ///
 /// The store lock reading held is a violation only when the command under
-/// test is behind it: a holder that is the `aida` parent or one of its
-/// descendants (git, a hook, a refresh or auto-push child, including one that
-/// kept a fork-inherited copy of the parent's lock), or a held reading the
-/// probe could not attribute. A competing writer that took the lock the
+/// test is behind it: a holder carrying the command's `T1717_DIR` marker
+/// (however reparented), an ancestor of git's `aida` parent (one that holds
+/// the lock and pushes from a child), the `aida` parent or one of its
+/// descendants, or a held reading the probe could not attribute. A competing writer that took the lock the
 /// moment the command released it (the parked `aida edit` in the allocation
 /// test, BUG-1989) is the window discipline working, not a lock held across
 /// the push. Lock descriptors open in the hook, git or the `aida` parent stay
@@ -1122,34 +1141,61 @@ fn push_probe_attributes_a_competitor_that_took_the_released_lock() {
     assert_push_ran_unlocked(&fx);
 }
 
-/// BUG-1989: the tolerance does not reach the command under test. A push
-/// whose parent holds the store lock (here `flock` stands in for the `aida`
-/// parent, as git's parent) is still a violation, attributed to the holder.
+/// BUG-1989: the tolerance does not reach the command under test. A store
+/// lock held by the pushing process (`flock` stands in for git's `aida`
+/// parent), by an ancestor that pushes from a child, or by a reparented
+/// helper the command started is still a violation, attributed to the holder.
 // trace:BUG-1989 | ai:claude
 #[test]
 fn push_probe_still_fails_a_lock_held_by_the_pushing_process() {
-    let fx = fixture();
-    fx.local_commit("unpublished.txt");
-    let mut cmd = Command::new("flock");
-    git_env(&mut cmd);
-    let out = cmd
-        .current_dir(&fx.store)
-        .env("T1717_DIR", &fx.obs)
-        .env("T1717_LOCK", lock_path(&fx.store))
-        .arg(lock_path(&fx.store))
-        .args(["git", "push", "-q", "origin", "aida-store"])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", text(&out));
-    let lines = fx.obs_lines("pre-push");
-    let violations = push_lock_violations(&fx, &lines);
-    assert!(
-        violations.iter().any(
-            |v| v.starts_with("store lock held by the command under test")
-                && v.contains(" tree=yes ")
+    let push = "git push -q origin aida-store";
+    let shapes = [
+        ("parent", format!(r#"flock "$L" {push}"#)),
+        ("ancestor", format!(r#"flock "$L" sh -c '{push}'"#)),
+        // The subshell exits, so the holder is no descendant of git's parent:
+        // only the inherited T1717_DIR marker places it in the command.
+        (
+            "reparented",
+            format!(
+                r#"(flock "$L" -c ': > "$H"; while [ ! -f "$R" ]; do sleep 0.02; done' &)
+while [ ! -f "$H" ]; do sleep 0.02; done
+{push}; s=$?; : > "$R"; exit $s"#
+            ),
         ),
-        "the pushing process's own lock is a violation: {violations:?} in {lines:?}"
-    );
+    ];
+    for (shape, script) in shapes {
+        let fx = fixture();
+        fx.local_commit("unpublished.txt");
+        let mut cmd = Command::new("sh");
+        git_env(&mut cmd);
+        let out = cmd
+            .current_dir(&fx.store)
+            .env("T1717_DIR", &fx.obs)
+            .env("T1717_LOCK", lock_path(&fx.store))
+            .env("L", lock_path(&fx.store))
+            .env("H", fx.base.join("helper-held"))
+            .env("R", fx.base.join("helper-release"))
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{shape}: {}", text(&out));
+        let lines = fx.obs_lines("pre-push");
+        let violations = push_lock_violations(&fx, &lines);
+        assert!(
+            violations.iter().any(
+                |v| v.starts_with("store lock held by the command under test")
+                    && v.contains(" tree=yes ")
+            ),
+            "{shape}: the command's own lock is a violation: {violations:?} in {lines:?}"
+        );
+        if shape == "reparented" {
+            assert!(
+                violations.iter().all(|v| v.starts_with("store lock held")),
+                "{shape}: no descriptor reaches git, so the holder check alone \
+                 must catch it: {violations:?}"
+            );
+        }
+    }
 }
 
 /// Remote reconcile discovers hubs without the lock, then recomputes the
