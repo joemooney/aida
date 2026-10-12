@@ -2,13 +2,16 @@
 //!
 //! Which test is which:
 //! - Unit: the generated `sandbox.filesystem.allowWrite` is exactly the store
-//!   directory and the cache files, nothing else in the main checkout.
+//!   directory and the cache files, nothing else in the main checkout, and
+//!   `denyWrite` is exactly the store's `.git` pointer.
 //! - Harness (always runs): a small model of how Claude Code's Linux sandbox
-//!   applies `allowWrite` (each existing entry bound as is, no glob expansion),
-//!   checked over real tempdir paths.
+//!   applies `allowWrite` and `denyWrite` (each existing entry bound as is, no
+//!   glob expansion, deny over allow), checked over real tempdir paths.
 //! - Real claude (env-gated, `AIDA_TEST_REAL_CLAUDE=1`):
 //!   `real_claude_contained_session_claims_and_comments` runs `aida` inside a
-//!   contained session in a linked worktree and reads the result from main.
+//!   contained session in a linked worktree, probes writes inside and outside
+//!   the write set, and reads the result from main. Its fixture lives under
+//!   `$HOME/.cache`, outside every sandbox-writable temp directory.
 //!
 //! trace:BUG-1929 | ai:claude
 
@@ -33,6 +36,14 @@ fn main_fixture() -> (tempfile::TempDir, PathBuf) {
     std::fs::create_dir_all(main.join(".aida")).unwrap();
     std::fs::create_dir_all(main.join(".git")).unwrap();
     std::fs::create_dir_all(main.join("src")).unwrap();
+    std::fs::write(
+        main.join(".aida-store/.git"),
+        format!(
+            "gitdir: {}\n",
+            main.join(".git/worktrees/-aida-store").display()
+        ),
+    )
+    .unwrap();
     for name in CACHE_FILES {
         std::fs::write(main.join(".aida").join(name), b"").unwrap();
     }
@@ -51,8 +62,16 @@ fn settings_with_store(worktree: &Path, main: &Path) -> serde_json::Value {
 }
 
 fn allow_write(settings: &serde_json::Value) -> Vec<String> {
+    filesystem_entries(settings, "allowWrite")
+}
+
+fn deny_write(settings: &serde_json::Value) -> Vec<String> {
+    filesystem_entries(settings, "denyWrite")
+}
+
+fn filesystem_entries(settings: &serde_json::Value, key: &str) -> Vec<String> {
     settings
-        .pointer("/sandbox/filesystem/allowWrite")
+        .pointer(&format!("/sandbox/filesystem/{key}"))
         .and_then(|v| v.as_array())
         .map(|a| {
             a.iter()
@@ -62,10 +81,16 @@ fn allow_write(settings: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// How Claude Code's Linux sandbox applies `allowWrite` (claude 2.1.296): a
-/// `//p` entry is the absolute path `/p`; it is bound only when it exists at
-/// launch, with no glob expansion; a directory bind covers everything under it.
-fn sandbox_may_write(entries: &[String], target: &Path) -> bool {
+/// How Claude Code's Linux sandbox applies `allowWrite` and `denyWrite`
+/// (claude 2.1.296): a `//p` entry is the absolute path `/p`; it is bound only
+/// when it exists at launch, with no glob expansion; a directory bind covers
+/// everything under it; a `denyWrite` bind is read-only and wins over an
+/// enclosing `allowWrite`.
+fn sandbox_may_write(settings: &serde_json::Value, target: &Path) -> bool {
+    bound_covers(&allow_write(settings), target) && !bound_covers(&deny_write(settings), target)
+}
+
+fn bound_covers(entries: &[String], target: &Path) -> bool {
     entries.iter().any(|entry| {
         let Some(abs) = entry.strip_prefix('/') else {
             return false;
@@ -95,6 +120,11 @@ fn settings_allow_write_is_exactly_store_and_cache() {
         expected.push(format!("/{}", main.join(".aida").join(name).display()));
     }
     assert_eq!(allow_write(&settings), expected);
+    assert_eq!(
+        deny_write(&settings),
+        vec![format!("/{}", main.join(".aida-store/.git").display())],
+        "the store's .git pointer is denied, nothing under <main>/.git is named"
+    );
     for entry in allow_write(&settings) {
         assert!(entry.starts_with("//"), "absolute anchor: {entry}");
         assert!(!entry.contains('*'), "no globs (Linux skips them): {entry}");
@@ -119,7 +149,7 @@ fn sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main() {
     let (_tmp, main) = main_fixture();
     let worktree = main.parent().unwrap().join("aida-pool-main-0");
     std::fs::create_dir_all(&worktree).unwrap();
-    let entries = allow_write(&settings_with_store(&worktree, &main));
+    let settings = settings_with_store(&worktree, &main);
 
     for allowed in [
         main.join(".aida-store/objects/BUG-1.yaml"),
@@ -129,12 +159,13 @@ fn sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main() {
         main.join(".aida/cache.db-shm"),
     ] {
         assert!(
-            sandbox_may_write(&entries, &allowed),
+            sandbox_may_write(&settings, &allowed),
             "{}",
             allowed.display()
         );
     }
     for denied in [
+        main.join(".aida-store/.git"),
         main.join(".aida/config.toml"),
         main.join(".aida/cache.db.bak"),
         main.join(".aida/agents.toml"),
@@ -143,7 +174,7 @@ fn sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main() {
         main.clone(),
     ] {
         assert!(
-            !sandbox_may_write(&entries, &denied),
+            !sandbox_may_write(&settings, &denied),
             "{}",
             denied.display()
         );
@@ -167,6 +198,46 @@ fn symlinked_main_lists_both_spellings_of_the_same_files() {
             || path.parent() == Some(main.join(".aida").as_path());
         assert!(base_ok, "{}", path.display());
     }
+    let denied = contained_store_deny_write_paths(&paths);
+    assert_eq!(
+        denied,
+        vec![link.join(".aida-store/.git"), main.join(".aida-store/.git")],
+        "each spelling of the store gets its .git pointer denied"
+    );
+    let settings = crate::session::contained_settings_json_with_store(&[], false, &[], &paths);
+    let settings: serde_json::Value = serde_json::from_str(&settings).unwrap();
+    assert_eq!(deny_write(&settings).len(), 2, "{settings}");
+}
+
+// Fail closed: the store directory is never allowed without its `.git` deny,
+// and the cache files alone emit no deny entry.
+#[test]
+fn store_allow_always_carries_its_git_deny() {
+    let (_tmp, main) = main_fixture();
+    let paths = contained_store_write_paths(&main);
+    let fs = sandbox_filesystem(&paths).expect("expressible main emits a filesystem key");
+    let allow: Vec<&str> = fs["allowWrite"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    let deny: Vec<&str> = fs["denyWrite"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    for store in allow.iter().filter(|e| e.ends_with("/.aida-store")) {
+        assert!(deny.contains(&format!("{store}/.git").as_str()), "{fs}");
+    }
+
+    let cache_only: Vec<PathBuf> = paths
+        .into_iter()
+        .filter(|p| p.file_name().is_none_or(|n| n != ".aida-store"))
+        .collect();
+    let fs = sandbox_filesystem(&cache_only).unwrap();
+    assert_eq!(fs["denyWrite"], serde_json::json!([]), "{fs}");
 }
 
 // A main checkout path that cannot be expressed exactly adds no entry, and the
@@ -223,9 +294,17 @@ fn store_boundary_gaps_name_each_exclusion() {
 }
 
 // REAL CLAUDE (env-gated): in a linked worktree of a fresh AIDA project, a
-// contained `claude -p` session runs `aida edit --status in-progress` and
-// `aida comment add` through sandboxed Bash; both must be visible from the
-// main checkout. Costs a model call, so CI skips it unless
+// contained `claude -p` session runs one probe script through sandboxed Bash.
+// It claims a spec (`aida edit --status in-progress`), comments on it, finishes
+// a queued spec (`aida queue done`), then tries to write inside and outside
+// the write set. From the host the test then checks that the claim, comment
+// and completion are visible from main and committed to the store, that
+// `<main>/.aida-store/objects` was writable, and that `<main>/.aida-store/.git`,
+// `<main>/.aida/config.toml` and `<main>/README.md` are unchanged.
+//
+// The fixture lives under `$HOME/.cache`, not `tempfile::tempdir()`: inside
+// Claude Code `TMPDIR` is sandbox-writable, so a temp-dir fixture would pass
+// with or without the write set. Costs a model call, so CI skips it unless
 // `AIDA_TEST_REAL_CLAUDE=1`. Optional: `AIDA_TEST_CLAUDE_BIN` (default
 // `claude`), `AIDA_TEST_AIDA_BIN` (default `aida`),
 // `AIDA_TEST_REAL_CLAUDE_MODEL` (default `haiku`).
@@ -235,6 +314,7 @@ fn real_claude_contained_session_claims_and_comments() {
         eprintln!("skipping: set AIDA_TEST_REAL_CLAUDE=1 to drive a real `claude -p`");
         return;
     }
+    use aida_core::db::DatabaseBackend as _;
     use std::io::Write as _;
     use std::process::{Command, Stdio};
 
@@ -254,8 +334,22 @@ fn real_claude_contained_session_claims_and_comments() {
         text
     };
 
-    let tmp = tempfile::tempdir().unwrap();
-    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set"));
+    let cache_home = home.join(".cache");
+    std::fs::create_dir_all(&cache_home).unwrap();
+    let fixture = tempfile::Builder::new()
+        .prefix("aida-test-bug1929-")
+        .tempdir_in(&cache_home)
+        .unwrap();
+    let parent = std::fs::canonicalize(fixture.path()).unwrap();
+    let sandbox_tmp = std::env::temp_dir();
+    let sandbox_tmp = std::fs::canonicalize(&sandbox_tmp).unwrap_or(sandbox_tmp);
+    assert!(
+        !parent.starts_with(&sandbox_tmp),
+        "the fixture must sit outside the sandbox-writable {}: {}",
+        sandbox_tmp.display(),
+        parent.display()
+    );
     let main = parent.join("main");
     std::fs::create_dir_all(&main).unwrap();
     run(&main, "git", &["init", "-q", "-b", "main"]);
@@ -265,26 +359,37 @@ fn real_claude_contained_session_claims_and_comments() {
     run(&main, "git", &["add", "README.md"]);
     run(&main, "git", &["commit", "-q", "-m", "init"]);
     run(&main, &aida, &["init", "--no-skills", "--no-hooks"]);
-    let added = run(
-        &main,
-        &aida,
-        &[
-            "add",
-            "--title",
-            "Contained fixture",
-            "--type",
-            "bug",
-            "--status",
-            "approved",
-        ],
-    );
-    let id = added
-        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
-        .find(|w| {
-            w.len() > 4 && w.starts_with("BUG-") && w[4..].chars().all(|c| c.is_ascii_digit())
-        })
-        .unwrap_or_else(|| panic!("no BUG id in: {added}"))
-        .to_string();
+
+    // Seed two approved specs and queue the second, through the store API: the
+    // CLI would need advisor and dispatch authority this fixture has no grant
+    // for.
+    let store = main.join(".aida-store");
+    let cache = main.join(".aida/cache.db");
+    {
+        let backend = aida_core::CachedGitBackend::open(&store, &cache).unwrap();
+        let mut queued = None;
+        for spec in ["BUG-1", "BUG-2"] {
+            let mut req =
+                aida_core::Requirement::new(format!("Contained fixture {spec}"), "d".into());
+            req.spec_id = Some(spec.to_string());
+            req.status = aida_core::RequirementStatus::Approved;
+            queued = Some(backend.add_requirement(req).unwrap().id);
+        }
+        backend
+            .queue_add(aida_core::QueueEntry {
+                user_id: "fixture".into(),
+                requirement_id: queued.unwrap(),
+                position: 0,
+                added_by: "fixture".into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: None,
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
 
     let worktree = parent.join("aida-pool-fixture-0");
     run(
@@ -299,7 +404,37 @@ fn real_claude_contained_session_claims_and_comments() {
             worktree.to_str().unwrap(),
         ],
     );
-    aida_core::db::prime_cache_sidecars(&main.join(".aida/cache.db"));
+    aida_core::db::prime_cache_sidecars(&cache);
+    let store_head_before = run(&store, "git", &["rev-parse", "HEAD"]);
+    let read = |p: &Path| std::fs::read(p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+    let unchanged = [
+        store.join(".git"),
+        main.join(".aida/config.toml"),
+        main.join("README.md"),
+    ];
+    let before: Vec<Vec<u8>> = unchanged.iter().map(|p| read(p)).collect();
+    let store_probe = store.join("objects/x.yaml");
+
+    // One script, so the model has a single command to run. Each write probe
+    // records its outcome; the host re-checks every file itself.
+    let probe_out = worktree.join("probe.out");
+    let mut script = format!(
+        "{aida} edit BUG-1 --status in-progress && {aida} comment add BUG-1 contained-ok \
+         && {aida} queue done BUG-2 --user fixture -y\n\
+         echo \"aida=$?\" > {out}\n",
+        out = probe_out.display()
+    );
+    for target in unchanged.iter().chain(std::iter::once(&store_probe)) {
+        script.push_str(&format!(
+            "if (echo probe >> '{t}') 2>/dev/null; then echo 'wrote {t}'; \
+             else echo 'denied {t}'; fi >> {out}\n",
+            t = target.display(),
+            out = probe_out.display()
+        ));
+    }
+    let script_path = worktree.join("probe.sh");
+    std::fs::write(&script_path, script).unwrap();
+
     let settings = crate::session::contained_settings_json_with_store(
         &[],
         false,
@@ -307,8 +442,8 @@ fn real_claude_contained_session_claims_and_comments() {
         &contained_store_write_paths(&main),
     );
     let prompt = format!(
-        "Run exactly this one Bash command and nothing else: \
-         {aida} edit {id} --status in-progress && {aida} comment add {id} contained-ok"
+        "Run exactly this one Bash command and nothing else: sh {}",
+        script_path.display()
     );
     let program = std::env::var("AIDA_TEST_CLAUDE_BIN").unwrap_or_else(|_| "claude".to_string());
     let model =
@@ -349,13 +484,69 @@ fn real_claude_contained_session_claims_and_comments() {
     );
     assert!(out.status.success(), "claude failed: {transcript}");
 
-    let shown = run(&main, &aida, &["show", &id, "--full", "--comments"]);
+    let probe = std::fs::read_to_string(&probe_out)
+        .unwrap_or_else(|e| panic!("the probe script never ran ({e}): {transcript}"));
     assert!(
-        shown.contains("in-progress"),
+        probe.contains("aida=0"),
+        "the aida commands failed: {probe}\n{transcript}"
+    );
+
+    // Inside the write set: the store's objects directory.
+    assert!(
+        store_probe.exists(),
+        "<main>/.aida-store/objects must be writable: {probe}\n{transcript}"
+    );
+    std::fs::remove_file(&store_probe).unwrap();
+    // Outside it: the store's .git pointer (denyWrite), and the rest of main.
+    for (path, before) in unchanged.iter().zip(&before) {
+        assert_eq!(
+            &read(path),
+            before,
+            "{} must not be writable from a contained session: {probe}",
+            path.display()
+        );
+    }
+
+    let status_is = |text: &str, want: &str| {
+        text.lines()
+            .any(|l| l.trim_start().starts_with("status:") && l.contains(want))
+    };
+    let shown = run(&main, &aida, &["show", "BUG-1", "--full", "--comments"]);
+    assert!(
+        status_is(&shown, "in-progress"),
         "the claim must be visible from main: {shown}\n{transcript}"
     );
     assert!(
         shown.contains("contained-ok"),
         "the comment must be visible from main: {shown}\n{transcript}"
+    );
+    let done = run(&main, &aida, &["show", "BUG-2"]);
+    assert!(
+        status_is(&done, "completed"),
+        "queue done must be visible from main: {done}\n{transcript}"
+    );
+
+    // The writes are committed to the store, not left in its working tree.
+    let log = run(
+        &store,
+        "git",
+        &[
+            "log",
+            "--format=%s",
+            &format!("{}..HEAD", store_head_before.trim()),
+        ],
+    );
+    assert!(
+        !log.trim().is_empty(),
+        "the contained writes must commit to the store: {log}\n{transcript}"
+    );
+    let dirty = run(
+        &store,
+        "git",
+        &["status", "--porcelain", "--", "objects", "registry/queues"],
+    );
+    assert!(
+        dirty.trim().is_empty(),
+        "contained writes left uncommitted in the store: {dirty}"
     );
 }

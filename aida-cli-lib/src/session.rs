@@ -2419,9 +2419,10 @@ pub(crate) fn contained_settings_json(
     contained_settings_json_with_store(allowed_hosts, managed_domains_only, write_roots, &[])
 }
 
-/// [`contained_settings_json`] plus BUG-1929's `sandbox.filesystem.allowWrite`:
-/// the main checkout's store and cache paths, which widen only what sandboxed
-/// Bash (the `aida` binary) may write. The Edit/Write tool boundary stays at
+/// [`contained_settings_json`] plus BUG-1929's `sandbox.filesystem`: the main
+/// checkout's store and cache paths in `allowWrite`, which widen only what
+/// sandboxed Bash (the `aida` binary) may write, and the store's `.git`
+/// pointer in `denyWrite`. The Edit/Write tool boundary stays at
 /// `write_roots`. The key is omitted when no path can be expressed.
 // trace:BUG-1929 | ai:claude
 pub(crate) fn contained_settings_json_with_store(
@@ -2455,9 +2456,8 @@ pub(crate) fn contained_settings_json_with_store(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
-    let allow_write = crate::contained_boundary::sandbox_allow_write_entries(store_write_paths);
-    if !allow_write.is_empty() {
-        sandbox["filesystem"] = serde_json::json!({ "allowWrite": allow_write });
+    if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
+        sandbox["filesystem"] = filesystem;
     }
     serde_json::json!({
         "permissions": {

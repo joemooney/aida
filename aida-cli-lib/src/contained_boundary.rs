@@ -135,7 +135,8 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     paths
 }
 
-/// The `sandbox.filesystem.allowWrite` entries for `paths`: `//<abs>` (Claude
+/// The `sandbox.filesystem` path entries (`allowWrite` or `denyWrite`) for
+/// `paths`: `//<abs>` (Claude
 /// Code's absolute-path anchor) per path. A path [`root_rule_path`] cannot
 /// express exactly emits nothing (fails closed).
 // trace:BUG-1929 | ai:claude
@@ -151,6 +152,44 @@ pub(crate) fn sandbox_allow_write_entries(paths: &[PathBuf]) -> Vec<String> {
         }
     }
     entries
+}
+
+/// The store pointer files inside the write set that a contained session must
+/// NOT write: `<store>/.git` for every `.aida-store` entry in
+/// `store_write_paths`. The pointer names the store's git directory; a session
+/// that repoints it at a directory it controls (`core.fsmonitor=<cmd>`) runs
+/// `<cmd>` outside the sandbox on the next host-side store commit. Nothing
+/// under `<main>/.git` is added here (BUG-1982).
+// trace:BUG-1929 | ai:claude
+pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) -> Vec<PathBuf> {
+    store_write_paths
+        .iter()
+        .filter(|p| p.file_name().is_some_and(|n| n == ".aida-store"))
+        .map(|p| p.join(".git"))
+        .collect()
+}
+
+/// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from
+/// [`sandbox_allow_write_entries`] and `denyWrite` for each allowed store's
+/// `.git` pointer ([`contained_store_deny_write_paths`]). A store directory
+/// whose pointer cannot be denied is not allowed either (fails closed). `None`
+/// when nothing is allowed.
+// trace:BUG-1929 | ai:claude
+pub(crate) fn sandbox_filesystem(store_write_paths: &[PathBuf]) -> Option<serde_json::Value> {
+    let guarded: Vec<PathBuf> = store_write_paths
+        .iter()
+        .filter(|p| {
+            p.file_name().is_none_or(|n| n != ".aida-store")
+                || root_rule_path(&p.join(".git")).is_some()
+        })
+        .cloned()
+        .collect();
+    let allow_write = sandbox_allow_write_entries(&guarded);
+    if allow_write.is_empty() {
+        return None;
+    }
+    let deny_write = sandbox_allow_write_entries(&contained_store_deny_write_paths(&guarded));
+    Some(serde_json::json!({ "allowWrite": allow_write, "denyWrite": deny_write }))
 }
 
 /// BUG-1929: why a contained session's write set would miss the store or cache
