@@ -17,11 +17,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-12T06:01:34.765702306Z
+modified_at: 2026-10-12T06:01:39.230484814Z
 req_type: Task
 tags:
 - adr-9
 - found:night-2026-10-10
+- groom:approve
 - groomed:night
 - guardrail
 filed_at:
