@@ -658,6 +658,57 @@ impl Drop for HoldingWrite {
     }
 }
 
+// BUG-1956: a reader-side backstop on the SQLite retry ladder. While a
+// `ReadLadderBudget` guard is alive on this thread AND the invocation is an
+// explicitly budgeted read (see `cache_refresh::read_ladder_allowance`), the
+// ladder's sleeps draw on one invocation-wide wait allowance. A reader that
+// still has to write (first build, pending migration) then fails with the
+// usual lock-holder error inside ADR-53's 5 s ceiling instead of riding the
+// full ~25.5 s ladder. Only time spent WAITING counts, so a slow store load
+// never spends it; mutations (no explicit read budget) keep the full ladder.
+// trace:BUG-1956 | ai:claude
+pub(super) const READ_LADDER_CAP: Duration = Duration::from_secs(3);
+
+thread_local! {
+    // trace:BUG-1956 | ai:claude
+    static READ_LADDER_ARMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Arms the read wait allowance for ladders on this thread until dropped.
+// trace:BUG-1956 | ai:claude
+pub(super) struct ReadLadderBudget(());
+impl ReadLadderBudget {
+    pub(super) fn arm() -> Self {
+        READ_LADDER_ARMED.with(|n| n.set(n.get() + 1));
+        Self(())
+    }
+}
+impl Drop for ReadLadderBudget {
+    fn drop(&mut self) {
+        READ_LADDER_ARMED.with(|n| n.set(n.get() - 1));
+    }
+}
+
+/// The armed read allowance left, or `None` when this ladder is uncapped.
+// trace:BUG-1956 | ai:claude
+fn read_ladder_allowance() -> Option<Duration> {
+    if READ_LADDER_ARMED.with(|n| n.get()) == 0 {
+        return None;
+    }
+    super::cache_refresh::read_ladder_allowance(READ_LADDER_CAP)
+}
+
+/// The sleep before retry `attempts`, or `None` when the ladder (or the
+/// reader's wait allowance) is spent.
+// trace:BUG-1956 | ai:claude
+fn ladder_delay(delays: &[Duration], attempts: usize) -> Option<Duration> {
+    let delay = *delays.get(attempts)?;
+    match read_ladder_allowance() {
+        None => Some(delay),
+        Some(left) => (!left.is_zero()).then(|| delay.min(left)),
+    }
+}
+
 thread_local! {
     // Armed by the `aida awaiting --notice` path before the cache is opened, so
     // BOTH the connection open and the summary reads honor the short ladder.
@@ -1093,7 +1144,12 @@ where
         }
         match f() {
             Ok(value) => return Ok(value),
-            Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+            Err(err) if is_sqlite_lock_error(&err) => {
+                // trace:BUG-1956 | ai:claude
+                let Some(delay) = ladder_delay(&delays, attempts) else {
+                    let observation = observe_lock_info_file(lock_info_path).ok().flatten();
+                    return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
+                };
                 if owns_sidecar {
                     touch_own_lock_info_at(
                         lock_info_path,
@@ -1102,12 +1158,12 @@ where
                 }
                 #[cfg(test)]
                 super::cache_refresh::test_count("retry_sleep");
-                std::thread::sleep(delays[attempts]);
+                std::thread::sleep(delay);
+                // trace:BUG-1956 | ai:claude
+                if READ_LADDER_ARMED.with(|n| n.get()) > 0 {
+                    super::cache_refresh::record_ladder_wait(delay);
+                }
                 attempts += 1;
-            }
-            Err(err) if is_sqlite_lock_error(&err) => {
-                let observation = observe_lock_info_file(lock_info_path).ok().flatten();
-                return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
         }
@@ -1609,7 +1665,23 @@ impl Cache {
                 .unwrap_or(current_version_num)
                 .to_string();
             if on_disk_version.as_deref() != Some(target_version.as_str()) {
-                cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                if tables_present {
+                    // BUG-1956: the tables are already usable, so the stamp
+                    // is bookkeeping (a missing stamp never forces a
+                    // migration). One attempt only: a live writer must not
+                    // park this open in the ~25 s ladder; a later open
+                    // stamps it.
+                    // trace:BUG-1956 | ai:claude
+                    let attempt = ReadRefreshAttempt::new();
+                    let stamped = cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version);
+                    drop(attempt);
+                    match stamped {
+                        Err(err) if !is_cache_lock_error(&err) => return Err(err),
+                        _ => {}
+                    }
+                } else {
+                    cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                }
             }
         }
         Ok(cache)
@@ -6157,6 +6229,67 @@ mod tests {
         assert!(msg.contains("pid="), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
+    }
+
+    fn busy_ladder(cache_path: &Path) -> anyhow::Error {
+        with_cache_retry(cache_path, "read-side cache write", || -> Result<()> {
+            Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: rusqlite::ErrorCode::DatabaseBusy,
+                    extended_code: 5,
+                },
+                None,
+            )))
+        })
+        .expect_err("a held lock must exhaust the ladder")
+    }
+
+    /// BUG-1956: an armed, explicitly budgeted read caps the whole retry
+    /// ladder at what is left of the invocation's wait allowance, and the
+    /// terminal error still names the lock.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn read_ladder_budget_caps_the_retry_ladder() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        // An earlier refresh in this invocation already waited most of it.
+        record_ladder_wait(READ_LADDER_CAP - Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        let err = {
+            let _armed = ReadLadderBudget::arm();
+            busy_ladder(&cache_path)
+        };
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_secs(2), "ladder ran {elapsed:?}");
+        assert!(is_cache_lock_error(&err), "{err:#}");
+        assert!(err.to_string().contains("database is locked"), "{err}");
+        // The allowance is spent for the rest of this invocation.
+        let _armed = ReadLadderBudget::arm();
+        assert_eq!(read_ladder_allowance(), Some(Duration::ZERO));
+        assert_eq!(ladder_delay(&[Duration::from_millis(100)], 0), None);
+    }
+
+    /// BUG-1956: without an explicit read budget (a mutation's invocation)
+    /// or without an armed guard, the ladder is never capped.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn read_ladder_budget_leaves_unbudgeted_ladders_alone() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        let full = [Duration::from_millis(100)];
+        let scope = CacheReadScope::new();
+        scope.configure(false, None);
+        record_ladder_wait(READ_LADDER_CAP);
+        {
+            let _armed = ReadLadderBudget::arm();
+            assert_eq!(read_ladder_allowance(), None);
+            assert_eq!(ladder_delay(&full, 0), Some(full[0]));
+        }
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        assert_eq!(read_ladder_allowance(), None, "not armed");
+        assert_eq!(ladder_delay(&full, 0), Some(full[0]));
     }
 
     #[test]
