@@ -1,0 +1,29 @@
+id: 01a130b3-75b8-7f51-8f04-07e31db8f3f0
+spec_id: BUG-1990
+agreed_id: BUG-1990
+title: 'Flaky test: test_show_latency.py passes then fails tearing down its temp dir (.aida not empty, a background writer races rmtree)'
+description: |-
+  CI run 38266643902 (PR #2553, head d08f5475db, which touches only awaiting/idle-in-progress code) failed the Build step 'Run single-spec show latency regression'. Every check in tests/test_show_latency.py PASSED (it printed 'PASS show latency, canonical object, cache labels, strict refresh'). Then TemporaryDirectory cleanup raised OSError [Errno 39] Directory not empty: '.aida' (shutil.rmtree, tests/test_show_latency.py:21).
+
+  Hypothesis: a detached child that the last aida show spawned (a background cache refresh, or a history/auto-sync child) is still writing under <temp>/.aida while rmtree walks it, so a file appears after the directory listing.
+
+  Acceptance: the test waits for (or stops) every child it caused before teardown, or tears down with a bounded retry on ENOTEMPTY that is logged. The latency and label assertions are not weakened. Ideally, identify which child writes there (e.g. log the leftover entries on failure).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T15:20:29.880301545Z
+modified_at: 2026-10-12T15:20:29.880301545Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- found:night
+filed_at:
+  code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2057f093-34f4-4dd8-8426-9a0077db8580
