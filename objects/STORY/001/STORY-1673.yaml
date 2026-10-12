@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-12T06:08:04.626099425Z
+modified_at: 2026-10-12T06:08:07.977309721Z
 req_type: Story
 tags:
 - from:aida-host
@@ -39,6 +39,21 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:13:20.804486938Z
+comments:
+- id: 01a12eb9-c129-7881-a336-d5a64dec93d4
+  author: joe
+  content: |
+    [groom:night] NEEDS-DECISION (security). The `constraint` type exists, but no verify field or command. The proposal stores a shell command in a store row and has `aida verify constraints` execute it. The store is a git-synced branch that other contributors and agents write to, so this is arbitrary command execution from repo data, reachable by any agent that edits a constraint row.
+
+    Options:
+    - A. Built-in probes only: a constraint names a probe id from a fixed set shipped in the binary (disk-rotational, cpu-count, mem-total, psi-available, path-exists, command-on-path) plus an expected value. No shell from the store. Covers the aida-host examples.
+    - B. Arbitrary command, but trust-pinned: `aida verify constraints` runs only commands whose hash is in a local, untracked allow-list the operator approves interactively (`--trust`); a changed command is refused until re-approved. Never runs from drain/headless.
+    - C. Arbitrary command with a confirmation prompt each run. Simplest, weakest; unusable headless.
+
+    Recommendation: A first (covers the stated host facts with zero execution risk), with B as a later extension if a real constraint cannot be expressed by a probe. Either way, drift results should be report-only and never run implicitly by sync or drain.
+  created_at: 2026-10-12T06:08:07.977309721Z
+  modified_at: 2026-10-12T06:08:07.977309721Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
