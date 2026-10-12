@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T07:42:22.835490436Z
+modified_at: 2026-10-12T08:05:03.986010652Z
 req_type: Task
 tags:
 - closure:pending
@@ -777,6 +777,21 @@ comments:
     verify_stack origin/main..779ce22fde --build: 9/9 PASS. check-ci-fast: 26 gates pass. lib*.rs goes 30,197 -> 21,932. Build is running (I closed and reopened the PR, because the force-push landed before the retarget). The r1 rulings (a) 1n gap and (b) map overlaps are still open. Run 13 (drain_next_n, phase_driver, phase_driver_trait per Q9 (a)) is cut on slice-53 and being proven; it will be stacked on this.
   created_at: 2026-10-12T07:42:22.835490436Z
   modified_at: 2026-10-12T07:42:22.835490436Z
+  session_id: b131bd29-8831-46b7-adfc-cad6b631bdcb
+- id: 01a12f24-cf72-7c33-91f6-b148456cf0e9
+  author: joe
+  content: |-
+    RUN 13 READY FOR REVIEW: PR #2550 (branch slice-53, head 2eba326279). It is stacked on run 12: base is the slice-49 branch at 779ce22fde, via #2547, which targets main. Q9 (a) split, three pure moves, each tag proven at its own SHA (warnings 0/0, cargo test --workspace 10358/10358, 8 ignored):
+    - slice-53-r1 drain_next_n cf9b5fc4ad (1661; move only)
+    - slice-54-r1 phase_driver 2018f215d0 (2872). Retarget: config-trust 2 sites worktree, lib.rs 4->2; the bug_1173 corpus gains phase_driver.rs; headless_hint gains an explicit env-setter check for phase_driver.rs, because without it the guard would have silently lost coverage of a moved AIDA_HEADLESS site.
+    - slice-55-r1 phase_driver_trait 2eba326279 (3778; only the impl auto_complete::PhaseDriver for RealPhaseDriver). Retarget: config-trust 1 site, lib.rs 2->1; corpora bug_1205, task_1244, bug_1186 and headless no_human_resume gain phase_driver_trait.rs, plus its own env-setter check. The first proof hit the BUG-1968/1974 flake (bug_1923_repeated_catch_up...). It passes in isolation, and the full re-proof was green (log in /tmp/libsplit/fail9).
+    verify_stack 779ce22fde..2eba326279: 9/9 (--build pass; check 6 re-run after the last tag). check-ci-fast: 26 pass. lib*.rs goes 21,932 -> 13,639.
+    CORRECTION to my r2 comment: rulings (a) and (b) were already APPROVED in the #2547 advisor comment; I missed them.
+    - (a) is done as #2551 '[AI:claude] fix(cli-lib): restore 1n public re-exports (TASK-1538)', off main, 2 lines, proven externally reachable.
+    - (b) was not folded into the run 12 r2 review_gates MOVE. extract_module.py always creates a fresh <mod>.rs, and verify_stack FAIL 3 requires a MOVE to create its module, so neither tool supports appending to an existing module. Plan: run 14 opens with a 'tooling:' commit adding an append mode (the manifest entry gains append=true; check 3 accepts a MOVE that modifies an existing <mod>.rs named in its subject). Then come two append-MOVEs, stale-check -> review_gates and forge-timeout -> kernel, followed by the Q8 straddler sweep. If you'd rather have this a different way (e.g. a new module name), say so before run 14.
+    #2548 is still open and touches no lib_part files, so there is no ordering conflict.
+  created_at: 2026-10-12T08:05:03.986010652Z
+  modified_at: 2026-10-12T08:05:03.986010652Z
   session_id: b131bd29-8831-46b7-adfc-cad6b631bdcb
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
