@@ -8,13 +8,27 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-12T06:01:03.669643005Z
+modified_at: 2026-10-12T06:01:21.431942077Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - groom:needs-decision
 - runaway-seats
 - watchdog
+comments:
+- id: 01a12eb3-8d17-7a83-a7b6-9d6cd68412a0
+  author: joe
+  content: |
+    [groom:night] NEEDS-DECISION. Reading runaway_seats.rs: `still_active` is not a liveness claim. It is the dedup set of rule ids that tripped last run and still trip now (coverage.still_active = tripped_ids ∩ state.active; rendered as "still tripped (already reported once)"). The compactions rule sums compactions over a rolling 24h window, so a session that compacted heavily keeps tripping for up to 24h after it ends. The report is correct by its own definition, but it misleads the watchdog-route seat.
+
+    Question: should runaway-seats judge session liveness at all?
+     A) Wording only: rename the field and label (for example `still_tripped`) and add each session's transcript last-write age to the finding, so the seat can see it is historical. Small; no new liveness dependency.
+     B) Liveness-aware (the spec's acceptance): consult session_liveness / leases / transcript recency, report ended or idle sessions under a separate historical list, and keep them from tripping the verdict. Larger; couples the watchdog to the liveness model.
+     C) Window per rule: keep the semantics but shrink the compactions window to the session's live span (stop counting once the transcript stops advancing for N minutes).
+    Recommendation: A now (cheap and removes the false "still_active" reading), then B as a follow-up only if routes keep firing on ended sessions. B changes what trips the watchdog and needs an advisor call.
+  created_at: 2026-10-12T06:01:21.431942077Z
+  modified_at: 2026-10-12T06:01:21.431942077Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
