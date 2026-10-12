@@ -64,13 +64,16 @@ fn file_content_stub(content_lines: &str) -> String {
 /// A binary from before the side channel: it never touches the file. This is
 /// the shape of an older binary that saw the (no longer advertised) `init-cd`
 /// token — markers on stdout — and of a bare in-place init that prints prose.
+/// The `cd` is relative so the printed block is identical across the per-shell
+/// tempdirs `init_side_channel_agrees_across_shells` compares byte for byte.
 // trace:BUG-0445 | ai:claude
+// trace:BUG-1960 | ai:claude
 fn stdout_only_stub() -> String {
     format!(
         "#!/usr/bin/env bash\n\
          mkdir -p \"$2\"\n\
          printf 'project ready:\\n'\n\
-         printf '%s\\n' '{begin}' \"cd '$PWD/$2'\" '{end}'\n\
+         printf '%s\\n' '{begin}' \"cd '$2'\" '{end}'\n\
          exit 0\n",
         begin = EVAL_BEGIN,
         end = EVAL_END,
@@ -412,6 +415,82 @@ fn init_side_channel_agrees_across_shells() {
                 actual.2, baseline.2,
                 "[{label}] {shell} status differs from bash"
             );
+        }
+    }
+}
+
+// ── interrupts ───────────────────────────────────────────────────────────────
+
+/// A stub that records the side-channel path and then interrupts its OWN
+/// calling shell, the way a Ctrl-C reaches the wrapper's shell while init is
+/// running in the foreground.
+// trace:BUG-1960 | ai:claude
+fn interrupting_stub(signal: &str) -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         printf '%s\\n' \"${env}\" > \"$AIDA_T_FILE\"\n\
+         kill -{signal} \"$PPID\"\n\
+         exit 130\n",
+        env = INIT_CD_FILE_ENV,
+    )
+}
+
+/// INT or TERM delivered to the shell while init runs removes the private
+/// file, and the trap is scoped to the call. Two scenarios per signal:
+///
+/// * no caller trap: the default disposition would kill the shell mid-call
+///   and strand the file, so the wrapper's own trap is what removes it; after
+///   the call the default is back (a second signal ends the shell, so
+///   `survived` never prints);
+/// * a caller trap: it is restored after the call and still fires.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_removes_the_side_channel_file_and_restores_traps() {
+    for signal in ["INT", "TERM"] {
+        for (label, caller_trap) in [
+            ("default", ""),
+            ("caller-trap", "trap 'echo caller-trap' SIG\n"),
+        ] {
+            for &shell in wrapper_shells() {
+                let body = format!(
+                    "export AIDA_T_FILE=\"$PWD/cdfile\"\n\
+                     _start=$PWD\n\
+                     {caller_trap}\
+                     aida init proj\n\
+                     echo \"rc:$?\"\n\
+                     _f=$(cat \"$_start/cdfile\" 2>/dev/null)\n\
+                     if [ -n \"$_f\" ] && [ -e \"$_f\" ]; then echo file:present; else echo file:gone; fi\n\
+                     if [ -n \"$_f\" ]; then echo recorded:yes; else echo recorded:no; fi\n\
+                     kill -{signal} $$\n\
+                     echo survived\n",
+                    caller_trap = caller_trap.replace("SIG", signal),
+                );
+                let (stdout, stderr, _) = run_wrapper_in(shell, &interrupting_stub(signal), &body);
+                let ctx = format!("[{shell}/{signal}/{label}]\n{stdout}\nstderr:\n{stderr}");
+                assert!(
+                    stdout.contains("recorded:yes"),
+                    "the stub must have seen the file: {ctx}"
+                );
+                assert!(
+                    stdout.contains("file:gone"),
+                    "an interrupted init must not leave its file behind: {ctx}"
+                );
+                assert!(
+                    stdout.contains("rc:130"),
+                    "the interrupted status propagates: {ctx}"
+                );
+                if caller_trap.is_empty() {
+                    assert!(
+                        !stdout.contains("survived"),
+                        "the wrapper's trap must not outlive the call: {ctx}"
+                    );
+                } else {
+                    assert!(
+                        stdout.contains("caller-trap\nsurvived"),
+                        "the caller's own trap must be restored after the call: {ctx}"
+                    );
+                }
+            }
         }
     }
 }

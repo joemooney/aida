@@ -575,13 +575,15 @@ pub(crate) fn enter_dir_channel(
 fn emit_enter_dir(plan_dir: &Path) {
     let abs = std::env::current_dir().unwrap_or_else(|_| plan_dir.to_path_buf());
     let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();
-    let side_channel = std::env::var_os(crate::shell_eval::INIT_CD_FILE_ENV);
+    // Captured (and removed from the env) at process entry, so the children
+    // init spawned never saw it. trace:BUG-1960 | ai:claude
+    let side_channel = crate::shell_eval::init_cd_file();
     // Eval'd by the wrapper: quote the path. trace:BUG-1624 | ai:claude
     let payload = format!(
         "cd '{}'",
         crate::sh_single_quote(&abs.display().to_string())
     );
-    match enter_dir_channel(side_channel.as_deref(), wrapper.as_deref()) {
+    match enter_dir_channel(side_channel, wrapper.as_deref()) {
         EnterDirChannel::File(path) => {
             match crate::shell_eval::write_init_cd_file(&path, &payload) {
                 Ok(()) => println!("      entering {}", plan_dir.display()),

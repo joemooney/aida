@@ -331,6 +331,19 @@ fn the_init_arm_never_captures_the_childs_stdout() {
         init_arm.contains("rm -f \"$_aida_cd_file\""),
         "init arm must clean up its side-channel file:\n{init_arm}"
     );
+    // trace:BUG-1960 | ai:claude
+    // An interrupt must not strand the file: a trap removes it on INT/TERM,
+    // scoped to the call (zsh localtraps; bash saves and restores).
+    assert!(
+        init_arm.contains("trap 'rm -f \"$_aida_cd_file\"' INT TERM"),
+        "init arm must remove its side-channel file on INT/TERM:\n{init_arm}"
+    );
+    assert!(
+        init_arm.contains("setopt localtraps")
+            && init_arm.contains("_aida_traps=$(trap -p INT TERM)")
+            && init_arm.contains("eval \"$_aida_traps\""),
+        "the init arm's trap must be scoped to the call and the caller's traps restored:\n{init_arm}"
+    );
 }
 
 /// Pure channel choice on the binary's side of the negotiation.

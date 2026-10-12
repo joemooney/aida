@@ -92,6 +92,32 @@ pub(crate) const INIT_CD_FILE_CAP: &str = "init-cd-file";
 // trace:BUG-0445 | ai:claude
 pub(crate) const INIT_CD_FILE_ENV: &str = "AIDA_INIT_CD_FILE";
 
+/// The side-channel path the wrapper handed THIS process, captured once by
+/// [`take_init_cd_file_from_env`]. `None` until captured or when unset.
+// trace:BUG-1960 | ai:claude
+static INIT_CD_FILE: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+
+/// Read [`INIT_CD_FILE_ENV`] once and remove it from the process environment,
+/// so no process this one spawns (git, forge CLIs, extensions, a nested
+/// `aida`) inherits it. A nested `aida init` that saw the outer wrapper's path
+/// would overwrite the outer `cd` block with its own. Must run at a
+/// single-threaded point (the top of `main_entry`), because mutating the
+/// environment while other threads read it is unsound.
+// trace:BUG-1960 | ai:claude
+pub(crate) fn take_init_cd_file_from_env() {
+    let value = std::env::var_os(INIT_CD_FILE_ENV);
+    if value.is_some() {
+        std::env::remove_var(INIT_CD_FILE_ENV);
+    }
+    let _ = INIT_CD_FILE.set(value);
+}
+
+/// The side-channel path captured at process entry, if the wrapper set one.
+// trace:BUG-1960 | ai:claude
+pub(crate) fn init_cd_file() -> Option<&'static std::ffi::OsStr> {
+    INIT_CD_FILE.get().and_then(|v| v.as_deref())
+}
+
 /// Write `payload` to the side-channel file at `path` as a marker-delimited
 /// block. The wrapper applies the same exactly-one-marker-pair validation to
 /// the file that it applies to stdout for the legacy verbs, so a file that was

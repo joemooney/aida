@@ -1407,6 +1407,7 @@ aida() {
     # trace:BUG-1811 | ai:antigravity
     # Suppress set -x trace for wrapper internals
     # trace:BUG-2000 | ai:claude
+    # trace:BUG-1960 | ai:claude
     # zsh has no `local -`: there it is a bare `local`, which prints every
     # shell parameter to stdout on each call. zsh scopes options with
     # `localoptions` instead.
@@ -1515,10 +1516,27 @@ AIDA_WRAPPER_OUTPUT
                 command aida "$@"
                 return $?
             fi
+            # trace:BUG-1960 | ai:claude
+            # An interrupt (Ctrl-C) or TERM while init runs must not strand
+            # the private file in TMPDIR. The trap is scoped to this call:
+            # zsh restores the caller's traps itself on function exit
+            # (localtraps); bash has global traps, so save them and put them
+            # back on every return path below.
+            local _aida_traps=''
+            if [ -n "${ZSH_VERSION:-}" ]; then
+                setopt localtraps
+            else
+                _aida_traps=$(trap -p INT TERM)
+            fi
+            trap 'rm -f "$_aida_cd_file"' INT TERM
             AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
             _aida_rc=$?
             if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
                 rm -f "$_aida_cd_file"
+                if [ -z "${ZSH_VERSION:-}" ]; then
+                    trap - INT TERM
+                    eval "$_aida_traps"
+                fi
                 return "$_aida_rc"
             fi
             while IFS= read -r _aida_line; do
@@ -1537,6 +1555,10 @@ AIDA_WRAPPER_OUTPUT
                 esac
             done < "$_aida_cd_file"
             rm -f "$_aida_cd_file"
+            if [ -z "${ZSH_VERSION:-}" ]; then
+                trap - INT TERM
+                eval "$_aida_traps"
+            fi
             if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ] && [ -n "$_aida_eval" ]; then
                 eval "$_aida_eval"
             fi
