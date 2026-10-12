@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-12T15:07:57.726120929Z
+modified_at: 2026-10-12T15:36:16.640488724Z
 req_type: Bug
 tags:
 - contained
@@ -188,6 +188,19 @@ comments:
   created_at: 2026-10-12T15:07:57.726120929Z
   modified_at: 2026-10-12T15:07:57.726120929Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a130c1-e800-7ea0-a2ba-840bcc1842e7
+  author: joe
+  content: |-
+    Round 4 (F1) at c6174e7545:
+    - **Builder.** `git_ops::host_git_command(cwd)` is now the one builder for host store git. The central set adds `fetch.recurseSubmodules=false`.
+    - **Call sites.** `fetch_branch`, `refresh_remote_branch_state`, the auto-push `run_git_with_timeout` and every other exec-capable store git call go through the builder. Auto-push now refuses an embedded repo before pushing.
+    - **Guard test:** `bug_1929_store_git_guard`.
+    - **F1 regression:** `bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack`. The fixture puts a gitlink plus `.gitmodules` on the fetched branch and plants an uploadpack marker. The test's precondition shows that the raw fetch 04b529c167 used fires the marker.
+    - **Real-claude probe** with the new F1 plant, on the final head c6174e7545 and with grant vars unset: `1 passed; 0 failed … finished in 36.23s`. The guard and F1 tests also pass in that build.
+    - **Docs.** Details are in the PR body (F1 section, Real-claude run). PR #2541.
+  created_at: 2026-10-12T15:36:16.640488724Z
+  modified_at: 2026-10-12T15:36:16.640488724Z
+  session_id: 296fdf1d-8ee7-4bef-9ac3-e2e12f973b18
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
