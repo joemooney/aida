@@ -770,9 +770,14 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
         // trace:STORY-1646 | ai:claude
         // A binary already swapped means the rollback was under way: finish
         // the `.promoted` swap too; otherwise put the parked record back.
+        // trace:BUG-1959 | ai:claude
+        // A binary counts as swapped once its parked copy has moved on into
+        // `prev/` (gone from `.rollback/`) or once its prev slot has moved
+        // live. With both binaries swapped, `.rollback/` holds only the
+        // parked `.promoted`, which must go to `prev/`, not back onto live.
         let swapped = LIVE_BINARIES
             .iter()
-            .any(|n| swap.join(n).is_file() && !layout.prev(n).exists());
+            .any(|n| !swap.join(n).is_file() || !layout.prev(n).exists());
         let parked_meta = swap.join(PROMOTED_FILE);
         if swapped {
             swap_meta_forward(layout, &swap)?;
@@ -1200,6 +1205,19 @@ fn smoke_check(
     Ok(())
 }
 
+/// A smoke-test [`Command`] for `bin`, with the git env vars a hook may
+/// export removed: a stray GIT_DIR would point the read-only check at
+/// another repo.
+// trace:STORY-1646 | ai:claude
+// trace:BUG-1959 | ai:claude
+pub(crate) fn smoke_command(bin: &Path) -> Command {
+    let mut c = Command::new(bin);
+    c.env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE");
+    c
+}
+
 /// The production [`BuildSteps`].
 pub(crate) struct RealSteps;
 
@@ -1245,15 +1263,7 @@ impl BuildSteps for RealSteps {
     }
 
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()> {
-        // trace:STORY-1646 | ai:claude
-        // A hook-exported GIT_DIR would point the read-only check at another repo.
-        let cmd = |bin: &Path| {
-            let mut c = Command::new(bin);
-            c.env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE");
-            c
-        };
+        let cmd = smoke_command;
         smoke_check(
             "aida --version",
             cmd(aida).arg("--version"),
@@ -1432,7 +1442,7 @@ pub(crate) fn live_status_notes(
     match live_meta {
         Some(meta) if meta.allow_dirty => notes.push(format!(
             "the live binary was promoted with --allow-dirty from a dirty checkout ({live}, HEAD {})",
-            meta.sha
+            meta_sha(meta)
         )),
         Some(_) => {}
         None if live.ends_with("+dirty") => notes.push(format!(
@@ -1451,6 +1461,34 @@ pub(crate) fn live_status_notes(
         notes.push("the previous build has the same SHA as the live one".to_string());
     }
     notes
+}
+
+/// The recorded HEAD sha, or `unknown` when the record has none (an
+/// `--allow-dirty` promotion where `git rev-parse HEAD` failed).
+// trace:BUG-1959 | ai:claude
+fn meta_sha(meta: &PromotionMeta) -> &str {
+    let sha = meta.sha.trim();
+    if sha.is_empty() {
+        "unknown"
+    } else {
+        sha
+    }
+}
+
+/// The `Promoted:` line of `aida dev status`.
+// trace:STORY-1646 | ai:claude
+// trace:BUG-1959 | ai:claude
+pub(crate) fn promoted_line(meta: &PromotionMeta) -> String {
+    format!(
+        "Promoted:     HEAD {} at {}{}",
+        meta_sha(meta),
+        meta.promoted_at,
+        if meta.allow_dirty {
+            " (--allow-dirty)"
+        } else {
+            ""
+        }
+    )
 }
 
 /// The live-binary block of `aida dev status`.
@@ -1479,16 +1517,7 @@ pub(crate) fn print_live_status() {
     // trace:STORY-1646 | ai:claude
     let live_meta = read_promotion_meta(&live_dir);
     if let Some(meta) = &live_meta {
-        println!(
-            "Promoted:     HEAD {} at {}{}",
-            meta.sha,
-            meta.promoted_at,
-            if meta.allow_dirty {
-                " (--allow-dirty)"
-            } else {
-                ""
-            }
-        );
+        println!("{}", promoted_line(meta));
     }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {

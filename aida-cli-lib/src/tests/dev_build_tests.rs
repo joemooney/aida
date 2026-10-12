@@ -1345,3 +1345,102 @@ fn install_links_refusal_after_promote_says_the_promote_succeeded() {
     assert_eq!(read(&f.layout.live("aida")), "NEW-aida");
     assert_eq!(read(&f.layout.link("aida")), "REAL-FILE");
 }
+
+// --- review follow-ups ------------------------------------------------------------
+// trace:BUG-1959 | ai:claude
+
+fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
+    PromotionMeta {
+        sha: sha.into(),
+        allow_dirty,
+        promoted_at: "2026-10-12T00:00:00Z".into(),
+    }
+}
+
+fn write_meta(dir: &Path, m: &PromotionMeta) {
+    write(
+        &dir.join(PROMOTED_FILE),
+        &serde_json::to_string_pretty(m).unwrap(),
+    );
+}
+
+#[test]
+fn recovery_finishes_the_record_swap_after_both_binaries_were_swapped() {
+    let f = fixture();
+    // Rollback swapped both binaries, then died before swap_meta_forward:
+    // `.rollback/` holds only the parked live record.
+    write(&f.layout.live("aida"), "PREV-aida");
+    write(&f.layout.live("aida-server"), "PREV-aida-server");
+    write(&f.layout.prev("aida"), "LIVE-aida");
+    write(&f.layout.prev("aida-server"), "LIVE-aida-server");
+    let live_rec = meta("1111111111", true);
+    let prev_rec = meta("2222222222", false);
+    write_meta(&f.layout.prev_dir(), &prev_rec);
+    let swap = f.layout.live_dir.join(".rollback");
+    write_meta(&swap, &live_rec);
+
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    // The records follow their binaries: prev's record is now live, the
+    // parked one sits in prev/.
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), Some(prev_rec));
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), Some(live_rec));
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert_eq!(read(&f.layout.prev("aida-server")), "LIVE-aida-server");
+    assert!(!swap.exists());
+}
+
+#[test]
+fn recovery_before_any_binary_swapped_restores_the_parked_record() {
+    let f = fixture();
+    // Rollback parked the pair and the live record, then died before any
+    // prev -> live rename.
+    put_live(&f.layout, "LIVE");
+    write(&f.layout.prev("aida"), "PREV-aida");
+    write(&f.layout.prev("aida-server"), "PREV-aida-server");
+    let live_rec = meta("1111111111", false);
+    let prev_rec = meta("2222222222", false);
+    write_meta(&f.layout.prev_dir(), &prev_rec);
+    let swap = f.layout.live_dir.join(".rollback");
+    write(&swap.join("aida"), "LIVE-aida");
+    write(&swap.join("aida-server"), "LIVE-aida-server");
+    write_meta(&swap, &live_rec);
+
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    assert!(recover_live_dir(&f.layout).unwrap().is_empty());
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), Some(live_rec));
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), Some(prev_rec));
+    assert_eq!(read(&f.layout.live("aida")), "LIVE-aida");
+    assert_eq!(read(&f.layout.prev("aida")), "PREV-aida");
+    assert!(!swap.exists());
+}
+
+#[test]
+fn smoke_command_removes_the_git_env_vars() {
+    let cmd = smoke_command(Path::new("/nonexistent/aida"));
+    for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+        assert!(
+            cmd.get_envs()
+                .any(|(k, v)| k == std::ffi::OsStr::new(var) && v.is_none()),
+            "{var} is not removed from the smoke command"
+        );
+    }
+}
+
+#[test]
+fn status_shows_unknown_for_an_empty_promoted_sha() {
+    let line = promoted_line(&meta("", true));
+    assert_eq!(
+        line,
+        "Promoted:     HEAD unknown at 2026-10-12T00:00:00Z (--allow-dirty)"
+    );
+    assert_eq!(
+        promoted_line(&meta(HEAD, false)),
+        format!("Promoted:     HEAD {HEAD} at 2026-10-12T00:00:00Z")
+    );
+    let notes = live_status_notes(Some("abc1234567+dirty"), Some(&meta("", true)), None, None);
+    assert!(
+        notes.iter().any(|n| n.contains("HEAD unknown")),
+        "{notes:?}"
+    );
+}
