@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-12T14:51:08.679975945Z
+modified_at: 2026-10-12T14:51:10.815408954Z
 req_type: Bug
 tags:
 - groom:close-done
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-10-12T06:02:12.929062165Z
   modified_at: 2026-10-12T06:02:12.929062165Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13098-9e5f-7dc1-88fe-0c134463958c
+  author: joe
+  content: '[groom:night] Re-bucketed APPROVE -> CLOSE-DONE. Fixed on main by eb46745a0c (#2549, BUG-1974, merged 2026-10-12 01:06). That fix confirmed the suspected mechanism with a deterministic test (a duplicated, fork-inherited flock fd makes serve_at skip ensure_fresh and return Ok), and routed every locked-path assertion in task_1507_history_cache_tests.rs through test_support::serve_locked, including this test (lines ~2244/2249). That covers acceptance bullets 1-2. Bullet 3 (a 50-run soak under parallel load) was not recorded on the PR; if you want that evidence before closing, run it once rather than approving a new implementation.'
+  created_at: 2026-10-12T14:51:10.815408954Z
+  modified_at: 2026-10-12T14:51:10.815408954Z
+  session_id: 5b9fd23c-85f8-4544-821c-3c769b4609b6
 filed_at:
   code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
   branch: main
