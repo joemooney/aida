@@ -1995,14 +1995,25 @@ pub fn preserve_dirty_worktree(
     }
     // Raw (untrimmed) diff capture — the shared `git()` helper trims, which we
     // avoid here to keep the patch byte-faithful for `git apply`.
-    let raw = |args: &[&str]| -> String {
-        Command::new("git")
+    // A git failure is an error, never an empty section: a patch silently
+    // missing the diff would let the caller reset the tree believing the
+    // work was saved. trace:BUG-1947 | ai:claude
+    let raw = |args: &[&str]| -> Result<String> {
+        let out = Command::new("git")
             .arg("-C")
             .arg(worktree_path)
             .args(args)
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-            .unwrap_or_default()
+            .with_context(|| format!("run git {}", args.join(" ")))?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "git {} failed in {}: {}",
+                args.join(" "),
+                worktree_path.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
     };
     let mut body = String::new();
     body.push_str(&format!(
@@ -2010,9 +2021,9 @@ pub fn preserve_dirty_worktree(
         worktree_path.display(),
         label
     ));
-    body.push_str(&raw(&["diff", "--binary", "HEAD"]));
-    body.push_str(&raw(&["diff", "--binary", "--cached"]));
-    let untracked = raw(&["ls-files", "--others", "--exclude-standard"]);
+    body.push_str(&raw(&["diff", "--binary", "HEAD"])?);
+    body.push_str(&raw(&["diff", "--binary", "--cached"])?);
+    let untracked = raw(&["ls-files", "--others", "--exclude-standard"])?;
     if !untracked.trim().is_empty() {
         body.push_str("\n# Untracked files present at salvage time:\n");
         for line in untracked.lines() {
@@ -2141,6 +2152,23 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
             )
         }
     }
+}
+
+/// `git status --porcelain` for a worktree, failing when git fails, unlike
+/// [`worktree_is_dirty`], which reads a git error as "clean". Callers about
+/// to reset or delete a tree use this so a probe error keeps the tree.
+/// Lines starting `??` are untracked files.
+// trace:BUG-1947 | ai:claude
+pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
+    let r = git(worktree_path, &["status", "--porcelain"])?;
+    if !r.success {
+        anyhow::bail!(
+            "git status failed in {}: {}",
+            worktree_path.display(),
+            r.stderr
+        );
+    }
+    Ok(r.stdout)
 }
 
 /// True when a worktree has uncommitted changes (tracked or untracked,

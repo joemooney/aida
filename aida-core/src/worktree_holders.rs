@@ -76,7 +76,9 @@
 //! `/proc/<self>/ns/pid`: the kernel reserves a fixed inode for the initial
 //! namespace, and that is the one signal that still holds when the namespace
 //! mounts its own `/proc` (there it looks complete and `NSpid` shows a single
-//! level). A `hidepid` mount that still shows the caller's own pid is NOT
+//! level). Setting `AIDA_TRUST_PID_NAMESPACE=1` waives the namespace check
+//! for a container that owns its worktrees (nothing outside it can be using
+//! them); the other two unverified cases still apply. A `hidepid` mount that still shows the caller's own pid is NOT
 //! detected; other users' processes are then skipped like any unreadable
 //! entry. [`check_worktree_removal`], which every bulk or
 //! automatic path uses, treats an unverified scan as a refusal, so those
@@ -319,8 +321,13 @@ pub fn scan_holders_in(
         ));
     }
 
-    if let Some(why) = separate_pid_namespace(proc_root, self_pid) {
-        return Err(why);
+    // The operator can vouch that nothing outside this pid namespace uses
+    // the worktrees (a dev container that owns its checkout), which would
+    // otherwise leave every automatic cleanup refusing. trace:BUG-1947 | ai:claude
+    if !trust_pid_namespace() {
+        if let Some(why) = separate_pid_namespace(proc_root, self_pid) {
+            return Err(why);
+        }
     }
 
     // The ppid/session maps cover every visible process, so subtree
@@ -405,9 +412,30 @@ fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
         .parse()
         .ok()?;
     (inode != INITIAL_PID_NAMESPACE_INODE).then(|| {
-        "this process runs in a separate pid namespace, so processes outside it are hidden"
-            .to_string()
+        format!(
+            "this process runs in a separate pid namespace (a container?), so processes \
+             outside it are hidden; if nothing outside this namespace uses these \
+             worktrees, set {TRUST_PID_NAMESPACE_ENV}=1 to trust the scan"
+        )
     })
+}
+
+/// Environment opt-out for the separate-pid-namespace refusal. Set to `1`
+/// (or `true`/`yes`) when no process outside this pid namespace can be using
+/// the worktrees, e.g. a dev container or CI job that owns its checkout.
+/// Without it, a scan from inside a container is unverified and every
+/// automatic cleanup (pool reuse, gc, reap, doctor heals, stale-lease
+/// release) keeps the tree. It does NOT trust a `/proc` in which this
+/// process cannot see itself.
+// trace:BUG-1947 | ai:claude
+pub const TRUST_PID_NAMESPACE_ENV: &str = "AIDA_TRUST_PID_NAMESPACE";
+
+/// True when [`TRUST_PID_NAMESPACE_ENV`] opts out of the pid-namespace check.
+// trace:BUG-1947 | ai:claude
+pub fn trust_pid_namespace() -> bool {
+    std::env::var(TRUST_PID_NAMESPACE_ENV)
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
 }
 
 /// `pid` followed by its ancestors, nearest first, bounded in depth.
@@ -710,11 +738,46 @@ mod tests {
         symlink("pid:[4026533285]", me.join("ns").join("pid")).unwrap();
         let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
         assert!(err.contains("separate pid namespace"), "{err}");
+        // The refusal names its opt-out.
+        assert!(err.contains("AIDA_TRUST_PID_NAMESPACE=1"), "{err}");
 
         // Unparsable link: no signal, scan proceeds.
         std::fs::remove_file(me.join("ns").join("pid")).unwrap();
         symlink("garbage", me.join("ns").join("pid")).unwrap();
         assert!(scan_holders_in(&fake.root, &wt, 200).is_ok());
+    }
+
+    /// The opt-out trusts a container's own pid namespace (the scan runs and
+    /// still finds holders inside it), but never a /proc that hides the
+    /// caller itself.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn trust_pid_namespace_opt_out_verifies_a_container_scan() {
+        let (_t, fake, wt, _outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        let me = fake.add(200, 1, "aida session reap", Path::new("/"));
+        fake.add(300, 1, "cargo build", &wt);
+        std::fs::create_dir_all(me.join("ns")).unwrap();
+        symlink("pid:[4026533285]", me.join("ns").join("pid")).unwrap();
+
+        {
+            let _env = crate::test_env::EnvVarGuard::unset(TRUST_PID_NAMESPACE_ENV);
+            assert!(!trust_pid_namespace());
+            assert!(scan_holders_in(&fake.root, &wt, 200).is_err());
+        }
+        {
+            let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "1");
+            assert!(trust_pid_namespace());
+            let h = scan_holders_in(&fake.root, &wt, 200).expect("trusted namespace");
+            assert_eq!(pids(&h), vec![300], "holders inside are still found");
+            // Invisible self stays unverified even with the opt-out.
+            let err = scan_holders_in(&fake.root, &wt, 999).unwrap_err();
+            assert!(err.contains("pid 999"), "{err}");
+        }
+        {
+            let _env = crate::test_env::EnvVarGuard::set(TRUST_PID_NAMESPACE_ENV, "0");
+            assert!(!trust_pid_namespace());
+        }
     }
 
     // trace:BUG-1947 | ai:claude
