@@ -138,13 +138,17 @@ pub(crate) fn normalize_upgrade_mode(
 
 /// The replacement command named in the deprecation note for the hidden
 /// `--unused <window>` alias of `aida usage`. `aida usage unused` errors
-/// without its DURATION positional, so the hint must carry one to be
-/// runnable as printed.
+/// without its DURATION positional, so the hint carries the window the old
+/// flag was given, shell-quoted so a multi-word window (`24 hours ago`) is
+/// pasted as one argument. A window that does not parse is not echoed back;
+/// the hint shows the `<window>` placeholder instead.
 // trace:BUG-1973 | ai:claude
 pub(crate) fn usage_unused_alias_target(window: &str) -> String {
     let window = window.trim();
-    let window = if window.is_empty() { "30d" } else { window };
-    format!("aida usage unused {window}")
+    if window.is_empty() || crate::queue_cmd::parse_lookback(window, "--unused").is_err() {
+        return "aida usage unused <window>".to_string();
+    }
+    format!("aida usage unused {}", shell_quote(window))
 }
 
 // trace:STORY-1028 | ai:codex
@@ -332,20 +336,39 @@ mod bug_1973_usage_unused_hint_tests {
     }
 
     #[test]
-    fn hint_never_suggests_a_bare_unused_without_a_duration() {
-        assert_eq!(usage_unused_alias_target(""), "aida usage unused 30d");
+    fn multi_word_window_is_shell_quoted() {
+        assert_eq!(
+            usage_unused_alias_target("24 hours ago"),
+            "aida usage unused '24 hours ago'"
+        );
+    }
+
+    #[test]
+    fn empty_or_invalid_window_shows_the_placeholder() {
+        assert_eq!(usage_unused_alias_target(""), "aida usage unused <window>");
+        assert_eq!(
+            usage_unused_alias_target("not a window; rm -rf"),
+            "aida usage unused <window>"
+        );
     }
 
     #[test]
     fn hinted_command_parses_while_bare_form_does_not() {
-        for window in ["30d", "90d", "2w", ""] {
+        for window in ["30d", "90d", "2w", "24 hours ago"] {
             let hint = usage_unused_alias_target(window);
-            let argv: Vec<&str> = hint.split_whitespace().collect();
             assert!(
-                crate::cli::Cli::try_parse_from(&argv).is_ok(),
-                "hinted command must parse: {hint}"
+                hint.ends_with(&format!(" {}", crate::shell_quote(window))),
+                "hint must name the window as one shell word: {hint}"
+            );
+            assert!(
+                crate::cli::Cli::try_parse_from(["aida", "usage", "unused", window]).is_ok(),
+                "hinted command must parse for window {window:?}"
             );
         }
+        assert!(
+            usage_unused_alias_target("24 hours ago").contains("'24 hours ago'"),
+            "a multi-word window must be quoted in the hint"
+        );
         assert!(
             crate::cli::Cli::try_parse_from(["aida", "usage", "unused"]).is_err(),
             "bare `aida usage unused` requires DURATION"
