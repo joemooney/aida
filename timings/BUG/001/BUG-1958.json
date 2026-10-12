@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1958",
+  "publishes": [
+    {
+      "at": "2026-10-12T22:29:53.684505941Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:55:53.272739044Z",
+      "spec": "BUG-1958",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T20:29:40.476618472Z",
+      "spec": "BUG-1958",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T22:29:34.817811641Z",
+      "spec": "BUG-1958",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "b376f516b4cf739244b8dec73521ddd6d07e64ae"
+      }
+    },
+    {
+      "ts": "2026-10-12T22:29:53.670675211Z",
+      "spec": "BUG-1958",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6dfba7ac1c808da98f75e148d486a21f2a0bea3a",
+        "pr": 2572,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
