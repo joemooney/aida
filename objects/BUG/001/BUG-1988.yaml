@@ -11,18 +11,26 @@ description: |
   3. The two pause-driven tests in aida-cli/tests/bug_1947_session_end_live_process.rs (~:529, ~:553) and the end_with_a_holder_started_at helper are #[cfg(debug_assertions)], so `--profile agent` runs don't wait 60 s and fail.
   4. dirty_entries_ignoring_runtime_links doesn't refuse a bare `?? .aida/` when everything under it is a runtime link (or that gate's git status uses -uall). Add a test with .aida/ not gitignored.
   5. Optional: print the "pid namespace unverified" warning once per session end, not three times.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T08:20:18.276952554Z
-modified_at: 2026-10-12T08:20:18.276952554Z
+modified_at: 2026-10-12T14:48:32.406129939Z
 req_type: Bug
 tags:
 - data-safety
 - from-review:2548
 - sessions
 - worktree
+history:
+- id: 01a13096-3396-7f11-ba90-ba809a8e59b1
+  author: joe
+  timestamp: 2026-10-12T14:48:32.406123283Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: eb46745a0c6b1aa03e8f2e49e15c7a16b6d7dc8b
   branch: main
