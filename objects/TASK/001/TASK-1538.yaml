@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-12T08:51:38.487198700Z
+modified_at: 2026-10-12T09:13:07.685216242Z
 req_type: Task
 tags:
 - closure:pending
@@ -817,6 +817,19 @@ comments:
   content: 'READY (#2551, 1n shims): rebased onto origin/main cd739cfb5f, head 20f8fac94c. The use-block conflict is resolved by keeping both: `use review_gates::*;` then `pub use role::AGENT_ROLES;` (the diff vs main is the 2 pub use lines only). cargo check -p aida-cli-lib: 0 warnings. make check-ci-fast: 26 gates pass. Build (ubuntu-latest) is GREEN (14m9s), merge-hold-gate passes, MERGEABLE. Ready for your squash merge.'
   created_at: 2026-10-12T08:51:38.487198700Z
   modified_at: 2026-10-12T08:51:38.487198700Z
+  session_id: 526a0d17-9998-4a2a-a5e7-e67f650c6b36
+- id: 01a12f63-1f65-7163-9a73-a3c0027a1997
+  author: joe
+  content: |-
+    RUN 13 READY (r2): PR #2550, branch slice-53, head a487090b93, base main cd739cfb5f (run 12 merged). Rebased onto main with no conflicts (#2548 touched no lib*.rs). Each tag was re-proven in full at its own SHA (warnings 0/0, cargo test --workspace --no-fail-fast 10371/10371, 8 ignored):
+    - slice-53-r2 drain_next_n 9702fbf788 (1661)
+    - slice-54-r2 phase_driver 1ca1e20c18 (2872; move 1b1f5b158f + retarget)
+    - slice-55-r2 phase_driver_trait a487090b93 (3778; move 31eae12bc1 + retarget)
+    verify_stack origin/main slice-53 --build: checks 1-9 PASS. check-ci-fast: 26 pass. Build (ubuntu-latest) is GREEN (21m9s), merge-hold-gate passes, MERGEABLE. The retargets are unchanged from r1 (see the PR body).
+    Flake: the first r2 phase_driver proof (load ~21) hit bug_1633_pull_* x3 and cached_git_backend reader_incremental_lock_error_does_not_full_rebuild. The full re-proof is green; the log is in /tmp/libsplit/fail10.
+    Still open: the append-MOVE SKETCH (stale-check -> review_gates per ruling (b), forge-timeout -> kernel, and the mapped residue all need it), and Q10. #2551 (1n shims) is rebased and green, and also READY.
+  created_at: 2026-10-12T09:13:07.685216242Z
+  modified_at: 2026-10-12T09:13:07.685216242Z
   session_id: 526a0d17-9998-4a2a-a5e7-e67f650c6b36
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
