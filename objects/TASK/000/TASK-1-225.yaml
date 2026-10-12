@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-12T08:33:27.217538776Z
+modified_at: 2026-10-12T15:08:19.313950835Z
 req_type: Task
 tags:
 - closure-pending
@@ -679,6 +679,12 @@ comments:
   created_at: 2026-10-12T08:33:13.953928237Z
   modified_at: 2026-10-12T08:33:13.953928237Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a130a8-4ff1-7ea1-912c-bfe31c477143
+  author: joe
+  content: 'ADVISOR 2026-10-12 (operator instruction: close only if every acceptance item is covered by TASK-1717): NOT SATISFIED, left open. Covered by TASK-1717 (#2502, 1c842051ee): db sync commit/rebase under with_store_write_lock (aida-core/src/db/store_lock.rs:202, git_backend_cmd.rs sync window), the ''cannot lock ref HEAD'' collision regression (task_1717_store_writer_lock.rs sync_vs_edit_* tests), concurrent-process coverage for the converted routes. MISSING per the APPROVED-AS-AMENDED signoff (''core public mutations must participate; CLI-only wrapping cannot complete the task''): (1) unlocked shared-store writers remain: coordination.rs pull_rebase (claim/lock-claim acquire, release, heartbeat), schedule_ledger.rs pull_rebase_auto_merge, aida-core team.rs roster CAS rebases, alias.rs link_cas, init_cmd.rs existing-store retry, git_ops.rs node registration/identity/hijack, doctor/compaction maintenance writers; (2) A1 dispenser ordering (store lock before blocks.lock) + add-vs-sync barrier and deadlock tests; (3) conditional-push writers and the A2 owner-join (no independent signoff on BUG-1808''s A2); (4) A4 residuals: private-ref FETCH_HEAD and full phase coverage unverified, and later tests for rebase-abort/competing cache/GC not independently reviewed as closing the gaps; (5) TASK-1333 dependency. If the operator prefers option (A) from comment [11], items 1-5 must be filed as new specs before closing.'
+  created_at: 2026-10-12T15:08:19.313950835Z
+  modified_at: 2026-10-12T15:08:19.313950835Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
