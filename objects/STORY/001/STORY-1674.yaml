@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-12T06:08:21.692093097Z
+modified_at: 2026-10-12T15:02:21.311643562Z
 req_type: Story
 tags:
 - from:aida-host
@@ -57,6 +57,12 @@ comments:
   created_at: 2026-10-12T06:08:21.692093097Z
   modified_at: 2026-10-12T06:08:21.692093097Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-d97f-7eb3-a237-dda71613bcb1
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option B, join the EPIC-71 token ledger at query time, plus C''s rule for harness_version. Do not stamp guessed provenance at write time. Supervised (touches the schema).'
+  created_at: 2026-10-12T15:02:21.311643562Z
+  modified_at: 2026-10-12T15:02:21.311643562Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
