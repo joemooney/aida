@@ -18,11 +18,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:40:01.741783944Z
-modified_at: 2026-10-12T06:03:24.672898073Z
+modified_at: 2026-10-12T06:03:38.999986436Z
 req_type: Bug
 tags:
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb5-a678-7bf2-9865-7e063746c82e
+  author: joe
+  content: |
+    [groom:night] APPROVE. Root cause found and written into the description: this is not a time cap (DrainCaps::default() has no caps). drain_batch_with_caps returns MaxReached when drain_cmd::stop_requested_from_env() sees AIDA_DRAIN_STOP_FILE pointing at an existing file. drain_stop_request_stops_before_next_spec sets that var process-wide and writes the file while drain_caps_inactive_drains_normally reads it without the env lock. Acceptance now pins the isolation fix plus a regression test.
+  created_at: 2026-10-12T06:03:38.999986436Z
+  modified_at: 2026-10-12T06:03:38.999986436Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
