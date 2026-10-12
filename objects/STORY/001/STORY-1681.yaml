@@ -1,0 +1,67 @@
+id: 01a130a7-ad1d-7843-a5fc-6113bb58ecb8
+spec_id: STORY-1681
+agreed_id: STORY-1681
+title: 'Host-owned store: contained sessions write through a validated spool or broker, so the host never runs git over a sandbox-writable tree'
+description: |
+  ## Problem
+  BUG-1929 (#2541) makes contained (sandboxed) sessions able to write the main checkout's `.aida-store/**` and `.aida/cache.db*` by widening the sandbox write set. That leaves the HOST running git (status/commit/push/fetch) over a tree the sandbox can write. Rounds 1–3 of review found the resulting attack surface: a sandboxed session can plant git config, hooks, fsmonitor, submodules or embedded repos that the host's git later executes with host privilege. Round 4 closes the known vectors by routing every store git call through `git_ops` with a central hardening set (`core.fsmonitor=false`, `fetch.recurseSubmodules=false`, `--ignore-submodules=all`, embedded-repo refusal) plus a guard test. Operator decision 2026-10-12: merge that as a STOPGAP, and design a store the host owns, so the host never runs git over a sandbox-writable tree.
+
+  ## Goal
+  Contained sessions can still perform every write verb their skills need (edit status, comment add, queue done, findings, handoff), atomically and visibly from the main checkout, while no host git process ever reads a working tree, index, config or hooks directory that a sandboxed process could have written.
+
+  ## Sketch: options
+  **A. Host-owned clone fed by validated YAML (spool + ingest).**
+  Sandbox gets write access only to a per-session spool dir (e.g. `<main>/.aida/spool/<session>/`), never to `.aida-store/`. Write verbs serialize the intended object mutation as a typed record (object id, expected base revision, new YAML). A host-side ingester (aida-server or the next host-run `aida` invocation) validates each record against the schema (no paths, no symlinks, size caps, id/type allowlist), applies it to the host-owned `.aida-store` worktree, and commits. The sandbox sees results via a read-only view (bind mount or the cache).
+  - + No git ever runs over sandbox-writable bytes; the only parsed input is schema-checked YAML.
+  - + Works offline and when no server is running (ingest on next host invocation).
+  - − Writes become asynchronous unless the ingester is running; "read your own write" needs the cache to merge pending spool records, or a synchronous ingest call.
+  - − Conflict semantics needed (expected-base revision → reject/retry).
+
+  **B. Broker for object writes (RPC).**
+  A host process (aida-server / MCP) exposes the store write verbs over a socket the sandbox may connect to; the CLI inside the sandbox becomes a client for write verbs. Store and cache stay read-only to the sandbox.
+  - + Synchronous, atomic; one writer serializes all mutations (also removes store-write.lock contention).
+  - − Requires a running broker for every contained session; a new auth surface (socket must be session-scoped; identity binding ties into BUG-1918/STORY-1654).
+  - − Larger change to CLI plumbing (every write verb gets a client path).
+
+  **C. Keep the stopgap (status quo after #2541) and harden incrementally.**
+  - + No new architecture.
+  - − Every new host git call or git feature is a potential sandbox→host escalation; safety rests on a guard test enumerating call sites. This is what reviewers flagged as fragile.
+
+  ## Recommendation (advisor, for operator decision)
+  A, with a synchronous fast path: the CLI inside the sandbox writes the spool record and then asks a running aida-server (if any) to ingest now, falling back to ingest-on-next-host-run. This keeps B's latency when a server is up without making a broker mandatory, and the host's only input is validated YAML. Revert the BUG-1929 write-set widening once A lands.
+
+  ## Open questions for the operator
+  1. Is asynchronous ingest acceptable when no server is running (a session's comment appears only after the next host-side aida run)?
+  2. Should the sandbox read the store via a read-only bind of the host worktree, or via the cache only?
+  3. Conflict policy for a stale expected-base: reject with a clear error (recommended) or last-writer-wins?
+
+  ## Acceptance (draft; to firm up after the decision)
+  - No host-side git invocation has a working tree, GIT_DIR, config or hooks path inside the sandbox write set (test enumerates the write set and every git_ops call's cwd/env).
+  - A contained session can claim a spec, add a comment and mark queue done; all are visible from the main checkout (integration test, same as BUG-1929's).
+  - A malformed or hostile spool record (path traversal, symlink, oversized, wrong id/type) is rejected with a clear error and never reaches git.
+  - The BUG-1929 store/cache write-set entries are removed from the sandbox profile.
+
+  ## Related
+  BUG-1929 (stopgap, #2541), BUG-1928 (sandbox write-set mechanism), BUG-1918 / STORY-1654 (identity binding for a broker), ADR-73.
+
+  Status: DRAFT, sketch only. Do NOT implement until the operator decides and the advisor signs off (architecture rule).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T15:07:37.629452703Z
+modified_at: 2026-10-12T15:07:37.629452703Z
+req_type: Story
+tags:
+- architecture
+- sandbox
+- security
+- store
+filed_at:
+  code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
