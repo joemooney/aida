@@ -162,6 +162,10 @@ struct ListTableOptions {
     no_glyph: bool,
     flow_header: String,
     terminal_width: Option<usize>,
+    /// Derived driver label per in-progress row (`relay:lib-split`,
+    /// `idle 26h`), shown beside the status. Empty → no driver column.
+    // trace:STORY-1653 | ai:claude
+    drivers: std::collections::HashMap<Uuid, String>,
 }
 
 /// Resolve the two whole-store facts used by `aida show` from the cache.
@@ -354,14 +358,23 @@ where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
 {
     let flow_width = options.flow_header.chars().count();
+    // trace:STORY-1653 | ai:claude — the status column widens by the driver
+    // suffix (` · relay:lib-split`) only when some row resolved a driver.
+    let drv_w = options
+        .drivers
+        .values()
+        .map(|l| l.chars().count() + 3)
+        .max()
+        .unwrap_or(0);
+    let status_w = 13 + drv_w;
     let header_prefix = if options.show_origin {
         format!(
-            "{}{:<12} {:<14} {:<12} {:<13} ",
+            "{}{:<12} {:<14} {:<12} {:<status_w$} ",
             options.flow_header, "ID", "Origin ID", "Type", "Status"
         )
     } else {
         format!(
-            "{}{:<14} {:<12} {:<13} {:<10} ",
+            "{}{:<14} {:<12} {:<status_w$} {:<10} ",
             options.flow_header, "ID", "Type", "Status", "Priority"
         )
     };
@@ -400,6 +413,7 @@ where
                 (false, true) => 111,
                 (false, false) => 77,
             }
+            + drv_w
     });
 
     let render_status = |r: &aida_core::RequirementSummary| -> String {
@@ -412,11 +426,29 @@ where
         } else {
             status_display::display_status_for_type(&r.req_type, &r.status).to_string()
         };
-        if options.no_glyph {
-            status_display::status_cell_no_glyph(&label, 13)
+        // trace:STORY-1653 | ai:claude — `◐ InProgress · relay:lib-split`:
+        // the label is padded AFTER the driver suffix so the two read as one
+        // phrase, and the column stays `13 + drv_w` wide.
+        let suffix = options
+            .drivers
+            .get(&r.id)
+            .map(|l| format!(" · {l}"))
+            .unwrap_or_default();
+        let label_w = if suffix.is_empty() {
+            13
         } else {
-            status_display::status_cell(&label, 11)
+            label.chars().count() + if options.no_glyph { 0 } else { 2 }
+        };
+        let cell = if options.no_glyph {
+            status_display::status_cell_no_glyph(&label, label_w)
+        } else {
+            status_display::status_cell(&label, label_w.saturating_sub(2))
+        };
+        if drv_w == 0 {
+            return cell;
         }
+        let pad = (13 + drv_w).saturating_sub(label_w + suffix.chars().count());
+        format!("{cell}{}{}", suffix.dimmed(), " ".repeat(pad))
     };
     let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
         if flow_width == 0 {
@@ -577,6 +609,7 @@ mod list_title_width_tests {
                         no_glyph: true,
                         flow_header: String::new(),
                         terminal_width: Some(width),
+                        drivers: Default::default(),
                     };
                     let lines = render_list_table(&reqs, &options, |_| (false, false, false));
                     assert_eq!(
@@ -604,6 +637,7 @@ mod list_title_width_tests {
             no_glyph: true,
             flow_header: String::new(),
             terminal_width: None,
+            drivers: Default::default(),
         };
         let lines = render_list_table(std::slice::from_ref(&req), &options, |_| {
             (false, false, false)
@@ -1863,6 +1897,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Driver(_) => unreachable!("driver is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
@@ -1998,6 +2033,8 @@ pub(crate) fn handle_git_backend_command(
             priority,
             feature,
             tags,
+            // trace:STORY-1653 | ai:claude
+            driver,
             machine_drafts,
             no_scope,
             show_origin,
@@ -2731,6 +2768,14 @@ pub(crate) fn handle_git_backend_command(
             // beat env `AIDA_LIST_LIMIT`, which beats `[list] agent_limit`,
             // which beats the built-in 100 (0 = unbounded). `--limit 0` also
             // means "no cap". trace:STORY-1644 | ai:claude
+            // The derived driver of every in-progress row (never stored on
+            // the spec), and the `--driver <kind>` filter over it.
+            // trace:STORY-1653 | ai:claude
+            let list_drivers =
+                crate::driver_view::list_driver_map(list_project_root.as_deref(), &reqs);
+            if let Some(want) = driver.as_deref() {
+                crate::driver_view::retain_by_driver(&mut reqs, &list_drivers, want)?;
+            }
             let total_after_filters = reqs.len();
             let agent_cap = crate::resolve_agent_list_limit(
                 std::env::var(crate::AGENT_LIST_LIMIT_ENV).ok().as_deref(),
@@ -3045,6 +3090,14 @@ pub(crate) fn handle_git_backend_command(
                     // unset stays drainable. trace:TASK-1231 | ai:claude
                     #[serde(skip_serializing_if = "Option::is_none")]
                     execution_mode: Option<&'a str>,
+                    // The derived driver of an in-progress row, e.g.
+                    // `relay:lib-split` / `idle 26h`, and its kind (relay /
+                    // drain / agent / queued / idle). Omitted otherwise.
+                    // trace:STORY-1653 | ai:claude
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    driver: Option<String>,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    driver_kind: Option<&'static str>,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
@@ -3084,6 +3137,8 @@ pub(crate) fn handle_git_backend_command(
                             assignee: r.assignee.as_deref(),
                             deferred_until: r.deferred_until.as_deref(),
                             execution_mode: r.execution_mode.as_deref(),
+                            driver: list_drivers.get(&r.id).map(|d| d.label()),
+                            driver_kind: list_drivers.get(&r.id).map(|d| d.kind()),
                         }
                     })
                     .collect();
@@ -3166,13 +3221,22 @@ pub(crate) fn handle_git_backend_command(
                     Some(faq_fields) => toon_list_fields(Some(faq_fields))?,
                     None => selected_fields.clone(),
                 };
+                // trace:STORY-1653 | ai:claude — `driver`, `driver_kind`
+                let selected = crate::driver_view::with_driver_columns(
+                    selected,
+                    fields.is_some(),
+                    &list_drivers,
+                );
                 let rows: Vec<Vec<String>> = reqs
                     .iter()
                     .map(|r| {
                         let routing = row_routing(r);
                         selected
                             .iter()
-                            .map(|f| toon_list_cell(r, routing, f))
+                            .map(|f| {
+                                crate::driver_view::list_cell(&list_drivers, r, f)
+                                    .unwrap_or_else(|| toon_list_cell(r, routing, f))
+                            })
                             .collect()
                     })
                     .collect();
@@ -3562,6 +3626,8 @@ pub(crate) fn handle_git_backend_command(
                     no_glyph: *no_glyph,
                     flow_header: flow_header.to_string(),
                     terminal_width: terminal_list_width(),
+                    // trace:STORY-1653 | ai:claude
+                    drivers: list_drivers.iter().map(|(k, d)| (*k, d.label())).collect(),
                 };
                 for line in render_list_table(&reqs, &options, row_routing) {
                     println!("{line}");

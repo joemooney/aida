@@ -58,6 +58,7 @@ fn lease_at(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 

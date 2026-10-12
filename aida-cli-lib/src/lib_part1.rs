@@ -776,6 +776,9 @@ pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
     "origin",
     "deferred_reason",
+    // trace:STORY-1653 | ai:claude — derived driver of an in-progress spec.
+    "driver",
+    "driver_kind",
 ];
 
 /// Render a numeric weight/score for display: integral values drop the
@@ -2292,6 +2295,10 @@ pub(crate) fn run() -> Result<()> {
     // trace:EPIC-1-001 | ai:claude
     if let Command::Dev(dev_cmd) = &cli.command {
         return crate::dev_cmd::handle_dev_command(dev_cmd);
+    }
+    // `aida driver` reads/writes `.aida/drivers/` only. trace:STORY-1653 | ai:claude
+    if let Command::Driver(cmd) = &cli.command {
+        return crate::driver_cmd::handle_driver_command(cmd);
     }
 
     // STORY-472: `aida release` — a memorable top-level verb wrapping the dev
@@ -4149,6 +4156,7 @@ pub(crate) fn run() -> Result<()> {
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Driver(_) => unreachable!("driver is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),

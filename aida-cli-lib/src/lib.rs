@@ -75,6 +75,9 @@ mod decide_cmd;
 mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
+// Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
+mod driver_cmd;
+mod driver_view;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
 mod dev_cmd;

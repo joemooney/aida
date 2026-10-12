@@ -56,6 +56,7 @@ fn mock_lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 
@@ -73,6 +74,7 @@ fn mock_ps_row(id: &str, spec: &str, worktree: PathBuf) -> PsRow {
         locked_by: None,
         mail_identity: None,
         activity: None,
+        driver: None,
     }
 }
 

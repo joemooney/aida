@@ -80,7 +80,9 @@ pub mod db;
 pub mod deps_sweep;
 pub mod dispatch_routing;
 pub mod dispenser;
+// Driver registry + derived per-spec driver. trace:STORY-1653 | ai:claude
 pub mod docs_review;
+pub mod driver_registry;
 // trace:TASK-0417 | ai:claude
 pub mod ears_lint;
 // trace:STORY-1427 | ai:claude

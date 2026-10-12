@@ -74,6 +74,11 @@ pub(crate) struct PsRow {
     /// unambiguous; nothing to inspect).
     // trace:BUG-1553 | ai:claude
     pub(crate) activity: Option<SeatActivity>,
+    /// The derived driver of this row's spec (relay / drain / agent / queued /
+    /// idle), resolved by `driver_view::overlay_running_work`. `None` for rows
+    /// with no spec or before the overlay runs. Never stored on the spec.
+    // trace:STORY-1653 | ai:claude
+    pub(crate) driver: Option<aida_core::driver_registry::DerivedDriver>,
 }
 
 /// The TASK-1090 dispatch-health payload for one [`PsRow`].
@@ -474,6 +479,11 @@ pub(crate) struct PsOrphan {
     /// "abandoned".
     // trace:BUG-1656 | ai:claude
     pub(crate) possibly_subagent: bool,
+    /// The derived driver of this spec. A live relay/drain/agent driver means
+    /// the spec IS being worked even though no session of its own is alive —
+    /// such rows are never framed as orphaned/abandoned.
+    // trace:STORY-1653 | ai:claude
+    pub(crate) driver: Option<aida_core::driver_registry::DerivedDriver>,
 }
 
 /// The flag-only / orphaned verdict for one In-Progress spec, given the
@@ -2001,6 +2011,10 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // trace:BUG-1681 | ai:claude
     ps_overlay_integration_standing(project_root, &mut rows);
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
+    // The derived driver: a relay / drain / registered agent working a spec
+    // whose own lease pid is gone keeps the row live (no stalled framing).
+    // trace:STORY-1653 | ai:claude
+    driver_view::overlay_running_work(project_root, &leases, &mut rows, &mut orphans, now);
     (rows, orphans)
 }
 
@@ -2023,6 +2037,8 @@ pub(crate) fn orphaned_in_progress_items(
     orphans
         .into_iter()
         .filter(|o| !o.likely_fanout)
+        // A spec a live relay/drain covers is being worked. trace:STORY-1653 | ai:claude
+        .filter(|o| !driver_view::orphan_is_driven(o))
         .map(|o| awaiting_you::OrphanedInProgressItem {
             since_label: since_label_for(&o.spec),
             spec_id: o.spec,
@@ -2312,6 +2328,7 @@ pub(crate) fn build_running_work(
                 locked_by,
                 mail_identity,
                 activity,
+                driver: None, // trace:STORY-1653 | ai:claude
             }
         })
         .collect();
@@ -2391,6 +2408,7 @@ pub(crate) fn build_running_work(
                 // trace:BUG-1656 | ai:claude
                 // trace:BUG-1681 | ai:claude
                 possibly_subagent: stale_lease && subagent_in_this_worktree,
+                driver: None, // trace:STORY-1653 | ai:claude
             });
         }
     }
@@ -2592,8 +2610,26 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 })
             })
             .collect();
+        // The derived driver (`driver` / `driver_kind`). trace:STORY-1653 | ai:claude
+        let mut sessions = sessions;
+        for (v, item) in sessions.iter_mut().zip(collapsed_rows.iter()) {
+            driver_view::insert_json_fields(v, item.row.driver.as_ref());
+        }
+        // A spec with no live session of its own but a live relay/drain
+        // driver is being worked: report it under `driven`, never `orphaned`.
+        // trace:STORY-1653 | ai:claude
+        let driven: Vec<serde_json::Value> = orphans
+            .iter()
+            .filter(|o| driver_view::orphan_is_driven(o))
+            .map(|o| {
+                let mut v = serde_json::json!({ "spec": o.spec, "title": o.title });
+                driver_view::insert_json_fields(&mut v, o.driver.as_ref());
+                v
+            })
+            .collect();
         let orphaned: Vec<serde_json::Value> = orphans
             .iter()
+            .filter(|o| !driver_view::orphan_is_driven(o))
             .map(|o| {
                 serde_json::json!({
                     "spec": o.spec,
@@ -2616,11 +2652,21 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 })
             })
             .collect();
+        // Orphans carry their queued/idle reading. trace:STORY-1653 | ai:claude
+        let mut orphaned = orphaned;
+        for (v, o) in orphaned
+            .iter_mut()
+            .zip(orphans.iter().filter(|o| !driver_view::orphan_is_driven(o)))
+        {
+            driver_view::insert_json_fields(v, o.driver.as_ref());
+        }
         println!(
             "{}",
             crate::cache_output::json_pretty(&serde_json::json!({
                 "sessions": sessions,
                 "orphaned": orphaned,
+                // trace:STORY-1653 | ai:claude
+                "driven": driven,
                 // STORY-769: last-human-input oracle, null when never stamped.
                 "operator": operator,
                 "wave": live_wave.as_ref().map(|l| serde_json::json!({
@@ -2670,7 +2716,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         // like `aida integrate`'s `running:`/`stale_hidden:` pair.
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
-        println!("orphaned: {}", orphans.len());
+        // trace:STORY-1653 | ai:claude — driven orphans have their own count.
+        let driven_orphans = orphans
+            .iter()
+            .filter(|o| driver_view::orphan_is_driven(o))
+            .count();
+        println!("orphaned: {}", orphans.len() - driven_orphans);
+        println!("driven: {driven_orphans}");
         if let Some(lock) = &live_wave {
             println!(
                 "wave_id: {}",
@@ -2743,6 +2795,10 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .unwrap_or_default()
                         .to_string(),
                 ]
+                .into_iter()
+                // trace:STORY-1653 | ai:claude
+                .chain(driver_view::toon_cells(r.driver.as_ref()))
+                .collect()
             })
             .collect();
         println!(
@@ -2760,14 +2816,19 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "dispatch_state",
                     "dispatch_hint",
                     "mail_identity",
-                    "activity"
+                    "activity",
+                    "driver",
+                    "driver_kind"
                 ],
                 &run
             )
         );
+        // trace:STORY-1653 | ai:claude — driven specs are not orphans.
         let orph: Vec<Vec<String>> = orphans
             .iter()
+            .filter(|o| !driver_view::orphan_is_driven(o))
             .map(|o| {
+                let [driver, driver_kind] = driver_view::toon_cells(o.driver.as_ref());
                 vec![
                     o.spec.clone(),
                     o.title.clone(),
@@ -2777,6 +2838,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                         "flag-only".to_string()
                     },
                     o.likely_fanout.to_string(),
+                    driver,
+                    driver_kind,
                 ]
             })
             .collect();
@@ -2784,10 +2847,35 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             "{}",
             crate::toon::table_raw(
                 "orphaned",
-                &["spec", "title", "liveness", "likely_fanout"],
+                &[
+                    "spec",
+                    "title",
+                    "liveness",
+                    "likely_fanout",
+                    "driver",
+                    "driver_kind"
+                ],
                 &orph
             )
         );
+        let driven: Vec<Vec<String>> = orphans
+            .iter()
+            .filter(|o| driver_view::orphan_is_driven(o))
+            .map(|o| {
+                let [driver, driver_kind] = driver_view::toon_cells(o.driver.as_ref());
+                vec![o.spec.clone(), o.title.clone(), driver, driver_kind]
+            })
+            .collect();
+        if !driven.is_empty() {
+            println!(
+                "{}",
+                crate::toon::table_raw(
+                    "driven",
+                    &["spec", "title", "driver", "driver_kind"],
+                    &driven
+                )
+            );
+        }
         // TASK-1090: always-shown (not gated by --all) — dead process +
         // uncommitted work hidden behind the stale-session footer.
         // BUG-1680: collapse duplicate rows for the same worktree path with a count.
@@ -2920,7 +3008,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     .naive_local(),
                 now.with_timezone(&chrono::Local).date_naive(),
             );
-            let live_label = format!("{} {}", row.state.glyph(), row.state.label());
+            // trace:STORY-1653 | ai:claude — `live · relay:<run>`.
+            let live_label = driver_view::ps_live_label(row);
             // BUG-1553 (2026-09-23 PROXY DECISION): neither `LongToolCall`
             // nor `Suspended` overrides this cell's color/text — a purely
             // time-based or process-state heuristic cannot assert "blocked
@@ -3190,8 +3279,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     // lease) — informational, not alarming. Only the rest — crashed (stale)
     // spec-scoped leases, or flag-only with NO live worker — are genuine
     // orphans. trace:TASK-1064 | ai:claude
-    let (fanout_worked, genuine): (Vec<&PsOrphan>, Vec<&PsOrphan>) =
-        orphans.iter().partition(|o| o.likely_fanout);
+    // trace:STORY-1653 | ai:claude — a spec a live relay/drain drives is
+    // being worked: it prints under its own "Driven" header, never as orphaned.
+    driver_view::print_driven_orphans(&orphans);
+    let (fanout_worked, genuine): (Vec<&PsOrphan>, Vec<&PsOrphan>) = orphans
+        .iter()
+        .filter(|o| !driver_view::orphan_is_driven(o))
+        .partition(|o| o.likely_fanout);
 
     // Likely worked by a fan-out — informational (a live advisor Agent-tool
     // subagent is plausibly building these; its lease just isn't spec-linked).
@@ -3246,7 +3340,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 warn.yellow(),
                 o.spec.yellow().bold(),
                 truncate(&o.title, 48).dimmed(),
-                format!("({why})").dimmed(),
+                // trace:STORY-1653 | ai:claude — `· queued (batch:X)` / `· idle 26h`
+                format!("({why}{})", driver_view::orphan_driver_suffix(o)).dimmed(),
             );
         }
         println!(

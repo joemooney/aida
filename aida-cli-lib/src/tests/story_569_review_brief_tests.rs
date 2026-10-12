@@ -106,6 +106,7 @@ fn file_zen_review_brief_short_circuits() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     };
 
     // Handoff disabled → None, no side effects.

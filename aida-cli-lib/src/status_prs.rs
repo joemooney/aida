@@ -3103,6 +3103,7 @@ mod story_1043_unshipped_work_tests {
             manual_enter_at: None,
             interrupted_at: None,
             interrupted_reason: None,
+            driver: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(

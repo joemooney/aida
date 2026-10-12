@@ -118,6 +118,7 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
             manual_enter_at: None,
             interrupted_at: None,
             interrupted_reason: None,
+            driver: None,
         };
         std::fs::write(
             dir.join(format!("{id}.toml")),

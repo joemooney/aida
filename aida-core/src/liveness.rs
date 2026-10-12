@@ -1059,6 +1059,11 @@ pub struct SessionLeaseLite {
     // trace:STORY-711 | ai:claude
     #[serde(default)]
     pub authorized_by: Option<String>,
+    /// Driver that minted this lease (`relay:<run>` etc.), from
+    /// `AIDA_RELAY_RUN` / `AIDA_DRIVER`. Absent on older leases.
+    // trace:STORY-1653 | ai:claude
+    #[serde(default)]
+    pub driver: Option<String>,
 }
 
 /// One work-item spec projected for the liveness pass — the display id, the two
@@ -1677,6 +1682,7 @@ mod tests {
             review_verb: false,
             claim_verb: false,
             authorized_by: None,
+            driver: None,
         }
     }
 
