@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:42.829403010Z
-modified_at: 2026-10-12T06:00:08.427468173Z
+modified_at: 2026-10-12T06:00:15.849041104Z
 req_type: Story
 tags:
 - from:aida-host
@@ -105,6 +105,30 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:12:47.033622828Z
+comments:
+- id: 01a12eb2-8ce9-79b3-b5b3-ca15dbfc4386
+  author: joe
+  content: |
+    [groom:night] SPLIT. This bundles six feedback items (F4, F14, F15, F21, F24, F27) into one story: a new command family, a sandboxed scorer, controls gating, a seam adapter, gap trending, and statusline/digest surfacing. Too big for one PR and it is new architecture (needs a sketch + advisor signoff). Nothing exists on main yet; the aida-host pilot scripts (scripts/regen-corpus.sh, regen-sandbox.sh, regen-score.sh, regen-analyze.py) are the reference.
+
+    Slice 0 (decision, before any code) - open design fork:
+    Q: Is regeneration a built-in `aida regen` CLI family, or a skill + project-local scripts that AIDA ships as a template?
+      (a) Built-in CLI: uniform controls/sandbox/score recording, statusline/digest integration is natural; cost: AIDA must model a project-declared oracle, installer and harness launchers (new config surface, e.g. `[regen]` in .aida/config.toml: oracle command, install command, required tools, harness list).
+      (b) Skill + templated scripts: cheap, flexible per project; cost: controls and sandbox become honor-system again (exactly what F24/F27/F30 warn against), no store-recorded score.
+      (c) Hybrid: built-in `corpus` + `score` recording + controls gate; trial launching stays a skill invoking harness CLIs.
+      Recommendation: (c) first, growing toward (a). The methodological guarantees (controls, sandbox, exact-marker parsing, recorded score) are the value and must live in code; harness launching varies the most and can stay in a skill until STORY-1678.
+
+    Proposed slices (each one PR):
+    1. `aida regen corpus` - freeze the store export into a corpus dir (replaces regen-corpus.sh). Acceptance: deterministic corpus for a given store commit; excludes code/tests/docs/git; manifest with store SHA and hash; test covers exclusion.
+    2. Project regen config + `aida regen score` raw (R1) - run the declared oracle in a sandbox (sanitized PATH with a fallback guard, fake HOME, private XDG), parse results from exact markers only, record score + age in the store. Acceptance: guard hits reported and a score with guard hits is never marked clean; loose-prefix output is rejected in a test.
+    3. Controls gate (F27 + F14) - reference control (original system, must be 100% across N repeats), stub control (hollow checks measured and excluded from the discriminating metric), clean-sandbox check; `score` refuses to report a trial until all three have passed. Acceptance: tests for each refusal path; discriminating metric excludes stub-passing checks.
+    4. Seam-adapter score (F15) - R2 run through a name-mapping adapter generated from the trial's GAPS file; report R1, R2 and the delta. Acceptance: fixture where a renamed env var flips R1 fail -> R2 pass.
+    5. Gap classification + headline metric (F21) - oracle pass rate is the headline; gaps trended by category; gap count never shown as quality. Acceptance: report format test.
+    6. Surfacing (F4 tail) - regenerability score and age in `aida statusline` and `aida digest`. Acceptance: shows "none" when no trial recorded; stale marker past a configurable age.
+    `aida regen trial` itself (launching the isolated regenerator) belongs with STORY-1678/1677 once slice 0 is decided.
+  created_at: 2026-10-12T06:00:15.849041104Z
+  modified_at: 2026-10-12T06:00:15.849041104Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
