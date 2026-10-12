@@ -261,6 +261,9 @@ fn completed_with_commit_on_origin_only_does_not_warn() {
 fn completed_missing_on_both_refs_names_both_and_hints_fetch() {
     let (_tmp, root) = init_repo();
     let _origin = add_bare_origin(&root);
+    // BUG-1958: a local ref equal to (or behind) origin is not rescanned, so
+    // put local ahead to keep both refs in play. trace:BUG-1958 | ai:claude
+    commit(&root, "b.txt", "y", "feat: unrelated local work (TASK-2)");
     let warning = completion_linkage_warning(&root, &task("TASK-1")).expect("warns");
     assert!(warning.contains("origin/main or main"), "{warning}");
     assert!(warning.contains("git fetch"), "{warning}");

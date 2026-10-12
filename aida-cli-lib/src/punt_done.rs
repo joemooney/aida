@@ -342,6 +342,13 @@ pub(crate) fn handle_done_command(
     } else {
         render_completion_crescendo(&display_id, &req.title);
     }
+    // BUG-1958: `aida done` is an into-Completed transition like `aida edit
+    // --status completed`, so it gets the same warn-never-refuse check for a
+    // code spec with nothing shipped on the default branch.
+    // trace:BUG-1958 | ai:claude
+    if let Some(root) = store_path.parent() {
+        crate::shipped_linkage::warn_if_completed_without_shipped_commit(root, &req);
+    }
     Ok(())
 }
 

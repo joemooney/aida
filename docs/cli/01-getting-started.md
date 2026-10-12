@@ -103,6 +103,8 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `-c/--comments` — inline the comment bodies (design discussion, doc seeds) rather than just the count.
 - `--raw` — print the description and comments as their markdown source. At an interactive terminal, human output renders that markdown: styled headings and emphasis, indented lists and code blocks, and tables drawn as aligned boxes that fit the terminal width. `AIDA_MARKDOWN=raw` does the same for every run.
 
+**The `linkage:` line (agent/TOON output).** Under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
+
 **Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
 
 **Chains with** — the natural stop between `list` (found it) and acting (`edit` / `queue work` / `comment add`).
@@ -119,7 +121,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **Don't reach for it when** — you're inside the real lifecycle. On a project with branches, PRs, and review, "finished" is a sequence (`queue done` → branch/PR → review → **merge auto-bumps to Completed**), and reaching for `done` short-circuits the precise vocabulary that the rest of the system relies on. As you gain fluency you'll stop using `done` and use the precise verbs — that's expected, not a failure of `done`.
 
-**Gotchas.** Because it's the simple shortcut, it doesn't carry the nuance of *where* in the lifecycle you are. On a real pipeline, prefer `aida queue done` (work finished on a branch → **Done**) and let the merge earn **Completed**.
+**Gotchas.** Because it's the simple shortcut, it doesn't carry the nuance of *where* in the lifecycle you are. On a real pipeline, prefer `aida queue done` (work finished on a branch → **Done**) and let the merge earn **Completed**. Like `edit --status completed`, `done` prints a **completion warning** (it never refuses) when a code spec reaches Completed but no commit naming it and no `trace:<ID>` comment is on the default branch — see `aida edit` below for what it checks and how to opt out.
 
 **Chains with** — for fluent users, superseded by `aida queue done` + the merge auto-bump (Chapter 4).
 
@@ -140,6 +142,8 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--tags` — **replaces** the entire tag set. Use only when you genuinely mean "these are now the tags, forget the rest." It conflicts with `--add-tag`/`--remove-tag` precisely to stop you mixing the two mental models.
 - `--status` — the lifecycle mover. Approval (Draft→Approved) is authority-gated on multi-agent projects; status transitions are where the governance lives.
 - `--blocked-by` (repeatable) — add dependency edges after creation. Same edge `add --blocked-by` makes, just later.
+
+**The completion warning.** When `edit --status completed` (or `aida done`) moves a code spec into Completed, AIDA checks the default branch — `origin/<default>` and the local `<default>` — for a commit whose message names the spec or a tracked file carrying a `trace:<ID>` comment. If neither is found it prints a warning to stderr naming the refs it checked; the status change still goes through. If the PR merged on the remote, `git fetch` and re-check with `aida show <ID>`. In a shallow clone the warning says `(shallow clone)`, because an older shipping commit may sit below the history cut. Decisions, docs and other non-code types are never warned about; for code-typed work that legitimately landed outside this repo, opt out with `aida edit <ID> --add-tag doctor:no-code`. `aida doctor --category completed-without-commit` applies the same rule across the whole store.
 
 **Gotchas.** Refinements you make in a *comment* do **not** bind an implementer — only the description / acceptance criteria do. If a design decision must be honored, `edit` it into the acceptance criteria; don't leave it in a comment and assume it'll be followed.
 
