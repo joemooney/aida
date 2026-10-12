@@ -449,3 +449,18 @@ fn quiet_render_hook_silences_only_render_panics() {
         "other panics were silenced"
     );
 }
+
+/// Source guard: the process-wide colour policy only works if `main_entry`
+/// applies it before anything else runs.
+// trace:BUG-1979 | ai:claude
+#[test]
+fn main_entry_applies_the_no_color_policy() {
+    let src = include_str!("../lib_part1.rs");
+    let start = src.find("pub fn main_entry()").expect("main_entry exists");
+    let body = &src[start..];
+    let end = body.find("\n}\n").expect("main_entry closes");
+    assert!(
+        body[..end].contains("crate::markdown_render::apply_no_color_policy();"),
+        "main_entry must call apply_no_color_policy()"
+    );
+}

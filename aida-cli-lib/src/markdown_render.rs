@@ -224,9 +224,13 @@ fn render_for_terminal_with(
     let styled = colour.should_colorize();
     // trace:BUG-1979 | ai:claude
     let root = crate::find_project_root().ok();
-    // `AIDA_GLYPHS` (a per-terminal property) beats a configured theme's base.
-    let profile = match crate::glyphs::active_theme(root.as_deref()) {
-        Some(theme) if std::env::var_os("AIDA_GLYPHS").is_none() => theme.base,
+    // A valid `AIDA_GLYPHS` (a per-terminal property) beats a configured
+    // theme's base; an unparseable value is ignored, as `active_profile` does.
+    let env_profile = std::env::var("AIDA_GLYPHS")
+        .ok()
+        .and_then(|v| GlyphProfile::parse(&v));
+    let profile = match (env_profile, crate::glyphs::active_theme(root.as_deref())) {
+        (None, Some(theme)) => theme.base,
         _ => crate::glyphs::active_profile(root.as_deref()),
     };
     match catch_render(|| render_markdown_with(src, width, styled, profile)) {

@@ -315,7 +315,7 @@ pub(crate) enum GlyphProfile {
 impl GlyphProfile {
     /// Parse a profile name (`unicode` / `ascii`, case-insensitive). Unknown /
     /// empty → `None` so callers can fall through to the next precedence tier.
-    fn parse(raw: &str) -> Option<GlyphProfile> {
+    pub(crate) fn parse(raw: &str) -> Option<GlyphProfile> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "unicode" | "emoji" | "utf8" | "utf-8" => Some(GlyphProfile::Unicode),
             "ascii" | "plain" => Some(GlyphProfile::Ascii),
