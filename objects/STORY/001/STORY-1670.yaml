@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:52.425752547Z
-modified_at: 2026-10-12T06:00:24.698976650Z
+modified_at: 2026-10-12T06:00:41.166986064Z
 req_type: Story
 tags:
 - from:aida-host
@@ -60,6 +60,18 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:12:55.582986290Z
+comments:
+- id: 01a12eb2-efce-73c3-b3a0-157bd7c3c6a8
+  author: joe
+  content: |
+    [groom:night] SPLIT. Three independent ideas with different dependencies; none exists on main.
+    1. Reverse trial (F5) - `aida regen reverse`: a fresh read-only agent writes specs from code only; diff against the store; report "found in code, absent in store" (candidate gaps) and "in store, not found in code" (candidate stale/unimplemented). Acceptance: report lists both categories with spec IDs/paths; agent run is read-only (sandboxed per STORY-1678); does not write to the store. Independent of the scorer, so this can go first; overlaps conceptually with STORY-1671 (distill from transcripts) - share the diff/report code.
+    2. Ablation tiers (F12) - `aida regen trial --inputs store|store+docs|store+docs+readme|store+transcripts`, score each, report per-tier deltas. Acceptance: tier recorded on the trial result; comparison report. Depends on STORY-1669 slices 1-2.
+    3. Trial gaps as design review (F16) - `aida regen review` lists `missing`/`ambiguous` gaps from the latest trial(s) as candidate human decisions ("your system does X here; is that intended?"), optionally routed via `aida human`. Acceptance: one item per gap with the trial ID and the code location if resolvable; no automatic spec writes. Depends on STORY-1669 slice 5 (gap classification).
+    Open question for slice 3: route into the `aida human` inbox or just print a report? Recommendation: report first, `--file` flag to create decision items.
+  created_at: 2026-10-12T06:00:41.166986064Z
+  modified_at: 2026-10-12T06:00:41.166986064Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
