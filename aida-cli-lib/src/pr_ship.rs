@@ -341,8 +341,9 @@ pub(crate) fn derive_squash_subject_spec_ids_held(
 /// BUG-1919: PR-body lines that declare the PR a non-completing slice of a
 /// multi-PR spec. A whole line (after stripping list/emphasis markup and
 /// trailing punctuation, case-insensitively) must equal one of these or start
-/// with one followed (after any closing emphasis) by whitespace, an em/en-dash,
-/// `:`, `;`, `,` or `(`; a mid-prose mention (or a
+/// with one followed (after any closing emphasis) by anything but a word
+/// character, `-`, `/`, a backtick, or a `.` that continues into a word (as
+/// in `no-complete.md`); a mid-prose mention (or a
 /// backticked mention such as a changelog bullet) stays descriptive, exactly as
 /// TASK-1600 keeps body ids descriptive.
 // trace:BUG-1919 | ai:claude
@@ -359,23 +360,23 @@ pub fn pr_body_declares_non_completing(pr_body: &str) -> bool {
             .trim_end_matches(|c: char| matches!(c, '.' | ':' | ';' | '!'))
             .trim()
             .to_ascii_lowercase();
-        // The marker may be followed by closing emphasis, then end of line,
-        // whitespace, a dash, or clause punctuation. A backtick, `/`, `-`, or
-        // a word character means the marker is quoted or part of a longer
-        // word, so the line only mentions it.
+        // After any closing emphasis, the marker ends the declaration unless
+        // the next character continues it as a word, path, or quote: a word
+        // character, `-`, `/`, or a backtick (the changelog-bullet case). A
+        // `.` counts as sentence punctuation only before whitespace or end of
+        // line, so `no-complete.md` stays a mention. Everything else (end of
+        // line, whitespace, dashes, `:;,!?)…(`) declares.
         // trace:BUG-1957 | ai:claude
         NO_COMPLETE_BODY_MARKERS.iter().any(|&marker| {
             line.strip_prefix(marker).is_some_and(|rest| {
-                match rest
+                let mut chars = rest
                     .trim_start_matches(|c: char| matches!(c, '*' | '_'))
-                    .chars()
-                    .next()
-                {
+                    .chars();
+                match chars.next() {
                     None => true,
-                    Some(c) => {
-                        c.is_whitespace()
-                            || matches!(c, '\u{2014}' | '\u{2013}' | ':' | ';' | ',' | '(')
-                    }
+                    Some(c) if c.is_alphanumeric() || matches!(c, '-' | '/' | '`') => false,
+                    Some('.') => chars.next().is_none_or(char::is_whitespace),
+                    Some(_) => true,
                 }
             })
         })
@@ -3316,6 +3317,13 @@ mod tests {
             "aida: no-complete(slice 2)",
             "aida: no-complete–slice",
             "aida: no-complete; slice 4",
+            // Round 2: sentence punctuation after the marker still declares.
+            "aida: no-complete. This is slice 2 of 3.",
+            "Non-completing slice. Pure move.",
+            "aida: no-complete! slice 2",
+            "aida: no-complete) x",
+            "aida: no-complete… slice",
+            "aida: no-complete?",
         ] {
             assert!(pr_body_declares_non_completing(body), "{body:?}");
         }
@@ -3332,6 +3340,8 @@ mod tests {
             "aida: no-complete/slice",
             "aida: no-complete-ish",
             "**aida: no-complete**ness",
+            "aida: no-complete.md documents the marker",
+            "aida: no-complete_flag",
         ] {
             assert!(!pr_body_declares_non_completing(body), "{body:?}");
         }

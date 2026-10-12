@@ -4358,6 +4358,10 @@ fn bug_1957_review_calibration_skips_closure_pending_branch_spec() {
 // trace:BUG-1957 | ai:claude
 #[test]
 fn bug_1957_review_calibration_reads_project_store() {
+    // Only the legacy `requirements.yaml` arm of `load_store_for_lookup` is
+    // exercised: the distributed `.aida/config.toml` arm refuses to adopt a
+    // store under the system temp root (the BUG-1598 guard), so a tempdir
+    // fixture cannot reach it. Both arms feed the same hold check.
     let root = tempfile::TempDir::new().unwrap();
     let mut held = aida_core::Requirement::new("held".to_string(), String::new());
     held.spec_id = Some("TASK-1538".to_string());
@@ -4376,4 +4380,46 @@ fn bug_1957_review_calibration_reads_project_store() {
         review_calibration_spec_ids(empty.path(), "fix: prose", "task-1538-x", ""),
         vec!["TASK-1538".to_string()]
     );
+}
+
+/// BUG-1957: the rework PR-head match consults the closure hold only on the
+/// metadata path. A branch-name id decides the match outright, so a held
+/// spec's own open PR branch is still reused for its rework, and the hold
+/// closure is never consulted there. With no id in the branch, the hold
+/// cannot withhold anything either: the only ids left come from an explicit
+/// title trailer, which ship honours even for a held spec.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
+    let consulted = std::cell::Cell::new(0);
+    let held = |id: &str| {
+        consulted.set(consulted.get() + 1);
+        (id == "TASK-1538").then(|| "held".to_string())
+    };
+    assert!(rework_pr_head_matches_spec(
+        "TASK-1538",
+        "task-1538-x",
+        "fix: prose",
+        "",
+        held
+    ));
+    assert_eq!(
+        consulted.get(),
+        0,
+        "a branch-name id decides without the hold"
+    );
+    assert!(rework_pr_head_matches_spec(
+        "TASK-1538",
+        "followup-polish",
+        "fix: prose (TASK-1538)",
+        "",
+        held
+    ));
+    assert!(!rework_pr_head_matches_spec(
+        "TASK-1538",
+        "followup-polish",
+        "fix: prose",
+        "Traces TASK-1538.",
+        held
+    ));
 }

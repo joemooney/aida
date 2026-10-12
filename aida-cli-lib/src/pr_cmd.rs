@@ -3651,6 +3651,12 @@ pub(crate) fn derive_pr_ship_squash_subject(
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
     // A store read is required before granting an ID completion authority.
     // trace:TASK-1600 | ai:codex
+    // This deliberately does NOT use `load_store_for_lookup` (the best-effort
+    // loader the calibration and rework credit paths use, which yields `None`
+    // on an unreadable store): here the store decides which specs the merge
+    // completes, so an unreadable store must fail closed and stop the merge
+    // rather than silently skipping id resolution and the closure hold.
+    // trace:BUG-1957 | ai:claude
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
     let (normalized, trailer) = pr_ship::derive_squash_subject_with_trailer(
