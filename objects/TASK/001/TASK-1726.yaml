@@ -2,22 +2,25 @@ id: 01a12b44-cc6c-7d02-bbc6-5a799697c960
 spec_id: TASK-1726
 agreed_id: TASK-1726
 title: 'seat-recovery-playbooks.md template: add a ''Stacked PR after its base is squash-merged'' playbook'
-description: |-
+description: |
   Upstream suggestion from aida-relay TASK-70 (PR joemooney/aida-relay#79). Hit three times in one day there: squash-merging the base of a stacked PR leaves the stacked branch conflicting, because it still carries the base's original commits.
 
   Recipe: (1) merge the base WITHOUT deleting its branch (deleting first auto-closes the stacked PR); (2) retarget the stacked PR to main; (3) delete the base branch; (4) git rebase --onto origin/main <old base head> <stacked branch>, then push --force-with-lease (old base head = the base PR's last headRefOid); (5) verify with git range-diff against the approved head before merging — a changed patch needs re-review.
 
   ## Acceptance
-  - The aida init discipline template for seat-recovery-playbooks.md ships this section.
-  - The discipline README index row mentions it.
-  - Existing projects pick it up via aida init --refresh only where they haven't edited the file.
+  - aida-core/templates/.aida/discipline/seat-recovery-playbooks.md (template master) ships a 'Stacked PR after its base is squash-merged' playbook with the five steps above.
+  - The discipline README.md index row for seat-recovery-playbooks.md mentions stacked PRs.
+  - `make sync-templates` has been run and `make check-templates` passes.
+  - No new propagation mechanism: existing projects receive it through the normal scaffold refresh path.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T14:01:31.500987723Z
-modified_at: 2026-10-11T14:01:31.500987723Z
+modified_at: 2026-10-12T05:52:38.298625975Z
 req_type: Task
+tags:
+- groomed:night
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
