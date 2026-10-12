@@ -3429,9 +3429,9 @@ pub(crate) fn review_record_attribution_refusal(
 ) -> anyhow::Error {
     match grant_seat {
         Some(seat) => anyhow::anyhow!(
-            "aida review record attribution fallback: a valid `{seat}` seat grant was found, \
-             but no agent identity is set; export AIDA_AGENT_TYPE (e.g. `claude`) and/or \
-             AIDA_AGENT_NAME in this session, then re-run `aida review record`"
+            "aida review record attribution fallback: a valid {seat} seat grant was found, \
+             but no agent identity is set; export AIDA_AGENT_TYPE (for example claude) and/or \
+             AIDA_AGENT_NAME in this session, then re-run the review record command"
         ),
         None => err.context("aida review record attribution fallback"),
     }
@@ -3458,6 +3458,10 @@ mod bug_1978_attribution_message_tests {
         assert!(msg.contains("AIDA_AGENT_TYPE"), "{msg}");
         assert!(msg.contains("AIDA_AGENT_NAME"), "{msg}");
         assert!(!msg.contains("aida role enter"), "{msg}");
+        // Agent output mode turns the first backticked `aida ...` command in
+        // an error into a `help:` retry line; re-running the same command
+        // without an identity would fail the same way, so none may be offered.
+        assert_eq!(crate::extract_aida_suggestion(&msg), None, "{msg}");
         assert!(
             !msg.contains("BUG-"),
             "internal IDs must stay out of user text: {msg}"
