@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-12T06:01:03.057164477Z
+modified_at: 2026-10-12T15:02:13.220016932Z
 req_type: Bug
 tags:
 - contained
@@ -39,6 +39,12 @@ comments:
   created_at: 2026-10-12T06:01:03.057164477Z
   modified_at: 2026-10-12T06:01:03.057164477Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-b9e4-77d0-9d09-7f14a0bc8a83
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option A+B. A: ignore submodule recursion for host git status over pool/contained-session worktrees. B: refuse or flag as tampered any index gitlink that has no .gitmodules entry. Route every raw status call through one hardened git_ops helper, and include the planted-filter-driver test. Security: strict reviewer; operator merges.'
+  created_at: 2026-10-12T15:02:13.220016932Z
+  modified_at: 2026-10-12T15:02:13.220016932Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
   branch: main
