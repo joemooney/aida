@@ -17,11 +17,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T06:02:31.946174442Z
+modified_at: 2026-10-12T06:02:37.187572487Z
 req_type: Bug
 tags:
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb4-b503-7f02-92db-c3f1400b9634
+  author: joe
+  content: |
+    [groom:night] APPROVE. Corrected the suspected cause: test_counts() is already thread-local (aida-core/src/db/cache_refresh.rs COUNTS), so shared counters are not the issue. write_attempt is only counted while holding the refresh write lock (aida-core/src/db/cache.rs with_cache_retry_observed / holding_write), so None means the reader never took that lock. The likely cause is flock contention from a sibling fork or a spent read deadline. Added a "## Acceptance" section asking for the root cause, an assertion that does not depend on lock races, and 50 stress runs.
+  created_at: 2026-10-12T06:02:37.187572487Z
+  modified_at: 2026-10-12T06:02:37.187572487Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
   branch: main
