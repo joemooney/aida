@@ -2,17 +2,28 @@ id: 01a12c2f-c425-7b62-a0b2-f5be7fc3287e
 spec_id: BUG-1971
 agreed_id: BUG-1971
 title: 'BUG-1928 follow-ups: run the real-claude boundary test once; announcement vs rule path on symlinks; cwd fallback outside git; resume path ignores its worktree'
-description: 'Non-blocking findings from the advisor review of PR #2534 (BUG-1928). (1) real_claude_contained_session_write_boundary has never run. Run AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib real_claude_contained once and post the result on BUG-1928, BEFORE BUG-1929 extends this boundary. The harness test checks the rules against a matcher written by the same author, so only the real run proves Claude Code''s grammar agrees. (2) queue_cmd.rs ~12602 announces the boundary from lease.worktree_path (as-given plus canonical), while claude_contained_flags() builds rules from the canonical cwd, so on a symlinked worktree path the two disagree (fails closed). Build the flags with claude_contained_flags_for(&lease.worktree_path), or announce from headless_worktree_root(). (3) headless_worktree_root() (session.rs ~1251) falls back to cwd when no git root is found, which could be $HOME; return no roots instead. (4) spawn_claude_headless_resume (session.rs ~4442) ignores its worktree argument; pass it to claude_contained_flags_for. Acceptance: (1)''s result posted; unit tests for (2)-(4).'
+description: |
+  Non-blocking findings from the advisor review of PR #2534 (BUG-1928). (1) real_claude_contained_session_write_boundary has never run. Run AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib real_claude_contained once and post the result on BUG-1928, BEFORE BUG-1929 extends this boundary. The harness test checks the rules against a matcher written by the same author, so only the real run proves Claude Code's grammar agrees. (2) queue_cmd.rs ~12602 announces the boundary from lease.worktree_path (as-given plus canonical), while claude_contained_flags() builds rules from the canonical cwd, so on a symlinked worktree path the two disagree (fails closed). Build the flags with claude_contained_flags_for(&lease.worktree_path), or announce from headless_worktree_root(). (3) headless_worktree_root() (session.rs ~1251) falls back to cwd when no git root is found, which could be $HOME; return no roots instead. (4) spawn_claude_headless_resume (session.rs ~4442) ignores its worktree argument; pass it to claude_contained_flags_for. Acceptance: (1)'s result posted; unit tests for (2)-(4).
+
+  ## Acceptance
+
+  (groom:night, 2026-10-11: verified on origin/main 17ff749954. Item 1's one-off run is DONE per the advisor (see BUG-1928); items 2-4 and the new item-1 HOME fix remain open. The advisor's warm-pool question is NOT in this bug's scope; see comment.)
+
+  1. `real_claude_contained_session_write_boundary` sets `HOME` on the claude child Command only to the operator's real home, taken from the `AIDA_LIB_TEST_REAL_HOMES` fence via a dedicated accessor in test_home.rs. `AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib real_claude_contained` passes with no wrapper (result posted on this spec).
+  2. The queue-work boundary announcement and the contained flags derive from the same root (either build flags with `claude_contained_flags_for(&lease.worktree_path)` or announce from `headless_worktree_root()`). Unit test: for a symlinked worktree path, announced roots equal the roots in the generated settings.
+  3. `headless_worktree_root()` (or a contained-flags variant of it) yields no write roots when no git root is found, instead of falling back to cwd. Unit test outside a git repo.
+  4. `spawn_claude_headless_resume` builds its contained flags from its `cwd` worktree argument (`claude_contained_flags_for(cwd)`), not the process cwd. Unit test on the resume argv.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-11T20:14:33.495324529Z
+modified_at: 2026-10-12T06:00:21.993313876Z
 req_type: Bug
 tags:
 - contained
 - follow-up:advisor-review
+- groomed:night
 - sandbox
 comments:
 - id: 01a12c64-d487-7803-b1bb-2e20a4354b6d
