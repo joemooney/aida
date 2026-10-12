@@ -45,6 +45,12 @@ sites = 2
 channels = ["probe"]
 sites = 1
 
+# burndown config: verbose, ready-order and bg-wait-ceiling knobs, each read
+# from the project copy and then ~/.aida (policy values only).
+[readers."aida-cli-lib/src/burndown_run.rs"]
+channels = ["worktree", "home"]
+sites = 6
+
 [readers."aida-cli-lib/src/bypass_confirm.rs"]
 channels = ["home"]
 sites = 1
@@ -206,7 +212,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 16
+sites = 10
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]

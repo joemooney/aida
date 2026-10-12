@@ -389,14 +389,15 @@ mod task_1244_drain_merge_lease_tests {
     #[test]
     fn drain_merge_and_wave_merge_take_the_merge_lease() {
         let src = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
             include_str!("lib_part3.rs"),
             include_str!("lib_part4.rs"),
             include_str!("lib_part5.rs"),
-            include_str!("lib_part6.rs")
+            include_str!("lib_part6.rs"),
+            include_str!("burndown_run.rs")
         );
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
