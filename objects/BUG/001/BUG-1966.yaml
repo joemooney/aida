@@ -17,11 +17,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:15.246332312Z
-modified_at: 2026-10-12T06:01:36.694390179Z
+modified_at: 2026-10-12T06:01:40.808672122Z
 req_type: Bug
 tags:
 - groom:approve
 - groomed:night
+comments:
+- id: 01a12eb3-d8c8-7ce2-9bcb-59c2a5e10dae
+  author: joe
+  content: |
+    [groom:night] APPROVE. Added the second failure mode found in /tmp/libsplit/test-plan_intent.fail1.log (line 228 "missed holder gate" from the sibling clone; the command failed without printing the drain-lock gate, 77 s runtime). The old acceptance clause "or its fixture step reports why it failed" is already true: ok() prints stdout and stderr. I replaced it with: name both causes, fix production if the gate can be skipped under load, otherwise make the fixture deterministic, then 20 stress runs.
+  created_at: 2026-10-12T06:01:40.808672122Z
+  modified_at: 2026-10-12T06:01:40.808672122Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
