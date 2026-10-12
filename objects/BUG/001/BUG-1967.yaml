@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:37.738378336Z
-modified_at: 2026-10-12T06:01:51.248389314Z
+modified_at: 2026-10-12T14:51:12.311833916Z
 req_type: Bug
 tags:
 - groom:approve
@@ -24,6 +24,12 @@ comments:
   created_at: 2026-10-12T06:01:51.248389314Z
   modified_at: 2026-10-12T06:01:51.248389314Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13098-a437-77f3-b694-876a222598c9
+  author: joe
+  content: '[groom:night] Note added after BUG-1956 merged (d57f76a277, #2552, 2026-10-12 05:48). The reported 26.2 s matches the ~25.5 s SQLite retry ladder that #2552 now caps for budgeted reads such as show. The overrun may have been the ladder rather than generic load. #2552 did not touch aida-cli/tests/bug_1674_show_bounded_under_writer.rs, so this stays APPROVE. First implementation step: re-run the test under load on current main; if it holds, close as completed citing #2552 instead of changing the timing assertion.'
+  created_at: 2026-10-12T14:51:12.311833916Z
+  modified_at: 2026-10-12T14:51:12.311833916Z
+  session_id: 5b9fd23c-85f8-4544-821c-3c769b4609b6
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
