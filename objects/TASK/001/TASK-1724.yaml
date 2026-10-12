@@ -2,17 +2,27 @@ id: 01a12adc-d62b-7bd1-b936-c1b51cf46e38
 spec_id: TASK-1724
 agreed_id: TASK-1724
 title: 'ADR-9 engine-caller guard: scope whole-file allowlist entries so production calls in an allowlisted file are still caught'
-description: 'aida-cli-lib/tests/adr9_one_engine_guardrail.rs exempts entire files via ENGINE_CALLER_ALLOWLIST. The STORY-1488 split (run 7, TASK-1538) added src/upgrade_release.rs, because its #[cfg(all(test, unix))] mod bug_1265_finish_ci_tests drives orchestrate_with_resume. Before the split, that code was exempt through the lib_part*→lib.rs normalisation, so coverage is unchanged. But any future production engine call in upgrade_release.rs (and likewise in lib.rs) would now pass unnoticed. Acceptance: the guard distinguishes test code from production (e.g. skip #[cfg(test)] mod bodies, or pin an expected production-call count per allowlisted file, with upgrade_release.rs = 0), plus a negative test showing an injected production call in an allowlisted test-only file fails the guard. Do after the lib.rs split completes, to avoid churn on the protocol.'
+description: |
+  aida-cli-lib/tests/adr9_one_engine_guardrail.rs exempts entire files via ENGINE_CALLER_ALLOWLIST. The STORY-1488 split (run 7, TASK-1538) added src/upgrade_release.rs, because its #[cfg(all(test, unix))] mod bug_1265_finish_ci_tests drives orchestrate_with_resume. Before the split, that code was exempt through the lib_part*→lib.rs normalisation, so coverage is unchanged. But any future production engine call in upgrade_release.rs (and likewise in lib.rs) would now pass unnoticed. Acceptance: the guard distinguishes test code from production (e.g. skip #[cfg(test)] mod bodies, or pin an expected production-call count per allowlisted file, with upgrade_release.rs = 0), plus a negative test showing an injected production call in an allowlisted test-only file fails the guard. Do after the lib.rs split completes, to avoid churn on the protocol.
+
+  ## Acceptance
+
+  (groom:night, 2026-10-11: re-checked on origin/main 17ff749954. lib.rs and the remaining lib_part*.rs files are NOT allowlisted any more, so they are already fully guarded; only src/upgrade_release.rs is a whole-file test-only exemption. The lib.rs split is still in progress but does not touch this guard test.)
+
+  1. adr9_one_engine_guardrail.rs no longer exempts upgrade_release.rs wholesale: it either skips `#[cfg(test)]`/`#[cfg(all(test, ...))]` mod bodies when counting production calls, or pins an expected production-call count per allowlisted file (upgrade_release.rs = 0).
+  2. Negative test: feeding the counter a source string with an engine call outside a `#[cfg(test)]` mod in an allowlisted test-only file is reported as an offender; a call inside the test mod is not.
+  3. The existing guard test still passes on the current tree.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-11T12:07:58.251995249Z
+modified_at: 2026-10-12T06:01:34.765702306Z
 req_type: Task
 tags:
 - adr-9
 - found:night-2026-10-10
+- groomed:night
 - guardrail
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
