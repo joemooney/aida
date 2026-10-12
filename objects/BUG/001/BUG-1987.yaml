@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T15:42:31.455528554Z
+modified_at: 2026-10-12T19:32:46.310077811Z
 req_type: Bug
 tags:
 - ci
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-10-12T08:06:12.991723487Z
   modified_at: 2026-10-12T08:06:12.991723487Z
   session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
+- id: 01a1319a-6c66-7f70-b1e5-2f08e16dd4a0
+  author: joe
+  content: 'NIGHT READY: PR #2561 green at 89d49d22f4ed33558e2dac2af9211362eae6ece8. Fresh re-review APPROVE: Drop now unlocks before close; the settle/registry workaround is removed; both new tests fail without the fix, and the BUG-1974 race test still reproduces. Non-blocking nits: the serve_locked doc parenthetical placement, and a <500ms timing assert in bug_1987_serve_locked_returns_a_pre_lock_error_at_once that could flake on a loaded host.'
+  created_at: 2026-10-12T19:32:46.310077811Z
+  modified_at: 2026-10-12T19:32:46.310077811Z
+  session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
 history:
 - id: 01a13096-4bf6-71c3-bfe3-cd65eef8c990
   author: joe
