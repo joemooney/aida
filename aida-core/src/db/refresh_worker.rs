@@ -143,14 +143,27 @@ pub fn spawn_detached_worker(store_root: &Path, cache_path: &Path) -> std::io::R
             .create(true)
             .append(true)
             .open(refresh_request::refresh_log_path(cache_path))?;
+        // The worker outlives its spawner, so it must not inherit the
+        // spawner's cwd: when that is a session worktree, the worker would
+        // show up as a live process using the tree and block its removal.
+        // Run it from the filesystem root, with absolute paths so the move
+        // cannot change what the arguments refer to. trace:BUG-1947 | ai:claude
+        let store_root = std::path::absolute(store_root)?;
+        let cache_path = std::path::absolute(cache_path)?;
+        let neutral_cwd = store_root
+            .ancestors()
+            .last()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(std::env::temp_dir);
         let mut cmd = Command::new(std::env::current_exe()?);
         cmd.arg("cache")
             .arg("refresh")
             .arg("--worker")
             .arg("--store")
-            .arg(store_root)
+            .arg(&store_root)
             .arg("--cache")
-            .arg(cache_path)
+            .arg(&cache_path)
+            .current_dir(neutral_cwd)
             .env("AIDA_CACHE_WORKER", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))

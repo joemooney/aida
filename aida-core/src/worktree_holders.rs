@@ -32,11 +32,11 @@
 //!    shell that ran it, the agent that ran the shell, and so on up to init);
 //! 2. descendants of `T`, the *highest* ancestor in the unbroken run (starting
 //!    at this process) whose cwd is inside the worktree, but ONLY those whose
-//!    session id (`/proc/<pid>/stat` field 6) is the caller's own session or
-//!    `T`'s session. When an agent was started in the worktree and ends its
-//!    own session, its helpers (MCP servers, language servers) were forked by
-//!    the agent and share its session, so they are part of the session being
-//!    ended.
+//!    session id (`/proc/<pid>/stat` field 6) is the session of some process
+//!    on the chain from the caller up to `T`. That covers the caller's own
+//!    shell and its background jobs (the shell's session), and the agent that
+//!    ran the shell together with its helpers (MCP servers, language servers),
+//!    which the agent forked into its own session.
 //!
 //! The session bound keeps a terminal multiplexer or editor that was started
 //! in the worktree from exempting everything under it. A tmux server calls
@@ -45,11 +45,14 @@
 //! SIBLING pane or terminal is therefore in a different session from both the
 //! caller and `T`, so it still counts as a holder. Claude Code's Bash tool
 //! also runs every command under `setsid`: the tool shell leads its own
-//! session, while the agent stays in the session it was started in. That is
-//! why `T`'s session is exempt as well as the caller's. Without it, the
-//! agent's own MCP servers would block it from ending its own session. A
-//! background command the agent started from a separate tool call has its own
-//! session, so it DOES block; stop it first, or pass the override flag.
+//! session, while the agent stays in the session it was started in, and a
+//! daemonized agent sits under a pty host that has a session of its own. That
+//! is why every session on the chain is exempt, not just the caller's and
+//! `T`'s. Without that, the agent's own MCP servers would block it from
+//! ending its own session. A sibling pane is never on the caller's chain, so
+//! its session stays counted. A background command the agent started from a
+//! separate tool call has its own session, so it DOES block; stop it first,
+//! or pass the override flag.
 //!
 //! The run must be unbroken: an orchestrator whose cwd is the main checkout
 //! does not pass the exemption to the implementers it spawned into other
@@ -66,9 +69,16 @@
 //! A single unreadable entry (another user's process, or one that exited
 //! mid-scan) is skipped. It cannot be attributed, and refusing on it would
 //! block every removal on a busy machine. The scan as a WHOLE is
-//! "unverified" when `/proc` itself cannot be listed, or when the caller
-//! cannot see its own pid there (a pid namespace or a `hidepid` mount hides
-//! other processes). [`check_worktree_removal`], which every bulk or
+//! "unverified" when `/proc` itself cannot be listed, when the caller
+//! cannot see its own pid there (a `/proc` belonging to another pid
+//! namespace, or a restricted mount), or when the caller runs in a pid
+//! namespace other than the host's. The last is read from the inode of
+//! `/proc/<self>/ns/pid`: the kernel reserves a fixed inode for the initial
+//! namespace, and that is the one signal that still holds when the namespace
+//! mounts its own `/proc` (there it looks complete and `NSpid` shows a single
+//! level). A `hidepid` mount that still shows the caller's own pid is NOT
+//! detected; other users' processes are then skipped like any unreadable
+//! entry. [`check_worktree_removal`], which every bulk or
 //! automatic path uses, treats an unverified scan as a refusal, so those
 //! paths keep the tree. [`check_worktree_removal_interactive`], used when an
 //! operator ends one session by name, warns and proceeds.
@@ -309,6 +319,10 @@ pub fn scan_holders_in(
         ));
     }
 
+    if let Some(why) = separate_pid_namespace(proc_root, self_pid) {
+        return Err(why);
+    }
+
     // The ppid/session maps cover every visible process, so subtree
     // membership can be decided without a second pass over /proc.
     let mut ppid: BTreeMap<u32, u32> = BTreeMap::new();
@@ -325,18 +339,23 @@ pub fn scan_holders_in(
     let excluded: BTreeSet<u32> = chain.iter().copied().collect();
 
     // Rule 2: T is the highest ancestor in the unbroken in-worktree run from
-    // self. Only T's descendants in the caller's session or T's session are
-    // exempt (see the module docs for why both sessions).
+    // self. Only T's descendants in a session that some process on the chain
+    // from self up to T belongs to are exempt (see the module docs).
     let mut subtree_root: Option<u32> = None;
+    let mut run_len = 0usize;
     for &pid in &chain {
         match read_link(proc_root, pid, "cwd") {
-            Some(cwd) if inside(&cwd) => subtree_root = Some(pid),
+            Some(cwd) if inside(&cwd) => {
+                subtree_root = Some(pid);
+                run_len += 1;
+            }
             _ => break,
         }
     }
-    let exempt_sessions: BTreeSet<u32> = subtree_root
+    // Self is always in its own session's set, even when its cwd is outside
+    // (then there is no T and nothing below is exempt anyway).
+    let exempt_sessions: BTreeSet<u32> = chain[..run_len.max(1)]
         .iter()
-        .chain(std::iter::once(&self_pid))
         .filter_map(|p| sid.get(p).copied())
         .collect();
 
@@ -360,6 +379,35 @@ pub fn scan_holders_in(
         }
     }
     Ok(holders)
+}
+
+/// Inode of the initial (host) pid namespace. The kernel reserves it
+/// (`PROC_PID_INIT_INO` in `include/linux/proc_ns.h`); every other pid
+/// namespace gets a dynamically allocated inode, which never equals it.
+const INITIAL_PID_NAMESPACE_INODE: u64 = 0xEFFF_FFFC;
+
+/// `Some(reason)` when this process runs in a pid namespace other than the
+/// host's. Processes outside the namespace (a host-side build in a
+/// bind-mounted worktree) are then invisible, even though `/proc` looks
+/// complete: a namespace that mounts its own `/proc` sees itself as pid 1's
+/// world, and `NSpid` in its status file shows only one level. The namespace
+/// link's inode is the one signal that holds there. A missing or unparsable
+/// link (a kernel without pid namespaces, or a test's fake `/proc`) gives no
+/// signal, so the scan proceeds.
+// trace:BUG-1947 | ai:claude
+fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
+    let link =
+        std::fs::read_link(proc_root.join(self_pid.to_string()).join("ns").join("pid")).ok()?;
+    let inode: u64 = link
+        .to_str()?
+        .strip_prefix("pid:[")?
+        .strip_suffix(']')?
+        .parse()
+        .ok()?;
+    (inode != INITIAL_PID_NAMESPACE_INODE).then(|| {
+        "this process runs in a separate pid namespace, so processes outside it are hidden"
+            .to_string()
+    })
 }
 
 /// `pid` followed by its ancestors, nearest first, bounded in depth.
@@ -619,6 +667,54 @@ mod tests {
         fake.add_in(300, 300, 100, "cargo test", &wt); // separate tool call
         let h = scan_holders_in(&fake.root, &wt, 201).unwrap();
         assert_eq!(pids(&h), vec![300]);
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn daemonized_agent_keeps_its_own_helpers_and_jobs_exempt() {
+        // Claude Code in daemon mode: a pty host started in the worktree leads
+        // its own session, the agent under it leads ANOTHER, and each tool
+        // shell is setsid'd. T is the pty host, so exempting only the
+        // caller's and T's sessions would count the agent's own MCP server.
+        let (_t, fake, wt, outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add_in(5, 5, 1, "claude daemon", &outside);
+        fake.add_in(50, 50, 5, "bg-pty-host", &wt); // T
+        fake.add_in(100, 100, 50, "claude", &wt);
+        fake.add_in(100, 110, 100, "aida mcp-serve", &wt); // agent helper
+        fake.add_in(200, 200, 100, "bash -c", &wt); // tool shell
+        fake.add_in(200, 201, 200, "aida session end", &wt); // self
+        fake.add_in(200, 202, 200, "tail -f log", &wt); // shell's bg job
+        fake.add_in(300, 300, 100, "cargo test", &wt); // separate tool call
+        fake.add_in(600, 600, 5, "other agent", &wt); // not under T
+        fake.add_in(700, 700, 50, "detached build", &wt); // under T, own sid
+        let h = scan_holders_in(&fake.root, &wt, 201).unwrap();
+        assert_eq!(pids(&h), vec![300, 600, 700]);
+    }
+
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn a_separate_pid_namespace_is_unverified_but_the_host_namespace_is_not() {
+        let (_t, fake, wt, _outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        let me = fake.add(200, 1, "aida session reap", &wt);
+        std::fs::create_dir_all(me.join("ns")).unwrap();
+
+        // Host namespace: the kernel's reserved inode.
+        symlink("pid:[4026531836]", me.join("ns").join("pid")).unwrap();
+        assert!(scan_holders_in(&fake.root, &wt, 200).unwrap().is_empty());
+
+        // A container that mounted its own /proc: pid list looks complete,
+        // but the namespace inode is a dynamically allocated one.
+        std::fs::remove_file(me.join("ns").join("pid")).unwrap();
+        symlink("pid:[4026533285]", me.join("ns").join("pid")).unwrap();
+        let err = scan_holders_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(err.contains("separate pid namespace"), "{err}");
+
+        // Unparsable link: no signal, scan proceeds.
+        std::fs::remove_file(me.join("ns").join("pid")).unwrap();
+        symlink("garbage", me.join("ns").join("pid")).unwrap();
+        assert!(scan_holders_in(&fake.root, &wt, 200).is_ok());
     }
 
     // trace:BUG-1947 | ai:claude

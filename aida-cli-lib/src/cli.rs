@@ -1651,8 +1651,9 @@ pub enum SessionCommand {
         ///      or running program inside it, e.g. a cargo build). Without
         ///      this, `session end` refuses and names each pid and command.
         ///      Those processes are not killed. Your own shell, its
-        ///      parents, and the helpers of the agent you are ending from
-        ///      are never counted.
+        ///      parents and background jobs, and the helpers of the agent
+        ///      you are ending from (such as its MCP server) are never
+        ///      counted.
         ///   3. Discard uncommitted tracked/untracked-but-not-ignored
         ///      changes in the worktree. Without this, `session end`
         ///      refuses and prints the dirty file list. Gitignored

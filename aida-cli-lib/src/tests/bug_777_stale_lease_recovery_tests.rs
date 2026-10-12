@@ -253,6 +253,10 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         dirty: Vec::new(),
         worktree_exists: true,
         in_use: None,
+
+        base_verdict: StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: false,
+        },
     };
     assert!(
         clean.worktree_state_phrase().contains("CLEAN"),
@@ -265,6 +269,8 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         dirty: vec![" M src/a.rs".into(), "?? src/b.rs".into()],
         worktree_exists: true,
         in_use: None,
+
+        base_verdict: StaleLeaseRecovery::StaleDirty { dirty_entries: 2 },
     };
     let phrase = dirty.worktree_state_phrase();
     assert!(phrase.contains("DIRTY"), "got: {phrase}");
@@ -280,6 +286,10 @@ fn worktree_state_phrase_reports_clean_dirty_or_missing() {
         dirty: Vec::new(),
         worktree_exists: false,
         in_use: None,
+
+        base_verdict: StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: true,
+        },
     };
     assert!(
         gone.worktree_state_phrase().contains("GONE"),
@@ -297,6 +307,8 @@ fn dirty_sample_is_bounded_and_reports_the_overflow() {
         dirty: (0..9).map(|i| format!("?? f{i}.rs")).collect(),
         worktree_exists: true,
         in_use: None,
+
+        base_verdict: StaleLeaseRecovery::StaleDirty { dirty_entries: 9 },
     };
     let sample = report.dirty_sample();
     assert!(sample.contains("f0.rs"));
@@ -490,11 +502,15 @@ fn implementer_retry_reprobes_live_predecessor_then_reclaims_after_death() {
         "STORY-993",
         3,
         std::time::Duration::from_millis(7),
-        |_| StaleLeaseRecoveryReport {
-            verdict: verdicts.pop().expect("expected a scripted verdict"),
-            dirty: Vec::new(),
-            worktree_exists: true,
-            in_use: None,
+        |_| {
+            let verdict = verdicts.pop().expect("expected a scripted verdict");
+            StaleLeaseRecoveryReport {
+                base_verdict: verdict.clone(),
+                verdict,
+                dirty: Vec::new(),
+                worktree_exists: true,
+                in_use: None,
+            }
         },
         |delay| sleeps.push(delay),
     )
@@ -534,6 +550,8 @@ fn implementer_retry_refuses_when_predecessor_stays_live_after_reprobes() {
             dirty: Vec::new(),
             worktree_exists: true,
             in_use: None,
+
+            base_verdict: StaleLeaseRecovery::Live,
         },
         |delay| sleeps.push(delay),
     )
@@ -839,4 +857,64 @@ fn bug_1947_a_worktree_a_live_process_uses_is_never_auto_released() {
     )
     .expect("dead, clean, unheld predecessor is released");
     assert!(!lease_file.exists());
+}
+
+/// BUG-1947: the implementer phase-1 retry only drops the dead predecessor's
+/// lease RECORD and relaunches into the very same worktree; nothing is removed
+/// or reset. So a process attempt 1 left running there (an orphaned
+/// `cargo test`) must not turn the retry into a lease conflict. The in-use
+/// override still makes the report's `verdict` Live for destructive paths;
+/// the retry judges the predecessor by `base_verdict`.
+// trace:BUG-1947 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_1947_implementer_retry_reclaims_a_dead_predecessor_despite_an_orphaned_process() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-1947-orphan");
+    std::fs::write(worktree.path().join("attempt1.rs"), "// wip\n").unwrap();
+    let mut lease = lease_at(worktree.path(), 3600, Some(reaped_pid()), None);
+    lease.id = "019f1947orph".to_string();
+    lease.scope = "STORY-1947".to_string();
+    lease.slug = "story-1947".to_string();
+    lease.branch = "story-1947-orphan".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let orphan = KillOnDrop(
+        std::process::Command::new("sleep")
+            .arg("600")
+            .current_dir(worktree.path())
+            .spawn()
+            .expect("spawn sleep"),
+    );
+
+    let report = stale_lease_recovery_for_lease(&lease);
+    assert_eq!(report.verdict, StaleLeaseRecovery::Live, "destructive view");
+    assert!(
+        matches!(report.base_verdict, StaleLeaseRecovery::StaleDirty { .. }),
+        "owner-liveness view: {:?}",
+        report.base_verdict
+    );
+
+    let mut sleeps = Vec::new();
+    let target = reclaim_implementer_retry_predecessor_with(
+        project.path(),
+        "STORY-1947",
+        2,
+        std::time::Duration::from_millis(1),
+        stale_lease_recovery_for_lease,
+        |delay| sleeps.push(delay),
+    )
+    .expect("an orphaned process must not block the record-only reclaim")
+    .expect("retry should return the predecessor branch/worktree");
+
+    assert_eq!(target.0, "story-1947-orphan");
+    assert_eq!(target.1, worktree.path());
+    assert!(sleeps.is_empty(), "no liveness re-probe was needed");
+    assert!(!lease_path(project.path(), &lease.id).exists());
+    assert!(
+        worktree.path().join("attempt1.rs").exists(),
+        "attempt-1 work is reused in place, never reset"
+    );
+    drop(orphan);
 }

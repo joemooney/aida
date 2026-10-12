@@ -8519,6 +8519,13 @@ pub(crate) struct StaleLeaseRecoveryReport {
     /// verified free), when it is. Forces the verdict to `Live`.
     // trace:BUG-1947 | ai:claude
     pub(crate) in_use: Option<String>,
+    /// The verdict before the in-use override: what the lease's own owner
+    /// liveness and worktree state say. Only non-destructive recovery that
+    /// keeps the worktree untouched (the implementer retry reusing the same
+    /// tree) may act on it; anything that removes or resets a tree must use
+    /// `verdict`.
+    // trace:BUG-1947 | ai:claude
+    pub(crate) base_verdict: StaleLeaseRecovery,
 }
 
 impl StaleLeaseRecoveryReport {
@@ -8587,8 +8594,9 @@ pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLease
     } else {
         Vec::new()
     };
-    let mut verdict =
+    let base_verdict =
         classify_stale_lease_recovery(lease_state, owner_gone, worktree_exists, dirty.len());
+    let mut verdict = base_verdict.clone();
     // A tree a live process is using (or one the scan could not verify) is
     // occupied, so it is never recoverable, even when the recorded owner is
     // dead. trace:BUG-1947 | ai:claude
@@ -8607,6 +8615,7 @@ pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLease
         dirty,
         worktree_exists,
         in_use,
+        base_verdict,
     }
 }
 
@@ -8738,7 +8747,12 @@ pub(crate) fn reclaim_implementer_retry_predecessor_with(
             return Ok(None);
         };
         let report = recovery_for_lease(&conflict);
-        match report.verdict {
+        // This retry only drops the lease RECORD and relaunches into the same
+        // worktree — nothing is removed or reset — so a live process still in
+        // the tree (an orphaned `cargo test` from attempt 1) must not block it.
+        // Judge the predecessor by its own owner liveness, not the in-use
+        // override. trace:BUG-1947 | ai:claude
+        match report.base_verdict {
             StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
                 if !remove_session_lease_record_only(project_root, &conflict.id) {
                     return Err(auto_complete::PhaseFailure::of(

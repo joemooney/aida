@@ -515,8 +515,17 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         //    tree must be clean; a stale-expired lease is reset regardless of
         //    dirtiness (the dead session's uncommitted changes are abandoned),
         //    so a leaked dirty reservation can't pin the tree forever.
+        //
+        //    An expired lease's `owner_pid` is the short-lived `session start`,
+        //    so "owner dead" does not mean the session is gone: its agent or
+        //    build may still be running in the tree. A tree a live process is
+        //    using (or one the process scan could not verify) is never
+        //    reclaimed or reset here, idle or expired. trace:BUG-1947 | ai:claude
         let idle_idx = pool.entries.iter().position(|e| {
             if e.destroying || !e.path.exists() {
+                return false;
+            }
+            if crate::worktree_holders::check_worktree_removal(&e.path).is_err() {
                 return false;
             }
             if e.is_lease_expired(now, lease_ttl) {
@@ -528,6 +537,10 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
 
         if let Some(idx) = idle_idx {
             let path = pool.entries[idx].path.clone();
+            // An expired reservation may still hold the dead session's
+            // uncommitted work; save it before the reset, exactly as a return
+            // does. trace:BUG-1947 | ai:claude
+            salvage_dirty_before_reset(project_root, &path);
             git_ops::reset_worktree_to(&path, &base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display()))?;
             git_ops::ensure_aida_runtime_excluded(&path)
@@ -588,6 +601,33 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
     })
 }
 
+/// Save a dirty pooled tree's uncommitted diff to `.aida/salvage/` before it
+/// is reset. Best-effort: a salvage failure is reported, never fatal, because
+/// the tree still has to reset to be reusable.
+// trace:BUG-660 trace:BUG-1947 | ai:claude
+fn salvage_dirty_before_reset(project_root: &Path, path: &Path) {
+    if !git_ops::worktree_is_dirty(path) {
+        return;
+    }
+    let salvage_dir = project_root.join(".aida").join("salvage");
+    let label = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "worktree".to_string());
+    match git_ops::preserve_dirty_worktree(path, &salvage_dir, &label) {
+        Ok(Some(saved)) => eprintln!(
+            "  preserved uncommitted work from {} to {} before reset",
+            path.display(),
+            saved.display()
+        ),
+        Ok(None) => {}
+        Err(e) => eprintln!(
+            "  warning: could not salvage uncommitted work from {} before reset: {e}",
+            path.display()
+        ),
+    }
+}
+
 fn stamp_acquired(entry: &mut PoolEntry, opts: &AcquireOptions) {
     entry.owner_pid = Some(std::process::id() as i32);
     entry.owner_started_at = Some(now_ts());
@@ -634,25 +674,7 @@ pub fn return_to_pool(project_root: &Path, worktree_path: &Path) -> Result<()> {
         // be inspected/replayed. Best-effort: a salvage failure must not block
         // the return (the tree still needs to reset to be reusable).
         // trace:BUG-660 | ai:claude
-        if git_ops::worktree_is_dirty(&path) {
-            let salvage_dir = project_root.join(".aida").join("salvage");
-            let label = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "worktree".to_string());
-            match git_ops::preserve_dirty_worktree(&path, &salvage_dir, &label) {
-                Ok(Some(saved)) => eprintln!(
-                    "  preserved uncommitted work from {} to {} before reset",
-                    path.display(),
-                    saved.display()
-                ),
-                Ok(None) => {}
-                Err(e) => eprintln!(
-                    "  warning: could not salvage uncommitted work from {} before reset: {e}",
-                    path.display()
-                ),
-            }
-        }
+        salvage_dirty_before_reset(project_root, &path);
         git_ops::reset_worktree_to(&path, &base_ref)
             .with_context(|| format!("reset returned worktree {}", path.display()))?;
         let e = &mut pool.entries[idx];
@@ -1364,6 +1386,97 @@ mod git_integration_tests {
             err.to_string().contains("pool is full"),
             "fresh lease must stay reserved; got: {err}"
         );
+    }
+
+    /// Lease a pooled tree, then make it look like a session whose
+    /// `session start` process exited hours ago: dead owner, ancient lease.
+    fn expired_lease_fixture(root: &Path) -> PathBuf {
+        let leasing = AcquireOptions {
+            max_trees: Some(1),
+            lease_holder: Some("long-running-session".into()),
+            ..Default::default()
+        };
+        let p = acquire(root, &leasing).unwrap();
+        with_state_lock(root, |pool| {
+            pool.entries[0].owner_pid = None;
+            pool.entries[0].owner_started_at = None;
+            pool.entries[0].leased_at = Some(1);
+            Ok(())
+        })
+        .unwrap();
+        p
+    }
+
+    fn reclaiming_opts() -> AcquireOptions {
+        AcquireOptions {
+            max_trees: Some(1),
+            lease_ttl_secs: Some(1),
+            ..Default::default()
+        }
+    }
+
+    /// BUG-1947: an expired pooled lease only means the short-lived
+    /// `session start` exited. If a live process (the session's agent, a
+    /// build) is still inside the tree, acquire must NOT reset it out from
+    /// under that process. With a cap of 1 it reports the pool full instead.
+    // trace:BUG-1947 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn acquire_does_not_reclaim_an_expired_lease_a_live_process_is_using() {
+        struct KillOnDrop(std::process::Child);
+        impl Drop for KillOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("wip.txt"), "in progress\n").unwrap();
+        let live = KillOnDrop(
+            std::process::Command::new("sleep")
+                .arg("600")
+                .current_dir(&p1)
+                .spawn()
+                .unwrap(),
+        );
+
+        let err = acquire(root, &reclaiming_opts()).unwrap_err();
+        assert!(err.to_string().contains("pool is full"), "got: {err}");
+        assert!(
+            p1.join("wip.txt").exists(),
+            "tree must not be reset/cleaned"
+        );
+        let pool = read_state(root).unwrap();
+        assert!(pool.entries[0].leased, "reservation must survive");
+        assert_eq!(
+            pool.entries[0].lease_holder.as_deref(),
+            Some("long-running-session")
+        );
+
+        // Once the process is gone the reservation is reclaimable again.
+        drop(live);
+        assert_eq!(acquire(root, &reclaiming_opts()).unwrap(), p1);
+    }
+
+    /// BUG-1947: reclaiming an expired, dirty reservation saves its
+    /// uncommitted work to `.aida/salvage/` before the reset, as a return does.
+    // trace:BUG-1947 | ai:claude
+    #[test]
+    fn acquire_salvages_a_dirty_expired_lease_before_resetting_it() {
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = expired_lease_fixture(root);
+        std::fs::write(p1.join("wip.txt"), "abandoned work\n").unwrap();
+
+        assert_eq!(acquire(root, &reclaiming_opts()).unwrap(), p1);
+        assert!(!p1.join("wip.txt").exists(), "tree was reset");
+        let salvaged: Vec<_> = std::fs::read_dir(root.join(".aida").join("salvage"))
+            .expect("salvage dir created")
+            .flatten()
+            .collect();
+        assert!(!salvaged.is_empty(), "the dirty diff must be salvaged");
     }
 
     /// The full session lifecycle the warm-pool relies on: acquire a detached
