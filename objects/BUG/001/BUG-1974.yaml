@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:46:33.091000129Z
-modified_at: 2026-10-12T05:47:27.104065389Z
+modified_at: 2026-10-12T07:16:26.412482116Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-10-11T18:46:46.833059565Z
   modified_at: 2026-10-11T18:46:46.833059565Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ef8-4aac-71a3-882b-5c2a29993d30
+  author: joe
+  content: 'NIGHT READY: PR #2549 green at 60617474c845739c06f75e47d9c11ccaebfa1e92. Root cause: the history index flock is inherited by a git child that another test thread is spawning (fork-to-exec window), so serve_at reads the lock as held and answers Ok from the fallback without consuming the injected catch-up failure. The fix is test-side: test_support::serve_locked retries only while unlocked (an unlocked call is side-effect free), plus a deterministic reproduction test. Proof: 50/50 runs of the bug_1923 module at --test-threads=16 alongside a concurrent full lib suite. Two fresh reviews: APPROVE. Follow-up race in classify_miss/is_held filed as BUG-1987.'
+  created_at: 2026-10-12T07:16:26.412482116Z
+  modified_at: 2026-10-12T07:16:26.412482116Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12c49-edab-73e0-b099-d2a277af77da
   author: joe
