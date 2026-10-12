@@ -1,0 +1,36 @@
+id: 01a1327a-613c-7681-8e9f-714e84b92f4b
+spec_id: BUG-1999
+agreed_id: BUG-1999
+title: aida dev recovery misattributes prev's record when an old-format .rollback/.promoted leftover is present
+description: |-
+  Follow-up from the BUG-1959 strict round-3 review (PR #2573, APPROVE at f90eb0aa08).
+
+  Scenario: an older binary crashes partway through a rollback (stages 1-4 of the old flow), and a binary built with BUG-1959 then recovers.
+  - Result: live is B with no record, and prev is A beside record b; record a is deleted.
+  - The old code handled stages 1 and 3 correctly, so this is a small regression for those stages.
+  - Only metadata is wrong, never a binary: after a later rollback, aida dev status would show B's sha and allow-dirty flag for A.
+
+  Fix: during recovery, if .rollback/.promoted exists:
+  - move it to .rollback/live.promoted and treat the state as marked;
+  - move prev/.promoted to .rollback/prev.promoted when live has no .promoted;
+  - then settle as usual.
+  At minimum, correct the Known limits wording.
+
+  Also from the same review:
+  - the .swapping marker is now redundant (mutating the marked guard away is an equivalent mutant), so the comments overstate it;
+  - dev_build_tests.rs:1397 has a dangling, truncated doc comment.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T23:37:23.516314035Z
+modified_at: 2026-10-12T23:37:23.516314035Z
+req_type: Bug
+filed_at:
+  code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
