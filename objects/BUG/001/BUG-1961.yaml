@@ -8,13 +8,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:14.160176187Z
-modified_at: 2026-10-12T06:01:28.551020427Z
+modified_at: 2026-10-12T06:01:32.965178991Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
 - groom:approve
 - performance
 - schedule
+comments:
+- id: 01a12eb3-ba25-7a90-a2e3-a11d4e2b9f80
+  author: joe
+  content: |
+    [groom:night] APPROVE. Root cause located: the scheduler tick path (maintenance_schedule.rs, `JobKind::Substrate` in the tick loop) applies the outcome to `staged_ledgers` and persists through schedule_ledger::write_batch_cas_opts. That function rebuilds each ledger with reapply_delta, which copies only last_run, last_by, result, note, due_since, due_reason, episode and cold_boot_at onto the freshly loaded ledger. failure_trips is not in that list, so every trip a tick appends is dropped whenever a ledger file already exists (result/last_run still update, which is exactly what was observed). The `schedule run` path uses write_cas and keeps trips, which explains the older entries. Fix: merge failure_trips in reapply_delta (append the new trips by trip_id onto the fresh list, then apply the MAX_FAILURE_TRIPS cap) and add the two-failing-ticks test from the acceptance through the tick/batch path.
+  created_at: 2026-10-12T06:01:32.965178991Z
+  modified_at: 2026-10-12T06:01:32.965178991Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
