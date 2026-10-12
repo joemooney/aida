@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1956",
+  "publishes": [
+    {
+      "at": "2026-10-12T12:48:25.788128323Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T16:33:21.798476468Z",
+      "spec": "BUG-1956",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T06:55:52.468908211Z",
+      "spec": "BUG-1956",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T10:49:31.880575092Z",
+      "spec": "BUG-1956",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1956",
+        "branch": "bug-1956-work",
+        "first_seen": "2026-10-12T10:49:31.880403556+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-12T12:48:09.250048921Z",
+      "spec": "BUG-1956",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2552,
+        "verdict": "APPROVED",
+        "reviewed_sha": "00ff2b9d40b55aee872705e8310d3d99ae77e131"
+      }
+    },
+    {
+      "ts": "2026-10-12T12:48:25.748483368Z",
+      "spec": "BUG-1956",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-12T12:48:25.748652870Z",
+      "spec": "BUG-1956",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
