@@ -7,7 +7,9 @@
 #      offline): git can still record the merge, so the old hook let it
 #      through unchecked;
 #   2. MERGE_HEAD names a commit the clone does not have at all.
-# A healthy merge still goes through.
+# A healthy merge still goes through. Then, outside a merge:
+#   3. a `diff.external` driver cannot hide new debt from the scan;
+#   4. a `git diff` killed mid-line still reports its failure.
 #
 # Drives the REAL template (aida-core/templates/hooks/aida-pre-commit.sh)
 # installed as .git/hooks/pre-commit in a throwaway repo, via real `git commit`.
@@ -123,6 +125,44 @@ assert_stderr_contains "the refusal names the failing parent" "against $MISSING 
 # The same merge with only real parents goes through.
 git rev-parse side >"$(git rev-parse --git-path MERGE_HEAD)"
 assert_exit "a merge whose parent diffs all succeed is allowed" 0 "$(commit "merge side")"
+
+# 3. A user's `diff.external` (difftastic and friends) must not replace the
+#    unified diff the scan parses: an empty external diff would hide new debt.
+printf '#!/bin/sh\nexit 0\n' >"$FAKEHOME/empty-ext-diff"
+chmod +x "$FAKEHOME/empty-ext-diff"
+git config diff.external "$FAKEHOME/empty-ext-diff"
+printf '/// trace:BUG-4251 | ai:claude\npub fn ext() {}\n' >src/ext.rs
+git add -A
+assert_exit "new debt is refused even with diff.external set" 1 "$(commit "feat: ext")"
+assert_stderr_contains "the refusal names the debt the external diff would hide" "BUG-4251"
+git config --unset diff.external
+git rm -q --cached src/ext.rs
+rm src/ext.rs
+
+# 4. A `git diff` killed mid-line: its partial last line must not swallow the
+#    failure marker, so the scan still sees the failure.
+REAL_GIT=$(command -v git)
+KILLED="$FAKEHOME/killed"
+mkdir -p "$KILLED"
+cat >"$KILLED/git" <<SHIM
+#!/bin/sh
+case " \$* " in
+    *" --unified=0 "*) printf '+pub fn partial'; exit 1 ;;
+esac
+exec "$REAL_GIT" "\$@"
+SHIM
+chmod +x "$KILLED/git"
+echo 'pub fn killed() {}' >src/killed.rs
+git add -A
+# `git commit` puts git's exec-path ahead of PATH for hooks, which would skip
+# the shim, so run the installed hook directly.
+set +e
+env -i PATH="$KILLED:$SHIMS:$PATH" HOME="$FAKEHOME" \
+    bash .git/hooks/pre-commit >/dev/null 2>"$STDERR_LOG"
+rc=$?
+set -e
+assert_exit "a git diff killed mid-line refuses the commit" 1 "$rc"
+assert_stderr_contains "the killed diff is reported as failed" "against index failed"
 
 if [ "$fail" -ne 0 ]; then
     echo "PRE-COMMIT PROVENANCE PARENT DIFF FAILURE (BUG-1933): FAILURES"

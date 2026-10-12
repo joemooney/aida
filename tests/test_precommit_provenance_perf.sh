@@ -325,6 +325,10 @@ echo 'pub fn unrelated() {}' >src/unrelated.rs
 git add -A
 git commit --no-verify -qm "feat(main): unrelated"
 git merge -q --no-ff --no-commit renamer >/dev/null 2>&1
+if ! git diff --cached -M --name-status HEAD | grep -q '^R'; then
+    echo "FAIL - setup: expected the merge to stage old_name.rs -> new_name.rs as a rename"
+    fail=1
+fi
 printf '/// trace:BUG-921 | ai:claude\npub fn added_in_resolution() {}\n' >>src/new_name.rs
 git add -A
 assert_exit "new debt in a renamed file's resolution is refused" 1 "$(commit "merge renamer")"

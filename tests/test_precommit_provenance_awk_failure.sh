@@ -93,12 +93,21 @@ assert_stderr_contains() {
 # A clean staged change: no provenance debt anywhere.
 echo 'pub fn clean() {}' >src/clean.rs
 git add -A
+base=$(git rev-parse HEAD)
+
+# Each case starts from the same staged change: undo a commit a regressed hook
+# let through, so the next case still has something to commit.
+restore() {
+    git reset -q --soft "$base"
+}
 
 assert_exit "a crashed provenance awk refuses the commit" 1 "$(commit crash "feat: clean")"
 assert_stderr_contains "the refusal says the scan did not complete" "provenance scan did not complete"
+restore
 assert_exit "a provenance scan cut short before its sentinel refuses the commit" 1 \
     "$(commit truncate "feat: clean")"
 assert_stderr_contains "the truncated scan is reported as incomplete" "provenance scan did not complete"
+restore
 
 # The healthy scan: debt is still refused, and the clean change goes through.
 cat >src/debt.rs <<'EOF'
