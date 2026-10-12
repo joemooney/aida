@@ -2024,7 +2024,8 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
 #[cfg(test)]
 thread_local! {
     static INDEX_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    /// Tests: whether this thread's last [`serve_at`] held the indexer lock.
+    /// Tests: whether this thread's last [`serve_with_budget_at`] held the
+    /// indexer lock.
     // trace:BUG-1974 | ai:claude
     static LAST_SERVE_LOCKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -2523,13 +2524,16 @@ pub(crate) mod test_support {
         opts: &HistoryOpts,
         budget: Duration,
     ) -> Result<Option<CacheAnswer>> {
+        let mut last = None;
         for _ in 0..1000 {
+            LAST_SERVE_LOCKED.with(|c| c.set(false));
             let got = serve_at(store, db_path, opts, budget);
             if LAST_SERVE_LOCKED.with(std::cell::Cell::get) {
                 return got;
             }
+            last = Some(got.map(|a| a.is_some()));
             std::thread::sleep(Duration::from_millis(1));
         }
-        panic!("the history index lock stayed held for 1000 tries");
+        panic!("serve_at never held the history index lock in 1000 tries (last: {last:?})");
     }
 }
