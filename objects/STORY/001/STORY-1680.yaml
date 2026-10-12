@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:32:57.266716488Z
-modified_at: 2026-10-12T09:08:56.871572345Z
+modified_at: 2026-10-12T09:25:02.798740117Z
 req_type: Story
 tags:
 - awaiting
@@ -46,6 +46,21 @@ comments:
     - skip git when the status change is already inside the threshold.
   created_at: 2026-10-12T09:08:56.871572345Z
   modified_at: 2026-10-12T09:08:56.871572345Z
+  session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a12f6e-08ce-7dc2-b694-7375616cd235
+  author: joe
+  content: |-
+    NIGHT READY: PR #2553 green at 10c654c568666e15d64de62622e19f87c5a5bccf
+
+    - Review history: the first fresh review was APPROVE but raised one Medium and two Low findings. The Medium was that a stale branch beat a fresh status change; the Lows were untested de-dup/wiring and git test isolation. All three are fixed, and a second fresh re-review is APPROVE: 15 story_1680 tests and 8 bug_1723 config-trust tests pass.
+    - Build is green on the first run.
+    - Non-blocking follow-ups are listed in the PR body and on the spec:
+      - hide under-threshold idle orphan rows;
+      - fix the modified_at fallback label;
+      - skip git when the status change is inside the threshold;
+      - repos whose default branch is not main or origin/main ignore branch activity.
+  created_at: 2026-10-12T09:25:02.798740117Z
+  modified_at: 2026-10-12T09:25:02.798740117Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
 history:
 - id: 01a12e52-065f-7f50-a7c3-efc49b10a544
