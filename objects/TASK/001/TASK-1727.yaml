@@ -8,13 +8,21 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:31.066998060Z
-modified_at: 2026-10-12T06:02:45.533569498Z
+modified_at: 2026-10-12T06:02:57.867661525Z
 req_type: Task
 tags:
 - follow-up:merge-relay
 - groom:approve
 - statusline
 - test-gap
+comments:
+- id: 01a12eb5-05cb-71f3-898d-6335112fa685
+  author: joe
+  content: |
+    [groom:night] APPROVE. Verified on origin/main (f5fbf0dc81, #2523): main_checkout_drift::statusline_marker is unit-tested, but nothing pins the wiring in statusline_cmd::handle_statusline_command (the rendered segment a statusline script consumes). The timing assertion in question is tests/test_session_context_drift.sh section 7 (drift probe adds under 50 ms, measured as with-minus-without means). That shell check is what should get the generous or load-aware bound plus its explanatory comment. Acceptance is otherwise testable as written.
+  created_at: 2026-10-12T06:02:57.867661525Z
+  modified_at: 2026-10-12T06:02:57.867661525Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
