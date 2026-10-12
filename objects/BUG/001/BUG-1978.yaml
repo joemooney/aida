@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:33.585661023Z
-modified_at: 2026-10-12T06:06:06.790540988Z
+modified_at: 2026-10-12T06:06:19.567921082Z
 req_type: Bug
 tags:
 - attribution
@@ -24,6 +24,14 @@ tags:
 - groomed:night
 - review
 - ux
+comments:
+- id: 01a12eb8-19af-7901-99d6-341b3c431397
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe, message-only). Still real: lib_part5.rs review_recorded_by_from returns "aida review record (operator)" when AIDA_AGENT_NAME/TYPE are unset, then require_direct_human() fails with role-enter guidance even when seat_authority::current_grant is valid. Overlap with BUG-1983: both are "a valid seat grant is not honoured", but different code paths. This one is the review-record identity and error text; BUG-1983 is has_advisor_authority (role.rs) ignoring the grant on Draft->Approved. Tightened acceptance to the message fix plus tests for both cases. Moved the "auto-export AIDA_AGENT_TYPE" idea and "grant implies identity" out of scope (authority semantics belong with BUG-1983's shared helper).
+  created_at: 2026-10-12T06:06:19.567921082Z
+  modified_at: 2026-10-12T06:06:19.567921082Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
