@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:07:55.223493475Z
-modified_at: 2026-10-12T09:04:41.824870898Z
+modified_at: 2026-10-12T10:42:43.312871165Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-10-12T09:04:41.824870898Z
   modified_at: 2026-10-12T09:04:41.824870898Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a12fb5-25f0-7dd1-a169-bdf28ad6d4aa
+  author: joe
+  content: 'Advisor, performance-guard trip triage (2026-10-12 03:45). The show ceiling was breached again: worst 30740 ms against the 5000 ms ceiling, and 18.8% of 1263 calls in 24h were over the 1000 ms budget (tolerated 10%). By binary: 95f15a20d4 48.7% of 335 (the outlier), 4cced67be8 9.7%, 97453570d6 7.8%, 9116ba7f23 4.7%. Disposition: a real regression, owned by this spec (PR #2552, under review). Budget unchanged per ADR-53. After #2552 merges and the live binary is promoted, the 24h window should age out the old lineages; if 95f15a20d4-class proportions persist on the new binary, reopen. Also check why 95f15a20d4 alone sits at ~49%.'
+  created_at: 2026-10-12T10:42:43.312871165Z
+  modified_at: 2026-10-12T10:42:43.312871165Z
+  session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
 history:
 - id: 01a12bcf-cb9a-74f0-9d98-21e0a6befc37
   author: joe
