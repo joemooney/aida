@@ -47,6 +47,7 @@ fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitR
         .current_dir(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .envs(envs.iter().copied())
+        .args(host_git_hardening(cwd))
         .args(transaction_git_config())
         .args(args)
         .output()
@@ -74,6 +75,139 @@ pub fn transaction_git_config() -> &'static [&'static str] {
     } else {
         &[]
     }
+}
+
+/// `-c` options on every host git run (BUG-1929 E1). A contained session can
+/// write its worktree and the main checkout's store, so it can plant an
+/// embedded repository there (`<dir>/.git` naming a git directory it made)
+/// whose own config sets `core.fsmonitor=<cmd>`. A host `git status` or
+/// `git diff` that recurses into it would run `<cmd>` outside the sandbox.
+/// Command-line `-c` outranks every config file, including the embedded
+/// repository's, and reaches child git processes through
+/// `GIT_CONFIG_PARAMETERS`.
+///
+/// - Always: `core.fsmonitor=false`.
+/// - In a store tree ([`is_store_tree`]) also `diff.ignoreSubmodules=all`
+///   and `submodule.recurse=false`, so git never descends into a gitlink at
+///   all. A code checkout keeps git's submodule handling: a user project
+///   with real submodules must still see them as dirty.
+// trace:BUG-1929 | ai:claude
+pub fn host_git_hardening(cwd: &Path) -> &'static [&'static str] {
+    if is_store_tree(cwd) {
+        &[
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "diff.ignoreSubmodules=all",
+            "-c",
+            "submodule.recurse=false",
+        ]
+    } else {
+        &["-c", "core.fsmonitor=false"]
+    }
+}
+
+/// Is `dir` the root of an AIDA store worktree? True for a directory named
+/// `.aida-store` (the attached layout; the only store a contained session can
+/// write, and a name a sandboxed session cannot change because the parent is
+/// outside its write set), or a directory holding both `objects/` and
+/// `metadata.yaml` (an override store).
+// trace:BUG-1929 | ai:claude
+pub fn is_store_tree(dir: &Path) -> bool {
+    let named = |p: &Path| p.file_name().is_some_and(|n| n == ".aida-store");
+    named(dir)
+        || std::fs::canonicalize(dir).is_ok_and(|c| named(&c))
+        || (dir.join("objects").is_dir() && dir.join("metadata.yaml").is_file())
+}
+
+/// Refuse to stage, commit or push a store that holds an embedded repository
+/// (BUG-1929 E1): a gitlink (mode 160000) in the index, or a `.git` entry
+/// (file, directory or symlink) anywhere below the store root other than the
+/// root's own pointer. The store holds only YAML; an embedded repository there
+/// is planted, and its config can name commands git would run on the host.
+/// The walk never follows symlinks. No-op outside a store tree.
+// trace:BUG-1929 | ai:claude
+pub fn refuse_embedded_repos(store: &Path) -> Result<()> {
+    if !is_store_tree(store) {
+        return Ok(());
+    }
+    let mut found: Vec<String> = Vec::new();
+    let staged = git(store, &["ls-files", "--stage", "-z"])?;
+    anyhow::ensure!(
+        staged.success,
+        "git ls-files failed in {}: {}",
+        store.display(),
+        staged.stderr
+    );
+    for entry in staged.stdout.split('\0') {
+        if let Some(path) = entry.strip_prefix("160000 ") {
+            let path = path.split_once('\t').map_or(path, |(_, p)| p);
+            found.push(format!("{path} (staged gitlink)"));
+        }
+    }
+    let mut stack = vec![store.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_git = entry.file_name().eq_ignore_ascii_case(".git");
+            if is_git && dir != store {
+                found.push(
+                    path.strip_prefix(store)
+                        .unwrap_or(&path)
+                        .display()
+                        .to_string(),
+                );
+                continue;
+            }
+            if !is_git && entry.file_type().is_ok_and(|t| t.is_dir()) {
+                stack.push(path);
+            }
+        }
+    }
+    if found.is_empty() {
+        return Ok(());
+    }
+    found.sort();
+    anyhow::bail!(
+        "refusing to stage, commit or push the AIDA store at {}: it contains an embedded \
+         git repository, which the store never holds and which can run commands on this \
+         machine. Remove it after checking who planted it (`git rm --cached <path>` for a \
+         staged gitlink): {}",
+        store.display(),
+        found.join(", ")
+    )
+}
+
+/// [`refuse_embedded_repos`] plus a gitlink check over the tree of `rev`, for a
+/// push: a gitlink an older binary already committed is not published either.
+// trace:BUG-1929 | ai:claude
+fn refuse_embedded_repos_for_push(store: &Path, rev: &str) -> Result<()> {
+    refuse_embedded_repos(store)?;
+    if !is_store_tree(store) {
+        return Ok(());
+    }
+    let tree = git(store, &["ls-tree", "-r", "-z", "--end-of-options", rev])?;
+    if !tree.success {
+        // An unborn or unknown rev: git push reports it.
+        return Ok(());
+    }
+    let links: Vec<&str> = tree
+        .stdout
+        .split('\0')
+        .filter(|e| e.starts_with("160000 "))
+        .filter_map(|e| e.split_once('\t').map(|(_, p)| p))
+        .collect();
+    anyhow::ensure!(
+        links.is_empty(),
+        "refusing to push the AIDA store at {}: {rev} commits an embedded git repository \
+         (gitlink), which the store never holds: {}",
+        store.display(),
+        links.join(", ")
+    );
+    Ok(())
 }
 
 /// Check if a directory is a git repository.
@@ -198,6 +332,7 @@ pub fn init(path: &Path) -> Result<()> {
 
 /// Stage specific files.
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
+    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let mut args = vec!["add"];
     args.extend(paths);
@@ -210,6 +345,7 @@ pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
 
 /// Stage all changes (tracked and untracked) in a subdirectory.
 pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
+    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let result = git_with_index_lock_retry(repo, &["add", "-A", subdir])?;
     if !result.success {
@@ -264,6 +400,7 @@ fn commit_redaction_args(public_email: Option<&str>) -> Vec<String> {
 /// global git config. trace:TASK-1122 | ai:claude
 pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::commit
+    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
     let (_h, public_email) = read_public_identity();
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
@@ -291,6 +428,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
 /// know the paths are changed; any non-zero exit is an error.
 // trace:BUG-1938 | ai:claude
 pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
+    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
     let (_h, public_email) = read_public_identity();
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
@@ -308,6 +446,7 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
+    refuse_embedded_repos_for_push(repo, "HEAD")?; // trace:BUG-1929 | ai:claude
     let result = git(repo, &["push", "--end-of-options", remote, branch])?;
     if result.success {
         Ok(true)
@@ -418,6 +557,7 @@ pub fn push_exact_outcome(
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
     );
     reject_option_like("branch", branch)?;
+    refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /
     // libcurl's) messages to untranslated English. trace:BUG-1969 | ai:claude
@@ -1441,7 +1581,9 @@ pub fn current_branch(repo: &Path) -> Result<String> {
 
 /// Check if the working tree has uncommitted changes.
 pub fn has_changes(repo: &Path) -> Result<bool> {
-    let result = git(repo, &["status", "--porcelain"])?;
+    // BUG-1929 E1: never recurse into a (planted) submodule.
+    // trace:BUG-1929 | ai:claude
+    let result = git(repo, &["status", "--porcelain", "--ignore-submodules=all"])?;
     Ok(!result.stdout.is_empty())
 }
 
@@ -1451,7 +1593,11 @@ pub fn has_changes(repo: &Path) -> Result<bool> {
 /// its tolerant contract for its other callers.
 // trace:TASK-1717 | ai:claude
 pub fn has_changes_checked(repo: &Path) -> Result<bool> {
-    let result = git(repo, &["status", "--porcelain"])?;
+    // BUG-1929 E1: a store holding an embedded repository is an error before
+    // any status runs, and the status never recurses into a submodule.
+    // trace:BUG-1929 | ai:claude
+    refuse_embedded_repos(repo)?;
+    let result = git(repo, &["status", "--porcelain", "--ignore-submodules=all"])?;
     anyhow::ensure!(
         result.success,
         "git status failed in {}: {}",
@@ -7665,6 +7811,147 @@ mod tests {
         assert!(load_requirements_strict(dir.path()).is_err());
         let empty = tempfile::tempdir().unwrap();
         assert!(load_requirements_strict(empty.path()).unwrap().is_empty());
+    }
+
+    /// A store (`<dir>/.aida-store`) with one commit, plus an embedded
+    /// repository planted at `objects/zz` the way a sandboxed session could:
+    /// `objects/zz/.git` names a git directory inside the store whose config
+    /// sets `core.fsmonitor` to a script that appends to `marker`, outside the
+    /// store. Returns (store, marker).
+    // trace:BUG-1929 | ai:claude
+    fn bug_1929_planted_store(dir: &Path) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let store = dir.join(".aida-store");
+        init(&store).unwrap();
+        configure_user(&store, "Test User", "test@example.com").unwrap();
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join("objects/a.yaml"), "id: A\n").unwrap();
+        run_git(&store, &["add", "objects/a.yaml"]);
+        run_git(&store, &["commit", "-qm", "initial"]);
+
+        let marker = dir.join("fsmonitor-ran");
+        let hook = store.join(".evil-fsm.sh");
+        std::fs::write(
+            &hook,
+            format!("#!/bin/sh\necho ran >> '{}'\nexit 1\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let sub = store.join("objects/zz");
+        std::fs::create_dir_all(&sub).unwrap();
+        let gitdir = store.join(".evil.git");
+        run_git(
+            &store,
+            &[
+                "init",
+                "-q",
+                &format!("--separate-git-dir={}", gitdir.display()),
+                sub.to_str().unwrap(),
+            ],
+        );
+        configure_user(&sub, "Test User", "test@example.com").unwrap();
+        std::fs::write(sub.join("x.txt"), "x").unwrap();
+        run_git(&sub, &["add", "x.txt"]);
+        run_git(&sub, &["commit", "-qm", "planted"]);
+        run_git(&sub, &["config", "core.fsmonitor", hook.to_str().unwrap()]);
+        (store, marker)
+    }
+
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_planted_fsmonitor_never_runs_and_store_writes_refuse() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, marker) = bug_1929_planted_store(dir.path());
+        // The host's own `git add -A` used to stage it; the session can too.
+        run_git(&store, &["add", "objects/zz"]);
+        assert!(run_git(&store, &["ls-files", "--stage"]).contains("160000 "));
+
+        // The plant is live: an unhardened `git status` runs the hook.
+        let _ = Command::new("git")
+            .current_dir(&store)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            marker.exists(),
+            "precondition: a plain git status must run the planted fsmonitor"
+        );
+        std::fs::remove_file(&marker).unwrap();
+
+        let _ = has_changes(&store);
+        let err = has_changes_checked(&store).unwrap_err().to_string();
+        assert!(err.contains("embedded git repository"), "{err}");
+        assert!(err.contains("objects/zz"), "{err}");
+        assert!(add_all(&store, ".").is_err());
+        assert!(add(&store, &["objects/a.yaml"]).is_err());
+        assert!(commit(&store, "should not commit").is_err());
+        assert!(push(&store, "origin", "aida-store").is_err());
+        let _ = git(&store, &["diff", "--name-only"]).unwrap();
+        let _ = git(&store, &["status", "--porcelain"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host git run over the store ran the planted fsmonitor"
+        );
+        assert_eq!(run_git(&store, &["rev-list", "--count", "HEAD"]), "1");
+    }
+
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_unstaged_nested_git_is_never_staged() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, marker) = bug_1929_planted_store(dir.path());
+        std::fs::write(store.join("objects/b.yaml"), "id: B\n").unwrap();
+        let err = add_all(&store, ".").unwrap_err().to_string();
+        assert!(err.contains("objects/zz/.git"), "{err}");
+        assert!(!run_git(&store, &["ls-files", "--stage"]).contains("160000 "));
+        assert!(has_changes_checked(&store).is_err());
+        assert!(!marker.exists());
+    }
+
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_push_refuses_a_committed_gitlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, _marker) = bug_1929_planted_store(dir.path());
+        run_git(&store, &["add", "objects/zz"]);
+        run_git(&store, &["commit", "-qm", "gitlink from an older binary"]);
+        run_git(&store, &["rm", "-q", "--cached", "objects/zz"]);
+        std::fs::remove_dir_all(store.join("objects/zz")).unwrap();
+        std::fs::remove_dir_all(store.join(".evil.git")).unwrap();
+        assert!(refuse_embedded_repos(&store).is_ok());
+        let err = refuse_embedded_repos_for_push(&store, "HEAD")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("objects/zz"), "{err}");
+    }
+
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_hardening_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let code = dir.path().join("code");
+        std::fs::create_dir_all(&code).unwrap();
+        assert!(!is_store_tree(&code));
+        assert_eq!(host_git_hardening(&code), &["-c", "core.fsmonitor=false"]);
+        // A code checkout with a real nested repository is not refused.
+        std::fs::create_dir_all(code.join("vendor/.git")).unwrap();
+        assert!(refuse_embedded_repos(&code).is_ok());
+
+        let store = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        assert!(is_store_tree(&store));
+        let h = host_git_hardening(&store).join(" ");
+        for flag in [
+            "core.fsmonitor=false",
+            "diff.ignoreSubmodules=all",
+            "submodule.recurse=false",
+        ] {
+            assert!(h.contains(flag), "{h}");
+        }
+        let custom = dir.path().join("custom-store");
+        std::fs::create_dir_all(custom.join("objects")).unwrap();
+        std::fs::write(custom.join("metadata.yaml"), "").unwrap();
+        assert!(is_store_tree(&custom));
     }
 
     // trace:BUG-1969 | ai:claude — each push-failure class from real git /
