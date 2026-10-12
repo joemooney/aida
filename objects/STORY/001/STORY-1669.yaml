@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:42.829403010Z
-modified_at: 2026-10-12T06:00:15.849041104Z
+modified_at: 2026-10-12T15:02:33.033053823Z
 req_type: Story
 tags:
 - from:aida-host
@@ -129,6 +129,12 @@ comments:
   created_at: 2026-10-12T06:00:15.849041104Z
   modified_at: 2026-10-12T06:00:15.849041104Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a3-0749-7622-be47-fe9fe84a8c64
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): slice 0 = option (c) hybrid, growing toward (a): corpus, score recording and controls are built in; harness launching stays in a skill until STORY-1678. The parent stays draft and needs decomposing into the proposed slices.'
+  created_at: 2026-10-12T15:02:33.033053823Z
+  modified_at: 2026-10-12T15:02:33.033053823Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
