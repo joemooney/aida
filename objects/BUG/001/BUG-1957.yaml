@@ -2,7 +2,7 @@ id: 01a12a88-e2f1-7ed1-9560-39ccb1334dee
 spec_id: BUG-1957
 agreed_id: BUG-1957
 title: 'pr ship follow-ups from BUG-1919 review: body-marker false match, dead helper, Done children, drain calibration ignores closure hold'
-description: |-
+description: |
   Minor findings from the night review of PR #2497 (BUG-1919, merged 0c62bfd7ea), none of which blocked the merge:
   1. pr_ship.rs (~356-371): the body marker only has to start a line followed by any non-word character, so a changelog bullet like `- `aida: no-complete` marker is now recognised` matches once the backticks are trimmed, and the merge completes nothing. Fix: accept only the exact marker line, or the marker followed by whitespace or an em-dash; add a negative test.
   2. pr_ship.rs:329: derive_squash_subject_spec_ids_resolving no longer has any callers. Delete it.
@@ -10,15 +10,27 @@ description: |-
   4. pr_ship.rs (~425, ~452): the note says the spec id is 'traced in the PR body only', but nothing checks or adds it to the body. Reword the note, or check the body.
   5. No test covers parsing --no-complete, ship_completion_trailer, or derive_pr_ship_squash_subject returning the trailer; and --dry-run returns before the provenance line. Add a clap parse test and print the provenance in the dry-run plan.
   6. queue_cmd.rs:8714, 12850: drain-side calibration calls derive_squash_subject_spec_ids with |_| None for the hold, so it can credit a held spec that ship itself would not complete. Pass the store-backed check.
+
+  ## Acceptance
+
+  (groom:night, 2026-10-11: all six items verified still open on origin/main 17ff749954.)
+
+  1. `pr_body_declares_non_completing` accepts only the exact marker line, or the marker followed by whitespace, an em-dash, or end of line (after the existing bullet/emphasis trimming). Negative test: ``- `aida: no-complete` marker is now recognised`` does NOT match; existing positive cases in `bug_1919_body_marker_detection` still match.
+  2. `derive_squash_subject_spec_ids_resolving` is deleted (it has no callers).
+  3. `spec_completion_hold_reason` treats `Done` children as resolved (subtract `rollup.done` from the open count). Unit test: a parent whose only remaining child is Done is not held.
+  4. The withheld-trailer note no longer claims the id is "traced in the PR body only" unless that is checked; simplest acceptable fix is rewording the note (e.g. "not completed by this merge"). Existing note tests updated.
+  5. Tests: a clap parse test for `aida pr ship --no-complete`; a unit test that `derive_pr_ship_squash_subject` returns the completion trailer; `--dry-run` output includes the trailer-provenance line (test on the dry-run plan).
+  6. The two drain-side `derive_squash_subject_spec_ids` callers in queue_cmd.rs pass the store-backed hold check (`spec_completion_hold_reason`) instead of `|_| None`, so a held spec is not credited. Unit test with a `closure-pending`-tagged spec.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-11T10:36:16.497896486Z
+modified_at: 2026-10-12T05:50:24.994496831Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
+- groomed:night
 filed_at:
   code_sha: 0c62bfd7eaff1a03da00e8fd4e234040110b2e70
   branch: main
