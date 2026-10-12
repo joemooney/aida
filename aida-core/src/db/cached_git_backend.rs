@@ -652,6 +652,12 @@ impl CachedGitBackend {
                     return self.file_and_spawn_refresh();
                 }
                 Ok(None) => {
+                    // Lets a test tell "another holder had the refresh lock"
+                    // (this reader then hands off and never makes a write
+                    // attempt) apart from the write-lock path it exercises.
+                    // trace:BUG-1965 | ai:claude
+                    #[cfg(test)]
+                    cache_refresh::test_count("refresh_lock_contended");
                     let limit = if migration && !budget.0.is_zero() {
                         cache_refresh::migration_wait_limit()
                     } else {
@@ -4146,9 +4152,22 @@ mod tests {
     }
 
     // trace:TASK-1526 | ai:codex
+    //
+    // BUG-1965: the write-lock path is only reached by the refresh-lock
+    // WINNER. A `fork` on any sibling test thread while this reader holds the
+    // refresh flock duplicates the descriptor into a child that keeps the
+    // lock until it reaches `exec` (see `acquire_past_fork_window`), so under
+    // a loaded parallel run the next read can lose the refresh lock to that
+    // child. The loser hands off to the detached worker (`deferred` in tests,
+    // where the spawn is refused) and never makes a write attempt, which is
+    // what `write_attempt == None` was. A run whose read reports
+    // `refresh_lock_contended` did not exercise this test's path: it must
+    // still never full-rebuild, and is retried rather than asserted on.
+    // trace:BUG-1965 | ai:claude
     #[test]
     fn reader_incremental_lock_error_does_not_full_rebuild() {
         use super::super::cache_refresh::*;
+        const ATTEMPTS: usize = 10;
         for sidecar in [false, true] {
             let dir = tempdir().unwrap();
             let (backend, store_root, cache_path) = task_1515_backend(dir.path());
@@ -4161,35 +4180,66 @@ mod tests {
             let holder = rusqlite::Connection::open(&cache_path).unwrap();
             holder.execute_batch("BEGIN IMMEDIATE").unwrap();
             for constructor in [false, true] {
-                let scope = CacheReadScope::new();
-                test_counts();
-                if constructor {
-                    let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                let mut contended_runs = Vec::new();
+                let asserted = (0..ATTEMPTS).any(|_| {
+                    let scope = CacheReadScope::new();
+                    test_counts();
+                    // `Some(counts)` when the read lost the refresh lock to
+                    // another holder; that run says nothing about this path.
+                    let contended = |counts: std::collections::HashMap<&'static str, usize>| {
+                        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+                        counts
+                            .contains_key("refresh_lock_contended")
+                            .then_some(counts)
+                    };
+                    if constructor {
+                        let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                        let counts = test_counts();
+                        if let Some(c) = contended(counts.clone()) {
+                            contended_runs.push(c);
+                            return false;
+                        }
+                        assert_eq!(counts.get("write_attempt"), Some(&1));
+                        assert!(!scope.touched(), "a constructor has not served rows");
+                        assert_eq!(
+                            opened.list_summaries(&ListFilter::default()).unwrap().len(),
+                            3
+                        );
+                    } else {
+                        assert_eq!(
+                            backend
+                                .list_summaries(&ListFilter::default())
+                                .unwrap()
+                                .len(),
+                            3
+                        );
+                    }
                     let counts = test_counts();
+                    if let Some(c) = contended(counts.clone()) {
+                        contended_runs.push(c);
+                        return false;
+                    }
                     assert_eq!(counts.get("write_attempt"), Some(&1));
-                    assert_eq!(counts.get("full_rebuild"), None);
-                    assert!(!scope.touched(), "a constructor has not served rows");
-                    assert_eq!(
-                        opened.list_summaries(&ListFilter::default()).unwrap().len(),
-                        3
-                    );
-                } else {
-                    assert_eq!(
-                        backend
-                            .list_summaries(&ListFilter::default())
-                            .unwrap()
-                            .len(),
-                        3
+                    assert_eq!(counts.get("retry_sleep"), None);
+                    let m = scope.metadata();
+                    assert_eq!(m["refreshing"], "writer_busy");
+                    assert_eq!(m["cache_head"], from);
+                    assert_eq!(m["built_at"], serde_json::json!(built_at));
+                    true
+                });
+                assert!(
+                    asserted,
+                    "every one of {ATTEMPTS} reads lost the refresh lock to another \
+                     holder: {contended_runs:?}; {}",
+                    RefreshLock::diagnose_unavailable(&cache_path)
+                );
+                if !contended_runs.is_empty() {
+                    eprintln!(
+                        "BUG-1965: {} read(s) lost the refresh lock to another holder \
+                         and were retried: {contended_runs:?}",
+                        contended_runs.len()
                     );
                 }
-                let counts = test_counts();
-                assert_eq!(counts.get("write_attempt"), Some(&1));
-                assert_eq!(counts.get("retry_sleep"), None);
-                assert_eq!(counts.get("full_rebuild"), None);
-                let m = scope.metadata();
-                assert_eq!(m["refreshing"], "writer_busy");
-                assert_eq!(m["cache_head"], from);
-                assert_eq!(m["built_at"], serde_json::json!(built_at));
             }
             holder.execute_batch("ROLLBACK").unwrap();
             assert_eq!(
@@ -4803,7 +4853,12 @@ mod tests {
         test_counts();
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(scope.metadata()["refreshing"], "worker_running");
-        assert_eq!(test_counts().get("write_attempt"), None);
+        let counts = test_counts();
+        assert_eq!(counts.get("write_attempt"), None);
+        // The counter that lets a write-lock test discard a run where an
+        // unrelated holder took the refresh lock first.
+        // trace:BUG-1965 | ai:claude
+        assert!(counts.contains_key("refresh_lock_contended"), "{counts:?}");
         stop.send(()).unwrap();
         thread.join().unwrap();
     }
