@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-12T14:51:10.815408954Z
+modified_at: 2026-10-12T14:56:44.175849042Z
 req_type: Bug
 tags:
 - groom:close-done
@@ -36,6 +36,12 @@ comments:
   created_at: 2026-10-12T14:51:10.815408954Z
   modified_at: 2026-10-12T14:51:10.815408954Z
   session_id: 5b9fd23c-85f8-4544-821c-3c769b4609b6
+- id: 01a1309d-b48f-7343-b4d9-89754998c911
+  author: joe
+  content: 'advisor: held in draft rather than closed. The root-cause fix landed in #2549 (BUG-1974), but this spec''s acceptance requires a 50-run soak that was never recorded. Close it once a 50-run soak of the task_1507 inconsistent-index test on main passes.'
+  created_at: 2026-10-12T14:56:44.175849042Z
+  modified_at: 2026-10-12T14:56:44.175849042Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
   branch: main
