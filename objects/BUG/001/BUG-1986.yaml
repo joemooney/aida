@@ -1,0 +1,38 @@
+id: 01a12e95-5f9d-7831-aae3-fc2eb041fac8
+spec_id: BUG-1986
+agreed_id: BUG-1986
+title: 'BUG-1947 follow-ups: container pid-namespace holder scan, recheck before remove, dedicated in-use override'
+description: |
+  Follow-up from the advisor review of PR #2544 (BUG-1947 round 4, approved at 130118ef9c with these items deferred). BUG-1947 closes the 2026-10-10 incident on a host pid namespace; these gaps remain.
+
+  1. MEDIUM-HIGH: in a non-host pid namespace (Docker, Codespaces, CI container), interactive `aida session end` removes a tree it can SEE is in use. worktree_holders.rs:377-384 returns Err(ScanUnverified) before the holder loop (:422). check_worktree_removal_interactive (:304) turns unverified into a warning plus Ok, and session_end.rs:1206 uses that form. Scenario: `aida session end <id> --yes` in a container deletes a worktree while a visible `cargo build` runs in it.
+  2. LOW: time-of-check gap in session_end. The holder check (:1203) runs before the TTY confirmation (:1260-1273) and the lease/registry work, so a process started while the operator is at the prompt is missed.
+  3. LOW (design): `--force` overloads skipping confirmation, overriding a dirty tree, and overriding the live-process refusal. A sweep script passing --force for non-TTY or dirty reasons also bypasses the live-process guard.
+  4. LOW: `aida worktree pool return` (worktree_gc.rs:2087 -> return_to_pool) does no holder check and resets after a failed salvage.
+  5. LOW: the holder scan ignores memory mappings (/proc/<pid>/map_files), so a process holding only an mmapped file from the tree with no open fd is missed.
+
+  ## Acceptance
+  - In a non-initial pid namespace the scan still inspects visible processes. Any visible holder makes both scan_holders_in and check_worktree_removal_interactive refuse, and unverified is returned only when no holder is visible. Test: a fake /proc with a non-initial namespace inode and a visible holder.
+  - session_end re-checks holders immediately before `git worktree remove` / return_to_pool (after confirmation), and refuses if one appeared. Test: a holder started after the first check is caught.
+  - The live-process override is a dedicated flag (e.g. `--include-in-use`, matching `worktree pool destroy`), and `--force` alone no longer bypasses it. Docs and help are updated.
+  - `worktree pool return` applies the strict holder check, and skips (does not reset) after a failed salvage.
+  - map_files is scanned, or the docs state the limit.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T05:28:23.709718478Z
+modified_at: 2026-10-12T05:28:23.709718478Z
+req_type: Bug
+tags:
+- data-safety
+- sessions
+- worktree
+filed_at:
+  code_sha: ae606ce935abe9808782078688b96d1d35773798
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
