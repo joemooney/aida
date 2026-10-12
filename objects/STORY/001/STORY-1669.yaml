@@ -95,7 +95,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:42.829403010Z
-modified_at: 2026-10-12T15:02:33.033053823Z
+modified_at: 2026-10-12T15:10:14.288241029Z
 req_type: Story
 tags:
 - from:aida-host
@@ -156,6 +156,12 @@ comments:
   created_at: 2026-10-12T15:02:33.033053823Z
   modified_at: 2026-10-12T15:02:33.033053823Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a130aa-1110-7b81-a897-cbe796b106a7
+  author: joe
+  content: 'ADVISOR 2026-10-12: decomposed per the groom split and the operator''s slice-0 decision. Slice 0 = ADR-74 (decided, hybrid). Slices: TASK-1729 corpus, TASK-1730 config + score R1 (sketch of the [regen] config schema required before code), TASK-1731 controls gate, TASK-1732 seam-adapter R2, TASK-1733 gap classification/headline, TASK-1734 statusline/digest surfacing. 1730 gates 1731-1734. Parent stays draft as the umbrella.'
+  created_at: 2026-10-12T15:10:14.288241029Z
+  modified_at: 2026-10-12T15:10:14.288241029Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
