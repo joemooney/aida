@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-11T22:18:15.841397777Z
+last_run: 2026-10-12T04:47:39.360570320Z
 last_by:
   seat: advisor
   session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
   vendor: claude
 result: done
-note: 'Advisor triage 2026-10-11 15:18: NOT a code regression; budget unchanged. The over-budget aida show calls concentrate in 9116ba7f23 (13.8% of 617), a lib-split slice build run from the relay''s worktree while parallel cargo-test proof lanes saturated the CPU. The live binaries are at or under tolerance: 4cced67be8 9.7%, 97453570d6 6.9%, current 95f15a20d4/18428db14c 0% of 6. The overall proportion is 9.6%, below the 10% tolerance. The trip is the single 27.9s call against the 5s ceiling, consistent with load/lock contention during the proof runs. Re-check after the lib-split lands; if the ceiling trips again on a live main binary under normal load, file a regression bug.'
-due_since: 2026-10-12T04:28:34.455921199Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Advisor 21:50: same trip as the 15:18 triage. The ceiling breach is the same single 27,868 ms call (unchanged worst) and will age out of the 24h window. The over-budget share is concentrated in old builds: lib-split dev build 9116ba7f23 13.8%, 4cced67be8 9.7%, 97453570d6 7.7%. The newest live binary 95f15a20d4 is at 4.3% of 46. Proportion 10.3%, borderline. The cause is proof-lane and three-relay CPU load, not a code regression; budget unchanged. If a breach recurs on a binary built after ae606ce935, file a regression.'
