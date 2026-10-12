@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:40:48.922607973Z
-modified_at: 2026-10-12T05:52:56.225878116Z
+modified_at: 2026-10-12T06:02:24.732422121Z
 req_type: Story
 tags:
 - groom:approve
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-10-11T13:41:29.976698729Z
   modified_at: 2026-10-11T13:41:29.976698729Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a12eb4-845c-71e2-84f6-7fe1b50a452c
+  author: joe
+  content: |
+    [groom:night] APPROVE (supervised, security). Verified open: pr_ship.rs only squash-merges (`gh pr merge <N> --squash`); there is no rebase/merge-method option. The acceptance is testable as written: refusal without an approval at head, refusal on a stale head, spec status unchanged without the final-slice flag, and the ADR-73 exception retired. Treat the verify_stack.py hook as optional, not a gate for this story. Security/supervised because it extends approval-authority gating (two-seat, ADR-73) to a new merge path.
+  created_at: 2026-10-12T06:02:24.732422121Z
+  modified_at: 2026-10-12T06:02:24.732422121Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
