@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T06:02:37.187572487Z
+modified_at: 2026-10-12T14:51:13.165118545Z
 req_type: Bug
 tags:
 - groom:approve
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-10-12T06:02:37.187572487Z
   modified_at: 2026-10-12T06:02:37.187572487Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13098-a78d-7b31-8785-0c3f99186140
+  author: joe
+  content: '[groom:night] Context after BUG-1956 merged (d57f76a277, #2552): reader-side inline refreshes in cached_git_backend.rs now go through bounded_inline_refresh with a shared read-wait allowance. That changes the code path this test exercises, but the test itself (cached_git_backend.rs:4150) was not modified. Stays APPROVE; reproduce against current main before diagnosing.'
+  created_at: 2026-10-12T14:51:13.165118545Z
+  modified_at: 2026-10-12T14:51:13.165118545Z
+  session_id: 5b9fd23c-85f8-4544-821c-3c769b4609b6
 filed_at:
   code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
   branch: main
