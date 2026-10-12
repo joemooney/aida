@@ -1209,10 +1209,17 @@ pub(crate) fn session_end(
     // trace:BUG-1947 | ai:claude
     let tears_down_worktree = has_worktree
         && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
+    // BUG-1988: one scan for all three checks below, so an unverified scan
+    // (e.g. a separate pid namespace) warns once per session end, not three
+    // times. trace:BUG-1988 | ai:claude
+    let unverified_warned = std::cell::Cell::new(false);
+    let holder_check = interactive_holder_check(
+        aida_core::worktree_holders::check_worktree_removal,
+        &unverified_warned,
+        |warning| eprintln!("{warning}"),
+    );
     if tears_down_worktree {
-        if let Err(in_use) =
-            aida_core::worktree_holders::check_worktree_removal_interactive(&target.worktree_path)
-        {
+        if let Err(in_use) = holder_check(&target.worktree_path) {
             if !include_in_use {
                 anyhow::bail!(
                     "{}\n\nThe session was NOT ended; its lease and worktree are unchanged.",
@@ -1294,7 +1301,7 @@ pub(crate) fn session_end(
         if let Err(refusal) = recheck_holders_before_teardown(
             &target.worktree_path,
             include_in_use,
-            aida_core::worktree_holders::check_worktree_removal_interactive,
+            &holder_check, // trace:BUG-1988 | ai:claude
         ) {
             anyhow::bail!(
                 "{refusal}\n\nThe session was NOT ended; its lease and worktree are unchanged."
@@ -1383,7 +1390,7 @@ pub(crate) fn session_end(
         if let Err(refusal) = recheck_holders_before_teardown(
             &target.worktree_path,
             include_in_use,
-            aida_core::worktree_holders::check_worktree_removal_interactive,
+            &holder_check, // trace:BUG-1988 | ai:claude
         ) {
             anyhow::bail!(
                 "{refusal}\n\nThe session was NOT ended; its lease is kept and its worktree \
@@ -1391,25 +1398,6 @@ pub(crate) fn session_end(
             );
         }
     }
-
-    if let Some(work) = &session_end_unshipped_work {
-        record_session_end_unshipped_work(&project_root, work);
-    }
-
-    // STORY-56: flatten the session's activity log into each
-    // participating role's project-level activity stream BEFORE we delete
-    // the lease — once the lease is gone the activity file is orphaned.
-    // For each role, take the newest entry per spec_id from the session
-    // log, merge into the project role's `activity` (newest first, dedupe
-    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
-    // `aida role show` still surface what was worked on under the closed
-    // session. trace:STORY-56 | ai:claude
-    aggregate_session_activity_into_roles(&project_root, &target.id);
-    let activity_file = session_activity_path(&project_root, &target.id);
-    let canonical_activity = activity_file.canonicalize().ok();
-    let activity_target: std::path::PathBuf = canonical_activity
-        .clone()
-        .unwrap_or_else(|| activity_file.clone());
 
     // Snapshot the lease file's authoritative on-disk location BEFORE we
     // touch the worktree's symlinks. When session_end runs from inside the
@@ -1441,7 +1429,12 @@ pub(crate) fn session_end(
     }
 
     // BUG-652 salvage for a dirty pooled tree, now that the links are gone.
-    // trace:BUG-1986 | ai:claude
+    // BUG-1988: a failed salvage stops the end HERE, before anything that
+    // ends the session (punt record, role activity merge, lease delete):
+    // the return would otherwise fail its own salvage and keep the tree,
+    // leaving a pool entry leased by a session that no longer exists. The
+    // runtime links are put back so the tree stays usable for the retry.
+    // trace:BUG-1986 trace:BUG-1988 | ai:claude
     if salvage_before_return {
         match salvage_worktree_patch(&project_root, "pool-return", None, &target.worktree_path) {
             Ok(Some(p)) => eprintln!(
@@ -1450,15 +1443,50 @@ pub(crate) fn session_end(
                 p.display().to_string().dimmed()
             ),
             Ok(None) => {}
-            // BUG-1986: the return salvages again and keeps the tree
-            // (no reset) if that fails too. trace:BUG-1986 | ai:claude
-            Err(e) => eprintln!(
-                "{} could not salvage uncommitted changes before return: {} — the return will retry and keep the tree if it fails again",
-                "Warning:".yellow().bold(),
-                e
-            ),
+            Err(e) => {
+                // trace:BUG-1988 | ai:claude
+                #[cfg(unix)]
+                let relink = crate::worktree_gc::link_worktree_runtime_state(
+                    &project_root,
+                    &target.worktree_path,
+                )
+                .err()
+                .map(|err| format!("\nThe worktree's runtime links could not be restored: {err}"))
+                .unwrap_or_default();
+                #[cfg(not(unix))]
+                let relink = String::new();
+                anyhow::bail!(
+                    "{}",
+                    session_end_salvage_failure_message(
+                        &target.id,
+                        &target.worktree_path,
+                        &project_root,
+                        &e,
+                        &relink
+                    )
+                );
+            }
         }
     }
+
+    if let Some(work) = &session_end_unshipped_work {
+        record_session_end_unshipped_work(&project_root, work);
+    }
+
+    // STORY-56: flatten the session's activity log into each
+    // participating role's project-level activity stream BEFORE we delete
+    // the lease — once the lease is gone the activity file is orphaned.
+    // For each role, take the newest entry per spec_id from the session
+    // log, merge into the project role's `activity` (newest first, dedupe
+    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
+    // `aida role show` still surface what was worked on under the closed
+    // session. trace:STORY-56 | ai:claude
+    aggregate_session_activity_into_roles(&project_root, &target.id);
+    let activity_file = session_activity_path(&project_root, &target.id);
+    let canonical_activity = activity_file.canonicalize().ok();
+    let activity_target: std::path::PathBuf = canonical_activity
+        .clone()
+        .unwrap_or_else(|| activity_file.clone());
 
     // Delete the lease file BEFORE removing the worktree. The canonical
     // path resolved above points at the parent's sessions dir, so the
@@ -1516,60 +1544,12 @@ pub(crate) fn session_end(
         }
     }
 
-    // STORY-637: release the cross-clone lease claim on the shared store so a
-    // peer clone can take this scope. Best-effort by design — staleness (pid /
-    // TTL) reclaims a never-released claim, so a failed release never
-    // deadlocks. trace:STORY-637 | ai:claude
-    coordination::release_claim(
-        &project_root.join(".aida-store"),
-        &target.scope,
-        &project_root,
-    );
-
-    // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
-    // future session that reuses the (time-ordered, effectively-unique) id
-    // never inherits a stale "pause at finish" signal. Best-effort, quiet.
-    // trace:STORY-564 | ai:claude
-    zen::clear_needs_human_marker(&project_root, &target.id);
-
-    // BUG-80: drop the planned-cluster manifest for this session, if any.
-    // Manifests are runtime per-session state — pinning them around past
-    // a closed lease leaks files into `.aida/sessions/`. Quiet on missing.
-    // trace:BUG-80 | ai:claude
-    let manifest_target = session_manifest::manifest_path(&project_root, &target.id);
-    if manifest_target.exists() {
-        match std::fs::remove_file(&manifest_target) {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                eprintln!(
-                    "{} could not delete session manifest at {}: {}",
-                    "Warning:".yellow().bold(),
-                    manifest_target.display(),
-                    e
-                );
-            }
-        }
-    }
-
-    // STORY-56: drop the session activity log. Quiet on missing — short
-    // sessions that never recorded any activity won't have one. We've
-    // already aggregated entries into the project-level role(s) above.
-    // trace:STORY-56 | ai:claude
-    if activity_target.exists() {
-        match std::fs::remove_file(&activity_target) {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                eprintln!(
-                    "{} could not delete session activity log at {}: {}",
-                    "Warning:".yellow().bold(),
-                    activity_target.display(),
-                    e
-                );
-            }
-        }
-    }
+    // BUG-1988: the mcp-claim reap deliberately stays BEFORE the remove/return
+    // (it is a local unlink, so it does not widen the recheck window): the
+    // claim file sits in the sessions dir and parses as a lease, so leaving
+    // it in place would make the BUG-483 peer check below treat this
+    // session's own MCP claim as a peer sharing the tree and skip the
+    // removal. trace:BUG-1988 | ai:claude
 
     // TASK-68: detect whether the user's shell was sitting inside the
     // worktree we're about to nuke. We capture cwd BEFORE we chdir away
@@ -1700,6 +1680,72 @@ pub(crate) fn session_end(
             }
         }
     }
+    // BUG-1988: the steps below used to run between the final holder recheck
+    // and the remove/return above. They are moved here so that window holds
+    // only local filesystem steps and the salvage diff: `release_claim` in
+    // particular pulls, commits and pushes the shared store, which can take
+    // long enough for a new process to start in the tree. They run whatever
+    // the remove/return outcome was, exactly as before the move: a failed
+    // `git worktree remove` or pool return only warns (no early return), and
+    // the lease is already deleted by then, so the session HAS ended and its
+    // store claim, needs-human marker, manifest and activity log must go
+    // with it rather than strand the scope.
+    // trace:BUG-1988 | ai:claude
+    // STORY-637: release the cross-clone lease claim on the shared store so a
+    // peer clone can take this scope. Best-effort by design — staleness (pid /
+    // TTL) reclaims a never-released claim, so a failed release never
+    // deadlocks. trace:STORY-637 | ai:claude
+    coordination::release_claim(
+        &project_root.join(".aida-store"),
+        &target.scope,
+        &project_root,
+    );
+
+    // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
+    // future session that reuses the (time-ordered, effectively-unique) id
+    // never inherits a stale "pause at finish" signal. Best-effort, quiet.
+    // trace:STORY-564 | ai:claude
+    zen::clear_needs_human_marker(&project_root, &target.id);
+
+    // BUG-80: drop the planned-cluster manifest for this session, if any.
+    // Manifests are runtime per-session state — pinning them around past
+    // a closed lease leaks files into `.aida/sessions/`. Quiet on missing.
+    // trace:BUG-80 | ai:claude
+    let manifest_target = session_manifest::manifest_path(&project_root, &target.id);
+    if manifest_target.exists() {
+        match std::fs::remove_file(&manifest_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session manifest at {}: {}",
+                    "Warning:".yellow().bold(),
+                    manifest_target.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    // STORY-56: drop the session activity log. Quiet on missing — short
+    // sessions that never recorded any activity won't have one. We've
+    // already aggregated entries into the project-level role(s) above.
+    // trace:STORY-56 | ai:claude
+    if activity_target.exists() {
+        match std::fs::remove_file(&activity_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session activity log at {}: {}",
+                    "Warning:".yellow().bold(),
+                    activity_target.display(),
+                    e
+                );
+            }
+        }
+    }
+
     // BUG-734: the branch-retained hint only makes sense when a worktree
     // (with its checked-out branch) was actually removed. trace:BUG-734 | ai:claude
     if has_worktree {
@@ -1938,10 +1984,88 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
             });
         known && worktree.join(path).is_symlink()
     };
+    // BUG-1988: with `.aida/` not gitignored and nothing tracked under it,
+    // plain `git status` collapses it to one `?? .aida/` entry, which the
+    // per-link filter cannot judge. Expand an untracked `.aida/` into its
+    // files (`-uall`; git lists a symlink as a file and never descends it),
+    // so it only counts when something under it is not a runtime link.
+    // trace:BUG-1988 | ai:claude
     entries
         .into_iter()
+        .flat_map(|entry| {
+            // Porcelain v1 (`worktree_dirty_entries`). trace:BUG-1988 | ai:claude
+            if entry == "?? .aida/" {
+                untracked_entries_under(worktree, ".aida/").unwrap_or_else(|| vec![entry])
+            } else {
+                vec![entry]
+            }
+        })
         .filter(|entry| !is_runtime_link(entry))
         .collect()
+}
+
+/// Every untracked file under `dir` in `worktree`, one porcelain entry each.
+/// `None` when git cannot answer, so the caller keeps the collapsed entry.
+// trace:BUG-1988 | ai:claude
+fn untracked_entries_under(worktree: &std::path::Path, dir: &str) -> Option<Vec<String>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain", "--untracked-files=all", "--", dir])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
+/// BUG-1988: the interactive holder scan for one `session end` run. `scan`
+/// is the strict scan; an unverified result with no holder is downgraded to
+/// a warning, which `emit` receives at most once per `warned` cell however
+/// many times the returned check runs.
+// trace:BUG-1988 | ai:claude
+pub(crate) fn interactive_holder_check<'a>(
+    scan: impl Fn(&std::path::Path) -> Result<(), aida_core::worktree_holders::WorktreeInUse> + 'a,
+    warned: &'a std::cell::Cell<bool>,
+    emit: impl Fn(&str) + 'a,
+) -> impl Fn(&std::path::Path) -> Result<(), aida_core::worktree_holders::WorktreeInUse> + 'a {
+    move |worktree| {
+        let warning = aida_core::worktree_holders::downgrade_unverified(scan(worktree))?;
+        if let Some(warning) = warning {
+            if !warned.replace(true) {
+                emit(&warning);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// BUG-1988: the refusal when the pre-return salvage of a dirty pooled tree
+/// fails. Nothing that ends the session has run, so it says the session was
+/// NOT ended and names the command that finishes the end once the cause is
+/// fixed.
+// trace:BUG-1988 | ai:claude
+pub(crate) fn session_end_salvage_failure_message(
+    session_id: &str,
+    worktree: &std::path::Path,
+    project_root: &std::path::Path,
+    error: &dyn std::fmt::Display,
+    extra: &str,
+) -> String {
+    format!(
+        "could not salvage the uncommitted changes in pooled worktree {} before returning it \
+         to the pool: {error}\n\n\
+         The session was NOT ended; its lease is kept and its worktree was not reset.{extra}\n\
+         Fix the cause (salvage patches go under {}), or commit or stash the changes in the \
+         worktree, then re-run `aida session end {session_id}`.",
+        worktree.display(),
+        project_root.join(".aida").join("salvage").display(),
+    )
 }
 
 /// The session-end override flag for the live-process refusal.
