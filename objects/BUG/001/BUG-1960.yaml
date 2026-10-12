@@ -12,12 +12,12 @@ description: |
   1. CI runs the zsh leg of bug_0445_init_side_channel_tests: install zsh in the CI Build job (ci.yml) so `wrapper_shells()` includes zsh, and the zsh case passes rather than skips.
   2. The init wrapper (dev_cmd.rs, around the `mktemp -t aida-init-cd.XXXXXX` block) removes the temp file on INT/TERM (a `trap` scoped to the function, restored afterwards); the generated-wrapper test asserts the trap is present.
   3. `AIDA_INIT_CD_FILE` is not inherited by processes init spawns: init reads it once and every child `Command` it spawns removes it (or it is cleared from the process env at init entry after reading). Test: a nested init/emit_enter_dir does not overwrite the outer file.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:03:14.762751326Z
-modified_at: 2026-10-12T14:55:54.716614478Z
+modified_at: 2026-10-12T20:50:52.412051568Z
 req_type: Bug
 tags:
 - groom:approve
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a131e1-ed7c-7dc2-b1c2-f4bac33726a2
+  author: aida-session-start
+  timestamp: 2026-10-12T20:50:52.412050954Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1c9eca9bfff30c98da93f471f7f6d334f79482b7
   branch: main
