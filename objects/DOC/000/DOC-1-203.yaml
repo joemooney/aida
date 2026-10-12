@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-12T02:47:07.421227815Z
+modified_at: 2026-10-12T03:08:20.272167588Z
 req_type: Doc
 tags:
 - factory:2026-10-11
@@ -312,6 +312,12 @@ comments:
   content: 'FACTORY DRAFT (round 5): PR #2499 at 8564175390. Rebased on main; universal launch-grant sentences cut and replaced by a per-launcher table (role enter/add, session new/resume, agent new, queue work), every cell code-traced in the PR body; role add direct grant, exceptions listed without a count. Correction to round-4 starting points: session new --role issues no grant (session.rs:1221 is spawn_vendor_headless_with_seat), and queue work has two inherit paths (fresh --no-human non-review, resumed interactive PR review). check-ci-fast green. Still draft.'
   created_at: 2026-10-12T02:47:07.421227815Z
   modified_at: 2026-10-12T02:47:07.421227815Z
+  session_id: 41bae717-5469-4211-97a6-618c019ce287
+- id: 01a12e15-25b0-71b2-8560-25cf0882c5d2
+  author: joe
+  content: 'FACTORY READY: PR #2499 green at 66d6ee70f3. Round 5 per REWORK BRIEF; citations in the PR body. Two advisor starting points corrected from the code (session new issues no grant even with --role; queue work has two inherit paths); see PR body. Draft, awaiting advisor review.'
+  created_at: 2026-10-12T03:08:20.272167588Z
+  modified_at: 2026-10-12T03:08:20.272167588Z
   session_id: 41bae717-5469-4211-97a6-618c019ce287
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
