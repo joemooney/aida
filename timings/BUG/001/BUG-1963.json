@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1963",
+  "publishes": [
+    {
+      "at": "2026-10-12T14:56:36.814061832Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:36.799080071Z",
+      "spec": "BUG-1963",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-12T14:56:36.799522248Z",
+      "spec": "BUG-1963",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
