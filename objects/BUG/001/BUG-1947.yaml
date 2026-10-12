@@ -21,10 +21,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T05:15:16.929822029Z
-modified_at: 2026-10-12T00:39:29.576673657Z
+modified_at: 2026-10-12T02:33:58.428685246Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
+- batch:night-2026-10-11
 - data-safety
 - sessions
 - worktree
