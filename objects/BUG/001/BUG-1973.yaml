@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:20:16.023382481Z
-modified_at: 2026-10-12T18:42:06.798000940Z
+modified_at: 2026-10-12T19:35:37.196150754Z
 req_type: Bug
 tags:
 - docs
@@ -23,6 +23,40 @@ comments:
   created_at: 2026-10-12T06:03:30.650079586Z
   modified_at: 2026-10-12T06:03:30.650079586Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a1319d-07ec-75c1-a753-6b5a5f3c17da
+  author: joe
+  content: |-
+    ## Rework brief — round 1 (advisor) · REQUEST CHANGES at b51a545984
+
+    **Verdict:** REQUEST CHANGES from an independent reviewer. The fix is correct for single-token windows. It is still incomplete for multi-word windows, which the command's help lists as valid.
+
+    ### Must fix
+    1. **The hint can't be run for multi-word windows** (`aida-cli-lib/src/upgrade_release.rs:144-148`, `usage_unused_alias_target`).
+       - The `usage unused` help (`cli.rs:8360`) lists `24 hours ago` as a valid DURATION.
+       - `aida usage --unused "24 hours ago"` prints the hint `aida usage unused 24 hours ago` without quotes.
+       - Running that hint exits 2 with `unexpected argument 'hours' found`.
+       - **Fix:** shell-quote the window when it contains whitespace or shell metacharacters, so the hint reads `aida usage unused '24 hours ago'`.
+       - **Tests:**
+         - Add a unit test that asserts the quoted output.
+         - In `hinted_command_parses_while_bare_form_does_not`, add `"24 hours ago"` to the windows.
+         - Build that argv as `["aida","usage","unused",window]`, not with `split_whitespace`.
+         - Separately assert that the printed hint string contains the quoted form.
+
+    ### Optional (non-blocking)
+    2. An invalid window, such as `--unused garbage`, is echoed into the hint just before the parse error. Fix only if it's cheap: print the note after the window parses, or fall back to the `<window>` placeholder when it doesn't. An empty `--unused=""` behaves the same way.
+
+    ### Out of scope
+    - When the user ran the new form, `invalid --unused value` still names the old flag. That error is on main already; leave it alone.
+
+    ### Done when
+    - The multi-word hint is quoted and parses.
+    - The new tests pass, and they fail if you revert to the unquoted form (run that mutation check).
+    - One commit in the format `[AI:claude] fix(usage): … (BUG-1973)`, pushed with no `--no-verify`.
+    - `make check-ci-fast` passes.
+    - A fresh reviewer re-gates at the new head.
+  created_at: 2026-10-12T19:35:37.196150754Z
+  modified_at: 2026-10-12T19:35:37.196150754Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-ff64-7580-a3f0-1a79fc527c46
   author: joe
