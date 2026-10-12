@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: 'Advisor 20:20: aida-store had diverged (gitlab +2, origin +1). Reconciled by union merge, pushed to both hubs, no force-push. A concurrent push to origin landed mid-reconcile; a second reconcile put both hubs at 23b15bbc21. Cause: three relays (night, factory, lib-split) write the store and push to origin, and gitlab catches up only through the hourly hub-mirror-sync, so drift under parallel relay load is expected churn, not a fault. main is in sync.'
+due_since: 2026-10-12T09:02:27.198892392Z
+due_reason: on CronJobFailed:hub-drift-guard
