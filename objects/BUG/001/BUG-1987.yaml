@@ -10,12 +10,12 @@ description: |
   Impact: test flake in the STORY-1650 flow tests; in production a rare mislabelled "index busy" note (cosmetic, the fallback still answers).
 
   Acceptance: the flow tests that assert a specific IndexMiss are deterministic under fork pressure (e.g. a cfg(test) retry of the classification while Busy is spurious, mirroring test_support::serve_locked, or a test hook that pins indexer_running), with no assertion weakened; consider whether production should retry is_held briefly before reporting Busy.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T08:06:12.991723487Z
+modified_at: 2026-10-12T14:48:38.646069553Z
 req_type: Bug
 tags:
 - ci
@@ -35,6 +35,14 @@ comments:
   created_at: 2026-10-12T08:06:12.991723487Z
   modified_at: 2026-10-12T08:06:12.991723487Z
   session_id: ea9198d0-8b3a-47c4-8d68-c250d14af770
+history:
+- id: 01a13096-4bf6-71c3-bfe3-cd65eef8c990
+  author: joe
+  timestamp: 2026-10-12T14:48:38.646063894Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 17ff749954bca6e86e47f1d3b237d8bb53f531ed
   branch: main
