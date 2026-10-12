@@ -13,12 +13,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-12T15:09:37.941801Z
+modified_at: 2026-10-12T15:10:20.578046753Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a12c98-a1cd-7902-8a9f-088c60cf53a1
   created_at: 2026-10-12T15:09:41.397042873Z
+- rel_type: BlockedBy
+  target_id: 01a130a9-290a-79a3-876b-e184099da9ae
+  created_at: 2026-10-12T15:10:20.578039848Z
+  created_by: joe
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
