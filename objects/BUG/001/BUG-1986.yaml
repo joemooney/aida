@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T05:28:23.709718478Z
-modified_at: 2026-10-12T05:48:13.534303191Z
+modified_at: 2026-10-12T07:49:19.603438198Z
 req_type: Bug
 tags:
 - data-safety
@@ -32,6 +32,23 @@ relationships:
 - rel_type: Child
   target_id: 01a12963-0241-7053-9a15-e9e560fd60cb
   created_at: 2026-10-12T05:28:26.467763856Z
+comments:
+- id: 01a12f16-6673-71b0-9f3d-7670a076d958
+  author: joe
+  content: |-
+    NIGHT READY: PR #2548 green at d2dc321e2a
+
+    A fresh round-3 reviewer (not the implementer) reviewed this exact SHA and **APPROVED** it. Both round-2 findings are confirmed fixed: the runtime links and the ledger are not touched until the final holder recheck passes. The tests the reviewer ran passed: `bug_1947_session_end_live_process` 9/9 and the aida-core `worktree_` tests 97/97.
+
+    The reviewer also found these non-blocking items, left for the advisor to decide (fix here or as a follow-up):
+    1. MINOR: after the final recheck (session_end.rs:1381) and before the remove/pool return, `coordination::release_claim` still runs (store pull/commit/push, which can take seconds). Moving `release_claim` and the MCP-claim, manifest and activity-log cleanups after the remove would leave only local filesystem steps in that window, which matches "immediately before" more closely.
+    2. MINOR: two tests in bug_1947_session_end_live_process.rs (around :529 and :553) depend on `session_end_test_pause`, which only exists under `cfg(debug_assertions)`. Run with `--profile agent` they fail after 60s. CI uses the dev profile, so CI is unaffected. Fix: gate the tests on `debug_assertions`.
+    3. MINOR: if the salvage fails during a pool return, the pool entry stays leased after the session lease is deleted. Work is preserved, but the warning should print the recovery command.
+    4. NIT: in a separate pid namespace, the "unverified" warning prints three times per `session end`.
+    5. NIT: when a project has no tracked files under `.aida/`, git reports the whole directory as `?? .aida/`. The runtime-link filter does not drop that entry, so the tree is refused as dirty.
+  created_at: 2026-10-12T07:49:19.603438198Z
+  modified_at: 2026-10-12T07:49:19.603438198Z
+  session_id: 1b110a25-274c-4f06-8af4-81154efaa853
 history:
 - id: 01a12e9e-76b0-7581-a57c-ee4cf4b92bde
   author: joe
