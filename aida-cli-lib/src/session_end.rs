@@ -979,6 +979,9 @@ pub(crate) fn session_end(
     // default). TASK-985: --remove forces deletion instead of returning.
     return_to_pool: bool,
     remove: bool,
+    // BUG-1986: the dedicated live-process override. `--force` alone no
+    // longer removes a tree another live process is using.
+    include_in_use: bool,
 ) -> Result<()> {
     // Returning is now the default; the flag is kept for compat.
     let _ = return_to_pool;
@@ -1154,7 +1157,9 @@ pub(crate) fn session_end(
     // claude keeps running with `(deleted)` as its cwd — leaking memory,
     // confusing future liveness probes, and potentially firing hooks at
     // paths that no longer exist. Default refuses with a clear message;
-    // `--force` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // `--include-in-use` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // `--force` alone no longer does: a sweep passing `--force` for a dirty
+    // tree or a missing TTY must not kill a live agent. trace:BUG-1986 | ai:claude
     // trace:BUG-61 | ai:claude
     // BUG-734: worktree-less lease ⇒ no process-leak check — nothing to
     // remove, so nothing can leak. trace:BUG-734 | ai:claude
@@ -1164,7 +1169,7 @@ pub(crate) fn session_end(
         Vec::new()
     };
     if !leaked.is_empty() {
-        if !force {
+        if !include_in_use {
             let mut msg = format!(
                 "{} live claude process{} inside worktree {} — would leak with `(deleted)` cwd if we removed the worktree:",
                 leaked.len(),
@@ -1174,7 +1179,9 @@ pub(crate) fn session_end(
             for p in &leaked {
                 msg.push_str(&format!("\n  pid {} cwd {}", p.pid, p.cwd.display()));
             }
-            msg.push_str("\n\nExit those claude(s) first, or pass --force to SIGTERM them.");
+            msg.push_str(
+                "\n\nExit those claude(s) first, or pass --include-in-use to SIGTERM them.",
+            ); // trace:BUG-1986 | ai:claude
             anyhow::bail!(msg)
         }
         eprintln!(
@@ -1191,13 +1198,16 @@ pub(crate) fn session_end(
     // therefore safe by default, because each call refuses on its own. The
     // caller's own process chain (this command, its shell, the agent that
     // owns the session when run from inside the tree) is exempt, so ending
-    // your own session still works. `--force` overrides. Checked whenever
+    // your own session still works. `--include-in-use` overrides; `--force`
+    // does not (trace:BUG-1986 | ai:claude). Checked whenever
     // the tree is torn down for this session (not shared with a peer lease),
     // INCLUDING a return to the warm pool: that return runs a forced
     // detached checkout and a hard reset, which rewrites every file under a
     // running build just as surely as a removal does. Checked before the
     // lease is touched, so a refusal changes nothing. This is the
-    // interactive form: a scan that cannot be verified warns and proceeds.
+    // interactive form: a scan that cannot be verified, and found no holder,
+    // warns and proceeds. It is re-run after the confirmation and again
+    // immediately before the tree is removed or reset (BUG-1986).
     // trace:BUG-1947 | ai:claude
     let tears_down_worktree = has_worktree
         && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
@@ -1205,14 +1215,14 @@ pub(crate) fn session_end(
         if let Err(in_use) =
             aida_core::worktree_holders::check_worktree_removal_interactive(&target.worktree_path)
         {
-            if !force {
+            if !include_in_use {
                 anyhow::bail!(
                     "{}\n\nThe session was NOT ended; its lease and worktree are unchanged.",
-                    in_use.refusal("--force")
+                    in_use.refusal(INCLUDE_IN_USE_FLAG)
                 );
             }
             eprintln!(
-                "{} worktree {} — removing anyway (--force)",
+                "{} worktree {} — removing anyway ({INCLUDE_IN_USE_FLAG})",
                 "Warning:".yellow().bold(),
                 in_use.summary()
             );
@@ -1275,6 +1285,21 @@ pub(crate) fn session_end(
                 eprintln!("Aborted — session {} is still open.", target.id);
                 return Ok(());
             }
+        }
+    }
+
+    // BUG-1986: the operator may have sat at the prompt for a while; a build
+    // started in the tree meanwhile must still stop the teardown. Nothing
+    // has been touched yet, so a refusal here leaves everything as it was.
+    if tears_down_worktree {
+        if let Err(refusal) = recheck_holders_before_teardown(
+            &target.worktree_path,
+            include_in_use,
+            aida_core::worktree_holders::check_worktree_removal_interactive,
+        ) {
+            anyhow::bail!(
+                "{refusal}\n\nThe session was NOT ended; its lease and worktree are unchanged."
+            );
         }
     }
 
@@ -1361,8 +1386,10 @@ pub(crate) fn session_end(
                     p.display().to_string().dimmed()
                 ),
                 Ok(None) => {}
+                // BUG-1986: the return salvages again and keeps the tree
+                // (no reset) if that fails too. trace:BUG-1986 | ai:claude
                 Err(e) => eprintln!(
-                    "{} could not salvage uncommitted changes before return: {} — proceeding (they will be reset away)",
+                    "{} could not salvage uncommitted changes before return: {} — the return will retry and keep the tree if it fails again",
                     "Warning:".yellow().bold(),
                     e
                 ),
@@ -1545,6 +1572,20 @@ pub(crate) fn session_end(
     // idle) instead of deleting it. The directory persists so the next acquire
     // reuses it warm. trace:STORY-714 | ai:claude
     let mut returned_to_pool = false;
+    // BUG-1986: the last holder check, immediately before the tree is reset
+    // or removed. The lease is already gone by now, so a refusal keeps the
+    // worktree on disk and fails the command at the end instead of bailing
+    // midway through the teardown. trace:BUG-1986 | ai:claude
+    let kept_in_use = if has_worktree && shared_peer.is_none() {
+        recheck_holders_before_teardown(
+            &target.worktree_path,
+            include_in_use,
+            aida_core::worktree_holders::check_worktree_removal_interactive,
+        )
+        .err()
+    } else {
+        None
+    };
     if !has_worktree {
         // BUG-734: worktree-less lease — the record is gone; nothing on disk
         // to remove or return. trace:BUG-734 | ai:claude
@@ -1561,6 +1602,12 @@ pub(crate) fn session_end(
             target.worktree_path.display(),
             peer.id.yellow(),
             peer.scope
+        );
+    } else if let Some(refusal) = &kept_in_use {
+        eprintln!(
+            "{} {refusal}\n\nThe session's lease was released, but its worktree {} was kept.",
+            "Error:".red().bold(),
+            target.worktree_path.display()
         );
     } else if !remove
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
@@ -1657,7 +1704,7 @@ pub(crate) fn session_end(
     // BUG-734: no worktree was ever created, so no Claude Code project dir
     // can have been orphaned by its removal. trace:BUG-734 | ai:claude
     // trace:TASK-70 BUG-483 STORY-714 | ai:claude
-    if has_worktree && shared_peer.is_none() && !returned_to_pool {
+    if has_worktree && shared_peer.is_none() && !returned_to_pool && kept_in_use.is_none() {
         if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
             if cc_dir.is_dir() {
                 if purge_cc {
@@ -1806,7 +1853,37 @@ pub(crate) fn session_end(
             eprintln!("{}", line);
         }
     }
+    // trace:BUG-1986 | ai:claude
+    if kept_in_use.is_some() {
+        anyhow::bail!(
+            "the session ended, but worktree {} was kept because a live process started \
+             using it during the teardown; stop it and remove the worktree by hand, or \
+             re-run the cleanup later",
+            target.worktree_path.display()
+        );
+    }
     Ok(())
+}
+
+/// The session-end override flag for the live-process refusal.
+// trace:BUG-1986 | ai:claude
+pub(crate) const INCLUDE_IN_USE_FLAG: &str = "--include-in-use";
+
+/// Re-run the live-process check right before a destructive teardown step.
+/// `check` is the scan (injectable for tests). `Err` carries the full
+/// refusal text naming each holder and the override flag. With
+/// `include_in_use` the scan is skipped: the operator already chose to
+/// remove the tree regardless.
+// trace:BUG-1986 | ai:claude
+pub(crate) fn recheck_holders_before_teardown(
+    worktree: &std::path::Path,
+    include_in_use: bool,
+    check: impl Fn(&std::path::Path) -> Result<(), aida_core::worktree_holders::WorktreeInUse>,
+) -> std::result::Result<(), String> {
+    if include_in_use || worktree.as_os_str().is_empty() {
+        return Ok(());
+    }
+    check(worktree).map_err(|in_use| in_use.refusal(INCLUDE_IN_USE_FLAG))
 }
 
 /// BUG-59: ready-to-print hint lines telling the caller to leave the deleted
@@ -1823,3 +1900,7 @@ pub(crate) fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -
         format!("      cd '{}'", escaped),
     ]
 }
+
+#[cfg(test)]
+#[path = "tests/bug_1986_teardown_recheck_tests.rs"]
+mod bug_1986_teardown_recheck_tests;

@@ -282,7 +282,10 @@ fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
     assert!(!out.status.success(), "session end must refuse:\n{msg}");
     assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
     assert!(msg.contains("sleep 600"), "names the command:\n{msg}");
-    assert!(msg.contains("--force"), "names the override:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
     assert!(
         !msg.contains("BUG-1947"),
         "no internal ids in user prose:\n{msg}"
@@ -292,10 +295,31 @@ fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
     drop(live);
 }
 
-// (a): `--force` overrides the refusal and removes the worktree.
+// BUG-1986: `--force` (skip the prompt, discard dirt) alone no longer
+// overrides the live-process refusal; a sweep that passes it for those
+// reasons must still keep a tree that is in use.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn session_end_force_alone_does_not_override_the_live_process_refusal() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    let live = s.spawn_live_process();
+    let out = s.end(&s.repo, &["--force"]);
+    let msg = text(&out);
+    assert!(!out.status.success(), "--force alone must refuse:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
+    assert!(s.worktree.is_dir(), "worktree must survive");
+    assert!(s.lease_exists(), "lease must survive");
+    drop(live);
+}
+
+// (a): `--include-in-use` overrides the refusal and removes the worktree.
 // (c): releasing the lease does not move the spec back out of In Progress.
 #[test]
-fn session_end_force_removes_a_worktree_with_a_live_process_inside() {
+fn session_end_include_in_use_removes_a_worktree_with_a_live_process_inside() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let before = s.status_line();
@@ -305,15 +329,15 @@ fn session_end_force_removes_a_worktree_with_a_live_process_inside() {
     );
     let live = s.spawn_live_process();
 
-    let out = s.end(&s.repo, &["--force"]);
+    let out = s.end(&s.repo, &["--include-in-use"]);
     assert!(
         out.status.success(),
-        "--force must proceed:\n{}",
+        "--include-in-use must proceed:\n{}",
         text(&out)
     );
     assert!(
         !s.worktree.exists(),
-        "worktree must be removed under --force"
+        "worktree must be removed under --include-in-use"
     );
     assert!(!s.lease_exists(), "lease released");
     assert_eq!(
@@ -342,8 +366,8 @@ fn session_end_without_live_processes_removes_the_worktree_even_from_inside_it()
 
 // Pooling is the default, and returning a pooled tree runs a forced checkout
 // and a hard reset, which rewrites the files under a running build just as a
-// removal deletes them. The return must refuse the same way, and `--force`
-// must override it the same way.
+// removal deletes them. The return must refuse the same way, and
+// `--include-in-use` must override it the same way.
 #[test]
 fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -361,7 +385,10 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
     assert!(!out.status.success(), "pool return must refuse:\n{msg}");
     assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
     assert!(msg.contains("sleep 600"), "names the command:\n{msg}");
-    assert!(msg.contains("--force"), "names the override:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
     assert!(s.lease_exists(), "lease must survive the refusal");
     assert_eq!(
         s.worktree_branch(),
@@ -369,10 +396,10 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
         "the tree must not be detached and reset under the live process"
     );
 
-    let out = s.end(&s.repo, &["--force"]);
+    let out = s.end(&s.repo, &["--include-in-use"]);
     assert!(
         out.status.success(),
-        "--force must proceed:\n{}",
+        "--include-in-use must proceed:\n{}",
         text(&out)
     );
     assert!(!s.lease_exists(), "lease released");
@@ -383,5 +410,45 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
         "a pooled tree is returned, not removed:\n{}",
         text(&out)
     );
+    drop(live);
+}
+
+// BUG-1986: `aida worktree pool return` resets the tree the same way, so it
+// applies the strict holder check, and `--include-in-use` overrides it.
+// trace:BUG-1986 | ai:claude
+#[test]
+fn pool_return_refuses_a_worktree_a_live_process_is_using() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start_pooled();
+    let live = s.spawn_live_process();
+    let pid = live.0.id();
+    let branch_before = s.worktree_branch();
+
+    let wt = s.worktree.to_str().unwrap().to_string();
+    let mut ret = aida(&s.repo, &s.home);
+    ret.args(["worktree", "pool", "return", &wt]);
+    let out = ret.output().expect("run pool return");
+    let msg = text(&out);
+    assert!(!out.status.success(), "pool return must refuse:\n{msg}");
+    assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
+    assert!(
+        msg.contains("--include-in-use"),
+        "names the override:\n{msg}"
+    );
+    assert_eq!(
+        s.worktree_branch(),
+        branch_before,
+        "the tree must not be reset under the live process"
+    );
+
+    let mut ret = aida(&s.repo, &s.home);
+    ret.args(["worktree", "pool", "return", &wt, "--include-in-use"]);
+    let out = ret.output().expect("run pool return --include-in-use");
+    assert!(
+        out.status.success(),
+        "--include-in-use must proceed:\n{}",
+        text(&out)
+    );
+    assert_eq!(s.worktree_branch(), "HEAD", "returned trees are detached");
     drop(live);
 }

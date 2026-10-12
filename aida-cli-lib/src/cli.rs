@@ -1640,31 +1640,33 @@ pub enum SessionCommand {
         #[clap(long, short = 'y')]
         yes: bool,
 
-        /// Force through safety checks. Three effects:
-        ///   1. Force-terminate any live `claude` processes inside the
-        ///      worktree (SIGTERM, 5s grace, then SIGKILL). Without this,
-        ///      `session end` refuses to remove a worktree with live
-        ///      claudes inside (prevents orphaned-claude-with-dangling-
-        ///      cwd leak).
-        ///   2. Remove the worktree, or reset it back into the warm pool,
-        ///      even while other live processes use it (a cwd, open file,
-        ///      or running program inside it, e.g. a cargo build). Without
-        ///      this, `session end` refuses and names each pid and command.
-        ///      Those processes are not killed. Your own shell, its
-        ///      parents and background jobs, and the helpers of the agent
-        ///      you are ending from (such as its MCP server) are never
-        ///      counted.
-        ///   3. Discard uncommitted tracked/untracked-but-not-ignored
-        ///      changes in the worktree. Without this, `session end`
-        ///      refuses and prints the dirty file list. Gitignored
-        ///      differences — `target/`, `.aida/cache.db`, etc. — never
-        ///      require `--force` and are always discarded.
-        // trace:BUG-61 | ai:claude
-        // trace:BUG-1947 | ai:claude
+        /// Discard uncommitted work and skip the confirmation. Discards
+        /// tracked and untracked-but-not-ignored changes in the worktree;
+        /// without this, `session end` refuses and prints the dirty file
+        /// list. Gitignored differences (`target/`, `.aida/cache.db`, etc.)
+        /// never require `--force` and are always discarded. `--force` does
+        /// NOT override the live-process check; that is `--include-in-use`.
         // trace:BUG-67 | ai:claude
         // trace:TASK-487 | ai:claude
+        // trace:BUG-1986 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// Remove the worktree, or reset it back into the warm pool, even
+        /// while live processes use it. Without this, `session end` refuses
+        /// and names each pid and command: a live `claude` inside the
+        /// worktree, or any other process with its working directory, an
+        /// open or memory-mapped file, or its program inside it (a cargo
+        /// build, for example). With it, live `claude` processes inside the
+        /// worktree are terminated (SIGTERM, 5s grace, then SIGKILL); other
+        /// processes are not killed. Your own shell, its parents and
+        /// background jobs, and the helpers of the agent you are ending
+        /// from (such as its MCP server) are never counted.
+        // trace:BUG-61 | ai:claude
+        // trace:BUG-1947 | ai:claude
+        // trace:BUG-1986 | ai:claude
+        #[clap(long)]
+        include_in_use: bool,
 
         /// After removing the worktree, also delete the corresponding
         /// `~/.claude/projects/<encoded-cwd>/` directory so `claude
@@ -3221,6 +3223,14 @@ pub enum WorktreePoolCommand {
     Return {
         /// Worktree path to return (default: the pool tree at the cwd).
         path: Option<String>,
+
+        /// Reset the tree even while live processes use it (a working
+        /// directory, open or memory-mapped file, or program inside it).
+        /// Without this, the return refuses and names each pid and command,
+        /// and also refuses when the process list cannot be fully checked.
+        // trace:BUG-1986 | ai:claude
+        #[clap(long)]
+        include_in_use: bool,
     },
 
     /// Register EXISTING worktrees into the warm-pool — the migration path for

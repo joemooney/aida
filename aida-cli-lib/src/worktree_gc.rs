@@ -2079,11 +2079,26 @@ pub(crate) fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<
             }
             Ok(())
         }
-        WorktreePoolCommand::Return { path } => {
+        WorktreePoolCommand::Return {
+            path,
+            include_in_use,
+        } => {
             let target = match path {
                 Some(p) => std::path::PathBuf::from(p),
                 None => std::env::current_dir()?,
             };
+            // BUG-1986: a return runs a forced checkout and a hard reset,
+            // which rewrites every file under a running build. Apply the
+            // strict check: a live holder, or a scan that cannot be
+            // verified, refuses unless --include-in-use. trace:BUG-1986 | ai:claude
+            if !*include_in_use {
+                if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&target) {
+                    anyhow::bail!(
+                        "{}\n\nThe worktree was NOT returned; it is unchanged.",
+                        in_use.refusal("--include-in-use")
+                    );
+                }
+            }
             aida_core::worktree_pool::return_to_pool(&project_root, &target)?;
             println!(
                 "{} returned {} to the warm-pool (reset to a clean base, marked idle — directory + build cache kept)",

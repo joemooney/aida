@@ -11877,6 +11877,11 @@ pub(crate) fn handle_queue_work(
                 // (a pooled tree is returned + reset clean, not deleted).
                 /* remove */
                 false,
+                // A live process inside the stolen tree still refuses the
+                // teardown; --steal never implies --include-in-use.
+                // trace:BUG-1986 | ai:claude
+                /* include_in_use */
+                false,
             )
             // BUG-311: collapse the internal session_end error into the
             // primary message so it surfaces specifically as "--steal could

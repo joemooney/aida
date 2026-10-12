@@ -904,7 +904,7 @@ session end` would break the chain.
 |------|--------------|-----|
 | ⇒ Submit the PR ← recommended | `/aida-pr` | The orchestrator is already driving this spec — opening the PR is the only mechanical step that keeps the chain moving (phases 2-6 follow automatically). Reversible: closing the PR halts at phase 3. |
 | ⊕ Route to the advisor *(include only when the deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the implementation surfaced a load-bearing risk the implementer can't grade itself (smoke-test gate, deviation from the plan, larger-than-expected change), park the decision with the advisor instead of guessing the path forward. |
-| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run. Reversible: re-queue with `aida queue work <SPEC-ID>`. |
+| ⏏ Abort the chain | Ctrl+C, then `aida session end <session-id> --force --include-in-use` from the parent shell | Hard-stops the orchestrator — ends this spec and bails; phases 2-6 will not run. Reversible: re-queue with `aida queue work <SPEC-ID>`. |
 
 Orchestrator mode shows only these three rows on purpose: there is no
 "grab the next item" (the orchestrator picks up the next spec only after

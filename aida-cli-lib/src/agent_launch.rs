@@ -208,6 +208,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             skip_ci,
             return_to_pool,
             remove,
+            include_in_use,
         } => session_end(
             id.as_deref(),
             spec.as_deref(),
@@ -220,6 +221,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *skip_ci,
             *return_to_pool,
             *remove,
+            *include_in_use,
         ),
         SessionCommand::Leases {
             verbose,
