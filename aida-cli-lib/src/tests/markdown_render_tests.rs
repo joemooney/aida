@@ -315,36 +315,137 @@ fn aida_glyphs_env_drives_the_terminal_renderer() {
         ]);
         let out = render_markdown_for_terminal(WIDE_TABLE, 80);
         assert_all_ascii(&out);
-        assert!(out.starts_with("+-"), "{out}");
+        assert!(out.contains("+-") && !out.contains('┌'), "{out}");
     }
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_GLYPHS", Some("unicode")),
         ("AIDA_TEST_HOME", Some(home_str)),
     ]);
-    assert!(render_markdown_for_terminal(WIDE_TABLE, 80).starts_with("┌"));
+    let unicode = render_markdown_for_terminal(WIDE_TABLE, 80);
+    assert!(unicode.contains('┌'), "{unicode}");
 }
 
 #[test]
-fn empty_no_color_is_ignored_per_no_color_org() {
-    // Unset or empty NO_COLOR leaves colour on at a terminal.
-    assert!(styling_decision(None, None, None, true));
-    assert!(styling_decision(Some(""), None, None, true));
-    // A non-empty NO_COLOR turns it off, whatever its value.
-    assert!(!styling_decision(Some("1"), None, None, true));
-    assert!(!styling_decision(Some("0"), None, None, true));
-    // CLICOLOR_FORCE wins over NO_COLOR; CLICOLOR=0 and a pipe turn it off.
-    assert!(styling_decision(Some("1"), Some("1"), None, false));
-    assert!(!styling_decision(None, Some("0"), None, false));
-    assert!(!styling_decision(None, None, Some("0"), true));
-    assert!(!styling_decision(None, None, None, false));
+fn empty_no_color_override_follows_no_color_org() {
+    use std::ffi::OsStr;
+    let empty = Some(OsStr::new(""));
+    // Unset or non-empty NO_COLOR: `colored` already reads it right.
+    assert_eq!(empty_no_color_override(None, None, None, true), None);
+    assert_eq!(
+        empty_no_color_override(Some(OsStr::new("1")), None, None, true),
+        None
+    );
+    // Empty NO_COLOR is ignored: colour is on at a terminal...
+    assert_eq!(empty_no_color_override(empty, None, None, true), Some(true));
+    // ...and still off when piped or under CLICOLOR=0.
+    assert_eq!(
+        empty_no_color_override(empty, None, None, false),
+        Some(false)
+    );
+    assert_eq!(
+        empty_no_color_override(empty, None, Some("0"), true),
+        Some(false)
+    );
+    // CLICOLOR_FORCE already forces colour on in `colored`: no override.
+    assert_eq!(empty_no_color_override(empty, Some("1"), None, false), None);
+    assert_eq!(
+        empty_no_color_override(empty, Some("0"), None, true),
+        Some(true)
+    );
+}
+
+/// A local `colored` decision object, so these tests never flip the
+/// process-wide override other tests depend on.
+fn local_colour(override_to: Option<bool>) -> colored::control::ShouldColorize {
+    let sc = colored::control::ShouldColorize::from_env();
+    if let Some(on) = override_to {
+        sc.set_override(on);
+    }
+    sc
 }
 
 #[test]
-fn quiet_render_hook_only_silences_render_panics() {
+fn renderer_and_colored_make_one_colour_decision_under_empty_no_color() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("NO_COLOR", Some("")),
+        ("CLICOLOR_FORCE", None),
+        ("CLICOLOR", None),
+        ("AIDA_TEST_HOME", home.path().to_str()),
+    ]);
+    // `colored` alone reads an empty NO_COLOR as "off".
+    let colour = local_colour(None);
+    assert!(!colour.should_colorize());
+    // The process-start policy corrects it at a terminal (no-color.org)...
+    apply_no_color_policy_to(&colour, true);
+    assert!(colour.should_colorize());
+    // ...and the renderer follows the very same decision.
+    let out = render_for_terminal_with("**bold**", 80, &colour);
+    assert!(out.contains('\x1b'), "{out:?}");
+    // Piped, the policy keeps colour off, and again the renderer agrees.
+    let piped = local_colour(None);
+    apply_no_color_policy_to(&piped, false);
+    assert!(!piped.should_colorize());
+    assert!(!render_for_terminal_with("**bold**", 80, &piped).contains('\x1b'));
+}
+
+#[test]
+fn set_override_false_suppresses_renderer_styling() {
+    let src = "# Heading\n\n**bold**";
+    let on = render_for_terminal_with(src, 80, &local_colour(Some(true)));
+    let off = render_for_terminal_with(src, 80, &local_colour(Some(false)));
+    assert!(on.contains('\x1b'), "{on:?}");
+    assert!(!off.contains('\x1b'), "{off:?}");
+}
+
+#[test]
+fn quiet_render_hook_silences_only_render_panics() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    const SILENT: &str = "bug1979-render-panic-marker";
+    const LOUD: &str = "bug1979-thread-panic-marker";
+    // Settle the once-only global install first so it cannot wrap our hook.
     install_quiet_render_hook();
-    // Outside a render, the flag is clear, so other panics still reach the
-    // previous hook.
-    assert!(!RENDERING.with(|r| r.get()));
-    let _ = render_markdown_for_terminal("text", 80);
-    assert!(!RENDERING.with(|r| r.get()), "flag reset after render");
+    let seen_silent = Arc::new(AtomicUsize::new(0));
+    let seen_loud = Arc::new(AtomicUsize::new(0));
+    let saved = Arc::new(std::panic::take_hook());
+    {
+        let (silent, loud, saved) = (seen_silent.clone(), seen_loud.clone(), saved.clone());
+        // The counting "previous" hook; other tests' panics pass through to
+        // the saved hook so their messages are not lost.
+        let counting: Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send> =
+            Box::new(move |info| match panic_message(info.payload()) {
+                SILENT => {
+                    silent.fetch_add(1, Ordering::SeqCst);
+                }
+                LOUD => {
+                    loud.fetch_add(1, Ordering::SeqCst);
+                }
+                _ => saved(info),
+            });
+        std::panic::set_hook(quiet_render_hook(counting));
+    }
+
+    // A panic on the render thread inside catch_render is caught silently.
+    let caught = catch_render(|| -> () { panic!("{}", SILENT) });
+    // A panic in a spawned thread reaches the previous hook.
+    let joined = std::thread::spawn(|| -> () { panic!("{}", LOUD) }).join();
+    // So does a panic on this thread outside a render (the flag was reset).
+    let outside = std::panic::catch_unwind(|| -> () { panic!("{}", LOUD) });
+
+    let _ = std::panic::take_hook();
+    let saved = Arc::try_unwrap(saved).unwrap_or_else(|_| panic!("hook still shared"));
+    std::panic::set_hook(saved);
+
+    assert!(caught.is_err() && joined.is_err() && outside.is_err());
+    assert_eq!(
+        seen_silent.load(Ordering::SeqCst),
+        0,
+        "render panic was reported"
+    );
+    assert_eq!(
+        seen_loud.load(Ordering::SeqCst),
+        2,
+        "other panics were silenced"
+    );
 }

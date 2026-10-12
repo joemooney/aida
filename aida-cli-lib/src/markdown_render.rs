@@ -99,79 +99,148 @@ pub(crate) fn terminal_width() -> usize {
         .unwrap_or(80)
 }
 
-/// Pure styling decision, following no-color.org: `CLICOLOR_FORCE` (set and
-/// not `0`) forces colour on; a NON-EMPTY `NO_COLOR` turns it off (an empty
-/// `NO_COLOR` is ignored); `CLICOLOR=0` turns it off; otherwise colour is on
-/// at a terminal. This is the `colored` crate's precedence minus its
-/// treatment of an empty `NO_COLOR` as set.
+/// The process-wide colour override that applies no-color.org's rule to an
+/// EMPTY `NO_COLOR`, or `None` when `colored`'s own reading is already right.
+///
+/// no-color.org says an empty `NO_COLOR` must be ignored; `colored` 2.2 treats
+/// any set value (empty included) as "off". So only for an empty `NO_COLOR`
+/// with no `CLICOLOR_FORCE` forcing colour on, this returns the decision
+/// `colored` would make without `NO_COLOR`: on at a terminal unless
+/// `CLICOLOR=0`. Pure so it is unit-tested.
 // trace:BUG-1979 | ai:claude
-fn styling_decision(
-    no_color: Option<&str>,
+pub(crate) fn empty_no_color_override(
+    no_color: Option<&std::ffi::OsStr>,
     clicolor_force: Option<&str>,
     clicolor: Option<&str>,
     stdout_is_tty: bool,
-) -> bool {
+) -> Option<bool> {
+    if !no_color.is_some_and(|v| v.is_empty()) {
+        return None;
+    }
     if clicolor_force.is_some_and(|v| v != "0") {
-        return true;
+        return None;
     }
-    if no_color.is_some_and(|v| !v.is_empty()) {
-        return false;
-    }
-    if clicolor == Some("0") {
-        return false;
-    }
-    stdout_is_tty
+    Some(clicolor != Some("0") && stdout_is_tty)
 }
 
-/// Whether styling (ANSI) is on, from the ambient environment and terminal.
-fn styling_enabled() -> bool {
+/// Apply [`empty_no_color_override`] to the `colored` crate once, at process
+/// start (called from `main_entry` before any thread starts), so the whole
+/// process — the markdown renderer and every `colored` call site — makes the
+/// same colour decision. A later explicit `--color` / `--no-color` override
+/// still wins because it is applied after this.
+// trace:BUG-1979 | ai:claude
+pub(crate) fn apply_no_color_policy() {
     use std::io::IsTerminal;
+    apply_no_color_policy_to(
+        &colored::control::SHOULD_COLORIZE,
+        std::io::stdout().is_terminal(),
+    );
+}
+
+/// [`apply_no_color_policy`] against an explicit `colored` decision object, so
+/// tests can use a local one instead of flipping the process-wide global.
+fn apply_no_color_policy_to(target: &colored::control::ShouldColorize, stdout_is_tty: bool) {
     let var = |k: &str| std::env::var(k).ok();
-    styling_decision(
-        var("NO_COLOR").as_deref(),
+    if let Some(on) = empty_no_color_override(
+        std::env::var_os("NO_COLOR").as_deref(),
         var("CLICOLOR_FORCE").as_deref(),
         var("CLICOLOR").as_deref(),
-        std::io::stdout().is_terminal(),
-    )
+        stdout_is_tty,
+    ) {
+        target.set_override(on);
+    }
 }
 
 thread_local! {
-    /// Set while this thread renders inside [`render_markdown_for_terminal`]'s
-    /// `catch_unwind`, so the panic hook stays silent for that panic only.
+    /// Set while this thread renders inside [`catch_render`], so the panic
+    /// hook stays silent for that panic only.
     static RENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Install (once) a panic hook that is silent for a panic raised while this
-/// thread is rendering markdown, and delegates to the previous hook for every
-/// other panic. A caught renderer panic falls back to the raw source, so the
-/// default hook's stderr message would only be noise.
+/// Wrap `previous` in a panic hook that is silent for a panic raised while
+/// this thread is inside [`catch_render`], and delegates every other panic
+/// (other threads, or this thread outside a render) to `previous`.
+// trace:BUG-1979 | ai:claude
+fn quiet_render_hook(
+    previous: Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static>,
+) -> Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static> {
+    Box::new(move |info| {
+        if !RENDERING.with(|r| r.get()) {
+            previous(info);
+        }
+    })
+}
+
+/// Install [`quiet_render_hook`] over the current hook, once per process. A
+/// caught renderer panic falls back to the raw source, so the default hook's
+/// stderr message would only be noise.
 // trace:BUG-1979 | ai:claude
 fn install_quiet_render_hook() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            if !RENDERING.with(|r| r.get()) {
-                previous(info);
-            }
-        }));
+        std::panic::set_hook(quiet_render_hook(previous));
     });
+}
+
+/// `catch_unwind(f)` with this thread flagged as rendering, so a panic in `f`
+/// is caught without a message from the quiet hook.
+// trace:BUG-1979 | ai:claude
+fn catch_render<T>(f: impl FnOnce() -> T + std::panic::UnwindSafe) -> std::thread::Result<T> {
+    install_quiet_render_hook();
+    let was = RENDERING.with(|r| r.replace(true));
+    let result = std::panic::catch_unwind(f);
+    RENDERING.with(|r| r.set(was));
+    result
+}
+
+/// The message carried by a panic payload, for the debug diagnostic.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
 }
 
 /// Render `src` for a terminal `width` columns wide. Never fails: on any
 /// renderer error or panic the source is returned unchanged, without a panic
-/// message on stderr. Glyphs follow the active glyph profile.
+/// message on stderr (set `AIDA_DEBUG` to see it). Glyphs follow the active
+/// glyph profile; a configured `[ui] theme` contributes its base profile.
 pub(crate) fn render_markdown_for_terminal(src: &str, width: usize) -> String {
-    let styled = styling_enabled();
+    render_for_terminal_with(src, width, &colored::control::SHOULD_COLORIZE)
+}
+
+/// [`render_markdown_for_terminal`] with styling decided by `colour`, the
+/// `colored` crate's decision object. Production passes the global, so the
+/// renderer honours `NO_COLOR`, `CLICOLOR_FORCE` and any in-process override
+/// (including [`apply_no_color_policy`]) exactly like the rest of the output.
+// trace:BUG-1979 | ai:claude
+fn render_for_terminal_with(
+    src: &str,
+    width: usize,
+    colour: &colored::control::ShouldColorize,
+) -> String {
+    let styled = colour.should_colorize();
     // trace:BUG-1979 | ai:claude
-    let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
-    install_quiet_render_hook();
-    RENDERING.with(|r| r.set(true));
-    let result = std::panic::catch_unwind(|| render_markdown_with(src, width, styled, profile));
-    RENDERING.with(|r| r.set(false));
-    match result {
+    let root = crate::find_project_root().ok();
+    // `AIDA_GLYPHS` (a per-terminal property) beats a configured theme's base.
+    let profile = match crate::glyphs::active_theme(root.as_deref()) {
+        Some(theme) if std::env::var_os("AIDA_GLYPHS").is_none() => theme.base,
+        _ => crate::glyphs::active_profile(root.as_deref()),
+    };
+    match catch_render(|| render_markdown_with(src, width, styled, profile)) {
         Ok(Ok(rendered)) => rendered,
-        _ => src.to_string(),
+        Ok(Err(_)) => src.to_string(),
+        Err(payload) => {
+            if std::env::var_os("AIDA_DEBUG").is_some() {
+                eprintln!(
+                    "aida: markdown renderer panicked, showing raw text: {}",
+                    panic_message(payload.as_ref())
+                );
+            }
+            src.to_string()
+        }
     }
 }
 

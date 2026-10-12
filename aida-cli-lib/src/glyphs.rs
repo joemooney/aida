@@ -341,7 +341,12 @@ impl GlyphProfile {
 /// custom `[glyphs]` override like `"--"` would break alignment), and adding
 /// box-drawing to [`Glyph::ALL`] would make the skill-body glyph count and
 /// `aida config glyph list` treat ordinary box-drawing text as registry
-/// glyphs. The list bullet is a real registry glyph ([`Glyph::Bullet`]).
+/// glyphs.
+///
+/// The markdown renderer picks the line art AND its list bullet
+/// ([`Glyph::Bullet`] rendered for the same profile) from the profile alone:
+/// per-symbol `[glyphs]` overrides and theme bundles do not apply to rendered
+/// markdown. A configured `[ui] theme` contributes only its base profile.
 // trace:BUG-1979 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LineArt {
