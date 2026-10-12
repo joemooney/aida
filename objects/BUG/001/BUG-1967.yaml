@@ -12,10 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:37.738378336Z
-modified_at: 2026-10-12T06:01:47.074468678Z
+modified_at: 2026-10-12T06:01:51.248389314Z
 req_type: Bug
 tags:
 - groom:approve
+comments:
+- id: 01a12eb4-0190-7582-a569-4cf96410c7d4
+  author: joe
+  content: |
+    [groom:night] APPROVE as written. The 5 s CEILING in aida-cli/tests/bug_1674_show_bounded_under_writer.rs (show_bounded_and_labelled) is still a bare `elapsed < CEILING`. BUG-1730/BUG-1731 (#2284, #2288 / 15fd965f44) moved the aida-cli-lib wall-clock asserts to the load-aware crate::test_timing::assert_within_budget, but this aida-cli integration test was not covered. The likely fix: use the same load-aware pattern (expose an equivalent helper to aida-cli tests, keep 5 s as the budget, and add a hard hang ceiling) while still failing on a real regression.
+  created_at: 2026-10-12T06:01:51.248389314Z
+  modified_at: 2026-10-12T06:01:51.248389314Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
