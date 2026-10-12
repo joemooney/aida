@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:16.686825446Z
-modified_at: 2026-10-12T06:05:19.549889414Z
+modified_at: 2026-10-12T06:05:44.072644068Z
 req_type: Bug
 tags:
 - from:aida-host
@@ -41,6 +41,14 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-12T00:42:19.206334321Z
+comments:
+- id: 01a12eb7-8f08-7b02-8119-e0f91942ea84
+  author: joe
+  content: |
+    [groom:night] CLOSE-DUP of BUG-1977. Same refusal (aida-core/src/git_ops.rs HookKind::OtherAidaGenerated recommending `aida scaffold apply`) and same ask (a hook-only fix that never touches README.md/CLAUDE.md). BUG-1977's acceptance now covers the scoped command, listing all stale hooks, and a test that README.md/CLAUDE.md stay untouched. It cites this spec. The aida-host pilot evidence and the EPIC-77 link stay here for the record; consider linking BUG-1977 under EPIC-77 when closing.
+  created_at: 2026-10-12T06:05:44.072644068Z
+  modified_at: 2026-10-12T06:05:44.072644068Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
