@@ -1,0 +1,30 @@
+id: 01a12f4f-a60a-7d01-893e-e2c55592815e
+spec_id: BUG-1989
+agreed_id: BUG-1989
+title: 'Flaky test: task_1717 allocation_pull_and_push_follow_the_window_discipline sees the store lock held during pre-push'
+description: |-
+  CI run 38223901898 (PR #2552, head 00ff2b9d40, which touches only cache retry/read-budget code) failed at aida-cli/tests/task_1717_store_writer_lock.rs:518 in assert_push_ran_unlocked. The message was: push must run outside the store lock: ["lock=held", "hook_locks=", "git_locks=", "aida_locks=", "aida_cmd=... aida add allocated during test --type task "]. The pre-push hook's flock probe reported the store lock as held, while the parent aida's /proc fd list showed no lock fds. The same test file passed 5 out of 5 local runs at the same SHA (36/36 each time).
+
+  Hypothesis: the same open-file-description inheritance window as BUG-1974/BUG-1987. A process forked while the store lock was held (for example a detached refresh/auto-push child, or a git child spawned inside the window) keeps a duplicate of the flock fd until exec or exit. So the lock still reads as held after the parent releases it. Note that aida_locks only inspects the parent.
+
+  Acceptance: identify which process holds the duplicate fd (extend the probe to scan /proc/*/fd for the lock inode). Then either make the lock fd unreachable from any spawn (spawn only after release, or close-range in pre_exec), or make the assertion tolerate a lock held by a non-aida short-lived child, if that is legitimate. Do not weaken the push-unlocked invariant itself.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T08:51:51.434814324Z
+modified_at: 2026-10-12T08:51:51.434814324Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- night-b
+- store-lock
+filed_at:
+  code_sha: cd739cfb5f24200e1a7c45f0aaa6370bda8fcb70
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 95f15a20d4
+  vendor: claude
+  session: e2bad11d-5e52-4b29-b5d0-6238d10778dd
