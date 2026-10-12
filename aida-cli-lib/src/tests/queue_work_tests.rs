@@ -3781,6 +3781,10 @@ struct Bug1608Driver<'a> {
 }
 
 impl auto_complete::BatchDriver for Bug1608Driver<'_> {
+    fn stop_requested(&mut self) -> bool {
+        false
+    }
+
     fn next_head(&mut self) -> Option<String> {
         self.real.next_head()
     }

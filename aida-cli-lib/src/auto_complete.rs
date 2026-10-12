@@ -4827,6 +4827,14 @@ pub(crate) trait BatchDriver {
     fn cumulative_tokens(&mut self) -> u64 {
         0
     }
+    /// STORY-1130: has a cooperative `aida drain stop` been requested? The
+    /// drain loop asks the driver instead of reading the process-wide
+    /// `AIDA_DRAIN_STOP_FILE` env var itself, so a test driver cannot observe
+    /// another (parallel) test's stop request. Required — no default — so a
+    /// new production driver cannot silently ignore `aida drain stop`; real
+    /// drivers delegate to [`crate::drain_cmd::stop_requested_from_env`].
+    // trace:BUG-1980 | ai:claude
+    fn stop_requested(&mut self) -> bool;
 }
 
 /// Handle for one pipelined implementer/CI child.
@@ -5019,7 +5027,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
     loop {
         while !no_more_heads && in_flight.len() < depth {
-            if crate::drain_cmd::stop_requested_from_env() {
+            if driver.stop_requested() {
                 break;
             }
             if let Some(limit) = max {
@@ -5074,7 +5082,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
         let Some(member) = in_flight.pop_front() else {
             if cap_stop_out.is_some()
-                || crate::drain_cmd::stop_requested_from_env()
+                || driver.stop_requested()
                 || (max.is_some()
                     && launched >= max.unwrap()
                     && !no_more_heads
@@ -5248,7 +5256,7 @@ pub(crate) fn drain_batch_with_caps(
         };
         // STORY-1130: `aida drain stop` is cooperative: let the in-flight spec
         // land, then stop before picking up another head.
-        if crate::drain_cmd::stop_requested_from_env() {
+        if driver.stop_requested() {
             return BatchDrainResult {
                 shipped,
                 punted,
@@ -9212,6 +9220,9 @@ mod tests {
             fn next_head(&mut self) -> Option<String> {
                 self.queue.first().cloned()
             }
+            fn stop_requested(&mut self) -> bool {
+                false
+            }
             fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
                 self.ran.push(spec.to_string());
                 OrchestrationResult {
@@ -9255,6 +9266,9 @@ mod tests {
         impl BatchDriver for OneInconclusiveDriver {
             fn next_head(&mut self) -> Option<String> {
                 self.queue.first().cloned()
+            }
+            fn stop_requested(&mut self) -> bool {
+                false
             }
             fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
                 self.ran.push(spec.to_string());
@@ -11346,11 +11360,17 @@ mod tests {
         /// TASK-966: reported tokens each `run_spec` adds to the running total,
         /// so a `--max-tokens` cap test can drive the accumulator deterministically.
         tokens_each: u64,
+        /// BUG-1980: this driver's own cooperative stop-request file. The
+        /// drain sees a stop only when *this* path exists — never through the
+        /// process-wide env var a parallel test may have set.
+        // trace:BUG-1980 | ai:claude
+        stop_file: Option<std::path::PathBuf>,
     }
 
     impl MockBatchDriver {
         fn new(heads: &[&str]) -> Self {
             Self {
+                stop_file: None,
                 heads: heads.iter().map(|s| s.to_string()).collect(),
                 fail_at: None,
                 stall_spec: None,
@@ -11369,6 +11389,12 @@ mod tests {
         /// TASK-966: each completed spec reports `n` tokens (for `--max-tokens`).
         fn tokens_each(mut self, n: u64) -> Self {
             self.tokens_each = n;
+            self
+        }
+
+        /// BUG-1980: stop cooperatively once `path` exists.
+        fn stop_file(mut self, path: &std::path::Path) -> Self {
+            self.stop_file = Some(path.to_path_buf());
             self
         }
 
@@ -11434,6 +11460,11 @@ mod tests {
     impl BatchDriver for MockBatchDriver {
         fn next_head(&mut self) -> Option<String> {
             self.heads.first().cloned()
+        }
+
+        // trace:BUG-1980 | ai:claude
+        fn stop_requested(&mut self) -> bool {
+            self.stop_file.as_deref().is_some_and(|p| p.exists())
         }
 
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
@@ -11564,6 +11595,11 @@ mod tests {
     impl BatchDriver for MockPipelinedBatchDriver {
         fn next_head(&mut self) -> Option<String> {
             self.heads.first().cloned()
+        }
+
+        // trace:BUG-1980 | ai:claude
+        fn stop_requested(&mut self) -> bool {
+            false
         }
 
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
@@ -11784,11 +11820,9 @@ mod tests {
     fn drain_stop_request_stops_before_next_spec() {
         let dir = tempfile::tempdir().unwrap();
         let stop_file = dir.path().join("drain-stop.json");
-        let _env = crate::test_env::EnvVarsGuard::apply(&[(
-            "AIDA_DRAIN_STOP_FILE",
-            Some(stop_file.to_string_lossy().as_ref()),
-        )]);
-        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+        // BUG-1980: the stop path belongs to this driver, not the process env,
+        // so no parallel drain test can observe it.
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stop_file(&stop_file);
 
         let first = drain_batch(&mut driver, Some(1), None);
         assert_eq!(first.shipped, vec!["TASK-1"]);
@@ -11844,6 +11878,28 @@ mod tests {
                 cap: 25_000
             })
         );
+    }
+
+    #[test]
+    fn drain_ignores_stop_request_for_a_different_project_root() {
+        // BUG-1980 regression: a stop request for another project's drain
+        // (published through the process-wide `AIDA_DRAIN_STOP_FILE`, as a
+        // sibling test or `aida drain start` would) must not stop this drain.
+        // trace:BUG-1980 | ai:claude
+        let other_root = tempfile::tempdir().unwrap();
+        let other_stop = crate::drain_cmd::drain_stop_path(other_root.path());
+        std::fs::create_dir_all(other_stop.parent().unwrap()).unwrap();
+        std::fs::write(&other_stop, "{}").unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(
+            "AIDA_DRAIN_STOP_FILE",
+            Some(other_stop.to_string_lossy().as_ref()),
+        )]);
+        let own_root = tempfile::tempdir().unwrap();
+        let own_stop = crate::drain_cmd::drain_stop_path(own_root.path());
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stop_file(&own_stop);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
     }
 
     /// TASK-966: inactive caps leave the drain behaving exactly like the
@@ -13209,6 +13265,9 @@ mod tests {
     impl BatchDriver for ScenarioBatchDriver {
         fn next_head(&mut self) -> Option<String> {
             self.heads.first().map(|m| m.spec.clone())
+        }
+        fn stop_requested(&mut self) -> bool {
+            false
         }
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
             let scenario = self

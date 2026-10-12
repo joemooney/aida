@@ -546,6 +546,11 @@ pub(crate) struct RealBatchDriver<'a> {
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
+    // trace:BUG-1980 | ai:claude
+    fn stop_requested(&mut self) -> bool {
+        crate::drain_cmd::stop_requested_from_env()
+    }
+
     fn next_head(&mut self) -> Option<String> {
         match resolve_batch_members(
             self.storage,
