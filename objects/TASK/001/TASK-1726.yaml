@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T14:01:31.500987723Z
-modified_at: 2026-10-12T14:55:49.917827664Z
+modified_at: 2026-10-12T23:51:51.364063718Z
 req_type: Task
 tags:
 - groom:approve
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-10-12T06:07:58.778799048Z
   modified_at: 2026-10-12T06:07:58.778799048Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13287-9f44-71e2-95e2-12c931ceb9e5
+  author: joe
+  content: 'Round-1 fresh review REQUEST CHANGES at 17067dff87: step 5 implies a pure rebase needs no re-review, contradicting review binding (pr ship refuses stale reviewed_sha); auto-close claim too absolute. Git recipe verified correct in scratch repo. Brief on PR #2579.'
+  created_at: 2026-10-12T23:51:51.364063718Z
+  modified_at: 2026-10-12T23:51:51.364063718Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-e09d-7cf1-a225-ae89acca4b3b
   author: joe
