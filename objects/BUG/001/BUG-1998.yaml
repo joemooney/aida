@@ -1,0 +1,31 @@
+id: 01a1325c-8eba-76b3-810d-5184c1c64bbd
+spec_id: BUG-1998
+agreed_id: BUG-1998
+title: 'History index follow-ups to BUG-1954: cache status/doctor say a behind checkout catches up; diverged checkout with a live tip still told to rebuild'
+description: |
+  Follow-up from the approving fresh review of PR #2576 (BUG-1954). Neither item blocked that merge.
+
+  1. `aida cache status` and the doctor history check contradict the new CheckoutBehind note. Both cache_cmd.rs (~338) and doctor_cmd.rs (~13150) ignore `HistoryCacheStatus::head_behind_tip`. For a checkout behind the shared index they print "BEHIND — it catches up on the next `aida history events` query". That is false, because ensure_fresh leaves the index alone in that case (TASK-1507 branch). They should branch on `head_behind_tip` and say that another checkout moved the shared index on.
+  2. The same reset hazard remains for diverged checkouts. When HEAD has diverged from the tip but the tip is live in another checkout (the `tip_is_live_elsewhere` branch of ensure_fresh), classify_miss still says Stuck, and its note suggests `aida cache rebuild --history`. That rebuild would reset an index the other checkout uses. Consider recording `tip_live_elsewhere` in status_at and routing it to the CheckoutBehind-style note (no rebuild).
+
+  ## Acceptance
+  - With HEAD an ancestor of the index tip, `aida cache status` and the doctor history line neither say the index will catch up nor suggest a rebuild. Unit test on each formatter.
+  - A diverged HEAD whose tip is live in another checkout gets a no-rebuild miss and note. A diverged HEAD whose tip is not live elsewhere stays Stuck. Unit tests for both.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-12T23:04:49.082266695Z
+modified_at: 2026-10-12T23:04:49.082266695Z
+req_type: Bug
+tags:
+- follow-up:review
+- history
+filed_at:
+  code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: b039a4fe-1dc7-49c2-a86f-bca6dce13774
