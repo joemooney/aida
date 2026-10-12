@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:20:16.023382481Z
-modified_at: 2026-10-12T19:35:37.196150754Z
+modified_at: 2026-10-12T20:22:08.809429207Z
 req_type: Bug
 tags:
 - docs
@@ -56,6 +56,38 @@ comments:
     - A fresh reviewer re-gates at the new head.
   created_at: 2026-10-12T19:35:37.196150754Z
   modified_at: 2026-10-12T19:35:37.196150754Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a131c7-a0a9-7db1-8618-08e149018e0a
+  author: joe
+  content: |-
+    ## Advisor gate: APPROVE at `6fd6fbbbab1098fdf000ac0370fe301a9813b1f6` (#2565, BUG-1973). READY-FOR-OPERATOR once Build is green.
+
+    A fresh, independent reviewer approved round 2. The verdict is recorded at `.aida/review-verdicts/BUG-1973.json`.
+
+    The advisor dispatched this implementer, so under ADR-73 condition 1 the operator merges it.
+
+    **What the reviewer verified**
+    - **The hint runs end to end with the real binary.** The printed `note:` line was `eval`'d for 10 windows: single-token, multi-word (`'24 hours ago'`), and offset timestamps. All exited 0 with the same report as the old flag.
+    - **`shell_quote` round-trips the dangerous strings byte-for-byte.** The set covered quotes, `$`, backticks, `;`, newline, globs, and `''`.
+    - **Invalid or empty windows show the `<window>` placeholder.** The check uses the command's own parser, so it cannot reject a form the command accepts.
+    - **The tests catch regressions.** Three mutations each fail at least one test: an unquoted window, the parse check removed, and the trim removed.
+
+    **CI**
+    - merge-hold-gate passes.
+    - Build run 38301638493 was still running at gate time. Merge only after it is green at this SHA.
+
+    **Merge (operator)**
+    ```
+    gh pr checks 2565   # Build must be green at 6fd6fbbbab
+    gh pr merge 2565 --squash --match-head-commit 6fd6fbbbab1098fdf000ac0370fe301a9813b1f6
+    aida pull && aida edit BUG-1973 --status completed
+    ```
+
+    **Non-blocking follow-ups**
+    - (minor) A window starting with `-`, such as `--unused=-5d`, prints `aida usage unused -5d`, and clap rejects that. Fix it by printing `aida usage unused -- <quoted>` or by falling back to the placeholder.
+    - (nit) The parse test passes the raw window to clap rather than the printed hint split with shlex.
+  created_at: 2026-10-12T20:22:08.809429207Z
+  modified_at: 2026-10-12T20:22:08.809429207Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-ff64-7580-a3f0-1a79fc527c46
