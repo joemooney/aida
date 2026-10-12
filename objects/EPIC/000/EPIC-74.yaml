@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-12T05:50:19.537325186Z
+modified_at: 2026-10-12T05:51:05.991933368Z
 req_type: Epic
 tags:
 - architecture
@@ -1192,6 +1192,13 @@ comments:
   created_at: 2026-10-11T15:21:23.834061165Z
   modified_at: 2026-10-11T15:21:23.834061165Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12eaa-2907-7d20-8977-00b6040c73d8
+  author: joe
+  content: |
+    [groom:night] APPROVE as a coherent container (supervised). Three children map one-to-one to the epic's slices (STORY-1481 exclusion, STORY-1482 targeted PRs + Done-in-target, STORY-1483 sync + landing), so no SPLIT is needed. The design is signed (V4, 2026-10-08) and the operator accepted the container on 2026-10-11. The operator's gating prerequisites are still OPEN as of this pass: (1) no canonical ADR filed from EPIC74_ADR_DRAFT_V4.md (`aida search` finds none); (2) the V4 child-acceptance amendment is not applied: STORY-1481 still contains "aida lane" (2 hits), and its title, like STORY-1482/1483's, still uses lane vocabulary; (3) slices 2-3 still wait on EPIC-76's common publisher. Children should stay unqueued until (1) and (2) are done. No code shipped: no target_branch field, no lane command.
+  created_at: 2026-10-12T05:51:05.991933368Z
+  modified_at: 2026-10-12T05:51:05.991933368Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
