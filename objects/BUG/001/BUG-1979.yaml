@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T21:02:01.748928563Z
-modified_at: 2026-10-12T18:57:30.716336410Z
+modified_at: 2026-10-12T19:37:15.307323179Z
 req_type: Bug
 tags:
 - groom:approve
@@ -28,6 +28,45 @@ comments:
   created_at: 2026-10-12T06:07:17.757242416Z
   modified_at: 2026-10-12T06:07:17.757242416Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a1319e-872b-7880-aaad-a6750a7c01b3
+  author: joe
+  content: |-
+    ## Rework brief, round 1 (advisor): REQUEST CHANGES at 16534d5b72
+
+    **Verdict:** REQUEST CHANGES from the independent reviewer. The glyph work, the snapshots and the panic-hook design are sound. The default Unicode output is byte-identical, and a mutation check confirmed the new tests catch regressions. What blocks is how colour is decided.
+
+    ### Must fix
+    1. **One `aida show` run makes two different colour decisions** (`aida-cli-lib/src/markdown_render.rs:108-137`).
+       - The renderer now ignores an empty `NO_COLOR`. The `colored` 2.2.0 crate, which styles the rest of `show`, treats an empty `NO_COLOR` as "off".
+       - Result: under `NO_COLOR=`, labels such as `"Execution mode:".bold()` (`git_backend_cmd.rs:5884`) and comment headers (`rel_cards.rs`) print plain, while the description and comment bodies get ANSI styling.
+       - The rewrite also drops `colored::control::set_override`, which the old code honoured through `SHOULD_COLORIZE`.
+       - **Fix:** apply the no-color.org rule once for the whole process, in `main_entry` (`lib_part1.rs:156`), before any threads start. When `NO_COLOR` is set but empty, call `colored::control::set_override(...)` with the same decision, or remove the empty variable.
+       - Then make `styling_enabled()` return `colored::control::SHOULD_COLORIZE.should_colorize()` again.
+       - **Test:** with an empty `NO_COLOR`, the renderer and `colored` must agree. Also, `set_override(false)` must suppress renderer styling.
+       - `output_format.rs:148` and `queue_misc.rs:785` (`var_os("NO_COLOR").is_none()`) stay out of scope. Note them in the PR body.
+    2. **Weak panic test** (`tests/markdown_render_tests.rs:343`). `quiet_render_hook_only_silences_render_panics` never triggers a panic. Replace it or add a test that:
+       - installs a counting previous hook;
+       - shows that a flagged `catch_unwind(|| panic!())` on the render thread stays silent;
+       - shows that a panic in a spawned thread does reach the previous hook.
+
+    ### Should fix (cheap)
+    3. **Theme and per-symbol overrides** (`markdown_render.rs:167`, `:204`).
+       - At minimum, reword the `glyphs.rs:344` doc comment so it no longer suggests bullet overrides or themes apply to markdown line art.
+       - Optional: choose the line-art profile with `active_theme(root).map(|t| t.base).unwrap_or(active_profile(root))`. `status_display` has the same gap, so this is not a regression.
+
+    ### Optional
+    4. A caught renderer panic now leaves no diagnostic. You may print the message when a debug env var is set.
+
+    ### Done when
+    - `aida show` makes one colour decision under an empty `NO_COLOR`, and `set_override` is honoured again.
+    - The panic test exercises real panics.
+    - The tests pass and would fail if the fix were reverted.
+    - Each commit is formatted `[AI:claude] fix(show): … (BUG-1979)`, with no `--no-verify`.
+    - `make check-ci-fast` passes.
+    - A fresh reviewer gates the new head.
+  created_at: 2026-10-12T19:37:15.307323179Z
+  modified_at: 2026-10-12T19:37:15.307323179Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309d-1362-7871-a262-d05e56252a49
   author: joe
