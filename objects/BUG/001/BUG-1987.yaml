@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T06:55:17.329044665Z
-modified_at: 2026-10-12T19:58:00.178095368Z
+modified_at: 2026-10-12T20:00:43.972895727Z
 req_type: Bug
 tags:
 - ci
@@ -41,6 +41,34 @@ comments:
   created_at: 2026-10-12T19:32:46.310077811Z
   modified_at: 2026-10-12T19:32:46.310077811Z
   session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
+- id: 01a131b4-05c4-7501-a1bf-85c44e5ec676
+  author: joe
+  content: |-
+    ## Advisor merge audit — #2561 BUG-1987 (night relay)
+
+    Merged as 84ff1cf0ab (squash), pinned with `--match-head-commit 89d49d22f4ed33558e2dac2af9211362eae6ece8`.
+
+    ADR-73 conditions:
+    1. **Not advisor-authored:** this is night-relay code; the advisor did not dispatch the implementer.
+    2. **Independent STRICT APPROVE at 89d49d22f4.** The reviewer checked:
+       - flock (`fs2`) open-file-description semantics: `LOCK_UN` in `Drop` releases the lock that a fork-window fd copy would otherwise hold;
+       - no new half-written window, and the drop order is unchanged;
+       - no main-branch dependency on the removed settle/registry code, which existed only in this PR;
+       - mutation checks: a no-op `Drop` fails both fork-copy tests, and the `serve_locked` mutant fails.
+       The verdict is recorded in `.aida/review-verdicts/BUG-1987.json`.
+    3. **CI green at the exact SHA:** Build run 38296294825 passed, and merge-hold-gate passed.
+    4. **No holds or labels:** mergeStateStatus was CLEAN.
+    5. **Signoff:** advisor-relay.
+
+    BUG-1987 is completed.
+
+    Non-blocking follow-ups:
+    - (low) `task_1507_history_cache_tests.rs:3807-3820`: the `< 500ms` assert is redundant and could flake on a loaded host. Drop it or relax it.
+    - (nit) The `serve_locked` doc comment in `history_cache.rs` (~2537-2551) mixes past and current behaviour.
+    - (nit) The comments in the bug_1635 and task_1512 tests still describe the inherited-fd fallback as live.
+  created_at: 2026-10-12T20:00:43.972895727Z
+  modified_at: 2026-10-12T20:00:43.972895727Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a13096-4bf6-71c3-bfe3-cd65eef8c990
   author: joe
