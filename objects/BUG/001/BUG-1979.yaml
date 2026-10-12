@@ -16,10 +16,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T21:02:01.748928563Z
-modified_at: 2026-10-12T06:06:44.970988378Z
+modified_at: 2026-10-12T06:07:17.757242416Z
 req_type: Bug
 tags:
 - groom:approve
+comments:
+- id: 01a12eb8-fcfd-7ca0-aec2-b59d0c95e7c1
+  author: joe
+  content: |
+    [groom:night] APPROVE (drain-safe). Still real: markdown_render.rs hard-codes ═/─ (:836), │ (:845, :859), • (:890) and box borders, and the existing glyph profile (aida-cli-lib/src/glyphs.rs, AIDA_GLYPHS) is not consulted. The NO_COLOR check (:101) uses var_os().is_none(), so an empty NO_COLOR still disables colour, against no-color.org. The catch_unwind at :107 has no silent hook. Acceptance is testable as written.
+  created_at: 2026-10-12T06:07:17.757242416Z
+  modified_at: 2026-10-12T06:07:17.757242416Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
