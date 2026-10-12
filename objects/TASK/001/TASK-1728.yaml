@@ -2,16 +2,26 @@ id: 01a12c32-6d86-7052-8f43-e41b20205f5b
 spec_id: TASK-1728
 agreed_id: TASK-1728
 title: 'STORY-1647 follow-ups: exempt conflicted cherry-pick/revert, document --amend/--squash refusals, drop the dead .aida-store pwd branch'
-description: 'Non-blocking findings from the advisor review of PR #2531. (1) A conflicted cherry-pick or revert finished on main in the primary checkout is refused (clean ones never run pre-commit). Decide: exempt CHERRY_PICK_HEAD / REVERT_HEAD in the exemption chain (aida-pre-commit.sh ~75-83), or document it. (2) The refusal message and docs should list that --amend and merge --squash + commit on main are refused too. (3) The .aida-store pwd check (~line 82) can''t trigger, since the git-dir test exempts linked worktrees first; drop it or comment why it stays. Acceptance: tests for whichever (1) decision, plus a docs update.'
+description: |
+  Non-blocking findings from the advisor review of PR #2531. (1) A conflicted cherry-pick or revert finished on main in the primary checkout is refused (clean ones never run pre-commit). Decide: exempt CHERRY_PICK_HEAD / REVERT_HEAD in the exemption chain (aida-pre-commit.sh ~75-83), or document it. (2) The refusal message and docs should list that --amend and merge --squash + commit on main are refused too. (3) The .aida-store pwd check (~line 82) can't trigger, since the git-dir test exempts linked worktrees first; drop it or comment why it stays. Acceptance: tests for whichever (1) decision, plus a docs update.
+
+  ## Acceptance
+
+  (groom:night, 2026-10-11: all three items verified still open on origin/main 17ff749954. Item 1 decided as EXEMPT, for consistency: clean cherry-picks/reverts never run pre-commit, and MERGE_HEAD / rebase replays are already exempt, so refusing only the conflicted case is arbitrary.)
+
+  1. aida-pre-commit.sh (template master; then `make sync-templates`) exempts commits made while `CHERRY_PICK_HEAD` or `REVERT_HEAD` exists, next to the existing MERGE_HEAD exemption. Tests: a conflicted cherry-pick and a conflicted revert finished on main in the primary checkout with `block_primary_commits = true` succeed; a plain commit is still refused.
+  2. The refusal message and the hooks docs state that `--amend` and `merge --squash` + commit on main in the primary checkout are also refused (with the AIDA_ALLOW_PRIMARY_COMMIT override).
+  3. The unreachable `.aida-store` pwd branch in the exemption chain is removed (or kept with a comment saying why); existing primary-gate tests still pass.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-11T18:21:04.774030180Z
+modified_at: 2026-10-12T06:00:45.467346402Z
 req_type: Task
 tags:
 - follow-up:advisor-review
+- groomed:night
 - hooks
 - main-checkout
 filed_at:
