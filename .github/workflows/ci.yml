@@ -287,6 +287,14 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_perf.sh
 
+      # BUG-1933: the provenance gate fails closed: a crashed or truncated awk
+      # scan, or a merge parent whose diff fails, refuses the commit.
+      - name: Run pre-commit provenance fail-closed tests
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          bash tests/test_precommit_provenance_awk_failure.sh
+          bash tests/test_precommit_provenance_parent_diff_failure.sh
+
       # STORY-1647: the opt-in primary-checkout gate refuses commits on main in
       # the primary checkout and exempts merges, rebases, .aida-store, worktrees.
       - name: Run pre-commit primary-checkout gate test
