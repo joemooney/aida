@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-12T06:07:49.162371510Z
+modified_at: 2026-10-12T06:07:55.806805036Z
 req_type: Story
 tags:
 - from:aida-host
@@ -45,6 +45,20 @@ relationships:
 - rel_type: Child
   target_id: 01a12c97-fcf6-7b51-b9e4-426213ecf695
   created_at: 2026-10-11T20:13:12.505768773Z
+comments:
+- id: 01a12eb9-919e-7300-962a-8482c4a5bbee
+  author: joe
+  content: |
+    [groom:night] SPLIT. Two independent tools.
+
+    Related existing: `aida trace coverage` (diff-scoped hunk coverage with the SPIKE-47 exemptions, EPIC-34/STORY-499), `aida trace check` (trace rot, TASK-868), `aida trace scan`. None reports whole-file coverage, and nothing inspects literals.
+
+    Proposed slices:
+    1. Whole-tree trace coverage report: `aida trace coverage --path <dir>` (or `--all`) reports, per file, functions with no trace marker in or above them, reusing the existing coverage definition and exemptions. Report-only. Acceptance: fixture crate with one traced and one untraced function reports 1/2 and names the untraced one; JSON output. Drain-safe.
+    2. `aida lint constants`: numeric literals inside traced regions that appear neither in the traced spec's description nor in a linked decision row, with an inline `// arbitrary` (or similar) marker to silence one. Acceptance: fixture with 15 mentioned in the spec and 40 not -> only 40 flagged; marked literal skipped; 0/1 and obvious index literals ignored. Needs a small rule decision on which literals are exempt; heuristic and noisy, so report-only.
+  created_at: 2026-10-12T06:07:55.806805036Z
+  modified_at: 2026-10-12T06:07:55.806805036Z
+  session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
