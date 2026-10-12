@@ -334,7 +334,9 @@ fn real_claude_contained_session_claims_and_comments() {
         text
     };
 
-    let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set"));
+    // The real home on purpose: under cfg(test) `crate::home_dir` redirects to
+    // a temp home, which is the sandbox-writable place this fixture must avoid.
+    let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set")); // allow-direct-home-dir
     let cache_home = home.join(".cache");
     std::fs::create_dir_all(&cache_home).unwrap();
     let fixture = tempfile::Builder::new()
