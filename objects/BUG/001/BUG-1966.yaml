@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:15.246332312Z
-modified_at: 2026-10-12T14:55:44.908372840Z
+modified_at: 2026-10-12T16:21:56.832648063Z
 req_type: Bug
 tags:
 - groom:approve
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-10-12T06:01:40.808672122Z
   modified_at: 2026-10-12T06:01:40.808672122Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130eb-b7e0-7041-a16d-51971b0a93ec
+  author: joe
+  content: 'Root cause is in the fixture only: the per-command ''timeout 30'' killed (exit 124) the two fsync-heavy commands that build a fresh cache (the fixture add, and the sibling''s first queue work) under disk pressure. Line 228: killed after the gate refused, during cache-close fsyncs, before the refusal was printed. The gate was never skipped. Reproduced exactly with strace fsync-delay injection. Fixed with a 600s hang guard, an explicit guard-kill panic, and a sleep-infinity holder. 20/20 runs passed alongside cargo test --workspace. PR #2558.'
+  created_at: 2026-10-12T16:21:56.832648063Z
+  modified_at: 2026-10-12T16:21:56.832648063Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-cd0c-7902-8e3e-e97f557dbf47
   author: joe
