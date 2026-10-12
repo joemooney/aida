@@ -14,7 +14,13 @@ description: |
 
   ## Acceptance
 
-  To be written at triage; the proposals above are the starting point.
+  Depends on the STORY-1669 slice-0 decision (which harnesses `aida regen trial` launches). Reuse the existing bwrap confinement in `aida-cli-lib/src/session.rs` (`bwrap_confinement_args`, `bwrap_preflight`) rather than a second sandbox implementation.
+
+  - [ ] `aida regen trial` launches every regenerator (Claude Code, Codex, Gemini/agy, or any configured harness) under the same OS sandbox: read-only root, the project checkout, `.git`, AIDA store worktree, agent transcripts and the live tool homes (e.g. `~/.local/bin`, `~/.claude/projects`) not visible, only the trial work dir (and the frozen corpus, read-only) mounted; HOME and XDG dirs are private temp dirs.
+  - [ ] The environment is scrubbed to an allowlist; each harness profile declares the minimum extra it needs (its auth file mounted read-only, named credential env vars, network on). Anything not declared is absent; the effective allowlist is recorded on the trial.
+  - [ ] If the sandbox cannot be established (no bwrap / userns denied), the trial refuses to start with the existing remediation hint; there is no unsandboxed fallback.
+  - [ ] A canary test: from inside a trial, attempts to read the project checkout, a transcript path and the live wrapper on PATH all fail, and the trial record shows isolation `enforced`.
+  - [ ] No harness relies on instruction-following for isolation (no "do not read X" prompt as the only control).
 
   ## Evidence
 
@@ -24,10 +30,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:09.445577574Z
-modified_at: 2026-10-12T00:42:09.445577574Z
+modified_at: 2026-10-12T05:52:30.303958661Z
 req_type: Story
 tags:
 - from:aida-host
+- groomed:night
 - regenerability
 relationships:
 - rel_type: Child
