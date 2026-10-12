@@ -3641,7 +3641,7 @@ mod bug_1923 {
         while test_support::meta(&fx.db, "tip_sha").as_deref() != Some(head.as_str()) {
             calls += 1;
             assert!(calls <= bound, "not at HEAD after {bound} budgeted queries");
-            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
             let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
             let commits = test_support::commit_count(&fx.db);
             assert!(
@@ -3692,7 +3692,7 @@ mod bug_1923 {
         // Three failed attempts in a row pause inline catch-up.
         for n in 1..=3 {
             history_cache::fail_next_catch_up();
-            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
             assert_eq!(failures(), Some(n.to_string()));
         }
         assert_eq!(failures().as_deref(), Some("3"));
@@ -3713,7 +3713,7 @@ mod bug_1923 {
 
         // Paused: a budgeted query no longer tries (no failure injected,
         // yet nothing moves) and falls back to the walk.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_none());
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3732,6 +3732,7 @@ mod bug_1923 {
     /// An index at `old` with HEAD three commits on, paused by three failed
     /// inline catch-ups in a row. Returns (fixture, old tip).
     // trace:BUG-1942 | ai:claude
+    // trace:BUG-1974 | ai:claude
     fn stalled_three_behind() -> (Fixture, String) {
         let mut fx = Fixture::new();
         let mut s = Spec::new("STORY-1", "Story", "Cool-down");
@@ -3746,10 +3747,42 @@ mod bug_1923 {
         }
         for _ in 0..3 {
             history_cache::fail_next_catch_up();
-            assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+            assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
         }
         assert!(history_cache::status_at(&fx.store, &fx.db).catch_up_stalled);
         (fx, old)
+    }
+
+    /// The BUG-1974 flake: a copy of the lock fd held by a child another
+    /// thread is forking makes `serve_at` read the lock as held, skip the
+    /// injected catch-up failure and answer `Ok` from the fall-back.
+    // trace:BUG-1974 | ai:claude
+    #[test]
+    fn bug_1974_an_inherited_lock_fd_skips_indexing_until_released() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Inherited lock");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        s.status = "Approved".into();
+        fx.put(&s);
+        fx.commit("update STORY-1");
+
+        let copy = test_support::inherited_lock_copy(&fx.db);
+        history_cache::fail_next_catch_up();
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+        assert!(got.unwrap().is_none(), "unlocked: falls back, no attempt");
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+
+        // Once the copy is gone, the still-pending injection is consumed.
+        drop(copy);
+        assert!(
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("1")
+        );
     }
 
     fn rfc3339_ago(secs: i64) -> String {
@@ -3772,7 +3805,7 @@ mod bug_1923 {
 
         let commits = test_support::commit_count(&fx.db);
         for _ in 0..2 {
-            let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
             assert!(got.is_none(), "paused: the git walk answers");
         }
         // No attempt ran and nothing was written.
@@ -3801,7 +3834,7 @@ mod bug_1923 {
 
         // No rebuild: the next budgeted query retries, keeps the gap and
         // clears the pause.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_some(), "served from the caught-up index");
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3824,7 +3857,7 @@ mod bug_1923 {
         test_support::set_meta(&fx.db, "catch_up_stalled_at", &stale);
 
         history_cache::fail_next_catch_up();
-        assert!(history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("4")
@@ -3833,7 +3866,7 @@ mod bug_1923 {
         assert_ne!(restamped, stale, "the failed retry restarts the cool-down");
 
         // Inside the new cool-down: no attempt.
-        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
         assert!(got.is_none());
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
@@ -3858,7 +3891,7 @@ mod bug_1923 {
         let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
         assert!(lines.contains("retries on the next"), "{lines}");
         assert!(
-            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
                 .unwrap()
                 .is_some()
         );
@@ -3887,14 +3920,14 @@ mod bug_1923 {
         fx.commit("update STORY-1");
         for _ in 0..2 {
             history_cache::fail_next_catch_up();
-            let _ = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO);
         }
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("2")
         );
         assert!(
-            history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO)
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
                 .unwrap()
                 .is_some()
         );
