@@ -25,11 +25,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T19:07:37.843699330Z
-modified_at: 2026-10-11T15:21:24.817551774Z
+modified_at: 2026-10-12T06:01:22.020888684Z
 req_type: Epic
 tags:
 - architecture
 - authority
+- groom:approve
 - guided
 - launch
 - publication
