@@ -100,6 +100,7 @@ mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod mailbox_root;
@@ -202,6 +203,7 @@ use findings_gate::*;
 use help::*;
 use human::*;
 use kernel::*;
+use leases::*;
 use mailbox_root::*;
 use mcp_cmd::*;
 use memory_doc::*;
