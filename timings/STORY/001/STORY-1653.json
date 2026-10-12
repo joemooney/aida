@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1653",
+  "publishes": [
+    {
+      "at": "2026-10-12T03:50:42.744944898Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T23:53:48.109598748Z",
+      "spec": "STORY-1653",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T20:14:51.512321862Z",
+      "spec": "STORY-1653",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-11T23:16:49.978050832Z",
+      "spec": "STORY-1653",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2542,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "6c38cc2fd9ff0b6aaecc75110d477b0c6e777d10"
+      }
+    },
+    {
+      "ts": "2026-10-11T23:16:55.762380248Z",
+      "spec": "STORY-1653",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Driver liveness uses a 15-min heartbeat TTL, but the shipped relay refreshes only once per claude session (30-90 min), so live relay work reverts to idle/stalled mid-session, which is the failure the story targets. Also, merging would close STORY-1653 with acceptance #4 (awaiting threshold) deferred to an unfiled slice B.",
+        "recovery_hint": "address the review findings, move STORY-1653 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-12T00:54:55.108445396Z",
+      "spec": "STORY-1653",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1653",
+        "branch": "story-1653-work",
+        "first_seen": "2026-10-12T00:54:55.100018618+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-12T03:50:13.916285323Z",
+      "spec": "STORY-1653",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2542,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7cdc8e1dfab31c64c8b5f835a0f2b53b77a0993d"
+      }
+    },
+    {
+      "ts": "2026-10-12T03:50:42.723244201Z",
+      "spec": "STORY-1653",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ac67eb831f28f9e202083f531645ccabcaab2e9e",
+        "pr": 2542,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
