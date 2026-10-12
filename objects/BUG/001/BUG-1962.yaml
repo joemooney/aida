@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-12T06:01:21.431942077Z
+modified_at: 2026-10-12T15:02:28.336730698Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-10-12T06:01:21.431942077Z
   modified_at: 2026-10-12T06:01:21.431942077Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a130a2-f4f0-7ce1-96d8-eb297b8c468c
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 08:05 (recorded by advisor; operator chose ''take groom''s recommendation on all 8''): option A, wording only: rename still_active to still_tripped and add each session''s transcript last-write age.'
+  created_at: 2026-10-12T15:02:28.336730698Z
+  modified_at: 2026-10-12T15:02:28.336730698Z
+  session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
