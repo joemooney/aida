@@ -22,7 +22,8 @@ protocol (TASK-1538 comments, 2026-10-10 plus the rule-7 amendment):
                existing <m>.rs: the parent's file is a byte prefix of the new
                one, it adds no module, no lib.rs mod/glob line (1n shims only)
                and no header, and the appended chunk has no `mod ` declaration
-               or `#[path` attribute
+               or `#[path` attribute that it does not remove verbatim from
+               lib*.rs in the same commit
   4 retarget   retarget:/tooling: commits change no code line in lib*.rs or in
                a module moved earlier in the range; a retarget may widen a
                source-scan corpus (signed amendment 1e) by adding
@@ -214,9 +215,16 @@ def check_extend(sha, module):
     new = git("show", f"{sha}:{path}")
     if not new.startswith(old):
         return [f"FAIL 3: extend edits already-moved text in {path} (parent is not a prefix)"]
+    # A declaration the commit removes verbatim from lib*.rs moves with its
+    # owner (e.g. a `#[path = "tests/..."]` test module); any other is new.
+    carried = collections.Counter(text.strip() for p, sign, text in diff_lines(sha)
+                                  if sign == "-" and LIB_ANY.match(p) and EXTEND_FORBIDDEN.match(text))
     issues = []
     for l in new[len(old):].splitlines():
         if EXTEND_FORBIDDEN.match(l):
+            if carried[l.strip()]:
+                carried[l.strip()] -= 1
+                continue
             issues.append(f"FAIL 3: extend appends a submodule declaration: {l.strip()[:80]}")
             break
     return issues

@@ -382,22 +382,29 @@ class TestVerifyStack(unittest.TestCase):
         self.assertFails("FAIL 3: added/removed lines do not match a pure move")
 
     def test_extend_appending_mod_declaration_fails(self):
-        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs") + "mod sneaky;\n")
-        self.commit("sneaky base")
         self.moved_base()
-        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace("mod sneaky;\n", ""))
         self.extend("m1", "b", chunk_extra="mod sneaky;\n")
         self.tag("slice-02-r1", self.proof("m1"))
         self.assertFails("FAIL 3: extend appends a submodule declaration: mod sneaky;")
 
     def test_extend_appending_path_attribute_fails(self):
-        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs") + "#[path = \"x.rs\"]\n")
-        self.commit("path base")
         self.moved_base()
-        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace("#[path = \"x.rs\"]\n", ""))
         self.extend("m1", "b", chunk_extra="#[path = \"x.rs\"]\n")
         self.tag("slice-02-r1", self.proof("m1"))
         self.assertFails("FAIL 3: extend appends a submodule declaration: #[path")
+
+    def test_extend_carrying_its_test_module_passes(self):
+        decl = "fn b() {}\n#[cfg(test)]\n#[path = \"tests/b_tests.rs\"]\nmod b_tests;\n"
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace("fn b() {}\n", decl))
+        self.write(f"{SRC}/tests/b_tests.rs", "// t\n")
+        self.commit("test module base")
+        self.moved_base()
+        self.write(f"{SRC}/lib_part1.rs", self.read(f"{SRC}/lib_part1.rs").replace(decl, ""))
+        self.write(f"{SRC}/m1.rs", self.read(f"{SRC}/m1.rs") + "\n" + decl)
+        self.commit("refactor(cli-lib): extend m1.rs")
+        self.tag("slice-02-r1", self.proof("m1"))
+        res = self.run_checker()
+        self.assertEqual(res.returncode, 0, res.stdout)
 
     def test_extend_v7_records_post_append_size(self):
         self.moved_base()
