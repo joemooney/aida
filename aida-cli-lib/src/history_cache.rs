@@ -373,6 +373,18 @@ pub(crate) struct IndexLock {
     _file: std::fs::File,
 }
 
+/// Unlock explicitly before the fd closes. An `flock` belongs to the open
+/// file description, which a child forked by another thread (git, via
+/// fork/exec) shares until it execs; merely closing this fd would leave the
+/// lock held by the child's copy, so a probe in that window would read the
+/// index as busy (BUG-1974, BUG-1987). `LOCK_UN` releases it for every copy.
+// trace:BUG-1987 | ai:claude
+impl Drop for IndexLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self._file);
+    }
+}
+
 impl IndexLock {
     fn open_file(db_path: &Path) -> Result<std::fs::File> {
         let path = lock_path(db_path);
@@ -2025,9 +2037,10 @@ pub(crate) fn serve(store: &Path, opts: &HistoryOpts) -> Option<CacheAnswer> {
 thread_local! {
     static INDEX_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// Tests: whether this thread's last [`serve_with_budget_at`] held the
-    /// indexer lock.
+    /// indexer lock; `None` when it failed before trying the lock.
     // trace:BUG-1974 | ai:claude
-    static LAST_SERVE_LOCKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    // trace:BUG-1987 | ai:claude
+    static LAST_SERVE_LOCKED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
 /// Test hook: how many indexing passes (catch-up, back-fill or reset, all
@@ -2208,7 +2221,7 @@ fn serve_with_budget_at(
     };
     let locked = lock.is_some();
     #[cfg(test)]
-    LAST_SERVE_LOCKED.with(|c| c.set(locked));
+    LAST_SERVE_LOCKED.with(|c| c.set(Some(locked)));
     let mut cache = HistoryCache::open(db_path).map_err(|e| heal(e, locked))?;
     if locked {
         if let Err(e) = cache.ensure_fresh(
@@ -2498,13 +2511,28 @@ pub(crate) mod test_support {
         IndexLock::acquire_blocking(db_path).unwrap()
     }
 
-    /// Take the indexer lock, then drop it, keeping only a duplicate of its
-    /// fd: what a child forked while the lock was held keeps until it
-    /// execs. The lock stays held while the returned file lives.
+    /// A duplicate of a locked fd whose original was closed *without* an
+    /// explicit unlock: what a forked child kept until it execed before
+    /// [`IndexLock`] unlocked on drop. The lock stays held while the
+    /// returned file lives. Built from a raw `File`, not an [`IndexLock`],
+    /// whose drop would release it.
     // trace:BUG-1974 | ai:claude
+    // trace:BUG-1987 | ai:claude
     pub(crate) fn inherited_lock_copy(db_path: &Path) -> std::fs::File {
+        let file = IndexLock::open_file(db_path).unwrap();
+        file.lock_exclusive().unwrap();
+        file.try_clone().unwrap()
+    }
+
+    /// Take the indexer lock and duplicate its fd, as a child forked by
+    /// another thread does, then drop the lock while the copy lives: the
+    /// copy must not keep the index locked.
+    // trace:BUG-1987 | ai:claude
+    pub(crate) fn copy_then_release(db_path: &Path) -> std::fs::File {
         let lock = IndexLock::acquire_blocking(db_path).unwrap();
-        lock._file.try_clone().unwrap()
+        let copy = lock._file.try_clone().unwrap();
+        drop(lock);
+        copy
     }
 
     /// [`serve_at`], retried until a call holds the indexer lock, for tests
@@ -2512,11 +2540,15 @@ pub(crate) mod test_support {
     /// a test's lock, yet a bare `serve_at` can still miss it: the lock is
     /// an `flock`, and a child that another test thread is spawning at that
     /// moment holds a copy of the lock fd from fork until exec, even after
-    /// this thread has dropped it. `serve_at` then reads the lock as held by
+    /// this thread has dropped it. ([`IndexLock`] now unlocks explicitly on
+    /// drop, which closes that window; the retry stays as a guard.)
+    /// `serve_at` then reads the lock as held by
     /// another indexer and falls back without indexing, and the caller sees
     /// `Ok` where it expected an injected failure. An unlocked call writes
     /// nothing and does not consume `fail_next_catch_up`, so the retry
-    /// changes no outcome; it only waits out the fork.
+    /// changes no outcome; it only waits out the fork. A call that fails
+    /// before it tries the lock (no HEAD, unopenable lock file) returns its
+    /// error at once: retrying it cannot help.
     // trace:BUG-1974 | ai:claude
     pub(crate) fn serve_locked(
         store: &Path,
@@ -2526,10 +2558,12 @@ pub(crate) mod test_support {
     ) -> Result<Option<CacheAnswer>> {
         let mut last = None;
         for _ in 0..1000 {
-            LAST_SERVE_LOCKED.with(|c| c.set(false));
+            LAST_SERVE_LOCKED.with(|c| c.set(None));
             let got = serve_at(store, db_path, opts, budget);
-            if LAST_SERVE_LOCKED.with(std::cell::Cell::get) {
-                return got;
+            // trace:BUG-1987 | ai:claude
+            match LAST_SERVE_LOCKED.with(std::cell::Cell::get) {
+                Some(true) | None => return got,
+                Some(false) => {}
             }
             last = Some(got.map(|a| a.is_some()));
             std::thread::sleep(Duration::from_millis(1));

@@ -1004,11 +1004,12 @@ fn history_cache_concurrent_indexer_serves_snapshot_or_falls_back() {
             .unwrap()
             .is_none()
     );
-    // Load-bearing for the same reason as above: `serve` returning None is
-    // the fallback, and only the clock shows it fell back *without waiting*
+    // Load-bearing for the same reason as above: `serve_at` returning None
+    // is the fallback, and only the clock shows it fell back *without waiting*
     // on the held indexer lock. Original 5s literal kept as the ceiling, at
     // ~250x the 20ms measured in a debug build on a quiet host.
     // trace:BUG-1731 | ai:claude
+    // trace:BUG-1987 | ai:claude
     crate::test_timing::assert_within_budget(
         started,
         Duration::from_secs(1),
@@ -3796,6 +3797,25 @@ mod bug_1923 {
         assert_eq!(
             test_support::meta(&fx.db, "catch_up_failures").as_deref(),
             Some("1")
+        );
+    }
+
+    /// `serve_locked` returns an error raised before the lock is tried at
+    /// once, instead of spinning and then panicking that it never held it.
+    // trace:BUG-1987 | ai:claude
+    #[test]
+    fn bug_1987_serve_locked_returns_a_pre_lock_error_at_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let not_a_repo = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&not_a_repo).unwrap();
+        let db = tmp.path().join("history.db");
+        let started = Instant::now();
+        let got = test_support::serve_locked(&not_a_repo, &db, &opts(), Duration::ZERO);
+        assert!(got.is_err(), "no HEAD: an error, not a panic");
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "returned at once, not after 1000 retries ({:?})",
+            started.elapsed()
         );
     }
 

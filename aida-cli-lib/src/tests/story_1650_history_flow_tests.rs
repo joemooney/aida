@@ -438,6 +438,84 @@ fn story_1650_half_built_index_falls_back_without_back_filling() {
     assert!(!history_cache::status_at(&store, &db).complete);
 }
 
+/// The BUG-1987 flake: a child forked by another thread kept a copy of a
+/// just-dropped lock fd until it execed, so `status_at` read the lock as held
+/// and a half-built index classified as `Busy` instead of `Filling`. The
+/// lock is now unlocked explicitly on drop, so the copy (alive across every
+/// call here) holds nothing.
+// trace:BUG-1987 | ai:claude
+#[test]
+fn bug_1987_a_forked_copy_of_a_released_lock_does_not_classify_as_busy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    let db = history_cache::history_db_path(&store);
+    history_cache::test_support::partial_build(&store, &db, 1, 1).unwrap();
+    let copy = history_cache::test_support::copy_then_release(&db);
+    let st = history_cache::status_at(&store, &db);
+    assert!(
+        !st.indexer_running,
+        "a forked copy of a released lock is not a running indexer"
+    );
+    assert_eq!(history_cache::classify_miss(&st), IndexMiss::Filling);
+    assert_cheap_fallback(&store, IndexMiss::Filling);
+    drop(copy);
+}
+
+/// Nor does such a copy make the flow's inline catch-up skip as if another
+/// process were indexing.
+// trace:BUG-1987 | ai:claude
+#[test]
+fn bug_1987_a_forked_copy_of_a_released_lock_does_not_skip_the_flow_catch_up() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    warm(&store);
+    advance(&store, 1);
+    let db = history_cache::history_db_path(&store);
+    let copy = history_cache::test_support::copy_then_release(&db);
+    with_index_on(|| {
+        let passes = history_cache::index_pass_count();
+        history_flow::answer(&store, &opts()).expect("caught up and served");
+        assert_eq!(history_cache::index_pass_count(), passes + 1);
+    });
+    drop(copy);
+    let st = history_cache::status_at(&store, &db);
+    assert_eq!(st.tip, st.head, "the index reached HEAD");
+}
+
+/// A genuinely held lock, here by another thread, still classifies `Busy`,
+/// and at once.
+// trace:BUG-1987 | ai:claude
+#[test]
+fn bug_1987_a_genuinely_held_lock_still_classifies_busy_at_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    let db = history_cache::history_db_path(&store);
+    history_cache::test_support::partial_build(&store, &db, 1, 1).unwrap();
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+    let holder = {
+        let db = db.clone();
+        std::thread::spawn(move || {
+            let _held = history_cache::test_support::hold_lock(&db);
+            held_tx.send(()).unwrap();
+            let _ = done_rx.recv();
+        })
+    };
+    held_rx.recv().unwrap();
+    let started = std::time::Instant::now();
+    let st = history_cache::status_at(&store, &db);
+    let took = started.elapsed();
+    assert!(st.indexer_running);
+    assert_eq!(history_cache::classify_miss(&st), IndexMiss::Busy);
+    assert_cheap_fallback(&store, IndexMiss::Busy);
+    assert!(
+        took < std::time::Duration::from_secs(1),
+        "a real holder reads as busy without waiting (took {took:?})"
+    );
+    done_tx.send(()).unwrap();
+    holder.join().unwrap();
+}
+
 #[test]
 fn story_1650_misses_are_classified_from_the_index_status() {
     let base = HistoryCacheStatus {
