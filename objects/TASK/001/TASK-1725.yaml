@@ -10,12 +10,12 @@ description: |
   - The section states the slice-stack exception (until rebase-merge support lands) and that mechanical enforcement is pending.
   - The section is vendor-neutral (no Claude-specific wording).
   - `make sync-templates` has been run and `make check-templates` passes.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:41:31.433481965Z
-modified_at: 2026-10-12T06:07:47.793583077Z
+modified_at: 2026-10-12T14:55:48.946293268Z
 req_type: Task
 tags:
 - docs
@@ -37,6 +37,14 @@ comments:
   created_at: 2026-10-12T06:07:47.793583077Z
   modified_at: 2026-10-12T06:07:47.793583077Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a1309c-dcd2-7f92-8bb8-52e8f409d2e5
+  author: joe
+  timestamp: 2026-10-12T14:55:48.946287439Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
