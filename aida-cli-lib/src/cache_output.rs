@@ -12,6 +12,45 @@ pub(crate) fn set_toon_cache_output(enabled: bool) {
     TOON_CACHE_OUTPUT.with(|c| c.set(enabled));
 }
 
+// Whether the last body text written through [`print_body`] left stdout
+// mid-line (no trailing newline). The footer is printed by the dispatcher
+// after the command returns and cannot see the body, so a command whose body
+// may lack a trailing newline prints it via [`print_body`] and the footer
+// emitter consults this to start `cache:` on its own line.
+// trace:BUG-1975 | ai:claude
+static STDOUT_LINE_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Print a command body to stdout verbatim (no newline added) and record
+/// whether it ended mid-line, so a following `cache:` footer is separated
+/// from it by exactly one newline.
+// trace:BUG-1975 | ai:claude
+pub(crate) fn print_body(body: &str) {
+    print!("{body}");
+    note_stdout_tail(body);
+}
+
+// trace:BUG-1975 | ai:claude
+fn note_stdout_tail(written: &str) {
+    if !written.is_empty() {
+        STDOUT_LINE_OPEN.store(
+            !written.ends_with('\n'),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
+
+/// The footer text to print (followed by a newline): prefixed with one
+/// newline only when the body left stdout mid-line, so it always starts on
+/// its own line without ever adding a blank line.
+// trace:BUG-1975 | ai:claude
+fn footer_after_body(footer: &str, line_open: bool) -> String {
+    if line_open {
+        format!("\n{footer}")
+    } else {
+        footer.to_string()
+    }
+}
+
 // trace:TASK-1526 | ai:codex
 pub(crate) fn json_pretty<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
     let mut value = serde_json::to_value(value)?;
@@ -60,7 +99,12 @@ pub(crate) fn finish(scope: &CacheReadScope, success: bool, argv: &[String]) {
         .iter()
         .any(|arg| matches!(arg.as_str(), "--notice" | "statusline" | "statusbar"));
     if !json && !advisory && crate::agent_output_mode() {
-        println!("{}", toon_cache(&scope.metadata()));
+        // trace:BUG-1975 | ai:claude
+        let line_open = STDOUT_LINE_OPEN.load(std::sync::atomic::Ordering::Relaxed);
+        println!(
+            "{}",
+            footer_after_body(&toon_cache(&scope.metadata()), line_open)
+        );
     }
 }
 
@@ -131,5 +175,40 @@ mod tests {
             .unwrap()["cache"]["stale"],
             false
         );
+    }
+
+    // trace:BUG-1975 | ai:claude
+    #[test]
+    fn footer_starts_on_its_own_line_after_unterminated_body() {
+        let body = "last body line";
+        let out = format!(
+            "{body}{}\n",
+            footer_after_body("cache:\n  stale: false", true)
+        );
+        assert_eq!(out, "last body line\ncache:\n  stale: false\n");
+    }
+
+    // trace:BUG-1975 | ai:claude
+    #[test]
+    fn footer_adds_no_blank_line_after_terminated_body() {
+        let body = "last body line\n";
+        let out = format!(
+            "{body}{}\n",
+            footer_after_body("cache:\n  stale: false", false)
+        );
+        assert_eq!(out, "last body line\ncache:\n  stale: false\n");
+        assert!(!out.contains("\n\n"));
+    }
+
+    // trace:BUG-1975 | ai:claude
+    #[test]
+    fn stdout_tail_tracks_the_last_non_empty_write() {
+        use std::sync::atomic::Ordering::Relaxed;
+        note_stdout_tail("no newline");
+        assert!(STDOUT_LINE_OPEN.load(Relaxed));
+        note_stdout_tail("");
+        assert!(STDOUT_LINE_OPEN.load(Relaxed), "empty writes keep state");
+        note_stdout_tail("terminated\n");
+        assert!(!STDOUT_LINE_OPEN.load(Relaxed));
     }
 }
