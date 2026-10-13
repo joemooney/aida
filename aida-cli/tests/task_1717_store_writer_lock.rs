@@ -2204,9 +2204,33 @@ fn drifted_generated_hook_is_refused_with_upgrade_guidance() {
     let before = snapshot(&fx);
     let out = fx.run(&["db", "sync"]);
     assert!(!out.status.success(), "{}", text(&out));
-    assert!(text(&out).contains("aida scaffold apply"), "{}", text(&out));
     assert!(text(&out).contains("Nothing was changed"), "{}", text(&out));
     assert_eq!(snapshot(&fx), before, "nothing changed");
+
+    // BUG-1977: the refusal's own hook-only command repairs it, and only it.
+    // trace:BUG-1977 | ai:claude
+    let msg = text(&out);
+    let named = msg
+        .split("Run `")
+        .nth(1)
+        .and_then(|rest| rest.split('`').next())
+        .unwrap_or_else(|| panic!("no command named: {msg}"));
+    assert!(
+        named.starts_with("aida scaffold upgrade --only git-hooks"),
+        "{msg}"
+    );
+    assert!(!msg.contains("scaffold apply"), "{msg}");
+    let args: Vec<&str> = named.split_whitespace().skip(1).collect();
+    // Run from outside the project: the named --project-root is enough.
+    let fixed = fx
+        .cmd(fx.repo.parent().unwrap(), &args, false)
+        .output()
+        .expect("run aida");
+    assert!(fixed.status.success(), "{}", text(&fixed));
+    assert!(text(&fixed).contains("`pre-commit`"), "{}", text(&fixed));
+    let refreshed = std::fs::read_to_string(&hook).unwrap();
+    assert!(!refreshed.contains("echo drifted"), "{refreshed}");
+    fx.run_ok(&["db", "sync"]);
 }
 
 // ── B2: a failing `git status` is never "clean" ────────────────────────────

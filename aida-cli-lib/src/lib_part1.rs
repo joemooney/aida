@@ -2127,6 +2127,25 @@ pub(crate) fn run() -> Result<()> {
         );
     }
 
+    // BUG-1977: the hook-only refresh repairs what blocks store writes, so
+    // it must not need a resolvable store (the refusal names --project-root).
+    // trace:BUG-1977 | ai:claude
+    if let Command::Scaffold(ScaffoldCommand::Upgrade {
+        project_root,
+        dry_run,
+        only: Some(cli::ScaffoldUpgradeOnly::GitHooks),
+        ..
+    }) = &cli.command
+    {
+        let root = project_root
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        if !root.exists() {
+            anyhow::bail!("Project root does not exist: {}", root.display());
+        }
+        return scaffold_cmd::run_scaffold_upgrade_git_hooks(&root, *dry_run);
+    }
+
     // STORY-410: `aida memories check` compares the local Claude Code memory
     // pack to the binary's embedded master — no store access needed, so handle
     // it before storage resolution (like init/upgrade). trace:STORY-410

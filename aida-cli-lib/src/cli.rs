@@ -30,6 +30,16 @@ pub enum OutputFormat {
     Json,
 }
 
+/// What `aida scaffold upgrade --only <SCOPE>` limits the upgrade to.
+// trace:BUG-1977 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScaffoldUpgradeOnly {
+    /// Only the AIDA-generated git hooks whose body is not this build's
+    /// shipped hook: each is backed up beside itself and replaced. Custom
+    /// hooks and every other file are left alone.
+    GitHooks,
+}
+
 // trace:STORY-830 | ai:codex
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitFootprint {
@@ -870,6 +880,13 @@ pub enum ScaffoldCommand {
         /// files are never touched.
         #[clap(long)]
         prune: bool,
+
+        /// Limit the upgrade to one scope. `git-hooks` replaces only the
+        /// stale AIDA-generated git hooks a store write refuses (backing
+        /// each up beside itself) and touches no other file.
+        // trace:BUG-1977 | ai:claude
+        #[clap(long, value_enum, conflicts_with_all = ["force", "prune"])]
+        only: Option<ScaffoldUpgradeOnly>,
     },
 
     /// Show a unified diff between embedded templates and on-disk files

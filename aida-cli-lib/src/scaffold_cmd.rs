@@ -599,15 +599,19 @@ pub(crate) fn handle_scaffold_command(
             dry_run,
             force,
             prune,
+            only,
         } => {
             // trace:FR-1-028 | ai:claude
-            let store = storage.load()?;
             let root = project_root
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
             if !root.exists() {
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
+            if let Some(crate::cli::ScaffoldUpgradeOnly::GitHooks) = only {
+                return run_scaffold_upgrade_git_hooks(&root, *dry_run);
+            }
+            let store = storage.load()?;
 
             // trace:BUG-1639 | ai:claude
             let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
@@ -865,6 +869,59 @@ mod task1503_tests {
             .unwrap();
         assert!(m.opted_out.contains("aida-commit"));
     }
+}
+
+/// `aida scaffold upgrade --only git-hooks`: back up and replace only the
+/// stale AIDA-generated git hooks (the ones a store write refuses).
+// trace:BUG-1977 | ai:claude
+pub(crate) fn run_scaffold_upgrade_git_hooks(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> Result<()> {
+    let report = aida_core::git_ops::refresh_stale_aida_hooks(project_root, dry_run)?;
+    if report.refreshed.is_empty() && report.manual.is_empty() {
+        println!("No stale AIDA git hooks: every AIDA-generated hook matches this build.");
+        return Ok(());
+    }
+    let verb = if dry_run { "Would replace" } else { "Replaced" };
+    for hook in &report.refreshed {
+        println!(
+            "{verb} the `{}` hook ({}); stale copy {} {}",
+            hook.name,
+            hook.path.display(),
+            if dry_run {
+                "would be saved to"
+            } else {
+                "saved to"
+            },
+            hook.backup.display()
+        );
+    }
+    if dry_run {
+        println!("Dry run: nothing was written.");
+    }
+    if !report.manual.is_empty() {
+        // The list goes to stdout too: agent-mode errors keep one line.
+        for hook in &report.manual {
+            println!(
+                "Needs manual action: the `{}` hook ({}): {}",
+                hook.name,
+                hook.path.display(),
+                hook.reason
+            );
+        }
+        let names = report
+            .manual
+            .iter()
+            .map(|h| format!("`{}`", h.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!(
+            "stale AIDA-generated git hook(s) {names} need manual action (listed above); store \
+             writes stay refused until they are fixed"
+        );
+    }
+    Ok(())
 }
 
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
