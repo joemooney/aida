@@ -3678,7 +3678,15 @@ pub(crate) fn derive_pr_ship_squash_subject(
             },
         )
     });
-    if normalized.is_empty() || normalized == current_subject {
+    // BUG-1997: never return None when spec IDs are withheld (via --no-complete,
+    // a PR-body marker, or closure hold, or when the PR title carried an ID that
+    // was stripped). Otherwise, gh pr merge defaults to the PR title on multi-commit
+    // PRs and can carry the withheld ID into the squash subject on main.
+    // trace:BUG-1997 | ai:antigravity
+    let raw_title_ids = pr_ship::extract_trailing_spec_ids_from_subject(&pr.title);
+    let title_ids_withheld = raw_title_ids.iter().any(|id| !trailer.ids.contains(id));
+    let ids_withheld = no_complete || !trailer.notes.is_empty() || title_ids_withheld;
+    if normalized.is_empty() || (normalized == current_subject && !ids_withheld) {
         return Ok((None, trailer));
     }
     Ok((Some(normalized), trailer))

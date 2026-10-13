@@ -127,3 +127,66 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
         "{out}"
     );
 }
+
+/// BUG-1997: `derive_pr_ship_squash_subject` never returns None when spec IDs
+/// are withheld, even when the normalized subject equals the branch-head commit
+/// subject. If it returned None, `gh pr merge --squash` would fall back to its
+/// default (the PR title on multi-commit PRs), resurrecting the withheld ID.
+// trace:BUG-1997 | ai:antigravity
+#[test]
+fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "t@t.t"]);
+    git(root, &["config", "user.name", "t"]);
+    std::fs::write(root.join("a"), "1").unwrap();
+    git(root, &["add", "a"]);
+    // Head commit has subject matching normalized clean title "fix: prose"
+    git(root, &["commit", "-q", "-m", "fix: prose"]);
+    git(root, &["checkout", "-q", "-b", "fix-branch"]);
+
+    let bin = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &bin.path().join("gh"),
+        "#!/bin/sh\necho '{\"title\":\"fix: prose (TASK-1538)\",\"body\":\"\"}'\n",
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(bin.path());
+
+    let mut req = aida_core::Requirement::new("t".to_string(), String::new());
+    req.spec_id = Some("TASK-1538".to_string());
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::InProgress;
+    let store = aida_core::RequirementsStore {
+        requirements: vec![req],
+        ..Default::default()
+    };
+    let backend = aida_core::GitBackend::new(&root.join(".aida-store")).unwrap();
+    aida_core::DatabaseBackend::save(&backend, &store).unwrap();
+
+    // With no_complete = true: normalized is "fix: prose", matching head commit "fix: prose".
+    // It must return Some("fix: prose"), NOT None.
+    let (subject, trailer) = derive_pr_ship_squash_subject(root, 1997, "fix-branch", true).unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+    assert_eq!(
+        subject.as_deref(),
+        Some("fix: prose"),
+        "must pass explicit subject when ids are withheld to prevent gh PR-title fallback"
+    );
+
+    // Also test PR-body non-completing marker with no_complete = false:
+    let bin2 = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &bin2.path().join("gh"),
+        "#!/bin/sh\necho '{\"title\":\"fix: prose (TASK-1538)\",\"body\":\"aida: no-complete\"}'\n",
+    );
+    let _path2 = crate::test_env::EnvVarGuard::prepend_path(bin2.path());
+    let (subject2, trailer2) =
+        derive_pr_ship_squash_subject(root, 1997, "fix-branch", false).unwrap();
+    assert!(trailer2.ids.is_empty(), "{trailer2:?}");
+    assert_eq!(
+        subject2.as_deref(),
+        Some("fix: prose"),
+        "must pass explicit subject when body withholds completion"
+    );
+}

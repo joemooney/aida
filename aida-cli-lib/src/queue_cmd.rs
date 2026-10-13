@@ -8697,17 +8697,15 @@ pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<Stri
 
 /// `completion_held` is the store-backed closure-hold check
 /// ([`pr_ship::spec_completion_hold_reason`]). For rework matching it is
-/// inert: a spec id in the branch name decides the match and returns before
-/// the hold is consulted, and an explicit title trailer is honoured even for a
-/// held spec, so the hold never changes this function's result. Dropping the
-/// parameter is tracked in BUG-1997.
+/// Match a spec against a candidate rework PR: an ID in the branch name takes
+/// precedence; otherwise the PR title/body completion derivation is consulted.
 // trace:BUG-1957 | ai:claude
+// trace:BUG-1997 | ai:antigravity
 pub(crate) fn rework_pr_head_matches_spec(
     spec: &str,
     head_branch: &str,
     pr_title: &str,
     pr_body: &str,
-    completion_held: impl Fn(&str) -> Option<String>,
 ) -> bool {
     let wanted = spec.trim().to_ascii_uppercase();
     if wanted.is_empty() {
@@ -8719,12 +8717,7 @@ pub(crate) fn rework_pr_head_matches_spec(
         return branch_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted));
     }
 
-    let meta_ids = pr_ship::derive_squash_subject_spec_ids_held(
-        pr_title,
-        head_branch,
-        pr_body,
-        completion_held,
-    );
+    let meta_ids = pr_ship::derive_squash_subject_spec_ids(pr_title, head_branch, pr_body);
     meta_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted))
 }
 
@@ -8875,16 +8868,7 @@ fn rework_pr_head_branch_override(
     let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
         .map(|meta| meta.body)
         .unwrap_or_default();
-    // Loaded only if the hold check actually runs.
-    // trace:BUG-1957 | ai:claude
-    let store = std::cell::OnceCell::new();
-    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body, |id| {
-        store
-            .get_or_init(|| crate::load_store_for_lookup(project_root))
-            .as_ref()
-            .and_then(|s| pr_ship::spec_completion_hold_reason(s, id))
-    })
-    .then_some(head_branch)
+    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body).then_some(head_branch)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
