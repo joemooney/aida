@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:45:09.320682147Z
-modified_at: 2026-10-11T13:52:09.545661741Z
+modified_at: 2026-10-13T06:36:22.394505641Z
 req_type: Story
 tags:
 - cli
@@ -81,6 +81,30 @@ comments:
   created_at: 2026-10-11T13:52:08.742120985Z
   modified_at: 2026-10-11T13:52:08.742120985Z
   session_id: d7c81e3b-934e-432b-b024-8be7d1fb4d6c
+- id: 01a133f9-f7fa-7570-a03b-833ddbd2beb7
+  author: joe
+  content: |-
+    FACTORY PLAN (codex), night 2026-10-12 — PLAN ONLY. No worktree, lease, code, build, review or approval created. BUG-1942 is now Completed; STORY-1661 remains Approved and blocked on trigger/spawn sketch signoff, so sequencing still forbids implementation. This session also has an advisor role instruction and cannot act as the implementation seat.
+
+    Approach after prerequisites and separate sketch signoff:
+    - cli.rs: extend HistoryCommand with opened/completed/rejected/approved/closed and shared view arguments; verify flag ownership against existing parent history flags rather than duplicating clap names. Preserve SPEC-ID, events and templates parsing.
+    - New focused history_views.rs: collect through the existing index-or-walk event path in history.rs/history_cache.rs; reuse event decoding. Filter by event time, join current requirement summaries by stable identity, apply current-field list filters, dedupe to latest matching event per spec unless --all-events, then sort and limit. Closed selects completed/rejected/superseded, excluding archived.
+    - output_format.rs: reuse list cell formatting and structured field shapes through a narrow adapter carrying when. The existing render_list_fields_table takes RequirementSummary and does not itself accept an extra timestamp; do not assume it already renders when or JSON/TOON. Verify all three output paths against actual list goldens.
+    - Completeness: carry raw walk-cap/window boundary evidence independently of row limit. Current collect_filtered_events_git computes window_exhausted as commit_walk_capped && filtered.len() < opts.limit, which can hide an incomplete window when a row limit is met. Existing human notice also suppresses explicit --max-commits. These existing signals alone cannot satisfy this view contract; add view-specific raw cap/boundary reporting, including explicit caps, and emit truncated metadata / window truncated at <date>. Never silently treat a capped fallback as complete.
+    - docs/cli/08-reporting.md and CLI help: document event time versus current status, default 7d, terminal set, filters, all-events and examples.
+
+    Acceptance-to-test mapping (CI only, no local compilation):
+    1. history_view_completed_filters_current_type plus human/TOON/JSON golden fixtures: exactly matching bugs, one row each, current status and list fields plus when.
+    2. history_view_closed_terminal_set: includes completed/rejected/superseded; excludes archived.
+    3. history_view_recompleted_latest_and_all_events: one default row, two occurrences with --all-events.
+    4. history_view_opened_uses_filed_time_current_status: opened then completed retains creation time and current completed status.
+    5. history_view_index_answers_beyond_walk_cap and history_view_fallback_cap_reports_truncation_even_when_limit_met: both complete index answer and visibly incomplete fallback, including explicit cap and structured metadata.
+    6. history_view_cli_preserves_spec_events_templates: existing command forms unchanged.
+    7. help/docs examples and required make check-ci-fast before every push; all builds/tests only on GitHub CI.
+
+    Risks: history index freshness API changes from STORY-1661; joining remapped IDs; dedup/limit ordering; output-format parity; cap reporting currently means something narrower than this contract. Separate implementer must read the prerequisite final diff and obtain sketch signoff before coding.
+  created_at: 2026-10-13T06:36:22.394505641Z
+  modified_at: 2026-10-13T06:36:22.394505641Z
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
