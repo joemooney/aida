@@ -312,6 +312,11 @@ fn real_claude_contained_session_write_boundary() {
     let program = std::env::var("AIDA_TEST_CLAUDE_BIN").unwrap_or_else(|_| "claude".to_string());
     let model =
         std::env::var("AIDA_TEST_REAL_CLAUDE_MODEL").unwrap_or_else(|_| "haiku".to_string());
+    // BUG-1971: the lib test binary redirects HOME to a temp dir, where claude
+    // has no credentials. Give the claude child (only) the operator's real
+    // home from the test fence. trace:BUG-1971 | ai:claude
+    let real_home =
+        crate::test_home::operator_real_home().expect("the test HOME fence names a real home");
     // The prompt goes on stdin: `--disallowed-tools` is variadic.
     let mut child = Command::new(program)
         .args([
@@ -330,6 +335,7 @@ fn real_claude_contained_session_write_boundary() {
             "Bash",
         ])
         .current_dir(&worktree)
+        .env("HOME", real_home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -359,5 +365,124 @@ fn real_claude_contained_session_write_boundary() {
     assert!(
         !outside.exists(),
         "the write one level above must be denied: {transcript}"
+    );
+}
+
+/// The `permissions.allow` rules in a contained flag set's `--settings` JSON.
+fn allow_rules_in_flags(flags: &[String]) -> Vec<String> {
+    let pos = flags.iter().position(|f| f == "--settings").unwrap();
+    let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
+    v["permissions"]["allow"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r.as_str().map(str::to_string))
+        .collect()
+}
+
+/// The roots named by `write boundary: //a/**, //b/**`, in rule-path form.
+fn announced_roots(line: &str) -> Vec<String> {
+    line.strip_prefix("write boundary: ")
+        .expect("announcement shape")
+        .split(", ")
+        .map(|p| {
+            p.strip_prefix('/')
+                .and_then(|p| p.strip_suffix("/**"))
+                .expect("pattern shape")
+                .to_string()
+        })
+        .collect()
+}
+
+/// The roots the `Edit` rules in `allow` grant, in rule-path form.
+fn settings_roots(allow: &[String]) -> Vec<String> {
+    allow
+        .iter()
+        .filter_map(|r| r.strip_prefix("Edit(/"))
+        .map(|r| r.strip_suffix("/**)").expect("rule shape").to_string())
+        .collect()
+}
+
+// BUG-1971 (2): on a symlinked worktree path, the `queue work` boundary
+// announcement and the contained `--settings` rules come from the same roots.
+// trace:BUG-1971 | ai:claude
+#[cfg(unix)]
+#[test]
+fn symlinked_worktree_announcement_matches_settings_roots() {
+    let (_tmp, parent, worktree) = pool_fixture();
+    let link = parent.join("linked-worktree");
+    std::os::unix::fs::symlink(&worktree, &link).unwrap();
+    let session_root = crate::find_project_root_from(&link.join("src")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&session_root, None);
+
+    let announced = announced_roots(&crate::session::contained_write_boundary_announcement());
+    let in_settings = settings_roots(&allow_rules_in_flags(
+        &crate::session::claude_contained_flags(),
+    ));
+    assert_eq!(announced, in_settings);
+    // Both spellings of the symlinked tree, and nothing else.
+    let mut expected = vec![
+        root_rule_path(&link).unwrap(),
+        root_rule_path(&worktree).unwrap(),
+    ];
+    expected.dedup();
+    assert_eq!(in_settings, expected);
+}
+
+// BUG-1971 (3): outside a git repository the contained session has no write
+// roots (it never falls back to cwd, which could be $HOME), so the settings
+// allow no edit at all.
+// trace:BUG-1971 | ai:claude
+#[test]
+fn outside_git_contained_session_has_no_write_roots() {
+    let tmp = tempfile::tempdir().unwrap();
+    let outside = std::fs::canonicalize(tmp.path()).unwrap();
+    if crate::find_project_root_from(&outside).is_ok() {
+        eprintln!("skipping: the temp dir sits inside a git repository");
+        return;
+    }
+    let roots = crate::session::write_roots_for_git_root(
+        crate::find_project_root_from(&outside).ok().as_deref(),
+    );
+    assert!(roots.is_empty(), "{roots:?}");
+    assert!(write_boundary_announcement(&roots).starts_with("write boundary: none"));
+    assert!(
+        allow_rules_in_flags(&crate::session::claude_contained_flags_for_roots(&roots)).is_empty()
+    );
+}
+
+// BUG-1971 (4): a contained headless resume scopes its write boundary to the
+// worktree it resumes in, not to the process cwd.
+// trace:BUG-1971 | ai:claude
+#[test]
+fn contained_resume_argv_scopes_boundary_to_its_worktree() {
+    let (_tmp, _parent, worktree) = pool_fixture();
+    let args =
+        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree));
+    assert!(
+        args.windows(2)
+            .any(|w| w == ["--permission-mode", "dontAsk"]),
+        "{args:?}"
+    );
+    let expected: Vec<String> = WRITE_TOOLS
+        .iter()
+        .map(|tool| format!("{tool}(/{}/**)", worktree.display()))
+        .collect();
+    assert_eq!(allow_rules_in_flags(&args), expected);
+    // The process cwd (this checkout) is not the boundary.
+    let cwd = std::env::current_dir().unwrap();
+    let cwd_str = format!("/{}/", cwd.display());
+    assert!(
+        allow_rules_in_flags(&args)
+            .iter()
+            .all(|r| !r.contains(&cwd_str)),
+        "{args:?}"
+    );
+    // The uncontained resume carries no contained flags.
+    let plain = crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None);
+    assert!(!plain.iter().any(|a| a == "--settings"), "{plain:?}");
+    assert!(
+        plain.contains(&"bypassPermissions".to_string()),
+        "{plain:?}"
     );
 }

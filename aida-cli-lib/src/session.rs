@@ -1247,12 +1247,44 @@ pub fn spawn_vendor_headless_with_seat(
 /// `.aida-store` sibling and the worktree itself are the rw surfaces the OS
 /// wrapper binds. Resolve the project root from cwd, falling back to cwd itself
 /// (and `.` if even that fails) so the wrapper never panics on a stray env.
+///
+/// BUG-1971: the contained WRITE boundary never reads this root, because its
+/// cwd fallback could be `$HOME`. It uses [`contained_session_write_roots`],
+/// which has no fallback.
 /// trace:STORY-612 | ai:claude
 fn headless_worktree_root() -> PathBuf {
     crate::find_project_root()
         .ok()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// BUG-1971: the write roots of a contained session launched from this
+/// process: the git root of cwd, which `queue work` has `set_current_dir`'d to
+/// the lease's worktree. Both the contained `--settings` rules
+/// ([`claude_contained_flags`]) and the `queue work` boundary announcement
+/// ([`contained_write_boundary_announcement`]) read this one list, so the two
+/// cannot disagree on a symlinked path. Outside a git repository there is no
+/// worktree, so there are no roots and `dontAsk` denies every edit: the
+/// boundary fails closed instead of widening to cwd (possibly `$HOME`).
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_session_write_roots() -> Vec<PathBuf> {
+    write_roots_for_git_root(crate::find_project_root().ok().as_deref())
+}
+
+/// The write roots for a discovered git root; none when there is no git root.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn write_roots_for_git_root(git_root: Option<&Path>) -> Vec<PathBuf> {
+    git_root
+        .map(crate::contained_boundary::contained_write_roots)
+        .unwrap_or_default()
+}
+
+/// BUG-1971: the `write boundary: …` line `queue work` prints for a contained
+/// claude launch, built from the same roots as the launch's settings.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_write_boundary_announcement() -> String {
+    crate::contained_boundary::write_boundary_announcement(&contained_session_write_roots())
 }
 
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
@@ -2056,18 +2088,26 @@ pub fn claude_contained_flags() -> Vec<String> {
     // lease's worktree (pool or named), and the same root the STORY-612 OS
     // wrapper binds rw. Never the orchestrator's requested path, which the warm
     // pool may have replaced. trace:BUG-1928 | ai:claude
-    claude_contained_flags_for(&headless_worktree_root())
+    // BUG-1971: no git root means no write roots (fail closed), never a cwd
+    // fallback. trace:BUG-1971 | ai:claude
+    claude_contained_flags_for_roots(&contained_session_write_roots())
 }
 
 /// BUG-1928: the contained launch flags with the write boundary scoped to
 /// `worktree` (see `crate::contained_boundary`).
 // trace:BUG-1928 | ai:claude
 pub fn claude_contained_flags_for(worktree: &Path) -> Vec<String> {
+    claude_contained_flags_for_roots(&crate::contained_boundary::contained_write_roots(worktree))
+}
+
+/// The contained launch flags for an explicit list of write roots.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Vec<String> {
     vec![
         "--setting-sources".to_string(),
         "project".to_string(),
         "--settings".to_string(),
-        claude_contained_settings_json(worktree),
+        claude_contained_settings_json(write_roots),
     ]
 }
 
@@ -2156,7 +2196,7 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-fn claude_contained_settings_json(worktree: &Path) -> String {
+fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2170,8 +2210,7 @@ fn claude_contained_settings_json(worktree: &Path) -> String {
         .map(|r| contained_managed_domains_only(r))
         .unwrap_or(false);
     // trace:BUG-1928 | ai:claude
-    let write_roots = crate::contained_boundary::contained_write_roots(worktree);
-    contained_settings_json(&allowed_hosts, managed_only, &write_roots)
+    contained_settings_json(&allowed_hosts, managed_only, write_roots)
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2904,15 +2943,19 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
 /// conversation with the working model it had already built. Pure — the flag
 /// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_resume_args_with_posture(prompt, session_id, false)
+    claude_headless_resume_args_with_posture(prompt, session_id, None)
 }
 
+/// `contained_in` is `Some(worktree)` for a contained resume: the write
+/// boundary is scoped to that worktree (the resumed session's cwd), not to the
+/// process cwd. `None` is the uncontained `bypassPermissions` posture.
+// trace:BUG-1971 | ai:claude
 pub fn claude_headless_resume_args_with_posture(
     prompt: &str,
     session_id: &str,
-    contained: bool,
+    contained_in: Option<&Path>,
 ) -> Vec<String> {
-    let permission_mode = if contained {
+    let permission_mode = if contained_in.is_some() {
         "dontAsk"
     } else {
         "bypassPermissions"
@@ -2922,8 +2965,9 @@ pub fn claude_headless_resume_args_with_posture(
         "--permission-mode".to_string(),
         permission_mode.to_string(),
     ];
-    if contained {
-        args.extend(claude_contained_flags());
+    if let Some(worktree) = contained_in {
+        // trace:BUG-1971 | ai:claude
+        args.extend(claude_contained_flags_for(worktree));
     }
     args.extend([
         "--output-format".to_string(),
@@ -3075,7 +3119,9 @@ pub fn spawn_claude_headless_resume(
     // trace:STORY-612 | ai:claude
     let (program, args) = claude_program_and_args(
         cwd,
-        claude_headless_resume_args_with_posture(prompt, session_id, contained),
+        // BUG-1971: the write boundary is the worktree being resumed in.
+        // trace:BUG-1971 | ai:claude
+        claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd)),
     )?;
     // TASK-1169 / ADR-22: the resume path is a headless child too — same
     // bounded ceiling, so a resumed drain can't diverge from a fresh one.
@@ -6038,9 +6084,7 @@ mod tests {
         );
         assert_eq!(
             allow,
-            crate::contained_boundary::write_allow_rules(
-                &crate::contained_boundary::contained_write_roots(&headless_worktree_root())
-            )
+            crate::contained_boundary::write_allow_rules(&contained_session_write_roots())
         );
         assert!(settings["permissions"]["deny"]
             .as_array()

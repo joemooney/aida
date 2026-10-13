@@ -12604,11 +12604,11 @@ pub(crate) fn handle_queue_work(
                         eprintln!(
                             "  {} {}",
                             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                            crate::contained_boundary::write_boundary_announcement(
-                                &crate::contained_boundary::contained_write_roots(
-                                    &lease.worktree_path
-                                )
-                            )
+                            // BUG-1971: from the same roots the launch's
+                            // `--settings` rules use (the git root of the
+                            // canonical cwd), not `lease.worktree_path` as
+                            // given. trace:BUG-1971 | ai:claude
+                            crate::session::contained_write_boundary_announcement()
                         );
                     }
                     eprintln!(
