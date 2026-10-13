@@ -8,12 +8,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T15:32:56.412298307Z
+modified_at: 2026-10-13T18:10:28.137786004Z
 req_type: Bug
 tags:
 - review-follow-up
 - security
 - shell-wrapper
+relationships:
+- rel_type: Supersedes
+  target_id: 01a13451-323c-7682-a969-e7d3facae99c
+  created_at: 2026-10-13T18:10:28.137775913Z
+  created_by: joe
 comments:
 - id: 01a13549-0bca-7580-a0d5-413d336fc2df
   author: joe
