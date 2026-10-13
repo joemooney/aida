@@ -21,12 +21,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:05.317476642Z
-modified_at: 2026-10-13T04:41:05.317476642Z
+modified_at: 2026-10-13T06:17:23.826733780Z
 req_type: Story
 tags:
 - cycle-time
 - fasttrack
 - process
+comments:
+- id: 01a133e8-9872-7931-95f6-6577906a5ccf
+  author: joe
+  content: 'Evidence from aida metrics cycle-time --since 30d (2026-10-13): queued wait p50 2.7h / p90 49h and awaiting-approval p90 23h, against implementer p50 ~7 min and CI p50 ~8 min. Routing trivial specs straight into an approved, queued lane goes after the dominant cost directly. Consider making ''queued → picked up'' latency for fasttrack items this story''s success metric. See FAQ-55, DOC-7.'
+  created_at: 2026-10-13T06:17:23.826733780Z
+  modified_at: 2026-10-13T06:17:23.826733780Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
