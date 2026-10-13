@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:20:29.880301545Z
-modified_at: 2026-10-13T03:44:11.542805416Z
+modified_at: 2026-10-13T06:41:03.234601360Z
 req_type: Bug
 tags:
 - ci
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-10-13T03:44:11.542805416Z
   modified_at: 2026-10-13T03:44:11.542805416Z
   session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
+- id: 01a133fe-4102-71d0-8d8c-18efa925f0c7
+  author: joe
+  content: 'MERGE (merge seat): PR #2585 merged at 40c9a5103a4b6caf9b5f50720644ca361b14d935 after a fresh independent review approved head 5c08a2e150 with Build green. The spec did not auto-complete because open PR #2571 still references BUG-1990, so the advisor sets the status.'
+  created_at: 2026-10-13T06:41:03.234601360Z
+  modified_at: 2026-10-13T06:41:03.234601360Z
+  session_id: e651951a-cde3-4010-8494-7b15a84fb988
 history:
 - id: 01a13328-d077-7c53-be36-5b749f8beacf
   author: joe
