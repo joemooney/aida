@@ -28,6 +28,79 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
+/// PATH readers in production code do not take ENV_LOCK. Run a PATH-changing
+/// test as one exact test in its own process, before constructing any fixture.
+/// Returns true in the parent after the child passed, so the caller returns.
+// trace:BUG-1994 | ai:codex
+pub(crate) fn run_path_isolated_test() -> bool {
+    let thread = std::thread::current();
+    let name = thread.name().expect("libtest thread name");
+    if is_path_isolated_process() {
+        assert_eq!(std::env::var("AIDA_TEST_PATH_CHILD").unwrap(), name);
+        return false;
+    }
+    assert!(
+        !holds_env_lock(),
+        "isolate before taking an environment guard"
+    );
+    let home = tempfile::tempdir().unwrap();
+    std::fs::write(
+        home.path().join(".gitconfig"),
+        "[user]\nname = AIDA Test\nemail = test@example.invalid\n[init]\ndefaultBranch = main\n",
+    )
+    .unwrap();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", home.path())
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("AIDA_TEST_PATH_CHILD", name)
+        .args(["--exact", "--nocapture", "--test-threads=1", name]);
+    // Some test binaries are linked against Rust libraries in cargo's search path.
+    if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
+        command.env("LD_LIBRARY_PATH", path);
+    }
+    let output = command.output().expect("spawn isolated test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "isolated test {name} failed:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed;")),
+        "isolated test must actually run one test: {name}\n{stdout}"
+    );
+    true
+}
+
+// trace:BUG-1994 | ai:codex
+pub(crate) fn is_path_isolated_process() -> bool {
+    let Ok(name) = std::env::var("AIDA_TEST_PATH_CHILD") else {
+        return false;
+    };
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    !name.is_empty()
+        && args.len() == 4
+        && args[0] == "--exact"
+        && args[1] == "--nocapture"
+        && args[2] == "--test-threads=1"
+        && args[3] == name
+}
+
+// trace:BUG-1994 | ai:codex
+pub(crate) fn require_path_mutation_scope(key: &str) {
+    if key == "PATH" {
+        assert!(
+            is_path_isolated_process(),
+            "PATH mutation requires run_path_isolated_test() before any fixture or env guard"
+        );
+    }
+}
+
 /// Global mutex serialising every env-var swap that routes through
 /// `EnvVarGuard`. Coarse-grained on purpose: one lock for all vars
 /// matches the underlying constraint (`std::env::set_var` is
@@ -159,9 +232,13 @@ impl EnvVarsGuard {
     /// under test must hold one of these guards too, or it races the setters.
     // trace:TASK-148 | ai:claude
     pub(crate) fn apply(pairs: &[(&'static str, Option<&str>)]) -> Self {
+        for (key, _) in pairs {
+            require_path_mutation_scope(key);
+        }
         let guard = env_lock();
         let mut prev = Vec::with_capacity(pairs.len());
         for (key, value) in pairs {
+            require_path_mutation_scope(key);
             prev.push((*key, std::env::var_os(key)));
             // SAFETY: serialised by ENV_LOCK.
             #[allow(unused_unsafe)]
@@ -187,6 +264,9 @@ impl EnvVarsGuard {
     /// the test process.
     // trace:BUG-1627 | ai:claude
     pub(crate) fn snapshot(keys: &[&'static str]) -> Self {
+        for key in keys {
+            require_path_mutation_scope(key);
+        }
         let guard = env_lock();
         let prev = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         Self {
@@ -196,6 +276,7 @@ impl EnvVarsGuard {
     }
 
     pub(crate) fn set_key(&mut self, key: &'static str, value: impl AsRef<OsStr>) {
+        require_path_mutation_scope(key);
         if !self.prev.iter().any(|(k, _)| *k == key) {
             self.prev.push((key, std::env::var_os(key)));
         }
@@ -206,6 +287,7 @@ impl EnvVarsGuard {
     }
 
     pub(crate) fn unset_key(&mut self, key: &'static str) {
+        require_path_mutation_scope(key);
         if !self.prev.iter().any(|(k, _)| *k == key) {
             self.prev.push((key, std::env::var_os(key)));
         }
@@ -237,6 +319,7 @@ impl EnvVarGuard {
     /// test doesn't cascade into "every later test panics on lock
     /// acquisition" and mask the real failure.
     pub(crate) fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
+        require_path_mutation_scope(key);
         let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK; no other test routed through
@@ -255,6 +338,7 @@ impl EnvVarGuard {
     /// Remove `key` for the guard's lifetime. Same locking + restoration
     /// discipline as [`Self::set`].
     pub(crate) fn unset(key: &'static str) -> Self {
+        require_path_mutation_scope(key);
         let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK.
@@ -274,6 +358,7 @@ impl EnvVarGuard {
     /// for tests that iterate over many values for the same key
     /// (`auto_bump_env_flag_respects_opt_out` is the canonical case).
     pub(crate) fn reset(&mut self, value: impl AsRef<OsStr>) {
+        require_path_mutation_scope(self.key);
         // SAFETY: still holding ENV_LOCK via self._guard.
         #[allow(unused_unsafe)]
         unsafe {
@@ -283,6 +368,7 @@ impl EnvVarGuard {
 
     /// Companion to [`Self::reset`] for the unset case.
     pub(crate) fn reset_unset(&mut self) {
+        require_path_mutation_scope(self.key);
         // SAFETY: still holding ENV_LOCK via self._guard.
         #[allow(unused_unsafe)]
         unsafe {
@@ -291,10 +377,11 @@ impl EnvVarGuard {
     }
 
     /// Acquire the crate-wide env lock, prepend `dir` to `PATH`, and restore
-    /// the previous `PATH` on drop. Prepending (instead of overwriting) keeps
-    /// existing PATH binaries reachable from concurrent subprocesses.
+    /// the previous `PATH` on drop. Allowed only in a one-test child process;
+    /// a writer-only mutex cannot protect concurrent unlocked readers.
     // trace:TASK-1532 | ai:agy
     pub(crate) fn prepend_path(dir: impl AsRef<Path>) -> Self {
+        require_path_mutation_scope("PATH");
         let guard = env_lock();
         let prev = std::env::var_os("PATH");
         let new = match &prev {
@@ -947,3 +1034,8 @@ fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
     }
     None
 }
+
+// trace:BUG-1994 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1994_path_isolation_tests.rs"]
+mod bug_1994_path_isolation_tests;

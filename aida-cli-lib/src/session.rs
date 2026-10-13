@@ -4889,6 +4889,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn run_claude_session_restores_terminal_title_after_child_exit() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         use std::os::unix::fs::PermissionsExt;
 
         fn write_executable(path: &std::path::Path, body: &str) {
