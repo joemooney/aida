@@ -21,13 +21,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-13T23:51:10.134434155Z
+modified_at: 2026-10-13T23:51:11.433437246Z
 req_type: Bug
 tags:
 - contained
 - drain
 - factory:2026-10-11
-- parked:advisor
 - sandbox
 - store
 - triaged:night
