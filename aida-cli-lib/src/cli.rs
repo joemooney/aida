@@ -2398,7 +2398,9 @@ pub enum RoleCommand {
     /// `--warn-within` (or has expired), and nothing otherwise; always exits
     /// 0. With `--refuse-within`, prints the refusal on stderr and exits 3
     /// when less than that is left: a relay runs it before launching each
-    /// seat session. No grant, or an implementer grant, is never refused.
+    /// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its
+    /// grant can't be used (missing, malformed, or revoked). No grant at all,
+    /// or an implementer grant, is never refused.
     // trace:TASK-1736 | ai:claude
     Expiry {
         /// Warn when the grant expires within this span (e.g. `2h`, `90m`).

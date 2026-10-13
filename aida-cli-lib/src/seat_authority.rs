@@ -197,30 +197,72 @@ pub(crate) struct GrantExpiry {
     pub expires_at: DateTime<Utc>,
 }
 
-/// The expiry of the grant named by `AIDA_SESSION_GRANT`, read from the raw
-/// record rather than the validated grant so an already-expired grant still
-/// reports. `None` when there is no grant, it is unreadable or revoked, or its
-/// seat is one the baseline confers anyway (its expiry costs nothing).
+/// What `AIDA_SESSION_GRANT` resolves to for expiry purposes.
 // trace:TASK-1736 | ai:claude
-pub(crate) fn session_grant_expiry() -> Option<GrantExpiry> {
-    let id = std::env::var(GRANT_ENV).ok()?;
-    let grant = read_grant(id.trim()).ok()?;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GrantLookup {
+    /// No grant handle in the environment.
+    NoGrant,
+    /// A grant for a seat the baseline confers anyway: its expiry costs nothing.
+    Baseline,
+    /// The handle is set but names no usable record (missing, malformed,
+    /// mismatched, or revoked, or its parent is). A launcher must not treat
+    /// this as "nothing to worry about".
+    Unresolved(String),
+    /// A live record and when it stops conferring its seat.
+    Expiry(GrantExpiry),
+}
+
+/// Classify the grant named by `AIDA_SESSION_GRANT`, reading the raw record
+/// rather than the validated grant so an already-expired grant still reports.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn session_grant_lookup() -> GrantLookup {
+    let Some(id) = std::env::var(GRANT_ENV)
+        .ok()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+    else {
+        return GrantLookup::NoGrant;
+    };
+    let grant = match read_grant(&id) {
+        Ok(grant) => grant,
+        Err(err) => return GrantLookup::Unresolved(err.to_string()),
+    };
     if grant.revoked_at.is_some() {
-        return None;
+        return GrantLookup::Unresolved("session grant was revoked".to_string());
     }
     let seat = crate::canonical_role_name(&grant.seat);
     if matches!(seat.as_str(), "implementer" | "guest" | "requester") {
-        return None;
+        return GrantLookup::Baseline;
     }
     let mut expires_at = grant.expires_at;
-    if let Some(parent) = grant
-        .parent_grant_id
-        .as_deref()
-        .and_then(|id| read_grant(id).ok())
-    {
-        expires_at = expires_at.min(parent.expires_at);
+    if let Some(parent_id) = grant.parent_grant_id.as_deref() {
+        match read_grant(parent_id) {
+            Ok(parent) if parent.revoked_at.is_some() => {
+                return GrantLookup::Unresolved(
+                    "the grant this session's grant was delegated from was revoked".to_string(),
+                )
+            }
+            Ok(parent) => expires_at = expires_at.min(parent.expires_at),
+            Err(err) => {
+                return GrantLookup::Unresolved(format!(
+                    "the grant this session's grant was delegated from: {err}"
+                ))
+            }
+        }
     }
-    Some(GrantExpiry { seat, expires_at })
+    GrantLookup::Expiry(GrantExpiry { seat, expires_at })
+}
+
+/// The expiry of the grant named by `AIDA_SESSION_GRANT`. `None` when there
+/// is no grant, it is unresolvable or revoked, or its seat is one the
+/// baseline confers anyway (its expiry costs nothing).
+// trace:TASK-1736 | ai:claude
+pub(crate) fn session_grant_expiry() -> Option<GrantExpiry> {
+    match session_grant_lookup() {
+        GrantLookup::Expiry(expiry) => Some(expiry),
+        _ => None,
+    }
 }
 
 /// `1h05m` / `42m` / `under 1m` for a positive span.
@@ -311,6 +353,22 @@ pub(crate) fn launch_refusal(
         format_remaining(within),
         reenter_command(seat)
     ))
+}
+
+/// The refusal a relay prints when `AIDA_SESSION_GRANT` is set but names no
+/// usable grant record: launching would only meet refusals mid-run. `label`
+/// is the session's role label, used to name the renew command when known.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> String {
+    let seat = label
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| crate::canonical_role_name(&s.to_ascii_lowercase()))
+        .unwrap_or_else(|| "<seat>".to_string());
+    format!(
+        "Not launching: this session's seat grant cannot be used ({reason}). Re-enter the seat at a terminal, then start again: {}",
+        reenter_command(&seat)
+    )
 }
 
 pub(crate) fn require_direct_tty() -> Result<()> {
@@ -762,6 +820,43 @@ mod tests {
         assert!(launch_refusal(&gone, now, Duration::hours(1))
             .unwrap()
             .contains("expired at"));
+    }
+
+    /// A set handle naming no usable record is `Unresolved`, never silently
+    /// `NoGrant`; the launch refusal names the renew command.
+    // trace:TASK-1736 | ai:claude
+    #[test]
+    fn unresolvable_grant_is_distinguished_from_no_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let subject = crate::current_user_id(None);
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some("  "))]);
+            assert_eq!(session_grant_lookup(), GrantLookup::NoGrant);
+        }
+        let missing = Uuid::new_v4().to_string();
+        for handle in [missing.as_str(), "not-a-uuid"] {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(handle))]);
+            assert!(
+                matches!(session_grant_lookup(), GrantLookup::Unresolved(_)),
+                "{handle}"
+            );
+        }
+        let id = test_support::mint_grant_for(root, &subject, "advisor", &[]);
+        let mut grant = read_grant(&id).unwrap();
+        grant.revoked_at = Some(Utc::now());
+        write_grant(&grant).unwrap();
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+            assert_eq!(
+                session_grant_lookup(),
+                GrantLookup::Unresolved("session grant was revoked".into())
+            );
+        }
+        let refusal = unresolved_launch_refusal("session grant was revoked", Some("Advisor"));
+        assert!(refusal.starts_with("Not launching"), "{refusal}");
+        assert!(refusal.contains("aida role enter advisor"), "{refusal}");
+        assert!(unresolved_launch_refusal("x", None).contains("aida role enter <seat>"));
     }
 
     // trace:TASK-1736 | ai:claude
