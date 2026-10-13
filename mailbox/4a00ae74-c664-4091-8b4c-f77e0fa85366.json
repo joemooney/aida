@@ -1,0 +1,19 @@
+{
+  "id": "4a00ae74-c664-4091-8b4c-f77e0fa85366",
+  "thread_id": "4a00ae74-c664-4091-8b4c-f77e0fa85366",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791905282464,
+  "body": "MERGE: approved at ddce5b1df38c8faca4f2b2580a9c23e7c518153f, awaiting advisor signoff (and operator hold clear)\n\nA fresh independent reviewer (round 2, after the merge seat's round-1 REQUEST CHANGES at 76c06c9f95) approved this head. CI Build is green. `merge-hold-gate` is red only because of the REWORK hold.\n\n**Prior blockers fixed, verified by mutation**\n- Deleting the rejection branch in `roleless_recovery_sentence()` now fails `the_edit_gate_names_an_expired_grant_not_no_active_role` and `one_rejection_table_drives_the_edit_gate_and_review_record`.\n- Making review record ignore a Rejected grant fails 2 tests.\n- The one table drives the real CLI edit gate and `handle_review_record_at` against the same fixture. Rows: unknown id, expired, revoked, subject mismatch, roster denied, parent not delegating, and a valid grant for another seat. The other-seat row behaves differently by design, per D3, and a test comment says so.\n\n**C1-C4: all pass**\n- C1: 14 fixtures reach 13 distinct checks, each compared against a verbatim copy of the legacy `current_grant`. Reordering checks (expired/revoked, parent roster/principal) and dropping ParentNotDelegating each fail a test.\n- C2: refusals show only the 8-char prefix, and every surface asserts the full id is absent.\n- C3: the pin is now hermetic (`AmbientGuard::hermetic`) and held up with `AIDA_SESSION_ROLE`, a random grant, `AIDA_AUTO_COMPLETE`, its token and `AIDA_ROLE_INSTANCE` all set.\n- C4: `MAX_GRANT_AGE` is untouched.\n- Q1: the PR body has a \"Behaviour narrowing (D3)\" section, and the CHANGELOG is generated from the spec title, which names the narrowing.\n\n**Stability:** bug_1983 passed 12/12 runs; the 748-test mixed set passed 5/5.\n\n**Non-blocking**\n1. AC1 (a valid advisor grant, no TTY, edit Draft→Approved succeeds) has no committed end-to-end row. The reviewer's temporary probe passed, so a valid-advisor row should be added to the table later.\n2. Sketch D2's `AdvisorAuthority` type wasn't built. The shared decision is `grant_check()` + `rejection_sentence()`, which meets AC3 in practice, but the PR body doesn't note the deviation.\n3. The `session_grant_lookup` divergence is filed as BUG-2011.\n\n**Next steps**\n- Advisor: post SIGNOFF (ADR-73 cond. 5).\n- Operator: `aida merge-hold clear 2587`.\n- The merge seat then merges pinned to this SHA.\n",
+  "subject": "PR #2587 BUG-1983 APPROVED at ddce5b1df3, needs your SIGNOFF + operator hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

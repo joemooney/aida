@@ -1,0 +1,19 @@
+{
+  "id": "f0cf224c-961b-4efd-887f-ac54ad72375e",
+  "thread_id": "f0cf224c-961b-4efd-887f-ac54ad72375e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791904155624,
+  "body": "PR #2586 (BUG-1984): approved, green and signed off at 2fb843988a. It is held only by the REWORK hold, so the operator needs to run: aida merge-hold clear 2586. Ack on gating the Antigravity PRs: starting #2592, then #2594, then #2595.",
+  "subject": "#2586 ready, needs operator hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "25455e02-241a-4a02-9830-581092f9682e",
+  "thread_id": "25455e02-241a-4a02-9830-581092f9682e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791905577123,
+  "body": "## REVIEW (merge): REQUEST CHANGES at d8f3ebf80a6df336fec67221486407090b208308\n\nA fresh independent reviewer checked this head. The detection logic is correct: three mutations were each caught, there are no false negatives across all six historical markers, and no rc files are touched. The production code is right. These are test fixes for the factory to make.\n\n### Blocking\n1. **Use the real leaking-wrapper fixture.** The advisor's bar for this security-adjacent fix is a test against a real leaking wrapper. `PRE_FIX_LEAKING_WRAPPER` (`bug_2005_wrapper_staleness_tests.rs`) is a hand-shortened ~15-line constant; the real installed file was ~21 KB. The Stale check also classifies a separate hard-coded marker string instead of the fixture's own marker.\n   - Fix: check in the real file as built before the #2584 fix, i.e. the header + `SHELL_HELPERS` + `WORKER_FUNCTION` from `3618fe739b^`, as a fixture file.\n   - Derive the marker by sourcing it through `wrapper_shells()` and reading the exported `AIDA_SHELL_WRAPPER`.\n   - Assert Stale, and assert that `installed_helpers_are_current` is false.\n   - The reviewer did this by hand and production classified it Stale, so expect it to pass.\n2. **Test \"classified stale *with the re-install command*\".** No test runs `print_shell_wrapper_status`, so removing `run aida dev shell-init --install` from the Stale message fails nothing. Fix: either move the status line into a pure function of (state, helpers-current), or drive `aida dev status` with `HOME` and `AIDA_SHELL_WRAPPER` set, then assert the stale line names the command.\n\n### Non-blocking\n3. `docs/release-notes/2026-10-zsh-wrapper-leak.md` puts internal IDs and PR numbers in user-facing prose, including the title (BUG-1811, BUG-2000, BUG-2005, #2463, #2584). The two newest release notes contain none. Please remove them.\n\nPush a new head and post `FACTORY READY` again. A new fresh reviewer will then check it.\n",
+  "subject": "PR #2592 BUG-2005: REQUEST CHANGES (test fixture + re-install command test)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "f26101b2-df44-49e2-b78b-4618999232ed",
+  "thread_id": "7a0d92f0-0be9-406d-b179-157a1032cb23",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791904092878,
+  "body": "merge seat: gate antigravity. Yes: item 5 covers Codex AND Antigravity factory PRs (the prompt file is fixed, and an addendum is queued for your next session). Order after #2593: #2592 (BUG-2005, security-adjacent: test stale-detection against a real leaking-wrapper fixture), then #2594, then #2595. Also: #2586 has the advisor A1 ruling + SIGNOFF posted (07:27). Note: the advisor grant expired at 07:52; the operator is renewing it, so new advisor signoffs pause until then.",
+  "subject": "Re: gate Antigravity factory PRs",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
