@@ -1019,7 +1019,7 @@ pub(crate) fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
             let header = format!("PRIVATE-TOKEN: {token}\n");
-            let _ = stdin.write_all(header.as_bytes());
+            stdin.write_all(header.as_bytes()).ok()?;
             drop(stdin);
         }
         child.wait_with_output().ok()?

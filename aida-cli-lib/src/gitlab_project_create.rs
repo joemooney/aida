@@ -340,7 +340,7 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
 /// username prompt.
 // trace:BUG-1972 | ai:claude
 // trace:BUG-2004 | ai:antigravity
-fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
+pub(crate) fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(dir)

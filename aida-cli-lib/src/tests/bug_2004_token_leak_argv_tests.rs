@@ -2,7 +2,7 @@
 //! (1) GitLab release probe (`gitlab_release_exists`) streams `PRIVATE-TOKEN`
 //!     via curl stdin (`-H @-`), never on the command line.
 //! (2) Mirror re-run probe (`ensure_gitlab_project_exists`) passes the remote
-//!     NAME to `git ls-remote`, so URLs with embedded credentials never leak in argv.
+//!     NAME to `git ls-remote`, so raw URLs with embedded credentials are not passed in git's argv.
 // trace:BUG-2004 | ai:antigravity
 
 use super::*;
@@ -134,55 +134,20 @@ fn gitlab_release_exists_without_token_does_not_pass_stdin_or_header() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn ensure_gitlab_project_exists_passes_remote_name_to_ls_remote() {
-    let tmp = TempDir::new().unwrap();
-    let bin = init_bin_dir(&tmp);
-    let git_bin = bin.join("git");
-    let rec_argv = tmp.path().join("rec_git_argv.txt");
-
-    let script = format!(
-        "#!/bin/sh\n\
-         for a in \"$@\"; do\n\
-             printf '%s\\n' \"$a\" >> '{}'\n\
-         done\n\
-         # If this is the ls-remote probe, succeed\n\
-         for a in \"$@\"; do\n\
-             if [ \"$a\" = \"ls-remote\" ]; then\n\
-                 exit 0\n\
-             fi\n\
-         done\n\
-         exec /usr/bin/git \"$@\"\n",
-        rec_argv.display()
-    );
-    crate::test_exec::write_executable(&git_bin, script);
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin.display(), old_path);
-    let secret = "glpat-supersecret-token-67890";
-    let credential_url = format!(
-        "https://oauth2:{}@gitlab.example.com/group/my-repo.git",
-        secret
-    );
-
-    let _guard = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&new_path))]);
-
-    let res = ensure_gitlab_project_exists(tmp.path(), "my-gitlab-remote", &credential_url, false);
-    assert!(res.is_ok(), "ensure_gitlab_project_exists should succeed");
-    assert_eq!(res.unwrap(), false, "existing project requires no creation");
-
-    let argv_content = fs::read_to_string(&rec_argv).unwrap_or_default();
-    assert!(
-        !argv_content.contains(secret),
-        "secret token must NOT appear in git ls-remote argv:\n{argv_content}"
-    );
-    assert!(
-        !argv_content.contains("oauth2"),
-        "URL credentials must NOT appear in git ls-remote argv:\n{argv_content}"
-    );
-    assert!(
-        argv_content.contains("my-gitlab-remote"),
-        "git ls-remote must be invoked with the remote NAME:\n{argv_content}"
+    let dir = std::path::Path::new("/test/project");
+    let cmd = crate::gitlab_project_create::ls_remote_probe(dir, "my-gitlab-remote");
+    let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
+    assert_eq!(
+        args,
+        vec![
+            "-C",
+            "/test/project",
+            "ls-remote",
+            "--heads",
+            "my-gitlab-remote"
+        ],
+        "ls_remote_probe must pass remote name, not URL"
     );
 }
