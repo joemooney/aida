@@ -1,0 +1,38 @@
+id: 01a13544-83ae-7f83-b0ac-9d0abda0fe1d
+spec_id: STORY-1686
+agreed_id: STORY-1686
+title: 'Night shift: host-capacity guard (cargo ps --capacity) and a max-concurrent agent-session cap'
+description: |
+  Two additions to the night shift (`aida shift tick`, STORY-1218; guards in aida-cli-lib/src/shift.rs), from the aida-host pilot (2026-10-13).
+
+  **1. `host-capacity` guard.** Today the only host test is `load-ceiling`: the 1-minute load average against a ceiling, 9.00 on this host. On a disk-bound host that is a poor proxy. Load counts threads blocked on I/O, and it says nothing about queued builds.
+
+  If `cargo ps --capacity` is on PATH (aida-host STORY-50: build-idle time, free and queued build slots, PSI, MemAvailable, `admit: N`, exit 0 when admitting), the guard passes only when it admits. If the command is absent, the guard is skipped and `load-ceiling` applies as today. Its JSON verdict is recorded with the other guard verdicts in `aida shift status`.
+
+  **2. `max-concurrent` guard.** Cap the agent sessions running machine-wide (drain waves, implementer sessions, aida-relay runs as reported by `aida ps`) at a configured N. Refuse a launch while at or above it. Like every shift guard, a refusal records the verdict and exits 0, and the next tick retries; nothing blocks or errors.
+
+  Context: on 2026-10-11/12 the host was build-idle for ~8 h in gaps over 30 min, and nothing launched. The night shift itself was blocked by other guards (`drain-mode-only`: no eligible spec queued; `budget-evidence`; `watchdog-quiet`). A capacity trigger helps only once those pass. The relay-side counterpart is aida-relay STORY-109 (relay slots with a fair queue and the same capacity gate).
+
+  ## Acceptance
+  - With `cargo ps --capacity` faked to deny, `host-capacity` fails and no wave launches. Faked to admit, it passes. Absent, it is skipped.
+  - With N agent sessions running and `max_concurrent = N`, `max-concurrent` fails.
+  - Both appear in `aida shift status` with their reasons.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T12:37:25.038401003Z
+modified_at: 2026-10-13T12:37:25.038401003Z
+req_type: Story
+tags:
+- capacity
+- from:aida-host
+- shift
+filed_at:
+  code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
