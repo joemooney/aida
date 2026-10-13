@@ -27,7 +27,10 @@ jobs:
     # BUG-611: a flaky hang in the test step used to run to GitHub's 6h default,
     # blocking the single runner (and every PR queued behind it) for hours. Fail
     # fast instead — a normal run is ~7 min. trace:BUG-611 | ai:claude
-    timeout-minutes: 25
+    # The 15-round history/PATH stress adds repeated Git fixtures to the normal
+    # suite. Each round also has its own two-minute watchdog with diagnostics.
+    # trace:BUG-1994 | ai:codex
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

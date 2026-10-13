@@ -2,6 +2,54 @@ use super::*;
 use std::io::Read;
 use std::process::{Command, Stdio};
 
+// Capture to files so a stuck descendant cannot keep an output pipe open after
+// the harness is killed. Only this invocation's process group is terminated.
+// trace:BUG-1994 | ai:codex
+fn bounded_output(command: &mut Command, cap: std::time::Duration) -> std::process::Output {
+    let dir = tempfile::tempdir().unwrap();
+    let stdout_path = dir.path().join("stdout");
+    let stderr_path = dir.path().join("stderr");
+    command
+        .stdout(std::fs::File::create(&stdout_path).unwrap())
+        .stderr(std::fs::File::create(&stderr_path).unwrap());
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+    let mut child = command.spawn().unwrap();
+    let deadline = std::time::Instant::now() + cap;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if std::time::Instant::now() >= deadline {
+            // SAFETY: spawn created a distinct process group with this live
+            // child's PID; the negative PID selects only its descendants.
+            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+            child.wait().unwrap();
+            panic!(
+                "stress child exceeded {cap:?}: {command:?}\n{}\n{}",
+                std::fs::read_to_string(&stdout_path).unwrap(),
+                std::fs::read_to_string(&stderr_path).unwrap()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    std::process::Output {
+        status,
+        stdout: std::fs::read(stdout_path).unwrap(),
+        stderr: std::fs::read(stderr_path).unwrap(),
+    }
+}
+
+// trace:BUG-1994 | ai:codex
+#[test]
+#[should_panic(expected = "stress child exceeded")]
+fn stress_watchdog_refuses_a_stuck_child() {
+    bounded_output(
+        Command::new("/bin/sh").args(["-c", "sleep 10"]),
+        std::time::Duration::from_millis(50),
+    );
+}
+
 // trace:BUG-1994 | ai:codex
 const PATH_TESTS: &[&str] = &[
     "bug_1957_pr_ship_squash_subject_returns_completion_trailer",
@@ -152,7 +200,7 @@ fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
     let skip = "task_1507_random_dag_sweep_fixed_seeds";
     list.args(["--list", "--skip", skip, "task_1507_history_cache_tests"])
         .args(PATH_TESTS);
-    let output = list.output().unwrap();
+    let output = bounded_output(&mut list, std::time::Duration::from_secs(120));
     assert!(output.status.success());
     let names: Vec<_> = String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -178,7 +226,7 @@ fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
                 "task_1507_history_cache_tests",
             ])
             .args(PATH_TESTS);
-        let output = command.output().unwrap();
+        let output = bounded_output(&mut command, std::time::Duration::from_secs(120));
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             output.status.success(),
