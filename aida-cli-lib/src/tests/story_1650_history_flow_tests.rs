@@ -427,6 +427,39 @@ fn story_1650_busy_index_falls_back_without_catching_up() {
     assert_eq!(history_cache::status_at(&store, &db).lag, Some(1));
 }
 
+// trace:BUG-1954 | ai:claude
+#[test]
+fn bug_1954_a_checkout_behind_the_shared_index_is_not_stuck() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = store_with_flow(tmp.path());
+    advance(&store, 1);
+    warm(&store);
+    let db = history_cache::history_db_path(&store);
+    let tip = history_cache::status_at(&store, &db).tip;
+    // Another checkout moved the shared index on; this one is a commit back.
+    git(&store, &["reset", "-q", "--hard", "HEAD~1"], None);
+    let st = history_cache::status_at(&store, &db);
+    assert!(st.head_behind_tip, "{st:?}");
+    assert_eq!(st.lag, None);
+    assert_eq!(history_cache::classify_miss(&st), IndexMiss::CheckoutBehind);
+    assert_cheap_fallback(&store, IndexMiss::CheckoutBehind);
+    // The event view the note names still answers this checkout, and
+    // leaves the shared index alone.
+    with_index_on(|| {
+        let mut feed = opts();
+        feed.events_mode = true;
+        let records = history::collect_event_records(&store, &feed).unwrap();
+        assert!(!records.events.is_empty(), "the events view answers");
+    });
+    assert_eq!(
+        history_cache::status_at(&store, &db).tip,
+        tip,
+        "the shared index is left as the other checkout has it"
+    );
+    let note = history_flow::fallback_note(IndexMiss::CheckoutBehind);
+    assert!(!note.contains("rebuild"), "{note}");
+}
+
 #[test]
 fn story_1650_half_built_index_falls_back_without_back_filling() {
     let tmp = tempfile::tempdir().unwrap();
@@ -557,6 +590,17 @@ fn story_1650_misses_are_classified_from_the_index_status() {
             IndexMiss::Stuck,
         ),
         (
+            // trace:BUG-1954 | ai:claude
+            // HEAD is an ancestor of the tip: this checkout is behind the
+            // shared index, which is not stuck.
+            HistoryCacheStatus {
+                head: Some(s("b")),
+                head_behind_tip: true,
+                ..base.clone()
+            },
+            IndexMiss::CheckoutBehind,
+        ),
+        (
             HistoryCacheStatus {
                 head: Some(s("b")),
                 lag: Some(1),
@@ -608,6 +652,7 @@ fn story_1650_every_fallback_note_is_one_line_with_the_fix() {
         IndexMiss::NotBuilt,
         IndexMiss::Behind,
         IndexMiss::Stuck,
+        IndexMiss::CheckoutBehind,
         IndexMiss::Filling,
         IndexMiss::Busy,
         IndexMiss::Unreadable,
@@ -616,13 +661,27 @@ fn story_1650_every_fallback_note_is_one_line_with_the_fix() {
         let note = history_flow::fallback_note(miss);
         assert!(note.starts_with("note: "), "{note}");
         assert!(!note.contains('\n'), "{note}");
+        // trace:BUG-1954 | ai:claude
         // Behind names the cheap refresh, never the minutes-long rebuild;
+        // NotBuilt and Filling name the refresh first and the rebuild
+        // second; CheckoutBehind never suggests resetting a shared index;
         // every other cause names the rebuild.
-        if miss == IndexMiss::Behind {
-            assert!(note.contains(history_flow::REFRESH), "{note}");
-            assert!(!note.contains("rebuild"), "{note}");
-        } else {
-            assert!(note.contains("aida cache rebuild --history"), "{note}");
+        const REBUILD: &str = "aida cache rebuild --history";
+        match miss {
+            IndexMiss::Behind => {
+                assert!(note.contains(history_flow::REFRESH), "{note}");
+                assert!(!note.contains("rebuild"), "{note}");
+            }
+            IndexMiss::NotBuilt | IndexMiss::Filling => {
+                let refresh = note.find(history_flow::REFRESH).expect(&note);
+                let rebuild = note.find(REBUILD).expect(&note);
+                assert!(refresh < rebuild, "refresh before rebuild: {note}");
+            }
+            IndexMiss::CheckoutBehind => {
+                assert!(!note.contains("rebuild"), "{note}");
+                assert!(note.contains("aida history events"), "{note}");
+            }
+            _ => assert!(note.contains(REBUILD), "{note}"),
         }
         assert!(!note.contains("STORY-"), "no internal IDs: {note}");
     }

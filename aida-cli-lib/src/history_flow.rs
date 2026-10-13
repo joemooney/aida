@@ -253,7 +253,14 @@ pub(crate) fn fallback_note(miss: IndexMiss) -> String {
             "{LEAD} the history index is switched off (AIDA_HISTORY_CACHE=0); \
              unset it and {FIX}"
         ),
-        IndexMiss::NotBuilt => format!("{LEAD} the history index has not been built yet; {FIX}"),
+        // trace:BUG-1954 | ai:claude
+        // An event view builds or fills the index in seconds; the full
+        // rebuild takes minutes on a large store, so it comes second.
+        IndexMiss::NotBuilt => format!(
+            "{LEAD} the history index has not been built yet; \
+             run `{REFRESH}` (again if this note persists) to see status changes, \
+             or `aida cache rebuild --history` to build it all at once"
+        ),
         // trace:STORY-1650 | ai:claude
         // An event view catches the index up incrementally under its
         // budget, a chunk or more per run; a rebuild would take minutes.
@@ -264,9 +271,17 @@ pub(crate) fn fallback_note(miss: IndexMiss) -> String {
         IndexMiss::Stuck => format!(
             "{LEAD} the history index is behind the store and cannot catch up on its own; {FIX}"
         ),
-        IndexMiss::Filling => {
-            format!("{LEAD} the history index has not reached this far back yet; {FIX}")
-        }
+        // trace:BUG-1954 | ai:claude
+        IndexMiss::CheckoutBehind => format!(
+            "{LEAD} this checkout's store is behind the shared history index, \
+             which another checkout has moved on; `aida history events` reads this \
+             checkout's changes from git"
+        ),
+        IndexMiss::Filling => format!(
+            "{LEAD} the history index has not reached this far back yet; \
+             run `{REFRESH}` (again if this note persists) to see status changes, \
+             or `aida cache rebuild --history` to fill it all at once"
+        ),
         IndexMiss::Busy => format!(
             "{LEAD} another aida process is updating the history index; \
              try again in a moment, or {FIX}"
