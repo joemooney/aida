@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T03:16:10.031115009Z
+modified_at: 2026-10-13T06:40:17.159665204Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -34,6 +34,18 @@ comments:
   created_at: 2026-10-13T02:58:52.763521050Z
   modified_at: 2026-10-13T02:58:52.763521050Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a133fd-8d07-7861-b361-7e4b688d09e0
+  author: joe
+  content: |-
+    FACTORY PLAN (codex), night 2026-10-12 — PLAN ONLY: higher-priority advisor-role instruction requires implementation through a doer seat. No live lease found. Broad gh search returned #2571, but its title/body/files cover BUG-1957, not this bug, so it is not an ownership skip. No worktree/lease/code/PR created.
+
+    Grounded mechanism: test_env.rs::EnvVarGuard::prepend_path and EnvVarGuard::set serialize PATH writers, but Command::new("git") readers that do not take env_lock can resolve the shim during its lifetime. Restoration alone cannot protect concurrent readers, and shim cleanup can invalidate an already-resolved path. The spec's strace/stress evidence and comment about shims execing real git must be preserved: forwarding shims are not proof the leak is harmless, and PATH contamination is not yet proven to explain every Git object-write failure.
+
+    Approach: inventory all PATH mutations including indirect EnvVarGuard calls across the test binary, and every affected production git caller exercised in-process. Prefer per-child scoped PATH / explicit executable injection for fake-git tests in status_prs.rs, tests/handle_pull_command_tests.rs, tests/story_1656_multi_forge_init_tests.rs and their focused production seams, keeping production defaults unchanged and avoiding lib.rs additions. Where an in-process caller cannot accept injection without cross-cutting contracts, isolate the fake-PATH scenario in a subprocess instead of a writer-only mutex. Keep temp shims alive until every child exits. No test weakening or fixture-only replacement that leaves code-under-test exposed.
+
+    Acceptance-to-test mapping: fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected (concurrent readers + real repository operation), fake_git_fixture_lifetime_covers_child_exit, source guard PATH_mutation_requires_isolated_child_or_shared_reader_guard including indirect guard setters and aliases, GitHub CI stress job 15 rounds x 16 threads running task_1507 history tests alongside all former PATH mutators. Carry the added unmet BUG-1955 acceptance explicitly: retain raw exec/exit/cwd/shim-lifetime evidence, identify the actual temporary-file/commit-object failure mechanism, add a failing reproduction and permanent regression. Do not claim that obligation satisfied merely by removing global PATH mutation. Risks: nested env-lock deadlocks if choosing universal serialization, missed reader call sites, global cwd/env contamination beyond PATH. Sketch/signoff required if new reusable command-injection contract becomes necessary. make check-ci-fast before every push; all Rust compilation/tests and stress evidence only on GitHub CI.
+  created_at: 2026-10-13T06:40:17.159665204Z
+  modified_at: 2026-10-13T06:40:17.159665204Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
