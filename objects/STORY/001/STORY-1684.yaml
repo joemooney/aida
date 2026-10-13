@@ -1,0 +1,37 @@
+id: 01a13390-6c25-7ee2-8d29-c48c00a71b1a
+spec_id: STORY-1684
+agreed_id: STORY-1684
+title: 'Automatic fasttrack routing: trivial specs enter the lane by rule, not by remembering'
+description: |-
+  Problem: the fasttrack lane (STORY-587, TASK-777, TASK-905, TASK-906) works, but only 11 specs have ever gone through it, about 2 recently. It depends on someone remembering to use it, so straightforward work takes the full ceremony.
+
+  Proposal: route by rule at approval and dispatch time.
+  - Eligible: docs-only, test-only, or a small expected diff (threshold set in config); not tagged security/authority/sandbox/credentials; no architecture tag; spec heft at most 1.
+  - The router tags the spec fasttrack and says why. The advisor can veto, and anything ineligible discovered during implementation punts out of the lane (the existing punt discipline).
+  - Fasttrack items get LIGHT review (pairs with the risk-tiered review story). CI stays the only gate, as STORY-587 intended.
+
+  Acceptance:
+  1. One eligibility function with table tests: eligible and ineligible cases, including a security-tagged doc fix, which stays OUT.
+  2. Approval or queueing of an eligible spec auto-tags it fasttrack with a one-line reason visible in aida show and aida fasttrack status; the advisor can remove the tag with a recorded veto.
+  3. A spec whose diff turns out to touch STRICT paths is punted out of the lane automatically before merge. Tested.
+  4. Measured: the lane's share of completed specs, and the median start-to-done time of fasttrack items versus the rest, reported after two weeks.
+  Process change: needs a sketch on this spec and advisor signoff before implementation.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:41:05.317476642Z
+modified_at: 2026-10-13T04:41:05.317476642Z
+req_type: Story
+tags:
+- cycle-time
+- fasttrack
+- process
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
