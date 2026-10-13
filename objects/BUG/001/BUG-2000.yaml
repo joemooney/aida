@@ -1,0 +1,31 @@
+id: 01a13291-7bf9-7060-9a18-9f483338570d
+spec_id: BUG-2000
+agreed_id: BUG-2000
+title: 'zsh: shell wrapper on main prints the entire environment (including API keys) to stdout on every wrapped aida call'
+description: |-
+  SECURITY. Found during the strict review of PR #2577 (BUG-1960).
+
+  On main, the generated shell wrapper begins with 'local -'. That form is valid in bash but not in zsh, where it prints every shell variable to stdout. This was introduced with BUG-1811.
+
+  Effect: for zsh users, every wrapped aida call dumps the whole environment, including any API keys or tokens it holds, to the terminal. Agent tool shells capture that output into transcripts and logs. A reviewer reproduced it: the comparison run printed Anthropic, OpenAI, Gemini and AIDA token values into an agent transcript.
+
+  Fix: PR #2577 (BUG-1960) removes 'local -' for zsh and uses 'setopt localoptions'. That PR is currently at REQUEST CHANGES for an unrelated trap issue. If #2577 stalls, the zsh part could ship on its own.
+
+  Operator actions:
+  - rotate any keys present in the environment of zsh sessions that ran the wrapper, including the 2026-10-12 review session;
+  - consider whether shipped releases carry this wrapper.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T00:02:37.689446175Z
+modified_at: 2026-10-13T00:02:37.689446175Z
+req_type: Bug
+filed_at:
+  code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97453570d6
+  vendor: claude
+  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
