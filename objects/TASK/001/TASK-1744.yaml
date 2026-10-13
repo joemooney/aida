@@ -1,0 +1,23 @@
+id: 01a13785-c1bd-7a43-b52b-44d1453bd470
+spec_id: TASK-1744
+agreed_id: TASK-1744
+title: Deliver mid-session grant expiry notices to Codex and Antigravity tool-only sessions
+description: Follow-up from BUG-2014 advisor condition C5. Claude Code delivery is scoped to its templates. Design and verify an informational delivery path for Codex and Antigravity headless tool-only sessions, reusing the typed grant verdict, effective parent expiry and deduplication contract. Require no graph/cache initialization, no authority from role labels, no prompt or tool denial, bounded delivery and explicit version/runtime evidence. Architecture sketch/signoff required before introducing client hook contracts.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T23:07:55.197268358Z
+modified_at: 2026-10-13T23:07:55.197268358Z
+req_type: Task
+tags:
+- from-implementer:BUG-2014
+- hooks
+- seats
+filed_at:
+  code_sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
+  branch: bug-2014-work
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: codex
