@@ -14,12 +14,12 @@ description: |-
   Operator actions:
   - rotate any keys present in the environment of zsh sessions that ran the wrapper, including the 2026-10-12 review session;
   - consider whether shipped releases carry this wrapper.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T00:02:37.689446175Z
-modified_at: 2026-10-13T03:33:06.973121085Z
+modified_at: 2026-10-13T08:11:36.883679926Z
 req_type: Bug
 comments:
 - id: 01a13352-311d-7ee0-9c8a-53dff05b9d2f
@@ -43,6 +43,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13451-289e-75f3-87c2-73b861c7cc8d
+  author: aida-auto-bump
+  timestamp: 2026-10-13T08:11:36.478735384Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13451-2a33-70b0-a7f9-fb8cd08bd816
+  timestamp: 2026-10-13T08:11:36.883653048Z
+  agent: implementer
+  commit_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  summary: 'Minimal correct fix: zsh takes setopt localoptions, bash keeps local -; single emitter; verified on a private build target: bug_2000 3/3, wrapper set 29/29; M1 and M2 caught.'
+  review_verdict: approved
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
@@ -51,3 +65,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T08:11:36.478730965Z
+  completion_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
