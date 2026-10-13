@@ -1,0 +1,30 @@
+id: 01a13530-330f-7d33-b0ac-41ab1eb83462
+spec_id: BUG-2006
+agreed_id: BUG-2006
+title: Contained launch paths other than queue work never export AIDA_CONTAINED=1, so contained-aware checks treat those sessions as uncontained
+description: |
+  Found by the merge-seat reviewer of PR #2586 (BUG-1984), review at a1260f94bc. Most contained launch paths never export `AIDA_CONTAINED=1`. Only `aida queue work` sets it (`queue_cmd.rs` ~11084-11097). `aida launch --sandbox` (`agent_launch.rs` ~1924) and the `[agents] contained = true` setting (`lib_part2.rs` ~697-700) launch a sandboxed agent without it. So `Cache::open`, `aida doctor`, and any other contained-aware code treat those sessions as uncontained.
+
+  ## Acceptance
+  - Every launch path that runs an agent contained exports `AIDA_CONTAINED=1` to it, and none that runs it uncontained does.
+  - A test per launch path asserts the variable in the child's environment.
+  - Line numbers are from the review; re-verify at main.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T12:15:13.679762298Z
+modified_at: 2026-10-13T12:15:13.679762298Z
+req_type: Bug
+tags:
+- contained
+- review-follow-up
+- sandbox
+filed_at:
+  code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
