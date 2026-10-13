@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T03:44:57.334531001Z
+modified_at: 2026-10-13T04:42:03.507121052Z
 req_type: Bug
 tags:
 - cache
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-10-12T06:00:29.632910239Z
   modified_at: 2026-10-12T06:00:29.632910239Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13391-4f73-79c2-90a5-fd2879e50c90
+  author: joe
+  content: 'PR #2586 opened (night relay #7): cache_binding check; Cache::open refuses a split sidecar in contained sessions, and doctor reports cache-sidecar-split. check-ci-fast 27/27. Supervised spec, so the operator merges.'
+  created_at: 2026-10-13T04:42:03.507121052Z
+  modified_at: 2026-10-13T04:42:03.507121052Z
+  session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
 history:
 - id: 01a1309d-3f26-7af2-8940-f209cc30cba7
   author: joe
