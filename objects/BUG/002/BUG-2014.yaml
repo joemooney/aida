@@ -13,18 +13,26 @@ description: |-
   - After expiry, the notice says the grant HAS expired and names the renewal command, before the agent attempts an advisor-gated command.
   - The check costs no store load (it reuses session_grant_lookup / grant_check; see BUG-2011 for keeping those consistent).
   - A test simulates a grant crossing the 2h and expired thresholds during a session and asserts exactly one notice per crossing.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-13T15:46:32.284314663Z
+modified_at: 2026-10-13T15:46:43.132713494Z
 req_type: Bug
 tags:
 - authority
 - hooks
 - roles
 - seats
+history:
+- id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
+  author: joe
+  timestamp: 2026-10-13T15:46:43.132707226Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
   branch: main
