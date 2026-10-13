@@ -304,6 +304,31 @@ pub(crate) fn push_with_create_fallback(
     }
 }
 
+/// `text` with the userinfo of every `scheme://user:secret@host` URL replaced
+/// by `***`, so a remote URL carrying an embedded token is never printed.
+// trace:BUG-1972 | ai:claude
+pub(crate) fn redact_url_userinfo(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("://") {
+        let (head, tail) = rest.split_at(i + 3);
+        out.push_str(head);
+        let authority_end = tail
+            .find(|c: char| c == '/' || c.is_whitespace())
+            .unwrap_or(tail.len());
+        match tail[..authority_end].rfind('@') {
+            Some(at) => {
+                out.push_str("***");
+                out.push_str(&tail[at..authority_end]);
+            }
+            None => out.push_str(&tail[..authority_end]),
+        }
+        rest = &tail[authority_end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// The `git ls-remote --heads <url>` probe. `GIT_TERMINAL_PROMPT=0` makes an
 /// HTTPS URL without stored credentials fail instead of blocking on a
 /// username prompt.
@@ -335,9 +360,10 @@ pub(crate) fn ensure_gitlab_project_exists(dir: &Path, url: &str, public: bool) 
     let stderr = String::from_utf8_lossy(&out.stderr);
     if !is_push_to_create_refusal(&stderr) {
         eprintln!(
-            "  {} could not reach {url} ({}) — not creating anything",
+            "  {} could not reach {} ({}) — not creating anything",
             crate::glyph(crate::glyphs::Glyph::Warning),
-            stderr.trim()
+            redact_url_userinfo(url),
+            redact_url_userinfo(stderr.trim())
         );
         return Ok(false);
     }

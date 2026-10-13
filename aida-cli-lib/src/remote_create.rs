@@ -907,7 +907,13 @@ fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<
         let Some(config_host) = key.as_str() else {
             continue;
         };
-        if config_host.trim().to_ascii_lowercase() != host_key {
+        // A key may carry a port or a trailing dot; the host never does.
+        // trace:BUG-1972 | ai:claude
+        let config_host = config_host.trim().to_ascii_lowercase();
+        let config_host = config_host
+            .split_once(':')
+            .map_or(config_host.as_str(), |(h, _)| h);
+        if config_host.trim_end_matches('.') != host_key.trim_end_matches('.') {
             continue;
         }
         return value
@@ -2091,11 +2097,12 @@ pub(crate) fn run_remote_mirror(
             }
         }
         println!("{check} remote `{name}` already configured");
-        // A re-run (say after `glab auth login`) must still create a missing
-        // project, or fan-out is wired to a project that does not exist.
-        // Probe the URL the remote really has, which is what pushes use.
+        // A re-run with --url (say after `glab auth login`) must still
+        // create a missing project, or fan-out is wired to a project that
+        // does not exist. Probe the URL the remote really has, which is what
+        // pushes use. Without --url the re-run stays offline.
         // trace:BUG-1972 | ai:claude
-        if !existing.is_empty() {
+        if url.is_some() && !existing.is_empty() {
             crate::gitlab_project_create::ensure_gitlab_project_exists(
                 project_root,
                 &existing,
@@ -3002,6 +3009,20 @@ hosts:
         assert_eq!(
             gitlab_release_token_from_glab_config_body("missing.example.com", body),
             None
+        );
+    }
+
+    // trace:BUG-1972 | ai:claude
+    #[test]
+    fn glab_config_host_key_matches_through_port_and_trailing_dot() {
+        let body = "hosts:\n  gitlab.corp.example:8443:\n    token: with-port\n  other.example.:\n    token: with-dot\n";
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("gitlab.corp.example", body).as_deref(),
+            Some("with-port")
+        );
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("other.example", body).as_deref(),
+            Some("with-dot")
         );
     }
 

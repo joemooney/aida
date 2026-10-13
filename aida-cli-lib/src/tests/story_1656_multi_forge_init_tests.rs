@@ -713,6 +713,23 @@ fn gitlab_only_init_publishes_to_origin_with_upstream() {
     assert!(cfg.mirror_remotes.is_empty(), "{:?}", cfg.mirror_remotes);
 }
 
+/// BUG-1972 review: a URL's embedded token never reaches the terminal.
+// trace:BUG-1972 | ai:claude
+#[test]
+fn probe_warning_redacts_url_userinfo() {
+    assert_eq!(
+        redact_url_userinfo(
+            "fatal: unable to access 'https://oauth2:glpat-XYZ@gitlab.corp/ai/p.git/': 502"
+        ),
+        "fatal: unable to access 'https://***@gitlab.corp/ai/p.git/': 502"
+    );
+    assert_eq!(
+        redact_url_userinfo("https://gitlab.corp/ai/p.git and git@gitlab.corp:ai/p.git"),
+        "https://gitlab.corp/ai/p.git and git@gitlab.corp:ai/p.git"
+    );
+    assert_eq!(redact_url_userinfo("ssh://git@h:22/x"), "ssh://***@h:22/x");
+}
+
 /// BUG-1972 (3): the ls-remote probe never waits on a credential prompt.
 // trace:BUG-1972 | ai:claude
 #[test]
