@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T15:56:48.960507969Z
+modified_at: 2026-10-13T19:29:57.986889957Z
 req_type: Bug
 comments:
 - id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
@@ -113,7 +113,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: QueueCommand::Done wiring warns '<ID> is Completed' on every normal queue done (status is Done, not Completed; nothing is on main pre-merge); the only real into-Completed path (queue advance Close) is untested
+  detail: 'Round-1 items met (plain queue done silent+pinned; close-path binary tests; docs), but the tests were made possible by unapproved product changes: queue advance --yes now auto-closes parents headlessly and stories now bucket ReadyToClose, which force-completes a Done (awaiting-merge) story. Needs revert + advisor ruling.'
   recovery_hint: address the review findings, move BUG-1996 back to In Progress, and clear the PR hold only after approval
   shelved_by: integrator
-  shelved_at: 2026-10-13T15:47:42.298439281Z
+  shelved_at: 2026-10-13T19:29:57.986889957Z
