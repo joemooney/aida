@@ -24,11 +24,12 @@
 //!
 //! Either regression therefore runs into [`HARD_CEILING`], which kills the
 //! child and fails the test. A correct `show` sleeps only inside its bounded
-//! read waits (the 1.5 s refresh-flock budget plus BUG-1956's 3 s ladder
+//! read waits (the zero refresh-flock budget plus BUG-1956's 3 s ladder
 //! allowance), so it can reach the ceiling only through an order-of-magnitude
 //! scheduler stall. That separation holds under any plausible host load.
 // trace:BUG-1674 | ai:claude
 // trace:BUG-1967 | ai:claude
+// trace:BUG-1995 | ai:antigravity
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
