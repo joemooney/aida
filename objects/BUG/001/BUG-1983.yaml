@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-12T14:56:13.071704405Z
+modified_at: 2026-10-13T03:14:20.830169956Z
 req_type: Bug
 tags:
 - authority
@@ -41,6 +41,66 @@ comments:
   created_at: 2026-10-12T06:07:42.802831053Z
   modified_at: 2026-10-12T06:07:42.802831053Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13341-021e-7b11-9b75-869fc2a734e1
+  author: joe
+  content: |-
+    SKETCH (awaiting advisor signoff) — BUG-1983, night relay session #7. Design only; no code written.
+
+    ## Root cause (evidence, not the hypothesis in the description)
+    The two paths do not disagree on main today. `has_advisor_authority()` -> `effective_role_with_roster()` -> `seat_authority::current_seat()` -> `current_grant()`, the same validated grant read as the statusline (BUG-1924). The observed failure was an **expired grant** reported with the wrong words:
+    - Grant records in `~/.aida/session-grants/`: advisor grant `ce999225` (issued 2026-10-11T02:29Z) expired at **2026-10-12T02:29Z**. The failure was at 19:45 -07:00, which is **02:45Z, 16 minutes after expiry**. The operator minted a fresh advisor grant `c83099e8` at 02:46:51Z and revoked the older `13e46d1a`, which is the "operator ran it by hand" step.
+    - `MAX_GRANT_AGE` is 24h. Relay seats routinely outlive it. My own integrator grant in this session has been expired since 2026-10-11T18:14Z.
+    - `aida review record` "worked" only because it does not check authority. It gates the operator-fallback identity (BUG-1978) and refuses the implementer seat. With `AIDA_AGENT_TYPE=claude` and an expired grant, it records silently. So the "honours the grant" observation was really "ignores the grant".
+    - The refusal tail comes from `roleless_recovery_sentence()`, which prints "No active role. Last-used role: advisor. Run: `aida role enter advisor`" whenever `current_grant` is None. It does not distinguish "no grant" from "a grant that failed validation".
+
+    ## Design
+    **D1. A grant verdict instead of an Option** (`seat_authority.rs`). Add `pub(crate) enum GrantCheck { Absent, Valid(SeatGrant), Rejected { id: String, seat: Option<String>, reason: GrantRejection } }` and `grant_check(project_root)`.
+    - `GrantRejection` variants: `BadHandle`, `Unreadable`, `Malformed`, `HandleMismatch`, `Revoked { at }`, `Expired { at }`, `SubjectMismatch { grant_subject, caller }`, `RosterDenied { principal, seat }`, and `Parent(Box<GrantRejection>)` / `ParentNotDelegating`.
+    - `current_grant()` becomes `grant_check(..).into_valid()`, with byte-for-byte the same accept/reject decisions and checks in the same order. No authority is widened.
+
+    **D2. One advisor-authority decision** (`role.rs`). Add `pub(crate) fn advisor_authority() -> AdvisorAuthority { basis: Grant { id, seat } | Orchestrated | Denied { grant: GrantCheck } }`.
+    - Companion instance, then orchestrator corroboration, then `grant_check` seat == advisor, which are the exact current rules.
+    - `has_advisor_authority()` becomes `advisor_authority().is_granted()`, so all 20+ callers are unchanged.
+    - `AdvisorAuthority::refusal_detail()` renders one sentence:
+      - Absent: the existing roleless recovery line.
+      - Rejected: "Session grant 7476f59c… (advisor) was rejected: expired at 2026-10-12T02:29Z. Re-enter at a terminal: `aida role enter advisor`." Each reason gets its own wording; subject and roster rejections name both values.
+      - Valid non-advisor grant: the existing `team_role_refusal_clause`.
+    - The edit gate (git_backend_cmd.rs ~6645) and the `aida add` downgrade notice use `refusal_detail()` instead of `team_role_refusal_clause() + roleless_recovery_sentence()`. `roleless_recovery_sentence` stays for `aida status`.
+
+    **D3. review record consumes the same decision.** This is the AC3 "one shared helper". It is a narrowing, so the advisor must rule on it. In `handle_review_record_at`, after identity binding:
+    - If `grant_check` is `Rejected`, refuse with the same `refusal_detail()` sentence, prefixed "refused: review record". A session that exports a grant which fails validation is not allowed to record as if it held a seat.
+    - `Absent` keeps today's behaviour: agent identity is recorded, and the operator fallback still needs a direct human.
+    - If the verdict's recorded seat is shown as advisor, that requires `advisor_authority()` to be granted. Today `recorded_by` and the seat display take the seat from `current_grant`. They will take it from the same `AdvisorAuthority`, so the two commands cannot drift.
+    - Reviewer and integrator seats, and ungranted agents, are not newly blocked.
+
+    **D4. The status-change event records the seat and grant.**
+    - An advisor-gated status advance appends git trailers to the store commit: `Aida-Authority: grant|orchestrator`, `Aida-Seat: advisor`, `Aida-Grant: <id>`. Today the commit is a bare "Update <ID>".
+    - `aida history events` shows `authority` on status_change rows that carry the trailers. Old commits show nothing.
+
+    **D5 (optional, recommend a follow-up spec rather than this PR): expiry warning.** The SessionStart hook would warn when the grant expires in under 2h, and the relay launcher would refuse to start a seat session whose grant has under 1h left. That prevents the next 16-minutes-after-expiry surprise. It is a separate spec, because it touches relay and launch code.
+
+    ## Tests (fixtures: `test_support::mint_grant_for` + hermetic home)
+    - T1 (AC1): a valid advisor grant, no TTY, no `aida role enter`. `aida edit X --status approved` on a Draft succeeds. The store commit carries `Aida-Seat: advisor` and `Aida-Grant: <id>`.
+    - T2 (AC2): one table-driven test per rejection, run against the same fixture for BOTH commands:
+      - unknown grant id
+      - grant for another seat (reviewer)
+      - expired (rewrite `expires_at` into the past)
+      - revoked
+      - subject mismatch
+      - roster denied
+      - a parent that no longer delegates
+      Each case asserts: the edit refuses, `review record` refuses (D3), and both error strings contain the grant id prefix and the same reason phrase.
+    - T3 (AC4): an expired grant's message contains "expired at" and not "No active role". An absent grant still shows the roleless line, as a regression pin.
+    - T4: `current_grant` equivalence. For each fixture, `current_grant().is_some() == matches!(grant_check(), Valid(_))`. This guards D1 against widening.
+    - T5: `has_advisor_authority()` outcome is unchanged for orchestrated, companion and env-only `AIDA_SESSION_ROLE=advisor` with no grant. The last must stay false.
+
+    ## Questions for the advisor
+    - Q1: D3 makes `review record` refuse when the session exports a grant that fails validation. That is a new refusal for long-running relay seats whose grant has expired. They must re-enter, which is the point. Approve this, or keep review record permissive and share only the message helper?
+    - Q2: D4 uses commit trailers rather than a new event field. OK?
+    - Q3: should D5 be a follow-up spec (my recommendation), or in scope?
+  created_at: 2026-10-13T03:14:20.830169956Z
+  modified_at: 2026-10-13T03:14:20.830169956Z
+  session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
 history:
 - id: 01a1309d-3b0f-7c80-b06e-0639346ad23f
   author: joe
