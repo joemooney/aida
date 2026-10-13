@@ -9,12 +9,12 @@ description: |-
   - Tests needing a fake git inject the binary path (or a scoped env) instead of mutating the process-wide PATH, OR every PATH mutator and PATH-sensitive test serialises on the shared env lock.
   - A source-shape guard forbids new unguarded `set_var("PATH"` in tests.
   - 15 rounds x 16 threads of the history tests alongside the PATH mutators pass with zero failures.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T12:49:48.453036232Z
+modified_at: 2026-10-13T16:26:44.400300829Z
 req_type: Bug
 tags:
 - parked:factory
@@ -62,6 +62,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13616-7730-7690-bd0d-4e7bae95b750
+  author: aida-session-start
+  timestamp: 2026-10-13T16:26:44.400300182Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
