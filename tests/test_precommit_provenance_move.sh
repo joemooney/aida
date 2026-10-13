@@ -234,6 +234,39 @@ git add -A
 assert_exit "bare /// DOC id is still refused" 1 "$(commit "feat: bare doc id")"
 git reset -q --hard
 
+# 8b. BUG-2008: A wrapped prose sentence whose bare id lands alone on the next line
+#     continues the prose sentence from the previous /// line and is ALLOWED.
+#     trace:BUG-2008 | ai:antigravity
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// STORY-30.
+pub fn wrapped_prose() {}
+EOF
+git add -A
+assert_exit "wrapped prose sentence ending with bare id on next line is allowed" 0 "$(commit "docs: wrapped prose id")"
+git reset -q --hard
+
+# But a standalone one-line /// STORY-30 is still refused.
+cat >>src/prose.rs <<'EOF'
+/// STORY-30
+pub fn bare_story() {}
+EOF
+git add -A
+assert_exit "standalone bare /// STORY-30 is still refused" 1 "$(commit "feat: standalone bare story")"
+assert_stderr_contains "refusal names the bare id line" "STORY-30"
+git reset -q --hard
+
+# And a /// trace:... line following a prose line is still refused.
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// trace:STORY-30 | ai:claude
+pub fn wrapped_trace() {}
+EOF
+git add -A
+assert_exit "wrapped /// trace marker is still refused" 1 "$(commit "feat: wrapped trace on doc")"
+assert_stderr_contains "refusal names the wrapped trace line" "trace:STORY-30"
+git reset -q --hard
+
 # 9. `////` is a PLAIN comment to rustc (four or more slashes are never
 #    rustdoc, so never `--help` text). Provenance on such a line is fine and
 #    must not be refused; the three-slash form right next to it still is.

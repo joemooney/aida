@@ -369,7 +369,7 @@ fi
 # (POSIX ERE has no portable `\b`), so an id-shaped substring of a longer word
 # (`DEBUG-2` → `BUG-2`, `SCR-4` → `CR-4`) is not mistaken for a SPEC-ID. The
 # cli.rs guard uses this exact pattern string — change both together.
-# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 | ai:claude
+# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 trace:BUG-2008 | ai:claude
 SPEC_ID_RE='(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+'
 
 # A rustdoc line is EXACTLY three slashes (`///`), optionally indented. Four or
@@ -473,13 +473,30 @@ __aida_staged_rs_diffs() {
 
 __aida_prov_started=$SECONDS
 __aida_prov_offenders=$(__aida_staged_rs_diffs | awk -v spec_re="$SPEC_ID_RE" -v doc_re="$DOC_COMMENT_RE" '
-function __aida_doc_is_provenance_leak(doc,    residual) {
+function doc_has_prose(doc,    residual) {
+    residual = doc
+    sub(/^[[:space:]]*\/\/\/+/, "", residual)
+    gsub(spec_re, " ", residual)
+    return (residual ~ /[A-Za-z][A-Za-z]/)
+}
+function doc_ends_sentence(doc,    s) {
+    s = trim_ws(doc)
+    sub(/^[[:space:]]*\/\/\/+/, "", s)
+    s = trim_ws(s)
+    if (s ~ /[.?!:]$/ && s !~ /(e\.g\.|i\.e\.|etc\.|vs\.)\.$/) return 1
+    return 0
+}
+# trace:BUG-2008 | ai:antigravity
+function __aida_doc_is_provenance_leak(doc, prev_has_prose, prev_ends_sentence,    residual) {
     if (doc !~ spec_re) return 0
     if (index(doc, "trace:") > 0) return 1
     residual = doc
     sub(/^[[:space:]]*\/\/\/+/, "", residual)
     gsub(spec_re, " ", residual)
     if (residual ~ /[A-Za-z][A-Za-z]/) return 0
+    # A bare-ID line that continues a sentence from the previous /// line
+    # (previous line has prose and does not end a sentence) is prose, not provenance.
+    if (prev_has_prose && !prev_ends_sentence) return 0
     return 1
 }
 function trim_ws(s) {
@@ -515,7 +532,16 @@ function settle(    i, key, off) {
     ncand = 0
 }
 /^#AIDA-DIFF-FAILED / { failed = failed " " substr($0, 19); next }
-/^#AIDA-DIFF / { settle(); ndiff++; current_file = ""; next }
+/^#AIDA-DIFF / {
+    settle()
+    ndiff++
+    current_file = ""
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
+    next
+}
 {
     lines++
     if (lines % 100000 == 0) {
@@ -527,23 +553,56 @@ function settle(    i, key, off) {
 /^--- / { next }
 /^-/ {
     text = substr($0, 2)
-    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) credit[trim_ws(text)]++
+    if (text ~ doc_re) {
+        if (__aida_doc_is_provenance_leak(text, prev_rem_has_prose, prev_rem_ends_sentence)) {
+            credit[trim_ws(text)]++
+            prev_rem_has_prose = 0
+            prev_rem_ends_sentence = 0
+        } else {
+            prev_rem_has_prose = 1
+            prev_rem_ends_sentence = doc_ends_sentence(text)
+        }
+    } else {
+        prev_rem_has_prose = 0
+        prev_rem_ends_sentence = 0
+    }
     next
 }
 # New-side file header: remember which file the following "+" lines belong to.
 /^\+\+\+ / {
     current_file = substr($0, 5)
     if (substr(current_file, 1, 2) == "b/") current_file = substr(current_file, 3)
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
+    next
+}
+/^@@ / {
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
     next
 }
 /^\+/ {
     text = substr($0, 2)
-    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) {
-        ncand++
-        cand_key[ncand] = trim_ws(text)
-        lead = text
-        sub(/^[[:space:]]+/, "", lead)
-        cand_off[ncand] = (current_file == "" ? "<staged>" : current_file) ": " lead
+    if (text ~ doc_re) {
+        if (__aida_doc_is_provenance_leak(text, prev_add_has_prose, prev_add_ends_sentence)) {
+            ncand++
+            cand_key[ncand] = trim_ws(text)
+            lead = text
+            sub(/^[[:space:]]+/, "", lead)
+            cand_off[ncand] = (current_file == "" ? "<staged>" : current_file) ": " lead
+            prev_add_has_prose = 0
+            prev_add_ends_sentence = 0
+        } else {
+            prev_add_has_prose = 1
+            prev_add_ends_sentence = doc_ends_sentence(text)
+        }
+    } else {
+        prev_add_has_prose = 0
+        prev_add_ends_sentence = 0
     }
     next
 }
