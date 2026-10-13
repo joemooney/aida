@@ -9,12 +9,12 @@ description: |
 
   1. When `aida queue done` moves a code spec into Completed, it calls `shipped_linkage::warn_if_completed_without_shipped_commit`. The warning goes to stderr and never refuses.
   2. A binary test shows the warning for a spec with no shipped commit, and no warning for a spec tagged `doctor:no-code` or one with a shipped commit.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T13:44:32.720651560Z
+modified_at: 2026-10-13T15:47:42.298439281Z
 req_type: Bug
 comments:
 - id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
@@ -58,6 +58,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a135f2-ba5a-7d83-bfc0-681b4c649160
+  author: aida-orchestrator
+  timestamp: 2026-10-13T15:47:42.298469789Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
   branch: main
@@ -66,3 +73,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 01a131ce77b4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: QueueCommand::Done wiring warns '<ID> is Completed' on every normal queue done (status is Done, not Completed; nothing is on main pre-merge); the only real into-Completed path (queue advance Close) is untested
+  recovery_hint: address the review findings, move BUG-1996 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-13T15:47:42.298439281Z
