@@ -1,0 +1,30 @@
+id: 01a13451-368a-72c3-8603-a0f5dee94989
+spec_id: TASK-1-277
+title: 'Low: trivial conflict with #2577 in dev_cmd.rs'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2000, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Low: trivial conflict with #2577 in dev_cmd.rs
+
+  PR: #2584
+  Reviewed sha: e82b401d56b1c5995e73e9071e7b4576949eb209
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T08:11:40.042181818Z
+modified_at: 2026-10-13T08:11:40.042181818Z
+req_type: Task
+tags:
+- carried-from:BUG-2000
+- finding-hash:986e4de2
+- from-review:PR-2584
+- kind:carried-forward
+filed_at:
+  code_sha: 0ba979dca2975e4affae8a023f8a0201567e6d0c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 4d87a732-07ba-4048-9889-3384420e68d6
