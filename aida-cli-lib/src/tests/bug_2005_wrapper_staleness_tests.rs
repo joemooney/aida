@@ -4,28 +4,15 @@
 // trace:BUG-2005 | ai:antigravity
 
 use crate::dev_cmd::{
-    classify_wrapper, installed_helpers_are_current, WrapperState, SHELL_HELPERS,
+    classify_wrapper, format_shell_wrapper_status, installed_helpers_are_current, WrapperState,
+    SHELL_HELPERS,
 };
 use crate::shell_eval::{EVAL_BLOCK_CAP, ZSH_LOCALOPTS_CAP};
+use crate::shell_wrapper_harness::{shell_args, wrapper_shells};
 
-/// Fixture representing the pre-BUG-2000 / pre-BUG-2005 wrapper that leaked
-/// shell parameters in zsh due to the unguarded `local -` and lacked the
-/// `zsh-localopts` capability marker.
-const PRE_FIX_LEAKING_WRAPPER: &str = r#"# AIDA shell wrapper.
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file'
-
-aida() {
-    # Suppress set -x trace for wrapper internals
-    local - 2>/dev/null || true
-    set +x 2>/dev/null
-    local _aida_cmd="${1:-} ${2:-}"
-    case "$_aida_cmd" in
-        *)
-            command aida "$@"
-            ;;
-    esac
-}
-"#;
+/// Real pre-fix leaking wrapper built from 3618fe739b^ (the commit immediately
+/// preceding BUG-2000 / PR #2584), containing header + SHELL_HELPERS + WORKER_FUNCTION.
+const PRE_FIX_LEAKING_WRAPPER: &str = include_str!("fixtures/bug_2005_leaking_wrapper.sh");
 
 #[test]
 fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
@@ -40,15 +27,42 @@ fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
         "pre-fix leaking wrapper must NOT be reported as current"
     );
 
-    // Sourced in a shell, its exported marker lacks `zsh-localopts`, so it
-    // must classify as Stale (not Current).
-    let pre_fix_marker =
-        "role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file";
-    assert_eq!(
-        classify_wrapper(Some(pre_fix_marker)),
-        WrapperState::Stale,
-        "pre-fix marker lacking zsh-localopts must classify as Stale"
-    );
+    // Derive the marker by sourcing the fixture through each supported shell
+    // in `wrapper_shells()` and inspecting the exported `AIDA_SHELL_WRAPPER`.
+    for &shell in wrapper_shells() {
+        let script = format!(
+            ". '{}'\nprintf '%s' \"$AIDA_SHELL_WRAPPER\"\n",
+            helper_path.display()
+        );
+        let out = std::process::Command::new(shell)
+            .args(shell_args(shell))
+            .arg(&script)
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run {shell}: {e}"));
+
+        assert!(
+            out.status.success(),
+            "sourcing fixture in {shell} failed: stdout={:?}, stderr={:?}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let derived_marker = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert!(
+            !derived_marker.is_empty(),
+            "derived marker from {shell} must not be empty"
+        );
+        assert!(
+            !derived_marker.split(',').any(|c| c == ZSH_LOCALOPTS_CAP),
+            "pre-fix leaking wrapper in {shell} must lack {ZSH_LOCALOPTS_CAP} capability"
+        );
+
+        assert_eq!(
+            classify_wrapper(Some(&derived_marker)),
+            WrapperState::Stale,
+            "pre-fix marker derived from {shell} must classify as Stale"
+        );
+    }
 }
 
 #[test]
@@ -127,5 +141,38 @@ fn classify_wrapper_requires_zsh_localopts_capability() {
             ZSH_LOCALOPTS_CAP.to_uppercase()
         ))),
         WrapperState::Current
+    );
+}
+
+#[test]
+fn stale_wrapper_status_names_reinstall_command() {
+    let lines = format_shell_wrapper_status(WrapperState::Stale, false);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("aida dev shell-init --install")),
+        "stale status without up-to-date helpers must instruct running `aida dev shell-init --install`: {lines:?}"
+    );
+
+    let up_to_date_lines = format_shell_wrapper_status(WrapperState::Stale, true);
+    assert!(
+        up_to_date_lines
+            .iter()
+            .any(|l| l.contains("already up to date") && l.contains("open a new shell")),
+        "stale status with up-to-date helpers must instruct opening a new shell: {up_to_date_lines:?}"
+    );
+
+    let current_lines = format_shell_wrapper_status(WrapperState::Current, false);
+    assert!(
+        current_lines.iter().any(|l| l.contains("current")),
+        "current status must report current: {current_lines:?}"
+    );
+
+    let absent_lines = format_shell_wrapper_status(WrapperState::Absent, false);
+    assert!(
+        absent_lines
+            .iter()
+            .any(|l| l.contains("aida dev shell-init --install")),
+        "absent status must name install command: {absent_lines:?}"
     );
 }
