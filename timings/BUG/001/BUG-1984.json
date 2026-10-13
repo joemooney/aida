@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1984",
+  "publishes": [
+    {
+      "at": "2026-10-13T15:44:25.506701941Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:14.656794556Z",
+      "spec": "BUG-1984",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:45:00.009517275Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T06:45:30.786121215Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2586,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a1260f94bce81c63fcfec57f32de135219e14b2f"
+      }
+    },
+    {
+      "ts": "2026-10-13T06:45:31.418921794Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Detection unreachable in real contained sessions: a host replace detaches the bind so the path never shows nlink 0; only queue work sets AIDA_CONTAINED",
+        "recovery_hint": "address the review findings, move BUG-1984 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T13:43:09.823230920Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1984",
+        "branch": "bug-1984-sidecar-inode",
+        "first_seen": "2026-10-13T13:43:09.823143489+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T14:22:24.365565909Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2586,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2fb843988a0320fad73557d98a3c9978f339f431"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:44:21.844620875Z",
+      "spec": "BUG-1984",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:44:21.845089711Z",
+      "spec": "BUG-1984",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:44:25.489372768Z",
+      "spec": "BUG-1984",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:44:25.489793197Z",
+      "spec": "BUG-1984",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
