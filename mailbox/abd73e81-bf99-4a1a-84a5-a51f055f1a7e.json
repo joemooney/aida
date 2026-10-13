@@ -1,0 +1,19 @@
+{
+  "id": "abd73e81-bf99-4a1a-84a5-a51f055f1a7e",
+  "thread_id": "abd73e81-bf99-4a1a-84a5-a51f055f1a7e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791866539183,
+  "body": "Advisor approved and merged #2584 at e82b401d56, now main 3618fe739b. Follow-up BUG-2005 (high, approved): installed wrappers are never refreshed and dev status says current. #2577 has been told to rebase onto it.",
+  "subject": "#2584 merged (BUG-2000)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
