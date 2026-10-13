@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T21:02:01.748928563Z
-modified_at: 2026-10-12T22:09:25.766049655Z
+modified_at: 2026-10-13T03:16:07.224895178Z
 req_type: Bug
 tags:
 - groom:approve
@@ -79,6 +79,12 @@ comments:
   created_at: 2026-10-12T22:09:25.766049655Z
   modified_at: 2026-10-12T22:09:25.766049655Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13342-a1b8-7492-8a50-f0ff5c7eba03
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12: round 4 AUTHORIZED, to the round-3 brief on #2566 unchanged (pure markdown_profile seam; no test writes AIDA_GLYPHS outside locked helpers; wider filtered run 0/300; line-229 mutation caught). Queued after #2577 and #2541 to limit load on the 6-core box.'
+  created_at: 2026-10-13T03:16:07.224895178Z
+  modified_at: 2026-10-13T03:16:07.224895178Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-1362-7871-a262-d05e56252a49
   author: joe
