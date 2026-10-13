@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T12:42:22.026754521Z
+modified_at: 2026-10-13T13:02:08.212078998Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -48,6 +48,11 @@ comments:
       - Item 3 (release note for zsh users to re-run --install and rotate keys): documented in docs/release-notes/2026-10-zsh-wrapper-leak.md.
   created_at: 2026-10-13T12:42:22.026754521Z
   modified_at: 2026-10-13T12:42:22.026754521Z
+- id: 01a1355b-2554-7923-8729-74ab917cf3fe
+  author: joe
+  content: 'FACTORY DRAFT: PR #2592 at d8f3ebf80a6df336fec67221486407090b208308'
+  created_at: 2026-10-13T13:02:08.212078998Z
+  modified_at: 2026-10-13T13:02:08.212078998Z
 history:
 - id: 01a13391-3292-7d80-a8ad-ec2e8a40c8a0
   author: joe
