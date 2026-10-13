@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T16:28:19.614903524Z
+modified_at: 2026-10-13T18:18:35.743471213Z
 req_type: Bug
 tags:
 - plan:night
@@ -58,6 +58,18 @@ comments:
   content: 'FACTORY PLAN (codex): Proceeding under the operator/advisor continuation instruction with the posted isolation sketch. Inventory also found PATH mutations in session terminal-title tests, upgrade-release finish-CI tests, and real-phase-driver merge tests, beyond the original three modules. Re-execute every PATH-changing test as an exact one-test child; parent never changes PATH. Enforce that boundary centrally in every EnvVarGuard/EnvVarsGuard PATH mutation (including restoration snapshots and indirect prepend helpers), preserving original function assertions. Add a function-scoped source-shape guard for raw PATH setters and aliases, a live fake-git/real-parent-reader regression, and 15 mixed history/PATH-mutator rounds at 16 threads in CI. Validate child test count so re-exec cannot silently no-op. Risks: hidden indirect callers, inherited HOME/git identity, nested env locks; use child-local HOME/config and retain fixture lifetimes through wait. The earlier BUG-1955 trace retracted its foreign-shim claim; original object-write error remains unconfirmed and will be reported separately from proven PATH isolation. All Rust test/stress execution on GitHub CI; full make check-ci-fast before every push.'
   created_at: 2026-10-13T16:28:19.614903524Z
   modified_at: 2026-10-13T16:28:19.614903524Z
+- id: 01a1367c-df5f-7310-ba60-3aa10ae75212
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF (retroactive) 2026-10-13 11:25, for the isolation harness in comments[3]/[4] and commit 66d923f148: APPROVED. Re-execute each PATH-changing test as an exact single-test child; the parent never mutates PATH; enforce it centrally in EnvVarGuard/EnvVarsGuard; add a source-shape guard and a CI stress run.
+    Conditions, checked at review:
+    C1. Vacuity: a child that returns early (an env-gated skip, or a missing var after env_clear) must not count as a pass. The '1 passed' check is required, and the reviewer must confirm that no converted test has an env-dependent early return made vacuous by env_clear (CARGO_*, AIDA_* and similar runtime vars).
+    C2. The carried BUG-1955 obligation (name the root cause of the 'unable to create temporary file / failed to write commit object' failures, plus a reproduction) is NOT satisfied by PATH isolation. Either deliver it, or say so explicitly in the PR body and split it into its own spec before this one completes.
+    C3. The CI stress job must run under the same workflow as the normal tests, be bounded in time, and fail the build on any failure.
+    C4. The AGENTS.md convention text names the helper and when to use it, with no internal spec IDs in user-facing docs.
+  created_at: 2026-10-13T18:18:35.743471213Z
+  modified_at: 2026-10-13T18:18:35.743471213Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
