@@ -11,12 +11,12 @@ description: |-
   - Snapshot tests cover ascii mode for a table and a nested list.
 
   Also fold in (trivial, same file): the catch_unwind fallback in render_markdown_for_terminal (~:108) still lets the default panic hook print to stderr, so install a silent hook around the render or avoid the panic path; and styling_enabled (~:101) should ignore an empty NO_COLOR value per no-color.org.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T21:02:01.748928563Z
-modified_at: 2026-10-13T03:16:07.224895178Z
+modified_at: 2026-10-13T14:54:54.303384485Z
 req_type: Bug
 tags:
 - groom:approve
@@ -100,6 +100,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a135c2-635b-7b53-b29c-c3bbaf4fe328
+  author: aida-auto-bump
+  timestamp: 2026-10-13T14:54:54.300000213Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a135c2-635f-7f10-b757-a6c607cbab09
+  timestamp: 2026-10-13T14:54:54.303382302Z
+  agent: implementer
+  commit_sha: ed5c5b7efd3561f55071f5860ecf64aa3fac9b47
+  summary: Completed via merge ed5c5b7e
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
@@ -108,3 +121,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T14:54:54.299994775Z
+  completion_sha: ed5c5b7efd3561f55071f5860ecf64aa3fac9b47
