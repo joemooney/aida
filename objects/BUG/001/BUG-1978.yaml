@@ -10,12 +10,12 @@ description: |
   - With no grant and no agent identity, the existing human/role-enter guidance is unchanged.
   - Tests assert the message for both cases (no grant; grant but no agent identity).
   - Out of scope: auto-exporting AIDA_AGENT_TYPE from the SessionStart hook, and treating the grant itself as recording identity (an authority change; see BUG-1983's shared advisor-authority helper).
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:33.585661023Z
-modified_at: 2026-10-12T20:55:10.193309766Z
+modified_at: 2026-10-13T03:06:07.614157852Z
 req_type: Bug
 tags:
 - attribution
@@ -86,6 +86,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13339-7b70-7132-9c74-505d22ca4050
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:06:07.600653367Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13339-7b7e-7b53-9d38-289733ab72ff
+  timestamp: 2026-10-13T03:06:07.614135016Z
+  agent: implementer
+  commit_sha: 1e0416ae6bc9767d24c85117683efde3be79968b
+  summary: Completed via merge 1e0416ae
+  review_verdict: approved
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -94,3 +108,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:06:07.600638435Z
+  completion_sha: 1e0416ae6bc9767d24c85117683efde3be79968b
