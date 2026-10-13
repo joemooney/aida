@@ -1,0 +1,41 @@
+id: 01a13390-7b59-7570-a329-3542db098e83
+spec_id: EPIC-78
+agreed_id: EPIC-78
+title: 'Layered architecture: extract an application (use-case) layer from aida-cli-lib so CLI, MCP, server and TUI share one core'
+description: |-
+  Problem (measured 2026-10-12): aida-cli-lib is about 584k lines and acts as the whole application, not a CLI library. Of 355 non-test source files only 22 use clap. Non-test code has 6,653 println!/eprintln! calls and 780 Command::new calls (git, gh, claude, tmux) mixed into logic. The MCP server (mcp.rs, 14k lines) lives inside the CLI crate. aida-server and aida-tui depend only on aida-core, so they cannot reach the queue, review, session or merge-hold logic. Effects: slow incremental builds and tests; 15-16k-line hotspot files (cli.rs, queue_cmd.rs, doctor_cmd.rs, auto_complete.rs) that cause merge conflicts between parallel agents; logic testable only end to end; slower cycle time.
+
+  Target (hexagonal / ports-and-adapters, 'functional core, imperative shell'):
+  - aida-core: domain model + store (as today).
+  - aida-app (new): use cases (queue work, review record, session start, merge-hold, pr ship, ...) returning typed Outcome values; side effects only through traits (Git, Forge, AgentLauncher, Clock, Fs, Terminal). It never prints, never calls Command::new, never depends on clap.
+  - adapters: git CLI, gh/glab (the existing forge trait), claude/codex launchers, tmux.
+  - delivery (thin): the CLI (clap + rendering of Outcome in human/toon/json), MCP, aida-server, aida-tui.
+
+  Approach: a gradual migration (strangler pattern), one command family at a time; no big-bang rewrite. First families: the ones exposed in both CLI and MCP and changed most often (queue/review, session, merge-hold). Builds on the forge trait (EPIC-35), phase_driver_trait.rs and the existing output-format modes, and complements STORY-1682 (the UI boundary guard).
+
+  Acceptance (epic level):
+  1. An ADR records the layering, the crate graph and the dependency rules, with advisor signoff, before any extraction.
+  2. CI guards: aida-app has no clap dependency, no println!/eprintln!, and no Command::new outside adapter modules; delivery crates may not reach around aida-app into adapters.
+  3. Slice 1: one command family extracted end to end. The CLI and MCP call the same aida-app function, and its unit tests use fake adapters (no real git/gh/claude processes).
+  4. Tracked over time: aida-cli-lib line count, println!/Command::new counts outside the delivery and adapter layers, incremental build time for a one-line change in a use case, and start-to-done cycle time.
+  Architecture change: requires the sketch plus ADR and advisor signoff before implementation; decompose into slice stories after the ADR.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:41:09.209313801Z
+modified_at: 2026-10-13T04:41:09.209313801Z
+req_type: Epic
+tags:
+- architecture
+- cycle-time
+- hexagonal
+- layering
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
