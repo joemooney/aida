@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T04:20:51.183119353Z
-modified_at: 2026-10-13T04:20:51.183119353Z
+modified_at: 2026-10-13T18:10:19.266433693Z
 req_type: Task
 tags:
 - carried-from:BUG-1977
 - finding-hash:a7000eb1
 - from-review:PR-2580
 - kind:carried-forward
+comments:
+- id: 01a13675-4c02-7021-920e-6a6f53752204
+  author: joe
+  content: 'Duplicate of BUG-2003 item (2) (same #2580 finding).'
+  created_at: 2026-10-13T18:10:19.266433693Z
+  modified_at: 2026-10-13T18:10:19.266433693Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
