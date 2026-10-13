@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2000",
+  "publishes": [
+    {
+      "at": "2026-10-13T08:11:38.092746366Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T02:33:01.040316212Z",
+      "spec": "BUG-2000",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:15:35.544941370Z",
+      "spec": "BUG-2000",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T04:41:43.077342909Z",
+      "spec": "BUG-2000",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2584,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e82b401d56b1c5995e73e9071e7b4576949eb209"
+      }
+    },
+    {
+      "ts": "2026-10-13T08:11:38.078832526Z",
+      "spec": "BUG-2000",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab",
+        "pr": 2584,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
