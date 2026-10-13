@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:30:08.591543166Z
-modified_at: 2026-10-13T19:52:58.698694084Z
+modified_at: 2026-10-13T20:59:05.879466781Z
 req_type: Bug
 tags:
 - forge
@@ -52,6 +52,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2599 at 74c592f061fdc0a79d319b138d18fa56ae0a6693'
   created_at: 2026-10-13T19:52:58.698694084Z
   modified_at: 2026-10-13T19:52:58.698694084Z
+- id: 01a1370f-d117-76e1-b8e8-6257d5d30024
+  author: joe
+  content: 'FACTORY READY: PR #2599 green at fec0e3a7bc3b4d0c2a9b0a8b4e85d49921df85d3'
+  created_at: 2026-10-13T20:59:05.879466781Z
+  modified_at: 2026-10-13T20:59:05.879466781Z
 history:
 - id: 01a13538-8b6f-74b1-98dd-18b09af158a7
   author: joe
