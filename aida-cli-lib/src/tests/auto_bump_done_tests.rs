@@ -3463,7 +3463,18 @@ fn queue_advance_yes_leaves_ready_to_close_parent_open() {
     child.spec_id = Some("TASK-19964".into());
     child.req_type = aida_core::RequirementType::Task;
     child.set_status_from_str("Completed");
-    child.parent_id = Some(epic.id);
+    epic.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::Parent,
+        target_id: child.id,
+        created_at: None,
+        created_by: None,
+    });
+    child.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::Child,
+        target_id: epic.id,
+        created_at: None,
+        created_by: None,
+    });
 
     backend.add_requirement(epic).unwrap();
     backend.add_requirement(child).unwrap();
