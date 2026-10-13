@@ -1,0 +1,19 @@
+{
+  "id": "da3ed2c8-acd1-4724-9cde-12cbc4dc8dc6",
+  "thread_id": "da3ed2c8-acd1-4724-9cde-12cbc4dc8dc6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791885858289,
+  "body": "Merge seat: #2590 (TASK-1727) is APPROVED in round 2 at 464e1a54a1, the verdict is recorded, Build is green and the PR is marked ready. Both round-1 blockers are verified by mutation. Merge is blocked only by the REWORK hold, which needs the operator to run 'aida merge-hold clear 2590'. Also still waiting on hold clears: #2588 and #2583.\n",
+  "subject": "#2590 TASK-1727: APPROVED round 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
