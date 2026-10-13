@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-12T14:56:04.009589609Z
+modified_at: 2026-10-13T06:40:15.810333932Z
 req_type: Task
 tags:
 - adr-9
@@ -33,6 +33,16 @@ comments:
   created_at: 2026-10-12T06:01:44.243301648Z
   modified_at: 2026-10-12T06:01:44.243301648Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a133fd-87c2-77b3-8d26-b920bf2728b2
+  author: joe
+  content: |-
+    FACTORY PLAN (codex), night 2026-10-12 — PLAN ONLY: higher-priority advisor-role instruction requires implementation through a doer seat. No matching open PR or live lease found; no worktree/lease/code/PR created.
+
+    Approach: change only aida-cli-lib/tests/adr9_one_engine_guardrail.rs. Remove src/upgrade_release.rs from the production whole-file ENGINE_CALLER_ALLOWLIST. Add a focused production-call scanner that excludes cfg(test) and cfg(all(test, ...)) module bodies while retaining production bodies and comments handling. Test-module boundaries must use balanced syntax rather than truncating the file at the first cfg(test), which would conceal production code after that module. Preserve the genuine auto_complete.rs/drain_gate.rs production exceptions and the positive handler routing assertion.
+
+    Acceptance-to-test mapping: (1) upgrade_release_test_calls_are_excluded_from_production_count for both cfg forms; (2) allowlisted_test_only_file_production_call_is_an_offender, covering calls before and after the test module, nested braces, and production modules; (3) existing only_allowlisted_files_call_the_one_engine_in_production plus the_queue_work_handler_still_routes_through_the_engine on the current tree. Add trace:TASK-1724 comments beside scanner and negative regressions. Risks: braces in strings/comments and multiline cfg attributes; use an existing parser dependency if available or a narrowly bounded scanner with those fixtures, never a blanket ignore after cfg(test). Existing groom comment explicitly removes split sequencing concern. All builds/tests on GitHub CI; make check-ci-fast before every push.
+  created_at: 2026-10-13T06:40:15.810333932Z
+  modified_at: 2026-10-13T06:40:15.810333932Z
 history:
 - id: 01a1309d-17a9-79a0-bf89-99c5d5fcda6a
   author: joe
