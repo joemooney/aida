@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:43:32.219529137Z
-modified_at: 2026-10-13T18:10:14.038797602Z
+modified_at: 2026-10-13T21:40:10.661373523Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -31,6 +31,21 @@ comments:
   created_at: 2026-10-13T18:10:14.038797602Z
   modified_at: 2026-10-13T18:10:14.038797602Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13735-6d25-70a0-8d1e-09bd25958f16
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+
+    • Approach:
+      1. Fix derive_pr_ship_squash_subject in aida-cli-lib/src/pr_cmd.rs:
+         - When normalized == current_subject, check whether any candidate spec IDs were withheld (via no_complete, PR body marker, or closure hold, or title had an ID stripped).
+         - If IDs were withheld, never return None (return Some(normalized)) so gh pr merge --squash receives an explicit --subject and does not fall back to the PR title carrying the withheld ID.
+      2. Drop the dead completion_held parameter from rework_pr_head_matches_spec in aida-cli-lib/src/queue_cmd.rs, phase_driver_trait.rs, and tests (as tracked by BUG-1997).
+      3. Add test reproducing the issue in aida-cli-lib/src/tests/task_140_squash_subject_tests.rs:
+         - Assert that when pr_title carries (ID) and head commit subject matches normalized subject with no_complete=true, derive_pr_ship_squash_subject returns Some, not None.
+      4. Built only on GitHub CI; not compiled locally.
+  created_at: 2026-10-13T21:40:10.661373523Z
+  modified_at: 2026-10-13T21:40:10.661373523Z
 history:
 - id: 01a13674-d447-75e0-a82e-e9bbe7bf07e1
   author: joe
