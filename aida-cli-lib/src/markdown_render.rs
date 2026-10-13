@@ -16,11 +16,15 @@
 //! - Styling is plain ANSI SGR and is dropped when colour is off (`NO_COLOR`,
 //!   a forced no-colour override); the layout (wrapping, list indentation,
 //!   table alignment) is kept.
+//! - Rules, gutters, bullets and table borders follow the glyph profile
+//!   (`AIDA_GLYPHS` / `[ui] glyphs`): the ascii profile draws them with
+//!   `= - * | +` only.
 //! - Callers decide whether to render at all with [`show_renders_markdown`]:
 //!   only human output at an interactive terminal, and never under `--raw` /
 //!   `AIDA_MARKDOWN=raw`. Machine formats and piped output keep the source.
 // trace:STORY-1652 | ai:claude
 
+use crate::glyphs::{Glyph, GlyphProfile, LineArt};
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -95,32 +99,199 @@ pub(crate) fn terminal_width() -> usize {
         .unwrap_or(80)
 }
 
-/// Whether styling (ANSI) is on. Follows the `colored` crate's decision, which
-/// already honours `NO_COLOR`, `CLICOLOR_FORCE` and the in-process override.
-fn styling_enabled() -> bool {
-    std::env::var_os("NO_COLOR").is_none() && colored::control::SHOULD_COLORIZE.should_colorize()
+/// The process-wide colour override that applies no-color.org's rule to an
+/// EMPTY `NO_COLOR`, or `None` when `colored`'s own reading is already right.
+///
+/// no-color.org says an empty `NO_COLOR` must be ignored; `colored` 2.2 treats
+/// any set value (empty included) as "off". So only for an empty `NO_COLOR`
+/// with no `CLICOLOR_FORCE` forcing colour on, this returns the decision
+/// `colored` would make without `NO_COLOR`: on at a terminal unless
+/// `CLICOLOR=0`. Pure so it is unit-tested.
+// trace:BUG-1979 | ai:claude
+pub(crate) fn empty_no_color_override(
+    no_color: Option<&std::ffi::OsStr>,
+    clicolor_force: Option<&str>,
+    clicolor: Option<&str>,
+    stdout_is_tty: bool,
+) -> Option<bool> {
+    if !no_color.is_some_and(|v| v.is_empty()) {
+        return None;
+    }
+    if clicolor_force.is_some_and(|v| v != "0") {
+        return None;
+    }
+    Some(clicolor != Some("0") && stdout_is_tty)
 }
 
-/// Render `src` for a terminal `width` columns wide. Never fails: on any
-/// renderer error or panic the source is returned unchanged.
-pub(crate) fn render_markdown_for_terminal(src: &str, width: usize) -> String {
-    let styled = styling_enabled();
-    match std::panic::catch_unwind(|| render_markdown(src, width, styled)) {
-        Ok(Ok(rendered)) => rendered,
-        _ => src.to_string(),
+/// Apply [`empty_no_color_override`] to the `colored` crate once, at process
+/// start (called from `main_entry` before any thread starts), so the whole
+/// process — the markdown renderer and every `colored` call site — makes the
+/// same colour decision. A later explicit `--color` / `--no-color` override
+/// still wins because it is applied after this.
+// trace:BUG-1979 | ai:claude
+pub(crate) fn apply_no_color_policy() {
+    use std::io::IsTerminal;
+    apply_no_color_policy_to(
+        &colored::control::SHOULD_COLORIZE,
+        std::io::stdout().is_terminal(),
+    );
+}
+
+/// [`apply_no_color_policy`] against an explicit `colored` decision object, so
+/// tests can use a local one instead of flipping the process-wide global.
+fn apply_no_color_policy_to(target: &colored::control::ShouldColorize, stdout_is_tty: bool) {
+    let var = |k: &str| std::env::var(k).ok();
+    if let Some(on) = empty_no_color_override(
+        std::env::var_os("NO_COLOR").as_deref(),
+        var("CLICOLOR_FORCE").as_deref(),
+        var("CLICOLOR").as_deref(),
+        stdout_is_tty,
+    ) {
+        target.set_override(on);
     }
 }
 
-/// Render `src` to terminal text, with ANSI styling when `styled`. Lines are
-/// joined with `\n`, no trailing newline.
+thread_local! {
+    /// Set while this thread renders inside [`catch_render`], so the panic
+    /// hook stays silent for that panic only.
+    static RENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Wrap `previous` in a panic hook that is silent for a panic raised while
+/// this thread is inside [`catch_render`], and delegates every other panic
+/// (other threads, or this thread outside a render) to `previous`.
+// trace:BUG-1979 | ai:claude
+fn quiet_render_hook(
+    previous: Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static>,
+) -> Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static> {
+    Box::new(move |info| {
+        if !RENDERING.with(|r| r.get()) {
+            previous(info);
+        }
+    })
+}
+
+/// Install [`quiet_render_hook`] over the current hook, once per process. A
+/// caught renderer panic falls back to the raw source, so the default hook's
+/// stderr message would only be noise.
+// trace:BUG-1979 | ai:claude
+fn install_quiet_render_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(quiet_render_hook(previous));
+    });
+}
+
+/// `catch_unwind(f)` with this thread flagged as rendering, so a panic in `f`
+/// is caught without a message from the quiet hook.
+// trace:BUG-1979 | ai:claude
+fn catch_render<T>(f: impl FnOnce() -> T + std::panic::UnwindSafe) -> std::thread::Result<T> {
+    install_quiet_render_hook();
+    let was = RENDERING.with(|r| r.replace(true));
+    let result = std::panic::catch_unwind(f);
+    RENDERING.with(|r| r.set(was));
+    result
+}
+
+/// The message carried by a panic payload, for the debug diagnostic.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
+}
+
+/// Render `src` for a terminal `width` columns wide. Never fails: on any
+/// renderer error or panic the source is returned unchanged, without a panic
+/// message on stderr (set `AIDA_DEBUG` to see it). Glyphs follow the active
+/// glyph profile; a configured `[ui] theme` contributes its base profile.
+pub(crate) fn render_markdown_for_terminal(src: &str, width: usize) -> String {
+    render_for_terminal_with(src, width, &colored::control::SHOULD_COLORIZE)
+}
+
+/// [`render_markdown_for_terminal`] with styling decided by `colour`, the
+/// `colored` crate's decision object. Production passes the global, so the
+/// renderer honours `NO_COLOR`, `CLICOLOR_FORCE` and any in-process override
+/// (including [`apply_no_color_policy`]) exactly like the rest of the output.
+// trace:BUG-1979 | ai:claude
+fn render_for_terminal_with(
+    src: &str,
+    width: usize,
+    colour: &colored::control::ShouldColorize,
+) -> String {
+    let styled = colour.should_colorize();
+    // trace:BUG-1979 | ai:claude
+    let root = crate::find_project_root().ok();
+    let env = std::env::var("AIDA_GLYPHS").ok();
+    let profile = markdown_profile(
+        env.as_deref(),
+        crate::glyphs::active_theme(root.as_deref()).map(|theme| theme.base),
+        crate::glyphs::active_profile(root.as_deref()),
+    );
+    match catch_render(|| render_markdown_with(src, width, styled, profile)) {
+        Ok(Ok(rendered)) => rendered,
+        Ok(Err(_)) => src.to_string(),
+        Err(payload) => {
+            if std::env::var_os("AIDA_DEBUG").is_some() {
+                eprintln!(
+                    "aida: markdown renderer panicked, showing raw text: {}",
+                    panic_message(payload.as_ref())
+                );
+            }
+            src.to_string()
+        }
+    }
+}
+
+/// The glyph profile for terminal markdown, from the raw `AIDA_GLYPHS` value
+/// `env`, the configured `[ui] theme`'s base profile `theme_base`, and the
+/// `fallback` profile (`active_profile`'s answer). A valid `env` (a
+/// per-terminal property) beats a theme's base; an unparseable or empty value
+/// is ignored, as `active_profile` does. Pure, so tests never set the
+/// process-wide variable.
+// trace:BUG-1979 | ai:claude
+fn markdown_profile(
+    env: Option<&str>,
+    theme_base: Option<GlyphProfile>,
+    fallback: GlyphProfile,
+) -> GlyphProfile {
+    match (env.and_then(GlyphProfile::parse), theme_base) {
+        (Some(from_env), _) => from_env,
+        (None, Some(base)) => base,
+        (None, None) => fallback,
+    }
+}
+
+/// Render `src` to terminal text with the default (Unicode) glyph profile.
+/// See [`render_markdown_with`].
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn render_markdown(
     src: &str,
     width: usize,
     styled: bool,
 ) -> Result<String, MarkdownRenderError> {
+    render_markdown_with(src, width, styled, GlyphProfile::Unicode)
+}
+
+/// Render `src` to terminal text, with ANSI styling when `styled` and rules,
+/// gutters, bullets and table borders drawn in `profile`'s glyphs. Lines are
+/// joined with `\n`, no trailing newline.
+// trace:BUG-1979 | ai:claude
+pub(crate) fn render_markdown_with(
+    src: &str,
+    width: usize,
+    styled: bool,
+    profile: GlyphProfile,
+) -> Result<String, MarkdownRenderError> {
     let blocks = parse_blocks(src)?;
     let width = width.max(MIN_WIDTH);
-    let ctx = Ctx { styled };
+    let ctx = Ctx {
+        styled,
+        art: LineArt::for_profile(profile),
+        bullet: Glyph::Bullet.render(profile),
+    };
     let lines = ctx.render_blocks(&blocks, width, true);
     Ok(lines
         .into_iter()
@@ -666,6 +837,11 @@ fn parse_blocks(src: &str) -> Result<Vec<Block>, MarkdownRenderError> {
 
 struct Ctx {
     styled: bool,
+    /// Rules, gutters and table borders for the active glyph profile.
+    // trace:BUG-1979 | ai:claude
+    art: LineArt,
+    /// Unordered-list marker for the active glyph profile.
+    bullet: &'static str,
 }
 
 /// A rendered line plus its visible (display) width, which excludes ANSI.
@@ -833,7 +1009,12 @@ impl Ctx {
                 let mut lines = self.wrap(inlines, width, style);
                 if *level <= 2 {
                     let w = lines.iter().map(|l| l.width).max().unwrap_or(0).max(1);
-                    let ch = if *level == 1 { "═" } else { "─" };
+                    // trace:BUG-1979 | ai:claude
+                    let ch = if *level == 1 {
+                        self.art.rule_heavy
+                    } else {
+                        self.art.rule_light
+                    };
                     lines.push(Line {
                         text: self.dim(&ch.repeat(w)),
                         width: w,
@@ -842,7 +1023,7 @@ impl Ctx {
                 lines
             }
             Block::Code(code) | Block::Html(code) => {
-                let gutter = self.dim("│");
+                let gutter = self.dim(self.art.vertical); // trace:BUG-1979 | ai:claude
                 let body = code.strip_suffix('\n').unwrap_or(code);
                 body.split('\n')
                     .map(|l| {
@@ -856,7 +1037,7 @@ impl Ctx {
             }
             Block::Quote(blocks) => {
                 let inner = self.render_blocks(blocks, width.saturating_sub(2).max(1), true);
-                let bar = self.dim("│");
+                let bar = self.dim(self.art.vertical); // trace:BUG-1979 | ai:claude
                 inner
                     .into_iter()
                     .map(|l| Line {
@@ -870,7 +1051,7 @@ impl Ctx {
             Block::Rule => {
                 let w = width.min(40);
                 vec![Line {
-                    text: self.dim(&"─".repeat(w)),
+                    text: self.dim(&self.art.rule_light.repeat(w)), // trace:BUG-1979 | ai:claude
                     width: w,
                 }]
             }
@@ -887,7 +1068,7 @@ impl Ctx {
         for (i, item) in items.iter().enumerate() {
             let mut marker = match start {
                 Some(s) => format!("{}.", s + i as u64),
-                None => "•".to_string(),
+                None => self.bullet.to_string(), // trace:BUG-1979 | ai:claude
             };
             // Deeply nested lists keep a readable floor and overflow the
             // terminal rather than wrapping a word per line.
@@ -954,7 +1135,7 @@ impl Ctx {
                 widths[c] = widths[c].max(natural(cell));
             }
         }
-        // Borders and padding: "│ a │ b │" is 3 per column plus one.
+        // Borders and padding: "| a | b |" is 3 per column plus one.
         let chrome = 3 * cols + 1;
         let budget = width.saturating_sub(chrome);
         const MIN_COL: usize = 3;
@@ -971,12 +1152,14 @@ impl Ctx {
             widths[idx] -= 1;
         }
 
-        let border = |left: &str, mid: &str, right: &str| -> Line {
+        // trace:BUG-1979 | ai:claude
+        let art = self.art;
+        let border = |[left, mid, right]: [&str; 3]| -> Line {
             let text = format!(
                 "{left}{}{right}",
                 widths
                     .iter()
-                    .map(|w| "─".repeat(w + 2))
+                    .map(|w| art.rule_light.repeat(w + 2))
                     .collect::<Vec<_>>()
                     .join(mid)
             );
@@ -993,7 +1176,7 @@ impl Ctx {
                 })
                 .collect();
             let height = wrapped.iter().map(|w| w.len()).max().unwrap_or(1);
-            let bar = self.dim("│");
+            let bar = self.dim(art.vertical);
             (0..height)
                 .map(|r| {
                     let mut text = bar.clone();
@@ -1019,7 +1202,7 @@ impl Ctx {
                 .collect()
         };
 
-        let mut out = vec![border("┌", "┬", "┐")];
+        let mut out = vec![border(art.top)];
         out.extend(render_row(
             head,
             Style {
@@ -1027,11 +1210,11 @@ impl Ctx {
                 ..Style::default()
             },
         ));
-        out.push(border("├", "┼", "┤"));
+        out.push(border(art.middle));
         for row in rows {
             out.extend(render_row(row, Style::default()));
         }
-        out.push(border("└", "┴", "┘"));
+        out.push(border(art.bottom));
         out
     }
 }

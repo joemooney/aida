@@ -159,6 +159,10 @@ pub fn main_entry() {
     // path out of the environment so no child process inherits it.
     crate::shell_eval::take_init_cd_file_from_env();
     install_sigpipe_handler();
+    // One colour decision for the whole process: apply no-color.org's rule
+    // for an empty `NO_COLOR` to the `colored` crate before any thread starts.
+    // trace:BUG-1979 | ai:claude
+    crate::markdown_render::apply_no_color_policy();
     // trace:BUG-766 | ai:claude
     // Export this binary's identity (AIDA_BIN + a PATH prepend of its
     // directory) into the process env BEFORE any command runs, so every

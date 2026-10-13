@@ -206,3 +206,286 @@ fn deeply_nested_lists_keep_a_readable_body_width() {
     // body) instead of being split a character at a time.
     assert!(out.lines().count() <= 12 * 3, "{out}");
 }
+
+// ---------------------------------------------------------------------------
+// Glyph profile (BUG-1979): AIDA_GLYPHS=ascii draws ASCII-only line art.
+// trace:BUG-1979 | ai:claude
+// ---------------------------------------------------------------------------
+
+const QUOTE_AND_RULE: &str = "> quoted line\n> > nested quote\n\n---\n\n```\ncode\n```\n";
+
+fn ascii(src: &str, width: usize) -> String {
+    render_markdown_with(src, width, false, GlyphProfile::Ascii).expect("renders")
+}
+
+fn assert_all_ascii(out: &str) {
+    if let Some(c) = out.chars().find(|c| !c.is_ascii()) {
+        panic!("non-ASCII glyph {c:?} in ascii-profile output:\n{out}");
+    }
+}
+
+#[test]
+fn ascii_profile_headings_use_ascii_rules() {
+    let out = ascii(HEADINGS, 80);
+    assert_all_ascii(&out);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "Top heading");
+    assert_eq!(lines[1], "===========");
+    let second = lines.iter().position(|l| *l == "Second level").unwrap();
+    assert_eq!(lines[second + 1], "------------");
+}
+
+#[test]
+fn ascii_profile_bullets_use_the_registry_bullet() {
+    let out = ascii(NESTED_LISTS, 40);
+    assert_all_ascii(&out);
+    assert!(out.starts_with("* first item"), "{out}");
+    assert!(out.contains("  * nested one"), "{out}");
+    assert_snapshot("nested_lists_40_ascii", &out);
+}
+
+#[test]
+fn ascii_profile_blockquote_code_and_rule_use_pipes_and_dashes() {
+    let out = ascii(QUOTE_AND_RULE, 80);
+    assert_all_ascii(&out);
+    assert_eq!(
+        out,
+        "| quoted line\n|\n| | nested quote\n\n----------------------------------------\n\n  | code"
+    );
+}
+
+#[test]
+fn ascii_profile_table_uses_plus_dash_pipe_borders() {
+    let out = ascii(WIDE_TABLE, 80);
+    assert_all_ascii(&out);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("+-") && lines[0].ends_with("-+"),
+        "{out}"
+    );
+    assert!(
+        lines[1].starts_with("| ") && lines[1].ends_with(" |"),
+        "{out}"
+    );
+    assert!(lines.last().unwrap().starts_with("+-"), "{out}");
+    // Same geometry as the Unicode table: only the glyphs differ.
+    let unicode = plain(WIDE_TABLE, 80);
+    let widths = |s: &str| s.lines().map(|l| l.width()).collect::<Vec<_>>();
+    assert_eq!(widths(&out), widths(&unicode));
+    assert_snapshot("wide_table_80_ascii", &out);
+}
+
+#[test]
+fn ascii_profile_styled_output_is_ascii_too() {
+    for src in [HEADINGS, EMPHASIS, NESTED_LISTS, WIDE_TABLE, QUOTE_AND_RULE] {
+        let out = render_markdown_with(src, 80, true, GlyphProfile::Ascii).unwrap();
+        assert_all_ascii(&out);
+    }
+}
+
+#[test]
+fn unicode_profile_is_the_default_and_unchanged() {
+    for src in [HEADINGS, EMPHASIS, NESTED_LISTS, WIDE_TABLE, QUOTE_AND_RULE] {
+        assert_eq!(
+            render_markdown_with(src, 80, false, GlyphProfile::Unicode).unwrap(),
+            plain(src, 80)
+        );
+    }
+    // The historical box-drawing literals, byte for byte.
+    assert_eq!(
+        plain(QUOTE_AND_RULE, 80),
+        "│ quoted line\n│\n│ │ nested quote\n\n────────────────────────────────────────\n\n  │ code"
+    );
+    assert!(plain(HEADINGS, 80).contains("═══"));
+    assert!(plain(NESTED_LISTS, 80).starts_with("• first"));
+    let table = plain(WIDE_TABLE, 80);
+    for corner in ["┌", "┬", "┐", "├", "┼", "┤", "└", "┴", "┘"] {
+        assert!(table.contains(corner), "missing {corner}");
+    }
+}
+
+// trace:BUG-1979 | ai:claude
+#[test]
+fn markdown_profile_prefers_valid_env_then_theme_then_fallback() {
+    use GlyphProfile::{Ascii, Unicode};
+    // (env, theme base, fallback) => expected
+    let cases: &[(
+        Option<&str>,
+        Option<GlyphProfile>,
+        GlyphProfile,
+        GlyphProfile,
+    )] = &[
+        // A valid env value wins over a theme and the fallback.
+        (Some("ascii"), Some(Unicode), Unicode, Ascii),
+        (Some("ascii"), None, Unicode, Ascii),
+        (Some(" PLAIN "), None, Unicode, Ascii),
+        (Some("unicode"), Some(Ascii), Ascii, Unicode),
+        // An invalid or empty env value with a theme falls to the theme base.
+        (Some("bogus"), Some(Ascii), Unicode, Ascii),
+        (Some(""), Some(Ascii), Unicode, Ascii),
+        (Some("bogus"), Some(Unicode), Ascii, Unicode),
+        (None, Some(Ascii), Unicode, Ascii),
+        // No theme: the fallback.
+        (Some("bogus"), None, Ascii, Ascii),
+        (Some(""), None, Unicode, Unicode),
+        (None, None, Ascii, Ascii),
+        (None, None, Unicode, Unicode),
+    ];
+    for &(env, theme_base, fallback, expected) in cases {
+        assert_eq!(
+            markdown_profile(env, theme_base, fallback),
+            expected,
+            "env={env:?} theme_base={theme_base:?} fallback={fallback:?}"
+        );
+    }
+}
+
+// trace:BUG-1979 | ai:claude
+#[test]
+fn ascii_profile_draws_ascii_table_borders() {
+    let out = render_markdown_with(WIDE_TABLE, 80, true, GlyphProfile::Ascii).unwrap();
+    assert_all_ascii(&out);
+    assert!(out.contains("+-") && !out.contains('┌'), "{out}");
+    let unicode = render_markdown_with(WIDE_TABLE, 80, true, GlyphProfile::Unicode).unwrap();
+    assert!(unicode.contains('┌'), "{unicode}");
+}
+
+#[test]
+fn empty_no_color_override_follows_no_color_org() {
+    use std::ffi::OsStr;
+    let empty = Some(OsStr::new(""));
+    // Unset or non-empty NO_COLOR: `colored` already reads it right.
+    assert_eq!(empty_no_color_override(None, None, None, true), None);
+    assert_eq!(
+        empty_no_color_override(Some(OsStr::new("1")), None, None, true),
+        None
+    );
+    // Empty NO_COLOR is ignored: colour is on at a terminal...
+    assert_eq!(empty_no_color_override(empty, None, None, true), Some(true));
+    // ...and still off when piped or under CLICOLOR=0.
+    assert_eq!(
+        empty_no_color_override(empty, None, None, false),
+        Some(false)
+    );
+    assert_eq!(
+        empty_no_color_override(empty, None, Some("0"), true),
+        Some(false)
+    );
+    // CLICOLOR_FORCE already forces colour on in `colored`: no override.
+    assert_eq!(empty_no_color_override(empty, Some("1"), None, false), None);
+    assert_eq!(
+        empty_no_color_override(empty, Some("0"), None, true),
+        Some(true)
+    );
+}
+
+/// A local `colored` decision object, so these tests never flip the
+/// process-wide override other tests depend on.
+fn local_colour(override_to: Option<bool>) -> colored::control::ShouldColorize {
+    let sc = colored::control::ShouldColorize::from_env();
+    if let Some(on) = override_to {
+        sc.set_override(on);
+    }
+    sc
+}
+
+#[test]
+fn renderer_and_colored_make_one_colour_decision_under_empty_no_color() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("NO_COLOR", Some("")),
+        ("CLICOLOR_FORCE", None),
+        ("CLICOLOR", None),
+        ("AIDA_TEST_HOME", home.path().to_str()),
+    ]);
+    // `colored` alone reads an empty NO_COLOR as "off".
+    let colour = local_colour(None);
+    assert!(!colour.should_colorize());
+    // The process-start policy corrects it at a terminal (no-color.org)...
+    apply_no_color_policy_to(&colour, true);
+    assert!(colour.should_colorize());
+    // ...and the renderer follows the very same decision.
+    let out = render_for_terminal_with("**bold**", 80, &colour);
+    assert!(out.contains('\x1b'), "{out:?}");
+    // Piped, the policy keeps colour off, and again the renderer agrees.
+    let piped = local_colour(None);
+    apply_no_color_policy_to(&piped, false);
+    assert!(!piped.should_colorize());
+    assert!(!render_for_terminal_with("**bold**", 80, &piped).contains('\x1b'));
+}
+
+#[test]
+fn set_override_false_suppresses_renderer_styling() {
+    let src = "# Heading\n\n**bold**";
+    let on = render_for_terminal_with(src, 80, &local_colour(Some(true)));
+    let off = render_for_terminal_with(src, 80, &local_colour(Some(false)));
+    assert!(on.contains('\x1b'), "{on:?}");
+    assert!(!off.contains('\x1b'), "{off:?}");
+}
+
+#[test]
+fn quiet_render_hook_silences_only_render_panics() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    const SILENT: &str = "bug1979-render-panic-marker";
+    const LOUD: &str = "bug1979-thread-panic-marker";
+    // Settle the once-only global install first so it cannot wrap our hook.
+    install_quiet_render_hook();
+    let seen_silent = Arc::new(AtomicUsize::new(0));
+    let seen_loud = Arc::new(AtomicUsize::new(0));
+    let saved = Arc::new(std::panic::take_hook());
+    {
+        let (silent, loud, saved) = (seen_silent.clone(), seen_loud.clone(), saved.clone());
+        // The counting "previous" hook; other tests' panics pass through to
+        // the saved hook so their messages are not lost.
+        let counting: Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send> =
+            Box::new(move |info| match panic_message(info.payload()) {
+                SILENT => {
+                    silent.fetch_add(1, Ordering::SeqCst);
+                }
+                LOUD => {
+                    loud.fetch_add(1, Ordering::SeqCst);
+                }
+                _ => saved(info),
+            });
+        std::panic::set_hook(quiet_render_hook(counting));
+    }
+
+    // A panic on the render thread inside catch_render is caught silently.
+    let caught = catch_render(|| -> () { panic!("{}", SILENT) });
+    // A panic in a spawned thread reaches the previous hook.
+    let joined = std::thread::spawn(|| -> () { panic!("{}", LOUD) }).join();
+    // So does a panic on this thread outside a render (the flag was reset).
+    let outside = std::panic::catch_unwind(|| -> () { panic!("{}", LOUD) });
+
+    let _ = std::panic::take_hook();
+    let saved = Arc::try_unwrap(saved).unwrap_or_else(|_| panic!("hook still shared"));
+    std::panic::set_hook(saved);
+
+    assert!(caught.is_err() && joined.is_err() && outside.is_err());
+    assert_eq!(
+        seen_silent.load(Ordering::SeqCst),
+        0,
+        "render panic was reported"
+    );
+    assert_eq!(
+        seen_loud.load(Ordering::SeqCst),
+        2,
+        "other panics were silenced"
+    );
+}
+
+/// Source guard: the process-wide colour policy only works if `main_entry`
+/// applies it before anything else runs.
+// trace:BUG-1979 | ai:claude
+#[test]
+fn main_entry_applies_the_no_color_policy() {
+    let src = include_str!("../lib_part1.rs");
+    let start = src.find("pub fn main_entry()").expect("main_entry exists");
+    let body = &src[start..];
+    let end = body.find("\n}\n").expect("main_entry closes");
+    assert!(
+        body[..end].contains("crate::markdown_render::apply_no_color_policy();"),
+        "main_entry must call apply_no_color_policy()"
+    );
+}
