@@ -1,0 +1,27 @@
+id: 01a13397-2b29-72e1-9ed3-50dc8f2c96f2
+spec_id: FAQ-54
+agreed_id: FAQ-54
+title: Why did a reviewer's test run show the wrong tests or a stale binary?
+description: Several worktrees shared one CARGO_TARGET_DIR. Cargo's dep-info records relative paths, so a build from another worktree can make cargo think the PR's sources are already built, and it then runs main's binary. Give each review worktree its own target dir. If you must share one, touch the changed .rs files, confirm the output shows 'Compiling <crate>' from the review path, and confirm the PR's new test names appear in the run.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:48:27.433956753Z
+modified_at: 2026-10-13T04:48:27.433956753Z
+req_type: Faq
+tags:
+- cargo
+- review
+- testing
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T04:48:27.433984471Z
