@@ -397,7 +397,7 @@ impl IndexLock {
     }
 
     /// `Ok(None)` when another process holds the lock.
-    fn try_acquire(db_path: &Path) -> Result<Option<IndexLock>> {
+    pub(crate) fn try_acquire(db_path: &Path) -> Result<Option<IndexLock>> {
         let file = Self::open_file(db_path)?;
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(IndexLock { _file: file })),
@@ -2199,6 +2199,54 @@ fn flow_catch_up(store: &Path, db_path: &Path, st: &HistoryCacheStatus) -> Resul
     cache.catch_up_guarded(store, tip, head, Budget::for_duration(budget))?;
     cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
     Ok(())
+}
+
+/// Advance an existing index under the caller-held IndexLock. This path never
+/// builds/resets an index and never counts a foreground catch-up failure.
+/// Retained chunks use finish_append, which clears the foreground stall counter.
+// trace:STORY-1661 | ai:codex
+pub(crate) fn catch_up_background_at(
+    store: &Path,
+    db_path: &Path,
+    budget: Budget,
+) -> Result<(usize, usize)> {
+    let mut cache = HistoryCache::open_existing(db_path)?;
+    if cache.meta("schema_version")?.as_deref() != Some(&HISTORY_SCHEMA_VERSION.to_string())
+        || cache.meta("decoder_version")?.as_deref() != Some(&HISTORY_DECODER_VERSION.to_string())
+    {
+        anyhow::bail!("history index format changed; run `aida cache rebuild --history`");
+    }
+    cache.conn.pragma_update(None, "synchronous", "NORMAL")?;
+    let head = aida_core::git_ops::head_sha(store)?;
+    let mut tip = cache
+        .meta("tip_sha")?
+        .filter(|tip| !tip.is_empty())
+        .context("history index is not initialized; run `aida cache rebuild --history`")?;
+    if tip != head && !aida_core::git_ops::is_ancestor(store, &tip, &head)? {
+        anyhow::bail!(
+            "history index no longer matches this store; run `aida cache rebuild --history`"
+        );
+    }
+    let before = cache.count("commits")?;
+    while tip != head && !budget.expired() {
+        // Bypass catch_up_guarded: a background deadline must not stall reads.
+        cache.catch_up(store, &tip, &head, budget)?;
+        let next = cache
+            .meta("tip_sha")?
+            .context("history index lost its tip")?;
+        if next == tip {
+            break;
+        }
+        tip = next;
+    }
+    let appended = usize::try_from(cache.count("commits")? - before)?;
+    let lag = if tip == head {
+        0
+    } else {
+        aida_core::git_ops::rev_list_count(store, &format!("{tip}..{head}"))?
+    };
+    cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
+    Ok((appended, lag))
 }
 
 /// [`serve`] against an explicit index path and budget.

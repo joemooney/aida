@@ -2550,6 +2550,14 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
+every = "15m"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would

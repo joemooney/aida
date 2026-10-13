@@ -1,3 +1,9 @@
+An existing history index catches up through the inline maintenance job
+`cache refresh --history --if-behind`, with a 30-second chunk budget. It takes
+only IndexLock, skips missing/disabled/busy indexes, and never spawns on commits.
+See [cache commands](docs/cli/10-storage.md).
+<!-- trace:STORY-1661 | ai:codex -->
+
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures
