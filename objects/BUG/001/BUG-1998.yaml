@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:04:49.082266695Z
-modified_at: 2026-10-13T20:25:58.023531920Z
+modified_at: 2026-10-13T20:32:29.304844054Z
 req_type: Bug
 tags:
 - follow-up:review
@@ -53,6 +53,11 @@ comments:
     - Diverged HEAD with tip live in another checkout gets no-rebuild miss (CheckoutBehind) and note; diverged HEAD without tip live elsewhere stays Stuck -> verified by classify_miss / status_at tests.
   created_at: 2026-10-13T20:25:58.023531920Z
   modified_at: 2026-10-13T20:25:58.023531920Z
+- id: 01a136f7-7478-74d1-b835-a3e70115e636
+  author: joe
+  content: 'FACTORY DRAFT: PR #2602 at 110ecf4eefbe8d4215df649583746bdf5f91e578'
+  created_at: 2026-10-13T20:32:29.304844054Z
+  modified_at: 2026-10-13T20:32:29.304844054Z
 history:
 - id: 01a13674-db4b-72f1-a3ed-13bc3fc38e01
   author: joe
