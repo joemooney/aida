@@ -3,12 +3,12 @@ spec_id: BUG-1997
 agreed_id: BUG-1997
 title: 'pr ship --no-complete: derive_pr_ship_squash_subject returns None when subject equals head commit subject, letting gh''s default subject carry the title''s spec id'
 description: 'Found by the strict reviewer of PR #2571 (BUG-1957), outside that PR''s diff, low confidence and not reproduced. derive_pr_ship_squash_subject (aida-cli-lib/src/pr_cmd.rs:~3685) returns None when the normalized subject equals the branch-head commit subject. With --no-complete, a title ''fix: x (ID)'' and a head commit ''fix: x'', gh may then fall back to its default squash subject (the PR title), which carries the withheld ID, so merge-time completion could fire. Acceptance: reproduce with a test; if confirmed, never return None when ids are withheld.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:43:32.219529137Z
-modified_at: 2026-10-13T18:09:47.596505097Z
+modified_at: 2026-10-13T18:09:48.615676391Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -25,6 +25,14 @@ comments:
   created_at: 2026-10-13T18:09:47.596505097Z
   modified_at: 2026-10-13T18:09:47.596505097Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+history:
+- id: 01a13674-d447-75e0-a82e-e9bbe7bf07e1
+  author: joe
+  timestamp: 2026-10-13T18:09:48.615670778Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 444b1fd7aa22f6dff2681b562a82ef373a3f13b4
   branch: main
