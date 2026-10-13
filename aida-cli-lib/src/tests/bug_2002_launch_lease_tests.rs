@@ -66,7 +66,9 @@ fn launch(root: &std::path::Path, background: bool, preview: bool) -> Result<()>
 // trace:BUG-2002 | ai:codex
 #[test]
 fn agent_new_foreground_conflict_precedes_all_prompts() {
-    let _env = crate::test_env::env_lock();
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_BUILD_PROFILE", "invalid-for-test");
+    // The pre-prompt binary-validation barrier fails if ownership is checked late.
+    assert!(aida_bin::process().is_err());
     let (tmp, lease) = fixture();
     let before = std::fs::read(lease_path(tmp.path(), &lease.id)).unwrap();
     let error = launch(tmp.path(), false, false).unwrap_err().to_string();
@@ -89,7 +91,9 @@ fn agent_new_foreground_conflict_precedes_all_prompts() {
 // trace:BUG-2002 | ai:codex
 #[test]
 fn agent_new_background_conflict_precedes_all_prompts() {
-    let _env = crate::test_env::env_lock();
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_BUILD_PROFILE", "invalid-for-test");
+    // The pre-prompt binary-validation barrier fails if ownership is checked late.
+    assert!(aida_bin::process().is_err());
     let (tmp, _) = fixture();
     let error = launch(tmp.path(), true, false).unwrap_err().to_string();
     assert!(
