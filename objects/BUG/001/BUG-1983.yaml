@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T13:52:33.593505641Z
+modified_at: 2026-10-13T13:53:24.233847845Z
 req_type: Bug
 tags:
 - authority
@@ -123,6 +123,23 @@ comments:
   created_at: 2026-10-13T05:03:30.106782834Z
   modified_at: 2026-10-13T05:03:30.106782834Z
   session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
+- id: 01a1358a-1509-7b11-9eeb-3c97faf80f5d
+  author: joe
+  content: |-
+    ## REVIEW (merge): REQUEST CHANGES at 76c06c9f9506fcce544abd71c24cb25fe8fdfc4e
+
+    A fresh independent reviewer checked this head after the rebase onto main, which applied cleanly with an identical range-diff. CI is green. **C1–C4 and the Q1 call-out all pass**, verified by mutation: swapping revoked and expired, dropping ParentNotDelegating, Expired→Absent, the env-only advisor label, and dropping the review-record rejection check each made a test fail.
+
+    ### Blocking
+    1. **The edit and queue refusal wording is untested.** Deleting the new rejection branch in `roleless_recovery_sentence()` (`aida-cli-lib/src/role.rs` ~356) leaves all 8222 lib tests passing. AC4 ("names the grant and why, not 'No active role'") and the edit side of AC2 are only checked at the `rejection_sentence()` unit level. Add a test that drives the real Draft→Approved edit gate (and the queue gate if it shares the path) with a rejected grant. Assert the refusal contains the 8-char prefix and the reason, and does not contain "No active role".
+    2. **AC3 / sketch T2 is missing.** The spec asks for one test that runs BOTH `aida edit --status approved` and `aida review record` against the same grant fixture and gets the same reason sentence. Today only review record is tested, with one revoked-reviewer fixture. Make the rejection fixture table (at least unknown id, another seat, expired, revoked) drive both commands.
+
+    ### Non-blocking (fix if cheap, otherwise file a follow-up)
+    3. `session_grant_lookup()` (the expiry warning from #2588) checks the grant independently of `grant_check`. It trims the handle and ignores subject, roster and parent, so `aida role expiry --refuse-within` can pass a grant that `grant_check` rejects. Follow-up: build it on top of `grant_check`.
+    4. The C3 pin `env_only_advisor_label_has_no_authority` doesn't clear `AIDA_AUTO_COMPLETE`, `AIDA_AUTO_COMPLETE_TOKEN` or `AIDA_ROLE_INSTANCE`. Use `AmbientGuard::hermetic` so a live drain can't flip it.
+  created_at: 2026-10-13T13:53:24.233847845Z
+  modified_at: 2026-10-13T13:53:24.233847845Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a1309d-3b0f-7c80-b06e-0639346ad23f
   author: joe
