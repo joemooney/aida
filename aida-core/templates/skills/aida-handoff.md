@@ -22,7 +22,10 @@ session is safe or compaction is required.
 
 ### Step 1: Capture Residue
 
-Run the `/aida-capture` sweep mentally, using the same rules:
+Invoke `/aida-capture` to capture conversation residue into the substrate,
+following its workflow (including the FAQ lens and autonomy-mode rules) rather
+than sweeping mentally. Keep these three residue bullets as the minimum
+checklist:
 
 - unfiled observations, bugs, or ideas
 - decisions made in conversation but not reflected in acceptance criteria,
@@ -30,9 +33,10 @@ Run the `/aida-capture` sweep mentally, using the same rules:
 - promised follow-ups that are not represented by a queued spec, finding, or
   brief
 
-Under `AIDA_HEADLESS=1`, never ask the user. File clear conversation flags as
-draft requirements or findings for later triage; skip ambiguous residue rather
-than blocking.
+Under headless or zen modes (`AIDA_HEADLESS=1` or `$AIDA_ZEN`), `/aida-capture`'s
+own autonomy rules apply: never prompt the user, auto-capture clear findings as
+`draft` requirements (and FAQs as `draft` with `faq:unvetted`), and skip
+ambiguous residue rather than blocking. <!-- trace:TASK-1738 | ai:antigravity -->
 
 ### Step 2: Inspect Session Pins
 
