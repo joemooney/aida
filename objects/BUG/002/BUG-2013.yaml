@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:55:32.825289932Z
-modified_at: 2026-10-13T18:10:07.834893683Z
+modified_at: 2026-10-13T21:59:38.137411430Z
 req_type: Bug
 comments:
 - id: 01a13675-1bfc-7aa2-88b3-af25fe4d880e
@@ -22,6 +22,17 @@ comments:
   created_at: 2026-10-13T18:10:06.972972573Z
   modified_at: 2026-10-13T18:10:06.972972573Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13747-3d99-7780-a627-1a1b325c0fc3
+  author: joe
+  content: |-
+    FACTORY PLAN (ANTIGRAVITY):
+    1. In aida-cli-lib/src/markdown_render.rs, pass `glyphs_env: Option<&str>` into `render_for_terminal_with`. `render_markdown_for_terminal` reads `std::env::var("AIDA_GLYPHS").ok()` and passes `env.as_deref()`.
+    2. In aida-cli-lib/src/tests/markdown_render_tests.rs:
+       - Update existing calls to `render_for_terminal_with` to pass `None` for `glyphs_env`.
+       - Add unit test `bug_2013_render_for_terminal_with_passes_computed_profile` verifying that passing `Some("ascii")` to `render_for_terminal_with` produces ASCII borders ('+-') and no Unicode box-drawing ('┌'), failing if the computed profile is ignored in favor of GlyphProfile::Unicode.
+    3. Verify make check-ci-fast passes, commit, push, and open draft PR labeled factory.
+  created_at: 2026-10-13T21:59:38.137411430Z
+  modified_at: 2026-10-13T21:59:38.137411430Z
 history:
 - id: 01a13675-1f5a-7cd3-be3e-6df5fde541f0
   author: joe
