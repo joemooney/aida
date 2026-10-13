@@ -224,15 +224,12 @@ fn render_for_terminal_with(
     let styled = colour.should_colorize();
     // trace:BUG-1979 | ai:claude
     let root = crate::find_project_root().ok();
-    // A valid `AIDA_GLYPHS` (a per-terminal property) beats a configured
-    // theme's base; an unparseable value is ignored, as `active_profile` does.
-    let env_profile = std::env::var("AIDA_GLYPHS")
-        .ok()
-        .and_then(|v| GlyphProfile::parse(&v));
-    let profile = match (env_profile, crate::glyphs::active_theme(root.as_deref())) {
-        (None, Some(theme)) => theme.base,
-        _ => crate::glyphs::active_profile(root.as_deref()),
-    };
+    let env = std::env::var("AIDA_GLYPHS").ok();
+    let profile = markdown_profile(
+        env.as_deref(),
+        crate::glyphs::active_theme(root.as_deref()).map(|theme| theme.base),
+        crate::glyphs::active_profile(root.as_deref()),
+    );
     match catch_render(|| render_markdown_with(src, width, styled, profile)) {
         Ok(Ok(rendered)) => rendered,
         Ok(Err(_)) => src.to_string(),
@@ -245,6 +242,25 @@ fn render_for_terminal_with(
             }
             src.to_string()
         }
+    }
+}
+
+/// The glyph profile for terminal markdown, from the raw `AIDA_GLYPHS` value
+/// `env`, the configured `[ui] theme`'s base profile `theme_base`, and the
+/// `fallback` profile (`active_profile`'s answer). A valid `env` (a
+/// per-terminal property) beats a theme's base; an unparseable or empty value
+/// is ignored, as `active_profile` does. Pure, so tests never set the
+/// process-wide variable.
+// trace:BUG-1979 | ai:claude
+fn markdown_profile(
+    env: Option<&str>,
+    theme_base: Option<GlyphProfile>,
+    fallback: GlyphProfile,
+) -> GlyphProfile {
+    match (env.and_then(GlyphProfile::parse), theme_base) {
+        (Some(from_env), _) => from_env,
+        (None, Some(base)) => base,
+        (None, None) => fallback,
     }
 }
 

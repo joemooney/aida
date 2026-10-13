@@ -304,24 +304,49 @@ fn unicode_profile_is_the_default_and_unchanged() {
     }
 }
 
+// trace:BUG-1979 | ai:claude
 #[test]
-fn aida_glyphs_env_drives_the_terminal_renderer() {
-    let home = tempfile::tempdir().unwrap();
-    let home_str = home.path().to_str().unwrap();
-    {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_GLYPHS", Some("ascii")),
-            ("AIDA_TEST_HOME", Some(home_str)),
-        ]);
-        let out = render_markdown_for_terminal(WIDE_TABLE, 80);
-        assert_all_ascii(&out);
-        assert!(out.contains("+-") && !out.contains('┌'), "{out}");
+fn markdown_profile_prefers_valid_env_then_theme_then_fallback() {
+    use GlyphProfile::{Ascii, Unicode};
+    // (env, theme base, fallback) => expected
+    let cases: &[(
+        Option<&str>,
+        Option<GlyphProfile>,
+        GlyphProfile,
+        GlyphProfile,
+    )] = &[
+        // A valid env value wins over a theme and the fallback.
+        (Some("ascii"), Some(Unicode), Unicode, Ascii),
+        (Some("ascii"), None, Unicode, Ascii),
+        (Some(" PLAIN "), None, Unicode, Ascii),
+        (Some("unicode"), Some(Ascii), Ascii, Unicode),
+        // An invalid or empty env value with a theme falls to the theme base.
+        (Some("bogus"), Some(Ascii), Unicode, Ascii),
+        (Some(""), Some(Ascii), Unicode, Ascii),
+        (Some("bogus"), Some(Unicode), Ascii, Unicode),
+        (None, Some(Ascii), Unicode, Ascii),
+        // No theme: the fallback.
+        (Some("bogus"), None, Ascii, Ascii),
+        (Some(""), None, Unicode, Unicode),
+        (None, None, Ascii, Ascii),
+        (None, None, Unicode, Unicode),
+    ];
+    for &(env, theme_base, fallback, expected) in cases {
+        assert_eq!(
+            markdown_profile(env, theme_base, fallback),
+            expected,
+            "env={env:?} theme_base={theme_base:?} fallback={fallback:?}"
+        );
     }
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_GLYPHS", Some("unicode")),
-        ("AIDA_TEST_HOME", Some(home_str)),
-    ]);
-    let unicode = render_markdown_for_terminal(WIDE_TABLE, 80);
+}
+
+// trace:BUG-1979 | ai:claude
+#[test]
+fn ascii_profile_draws_ascii_table_borders() {
+    let out = render_markdown_with(WIDE_TABLE, 80, true, GlyphProfile::Ascii).unwrap();
+    assert_all_ascii(&out);
+    assert!(out.contains("+-") && !out.contains('┌'), "{out}");
+    let unicode = render_markdown_with(WIDE_TABLE, 80, true, GlyphProfile::Unicode).unwrap();
     assert!(unicode.contains('┌'), "{unicode}");
 }
 
