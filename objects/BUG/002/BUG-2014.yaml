@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-13T23:19:48.281137088Z
+modified_at: 2026-10-13T23:33:50.095668469Z
 req_type: Bug
 tags:
 - authority
@@ -66,6 +66,11 @@ comments:
   content: 'FACTORY CI: #2611 main-targeted to schedule Build because ci.yml excludes dependency-base PRs. Code still stacked on #2604; main comparison includes dependency until it merges, isolated diff and merge-first prerequisite explicit in body. Base edit alone did not trigger; draft close/reopen triggered Build run38483452497 at 643f069303c718e0de1a34214f069abb08eb5998. All28 prepush gates passed; final author-controlled self-check no findings. Waiting for completed Build before READY.'
   created_at: 2026-10-13T23:19:48.281137088Z
   modified_at: 2026-10-13T23:19:48.281137088Z
+- id: 01a1379d-7b8f-7743-b6bf-e67fe452c54c
+  author: ai:codex:joe
+  content: 'FACTORY CI r1: run38483452497 failed two deterministic integration contracts, not a flake. Four grant_expiry_notice Rust tests PASS. Fixing missing hidden role expiry-notice row in docs/cli-format-json-audit.md and Codex shared-hook parity: signed C5 requires Claude-only delivery, so test pins the exact sole Claude entry and absence of Codex wiring/installed handler while retaining parity for ALL shared hooks. No Codex production wiring change, no authority change, no weakened assertions. Full fast gate r4 running before corrective push; no rerun without fix.'
+  created_at: 2026-10-13T23:33:50.095668469Z
+  modified_at: 2026-10-13T23:33:50.095668469Z
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
   author: joe
