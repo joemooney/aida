@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1725",
+  "publishes": [
+    {
+      "at": "2026-10-13T03:07:46.110407839Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:55:49.592942195Z",
+      "spec": "TASK-1725",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T23:33:22.908404485Z",
+      "spec": "TASK-1725",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T23:52:18.452435921Z",
+      "spec": "TASK-1725",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "0e7a5137836896ff25fd803585b343d214ae533e"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:07:46.096422223Z",
+      "spec": "TASK-1725",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "eb5882c98270cf6208e88d88bcaabe82d4bb29f4",
+        "pr": 2578,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
