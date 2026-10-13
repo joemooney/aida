@@ -1,0 +1,30 @@
+id: 01a13412-611a-7890-94b5-27452207795b
+spec_id: TASK-1-274
+title: 'non-blocking: bash 3.2 (macOS) $(trap -p) save/restore still unverified (acknow…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1960, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: bash 3.2 (macOS) $(trap -p) save/restore still unverified (acknowledged in PR)
+
+  PR: #2577
+  Reviewed sha: 88c30ffad1d573c6f89af9c7b3c7aed43068e46b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T07:03:02.170086737Z
+modified_at: 2026-10-13T07:03:02.170086737Z
+req_type: Task
+tags:
+- carried-from:BUG-1960
+- finding-hash:4477c76e
+- from-review:PR-2577
+- kind:carried-forward
+filed_at:
+  code_sha: 728809b94e33956809e4b67c0176d310ae1c669a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: e651951a-cde3-4010-8494-7b15a84fb988
