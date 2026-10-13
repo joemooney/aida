@@ -13,12 +13,12 @@ description: |
   2. The queue-work boundary announcement and the contained flags derive from the same root (either build flags with `claude_contained_flags_for(&lease.worktree_path)` or announce from `headless_worktree_root()`). Unit test: for a symlinked worktree path, announced roots equal the roots in the generated settings.
   3. `headless_worktree_root()` (or a contained-flags variant of it) yields no write roots when no git root is found, instead of falling back to cwd. Unit test outside a git repo.
   4. `spawn_claude_headless_resume` builds its contained flags from its `cwd` worktree argument (`claude_contained_flags_for(cwd)`), not the process cwd. Unit test on the resume argv.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-13T15:44:15.562826669Z
+modified_at: 2026-10-13T15:44:16.880504668Z
 req_type: Bug
 tags:
 - contained
@@ -104,6 +104,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a135ef-97f0-7e30-bae4-2a932ce52cde
+  author: joe
+  timestamp: 2026-10-13T15:44:16.880496816Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -112,3 +119,6 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T15:44:16.880473344Z
