@@ -10,12 +10,12 @@ description: |-
   Advisor decision: NOT a budget change. Treat as a possible regression to triage: (1) re-measure show on current main (>= d57f76a277, includes BUG-1956) under comparable load; (2) if still >10%, bisect between 97453570d6 and 95f15a20d4 (candidate: STORY-1652 markdown rendering at a terminal, or cache refresh contention).
   ## Acceptance
   - A measurement on current main, with load noted, either shows show within budget (close as fixed by BUG-1956) or identifies the regressing commit with a fix.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-13T18:09:53.352800018Z
+modified_at: 2026-10-13T18:09:54.416822503Z
 req_type: Bug
 tags:
 - performance
@@ -27,6 +27,14 @@ comments:
   created_at: 2026-10-13T18:09:53.352800018Z
   modified_at: 2026-10-13T18:09:53.352800018Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+history:
+- id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
+  author: joe
+  timestamp: 2026-10-13T18:09:54.416817544Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
   branch: main
