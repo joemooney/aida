@@ -1,0 +1,27 @@
+id: 01a13397-0bf8-7b30-917e-c7789ef36bb7
+spec_id: FAQ-52
+agreed_id: FAQ-52
+title: 'Why does ''aida pull'' print ''main → gitlab FAILED: non-fast-forward''?'
+description: The mirror hub's main has commits that origin's main doesn't, so a fast-forward mirror push is impossible. The store mirror is unaffected and nothing on origin is broken. Find what is extra with 'git log --oneline origin/main..gitlab/main'. If those commits are preserved elsewhere, realign the mirror with 'git push --force-with-lease=main:<old-mirror-sha> gitlab origin/main:main'. GitLab blocks force pushes to a protected main, so allow force push temporarily in Settings → Repository → Protected branches, push, then turn it back off (make sure main stays protected). Otherwise leave the warning until the hub migration.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:48:19.448420998Z
+modified_at: 2026-10-13T04:48:19.448420998Z
+req_type: Faq
+tags:
+- gitlab
+- hub
+- mirror
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T04:48:19.448447751Z
