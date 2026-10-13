@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T12:49:50.145228677Z
+modified_at: 2026-10-13T12:50:21.218139493Z
 req_type: Task
 tags:
 - adr-9
@@ -54,6 +54,11 @@ comments:
   content: Implementation committed locally; required fast gate unexpectedly invokes cargo check through two fast-tier entries. Stopped my queued gate process before compilation to honor operator no-local-compile rule. Awaiting operator choice on preserving these checks in CI while reclassifying them full. No push or PR yet. Self-check found macro string false positives; fixed with token traversal and a regression fixture. Rustfmt/diff checks pass; Rust tests remain unrun pending CI.
   created_at: 2026-10-13T12:48:09.930403240Z
   modified_at: 2026-10-13T12:48:09.930403240Z
+- id: 01a13550-5ba2-7261-b10c-17fc8c601550
+  author: joe
+  content: 'FACTORY PARKED: local head 323acba558a971993a489a2f748dfff6293a3faa in /home/joe/ai/aida-task1724; no PR/push. Blocker: scripts/ci-gate-tiers.toml puts Check aida-cli without default features and TUI seam guard in fast, and both invoke cargo check, forbidden by operator instructions. Required make check-ci-fast was attempted and stopped while queued for a build slot. Options: authorize moving these compile gates to full (GitHub CI unchanged), or retain classification and defer this factory item. Two self-check rounds; final no findings; diff and formatting pass. Retained worktree and own lease to preserve unpushed implementation; no other sessions touched.'
+  created_at: 2026-10-13T12:50:21.218139493Z
+  modified_at: 2026-10-13T12:50:21.218139493Z
 history:
 - id: 01a1309d-17a9-79a0-bf89-99c5d5fcda6a
   author: joe
