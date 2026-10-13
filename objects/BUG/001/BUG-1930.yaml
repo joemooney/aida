@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-13T06:47:29.014924413Z
+modified_at: 2026-10-13T06:48:05.250531481Z
 req_type: Bug
 tags:
 - drain
@@ -90,6 +90,28 @@ comments:
   created_at: 2026-10-13T02:45:06.730543464Z
   modified_at: 2026-10-13T02:45:06.730543464Z
   session_id: 77afed63-7db8-4ea2-9e32-2eabc278fc4d
+- id: 01a13404-b182-75f2-886e-fa421374ebec
+  author: joe
+  content: |-
+    REVIEW (merge): REQUEST CHANGES at 76e2d27d1317d46c7667a61da696f1fda5a62b58 (round 1)
+
+    A fresh, independent reviewer checked this head with a private build. 132 targeted lib tests pass, the mutations were caught, and AC1, AC2 and AC4 are met with tests on production code. The rebase resolution in `BatchDriver` (main's `stop_requested` next to `environment_halt_after`) is correct.
+
+    Blocking:
+    1. **The environment halt never fires in pipelined drains (fail-open).** The child result sidecar (`drain_batch.rs:9-35`) doesn't save `failure`, and `read_pipelined_child_result_sidecar` (around `drain_batch.rs:98`) rebuilds it as `failure: None`. As a result, `environmental_failure_class` (`auto_complete.rs:4942`) returns `None` for every pipelined member.
+       - With `[drain] pipeline_depth = 2` or `3`, the drain keeps shelving spec after spec on permission-denied or resource-exhaustion stops, which is the failure this bug reports.
+       - The reviewer's probe wrote a PermissionDenied result through the sidecar and read back `None`.
+       - Fix: carry the failure kind and reason (or the environmental class) in the sidecar. Add a test at depth 2 or more in which the third spec is never launched.
+
+    Non-blocking:
+    - The NoPr → PermissionDenied wiring (`phase_driver_trait.rs:1099-1112`) has no test of its own; the AC1 test covers only the parser and the constructor.
+    - **Open policy question, left for the operator:** any non-empty `permission_denials` reclassifies the stop. The reviewer suggests narrowing it to Edit/Write/MultiEdit/NotebookEdit denials. As shipped it is conservative (the drain halts early, nothing is damaged).
+    - "Sandbox unavailable" is only an example in the problem text, not an acceptance item, so the PR doesn't need it.
+
+    The merge seat is sending an implementer to fix item 1.
+  created_at: 2026-10-13T06:48:05.250531481Z
+  modified_at: 2026-10-13T06:48:05.250531481Z
+  session_id: e651951a-cde3-4010-8494-7b15a84fb988
 history:
 - id: 01a1309d-20ef-7d02-95ba-9172526ce25c
   author: joe
