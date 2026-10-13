@@ -2108,15 +2108,19 @@ pub(crate) fn collect_open_facts(
         // TASK-884: also note whether any child is actually in motion
         // (Completed / Done / InProgress). An epic with children that are all
         // un-started reads as `Umbrella` (decompose lane), not the invisible
-        // InProgress bucket. trace:TASK-884
-        let (epic_rollup, epic_children_in_motion) =
-            if matches!(req.req_type, aida_core::RequirementType::Epic) {
-                let r = aida_core::graph_walk::child_status_rollup(store, req.id);
-                let in_motion = r.completed + r.done + r.in_progress > 0;
-                ((r.total > 0).then_some((r.completed, r.total)), in_motion)
-            } else {
-                (None, false)
-            };
+        // BUG-543, BUG-1996: for epics and stories, compute child rollup so
+        // fully-delivered parents surface as ready-to-close.
+        // trace:BUG-1996 | ai:antigravity
+        let (epic_rollup, epic_children_in_motion) = if matches!(
+            req.req_type,
+            aida_core::RequirementType::Epic | aida_core::RequirementType::Story
+        ) {
+            let r = aida_core::graph_walk::child_status_rollup(store, req.id);
+            let in_motion = r.completed + r.done + r.in_progress > 0;
+            ((r.total > 0).then_some((r.completed, r.total)), in_motion)
+        } else {
+            (None, false)
+        };
         facts.push(burndown::OpenFacts {
             id,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),

@@ -3261,8 +3261,13 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
     drop(backend);
 
     let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
-    crate::queue_cmd::advance_dispatch(crate::burndown::AdvanceAction::Close, "BUG-12861", &store)
-        .expect("the close call itself must not error");
+    crate::queue_cmd::advance_dispatch(
+        crate::burndown::AdvanceAction::Close,
+        "BUG-12861",
+        &store,
+        false,
+    )
+    .expect("the close call itself must not error");
 
     let after = aida_core::CachedGitBackend::open(
         &store,

@@ -5,7 +5,7 @@
 //! `aida edit <ID> --status completed` warns — never refuses — when a code
 //! spec reaches Completed with nothing shipped on the default branch, checking
 //! both the local default branch and `origin/<default>`. BUG-1958 adds the
-//! same warning on `aida done`. BUG-1996 adds the same warning on `aida queue done`.
+//! same warning on `aida done`. BUG-1996 adds the same warning on `aida queue advance` closing a parent.
 // trace:STORY-1649 | ai:claude
 
 use std::path::Path;
@@ -358,7 +358,8 @@ fn done_with_shipped_commit_does_not_warn() {
     );
 }
 
-// ---- BUG-1996: `aida queue done` gets the same completion warning -----------
+// ---- BUG-1996: `aida queue done` must NOT warn (status moves to Done);
+// `aida queue advance` closing a parent gets the completion warning -----------
 
 fn queue_done(fixture: &Fixture, id: &str) -> (String, String) {
     ok(
@@ -367,44 +368,148 @@ fn queue_done(fixture: &Fixture, id: &str) -> (String, String) {
     )
 }
 
+fn add_spec_with_parent(fixture: &Fixture, req_type: &str, parent: &str) -> String {
+    let (stdout, _) = ok(
+        "aida add --parent",
+        &aida(
+            fixture,
+            &[
+                "add",
+                "--title",
+                "child spec",
+                "--type",
+                req_type,
+                "--parent",
+                parent,
+                "--status",
+                "approved",
+            ],
+        ),
+    );
+    spec_id_from(&stdout)
+}
+
+fn queue_advance(fixture: &Fixture, id: &str) -> (String, String) {
+    ok(
+        "aida queue advance",
+        &aida(fixture, &["queue", "advance", id, "--yes"]),
+    )
+}
+
 // trace:BUG-1996 | ai:antigravity
 #[test]
-fn queue_done_without_shipped_commit_warns() {
+fn queue_done_does_not_warn() {
     let fx = init_fixture();
     let id = add_spec(&fx, "task");
     let (_, stderr) = queue_done(&fx, &id);
     assert!(
-        stderr.contains(NO_SHIPPED_COMMIT) && stderr.contains(&id),
-        "expected `aida queue done` to warn naming {id}:\n{stderr}"
+        !stderr.contains(NO_SHIPPED_COMMIT),
+        "plain `aida queue done` moves to Done, not Completed, and must not warn:\n{stderr}"
+    );
+    let stdout = toon_show(&fx, &[&id]);
+    assert!(stdout.contains("status=done"), "{stdout}");
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_advance_close_parent_without_shipped_commit_warns() {
+    let fx = init_fixture();
+    let parent = add_spec(&fx, "story");
+    let child = add_spec_with_parent(&fx, "task", &parent);
+    ok(
+        "complete child",
+        &aida(
+            &fx,
+            &[
+                "edit",
+                &child,
+                "--status",
+                "completed",
+                "--add-tag",
+                "doctor:no-code",
+            ],
+        ),
+    );
+    let (stdout, stderr) = queue_advance(&fx, &parent);
+    assert!(
+        stdout.contains("closed") && stdout.contains(&parent),
+        "expected parent to be closed:\n{stdout}"
+    );
+    assert!(
+        stderr.contains(NO_SHIPPED_COMMIT) && stderr.contains(&parent),
+        "expected warning naming parent {parent}:\n{stderr}"
     );
     assert!(stderr.contains("doctor:no-code"), "{stderr}");
+    assert!(stderr.contains("git fetch"), "{stderr}");
 }
 
 // trace:BUG-1996 | ai:antigravity
 #[test]
-fn queue_done_opted_out_spec_does_not_warn() {
+fn queue_advance_close_parent_opted_out_does_not_warn() {
     let fx = init_fixture();
-    let id = add_spec(&fx, "task");
+    let parent = add_spec(&fx, "story");
     ok(
         "aida edit --add-tag",
-        &aida(&fx, &["edit", &id, "--add-tag", "doctor:no-code"]),
+        &aida(&fx, &["edit", &parent, "--add-tag", "doctor:no-code"]),
     );
-    let (_, stderr) = queue_done(&fx, &id);
+    let child = add_spec_with_parent(&fx, "task", &parent);
+    ok(
+        "complete child",
+        &aida(
+            &fx,
+            &[
+                "edit",
+                &child,
+                "--status",
+                "completed",
+                "--add-tag",
+                "doctor:no-code",
+            ],
+        ),
+    );
+    let (stdout, stderr) = queue_advance(&fx, &parent);
+    assert!(
+        stdout.contains("closed") && stdout.contains(&parent),
+        "expected parent to be closed:\n{stdout}"
+    );
     assert!(
         !stderr.contains(NO_SHIPPED_COMMIT),
-        "doctor:no-code opt-out must silence the `aida queue done` warning:\n{stderr}"
+        "doctor:no-code parent must not warn on queue advance close:\n{stderr}"
     );
 }
 
 // trace:BUG-1996 | ai:antigravity
 #[test]
-fn queue_done_with_shipped_commit_does_not_warn() {
+fn queue_advance_close_parent_with_shipped_commit_does_not_warn() {
     let fx = init_fixture();
-    let id = add_spec(&fx, "task");
-    commit_on_main(&fx, "work.txt", &format!("feat: ship it ({id}) (#53)"));
-    let (_, stderr) = queue_done(&fx, &id);
+    let parent = add_spec(&fx, "story");
+    let child = add_spec_with_parent(&fx, "task", &parent);
+    ok(
+        "complete child",
+        &aida(
+            &fx,
+            &[
+                "edit",
+                &child,
+                "--status",
+                "completed",
+                "--add-tag",
+                "doctor:no-code",
+            ],
+        ),
+    );
+    commit_on_main(
+        &fx,
+        "work.txt",
+        &format!("feat: deliver story ({parent}) (#42)"),
+    );
+    let (stdout, stderr) = queue_advance(&fx, &parent);
+    assert!(
+        stdout.contains("closed") && stdout.contains(&parent),
+        "expected parent to be closed:\n{stdout}"
+    );
     assert!(
         !stderr.contains(NO_SHIPPED_COMMIT),
-        "shipped spec must not warn on `aida queue done`:\n{stderr}"
+        "shipped parent must not warn on queue advance close:\n{stderr}"
     );
 }

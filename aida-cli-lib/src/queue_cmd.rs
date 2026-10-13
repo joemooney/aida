@@ -164,9 +164,10 @@ pub(crate) fn handle_queue_advance(
 
         // --yes / non-interactive: take ONLY the unambiguous autonomous step;
         // skip anything needing a human, printing what each needs.
+        // trace:BUG-1996 | ai:antigravity
         if !interactive {
-            if action.is_autonomous() {
-                advance_dispatch(action, &item.display, &store_path)?;
+            if action.is_autonomous() || (yes && action == burndown::AdvanceAction::Close) {
+                advance_dispatch(action, &item.display, &store_path, yes)?;
             } else {
                 println!(
                     "  {} needs a human — skipped. {}",
@@ -220,7 +221,7 @@ pub(crate) fn handle_queue_advance(
             continue;
         }
         // The only remaining option is the bucket's primary action.
-        advance_dispatch(action, &item.display, &store_path)?;
+        advance_dispatch(action, &item.display, &store_path, false)?;
     }
 
     Ok(())
@@ -258,6 +259,7 @@ pub(crate) fn advance_dispatch(
     action: burndown::AdvanceAction,
     display: &str,
     store_path: &std::path::Path,
+    yes: bool,
 ) -> Result<()> {
     use burndown::AdvanceAction;
 
@@ -473,20 +475,24 @@ pub(crate) fn advance_dispatch(
             }
         }
         AdvanceAction::Close => {
-            // BUG-543: a fully-delivered epic (all children Completed). Offer to
-            // close it (status → Completed) — operator-confirmed, never silent.
-            let do_close = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            // BUG-543: a fully-delivered epic/story (all children Completed). Offer to
+            // close it (status → Completed) — operator-confirmed when interactive,
+            // autonomous under --yes.
+            // trace:BUG-1996 | ai:antigravity
+            let do_close = if yes {
+                true
+            } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
                 // trace:STORY-809 | ai:claude
                 let card = crate::context_prompt::ContextCard {
                     decision: format!("whether to close {display} now that every child is Completed"),
                     provenance: vec![format!(
-                        "the rollup for {display} reports all children Completed — the epic is fully delivered"
+                        "the rollup for {display} reports all children Completed — the parent is fully delivered"
                     )],
                     answers: vec![
                         "y: status → Completed; it leaves the open lens (reversible via `aida edit --status`)".to_string(),
                         "n: leave it open (it will be offered again next pass)".to_string(),
                     ],
-                    recommended_default: "y — a fully-delivered epic staying open just clutters the open view".to_string(),
+                    recommended_default: "y — a fully-delivered parent staying open just clutters the open view".to_string(),
                 };
                 crate::context_prompt::confirm_with_context(
                     &format!("Close {display}? (all children completed → status completed)"),
@@ -5450,14 +5456,6 @@ pub(crate) fn handle_queue_command(
             // trace:STORY-1480 | ai:claude
             if let Ok(project_root) = find_project_root() {
                 let _ = crate::timing_record::publish(&project_root, &display_id, "queue-done");
-                // BUG-1996: `aida queue done` warns if completed without a shipped
-                // commit on the default branch, like `aida edit --status completed`
-                // and `aida done`.
-                // trace:BUG-1996 | ai:antigravity
-                crate::shipped_linkage::warn_if_completed_without_shipped_commit(
-                    &project_root,
-                    req,
-                );
             }
             let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
                 .ok()
