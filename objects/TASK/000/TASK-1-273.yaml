@@ -1,5 +1,6 @@
 id: 01a13412-5bfb-7bb3-bb3d-a654f9ca223c
 spec_id: TASK-1-273
+agreed_id: TASK-1344
 title: 'non-blocking: zsh helper _aida_init_zsh is defined as a global function in the …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1960, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
