@@ -2608,6 +2608,12 @@ pub(crate) fn agent_new_bg_dispatch(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(&config) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
 
     let output = command
         .output_retrying_etxtbsy()
@@ -4339,6 +4345,29 @@ pub(crate) fn render_agent_show_prompt(
     out
 }
 
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn is_contained_args(agent_type: &str, args: &[String]) -> bool {
+    match agent_type {
+        "claude" => {
+            args.iter().any(|arg| arg == "--settings")
+                && !args.iter().any(|arg| arg == "--permission-mode")
+        }
+        "codex" => {
+            args.windows(2)
+                .any(|w| w[0] == "--sandbox" && w[1] == "workspace-write")
+                && !args
+                    .iter()
+                    .any(|arg| arg == "--dangerously-bypass-approvals-and-sandbox")
+        }
+        _ => false,
+    }
+}
+
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
+    is_contained_args(config.agent_type, &config.default_args)
+}
+
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
 /// the spawned child, mirrored here read-only for the `--no-exec` preview.
 /// Keep in sync with `run_tracked_agent`'s `.env(...)` calls.
@@ -4357,6 +4386,10 @@ pub(crate) fn agent_launch_env_inputs(
             plan.role_instance.as_str().to_string(),
         ),
     ];
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        out.push(("AIDA_CONTAINED", "1".to_string()));
+    }
     if let Some(role) = &plan.role {
         out.push(("AIDA_SESSION_ROLE", role.clone()));
     }
@@ -4518,6 +4551,12 @@ pub(crate) fn run_tracked_agent(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
 
     let mut child = command
         .spawn_retrying_etxtbsy()

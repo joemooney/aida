@@ -11130,6 +11130,9 @@ pub(crate) fn handle_queue_work(
     }
     if contained {
         std::env::set_var("AIDA_CONTAINED", "1");
+    } else {
+        // trace:BUG-2006 | ai:antigravity
+        std::env::remove_var("AIDA_CONTAINED");
     }
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;

@@ -949,6 +949,12 @@ fn exec_claude(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant);
     }
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
     cmd.args(claude_session_args(
         permission_mode,
         name,
@@ -1003,6 +1009,12 @@ fn run_claude_session(
 ) -> Result<()> {
     let mut title_restore = TerminalTitleRestoreGuard::new(title_restore);
     let mut cmd = std::process::Command::new("claude");
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
     cmd.args(claude_session_args(
         permission_mode,
         name,
@@ -1223,8 +1235,8 @@ pub fn spawn_vendor_headless_with_seat(
         seat.as_str(),
         &crate::current_user_id(None),
     )?;
-    let status = Command::new(program)
-        .args(args)
+    let mut cmd = Command::new(program);
+    cmd.args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
         .env(crate::seat_authority::GRANT_ENV, child_grant.id)
@@ -1235,7 +1247,14 @@ pub fn spawn_vendor_headless_with_seat(
         // BUG-806: phase agents hold the drive's own binary, not whatever the
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value)
+        .env(ceiling_key, ceiling_value);
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    let status = cmd
         .stdout(Stdio::from(log))
         .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -1372,13 +1391,20 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
-    let mut cmd = std::process::Command::new("claude");
+    let prog = resolve_agent_program("claude");
+    let mut cmd = std::process::Command::new(prog);
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
     }
     if contained {
         cmd.args(claude_contained_flags());
+    }
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
     }
     cmd.status().context("failed to spawn claude")
 }
@@ -1457,6 +1483,8 @@ pub(crate) struct ReviewerLaunchPlan {
     /// binary name, byte-identical to before this seam existed.
     pub(crate) program: String,
     pub(crate) args: Vec<String>,
+    // trace:BUG-2006 | ai:antigravity
+    pub(crate) contained: bool,
 }
 
 // trace:BUG-1607 | ai:claude
@@ -1480,6 +1508,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 contained,
                 None,
             ),
+            contained,
         }),
         HeadlessVendor::Codex => {
             // Interactive queue-work's Codex-tab launch maps the uniform
@@ -1491,6 +1520,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 vendor,
                 program: resolve_agent_program(vendor.program()),
                 args: codex_session_args(prompt, bypass, None),
+                contained,
             })
         }
         HeadlessVendor::Agy => anyhow::bail!(
@@ -1514,11 +1544,17 @@ pub(crate) fn spawn_reviewer_launch_plan(
         "reviewer",
         &crate::current_user_id(None),
     )?;
-    std::process::Command::new(&plan.program)
-        .args(&plan.args)
+    let mut cmd = std::process::Command::new(&plan.program);
+    cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, grant.id)
-        .env("AIDA_SESSION_ROLE", "reviewer")
-        .status_retrying_etxtbsy()
+        .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2006 | ai:antigravity
+    if plan.contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd.status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", plan.program))
 }
 
@@ -2949,7 +2985,8 @@ pub fn exec_vendor_headless(
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let mut child = Command::new(program)
+    let mut child_cmd = Command::new(program);
+    child_cmd
         .args(args)
         .env("AIDA_HEADLESS", "1")
         // BUG-802: same drive-root anchor as the spawn path — the two launch
@@ -2957,7 +2994,14 @@ pub fn exec_vendor_headless(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         // BUG-806: same PATH rule as the spawn path.
         .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value)
+        .env(ceiling_key, ceiling_value);
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        child_cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        child_cmd.env_remove("AIDA_CONTAINED");
+    }
+    let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -3208,8 +3252,8 @@ pub fn spawn_claude_headless_resume(
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     let child_grant = crate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
-    let status = Command::new(program)
-        .current_dir(cwd)
+    let mut cmd = Command::new(program);
+    cmd.current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat)
@@ -3217,7 +3261,14 @@ pub fn spawn_claude_headless_resume(
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
-        .env(ceiling_key, ceiling_value)
+        .env(ceiling_key, ceiling_value);
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    let status = cmd
         .stdout(Stdio::from(log))
         .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
@@ -4566,6 +4617,12 @@ pub fn exec_claude_resume(
     }
     if contained {
         cmd.args(claude_contained_flags());
+    }
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
     }
     #[cfg(unix)]
     {
@@ -7442,6 +7499,278 @@ mod tests {
                     "enabled-but-unrunnable must fail closed with remediation: {msg}"
                 );
             }
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_reviewer_launch_plan_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let launcher = crate::current_user_id(None);
+        let grant_id = crate::seat_authority::test_support::mint_grant_for(
+            &project,
+            &launcher,
+            "advisor",
+            &["reviewer"],
+        );
+        let fake = tmp.path().join("fake-agent");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+
+        // 1. Contained = false with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+                ("AIDA_CONTAINED", Some("1")),
+            ]);
+            let plan = ReviewerLaunchPlan {
+                vendor: HeadlessVendor::Claude,
+                program: fake.to_string_lossy().to_string(),
+                args: vec![],
+                contained: false,
+            };
+            let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained reviewer launch must strip AIDA_CONTAINED from child: {env_contents}"
+            );
+        }
+
+        // 2. Contained = true without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+                ("AIDA_CONTAINED", None),
+            ]);
+            let plan = ReviewerLaunchPlan {
+                vendor: HeadlessVendor::Claude,
+                program: fake.to_string_lossy().to_string(),
+                args: vec![],
+                contained: true,
+            };
+            let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained reviewer launch must export AIDA_CONTAINED=1 to child: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_claude_resume_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", Some("1")),
+            ]);
+            let status = spawn_claude_resume("session-123", None, false).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_claude_resume must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", None),
+            ]);
+            let status = spawn_claude_resume("session-123", None, true).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_claude_resume must export AIDA_CONTAINED=1: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_vendor_headless_with_seat_contained_exports_aida_contained_and_uncontained_strips_it()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let launcher = crate::current_user_id(None);
+        let grant_id = crate::seat_authority::test_support::mint_grant_for(
+            &project,
+            &launcher,
+            "advisor",
+            &["implementer"],
+        );
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+        let log_path = tmp.path().join("headless.log");
+        let tee_opts = crate::headless_tee::TeeOptions::Silent;
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", Some("1")),
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ]);
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Claude,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                false,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_vendor_headless must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ]);
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Claude,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                true,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_vendor_headless must export AIDA_CONTAINED=1: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_claude_headless_resume_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let launcher = crate::current_user_id(None);
+        let grant_id = crate::seat_authority::test_support::mint_grant_for(
+            &project,
+            &launcher,
+            "advisor",
+            &["implementer"],
+        );
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+        let log_path = tmp.path().join("headless.log");
+        let tee_opts = crate::headless_tee::TeeOptions::Silent;
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", Some("1")),
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ]);
+            let status = spawn_claude_headless_resume(
+                "prompt",
+                "sid",
+                &log_path,
+                &project,
+                &tee_opts,
+                false,
+                "implementer",
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents.lines().any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_claude_headless_resume must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ]);
+            let status = spawn_claude_headless_resume(
+                "prompt",
+                "sid",
+                &log_path,
+                &project,
+                &tee_opts,
+                true,
+                "implementer",
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_claude_headless_resume must export AIDA_CONTAINED=1: {env_contents}"
+            );
         }
     }
 }
