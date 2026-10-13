@@ -12,12 +12,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:20:11.259964808Z
-modified_at: 2026-10-13T18:10:17.588887174Z
+modified_at: 2026-10-13T18:10:21.482920490Z
 req_type: Bug
 tags:
 - follow-up
 - hooks
 - review-follow-up
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1337d-e56f-7681-bcd4-a496dedd6643
+  created_at: 2026-10-13T18:10:21.482914549Z
+  created_by: joe
 comments:
 - id: 01a13675-41ac-7901-9cd1-a23e9e748dc6
   author: joe
