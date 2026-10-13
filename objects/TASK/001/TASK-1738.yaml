@@ -20,11 +20,31 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T06:16:59.456662055Z
-modified_at: 2026-10-13T06:37:11.515944811Z
+modified_at: 2026-10-13T06:42:34.550039753Z
 req_type: Task
 tags:
 - batch:fasttrack
 - lifecycle:no-review
+comments:
+- id: 01a133ff-a5b6-70e1-9431-8554305eee6c
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    • Approach: Edit only the master template aida-core/templates/skills/aida-handoff.md. Update Step 1 from running /aida-capture mentally to explicitly invoking /aida-capture, including its FAQ lens and autonomy-mode rules (zen/headless auto-capture as draft, draft+faq:unvetted for FAQs, never prompting). Retain the 3 residue bullets as minimum checklist. Regenerate mirrors via make sync-templates and verify via make check-templates.
+    • Files to change:
+      - aida-core/templates/skills/aida-handoff.md (master template only)
+      - generated mirrors synced via make sync-templates
+    • Tests:
+      - make check-templates (verifies link integrity, mirror synchronization, and portable pack drift)
+      - make check-ci-fast (runs all 27 fast-tier gates)
+    • Risks:
+      - Accidental hand-edits to generated mirrors (avoided by editing master only and running sync)
+      - Formatting or path divergence
+    • Acceptance mapping:
+      - Step 1 names /aida-capture as a step that runs: verified by inspecting aida-core/templates/skills/aida-handoff.md
+      - Mirrors regenerated & make check-templates + make check-ci-fast green: verified by executing both make targets
+  created_at: 2026-10-13T06:42:34.550039753Z
+  modified_at: 2026-10-13T06:42:34.550039753Z
 history:
 - id: 01a133fa-b7db-7df2-b0aa-e51ceab6fcab
   author: aida-session-start
