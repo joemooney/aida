@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T16:28:16.866957304Z
+modified_at: 2026-10-13T16:28:19.614903524Z
 req_type: Bug
 tags:
 - plan:night
@@ -53,6 +53,11 @@ comments:
   content: 'FACTORY PLAN (codex) / plan:night — sketch for signoff: inventory confirms process-wide PATH writers in status_prs, handle_pull_command_tests, story_1656, pr_cmd and lib_part3, including indirect EnvVarsGuard and prepend_path calls. Writer-only env_lock cannot protect unrelated git readers. Proposed test-only isolation harness re-executes the current test binary for an exact test name, one thread, with child-scoped PATH via Command::env; parent retains shim TempDirs until child exit. Move every PATH-changing scenario behind that boundary and add a source-shape guard rejecting direct/indirect parent PATH writers. Add CI stress invoking history tests alongside these parent launchers, 15 rounds at 16 threads. This introduces a reusable harness/new test convention, so the repository sketch-first rule requires advisor signoff before implementation. Also read BUG-1955 rework/strace findings: all 441 foreign-shim execs in that earlier trace were ENOENT probes; original temporary-file/object-write root cause remains unconfirmed, so do not claim PATH isolation proves it. Acceptance must separately include named mechanism and reproducer for the carried obligation. Parked pending harness signoff and root-cause evidence; no lease/code/PR created.'
   created_at: 2026-10-13T12:49:46.635676128Z
   modified_at: 2026-10-13T12:49:46.635676128Z
+- id: 01a13617-eb1e-70e3-a495-cd3fc195e414
+  author: ai:codex:joe
+  content: 'FACTORY PLAN (codex): Proceeding under the operator/advisor continuation instruction with the posted isolation sketch. Inventory also found PATH mutations in session terminal-title tests, upgrade-release finish-CI tests, and real-phase-driver merge tests, beyond the original three modules. Re-execute every PATH-changing test as an exact one-test child; parent never changes PATH. Enforce that boundary centrally in every EnvVarGuard/EnvVarsGuard PATH mutation (including restoration snapshots and indirect prepend helpers), preserving original function assertions. Add a function-scoped source-shape guard for raw PATH setters and aliases, a live fake-git/real-parent-reader regression, and 15 mixed history/PATH-mutator rounds at 16 threads in CI. Validate child test count so re-exec cannot silently no-op. Risks: hidden indirect callers, inherited HOME/git identity, nested env locks; use child-local HOME/config and retain fixture lifetimes through wait. The earlier BUG-1955 trace retracted its foreign-shim claim; original object-write error remains unconfirmed and will be reported separately from proven PATH isolation. All Rust test/stress execution on GitHub CI; full make check-ci-fast before every push.'
+  created_at: 2026-10-13T16:28:19.614903524Z
+  modified_at: 2026-10-13T16:28:19.614903524Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
