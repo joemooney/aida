@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T17:24:21.771308778Z
+modified_at: 2026-10-13T19:38:52.336286673Z
 req_type: Bug
 tags:
 - agent-new
@@ -88,6 +88,11 @@ comments:
   created_at: 2026-10-13T17:24:21.771308778Z
   modified_at: 2026-10-13T17:24:21.771308778Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a136c6-5e30-78a0-be12-212c25a925c5
+  author: ai:codex:joe
+  content: 'FACTORY REWORK PLAN: address merge findings 1-5. Share the actual listing default/--all selector with behavioral test fixtures; show state in default human rows. Add duplicate-scope refusal and child session-ID environment tests, resolve symlinked worktree paths in live-owner detection, and exercise foreground/background entrypoints with explicit owning --cwd using a harmless recording child. PR #2596 remains mergeable at b6b442e825, so no rebase/force push is needed. All Rust execution stays on GitHub CI; complete make check-ci-fast before push.'
+  created_at: 2026-10-13T19:38:52.336286673Z
+  modified_at: 2026-10-13T19:38:52.336286673Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
