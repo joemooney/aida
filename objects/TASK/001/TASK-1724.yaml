@@ -12,12 +12,12 @@ description: |
   1. adr9_one_engine_guardrail.rs no longer exempts upgrade_release.rs wholesale: it either skips `#[cfg(test)]`/`#[cfg(all(test, ...))]` mod bodies when counting production calls, or pins an expected production-call count per allowlisted file (upgrade_release.rs = 0).
   2. Negative test: feeding the counter a source string with an engine call outside a `#[cfg(test)]` mod in an allowlisted test-only file is reported as an offender; a call inside the test mod is not.
   3. The existing guard test still passes on the current tree.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T06:40:15.810333932Z
+modified_at: 2026-10-13T12:43:05.744925015Z
 req_type: Task
 tags:
 - adr-9
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13549-b690-7211-8882-880ada6f1531
+  author: aida-session-start
+  timestamp: 2026-10-13T12:43:05.744924303Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
