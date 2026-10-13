@@ -1,5 +1,6 @@
 id: 01a13533-d6f6-71c2-ae6b-2f937ab2c66b
 spec_id: TASK-1-283
+agreed_id: TASK-1352
 title: 'non-blocking: extracted sidecar helpers carry only trace:STORY-1091 (ai:codex);…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1930, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

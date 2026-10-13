@@ -1,5 +1,6 @@
 id: 01a13533-d440-7be3-8bb2-4e21d19baaf1
 spec_id: TASK-1-282
+agreed_id: TASK-1350
 title: 'non-blocking: open operator policy question — any non-empty permission_denials …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1930, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

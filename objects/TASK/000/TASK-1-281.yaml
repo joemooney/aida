@@ -1,5 +1,6 @@
 id: 01a13533-d26a-7711-b64e-b585194da001
 spec_id: TASK-1-281
+agreed_id: TASK-1351
 title: 'non-blocking: at pipeline_depth 3 (or after a ship refills the pipeline) a memb…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1930, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
