@@ -1,0 +1,38 @@
+id: 01a135fa-f3c1-75f2-bcb1-51193800f74f
+spec_id: BUG-2015
+agreed_id: BUG-2015
+title: Pre-push main guard blocks mirror-sync of an already-reviewed origin/main tip; aida remote mirror commits onto main
+description: |
+  Two AIDA features contradict each other in repos that forbid direct pushes to the default branch. Seen in aida-relay, 2026-10-13.
+
+  1. **`aida remote mirror-sync` cannot mirror `main`.** The scaffolded pre-push main guard (aida-relay TASK-25: "REFUSING to push to main — the default branch") refuses *any* push to `main`, whatever the remote. But mirror-sync pushes only `origin/main`'s tip to a registered mirror hub. That tip already passed PR, CI and the merge hold on origin, so the guard protects nothing there. Result: `main → gitlab FAILED` and an error exit. GitLab's main had fallen 39 commits behind. The workaround is the named override, `AIDA_ALLOW_MAIN_PUSH=1 aida remote mirror-sync`.
+
+  2. **`aida remote mirror <hub>` commits its config change directly onto local `main`** (`[AI:aida] chore(remote): list gitlab as a store mirror`, +1 line in `.aida/config.toml`). In a repo whose guard forbids pushing `main`, that commit can only land through a PR. mirror-sync then reports "local main has 1 local-only commit". Landed here as aida-relay PR #89.
+
+  ## Proposal
+  - The pre-push main guard allows a push to a remote listed in `[store.sync] mirror_remotes` when every pushed commit is already reachable from `origin/<default>`. Equivalently, mirror-sync passes an internal, logged allowance for exactly that case.
+  - `aida remote mirror` either writes the config change on a branch and prints the PR command, or leaves it uncommitted with a note, when the repo has the main guard enabled.
+
+  ## Acceptance
+  - In a repo with the main guard on and a registered mirror, `aida remote mirror-sync` mirrors `origin/main` without an override and still refuses a local-only `main` commit.
+  - `aida remote mirror` never creates a commit on the default branch in such a repo.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T15:56:41.281129856Z
+modified_at: 2026-10-13T15:56:41.281129856Z
+req_type: Bug
+tags:
+- from:aida-host
+- hooks
+- mirror
+- remote
+filed_at:
+  code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
