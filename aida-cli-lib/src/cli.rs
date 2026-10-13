@@ -8883,7 +8883,9 @@ pub enum AgentNewCommand {
         /// also passed, AIDA records the captured sessionId on the
         /// lease so the cross-substrate view links them automatically.
         /// Without `--bg`, the foreground launch path is unchanged.
-        /// Non-interactive dispatch: `aida agent new claude --bg --role implementer
+        /// For non-interactive dispatch, first set `[agents] confirm_bypass = false`
+        /// in `~/.aida/config.toml`; trusted project config can still require consent.
+        /// Then use: `aida agent new claude --bg --role implementer
         /// --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume
         /// --permission-mode bypassPermissions`. An explicit owning cwd reuses
         /// its inactive same-role lease; it never takes over a live agent.

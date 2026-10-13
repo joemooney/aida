@@ -239,6 +239,8 @@ fn agent_new_bg_help_documents_noninteractive_form() {
         "--no-resume",
         "--permission-mode bypassPermissions",
         "--prompt-file <FILE>",
+        "confirm_bypass = false",
+        "trusted project config can still require consent",
     ] {
         assert!(help.contains(arg), "missing {arg}: {help}");
     }

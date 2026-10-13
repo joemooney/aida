@@ -10,7 +10,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use aida_core::DatabaseBackend;
+use aida_core::{DatabaseBackend, Storage};
 
 use crate::not_found;
 use crate::record_role_activity;
