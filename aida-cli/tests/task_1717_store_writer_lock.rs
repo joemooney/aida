@@ -2221,7 +2221,12 @@ fn drifted_generated_hook_is_refused_with_upgrade_guidance() {
     );
     assert!(!msg.contains("scaffold apply"), "{msg}");
     let args: Vec<&str> = named.split_whitespace().skip(1).collect();
-    let fixed = fx.run_ok(&args);
+    // Run from outside the project: the named --project-root is enough.
+    let fixed = fx
+        .cmd(fx.repo.parent().unwrap(), &args, false)
+        .output()
+        .expect("run aida");
+    assert!(fixed.status.success(), "{}", text(&fixed));
     assert!(text(&fixed).contains("`pre-commit`"), "{}", text(&fixed));
     let refreshed = std::fs::read_to_string(&hook).unwrap();
     assert!(!refreshed.contains("echo drifted"), "{refreshed}");

@@ -871,6 +871,51 @@ mod task1503_tests {
     }
 }
 
+/// `aida scaffold upgrade --only git-hooks`: back up and replace only the
+/// stale AIDA-generated git hooks (the ones a store write refuses).
+// trace:BUG-1977 | ai:claude
+pub(crate) fn run_scaffold_upgrade_git_hooks(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> Result<()> {
+    let report = aida_core::git_ops::refresh_stale_aida_hooks(project_root, dry_run)?;
+    if report.refreshed.is_empty() && report.manual.is_empty() {
+        println!("No stale AIDA git hooks: every AIDA-generated hook matches this build.");
+        return Ok(());
+    }
+    let verb = if dry_run { "Would replace" } else { "Replaced" };
+    for hook in &report.refreshed {
+        println!(
+            "{verb} the `{}` hook ({}); stale copy {} {}",
+            hook.name,
+            hook.path.display(),
+            if dry_run {
+                "would be saved to"
+            } else {
+                "saved to"
+            },
+            hook.backup.display()
+        );
+    }
+    if dry_run {
+        println!("Dry run: nothing was written.");
+    }
+    if !report.manual.is_empty() {
+        let list = report
+            .manual
+            .iter()
+            .map(|h| format!("  - `{}` ({}): {}", h.name, h.path.display(), h.reason))
+            .collect::<Vec<_>>()
+            .join("\n");
+        anyhow::bail!(
+            "{} stale AIDA-generated git hook(s) need manual action; store writes stay refused until \
+             they are fixed:\n{list}",
+            report.manual.len()
+        );
+    }
+    Ok(())
+}
+
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
 /// based on its `FileCategory` and current drift state, then either
 /// write or leave alone. Output is grouped by category with per-file
@@ -890,38 +935,6 @@ mod task1503_tests {
 /// drifted file regardless of category (parity with `apply --force`,
 /// just with cleaner output).
 ///
-/// `aida scaffold upgrade --only git-hooks`: back up and replace only the
-/// stale AIDA-generated git hooks (the ones a store write refuses).
-// trace:BUG-1977 | ai:claude
-pub(crate) fn run_scaffold_upgrade_git_hooks(
-    project_root: &std::path::Path,
-    dry_run: bool,
-) -> Result<()> {
-    let refreshed = aida_core::git_ops::refresh_stale_aida_hooks(project_root, dry_run)?;
-    if refreshed.is_empty() {
-        println!("No stale AIDA git hooks: every AIDA-generated hook matches this build.");
-        return Ok(());
-    }
-    let verb = if dry_run { "Would replace" } else { "Replaced" };
-    for hook in &refreshed {
-        println!(
-            "{verb} the `{}` hook ({}); stale copy {} {}",
-            hook.name,
-            hook.path.display(),
-            if dry_run {
-                "would be saved to"
-            } else {
-                "saved to"
-            },
-            hook.backup.display()
-        );
-    }
-    if dry_run {
-        println!("Dry run: nothing was written.");
-    }
-    Ok(())
-}
-
 // trace:FR-1-028 | ai:claude
 pub(crate) fn run_scaffold_upgrade(
     project_root: &std::path::Path,
