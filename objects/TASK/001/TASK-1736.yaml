@@ -8,13 +8,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T05:17:12.815181617Z
+modified_at: 2026-10-13T05:24:05.840263829Z
 req_type: Task
 tags:
 - authority
 - relay
 - seats
 - ux
+comments:
+- id: 01a133b7-cc50-7601-a7c4-e75854c098d8
+  author: joe
+  content: |-
+    Implementation (night relay, session 8):
+    - aida: new `aida role expiry [--warn-within 2h] [--refuse-within DUR]`. It reads the AIDA_SESSION_GRANT record directly, so an already-expired grant still reports. Effective expiry is min(grant, parent). Revoked and implementer grants are silent. Warn mode prints one line on stdout and exits 0. Refuse mode prints to stderr and exits 3.
+    - SessionStart hook (aida-session-context.sh) prints the warning line when the grant has under 2h left.
+    - Statusline: a held seat inside 2h shows `role:X (expires in 42m)` in the warning colour.
+    - Relay half: joemooney/aida-relay#87. Before each launch, relay.sh runs `aida role expiry --refuse-within 1h`. On exit 3 it halts (exit 3, handoff left in place for --use-existing, operator notified). Any other status launches as before.
+    - Tests: unit tests in seat_authority; e2e aida-cli/tests/task_1736_grant_expiry.rs (fixture grants at 30m / 45m / expired / 5h, plus the hook script); relay tests/shell/task1736_grant_expiry.sh (5 cases).
+  created_at: 2026-10-13T05:24:05.840263829Z
+  modified_at: 2026-10-13T05:24:05.840263829Z
+  session_id: c87057ab-8a72-4c08-8b34-355f7148a989
 history:
 - id: 01a13351-a592-7cd0-af53-f8cf8dfb943d
   author: joe
