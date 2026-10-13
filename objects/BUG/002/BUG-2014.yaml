@@ -1,0 +1,35 @@
+id: 01a135f1-a8dc-7553-8304-158f744f00ad
+spec_id: BUG-2014
+agreed_id: BUG-2014
+title: A long-running seat gets no warning when its grant nears expiry mid-session; it learns only when an advisor-gated command refuses
+description: |-
+  Observed 2026-10-13. The advisor seat session 6fd5497b ran unattended overnight. Its grant expired at 07:52 local with no warning in the session. The next advisor-gated actions (review record for BUG-1972 at 07:53; TASK-1740 approval) failed or landed as drafts, and the session only learned the grant had expired after the fact.
+
+  TASK-1736 (#2588) added the warning, but it reaches a session only at SessionStart (aida-session-context.sh runs `aida role expiry --warn-within 2h`) and in the statusline. Neither helps a headless or relay seat: SessionStart fires once, often more than 2h before expiry, and a headless agent never sees the statusline. An unattended seat issues few or no user prompts, so a UserPromptSubmit-only notice would also miss it.
+
+  ## Acceptance
+  - A seat session whose grant comes within the warning window (2h) mid-session gets the expiry warning injected into its context once per threshold crossing (e.g. 2h, 30m, expired). It is not repeated on every call.
+  - The notice fires without any new user prompt: the delivery path covers tool-call-only sessions (e.g. a PreToolUse/PostToolUse hook, or the mailbox notice path, rate-limited).
+  - After expiry, the notice says the grant HAS expired and names the renewal command, before the agent attempts an advisor-gated command.
+  - The check costs no store load (it reuses session_grant_lookup / grant_check; see BUG-2011 for keeping those consistent).
+  - A test simulates a grant crossing the 2h and expired thresholds during a session and asserts exactly one notice per crossing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T15:46:32.284314663Z
+modified_at: 2026-10-13T15:46:32.284314663Z
+req_type: Bug
+tags:
+- authority
+- hooks
+- roles
+- seats
+filed_at:
+  code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: de277165-066b-453d-b88f-f2ec1f31d61d
