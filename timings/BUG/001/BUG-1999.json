@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1999",
+  "publishes": [
+    {
+      "at": "2026-10-13T23:51:58.765646346Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T12:24:20.149653909Z",
+      "spec": "BUG-1999",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T14:07:35.491434202Z",
+      "spec": "BUG-1999",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T15:59:33.117251042Z",
+      "spec": "BUG-1999",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2595,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "56d9c175259de67c66fafbe508d974dfbf8f0e0d"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:59:33.823239631Z",
+      "spec": "BUG-1999",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Old-format normalization parks both records without the .swapping marker; a crash inside that window re-creates the misattribution this bug fixes",
+        "recovery_hint": "address the review findings, move BUG-1999 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T16:31:48.683337012Z",
+      "spec": "BUG-1999",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1999",
+        "branch": "bug-1999-work",
+        "first_seen": "2026-10-13T16:31:48.683271305+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T23:51:58.750213958Z",
+      "spec": "BUG-1999",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7230cf3f4921d842c101b110218bbef2098758be",
+        "pr": 2595,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
