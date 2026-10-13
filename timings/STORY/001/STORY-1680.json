@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1680",
+  "publishes": [
+    {
+      "at": "2026-10-13T02:54:55.652326924Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T04:14:56.202292796Z",
+      "spec": "STORY-1680",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T08:31:56.080279675Z",
+      "spec": "STORY-1680",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T08:48:18.310581454Z",
+      "spec": "STORY-1680",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1680",
+        "branch": "story-1680-work",
+        "first_seen": "2026-10-12T08:48:18.300734453+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-12T09:48:56.261120724Z",
+      "spec": "STORY-1680",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2553,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "10c654c568666e15d64de62622e19f87c5a5bccf"
+      }
+    },
+    {
+      "ts": "2026-10-12T09:48:57.638270336Z",
+      "spec": "STORY-1680",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "AC1-4 met; M1: subagent-worked orphans (possibly_subagent) are listed as idle and dropped from the orphan channel",
+        "recovery_hint": "address the review findings, move STORY-1680 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-12T16:29:14.597439352Z",
+      "spec": "STORY-1680",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "f84e9f6cda953a91d4d72ef6149ed44dfdee5e2c"
+      }
+    },
+    {
+      "ts": "2026-10-13T02:54:55.638933739Z",
+      "spec": "STORY-1680",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1359b463e9209d1987030ee94b5590b7b8ac7d62",
+        "pr": 2553,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
