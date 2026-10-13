@@ -1,7 +1,7 @@
 id: 01a12e03-fe8d-7ca3-9d01-6e4dcde8216f
 spec_id: BUG-1983
 agreed_id: BUG-1983
-title: aida edit Draft->Approved ignores the advisor seat grant that aida review record honours
+title: Refusals name why a seat grant was rejected (expired, revoked, ...) instead of 'No active role'; review record now refuses a rejected grant
 description: |
   Observed 2026-10-11 19:45 in the advisor seat session (Claude Code, headless Bash tool, no TTY).
 
@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T04:24:15.069577217Z
+modified_at: 2026-10-13T04:31:28.087337364Z
 req_type: Bug
 tags:
 - authority
