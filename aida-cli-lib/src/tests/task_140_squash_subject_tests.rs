@@ -174,6 +174,8 @@ fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
         "must pass explicit subject when ids are withheld to prevent gh PR-title fallback"
     );
 
+    drop(_path);
+
     // Also test PR-body non-completing marker with no_complete = false:
     let bin2 = tempfile::tempdir().unwrap();
     crate::test_exec::write_executable(
