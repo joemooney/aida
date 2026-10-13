@@ -13,12 +13,12 @@ description: |
   2. The queue-work boundary announcement and the contained flags derive from the same root (either build flags with `claude_contained_flags_for(&lease.worktree_path)` or announce from `headless_worktree_root()`). Unit test: for a symlinked worktree path, announced roots equal the roots in the generated settings.
   3. `headless_worktree_root()` (or a contained-flags variant of it) yields no write roots when no git root is found, instead of falling back to cwd. Unit test outside a git repo.
   4. `spawn_claude_headless_resume` builds its contained flags from its `cwd` worktree argument (`claude_contained_flags_for(cwd)`), not the process cwd. Unit test on the resume argv.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-13T14:19:55.559554459Z
+modified_at: 2026-10-13T15:44:13.723458560Z
 req_type: Bug
 tags:
 - contained
@@ -64,6 +64,11 @@ comments:
   created_at: 2026-10-13T14:19:55.559554459Z
   modified_at: 2026-10-13T14:19:55.559554459Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a135ef-8b9b-75e3-a95c-f30ab0cedd21
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Fail-closed code is correct, but the item-3 test never calls the production function: reverting contained_session_write_roots() to the old cwd/HOME fallback passes all 22 tests (mutation M2).. No triage reason was given.'
+  created_at: 2026-10-13T15:44:13.723449988Z
+  modified_at: 2026-10-13T15:44:13.723449988Z
 history:
 - id: 01a1309d-255a-7633-b5c3-1f2c032437b4
   author: joe
@@ -86,6 +91,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a135ef-8b9b-75e3-a95c-f2f6910c91b1
+  author: joe
+  timestamp: 2026-10-13T15:44:13.723442940Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -94,11 +106,3 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fail-closed code is correct, but the item-3 test never calls the production function: reverting contained_session_write_roots() to the old cwd/HOME fallback passes all 22 tests (mutation M2).'
-  recovery_hint: address the review findings, move BUG-1971 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-13T04:10:16.688318407Z
