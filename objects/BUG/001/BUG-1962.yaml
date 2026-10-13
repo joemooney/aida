@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-13T18:50:22.302318672Z
+modified_at: 2026-10-13T18:58:05.388873838Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -60,6 +60,11 @@ comments:
       - Test verifying ended session behavior: covered by new unit test.
   created_at: 2026-10-13T18:50:22.302318672Z
   modified_at: 2026-10-13T18:50:22.302318672Z
+- id: 01a136a1-07cc-7bd3-9b4b-d5911d7b5549
+  author: joe
+  content: 'FACTORY DRAFT: PR #2598 at 66e02b4ec3423b86d203b653dbc88817a11a3d6c'
+  created_at: 2026-10-13T18:58:05.388873838Z
+  modified_at: 2026-10-13T18:58:05.388873838Z
 history:
 - id: 01a130a2-f7a9-70e1-9957-c76fdf0ec9ad
   author: joe
