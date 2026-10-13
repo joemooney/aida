@@ -22,12 +22,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:37:25.038401003Z
-modified_at: 2026-10-13T12:37:25.038401003Z
+modified_at: 2026-10-13T12:44:39.823940662Z
 req_type: Story
 tags:
 - capacity
 - from:aida-host
+- operator-held
 - shift
+deferred: true
+deferred_at: 2026-10-13T12:44:39.823940662Z
+deferred_until: when the night shift is enabled for a clone Joe actively drains, or aida-host STORY-50 ships
+deferred_reason: not running aida shift yet
 filed_at:
   code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
   branch: main
