@@ -12,12 +12,12 @@ description: |
   1. adr9_one_engine_guardrail.rs no longer exempts upgrade_release.rs wholesale: it either skips `#[cfg(test)]`/`#[cfg(all(test, ...))]` mod bodies when counting production calls, or pins an expected production-call count per allowlisted file (upgrade_release.rs = 0).
   2. Negative test: feeding the counter a source string with an engine call outside a `#[cfg(test)]` mod in an allowlisted test-only file is reported as an offender; a call inside the test mod is not.
   3. The existing guard test still passes on the current tree.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T13:57:32.425082363Z
+modified_at: 2026-10-13T15:04:57.082534890Z
 req_type: Task
 tags:
 - adr-9
@@ -89,6 +89,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a135cb-95f6-7a33-8aa1-946e4b8a1aa1
+  author: aida-auto-bump
+  timestamp: 2026-10-13T15:04:57.078969937Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a135cb-95fa-74c3-9900-26191ec88550
+  timestamp: 2026-10-13T15:04:57.082525321Z
+  agent: implementer
+  commit_sha: 01dc156f6efc02e96962480f09c6d28a54696743
+  summary: Guard now AST-scans upgrade_release.rs, skipping only cfg(test)/cfg(all(test,..)) mods; mutations confirm production calls before/after test mods fail, test-only calls pass; syn/proc-macro2 are dev-deps reusing locked versions (no new crates).
+  review_verdict: approved
 filed_at:
   code_sha: 5ca72fd2b9194f0b7dceef38d26762defbb87990
   branch: main
@@ -97,3 +111,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T15:04:57.078964661Z
+  completion_sha: 01dc156f6efc02e96962480f09c6d28a54696743
