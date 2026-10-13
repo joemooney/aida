@@ -943,6 +943,11 @@ mod task_1171_eval_channel_tests;
 #[path = "tests/bug_0445_init_side_channel_tests.rs"]
 mod bug_0445_init_side_channel_tests;
 
+// trace:BUG-2000 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2000_zsh_local_tests.rs"]
+mod bug_2000_zsh_local_tests;
+
 /// BUG-1952: the root `session end` resolves every runtime-state path against.
 /// A main checkout (real `.git` directory) is returned unchanged. From a linked
 /// worktree, git's own registry names the main checkout (via the shared
