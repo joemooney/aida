@@ -7618,6 +7618,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
         std::fs::write(
             project.join(".aida/config.toml"),
             "store_path = \".aida-store\"\n",
@@ -7703,6 +7704,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
         std::fs::write(
             project.join(".aida/config.toml"),
             "store_path = \".aida-store\"\n",
