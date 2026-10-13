@@ -1,0 +1,30 @@
+id: 01a137ad-021d-7903-b38b-dc73ac5d6e60
+spec_id: TASK-1-292
+title: bug_2005_wrapper_staleness_tests.rs:18 provenance doc names source commit fba16…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2005, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  bug_2005_wrapper_staleness_tests.rs:18 provenance doc names source commit fba16d9b9c9f7a8342416bc28ca1e8ba846a84eb, which does not exist in the repo; 3618fe739b^ is 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005. The sha256 on line 20 (5344afd3...) does match the fixture.
+
+  PR: #2592
+  Reviewed sha: 0c340ed6876df05b2d31e89a6cf6ee6b2b5cd9e4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:50:47.581885678Z
+modified_at: 2026-10-13T23:50:47.581885678Z
+req_type: Task
+tags:
+- carried-from:BUG-2005
+- finding-hash:fe0dd28e
+- from-review:PR-2592
+- kind:carried-forward
+filed_at:
+  code_sha: 1287c25b64d6447aedcb576bfaddb531da433999
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
