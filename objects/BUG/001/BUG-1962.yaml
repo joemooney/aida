@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-13T18:36:50.317214330Z
+modified_at: 2026-10-13T18:50:22.302318672Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -35,6 +35,31 @@ comments:
   created_at: 2026-10-12T15:02:28.336730698Z
   modified_at: 2026-10-12T15:02:28.336730698Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a13699-f6de-70b2-860c-5135c5e06f58
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    - Approach: Per operator decision 2026-10-12 (Option A, wording only), rename still_active to still_tripped and add transcript last-write age to session findings.
+    - Files & functions to change:
+      1. aida-cli-lib/src/runaway_seats.rs:
+         - Rename Coverage.still_active to Coverage.still_tripped.
+         - Add last_written_at to SessionAgg (with serde default and fallback to latest minute in s.minutes).
+         - Update fold_line and scan_file to record last_written_at from line timestamps or file mtime.
+         - In judge(), format transcript last-write age relative to now (e.g., 'transcript last written 4h ago') and include it in each session finding's description.
+         - In render_coverage(), reference c.still_tripped.
+         - Update all unit tests referencing still_active to still_tripped.
+      2. aida-cli-lib/src/doctor_cmd.rs:
+         - Rename c.still_active to c.still_tripped and table name runaway_seats_still_active to runaway_seats_still_tripped.
+    - Tests to add:
+      - ended_or_idle_session_reports_transcript_last_write_age_and_still_tripped in runaway_seats.rs, verifying that an ended session from 4 hours ago includes 'transcript last written 4h ago' in findings and populates still_tripped.
+    - Risks:
+      - Backwards-compatibility of persisted state: SessionAgg.last_written_at uses serde default and falls back gracefully to s.minutes.
+    - Acceptance mapping:
+      - still_active renamed to still_tripped: verified by git grep and Coverage field rename.
+      - Transcript last-write age included: verified in DoctorFinding summary.
+      - Test verifying ended session behavior: covered by new unit test.
+  created_at: 2026-10-13T18:50:22.302318672Z
+  modified_at: 2026-10-13T18:50:22.302318672Z
 history:
 - id: 01a130a2-f7a9-70e1-9957-c76fdf0ec9ad
   author: joe
