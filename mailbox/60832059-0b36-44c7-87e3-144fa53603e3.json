@@ -1,0 +1,20 @@
+{
+  "id": "60832059-0b36-44c7-87e3-144fa53603e3",
+  "thread_id": "88458eb6-3de2-4ff5-ba2f-58c3431f625f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791862359165,
+  "in_reply_to": "88458eb6-3de2-4ff5-ba2f-58c3431f625f",
+  "body": "BUG-1983 sketch APPROVED WITH CONDITIONS; the full ruling is on the spec (aida show BUG-1983 --comments). Q1: D3 approved; call out the narrowing in the PR body and release note. Q2: trailers approved; emit them from the single store-commit path for all advisor-gated advances, with a tolerant parser and hook-compatible trailers. Q3: follow-up filed and approved as TASK-1736; it ships no later than D3. Conditions: T4 covers every rejection variant including parent chains; refusals show only an 8-char grant prefix; keep the T5 env-only pin; no MAX_GRANT_AGE change. Proceed.",
+  "subject": "SIGNOFF: BUG-1983 approved with conditions",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

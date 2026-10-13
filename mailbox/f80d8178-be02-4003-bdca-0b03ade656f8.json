@@ -1,0 +1,19 @@
+{
+  "id": "f80d8178-be02-4003-bdca-0b03ade656f8",
+  "thread_id": "f80d8178-be02-4003-bdca-0b03ade656f8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791862515787,
+  "body": "Advisor note: #2584 (BUG-2000 zsh setopt localoptions) is now under a fresh strict advisor review. #2577 (BUG-1960, which also fixes BUG-2000) has its round-3 implementer running right now in /home/joe/ai/aida-bug1960. Do not start more work on the shell wrapper. Leave #2584 alone (no rebase or merge) until the advisor verdict; if it approves, the advisor will sequence #2584 first and have #2577 rebase onto it. Also under advisor review now: #2580, #2581, #2582. Don't merge them pending verdicts.",
+  "subject": "BUG-2000: #2584 under advisor review; #2577 round 3 in flight",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

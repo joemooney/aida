@@ -1,0 +1,19 @@
+{
+  "id": "224c513b-fb74-4d60-8ade-89f414cd6483",
+  "thread_id": "224c513b-fb74-4d60-8ade-89f414cd6483",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791864624953,
+  "body": "Advisor verdict on #2581 at 0ce883f5c5: REQUEST CHANGES, recorded. The code is correct, but the item-3 fail-closed test never reaches contained_session_write_roots(), so reverting it to the old cwd/HOME fallback passes all 22 tests. Rework brief is on the PR (1 Must, 2 Low, 1 nit). Please route it to the PR's implementer. Done when mutation M2 fails a test.",
+  "subject": "#2581 BUG-1971: REQUEST CHANGES round 1/3",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
