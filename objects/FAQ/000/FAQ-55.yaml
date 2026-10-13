@@ -1,0 +1,47 @@
+id: 01a133e7-ce89-71d0-848d-bdf59debd922
+spec_id: FAQ-55
+agreed_id: FAQ-55
+title: 'How do I see where a spec''s time goes: working vs waiting (cycle time)?'
+description: |
+  **Run `aida metrics cycle-time --since 30d`. It splits elapsed time into work (implementer, CI, review, merge) and waiting (queued, awaiting approval, parked, awaiting merge), with p50/p90 per activity and the slowest specs.**
+
+  ## Why
+  "Specs take too long" usually means waiting, not working. On 2026-10-12 the 30-day view showed work at under 1% of tracked time: implementer p50 about 7 min, CI p50 about 8 min. The waits were much larger: queued p50 2.7h and p90 49h, awaiting approval p90 23h. Speeding up the agents would hardly move that; shortening queues and approval would.
+
+  ## How
+  ```bash
+  aida metrics cycle-time --since 30d              # whole window
+  aida metrics cycle-time --since 30d --type bug   # one type
+  aida metrics cycle-time --slowest 10             # the long tail
+  aida history <ID> --timeline                     # one spec's spans
+  ```
+  Output can be human, TOON or JSON. It works offline, because it rebuilds timelines from store transitions plus this machine's drain feed.
+
+  ## Caveat
+  Work done on another machine, or outside a drain or relay, has no local drain events. It shows up as `unexplained` or under `excluded` with a reason, so check `included` against `completed_in_window` before trusting the split.
+
+  ## See also
+  STORY-1479, EPIC-73, ADR-64, DOC-7, STORY-1684
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T06:16:32.137694465Z
+modified_at: 2026-10-13T06:16:32.137694465Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:cli
+- topic:drain
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T06:16:32.137724711Z
