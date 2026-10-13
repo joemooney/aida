@@ -3,12 +3,12 @@ spec_id: TASK-1736
 agreed_id: TASK-1736
 title: Warn before a seat grant expires; relay refuses to launch a seat whose grant has under 1h left
 description: 'Follow-up from the BUG-1983 sketch (D5). MAX_GRANT_AGE is 24h, and relay seats routinely outlive it. BUG-1983 makes review record refuse on an expired grant, so long relay seats will hit a hard stop mid-run. Scope: (1) the SessionStart hook and the statusline warn when the active grant expires in under 2h, naming the expiry time and the re-enter command; (2) the relay launcher refuses to start a seat session whose grant has under 1h left, telling the operator to re-enter first. Done when: both behaviours are tested with a fixture grant near expiry, and an expired grant never surfaces first as a refusal in the middle of a relay run. Should ship no later than BUG-1983''s D3.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T03:32:31.250441115Z
+modified_at: 2026-10-13T05:17:12.815181617Z
 req_type: Task
 tags:
 - authority
@@ -23,6 +23,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a133b1-7eef-7383-838a-85fb4c258978
+  author: aida-session-start
+  timestamp: 2026-10-13T05:17:12.815181308Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
   branch: main
