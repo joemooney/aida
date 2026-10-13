@@ -2972,8 +2972,17 @@ pub(crate) fn handle_review_record_at(
     let recorded_by = review_recorded_by(&project_root);
     #[cfg(not(test))]
     if recorded_by == "aida review record (operator)" {
-        crate::seat_authority::require_direct_human()
-            .context("aida review record attribution fallback")?;
+        // BUG-1978: the refusal decision is unchanged; only its wording now
+        // distinguishes a granted agent seat that never identified itself.
+        // trace:BUG-1978 | ai:claude
+        if let Err(err) = crate::seat_authority::require_direct_human() {
+            let grant_seat =
+                crate::seat_authority::current_grant(&project_root).map(|grant| grant.seat);
+            return Err(review_record_attribution_refusal(
+                err,
+                grant_seat.as_deref(),
+            ));
+        }
     }
     if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
@@ -3405,6 +3414,71 @@ pub(crate) fn review_recorded_by_from(
         (Some(name), None) => format!("{name} ({role_disp} seat)"),
         (None, Some(kind)) => format!("{kind} {role_disp} seat"),
         (None, None) => "aida review record (operator)".to_string(),
+    }
+}
+
+/// Error for `aida review record` when no agent identity is set and the
+/// direct-human check refused. With a valid seat grant, the caller is an
+/// agent seat that has not identified itself, so point at the identity
+/// variables rather than `aida role enter` (which it cannot use anyway).
+/// Without a grant, keep the existing role-enter guidance.
+// trace:BUG-1978 | ai:claude
+pub(crate) fn review_record_attribution_refusal(
+    err: anyhow::Error,
+    grant_seat: Option<&str>,
+) -> anyhow::Error {
+    match grant_seat {
+        Some(seat) => anyhow::anyhow!(
+            "aida review record attribution fallback: a valid {seat} seat grant was found, \
+             but no agent identity is set; export AIDA_AGENT_TYPE (for example claude) and/or \
+             AIDA_AGENT_NAME in this session, then re-run the review record command"
+        ),
+        None => err.context("aida review record attribution fallback"),
+    }
+}
+
+#[cfg(test)]
+mod bug_1978_attribution_message_tests {
+    use super::*;
+
+    fn direct_human_refusal() -> anyhow::Error {
+        anyhow::anyhow!(
+            "role grants require a human at an interactive TTY; run `aida role enter` from your terminal"
+        )
+    }
+
+    #[test]
+    fn grant_without_agent_identity_names_the_identity_variables() {
+        let msg = format!(
+            "{:#}",
+            review_record_attribution_refusal(direct_human_refusal(), Some("advisor"))
+        );
+        assert!(msg.contains("seat grant was found"), "{msg}");
+        assert!(msg.contains("no agent identity is set"), "{msg}");
+        assert!(msg.contains("AIDA_AGENT_TYPE"), "{msg}");
+        assert!(msg.contains("AIDA_AGENT_NAME"), "{msg}");
+        assert!(!msg.contains("aida role enter"), "{msg}");
+        // Agent output mode turns the first backticked `aida ...` command in
+        // an error into a `help:` retry line; re-running the same command
+        // without an identity would fail the same way, so none may be offered.
+        assert_eq!(crate::extract_aida_suggestion(&msg), None, "{msg}");
+        assert!(
+            !msg.contains("BUG-"),
+            "internal IDs must stay out of user text: {msg}"
+        );
+    }
+
+    #[test]
+    fn no_grant_keeps_the_existing_role_enter_guidance() {
+        let msg = format!(
+            "{:#}",
+            review_record_attribution_refusal(direct_human_refusal(), None)
+        );
+        assert_eq!(
+            msg,
+            "aida review record attribution fallback: role grants require a human at an \
+             interactive TTY; run `aida role enter` from your terminal"
+        );
     }
 }
 
