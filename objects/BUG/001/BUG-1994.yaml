@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T18:35:37.775524925Z
+modified_at: 2026-10-13T19:38:06.257674768Z
 req_type: Bug
 tags:
 - plan:night
@@ -89,6 +89,11 @@ comments:
   content: Commit cdaea00951 references this requirement
   created_at: 2026-10-13T18:35:37.775524925Z
   modified_at: 2026-10-13T18:35:37.775524925Z
+- id: 01a136c5-aa31-7731-ba66-59a28df88c12
+  author: ai:codex:joe
+  content: 'FACTORY READY: PR #2597 green at ddc04b1c28126054645a04bf070d16fd6d1ac41e. Completed full Build https://github.com/joemooney/aida/actions/runs/38452585111 . All 15 stress rounds passed in normal workspace tests. C3 update: retained every selected member, added two-minute per-round watchdog diagnostics and a 45-minute Build cap after the old 25-minute cap was exhausted; all 27 fast gates passed before push. C2 remains explicitly unsatisfied by PATH isolation and split into BUG-2118. Draft retained; independent review and merge remain with relay.'
+  created_at: 2026-10-13T19:38:06.257674768Z
+  modified_at: 2026-10-13T19:38:06.257674768Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
