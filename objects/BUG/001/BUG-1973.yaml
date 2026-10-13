@@ -3,12 +3,12 @@ spec_id: BUG-1973
 agreed_id: BUG-1973
 title: Deprecation hint for 'aida usage --unused' tells users to run bare 'aida usage unused', which fails without a duration
 description: 'Found in the advisor review of PR #2532 (BUG-1949). aida-cli-lib/src/lib_part1.rs ~997 (may have moved in the lib split; rg ''usage unused'') prints a hint to run ''aida usage unused'', but DURATION is required, so the suggested command errors. Fix: hint ''aida usage unused <DURATION>'' (e.g. 30d). Also extend the BUG-1949 docs drift check to flag citations missing a required positional argument, or record why it doesn''t. Acceptance: a test asserts the hint text includes a duration placeholder.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:20:16.023382481Z
-modified_at: 2026-10-12T20:22:08.809429207Z
+modified_at: 2026-10-13T03:05:45.202152592Z
 req_type: Bug
 tags:
 - docs
@@ -104,6 +104,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13339-23e4-7671-80f1-4131e0207cb6
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:05:45.188584372Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13339-23f2-7b90-a675-a9d91215943a
+  timestamp: 2026-10-13T03:05:45.202119219Z
+  agent: implementer
+  commit_sha: 40de62f54e5e2ecd7dd2b47cafc73000d1883990
+  summary: Completed via merge 40de62f5
+  review_verdict: approved
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -112,3 +126,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:05:45.188569046Z
+  completion_sha: 40de62f54e5e2ecd7dd2b47cafc73000d1883990
