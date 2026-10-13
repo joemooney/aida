@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-13T20:07:57.054192771Z
+modified_at: 2026-10-13T20:20:28.693791493Z
 req_type: Story
 tags:
 - history
@@ -143,6 +143,11 @@ comments:
   content: 'FACTORY PLAN (codex) continuation: implement signed option (a) only. Focused history_indexer.rs TickOutcome and inline cache refresh --history --if-behind; early history dispatch avoids requirements-cache construction. IndexLock only, existing-file open only, cooperative runtime deadline and remaining-lag report, Busy exits zero, Disabled does no path/store work. Minimal HistoryCache background entry calls catch_up directly (no stall increment/refusal) and retained chunks clear the existing counter. Register the command for maintenance ticks, not per-prompt hooks. Tests named in signed plan plus deadline, CLI dispatch and schedule mapping; C1-C7 table in PR. No detached spawn or write-path hook. Rust execution on GitHub CI only; make check-ci-fast before push.'
   created_at: 2026-10-13T20:07:57.054192771Z
   modified_at: 2026-10-13T20:07:57.054192771Z
+- id: 01a136ec-7595-70a0-8f44-431359540f91
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2601 at 7e7f920b380d539028f29d0166463c16c745efe3. All 27 make check-ci-fast gates passed; author-controlled self-check found no blockers. Signed option (a) only, with scaffold and repository 15-minute jobs and actual tick-core regression. C1-C7 table in PR. Runtime is cooperative at existing chunk boundaries. The index job finishes a pinned head at zero lag; scheduler ledger bookkeeping afterwards creates one further commit, which the integration test proves stays within the unchanged foreground cap. No detached commit spawn. GitHub CI pending.'
+  created_at: 2026-10-13T20:20:28.693791493Z
+  modified_at: 2026-10-13T20:20:28.693791493Z
 history:
 - id: 01a12a01-9e8b-7502-ae6d-15a3366a2b21
   author: joe
