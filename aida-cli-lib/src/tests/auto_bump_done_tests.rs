@@ -3306,8 +3306,10 @@ fn queue_advance_close_dispatch_without_shipped_commit_warns() {
     backend.add_requirement(req).unwrap();
     drop(backend);
 
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
-    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_SESSION_ROLE", "advisor"),
+        ("AIDA_TEST_AUTO_CLOSE", "1"),
+    ]);
     crate::shipped_linkage::take_last_warning();
 
     crate::queue_cmd::advance_dispatch(
@@ -3363,8 +3365,10 @@ fn queue_advance_close_dispatch_opted_out_does_not_warn() {
     backend.add_requirement(req).unwrap();
     drop(backend);
 
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
-    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_SESSION_ROLE", "advisor"),
+        ("AIDA_TEST_AUTO_CLOSE", "1"),
+    ]);
     crate::shipped_linkage::take_last_warning();
 
     crate::queue_cmd::advance_dispatch(
@@ -3422,8 +3426,10 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
         &["commit", "-m", "feat: shipped work (TASK-19963) (#42)"],
     );
 
-    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
-    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_SESSION_ROLE", "advisor"),
+        ("AIDA_TEST_AUTO_CLOSE", "1"),
+    ]);
     crate::shipped_linkage::take_last_warning();
 
     crate::queue_cmd::advance_dispatch(
