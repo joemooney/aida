@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T08:13:53.118016370Z
-modified_at: 2026-10-13T08:13:53.118016370Z
+modified_at: 2026-10-13T18:10:36.358899270Z
 req_type: Task
 tags:
 - carried-from:TASK-1728
 - finding-hash:57def9ff
 - from-review:PR-2591
 - kind:carried-forward
+comments:
+- id: 01a13675-8ec6-7873-bafd-b7cf74ab3b77
+  author: joe
+  content: 'Rejected: as specified; same trust model as MERGE_HEAD. Forging the ref needs local write, which can already --no-verify.'
+  created_at: 2026-10-13T18:10:36.358899270Z
+  modified_at: 2026-10-13T18:10:36.358899270Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
   branch: main
