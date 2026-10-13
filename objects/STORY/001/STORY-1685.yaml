@@ -1,0 +1,34 @@
+id: 01a133e8-9c30-7b71-9ad7-b1c046034bbf
+spec_id: STORY-1685
+agreed_id: STORY-1685
+title: 'Relay handoff conditionals must be checkable: vague ''if X stalls, do Y'' made a relay open a parallel PR'
+description: |
+  A relay acts on the literal text of its handoff. On 2026-10-12 a handoff said "if #2577 stalls, ship the zsh part alone". The relay judged that it had stalled and opened a second PR (#2584) while #2577 was still active, with an implementer working round 3. The outcome was acceptable (#2584 was a minimal security fix), but that was luck: "stalls" had no checkable definition.
+
+  ## Want
+  Conditional instructions in a handoff ("if X stalls / fails / is blocked, do Y") need a condition the relay can check. Examples: "no push to PR #N for 2h", "PR #N has REQUEST CHANGES at round 3", "lease L expired". Otherwise the relay should treat the condition as false and record a question for the operator instead of acting.
+
+  ## Options (to sketch)
+  - aida-handoff template guidance: conditional next steps must name an observable test.
+  - Relay-side lint: flag vague conditionals in a handoff ("stalls", "if needed", "if it looks") and ask instead of acting.
+
+  ## See also
+  DOC-7 (Lessons), #2577, #2584
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T06:17:24.784149600Z
+modified_at: 2026-10-13T06:17:24.784149600Z
+req_type: Story
+tags:
+- handoff
+- relay
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
