@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T08:38:24.217096943Z
-modified_at: 2026-10-13T02:58:17.532380385Z
+modified_at: 2026-10-13T02:58:52.048570726Z
 req_type: Bug
 tags:
 - ci
@@ -72,6 +72,12 @@ comments:
   created_at: 2026-10-12T18:30:59.080698878Z
   modified_at: 2026-10-12T18:30:59.080698878Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13332-d610-7c31-a1ba-25d4afbab1e6
+  author: joe
+  content: 'RE-SCOPED at merge (operator + advisor, 2026-10-12): #2560 (4f2af68420) completes this spec as defensive hardening only; the CI root cause is unconfirmed. Acceptance items (a) not met, (b) partial, (c) not shown — all carried by BUG-1994. Not re-opened, to keep the merge-time completion intact.'
+  created_at: 2026-10-13T02:58:52.048570726Z
+  modified_at: 2026-10-13T02:58:52.048570726Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309c-bf9a-73b3-8364-26cfc8adcdf0
   author: joe
