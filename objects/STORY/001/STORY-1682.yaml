@@ -1,0 +1,35 @@
+id: 01a13382-22a9-79e3-b55b-b1c37332f346
+spec_id: STORY-1682
+agreed_id: STORY-1682
+title: 'Keep the UI crates splittable: enforce the core-only boundary, path-filter UI CI, version the server API'
+description: |-
+  Goal: keep a future split of the UIs (aida-tui, aida-server, aida-web-react) into their own repos a mechanical, roughly one-day job, and cut CI cost now, without deciding on the split today (operator discussion 2026-10-12).
+
+  Facts today: aida-tui and aida-server depend only on aida-core, never on aida-cli-lib. The web UI talks to aida-server and gets TypeScript types from aida-generate-types. All UI code is about 60k lines (TUI 29k Rust, server 14k Rust, web 18k TS), under 10% of the workspace. ci.yml has no path filters, so every CLI change rebuilds and tests the UIs.
+
+  Acceptance:
+  1. Boundary guard: a CI check (run by make check-ci-fast) fails if aida-tui or aida-server gains any dependency, direct or transitive, on aida-cli-lib. Show it fails on a deliberate violation.
+  2. Path-filtered UI CI: UI build and test jobs run only when UI code, aida-core, aida-server's API or the shared types change. Required checks still report on every PR (a skipped job counts as passing) so branch protection and merge-hold-gate keep working. Show a CLI-only PR skipping the UI jobs.
+  3. Versioned server API: the aida-server HTTP/JSON schema carries a version, and a check fails when the generated TypeScript types drift from the schema.
+
+  Split-readiness signals to revisit (any two make a split worth doing): the UIs release on a different rhythm; core+UI changes in the same PR happen less than once a month; UI CI time noticeably slows CLI merges; a contributor wants to work on a UI without the full workspace.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:25:29.001367290Z
+modified_at: 2026-10-13T04:25:29.001367290Z
+req_type: Story
+tags:
+- boundaries
+- ci
+- repo-structure
+- ui
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
