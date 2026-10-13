@@ -21,12 +21,12 @@ description: |
   - `make sync-templates` and `make check-templates` run; the template master is the only file edited.
 
   See also: BUG-629, aida-relay TASK-56.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-13T18:10:01.160951997Z
+modified_at: 2026-10-13T18:10:02.115755049Z
 req_type: Bug
 tags:
 - cross-repo
@@ -39,6 +39,14 @@ comments:
   created_at: 2026-10-13T18:10:01.160951997Z
   modified_at: 2026-10-13T18:10:01.160951997Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+history:
+- id: 01a13675-0903-7f62-b1d1-00a3671129af
+  author: joe
+  timestamp: 2026-10-13T18:10:02.115749675Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
   branch: main
