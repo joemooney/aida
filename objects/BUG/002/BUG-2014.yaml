@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-13T23:16:51.220508012Z
+modified_at: 2026-10-13T23:19:48.281137088Z
 req_type: Bug
 tags:
 - authority
@@ -61,6 +61,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2611 https://github.com/joemooney/aida/pull/2611 at 643f069303c718e0de1a34214f069abb08eb5998, stacked on #2604 bug-2011-work. C1-C6 evidence table and Claude Code 2.1.296 live model-visible PreToolUse probe in body. All 28 full make check-ci-fast gates passed (authorized Cargo checks included); Python6 locally; Rust tests await GitHub Build. Author-controlled self-check3 rounds, no remaining demonstrated findings; no approval authority. Draft TASK-1744 filed/linked for C5 client follow-up. Shared validator retains only its existing local team-roster metadata lookup; no graph/store/cache initialization.'
   created_at: 2026-10-13T23:16:51.220508012Z
   modified_at: 2026-10-13T23:16:51.220508012Z
+- id: 01a13790-a339-71e3-bacd-d8fe40cd1a49
+  author: ai:codex:joe
+  content: 'FACTORY CI: #2611 main-targeted to schedule Build because ci.yml excludes dependency-base PRs. Code still stacked on #2604; main comparison includes dependency until it merges, isolated diff and merge-first prerequisite explicit in body. Base edit alone did not trigger; draft close/reopen triggered Build run38483452497 at 643f069303c718e0de1a34214f069abb08eb5998. All28 prepush gates passed; final author-controlled self-check no findings. Waiting for completed Build before READY.'
+  created_at: 2026-10-13T23:19:48.281137088Z
+  modified_at: 2026-10-13T23:19:48.281137088Z
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
   author: joe
