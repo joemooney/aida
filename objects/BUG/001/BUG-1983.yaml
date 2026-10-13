@@ -20,12 +20,12 @@ description: |
   - A forged or stale grant (unknown grant id, grant for another seat, or expired) is still refused, with the same error class as review record.
   - One shared helper decides "has advisor authority" for both `aida edit --status` promotion and `aida review record`, so they cannot drift again. A test covers both commands against the same grant fixture.
   - The error text names the grant it found and why it was rejected, instead of "No active role" when a grant is present.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T03:32:32.217696819Z
+modified_at: 2026-10-13T04:24:15.069577217Z
 req_type: Bug
 tags:
 - authority
@@ -125,6 +125,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13381-01dd-7161-9804-7f4c4d4d73ca
+  author: aida-session-start
+  timestamp: 2026-10-13T04:24:15.069576629Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
   branch: main
