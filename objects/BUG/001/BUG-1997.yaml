@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:43:32.219529137Z
-modified_at: 2026-10-13T21:40:10.661373523Z
+modified_at: 2026-10-13T21:51:09.182029051Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -46,6 +46,11 @@ comments:
       4. Built only on GitHub CI; not compiled locally.
   created_at: 2026-10-13T21:40:10.661373523Z
   modified_at: 2026-10-13T21:40:10.661373523Z
+- id: 01a1373f-797e-7c30-b205-91b57de0267f
+  author: joe
+  content: 'FACTORY DRAFT: PR #2606 at e95e84f9ef1dca9be8f0884cf6f028ad7a7c3b9c'
+  created_at: 2026-10-13T21:51:09.182029051Z
+  modified_at: 2026-10-13T21:51:09.182029051Z
 history:
 - id: 01a13674-d447-75e0-a82e-e9bbe7bf07e1
   author: joe
