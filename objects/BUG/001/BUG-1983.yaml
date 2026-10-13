@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T13:53:24.233847845Z
+modified_at: 2026-10-13T15:28:01.681636792Z
 req_type: Bug
 tags:
 - authority
@@ -139,6 +139,39 @@ comments:
     4. The C3 pin `env_only_advisor_label_has_no_authority` doesn't clear `AIDA_AUTO_COMPLETE`, `AIDA_AUTO_COMPLETE_TOKEN` or `AIDA_ROLE_INSTANCE`. Use `AmbientGuard::hermetic` so a live drain can't flip it.
   created_at: 2026-10-13T13:53:24.233847845Z
   modified_at: 2026-10-13T13:53:24.233847845Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a135e0-b691-7ff2-962a-b4b238376f8b
+  author: joe
+  content: |-
+    MERGE: approved at ddce5b1df38c8faca4f2b2580a9c23e7c518153f, awaiting advisor signoff (and operator hold clear)
+
+    A fresh independent reviewer (round 2, after the merge seat's round-1 REQUEST CHANGES at 76c06c9f95) approved this head. CI Build is green. `merge-hold-gate` is red only because of the REWORK hold.
+
+    **Prior blockers fixed, verified by mutation**
+    - Deleting the rejection branch in `roleless_recovery_sentence()` now fails `the_edit_gate_names_an_expired_grant_not_no_active_role` and `one_rejection_table_drives_the_edit_gate_and_review_record`.
+    - Making review record ignore a Rejected grant fails 2 tests.
+    - The one table drives the real CLI edit gate and `handle_review_record_at` against the same fixture. Rows: unknown id, expired, revoked, subject mismatch, roster denied, parent not delegating, and a valid grant for another seat. The other-seat row behaves differently by design, per D3, and a test comment says so.
+
+    **C1-C4: all pass**
+    - C1: 14 fixtures reach 13 distinct checks, each compared against a verbatim copy of the legacy `current_grant`. Reordering checks (expired/revoked, parent roster/principal) and dropping ParentNotDelegating each fail a test.
+    - C2: refusals show only the 8-char prefix, and every surface asserts the full id is absent.
+    - C3: the pin is now hermetic (`AmbientGuard::hermetic`) and held up with `AIDA_SESSION_ROLE`, a random grant, `AIDA_AUTO_COMPLETE`, its token and `AIDA_ROLE_INSTANCE` all set.
+    - C4: `MAX_GRANT_AGE` is untouched.
+    - Q1: the PR body has a "Behaviour narrowing (D3)" section, and the CHANGELOG is generated from the spec title, which names the narrowing.
+
+    **Stability:** bug_1983 passed 12/12 runs; the 748-test mixed set passed 5/5.
+
+    **Non-blocking**
+    1. AC1 (a valid advisor grant, no TTY, edit Draft→Approved succeeds) has no committed end-to-end row. The reviewer's temporary probe passed, so a valid-advisor row should be added to the table later.
+    2. Sketch D2's `AdvisorAuthority` type wasn't built. The shared decision is `grant_check()` + `rejection_sentence()`, which meets AC3 in practice, but the PR body doesn't note the deviation.
+    3. The `session_grant_lookup` divergence is filed as BUG-2011.
+
+    **Next steps**
+    - Advisor: post SIGNOFF (ADR-73 cond. 5).
+    - Operator: `aida merge-hold clear 2587`.
+    - The merge seat then merges pinned to this SHA.
+  created_at: 2026-10-13T15:28:01.681636792Z
+  modified_at: 2026-10-13T15:28:01.681636792Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a1309d-3b0f-7c80-b06e-0639346ad23f
