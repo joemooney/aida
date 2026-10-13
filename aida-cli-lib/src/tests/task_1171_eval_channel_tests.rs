@@ -195,6 +195,7 @@ fn binary_emits_a_bare_payload_to_a_stale_or_absent_wrapper() {
 /// The staleness verdict `aida dev status` reports, over the three shapes a
 /// caller's shell can present.
 // trace:TASK-1171 | ai:claude
+// trace:BUG-2005 | ai:antigravity
 #[test]
 fn wrapper_state_is_classified_for_the_operator() {
     assert_eq!(classify_wrapper(None), WrapperState::Absent);
@@ -204,6 +205,10 @@ fn wrapper_state_is_classified_for_the_operator() {
     );
     assert_eq!(
         classify_wrapper(Some("role,session,dev,worktree,eval-block")),
+        WrapperState::Stale
+    );
+    assert_eq!(
+        classify_wrapper(Some("role,session,dev,worktree,eval-block,zsh-localopts")),
         WrapperState::Current
     );
 }
@@ -233,6 +238,10 @@ fn wrapper_shell_and_rust_constants_agree() {
         advertised.contains(EVAL_BLOCK_CAP),
         "the wrapper must advertise the eval-block capability, else the binary \
          will keep emitting the legacy bare payload to it: {advertised}"
+    );
+    assert!(
+        advertised.contains(crate::shell_eval::ZSH_LOCALOPTS_CAP),
+        "the wrapper must advertise the zsh-localopts capability: {advertised}"
     );
 }
 

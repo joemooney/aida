@@ -1295,10 +1295,16 @@ pub(crate) enum WrapperState {
 /// (`None` when unset) and whether the on-disk helpers file already carries the
 /// current protocol. Pure so the reporting is testable without a real shell.
 // trace:TASK-1171 | ai:claude
+// trace:BUG-2005 | ai:antigravity
 pub(crate) fn classify_wrapper(marker: Option<&str>) -> WrapperState {
     match marker {
         None => WrapperState::Absent,
-        Some(m) if crate::shell_eval::marker_speaks_eval_block(Some(m)) => WrapperState::Current,
+        Some(m)
+            if crate::shell_eval::marker_speaks_eval_block(Some(m))
+                && crate::shell_eval::marker_speaks_zsh_localopts(Some(m)) =>
+        {
+            WrapperState::Current
+        }
         Some(_) => WrapperState::Stale,
     }
 }
@@ -1307,10 +1313,55 @@ pub(crate) fn classify_wrapper(marker: Option<&str>) -> WrapperState {
 /// protocol? `false` for a missing/unreadable file — the caller only uses this
 /// to decide whether re-running `--install` would actually change anything.
 // trace:TASK-1171 | ai:claude
-fn installed_helpers_are_current(path: &std::path::Path) -> bool {
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn installed_helpers_are_current(path: &std::path::Path) -> bool {
     std::fs::read_to_string(path)
-        .map(|body| body.contains(crate::shell_eval::EVAL_BLOCK_CAP))
+        .map(|body| {
+            body.contains(crate::shell_eval::EVAL_BLOCK_CAP)
+                && body.contains(crate::shell_eval::ZSH_LOCALOPTS_CAP)
+                && body.contains("setopt localoptions")
+        })
         .unwrap_or(false)
+}
+
+// trace:TASK-1171 | ai:claude
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn format_shell_wrapper_status(
+    state: WrapperState,
+    helpers_current: bool,
+) -> Vec<String> {
+    match state {
+        WrapperState::Current => {
+            vec![format!("Shell wrapper: {}", "current".green())]
+        }
+        WrapperState::Stale if helpers_current => {
+            vec![format!(
+                "Shell wrapper: {} — the installed helpers are already up to date; open a new shell (or re-source them) to pick them up.",
+                "stale in this shell".yellow()
+            )]
+        }
+        WrapperState::Stale => {
+            vec![
+                format!(
+                    "Shell wrapper: {} — run `{}`, then open a new shell.",
+                    "stale".yellow(),
+                    "aida dev shell-init --install".cyan()
+                ),
+                format!(
+                    "               {}",
+                    "(everything still works; the shell-modifying verbs just use the older contract)"
+                        .dimmed()
+                ),
+            ]
+        }
+        WrapperState::Absent => {
+            vec![format!(
+                "Shell wrapper: {} — install with `{}` so `role enter` / `dev activate` / `worktree enter` mutate this shell.",
+                "not installed".yellow(),
+                "aida dev shell-init --install".cyan()
+            )]
+        }
+    }
 }
 
 /// Report the wrapper's protocol state, and — when this shell's wrapper is
@@ -1322,35 +1373,8 @@ fn print_shell_wrapper_status() {
         .map(|h| h.join(".aida").join("shell-init.sh"))
         .map(|p| installed_helpers_are_current(&p))
         .unwrap_or(false);
-    match state {
-        WrapperState::Current => {
-            println!("Shell wrapper: {}", "current".green());
-        }
-        WrapperState::Stale if helpers_current => {
-            println!(
-                "Shell wrapper: {} — the installed helpers are already up to date; open a new shell (or re-source them) to pick them up.",
-                "stale in this shell".yellow()
-            );
-        }
-        WrapperState::Stale => {
-            println!(
-                "Shell wrapper: {} — run `{}`, then open a new shell.",
-                "stale".yellow(),
-                "aida dev shell-init --install".cyan()
-            );
-            println!(
-                "               {}",
-                "(everything still works; the shell-modifying verbs just use the older contract)"
-                    .dimmed()
-            );
-        }
-        WrapperState::Absent => {
-            println!(
-                "Shell wrapper: {} — install with `{}` so `role enter` / `dev activate` / `worktree enter` mutate this shell.",
-                "not installed".yellow(),
-                "aida dev shell-init --install".cyan()
-            );
-        }
+    for line in format_shell_wrapper_status(state, helpers_current) {
+        println!("{line}");
     }
 }
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
@@ -1401,7 +1425,11 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # captured stdout"; this wrapper deliberately does not advertise it, so a
 # binary that knows only that token prints a plain copy-paste `cd` hint here
 # instead of markers nobody is reading.
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file'
+#
+# `zsh-localopts` says the wrapper scopes options with `setopt localoptions`
+# under zsh rather than bare `local -` (which leaked every parameter/API key).
+# (trace:BUG-2005)
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts'
 
 aida() {
     # trace:BUG-1811 | ai:antigravity
