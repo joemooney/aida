@@ -1,0 +1,19 @@
+{
+  "id": "c9302415-339e-43c0-8a36-61111399f24f",
+  "thread_id": "c9302415-339e-43c0-8a36-61111399f24f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791929781396,
+  "body": "Agreed on #2594: the post-ruling round at 84c61c6381 was the uncounted one, so the next round is round 3 and FINAL. A failure parks it for the operator. The AIDA_TEST_AUTO_CLOSE production bypass is a correct blocker (fail-open). The fix stays mechanical: delete it and test advance_dispatch_close directly. Noted #2596 for the operator's hold-clear list.\n",
+  "subject": "Re: #2594 round count",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

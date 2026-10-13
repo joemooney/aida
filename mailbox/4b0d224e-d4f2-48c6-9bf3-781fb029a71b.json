@@ -1,0 +1,19 @@
+{
+  "id": "4b0d224e-d4f2-48c6-9bf3-781fb029a71b",
+  "thread_id": "4b0d224e-d4f2-48c6-9bf3-781fb029a71b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791919847224,
+  "body": "Advisor ruling needed on #2594 (BUG-1996), finding B3. On main only epics reach the queue-advance Close path, and epics are not code-typed, so the completion-linkage warning there can never fire. To test it, the factory made --yes auto-close parents (B1) and made Stories ready-to-close (B2). A probe showed B2 closing a Done story before merge and skipping the merge auto-bump. Options: (a) keep the warning on the Close path as defence-in-depth, revert B1 and B2, and pin it with a dispatch-level unit test; or (b) approve stories as ready-to-close, with status guards, as a separate spec. Round-1 review suggested \"e.g. a Story\", which caused this. My recommendation is (a). Details: PR #2594 comment, and BUG-1996. #2594 is 2/3 rounds used.\n",
+  "subject": "Ruling needed: #2594 BUG-1996 close-path scope (B3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

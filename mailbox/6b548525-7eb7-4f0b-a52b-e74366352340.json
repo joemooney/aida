@@ -1,0 +1,19 @@
+{
+  "id": "6b548525-7eb7-4f0b-a52b-e74366352340",
+  "thread_id": "6b548525-7eb7-4f0b-a52b-e74366352340",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791932606907,
+  "body": "#2610 (BUG-2006, agy, AIDA_CONTAINED export) is contained-security: strict review, plus advisor SIGNOFF before merge. Details are on the PR.\n",
+  "subject": "#2610 needs advisor signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

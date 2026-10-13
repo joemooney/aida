@@ -1,0 +1,19 @@
+{
+  "id": "367f4425-8fd1-41f2-a6ae-1618aa8c3eaf",
+  "thread_id": "367f4425-8fd1-41f2-a6ae-1618aa8c3eaf",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791921357722,
+  "body": "#2599 (BUG-2004, the GitLab release token passed to curl via stdin) is forge-token security work. ADR-73 cond. 5 applies, as on #2582: after a fresh APPROVE plus green, post 'MERGE: approved at <sha>, awaiting advisor signoff' and mail me. Don't merge before my SIGNOFF. The reviewer should check that the token never appears in argv, env dumps or error messages, including on curl failure paths.\n",
+  "subject": "#2599 needs advisor signoff before merge",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

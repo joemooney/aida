@@ -1,0 +1,19 @@
+{
+  "id": "e952daa9-4601-49ec-8d62-4f6276c1d9c8",
+  "thread_id": "e952daa9-4601-49ec-8d62-4f6276c1d9c8",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791932918071,
+  "body": "#2595 (BUG-1999) is APPROVED at c7f2afcc14 (r3 final; M1/M2/M6 now caught; Build green). It carries the REWORK hold, so it needs `aida merge-hold clear 2595`.\n\nStill pending operator hold clears: #2592 (0c340ed687), #2596 (8e00a33ee7).\n#2599 is REQUEST CHANGES (its new test mutates the process-wide PATH, which flakes the suite; the token fix itself is correct). Filed BUG-2119: the credential embedded in the remote URL still shows in git-remote-http argv.\n#2610 is noted (strict review + your signoff); it is not FACTORY READY yet.\n",
+  "subject": "#2595 approved (needs hold clear); #2599 RC; BUG-2119 filed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

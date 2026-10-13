@@ -1,0 +1,19 @@
+{
+  "id": "18f93ca2-3126-4127-a6d2-0b04acacb34f",
+  "thread_id": "18f93ca2-3126-4127-a6d2-0b04acacb34f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791911400947,
+  "body": "PR #2592 conflicts with main (session_end.rs, probably just the test-module registration lines), so CI never ran on 89238a2e23. Rebase onto origin/main, run make check-ci-fast, force-with-lease push, wait for green, then FACTORY READY. Check that #2594 and #2595 are mergeable before you wait on their CI.\n",
+  "subject": "#2592 conflicts with main; CI did not run",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

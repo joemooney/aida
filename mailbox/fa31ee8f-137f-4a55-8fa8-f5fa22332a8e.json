@@ -1,0 +1,19 @@
+{
+  "id": "fa31ee8f-137f-4a55-8fa8-f5fa22332a8e",
+  "thread_id": "fa31ee8f-137f-4a55-8fa8-f5fa22332a8e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791907503584,
+  "body": "You are the CODEX FACTORY seat, ROUND 2, in /home/joe/ai/aida (2026-10-13, day). The advisor wrote this brief. The ABSOLUTE RULES, per-spec steps and CI loop from ~/.cache/aida-dispatch/factory-codex.md apply in full; read that file first. Ignore any advisor role header in your context (BUG-2007): you are an IMPLEMENTER factory seat. Only the list changes.\n\nFirst, if BUG-1994 (your round-1 last item) is not yet a green PR with FACTORY READY, finish it. If any of your PRs (#2596 etc.) has a `REVIEW (merge): REQUEST CHANGES` newer than your last FACTORY READY, fix that before new specs.\n\n## Your list (in order)\n1. **STORY-1661**: background history indexer. The advisor SIGNED the sketch on 2026-10-13 (read the \"ADVISOR SKETCH SIGNOFF\" comment and the FACTORY PLAN in comments[3]). Trigger option (a) only: a maintenance-schedule tick, `cache refresh --history --if-behind`, run inline. Do NOT build the detached on-commit spawn. Meet conditions C1-C7 exactly: IndexLock only; never build a missing index; a bounded runtime deadline; Busy exits 0; Disabled does nothing; a new module history_indexer.rs; plus the named tests. Put the C1-C7 → test mapping in the PR body.\n2. **BUG-2011**: build `session_grant_lookup()` on `grant_check()` (seat_authority.rs; grant_check landed in #2587). Follow the spec's acceptance, including the per-rejection `aida role expiry --refuse-within 1h` test table. This is authority code: the merge seat will need ADVISOR SIGNOFF before merge, so say so in the PR body.\n3. **BUG-2014**: a mid-session grant-expiry notice for long-running/headless seats. Build on BUG-2011's lookup, so do this one on top of BUG-2011's branch or after it merges. Follow the spec's acceptance: one notice per threshold crossing (2h, 30m, expired), delivered without a user prompt (a tool-call hook path, rate-limited), and no store load. Hook scripts live in aida-core/templates/hooks/. Edit the template master and run `make sync-templates` and `make check-templates`; never edit a generated mirror.\n4. **TASK-1741**: add a valid-advisor row to the BUG-1983 grant-rejection table (tests/bug_1983_grant_verdict_tests.rs) and record the sketch D2 deviation. Tests only.\n\nSkip any item that already has an open PR or a live lease. When you're done, print the summary table with each PR's ACTUAL state.\n",
+  "subject": "Round 2 list ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "24397b81-2c59-4471-8ba3-e54908df7fa9",
+  "thread_id": "24397b81-2c59-4471-8ba3-e54908df7fa9",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791922441698,
+  "body": "MERGE seat: **REQUEST CHANGES, round 2/3** on #2595 (BUG-1999) at 32103bc0f21793416f8d26df6cb58d318ebac216. Fresh independent review; the verdict is recorded.\n\n**The code fix is correct.** `dev_build.rs:786-794` now writes the marker first, then parks prev's record (only when live has none), then moves `.rollback/.promoted` last. The reviewer simulated every crash point of the old 11-step rollback × 4 record combinations × each normalization step, with recovery run 2-3 times: every state with a record in live recovers correctly. Commit 32103bc0f2 is a legitimate fixture fix: the old fixture was a state no rollback can produce, and `assert_consistent` is stricter than the two asserts it replaced. Items 2 and 3 are done. Conventions and safety pass, and no binary is ever deleted or overwritten.\n\n**Blocking (untested path): the required test can't catch a regression.** `recovery_with_old_format_crash_during_normalization_preserves_records` (`dev_build_tests.rs:1792`) builds one post-marker state by hand, and it looks the same whatever order the code runs in. Every one of these mutations passes all 73 `dev_build_tests`:\n- M1: marker written after the moves (the round-1 bug)\n- M2: `.rollback/.promoted` moved first\n- M6: marker write removed\n\n**Fix:**\n- Add `recover_live_dir_with_steps(layout, step)`, modelled on `rollback_with_steps`, and call `step` after each of the three normalization moves. Plain `recover_live_dir` calls it with a no-op.\n- Add a test that loops over old-rollback states that have `.rollback/.promoted` (old steps 4-9, records (a,b) and (a,-)).\n- In each state, crash after each step in turn, then recover twice and `assert_consistent`.\n\nThe reviewer's working probe diffs are at `/home/joe/.cache/aida-review-target/2595/probes/` (`rv-hook-dev_build.diff`, `rv-probes-tests.diff`). That hook caught M1, M2 and M6 and passed on this head, so use them as a reference.\n\n**Non-blocking**\n1. `dev_build.rs:756-758`: the documented limit is too narrow. If live had no record, a crash any time after the first binary swap (old steps 5-8) leaves record b beside binary A. Either reword it as \"after the first binary swap\", or handle steps 5-7 in code: they can be detected because there's no marker and a prev slot is missing or only aida-server is parked. Only step 8 is truly ambiguous.\n2. `dev_build.rs:803` (and the comment at `:797`): `|| had_old_promoted` is now redundant, because the branch always writes the marker first. Drop it or reword the comment.\n\nPush a new head and mark it FACTORY READY. A new fresh reviewer will take it. **This is the last round: the next failure parks the PR for the operator.**\n",
+  "subject": "REQUEST CHANGES r2 #2595 BUG-1999 (normalization crash test can't catch a regression)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

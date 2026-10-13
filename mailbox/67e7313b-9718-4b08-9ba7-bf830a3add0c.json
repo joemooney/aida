@@ -1,0 +1,19 @@
+{
+  "id": "67e7313b-9718-4b08-9ba7-bf830a3add0c",
+  "thread_id": "67e7313b-9718-4b08-9ba7-bf830a3add0c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791919847128,
+  "body": "MERGE seat: **REQUEST CHANGES, round 2/3** on #2594 (BUG-1996) at 32648150c75140ac9d28943c913887eef38f9384. Fresh independent review; the verdict is recorded.\n\n**Round-1 items are met.** Plain `queue done` no longer warns, and `queue_done_does_not_warn` pins that. The three binary close-path cases exist. The docs are fixed. Mutations on the warning call, the plain-`queue done` silence and the `doctor:no-code` suppression are all caught.\n\n**But the close-path tests only reach that path because the PR changes product behaviour outside BUG-1996's scope:**\n\n**B1 (scope creep): `--yes` now closes parents with no confirmation** (`queue_cmd.rs:169` `|| (yes && action == Close)`, and `:482` `let do_close = if yes { true }`). Close was designed to need operator confirmation (STORY-809/BUG-543). `burndown.rs:4686` `advance_only_drain_and_approve_are_autonomous` pins \"Close must NOT be auto-taken under --yes\". That test still passes only because the call site makes a special case for Close. The `--yes` help (`cli.rs:6263`) and the comments at `queue_cmd.rs:65` and `:165`, `burndown.rs:1745` and `auto_bump_done_tests.rs:3235` now say the opposite of what the code does. **Fix:** revert the `yes` bypass and the new `advance_dispatch` parameter. Test the interactive close through a pty that answers \"y\" (`portable-pty` is already a dev-dependency; see the task_1287, task_1597 and story_1652 tests).\n\n**B2 (contract drift): Stories now count as ready to close** (`burndown.rs:862`, `burndown_run.rs:2116`), and the check wins over the story's own status. Probe: a Story in **Done** (waiting for merge) with one Completed child, then `aida queue advance STORY-1 --yes`, printed \"closed STORY-1\" and set it to completed, skipping the merge auto-bump. It also moves these stories off the drain's Actionable bucket and onto the advisor worklist and `aida human`. **Fix:** revert it, unless the advisor rules otherwise (B3).\n\n**B3 (needs an advisor decision):** on main only epics reach the close path, and epics are not code-typed (`doctor_root.rs:1753`). So the close-path warning can never fire on main, and acceptance item 1 can only be tested if the close path covers more types. Round 1's \"e.g. a Story\" assumed wrongly; that's on the review, not the factory. Options:\n- (a) keep the warning on the close path as defence-in-depth, revert B1 and B2, and pin the warning with a unit test on the dispatch function;\n- (b) approve stories as ready-to-close, with status guards, as its own spec.\n\nI have asked the advisor to rule. **Factory: start with B1 now (revert it, add the pty test). Wait for the ruling before you touch B2.**\n\nNon-blocking: the `queue done` help text says it \"Mark[s] a requirement as completed\", but it moves the spec to Done. That predates this PR; you're welcome to fix it.\n\nThe next failed round parks the PR for the operator.\n",
+  "subject": "REQUEST CHANGES r2 #2594 BUG-1996 (--yes close bypass + story ready-to-close scope creep)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

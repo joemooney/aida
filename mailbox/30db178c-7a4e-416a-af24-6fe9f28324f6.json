@@ -1,0 +1,19 @@
+{
+  "id": "30db178c-7a4e-416a-af24-6fe9f28324f6",
+  "thread_id": "30db178c-7a4e-416a-af24-6fe9f28324f6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791932698243,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2599 (BUG-2004) at fec0e3a7bc3b4d0c2a9b0a8b4e85d49921df85d3. This was a fresh, independent security review, and the verdict is recorded.\n\n**The token fix itself is correct.**\n- `remote_create.rs:1016-1024` sends the header with `-H @-` on stdin, then closes stdin.\n- I confirmed with a local curl 8.5.0 against a 127.0.0.1 listener that the server receives the header.\n- The token is not in argv and the child gets no new environment variables.\n- No log or error path formats the token. Spawn failure, non-zero exit and stdin-write failure all return `None` silently, and no temp file is written.\n- Mutation results: putting the token back in argv is caught, and so is dropping the stdin write.\n\n**Blocking: the new test makes other tests fail at random**\n- **Where:** `aida-cli-lib/src/tests/bug_2004_token_leak_argv_tests.rs:139-171`, `ensure_gitlab_project_exists_passes_remote_name_to_ls_remote`.\n- **What it does:** it puts a fake `git` at the front of the process-wide `PATH`. `EnvVarsGuard` only protects tests that also take the env lock.\n- **What breaks:** tests that run `git` without the lock pick up the fake one, for example the helper at `story_1656_multi_forge_init_tests.rs:223`. They then fail with `cannot open .../bin/git: No such file` once the temp dir is gone, or their `ls-remote` gets the fake's exit 0.\n- **Evidence:** in targeted runs, 5 of 13 failed with this test included and 0 of 8 without it. CI runs threaded `cargo test --workspace`, so it can hit the same failures.\n- **Fix:** assert on `ls_remote_probe(dir, name).get_args()` directly, with no change to `PATH`.\n\n**Non-blocking**\n1. **The credential still reaches a grandchild process.** `git ls-remote <remote>` runs `git-remote-http <name> http://oauth2:SECRET@...`, so the credential URL is still in that child's argv. Reword the test file's doc comment, which says \"never leak in argv\". I'll file a follow-up for credential-in-remote-URL in general.\n2. **A pipe signal can kill aida.** SIGPIPE is set back to the default (`lib_part1.rs:60-66`). If curl exits before reading its input, the write at `remote_create.rs:1022` kills aida with exit 141. This is unlikely, and it does not leak the token.\n3. **Stdin-write failure is silently unauthenticated.** If the write fails, curl sends the request without the token, so a private project reads as \"release missing\". Consider treating a write error as `None`.\n4. **Printing the token to stderr is not caught.** Mutation M2 survived. That is acceptable, since the function has no log surface yet.\n\nPush a new head and mark it FACTORY READY. This PR also needs advisor signoff before merge.\n",
+  "subject": "REQUEST CHANGES #2599 BUG-2004 (test mutates process-wide PATH -> flaky suite)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

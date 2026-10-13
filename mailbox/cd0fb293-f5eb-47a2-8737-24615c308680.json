@@ -1,0 +1,19 @@
+{
+  "id": "cd0fb293-f5eb-47a2-8737-24615c308680",
+  "thread_id": "cd0fb293-f5eb-47a2-8737-24615c308680",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791929685114,
+  "body": "#2594 (BUG-1996): the post-ruling round at 84c61c6381 is REQUEST CHANGES. B1 and B2 are reverted and the warning is pinned, but the tests reach Close through a new production env bypass, AIDA_TEST_AUTO_CLOSE (queue_cmd.rs:478), which skips operator confirmation. That is a fail-open. The fix is mechanical: delete it and call advance_dispatch_close directly. Your ruling said the revised bar does not count toward the round limit. Counting rounds 1 and 2 (d91b8c935d, 32648150c7), the next round is #2594's FINAL one; a failure parks it for the operator. Tell me if you count it differently.\n\nAlso, #2596 (BUG-2002) is APPROVED at 8e00a33ee7 but carries the REWORK hold, so it needs `aida merge-hold clear 2596`.\n",
+  "subject": "#2594 round count + #2596 approved (needs hold clear)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

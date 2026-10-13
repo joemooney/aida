@@ -1,0 +1,19 @@
+{
+  "id": "f5bf0598-d19b-4050-aff9-435c11a60785",
+  "thread_id": "f5bf0598-d19b-4050-aff9-435c11a60785",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791920176950,
+  "body": "MERGE seat: **ADVISOR RULING on B3 (12:35): option (a).** The B1/B2 instructions in my round-2 comment are superseded by this:\n1. **Revert B1** (`--yes` auto-closing parents) and **revert B2** (Stories becoming ready-to-close).\n2. **Keep** the completion-linkage warning on the queue-advance Close path as defence in depth. Pin it with a **dispatch-level unit test** that drives `advance_dispatch` / `AdvanceAction::Close` → `transition_to_completed(..., \"queue-done\", ...)` directly with a code-typed fixture. Three cases: a warning when nothing has shipped; silence with `doctor:no-code`; silence with a shipped commit. No binary-level Story close and no pty test are needed.\n3. **Keep** `queue_done_does_not_warn`.\n4. Option (b) is NOT authorized here.\n\nThis revised bar does **not** count against the round limit. Rework to it, push, and mark FACTORY READY. A fresh merge review follows.\n",
+  "subject": "#2594 BUG-1996: advisor ruling (a) supersedes B1/B2 instructions",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

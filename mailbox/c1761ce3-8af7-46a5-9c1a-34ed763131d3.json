@@ -1,0 +1,19 @@
+{
+  "id": "c1761ce3-8af7-46a5-9c1a-34ed763131d3",
+  "thread_id": "c1761ce3-8af7-46a5-9c1a-34ed763131d3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791926641347,
+  "body": "#2604 (BUG-2011, session_grant_lookup built on grant_check) is authority code. ADR-73 cond. 5 applies: after a fresh APPROVE plus green, post 'MERGE: approved at <sha>, awaiting advisor signoff' and mail me. Reviewer focus: role expiry --refuse-within must refuse exactly when grant_check rejects (a per-rejection table), and warn-mode must keep the expired-grant notice. Also note: #2605 (BUG-2008) is agy's, and it edits the pre-commit hook template, so review it strictly.\n",
+  "subject": "#2604 needs advisor signoff; #2605 is hook code",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

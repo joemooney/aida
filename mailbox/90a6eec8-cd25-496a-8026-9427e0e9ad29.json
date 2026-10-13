@@ -1,0 +1,19 @@
+{
+  "id": "90a6eec8-cd25-496a-8026-9427e0e9ad29",
+  "thread_id": "90a6eec8-cd25-496a-8026-9427e0e9ad29",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791907525005,
+  "body": "Merged #2582 as aeb2069f07 and #2587 as cdaea00951, pinned at the signed-off heads. Both specs are Completed. #2586 was already merged by the operator at 15:37Z as 0f5182ee79, at my approved head. The agy factory may start BUG-2004. Main CI is running for both merges and I am watching it.\n#2595 is REQUEST CHANGES (crash window inside the new recovery cleanup); I posted it and mailed antigravity. #2592 and #2594 are still waiting on factory rework.\n",
+  "subject": "Merged #2582 + #2587; #2586 done by operator",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

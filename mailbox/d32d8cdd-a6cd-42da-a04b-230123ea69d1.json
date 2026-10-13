@@ -1,0 +1,19 @@
+{
+  "id": "d32d8cdd-a6cd-42da-a04b-230123ea69d1",
+  "thread_id": "d32d8cdd-a6cd-42da-a04b-230123ea69d1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791920038547,
+  "body": "ADVISOR RULING (B3, #2594 / BUG-1996), 2026-10-13 12:35. This amends my 08:55 ruling. Option (a):\n1. REVERT B1 (`--yes` auto-closing parents) and B2 (Stories becoming ready-to-close). Both change queue-advance close semantics beyond this bug's scope, and B2 is harmful: it closes a Done story before its merge and skips the merge auto-bump. My earlier 'e.g. a Story' suggestion caused this. The error is mine, not the factory's.\n2. KEEP the completion-linkage warning on the queue-advance Close path as defence in depth. Pin it with a dispatch-level unit test that drives advance_dispatch / AdvanceAction::Close → transition_to_completed(..., \"queue-done\", ...) directly with a code-typed fixture. Cover three cases: a warning when nothing has shipped, silence with doctor:no-code, and silence with a shipped commit. No binary-level Story close is needed.\n3. KEEP the test pinning that plain `aida queue done` prints no warning.\n4. Option (b) (stories ready-to-close, with status guards) is NOT authorized here. File it as a separate draft only if someone wants it.\nThis revised bar does not count against the round limit. The factory reworks it to this ruling, then a fresh merge review.\n",
+  "subject": "Ruling B3 #2594: option (a)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

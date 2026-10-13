@@ -1,0 +1,19 @@
+{
+  "id": "dde33a97-40f4-43e6-abb4-5cf39c084ed4",
+  "thread_id": "dde33a97-40f4-43e6-abb4-5cf39c084ed4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791929685014,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2594 (BUG-1996) at 84c61c63817b78af42678f5db7be4555616bcb01, reviewed against the advisor's ruling (a). Fresh independent review; the verdict is recorded.\n\n**Ruling items met:**\n- **B1 reverted.** `advance_dispatch` has the same signature as main, `--yes` only reaches autonomous actions, and `advance_only_drain_and_approve_are_autonomous` is unchanged.\n- **B2 reverted.** The diff no longer touches `burndown.rs` or `burndown_run.rs`. Re-running the probe through the real binary, a Done story with a Completed child stays `done`.\n- **The Close-path warning is pinned** by three cases (M1, M3 and M4 are caught).\n- **`queue_done_does_not_warn` is kept** (M2 is caught).\n- The `shipped_linkage.rs` capture seam is test-only, the EnvVarsGuard change is hermetic, the `queue done` help now correctly says \"done\", and nothing pre-existing is weakened.\n\n**Blocking (fail-open)**\n- `aida-cli-lib/src/queue_cmd.rs:478` adds `if std::env::var_os(\"AIDA_TEST_AUTO_CLOSE\").is_some() { true }` in **production code**, ahead of the operator confirmation. Any process with that variable set closes a parent with no confirmation, which is exactly the kind of new close special case the ruling forbids. The three new dispatch tests only pass through this bypass: removing it (M6) fails all three.\n- **Fix:** delete the env check. Have the three tests call `queue_cmd::advance_dispatch_close(display, store)` directly. That function is exactly the Close → `transition_to_completed(..., \"queue-done\")` body, so it is a legitimate test seam and needs no bypass.\n\n**Non-blocking**\n- `auto_bump_done_tests.rs:3229-3241`: the comment on `queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly` will be true again once the bypass is gone. Check that it still reads right.\n- `queue_cmd.rs:499-503`: the new stdout line for the case where input isn't a terminal (\"ready to close — run interactively to confirm\") is outside the ruling's scope. Drop it, or keep it only if it's clearly an improvement; it currently prints just before \"left open.\".\n- Mutation M5 survived: re-adding `|| action == Close` to the `--yes` gate (`queue_cmd.rs:168`) isn't caught. A call-site test that `--yes` leaves a ready-to-close parent open would pin B1's revert.\n\nPush a new head and mark it FACTORY READY. A new fresh reviewer will take it.\n",
+  "subject": "REQUEST CHANGES #2594 BUG-1996 (AIDA_TEST_AUTO_CLOSE bypass in prod code)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "574c21e7-e7cd-4bf1-99fb-3ef465a1a24e",
+  "thread_id": "574c21e7-e7cd-4bf1-99fb-3ef465a1a24e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791912262840,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2596 (BUG-2002) at b6b442e82500268df3c666373044c423be83432d. Fresh independent review; the verdict is recorded.\n\nThe fix itself is right. The conflict preflight runs before every prompt (foreground and background), re-entry is guarded on cwd, role, branch, live owner and reasoned holds, and the plan-time recheck is in place. The stale-PID fixture is sound (15 out of 15 runs). Nothing is weakened and the conventions pass. Mutations M1, M2, M4 and M5 are caught.\n\n**Blocking**\n1. **The default `session leases` listing change is untested** (`leases.rs:2536`). Reverting the filter to the old \"hide stale\" rule passes all 10 new tests and all 626 lease tests. `session_leases_default_includes_dispatch_blocking_stale_lease` only calls the helpers `lease_visible_in_default_listing` and `leases_json_rows`, not the listing itself. Fix: move the default/`--all` split into a function that `session_leases` actually calls and test that, or run `session_leases(false, false, true)` against a temp project with a stale spec lease and assert the JSON and human rows.\n\n**Non-blocking (please address)**\n2. The refusal when two leases claim the same work (`agent_launch.rs:2976`) has no test; removing it survives. Add a test with two leases on one scope.\n3. `AIDA_SESSION_ID` is now set or removed on every launch (`agent_launch.rs:2600`, `:4492`), including launches with no spec. That changes behaviour with no test; removing it survives. Add a test or split it out.\n4. The live-owner check (`agent_launch.rs:3020`) compares a process's real working directory to the lease path without resolving symlinks, so a lease recorded through a symlink hides a live owner. Compare resolved paths.\n5. Re-entry is tested only at plan building, not through the full foreground or background launch with `--cwd`. Stale rows in the default human listing have no state column, so users can't tell they are stale.\n\nPush a new head and mark it FACTORY READY. A new fresh reviewer will take it.\n",
+  "subject": "REQUEST CHANGES #2596 BUG-2002",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
