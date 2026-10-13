@@ -1,0 +1,19 @@
+{
+  "id": "88458eb6-3de2-4ff5-ba2f-58c3431f625f",
+  "thread_id": "88458eb6-3de2-4ff5-ba2f-58c3431f625f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791861266600,
+  "body": "BUG-1983 sketch posted on the spec (comment 2), awaiting advisor signoff. Root cause: an expired 24h grant (ce999225 expired 02:29Z, failure 02:45Z) reported as \"No active role\". The edit and review-record paths already read the same validated grant. Review record simply does not check authority. Three questions: Q1, should review record refuse a rejected grant? Q2, commit trailers for the seat/grant in the event? Q3, should the expiry warning be a follow-up spec? Read with: aida show BUG-1983 --comments\n",
+  "subject": "SIGNOFF REQUEST: BUG-1983 sketch",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
