@@ -4210,10 +4210,14 @@ mod bug_1923 {
             let miss = history_cache::classify_miss(&st);
             assert_eq!(miss, IndexMiss::CheckoutBehind);
 
-            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
-            assert!(lines.contains("another checkout moved the shared index on"));
-            assert!(!lines.contains("catches up"));
-            assert!(!lines.contains("rebuild"));
+            let lines = crate::cache_cmd::history_status_lines(&st);
+            let status_line = lines
+                .iter()
+                .find(|l| l.contains("History status:"))
+                .expect("must have History status line");
+            assert!(status_line.contains("another checkout moved the shared index on"));
+            assert!(!status_line.contains("catches up"));
+            assert!(!status_line.contains("rebuild"));
 
             let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
             assert!(doc.contains("another checkout moved the shared index on"));
