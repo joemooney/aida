@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 
 // trace:BUG-1994 | ai:codex
 const PATH_TESTS: &[&str] = &[
+    "bug_1957_pr_ship_squash_subject_returns_completion_trailer",
     "one_expensive_candidate_cannot_starve_the_scan",
     "bug1780_concurrent_fetch_does_not_break_pull_code_leg",
     "recover_open_change_uses_github_origin_even_with_stale_pure_git_config",
