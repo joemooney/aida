@@ -16,6 +16,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use syn::visit::{self, Visit};
 
 /// Source files (relative to the crate root) allowed to call the engine
 /// `orchestrate_with_resume` in PRODUCTION code. Adding a new per-spec driver?
@@ -30,9 +31,6 @@ const ENGINE_CALLER_ALLOWLIST: &[&str] = &[
     // the `aida queue work --auto-complete` handler (STORY-772: was main.rs;
     // the STORY-1488 split moved run_auto_complete out of lib.rs)
     "src/drain_gate.rs",
-    // test-only: `#[cfg(test)] mod bug_1265_finish_ci_tests` drives the engine
-    // through a harness; the STORY-1488 split moved it out of lib.rs.
-    "src/upgrade_release.rs",
 ];
 
 /// The engine entry point every per-spec driver must route through.
@@ -64,6 +62,88 @@ fn production_engine_calls(src: &str) -> usize {
         .count()
 }
 
+// trace:TASK-1724 | ai:codex
+fn requires_test(meta: &syn::Meta) -> bool {
+    match meta {
+        syn::Meta::Path(path) => path.is_ident("test"),
+        syn::Meta::List(list) if list.path.is_ident("all") => list
+            .parse_args_with(
+                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+            )
+            .expect("valid cfg arguments")
+            .iter()
+            .any(requires_test),
+        _ => false,
+    }
+}
+
+// trace:TASK-1724 | ai:codex
+fn macro_engine_references(tokens: proc_macro2::TokenStream) -> usize {
+    tokens
+        .into_iter()
+        .map(|token| match token {
+            proc_macro2::TokenTree::Ident(ident) if ident == "orchestrate_with_resume" => 1,
+            proc_macro2::TokenTree::Group(group) => macro_engine_references(group.stream()),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// This former test-only whole-file exception must have zero production calls.
+/// Parse module boundaries rather than hiding everything after the first test
+/// attribute; production items can follow a test module. Comments and string
+/// literals containing braces or the engine's name cannot affect the count.
+// trace:TASK-1724 | ai:codex
+fn upgrade_release_production_calls(src: &str) -> usize {
+    struct Calls(usize);
+    impl<'ast> Visit<'ast> for Calls {
+        fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
+            if module.attrs.iter().any(|attr| {
+                attr.path().is_ident("cfg")
+                    && requires_test(&attr.parse_args::<syn::Meta>().expect("valid cfg"))
+            }) {
+                return;
+            }
+            visit::visit_item_mod(self, module);
+        }
+
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(path) = call.func.as_ref() {
+                if path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "orchestrate_with_resume")
+                {
+                    self.0 += 1;
+                }
+            }
+            visit::visit_expr_call(self, call);
+        }
+
+        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+            // Macro bodies are opaque to the AST visitor. Conservatively count
+            // engine references there too, rather than permitting a new bypass.
+            self.0 += macro_engine_references(mac.tokens.clone());
+        }
+    }
+    let parsed = syn::parse_file(src).expect("guarded source must parse as Rust");
+    let mut calls = Calls(0);
+    calls.visit_file(&parsed);
+    calls.0
+}
+
+// trace:TASK-1724 | ai:codex
+fn offending_calls(rel: &str, src: &str) -> usize {
+    if ENGINE_CALLER_ALLOWLIST.contains(&rel) {
+        0
+    } else if rel == "src/upgrade_release.rs" {
+        upgrade_release_production_calls(src)
+    } else {
+        production_engine_calls(src)
+    }
+}
+
 #[test]
 fn only_allowlisted_files_call_the_one_engine_in_production() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -83,11 +163,8 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
         } else {
             rel
         };
-        if ENGINE_CALLER_ALLOWLIST.contains(&rel.as_str()) {
-            continue;
-        }
         let src = fs::read_to_string(f).unwrap();
-        let n = production_engine_calls(&src);
+        let n = offending_calls(&rel, &src);
         if n > 0 {
             offenders.push(format!("{rel} ({n} call site(s))"));
         }
@@ -104,6 +181,52 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
          lifecycle (burndown is the only sanctioned fleet-layer exception; see \
          docs/architecture/one-engine-invariant.md). Offenders: {offenders:?}"
     );
+}
+
+// trace:TASK-1724 | ai:codex
+#[test]
+fn upgrade_release_test_calls_are_excluded_from_production_count() {
+    for cfg in [
+        "test",
+        "all(test, unix)",
+        "all(unix, all(test, feature = \"x\"))",
+    ] {
+        let src = format!(
+            r##"
+            #[cfg({cfg})]
+            mod tests {{
+                fn harness() {{
+                    let text = r#"}} orchestrate_with_resume("#;
+                    // }} orchestrate_with_resume(
+                    if true {{ auto_complete::orchestrate_with_resume(); }}
+                }}
+            }}
+            "##
+        );
+        assert_eq!(offending_calls("src/upgrade_release.rs", &src), 0, "{cfg}");
+    }
+}
+
+// trace:TASK-1724 | ai:codex
+#[test]
+fn allowlisted_test_only_file_production_call_is_an_offender() {
+    let src = r#"
+        fn before() { auto_complete::orchestrate_with_resume(); }
+        #[cfg(test)]
+        mod tests { fn harness() { auto_complete::orchestrate_with_resume(); } }
+        mod production { fn after() { auto_complete::orchestrate_with_resume(); } }
+    "#;
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 2);
+    // `any` does not require test mode: this module can compile in production.
+    let src = r#"
+        #[cfg(any(test, unix))]
+        mod production { fn run() { auto_complete::orchestrate_with_resume(); } }
+    "#;
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
+    let src = "fn run() { wrapper!(auto_complete::orchestrate_with_resume()); }";
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
+    let src = r#"fn run() { println!("orchestrate_with_resume("); }"#;
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 0);
 }
 
 /// The positive side of the invariant: the allow-listed `drain_gate.rs` handler must
