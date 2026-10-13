@@ -1,0 +1,34 @@
+id: 01a1363c-52f0-7a13-9e50-17b3555b17ed
+spec_id: BUG-2117
+agreed_id: BUG-2117
+title: 'Store-commit hook hardening follow-ups: skip commit-config sourcing for any store toplevel; prepare-commit-msg can forge an Aida-Store trailer'
+description: |-
+  Residuals from the round-6 advisor review of PR #2541 (BUG-1929), c448e8e5e7. Both MINOR.
+
+  (i) aida-commit-msg skips sourcing .aida/commit-config only when AIDA_STORE_WRITE_GUARD is set or the branch is aida-store. A hand git commit on a detached store HEAD still sources the sandbox-writable file. The allowlist does not run on that path. Skip the source whenever the hook's toplevel is a store tree (the .aida-store root, or the git dir differs from the common dir and the toplevel is the store worktree).
+
+  (ii) prepare-commit-msg (aida-store-pair) can pick a planted nested .aida-store/.git inside the store and run git -C <planted> rev-parse HEAD. That executes nothing, but it lets the sandbox forge an Aida-Store: trailer on a store commit. Resolve the store only from host-owned data.
+
+  ## Acceptance
+  - A hand commit on a detached store HEAD with a planted commit-config does not source it (test).
+  - A planted nested .aida-store/.git does not influence the Aida-Store trailer (test).
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T17:08:05.488871589Z
+modified_at: 2026-10-13T17:08:05.488871589Z
+req_type: Bug
+tags:
+- contained
+- hooks
+- review-follow-up
+- security
+filed_at:
+  code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: de277165-066b-453d-b88f-f2ec1f31d61d
