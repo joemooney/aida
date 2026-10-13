@@ -2,18 +2,35 @@ id: 01a13396-f90a-7480-ad7c-37d95b405653
 spec_id: FAQ-51
 agreed_id: FAQ-51
 title: Why does 'aida agent new --spec <ID>' fail with 'scope is already owned by session ...'?
-description: 'Another session still holds the lease (work claim) on that spec, often an earlier implementer whose Claude process has exited. ''aida session leases'' hides older leases by default; use ''aida session leases --all'' to see them. To re-dispatch into the same worktree for a rework round, leave out --spec and pass --cwd <worktree>; the new agent works under the existing lease. Add --no-resume to skip the session picker. Don''t run ''aida session end <id>'' just to clear the lease: it deletes the worktree. (Tracked: BUG-2002.)'
+description: |
+  **Another session still holds the lease (work claim) on that spec. Re-dispatch into its worktree without `--spec`, or find the holder with `aida session leases --all`.**
+
+  ## Why
+  `agent new --spec <ID>` refuses when any lease owns that scope. It is often an earlier implementer whose Claude process has exited. `aida session leases` hides older leases by default, so the blocking lease may not show up.
+
+  ## How
+  - Find the holder: `aida session leases --all`, then `aida session show <id>`.
+  - For a rework round in the same worktree, leave out `--spec`:
+    `aida agent new claude --bg --no-resume --role implementer --cwd <worktree> --prompt-file <brief>`
+    The new agent works under the existing lease. `--no-resume` skips the session picker.
+  - Don't run `aida session end <id>` just to clear the lease: it deletes the worktree.
+
+  ## Caveat
+  BUG-2002 tracks surfacing this before the interactive prompts, and showing every blocking lease by default.
+
+  ## See also
+  BUG-2002, FAQ-53
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:48:14.602621519Z
-modified_at: 2026-10-13T04:48:14.602621519Z
+modified_at: 2026-10-13T04:51:15.067754316Z
 req_type: Faq
 tags:
-- agent-new
-- dispatch
-- leases
+- audience:user
+- topic:drain
+- topic:roles
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
