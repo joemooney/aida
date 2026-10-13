@@ -8696,8 +8696,11 @@ pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<Stri
 }
 
 /// `completion_held` is the store-backed closure-hold check
-/// ([`pr_ship::spec_completion_hold_reason`]) so the metadata match credits
-/// the same specs `aida pr ship` would complete.
+/// ([`pr_ship::spec_completion_hold_reason`]). For rework matching it is
+/// inert: a spec id in the branch name decides the match and returns before
+/// the hold is consulted, and an explicit title trailer is honoured even for a
+/// held spec, so the hold never changes this function's result. Dropping the
+/// parameter is tracked in BUG-1997.
 // trace:BUG-1957 | ai:claude
 pub(crate) fn rework_pr_head_matches_spec(
     spec: &str,

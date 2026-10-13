@@ -363,9 +363,10 @@ pub fn pr_body_declares_non_completing(pr_body: &str) -> bool {
         // After any closing emphasis, the marker ends the declaration unless
         // the next character continues it as a word, path, or quote: a word
         // character, `-`, `/`, or a backtick (the changelog-bullet case). A
-        // `.` counts as sentence punctuation only before whitespace or end of
-        // line, so `no-complete.md` stays a mention. Everything else (end of
-        // line, whitespace, dashes, `:;,!?)…(`) declares.
+        // `.` rejects only when it runs into a word character, so
+        // `no-complete.md` stays a mention while `no-complete.`, `.**`, `._`,
+        // `...`, `.)` and `.—` declare. Everything else (end of line,
+        // whitespace, dashes, `:;,!?)…(`) declares.
         // trace:BUG-1957 | ai:claude
         NO_COMPLETE_BODY_MARKERS.iter().any(|&marker| {
             line.strip_prefix(marker).is_some_and(|rest| {
@@ -375,7 +376,7 @@ pub fn pr_body_declares_non_completing(pr_body: &str) -> bool {
                 match chars.next() {
                     None => true,
                     Some(c) if c.is_alphanumeric() || matches!(c, '-' | '/' | '`') => false,
-                    Some('.') => chars.next().is_none_or(char::is_whitespace),
+                    Some('.') => !chars.next().is_some_and(char::is_alphanumeric),
                     Some(_) => true,
                 }
             })
@@ -3324,6 +3325,14 @@ mod tests {
             "aida: no-complete) x",
             "aida: no-complete… slice",
             "aida: no-complete?",
+            // A `.` followed by closing emphasis or more punctuation still
+            // declares; only a `.` running into a word is a mention.
+            "**Non-completing slice.** Pure move.",
+            "**aida: no-complete.** Slice 2 of 3",
+            "_Non-completing slice._ Pure move",
+            "aida: no-complete... slice 2",
+            "aida: no-complete.) x",
+            "aida: no-complete.—slice",
         ] {
             assert!(pr_body_declares_non_completing(body), "{body:?}");
         }
@@ -3341,6 +3350,7 @@ mod tests {
             "aida: no-complete-ish",
             "**aida: no-complete**ness",
             "aida: no-complete.md documents the marker",
+            "aida: no-complete.rs is the parser",
             "aida: no-complete_flag",
         ] {
             assert!(!pr_body_declares_non_completing(body), "{body:?}");
