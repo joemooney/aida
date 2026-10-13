@@ -126,6 +126,36 @@ pub(crate) fn workspace_announcement(label: &str, worktree: &Path, branch: &str)
     format!("{label}: {} [{branch}]", worktree.display())
 }
 
+/// The `write boundary` line for a contained session launched outside any git
+/// repository: there is no worktree, so there are no write roots.
+// trace:BUG-1971 | ai:claude
+pub(crate) const OUTSIDE_GIT_BOUNDARY_ANNOUNCEMENT: &str =
+    "write boundary: none (the session is not inside a git repository, so there is no \
+     worktree and every file edit will be denied)";
+
+/// BUG-1971: the launch lines `queue work` prints once the lease exists: the
+/// workspace line from the lease's worktree and, for a contained claude
+/// launch, the write-boundary line from the SAME roots the launch's
+/// `--settings` rules use (the git root of the process cwd), never from
+/// `lease_worktree` as given.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn queue_work_launch_lines(
+    phase_env: Option<&str>,
+    lease_worktree: &Path,
+    branch: &str,
+    contained_claude: bool,
+) -> Vec<String> {
+    let mut lines = vec![workspace_announcement(
+        launched_workspace_label(phase_env),
+        lease_worktree,
+        branch,
+    )];
+    if contained_claude {
+        lines.push(crate::session::contained_write_boundary_announcement());
+    }
+    lines
+}
+
 /// `write boundary: //<root>/**, …` — the operator-facing view of the allow
 /// rules, built from the same roots.
 // trace:BUG-1928 | ai:claude

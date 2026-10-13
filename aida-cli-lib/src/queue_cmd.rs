@@ -12588,27 +12588,20 @@ pub(crate) fn handle_queue_work(
                     // one) and the contained write boundary derived from it, so
                     // the operator never sees only the orchestrator's requested
                     // path. trace:BUG-1928 | ai:claude
+                    // BUG-1971: both lines come from one helper, so the
+                    // boundary line reads the launch's own roots.
+                    // trace:BUG-1971 | ai:claude
                     let phase_env = std::env::var(crate::orchestrator::PHASE_ENV).ok();
-                    eprintln!(
-                        "  {} {}",
-                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                        crate::contained_boundary::workspace_announcement(
-                            crate::contained_boundary::launched_workspace_label(
-                                phase_env.as_deref()
-                            ),
-                            &lease.worktree_path,
-                            &lease.branch,
-                        )
-                    );
-                    if contained && headless_vendor == crate::session::HeadlessVendor::Claude {
+                    for line in crate::contained_boundary::queue_work_launch_lines(
+                        phase_env.as_deref(),
+                        &lease.worktree_path,
+                        &lease.branch,
+                        contained && headless_vendor == crate::session::HeadlessVendor::Claude,
+                    ) {
                         eprintln!(
                             "  {} {}",
                             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                            // BUG-1971: from the same roots the launch's
-                            // `--settings` rules use (the git root of the
-                            // canonical cwd), not `lease.worktree_path` as
-                            // given. trace:BUG-1971 | ai:claude
-                            crate::session::contained_write_boundary_announcement()
+                            line
                         );
                     }
                     eprintln!(

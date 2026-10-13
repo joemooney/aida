@@ -1269,7 +1269,65 @@ fn headless_worktree_root() -> PathBuf {
 /// boundary fails closed instead of widening to cwd (possibly `$HOME`).
 // trace:BUG-1971 | ai:claude
 pub(crate) fn contained_session_write_roots() -> Vec<PathBuf> {
-    write_roots_for_git_root(crate::find_project_root().ok().as_deref())
+    write_roots_for_git_root(contained_session_git_root().as_deref())
+}
+
+/// The write roots of a contained session whose process cwd is `cwd`: the git
+/// root `cwd` sits in, or none outside a git repository (no cwd fallback).
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_session_write_roots_from(cwd: &Path) -> Vec<PathBuf> {
+    write_roots_for_git_root(crate::find_project_root_from(cwd).ok().as_deref())
+}
+
+/// The git root a contained session launched from this process writes in:
+/// the git root of the process cwd, or `None` outside a git repository. Under
+/// `cfg(test)` a [`contained_cwd_seam`] cwd wins, then a pinned hermetic
+/// project root.
+// trace:BUG-1971 | ai:claude
+fn contained_session_git_root() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(cwd) = contained_cwd_seam::cwd() {
+        return crate::find_project_root_from(&cwd).ok();
+    }
+    #[cfg(test)]
+    if let Some(root) = crate::test_ambient::project_root() {
+        return Some(root);
+    }
+    let cwd = std::env::current_dir().ok()?;
+    crate::find_project_root_from(&cwd).ok()
+}
+
+/// BUG-1971: test-only, per-thread stand-in for the process cwd that
+/// [`contained_session_write_roots`] resolves from, so a test can drive the
+/// production function from a directory outside git without a process-global
+/// `chdir`. Takes precedence over the hermetic project-root pin.
+// trace:BUG-1971 | ai:claude
+#[cfg(test)]
+pub(crate) mod contained_cwd_seam {
+    use std::cell::RefCell;
+    use std::path::{Path, PathBuf};
+
+    thread_local! {
+        static CWD: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn cwd() -> Option<PathBuf> {
+        CWD.with(|c| c.borrow().clone())
+    }
+
+    /// Pins the cwd until the guard drops, restoring the previous pin.
+    pub(crate) struct CwdGuard(Option<PathBuf>);
+
+    pub(crate) fn pin(cwd: &Path) -> CwdGuard {
+        CwdGuard(CWD.with(|c| c.replace(Some(cwd.to_path_buf()))))
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            CWD.with(|c| *c.borrow_mut() = prev);
+        }
+    }
 }
 
 /// The write roots for a discovered git root; none when there is no git root.
@@ -1284,7 +1342,26 @@ pub(crate) fn write_roots_for_git_root(git_root: Option<&Path>) -> Vec<PathBuf> 
 /// claude launch, built from the same roots as the launch's settings.
 // trace:BUG-1971 | ai:claude
 pub(crate) fn contained_write_boundary_announcement() -> String {
+    // trace:BUG-1971 | ai:claude
+    if contained_session_git_root().is_none() {
+        return crate::contained_boundary::OUTSIDE_GIT_BOUNDARY_ANNOUNCEMENT.to_string();
+    }
     crate::contained_boundary::write_boundary_announcement(&contained_session_write_roots())
+}
+
+/// BUG-1971: the write roots of a contained headless RESUME running in `cwd`.
+/// `cwd` must itself be a git root (the worktree being resumed in): a `cwd`
+/// that is a subdirectory of a checkout, or sits outside git (`$HOME`), grants
+/// nothing, so a caller passing the wrong directory fails closed.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_resume_write_roots(cwd: &Path) -> Vec<PathBuf> {
+    let Ok(canonical) = std::fs::canonicalize(cwd) else {
+        return Vec::new();
+    };
+    let git_root = crate::find_project_root_from(&canonical)
+        .ok()
+        .filter(|root| *root == canonical);
+    write_roots_for_git_root(git_root.as_deref())
 }
 
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
@@ -2966,8 +3043,11 @@ pub fn claude_headless_resume_args_with_posture(
         permission_mode.to_string(),
     ];
     if let Some(worktree) = contained_in {
-        // trace:BUG-1971 | ai:claude
-        args.extend(claude_contained_flags_for(worktree));
+        // BUG-1971: only when `worktree` is itself a git root; otherwise no
+        // write roots. trace:BUG-1971 | ai:claude
+        args.extend(claude_contained_flags_for_roots(
+            &contained_resume_write_roots(worktree),
+        ));
     }
     args.extend([
         "--output-format".to_string(),
