@@ -9,9 +9,17 @@ use crate::dev_cmd::{
 };
 use crate::shell_eval::{EVAL_BLOCK_CAP, ZSH_LOCALOPTS_CAP};
 use crate::shell_wrapper_harness::{shell_args, wrapper_shells};
+use crate::test_exec::write_executable;
 
-/// Real pre-fix leaking wrapper built from 3618fe739b^ (the commit immediately
-/// preceding BUG-2000 / PR #2584), containing header + SHELL_HELPERS + WORKER_FUNCTION.
+/// Real pre-fix leaking wrapper built from `3618fe739b^` (the commit immediately
+/// preceding BUG-2000 / PR #2584), containing header + `SHELL_HELPERS` + `WORKER_FUNCTION`.
+///
+/// Provenance:
+/// - Source commit: `3618fe739b^` (`fba16d9b9c9f7a8342416bc28ca1e8ba846a84eb`)
+/// - Assembled components: file header comment + `SHELL_HELPERS` + `WORKER_FUNCTION` (21,143 bytes)
+/// - SHA256: `5344afd309d4fda467d230f44f150f2327916968d42bc3771fac56be1e841109`
+/// - Regeneration: extract header comments, `SHELL_HELPERS`, and `WORKER_FUNCTION` from
+///   `3618fe739b^:aida-cli-lib/src/dev_cmd.rs` and concatenate them.
 const PRE_FIX_LEAKING_WRAPPER: &str = include_str!("fixtures/bug_2005_leaking_wrapper.sh");
 
 #[test]
@@ -22,8 +30,9 @@ fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
 
     // The installed file itself must be detected as NOT current (stale), so
     // `print_shell_wrapper_status` knows re-running `--install` will fix it.
+    let is_current = installed_helpers_are_current(&helper_path);
     assert!(
-        !installed_helpers_are_current(&helper_path),
+        !is_current,
         "pre-fix leaking wrapper must NOT be reported as current"
     );
 
@@ -57,11 +66,70 @@ fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
             "pre-fix leaking wrapper in {shell} must lack {ZSH_LOCALOPTS_CAP} capability"
         );
 
+        let state = classify_wrapper(Some(&derived_marker));
         assert_eq!(
-            classify_wrapper(Some(&derived_marker)),
+            state,
             WrapperState::Stale,
             "pre-fix marker derived from {shell} must classify as Stale"
         );
+
+        // Run the whole status path: pass `installed_helpers_are_current(fixture)`
+        // into `format_shell_wrapper_status` and assert the remedy line names the reinstall command.
+        let status_lines = format_shell_wrapper_status(state, is_current);
+        assert!(
+            status_lines
+                .iter()
+                .any(|l| l.contains("aida dev shell-init --install")),
+            "stale status for leaking wrapper must instruct reinstall: {status_lines:?}"
+        );
+    }
+}
+
+#[test]
+fn pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash() {
+    const SECRET: &str = "bug2005-leaked-secret-token-xyz789";
+
+    for &shell in wrapper_shells() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let home = dir.path().join("home");
+        std::fs::create_dir(&home).unwrap();
+        let bin = dir.path().join("aida");
+        write_executable(&bin, "#!/bin/sh\necho stub-ran\n");
+
+        let script = format!(
+            "PATH='{path}':\"$PATH\"\nexport PATH\n{fixture}\nAIDA_SECRET_KEY='{SECRET}'\nexport AIDA_SECRET_KEY\naida status\n",
+            path = dir.path().display(),
+            fixture = PRE_FIX_LEAKING_WRAPPER,
+        );
+
+        let out = std::process::Command::new(shell)
+            .env_clear()
+            .env("HOME", &home)
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .current_dir(dir.path())
+            .args(shell_args(shell))
+            .arg(&script)
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run {shell}: {e}"));
+
+        assert!(
+            out.status.success(),
+            "{shell} failed: stderr={:?}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+
+        if shell == "zsh" {
+            assert!(
+                stdout.contains(SECRET),
+                "zsh must leak environment parameters when running pre-fix wrapper:\n{stdout}"
+            );
+        } else {
+            assert!(
+                !stdout.contains(SECRET),
+                "{shell} should not leak environment parameters:\n{stdout}"
+            );
+        }
     }
 }
 

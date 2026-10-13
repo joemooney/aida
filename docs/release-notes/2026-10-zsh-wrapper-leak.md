@@ -2,7 +2,7 @@
 
 ## Summary
 
-In development builds from git main between October 10 and October 12, 2026,
+In development builds from git main between October 8 and October 12, 2026,
 the shell wrapper installed by `aida dev shell-init --install` used `local -` to
 scope options inside the `aida()` wrapper function. In bash, this idiom scopes
 shell options to the function. In zsh, however, `local -` is evaluated as a bare
