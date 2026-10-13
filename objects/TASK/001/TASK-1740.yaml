@@ -8,13 +8,45 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:53:44.348492787Z
-modified_at: 2026-10-13T19:55:40.323818703Z
+modified_at: 2026-10-13T19:55:54.305610467Z
 req_type: Task
 tags:
 - forge
 - gitlab
 - review-follow-up
 - tests
+comments:
+- id: 01a136d5-f641-7980-9d4f-ee33094300ba
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+
+    Approach:
+    Tests only, covering the three gaps identified in the advisor review of #2582:
+    1. Pin same-host different-path mirror re-run:
+       Verify that when an existing remote points at host/pathA (e.g. git@gitlab.example.test:ai/proj.git) and --url provides host/pathB (e.g. git@gitlab.example.test:team/elsewhere.git), run_remote_mirror leaves the remote untouched and does not probe or create the project. This catches mutations replacing same_remote with a host-only check.
+    2. Assert env-token-used notice (gitlab_project_create.rs ~211-218):
+       Verify that when create_gitlab_project uses an env token (GitlabTokenSource::Env), the notice ('no `glab auth login` token for {host}; using ${var}') is printed.
+    3. Capture output and test redaction at each call site:
+       - 'already points at' (remote_create.rs:2128-2134): when existing remote URL embeds user credentials, verify credentials are redacted in the warning.
+       - 'added remote' (remote_create.rs:2153-2156): when adding a new remote with embedded user credentials, verify credentials are redacted in the announcement.
+       - push 'still failed' (gitlab_project_create.rs:305-309): when fallback push fails with embedded credentials in stderr, verify the returned error message redacts credentials.
+
+    Files changed:
+    - aida-cli-lib/src/tests/story_1656_multi_forge_init_tests.rs
+
+    Tests added:
+    - mirror_rerun_with_same_host_different_path_never_probes_existing_remote
+    - create_gitlab_project_prints_notice_when_using_env_token
+    - mirror_rerun_redacts_credentials_in_already_points_at_warning
+    - run_remote_mirror_redacts_credentials_in_added_remote_notice
+    - push_fallback_redacts_credentials_in_still_failed_error
+
+    Risks & Acceptance:
+    - Tests only; no production code changes unless a defect is discovered.
+    - Each acceptance item is verified by targeted unit tests under story_1656.
+  created_at: 2026-10-13T19:55:54.305610467Z
+  modified_at: 2026-10-13T19:55:54.305610467Z
 history:
 - id: 01a135f1-4d1e-7d33-b8ce-3135dcc8c61c
   author: joe
