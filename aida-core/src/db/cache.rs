@@ -15,6 +15,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
+use super::cache_binding::CacheBinding;
 pub use super::cache_lock::{cache_lock_info_path, read_cache_lock_info, CacheLockInfo};
 use super::cache_lock::{
     clear_dead_owner_lock_info_at, enrich_cache_lock_error, observe_lock_info_file,
@@ -1334,6 +1335,10 @@ pub struct Cache {
     migration_pending: AtomicBool,
     usable_snapshot: AtomicBool,
     read_only: bool,
+    /// The file identities this handle's connection bound, re-checked during
+    /// use so a holder follows a cache another process replaced on disk.
+    // trace:BUG-1984 | ai:claude
+    binding: Mutex<CacheBinding>,
 }
 
 // trace:BUG-1752 | ai:codex
@@ -1450,18 +1455,7 @@ impl Cache {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         // trace:BUG-1940 | ai:claude
-        let cache =
-            Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))?;
-        // A contained session's sandbox binds the cache files by inode, so a
-        // host-side delete or replace silently splits the cache. Fail the open
-        // loudly instead. trace:BUG-1984 | ai:claude
-        if super::cache_binding::running_contained() {
-            let problems = super::cache_binding::sidecar_binding_problems(&cache.path);
-            if !problems.is_empty() {
-                return Err(super::cache_binding::binding_error(&problems));
-            }
-        }
-        Ok(cache)
+        Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))
     }
 
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
@@ -1650,6 +1644,7 @@ impl Cache {
                 },
             )?;
         }
+        let binding = Mutex::new(CacheBinding::capture(&path)); // trace:BUG-1984 | ai:claude
         let cache = Cache {
             conn: Mutex::new(conn),
             lock_info_path,
@@ -1657,6 +1652,7 @@ impl Cache {
             migration_pending: AtomicBool::new(migration_pending),
             usable_snapshot: AtomicBool::new(tables_present),
             read_only,
+            binding,
         };
         // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
@@ -1773,10 +1769,18 @@ impl Cache {
         // Reopen whatever is at the path now, even on error, so this handle
         // never keeps the in-memory placeholder.
         let fresh = Cache::open_at(self.path.clone(), false)?;
+        self.adopt_connection(&mut guard, fresh);
+        result
+    }
+
+    /// Move a freshly opened handle's connection and state into this one.
+    // trace:BUG-1984 | ai:claude
+    fn adopt_connection(&self, guard: &mut Connection, fresh: Cache) {
         let Cache {
             conn,
             migration_pending,
             usable_snapshot,
+            binding,
             ..
         } = fresh;
         *guard = conn.into_inner().unwrap_or_else(|p| p.into_inner());
@@ -1784,7 +1788,84 @@ impl Cache {
             .store(migration_pending.into_inner(), Ordering::SeqCst);
         self.usable_snapshot
             .store(usable_snapshot.into_inner(), Ordering::SeqCst);
-        result
+        *self.binding.lock().unwrap_or_else(|p| p.into_inner()) =
+            binding.into_inner().unwrap_or_else(|p| p.into_inner());
+    }
+
+    /// This handle's connection. About once a minute it first checks that
+    /// the files the connection bound are still the ones their paths name,
+    /// and re-opens the cache when another process replaced or deleted them.
+    // trace:BUG-1984 | ai:claude
+    fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        // Never inside a cache write: re-opening may itself need to write.
+        let due = !holding_write()
+            && self
+                .binding
+                .lock()
+                .is_ok_and(|mut binding| binding.due(std::time::Instant::now()));
+        if due {
+            // A failed re-open is retried at the next use; until then reads
+            // fail and callers fall back to the canonical store.
+            let _ = self.rebind_if_replaced();
+        }
+        self.conn.lock().unwrap()
+    }
+
+    /// Check now (not rate-limited) whether the cache files this handle's
+    /// connection bound were deleted or replaced on disk, and if so close the
+    /// connection and re-open the cache at its path. Returns why it re-bound,
+    /// or `None` when the binding is still current. The cache is derived
+    /// data, so following the path is always safe.
+    // trace:BUG-1984 | ai:claude
+    pub fn rebind_if_replaced(&self) -> Result<Option<String>> {
+        let reason = self
+            .binding
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .stale_reason();
+        let Some(reason) = reason else {
+            return Ok(None);
+        };
+        let mut guard = self.conn.lock().unwrap();
+        let old = std::mem::replace(&mut *guard, Connection::open_in_memory()?);
+        // The stale connection must not checkpoint on close: as the last user
+        // of the old files it would fold its WAL into whatever database it
+        // holds and delete the WAL and shm by NAME, which now name the files
+        // every other process is using.
+        let _ = old.set_db_config(
+            rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+            true,
+        );
+        // Close before re-opening: SQLite shares one shm mapping per database
+        // inode within a process, so a new connection opened while the old
+        // one lives would join the stale shm.
+        let _ = old.close();
+        match Cache::open_at(self.path.clone(), false) {
+            Ok(fresh) => {
+                self.adopt_connection(&mut guard, fresh);
+                eprintln!(
+                    "note: the AIDA cache at {} changed on disk ({reason}); re-opened it",
+                    self.path.display()
+                );
+                Ok(Some(reason))
+            }
+            Err(err) => {
+                self.binding
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .expire();
+                Err(err.context(format!(
+                    "the AIDA cache at {} changed on disk ({reason}) and could not be re-opened",
+                    self.path.display()
+                )))
+            }
+        }
+    }
+
+    /// Make the next cache use run the binding check.
+    #[cfg(test)]
+    pub(crate) fn expire_binding_check(&self) {
+        self.binding.lock().unwrap().expire();
     }
 
     // Read-only connection, pinned before reading either metadata or rows.
@@ -1809,6 +1890,7 @@ impl Cache {
             migration_pending: AtomicBool::new(false),
             usable_snapshot: AtomicBool::new(true),
             read_only: self.read_only,
+            binding: Mutex::new(CacheBinding::capture(&self.path)), // trace:BUG-1984 | ai:claude
         })
     }
 
@@ -1820,7 +1902,7 @@ impl Cache {
     // Another process can finish a pending migration while this handle waits.
     // trace:TASK-1526 | ai:codex
     pub(crate) fn recheck_migration(&self) -> bool {
-        if self.migration_pending() && !schema_migration_needed(&self.conn.lock().unwrap()) {
+        if self.migration_pending() && !schema_migration_needed(&self.conn()) {
             self.migration_pending.store(false, Ordering::SeqCst);
         }
         self.migration_pending()
@@ -1841,7 +1923,7 @@ impl Cache {
     // ------------------------------------------------------------------ meta
 
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1853,7 +1935,7 @@ impl Cache {
     }
 
     fn get_meta(&self, key: &str) -> Result<Option<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let r = conn
             .query_row(
                 "SELECT value FROM cache_meta WHERE key = ?1",
@@ -1919,7 +2001,7 @@ impl Cache {
 
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -2022,7 +2104,7 @@ impl Cache {
             }
         }
         let count = {
-            let conn = self.conn.lock().unwrap();
+            let conn = self.conn();
             let migration_pending = self.migration_pending();
             with_cache_write(
                 &self.path,
@@ -2180,7 +2262,7 @@ impl Cache {
         if self.migration_pending() {
             return Ok(false);
         }
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -2223,7 +2305,7 @@ impl Cache {
     /// no view of who depends on it) — that's recovered on the next full rebuild,
     /// the same contract as the inbound-degree axis. trace:TASK-902 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -2261,7 +2343,7 @@ impl Cache {
         epic_id: &Uuid,
         stored_status: &crate::models::RequirementStatus,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let Some(status_str) = epic_status_to_stamp(&conn, epic_id, stored_status) else {
             return Ok(());
         };
@@ -2283,13 +2365,13 @@ impl Cache {
     /// shifted, whichever endpoint recorded the hierarchy edge.
     // trace:BUG-764 | ai:claude
     pub fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         ancestor_epic_ids_on(&conn, id)
     }
 
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -2495,7 +2577,7 @@ impl Cache {
             sql.push_str(&format!(" LIMIT {}", n));
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(&sql)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> =
             args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
@@ -2543,7 +2625,7 @@ impl Cache {
             DeferFilter::DeferredOnly => format!(" AND (c.deferred = 1 OR c.{DEFER_TAG_LIKE})"),
             DeferFilter::Both => String::new(),
         };
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         // FTS5 requires the MATCH clause to use the bare table name, not an
         // alias — hence no `f` alias on requirements_fts.
         let sql = format!(
@@ -2571,7 +2653,7 @@ impl Cache {
     // ----------------------------------------------------------------- stats
 
     pub fn requirement_count(&self) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))?;
         Ok(n as usize)
     }
@@ -2583,7 +2665,7 @@ impl Cache {
     /// old predicate exactly: `!archived && decision_request.is_pending()`.
     // trace:TASK-1065 | ai:claude
     pub fn pending_decision_count(&self) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let n: i64 = conn.query_row(
             "SELECT COUNT(*) FROM requirements_cache WHERE has_pending_decision = 1 AND archived = 0",
             [],
@@ -2596,7 +2678,7 @@ impl Cache {
     /// UUID. Returns `Degrees::default()` (all-zero) when the spec isn't in the
     /// cache yet. trace:STORY-632 | ai:claude
     pub fn degrees_for_id(&self, id: &Uuid) -> Result<Degrees> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let d = conn
             .query_row(
                 "SELECT in_degree, out_degree, heft FROM requirements_cache WHERE id = ?1",
@@ -2623,7 +2705,7 @@ impl Cache {
     /// `Ok(None)` when the uuid isn't in the cache (stale/never-ingested).
     // trace:BUG-634 | ai:claude
     pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         spec_id_for_uuid_on(&conn, id)
     }
 
@@ -2640,7 +2722,7 @@ impl Cache {
     /// trusting an empty result.
     // trace:BUG-701 | ai:claude
     pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT UPPER(spec_id) AS sid, id, title \
              FROM requirements_cache \
@@ -2695,7 +2777,7 @@ impl Cache {
         sql: &str,
         id: Option<&str>,
     ) -> Result<Vec<crate::id_collisions::IdRow>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(sql)?;
         let params: Vec<&dyn rusqlite::ToSql> = match &id {
             Some(id) => vec![id as &dyn rusqlite::ToSql],
@@ -2736,7 +2818,7 @@ impl Cache {
     /// `canonical_spec_id` (stored spec_ids are upper-cased).
     // trace:BUG-636
     pub fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         uuid_for_spec_id_on(&conn, spec_id)
     }
 
@@ -2750,7 +2832,7 @@ impl Cache {
     /// looping.
     // trace:TASK-955 | ai:claude
     pub fn descendant_ids(&self, root: &Uuid) -> Result<HashSet<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "WITH RECURSIVE subtree(id) AS (
                  SELECT ?1

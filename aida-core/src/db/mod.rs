@@ -8,7 +8,7 @@
 mod cache;
 // trace:BUG-1984 | ai:claude
 #[cfg(feature = "native")]
-pub mod cache_binding;
+mod cache_binding;
 #[cfg(feature = "native")]
 mod cache_lock;
 #[cfg(feature = "native")]
