@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T14:23:07.748651524Z
+modified_at: 2026-10-13T14:28:31.810650388Z
 req_type: Bug
 tags:
 - cache
@@ -112,6 +112,12 @@ comments:
   created_at: 2026-10-13T14:23:07.748651524Z
   modified_at: 2026-10-13T14:23:07.748651524Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a135aa-3dc2-7f11-a4ce-35ede5daeb72
+  author: joe
+  content: 'ADVISOR RULING A1 + SIGNOFF (ADR-73 cond. 5) for PR #2586 at 2fb843988a0320fad73557d98a3c9978f339f431. **A1: stat-at-bind is accepted for this PR.** The cache is derived data. The window is open→stat, which is milliseconds outside rare schema writes and lock retries. What it misses there is a silent split until the next restart, the same as today, never data loss. The /proc/self/fd cross-check is the right fix and is tracked, with the reviewer''s non-blocking items 1-3, in TASK-1739 (approved). Signoff: the design matches the 2026-10-13 ruling (detect in the long-lived holder, which here means the web server and the TUI; no fresh-process doctor claim). Tests reproduce the real topology, including the unshare -rm holder. Mutations are caught. Build is green. Cleared to merge after the operator clears the REWORK hold. NOTE: BUG-1984''s Acceptance text still describes the old refusal and doctor check. The re-scoped acceptance is the 2026-10-13 ruling comment on the spec, and this PR is judged against that.'
+  created_at: 2026-10-13T14:28:31.810650388Z
+  modified_at: 2026-10-13T14:28:31.810650388Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-3f26-7af2-8940-f209cc30cba7
   author: joe
