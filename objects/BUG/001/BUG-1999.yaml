@@ -19,15 +19,23 @@ description: |-
   Also from the same review:
   - the .swapping marker is now redundant (mutating the marked guard away is an equivalent mutant), so the comments overstate it;
   - dev_build_tests.rs:1397 has a dangling, truncated doc comment.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:37:23.516314035Z
-modified_at: 2026-10-13T04:25:27.065504493Z
+modified_at: 2026-10-13T12:24:19.381790647Z
 req_type: Bug
 tags:
 - review-follow-up
+history:
+- id: 01a13538-86b5-7641-a40e-38e4325ffb0c
+  author: joe
+  timestamp: 2026-10-13T12:24:19.381784471Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
