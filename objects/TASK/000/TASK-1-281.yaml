@@ -1,0 +1,29 @@
+id: 01a13533-d26a-7711-b64e-b585194da001
+spec_id: TASK-1-281
+title: 'non-blocking: at pipeline_depth 3 (or after a ship refills the pipeline) a memb…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1930, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: at pipeline_depth 3 (or after a ship refills the pipeline) a member already in flight when the halt fires is left running with its parent-serialized review/merge leg never run — same pre-existing shape as the BUG-1608 failure-budget halt; message discloses it
+
+  PR: #2583
+  Reviewed sha: 55e32d5ea0e9e0e2b810fa919bc9cd4169b1a11b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T12:19:11.082641743Z
+modified_at: 2026-10-13T12:19:11.082641743Z
+req_type: Task
+tags:
+- carried-from:BUG-1930
+- finding-hash:d1f1efe6
+- from-review:PR-2583
+- kind:carried-forward
+filed_at:
+  code_sha: abbb2552c52b6f7c7e0cd9aba059f58f1ffc86fc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
