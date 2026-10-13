@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T18:21:00.129508209Z
+modified_at: 2026-10-13T18:23:57.883060377Z
 req_type: Bug
 tags:
 - plan:night
@@ -79,6 +79,11 @@ comments:
   content: 'C2 follow-up filed as BUG-2118: PATH isolation does NOT satisfy the carried BUG-1955 root-cause obligation. Its actual temporary-file/object-write mechanism and reproduction remain unconfirmed. All 25 converted tests and their fixture helpers were audited for C1: none has an env-gated early return made vacuous by env_clear; the parent-return path is the only early return in those bodies. The dedicated probe child is separately required to reach its ready file and execute fake git. C3: normal workspace CI Run tests includes the 15x16 stress; job timeout-minutes:25 bounds it and any failure fails Build. C4: AGENTS names test_env::run_path_isolated_test before fixtures/guards.'
   created_at: 2026-10-13T18:21:00.129508209Z
   modified_at: 2026-10-13T18:21:00.129508209Z
+- id: 01a13681-c9bb-77f0-827e-22d1b6777e4d
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2597 at 07f9fedf8a29802fa320861d6035cc42d60b859e. All 27 make check-ci-fast gates passed. C1 audit now covers 26 conversions; author-controlled self-check found the missed squash-subject writer, fixed it, and round 2 found no further blockers. C2 explicitly disclosed in PR body and split into BUG-2118. GitHub Build pending; draft retained for merge relay.'
+  created_at: 2026-10-13T18:23:57.883060377Z
+  modified_at: 2026-10-13T18:23:57.883060377Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
