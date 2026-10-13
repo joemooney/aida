@@ -345,11 +345,17 @@ pub(crate) fn roleless_recovery_line(project_root: &std::path::Path) -> Option<S
 
 /// Append the roleless recovery line to advisor-authority refusals when the
 /// current shell is roleless. Empty when no role recovery clue is available.
+/// A shell that exports a grant which fails validation is not roleless: it
+/// gets the rejection (which grant, which check) instead of "No active role".
 // trace:BUG-1044 | ai:codex
+// trace:BUG-1983 | ai:claude
 pub(crate) fn roleless_recovery_sentence() -> String {
     let Ok(project_root) = find_project_root() else {
         return String::new();
     };
+    if let Some(rejection) = seat_authority::grant_check(&project_root).rejection_sentence() {
+        return format!(" {rejection}.");
+    }
     roleless_recovery_line(&project_root)
         .map(|line| format!(" {line}."))
         .unwrap_or_default()

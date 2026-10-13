@@ -2967,6 +2967,16 @@ pub(crate) fn handle_review_record_at(
         );
     }
 
+    // BUG-1983: a session that exports a grant which fails validation claims
+    // a seat it does not hold; refuse rather than attribute the verdict to
+    // it, with the same sentence the advisor-gated edit gives. No exported
+    // grant stays permissive (agent identity, or the operator fallback below).
+    // trace:BUG-1983 | ai:claude
+    if let Some(rejection) = crate::seat_authority::grant_check(&project_root).rejection_sentence()
+    {
+        anyhow::bail!("refused: review record. {rejection}.");
+    }
+
     // BUG-1802: bind recording identity and enforce policy.
     // trace:BUG-1802 | ai:antigravity
     let recorded_by = review_recorded_by(&project_root);
