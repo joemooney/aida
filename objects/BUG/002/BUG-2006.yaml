@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:13.679762298Z
-modified_at: 2026-10-13T18:09:58.320324218Z
+modified_at: 2026-10-13T22:58:52.465634037Z
 req_type: Bug
 tags:
 - contained
@@ -27,6 +27,11 @@ comments:
   created_at: 2026-10-13T18:09:57.318960750Z
   modified_at: 2026-10-13T18:09:57.318960750Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a1377d-79b1-75e3-8681-95e5e19aa946
+  author: joe
+  content: 'PR #2610 filed with fix and unit tests, CI in flight at 7b79986a13618dac157be4ee9fc2625c2fe5218e'
+  created_at: 2026-10-13T22:58:52.465634037Z
+  modified_at: 2026-10-13T22:58:52.465634037Z
 history:
 - id: 01a13674-fa30-7603-9336-9657202fa1d8
   author: joe
