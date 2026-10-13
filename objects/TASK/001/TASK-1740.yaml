@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:53:44.348492787Z
-modified_at: 2026-10-13T20:19:23.649882937Z
+modified_at: 2026-10-13T20:38:26.119989746Z
 req_type: Task
 tags:
 - forge
@@ -52,6 +52,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2600 at 73de824f27b3cf4c764617e635660cd112da24cc'
   created_at: 2026-10-13T20:19:23.649882937Z
   modified_at: 2026-10-13T20:19:23.649882937Z
+- id: 01a136fc-e647-77d0-a499-11a7746fa585
+  author: joe
+  content: 'FACTORY DRAFT: PR #2600 updated at cf86665c460ca8ca6e703039739379c32856c50d'
+  created_at: 2026-10-13T20:38:26.119989746Z
+  modified_at: 2026-10-13T20:38:26.119989746Z
 history:
 - id: 01a135f1-4d1e-7d33-b8ce-3135dcc8c61c
   author: joe
