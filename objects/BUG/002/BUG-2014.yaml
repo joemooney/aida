@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-13T22:02:34.171755319Z
+modified_at: 2026-10-13T23:02:43.344685667Z
 req_type: Bug
 tags:
 - authority
@@ -33,6 +33,20 @@ comments:
   content: 'FACTORY PLAN / SKETCH (codex), PLAN ONLY pending ADVISOR SKETCH SIGNOFF: build on BUG-2011 PR #2604. Add a focused grant_expiry_notice module and a lightweight role-expiry notice command dispatched before store initialization. Match typed grant_check/session_grant_lookup outcomes; use informational expiry only to retain the timestamp/seat of the typed Expired rejection, never to confer authority. A PreToolUse hook for every tool calls this command with a short timeout and injects additionalContext; no prompt, no deny, exit 0. Edit aida-core/templates/hooks and settings masters, then make sync-templates/check-templates. Persist a local runtime ledger under the session-grant directory, keyed by validated grant/session identity, with atomic replacement and a permanent flock sidecar: emit at most once per 2h, 30m, expired crossing, renew/new grant starts a fresh epoch. Exclude absent/baseline grants, do not load graph/cache, and do not infer authority from AIDA_SESSION_ROLE. Deterministic clock tests simulate >2h -> 90m -> repeated calls -> 20m -> expired, assert one notice per observed threshold, renewed grant reset, concurrent calls at most once, poison-store/no-cache, and actual tool-hook JSON context delivery without UserPromptSubmit. Risks needing signoff: new hook/CLI contract, writable ledger failure policy (fail open to tool execution but retain diagnostic), scope across parent/child and multiple consumers, and timestamp metadata for typed expiry. Architecture-class per AGENTS.md; no signoff is recorded, so parked:factory/plan:night and continue without waiting for a human.'
   created_at: 2026-10-13T22:02:29.954056262Z
   modified_at: 2026-10-13T22:02:29.954056262Z
+- id: 01a13780-ff90-70f3-b218-57f820893926
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF 2026-10-13 16:05: APPROVED with conditions, for the codex sketch of 22:02Z (a grant_expiry_notice module, a lightweight role-expiry notice command, a tool-call hook, and a once-per-crossing ledger). Build on BUG-2011 (#2604): stack on its branch, or wait for its merge.
+    C1. Zero cost when there is no grant: the hook SCRIPT checks for AIDA_SESSION_GRANT and exits 0 without spawning aida when it is unset or empty. With a grant, the notice command must not load the store, graph or cache, and it has a hard timeout of 2s or less in the hook. Add a test or a static guard that the command path avoids store initialization.
+    C2. Delivery must be verified, not assumed: confirm against the installed Claude Code version that the chosen hook event injects additionalContext the model sees. If PreToolUse does not support additionalContext for this version, use PostToolUse. Pin the exact JSON shape in a test, and name the Claude Code version checked in the PR body.
+    C3. Ledger failure policy: the ledger lives under the session-grant directory. If it can't be read or written (contained sandbox, permissions), the hook FAILS OPEN and SILENT: no notice, one stderr diagnostic, exit 0. It never emits on every call. The statusline and SessionStart notices remain the fallback. Write atomically with a flock sidecar, as sketched.
+    C4. Authority: notices are informational only. Never infer the seat from AIDA_SESSION_ROLE; use the validated grant's seat, and for a typed Expired rejection only the record's timestamp and seat. One ledger epoch per grant id: a renewal or new grant resets it. A child grant's effective expiry is min(own, parent), per BUG-2011.
+    C5. Scope: the Claude Code templates only (master, then make sync-templates and make check-templates). Codex and agy delivery is a separate follow-up; file it as a draft.
+    C6. Tests as sketched: the deterministic clock sequence (more than 2h, 90m, repeats, 20m, expired) gives exactly one notice per crossing; renewal resets; concurrent calls give at most one notice; the store is never touched; and real hook JSON is delivered with no UserPromptSubmit.
+    This is architecture-class and is now signed. Implementation may proceed; review is one fresh strict reviewer. Advisor SIGNOFF is needed before merge only if the implementation deviates from C1-C6.
+  created_at: 2026-10-13T23:02:43.344685667Z
+  modified_at: 2026-10-13T23:02:43.344685667Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
   author: joe
