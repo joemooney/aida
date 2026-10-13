@@ -890,8 +890,8 @@ mod resolve_gh_binary_tests {
 
     // These tests run in exact single-test children. A shared writer mutex
     // alone cannot protect other tests' unlocked executable lookups.
-    // trace:BUG-1994 | ai:codex
     /// Prepend a directory only inside the isolated test child.
+    // trace:BUG-1994 | ai:codex
     // trace:TASK-1532 | ai:agy
     fn scoped_prepend_path(dir: &std::path::Path) -> impl Drop {
         crate::test_env::EnvVarGuard::prepend_path(dir)
