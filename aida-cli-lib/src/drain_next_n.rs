@@ -523,6 +523,11 @@ pub(crate) struct RealNextNDriver<'a> {
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
+    // trace:BUG-1980 | ai:claude
+    fn stop_requested(&mut self) -> bool {
+        crate::drain_cmd::stop_requested_from_env()
+    }
+
     fn next_head(&mut self) -> Option<String> {
         let (pick, role_skipped, blocked_skipped) =
             resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
