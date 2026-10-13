@@ -272,6 +272,76 @@ fn unexpressible_main_emits_no_entries() {
     assert!(settings.pointer("/sandbox/filesystem").is_none(), "{json}");
 }
 
+/// The settings JSON a contained launch gets for `write_roots`, parsed.
+// trace:BUG-1929 | ai:claude
+fn launch_settings(write_roots: &[PathBuf]) -> (String, serde_json::Value) {
+    let flags = crate::session::claude_contained_flags_for_roots(write_roots);
+    let json = flags[3].clone();
+    let settings = serde_json::from_str(&json).unwrap();
+    (json, settings)
+}
+
+// FAIL CLOSED: with no write roots (a session outside git, or a resume whose
+// cwd is not a git root) the launch grants no store or cache path at all. It
+// never falls back to the main checkout of the process's cwd (under
+// `cargo test`, this repository's own checkout).
+// trace:BUG-1929 | ai:claude
+#[test]
+fn bug_1929_outside_git_grants_no_store_or_cache_paths() {
+    let (json, settings) = launch_settings(&[]);
+    assert!(allow_write(&settings).is_empty(), "{json}");
+    assert!(deny_write(&settings).is_empty(), "{json}");
+    assert!(!json.contains(".aida-store"), "{json}");
+    assert!(!json.contains("cache.db"), "{json}");
+}
+
+// A linked worktree's launch grants the store and cache of ITS OWN main
+// checkout, and nothing belonging to any other checkout (in particular not
+// the one the process's cwd is in).
+// trace:BUG-1929 | ai:claude
+#[test]
+fn bug_1929_linked_worktree_grants_its_own_main_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = std::fs::canonicalize(tmp.path()).unwrap();
+    let main = base.join("main");
+    std::fs::create_dir_all(&main).unwrap();
+    bug_1929_git(&main, &["init", "-q", "-b", "main"]);
+    std::fs::write(main.join("README.md"), "hi\n").unwrap();
+    bug_1929_git(&main, &["add", "README.md"]);
+    bug_1929_git(&main, &["commit", "-qm", "init"]);
+    std::fs::create_dir_all(main.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(main.join(".aida")).unwrap();
+    let worktree = base.join("wt");
+    bug_1929_git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "wt",
+            worktree.to_str().unwrap(),
+        ],
+    );
+
+    let (json, settings) = launch_settings(&[worktree.clone()]);
+    let mut expected = vec![format!("/{}", main.join(".aida-store").display())];
+    for name in CACHE_FILES {
+        expected.push(format!("/{}", main.join(".aida").join(name).display()));
+    }
+    assert_eq!(allow_write(&settings), expected, "{json}");
+    assert_eq!(
+        deny_write(&settings),
+        vec![format!("/{}", main.join(".aida-store/.git").display())],
+        "{json}"
+    );
+    assert_eq!(
+        json.matches(".aida-store").count(),
+        2,
+        "only this main's store and its .git pointer: {json}"
+    );
+}
+
 // DOCTOR: no gap when everything is in place; one per missing sidecar, store
 // elsewhere, or cache elsewhere.
 #[test]
