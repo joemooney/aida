@@ -1,0 +1,29 @@
+id: 01a13533-d440-7be3-8bb2-4e21d19baaf1
+spec_id: TASK-1-282
+title: 'non-blocking: open operator policy question — any non-empty permission_denials …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1930, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: open operator policy question — any non-empty permission_denials reclassifies the stop (narrow to Edit/Write/MultiEdit/NotebookEdit?)
+
+  PR: #2583
+  Reviewed sha: 55e32d5ea0e9e0e2b810fa919bc9cd4169b1a11b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T12:19:11.552567824Z
+modified_at: 2026-10-13T12:19:11.552567824Z
+req_type: Task
+tags:
+- carried-from:BUG-1930
+- finding-hash:0cea4efe
+- from-review:PR-2583
+- kind:carried-forward
+filed_at:
+  code_sha: abbb2552c52b6f7c7e0cd9aba059f58f1ffc86fc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
