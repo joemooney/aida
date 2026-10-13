@@ -901,16 +901,24 @@ pub(crate) fn run_scaffold_upgrade_git_hooks(
         println!("Dry run: nothing was written.");
     }
     if !report.manual.is_empty() {
-        let list = report
+        // The list goes to stdout too: agent-mode errors keep one line.
+        for hook in &report.manual {
+            println!(
+                "Needs manual action: the `{}` hook ({}): {}",
+                hook.name,
+                hook.path.display(),
+                hook.reason
+            );
+        }
+        let names = report
             .manual
             .iter()
-            .map(|h| format!("  - `{}` ({}): {}", h.name, h.path.display(), h.reason))
+            .map(|h| format!("`{}`", h.name))
             .collect::<Vec<_>>()
-            .join("\n");
+            .join(", ");
         anyhow::bail!(
-            "{} stale AIDA-generated git hook(s) need manual action; store writes stay refused until \
-             they are fixed:\n{list}",
-            report.manual.len()
+            "stale AIDA-generated git hook(s) {names} need manual action (listed above); store \
+             writes stay refused until they are fixed"
         );
     }
     Ok(())

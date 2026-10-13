@@ -4049,14 +4049,20 @@ fn backup_and_replace_hook(
     );
     // Staged with create_new (not a bare write: TASK-331's guard) and
     // renamed over the hook.
-    let tmp = dir.join(format!(".{name}.aida-refresh-{stamp}"));
+    let tmp = dir.join(format!(
+        ".{name}.aida-refresh-{stamp}-{}",
+        std::process::id()
+    ));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .with_context(|| format!("staging {}", tmp.display()))?;
+    // Only a temp file this run created is cleaned up on failure.
     let staged = (|| {
         use std::io::Write;
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)?
-            .write_all(fresh.as_bytes())?;
+        file.write_all(fresh.as_bytes())?;
+        drop(file);
         std::fs::set_permissions(&tmp, meta.permissions())?;
         std::fs::rename(&tmp, path)
     })();
