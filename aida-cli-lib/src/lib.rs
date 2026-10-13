@@ -11,6 +11,27 @@
 // trace:STORY-639 | ai:claude
 #![recursion_limit = "256"]
 
+// Crate-local `print!` / `println!` shadow the prelude macros for every module
+// declared below (textual macro scope), so each stdout write through them is
+// tracked: the dispatcher's agent-mode `cache:` footer then starts on its own
+// line even when a command body ended mid-line. Both delegate to std's own
+// macros, so locking, line buffering, test capture and the panic on a failed
+// write are unchanged. trace:BUG-1975 | ai:claude
+macro_rules! print {
+    ($($arg:tt)*) => {
+        $crate::cache_output::print_tracked(::std::format_args!($($arg)*))
+    };
+}
+// trace:BUG-1975 | ai:claude
+macro_rules! println {
+    () => {
+        $crate::cache_output::println_tracked(::std::format_args!(""))
+    };
+    ($($arg:tt)*) => {
+        $crate::cache_output::println_tracked(::std::format_args!($($arg)*))
+    };
+}
+
 mod advisor;
 mod advisor_cmd_root;
 mod advisor_code_gate;
