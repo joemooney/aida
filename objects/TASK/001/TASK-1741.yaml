@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:45:47.396313407Z
-modified_at: 2026-10-13T22:02:42.444093968Z
+modified_at: 2026-10-13T22:03:09.505552132Z
 req_type: Task
 tags:
 - review-follow-up
@@ -29,6 +29,12 @@ relationships:
   target_id: 01a13601-d916-7c82-ba61-3d4bb81b3279
   created_at: 2026-10-13T18:11:12.838975247Z
   created_by: joe
+comments:
+- id: 01a1374a-7741-7973-8bb1-ac4ed5788fee
+  author: ai:codex:joe
+  content: 'FACTORY PLAN (codex): extend one_rejection_table_drives_the_edit_gate_and_review_record with an explicit valid-advisor row under the existing hermetic no-TTY ambient guard. Parse real edit CLI and execute the production handler, assert stored Draft -> Approved, then execute review record and inspect persisted reviewer_role=advisor. Pin grant_check Valid so wrongly rejecting the healthy fixture fails the row. Preserve every rejection and valid-reviewer assertion. Record sketch D2 deviation (shared grant_check plus rejection_sentence, no AdvisorAuthority type) on BUG-1983. Tests only; source reading/rustfmt and full make check-ci-fast locally, full Rust test execution only GitHub CI.'
+  created_at: 2026-10-13T22:03:09.505552132Z
+  modified_at: 2026-10-13T22:03:09.505552132Z
 history:
 - id: 01a135f1-47bb-71b2-8629-1957bef07eb9
   author: joe
