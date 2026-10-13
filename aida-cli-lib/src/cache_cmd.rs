@@ -342,6 +342,12 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
              brings it up to date",
             "BEHIND".yellow()
         )
+    } else if st.head_behind_tip || st.tip_live_elsewhere {
+        // trace:BUG-1998 | ai:antigravity
+        format!(
+            "History status:   {} — another checkout moved the shared index on",
+            "BEHIND".yellow()
+        )
     } else {
         format!(
             // trace:STORY-1650 | ai:claude

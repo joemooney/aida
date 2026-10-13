@@ -1194,6 +1194,10 @@ pub(crate) struct HistoryCacheStatus {
     /// store is behind a shared index that another checkout moved on.
     // trace:BUG-1954 | ai:claude
     pub(crate) head_behind_tip: bool,
+    /// True when the indexed tip is not an ancestor or descendant of HEAD,
+    /// but is still live in another checkout.
+    // trace:BUG-1998 | ai:antigravity
+    pub(crate) tip_live_elsewhere: bool,
     /// True when inline catch-up has paused after repeated attempts that
     /// kept nothing; queries read git until a rebuild or the next retry.
     pub(crate) catch_up_stalled: bool,
@@ -2099,8 +2103,9 @@ pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
         IndexMiss::Busy
     } else if st.tip != st.head {
         // trace:STORY-1650 | ai:claude
-        if st.head_behind_tip {
+        if st.head_behind_tip || st.tip_live_elsewhere {
             // trace:BUG-1954 | ai:claude
+            // trace:BUG-1998 | ai:antigravity
             IndexMiss::CheckoutBehind
         } else if st.catch_up_stalled || st.lag.is_none() {
             IndexMiss::Stuck
@@ -2419,6 +2424,10 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
                 // trace:BUG-1954 | ai:claude
                 st.head_behind_tip =
                     aida_core::git_ops::is_ancestor(store, head, tip).unwrap_or(false);
+                // trace:BUG-1998 | ai:antigravity
+                if !st.head_behind_tip {
+                    st.tip_live_elsewhere = tip_is_live_elsewhere(store, tip, head);
+                }
             }
         }
         st.floor_commit_at = cache

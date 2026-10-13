@@ -4040,4 +4040,196 @@ mod bug_1923 {
             .unwrap()
             .is_none());
     }
+
+    // trace:BUG-1998 | ai:antigravity
+    mod bug_1998 {
+        use super::*;
+        use crate::history_cache::{HistoryCacheStatus, IndexMiss};
+
+        #[test]
+        fn head_behind_tip_formatters_neither_say_catches_up_nor_suggest_rebuild() {
+            let st = HistoryCacheStatus {
+                exists: true,
+                head: Some("1111111".into()),
+                tip: Some("2222222".into()),
+                head_behind_tip: true,
+                tip_live_elsewhere: false,
+                complete: true,
+                events: 42,
+                commits: 10,
+                ..Default::default()
+            };
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                lines.contains("another checkout moved the shared index on"),
+                "status lines must state another checkout moved shared index on:\n{lines}"
+            );
+            assert!(
+                !lines.contains("catches up"),
+                "status lines must NOT say catches up:\n{lines}"
+            );
+            assert!(
+                !lines.contains("rebuild"),
+                "status lines must NOT suggest rebuild:\n{lines}"
+            );
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                doc.contains("another checkout moved the shared index on"),
+                "doctor line must state another checkout moved shared index on:\n{doc}"
+            );
+            assert!(
+                !doc.contains("catches up"),
+                "doctor line must NOT say catches up:\n{doc}"
+            );
+            assert!(
+                !doc.contains("rebuild"),
+                "doctor line must NOT suggest rebuild:\n{doc}"
+            );
+        }
+
+        #[test]
+        fn tip_live_elsewhere_formatters_neither_say_catches_up_nor_suggest_rebuild() {
+            let st = HistoryCacheStatus {
+                exists: true,
+                head: Some("1111111".into()),
+                tip: Some("2222222".into()),
+                head_behind_tip: false,
+                tip_live_elsewhere: true,
+                complete: true,
+                events: 42,
+                commits: 10,
+                ..Default::default()
+            };
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                lines.contains("another checkout moved the shared index on"),
+                "status lines must state another checkout moved shared index on:\n{lines}"
+            );
+            assert!(
+                !lines.contains("catches up"),
+                "status lines must NOT say catches up:\n{lines}"
+            );
+            assert!(
+                !lines.contains("rebuild"),
+                "status lines must NOT suggest rebuild:\n{lines}"
+            );
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                doc.contains("another checkout moved the shared index on"),
+                "doctor line must state another checkout moved shared index on:\n{doc}"
+            );
+            assert!(
+                !doc.contains("catches up"),
+                "doctor line must NOT say catches up:\n{doc}"
+            );
+            assert!(
+                !doc.contains("rebuild"),
+                "doctor line must NOT suggest rebuild:\n{doc}"
+            );
+        }
+
+        #[test]
+        fn diverged_head_with_tip_live_elsewhere_gets_no_rebuild_miss_and_note() {
+            let mut st_live = HistoryCacheStatus {
+                exists: true,
+                head: Some("aaaaaaa".into()),
+                tip: Some("bbbbbbb".into()),
+                head_behind_tip: false,
+                tip_live_elsewhere: true,
+                complete: true,
+                ..Default::default()
+            };
+            let miss = history_cache::classify_miss(&st_live);
+            assert_eq!(
+                miss,
+                IndexMiss::CheckoutBehind,
+                "tip live elsewhere must classify as CheckoutBehind"
+            );
+            let note = crate::history_flow::fallback_note(miss);
+            assert!(
+                !note.contains("rebuild"),
+                "CheckoutBehind fallback note must not suggest rebuild:\n{note}"
+            );
+
+            // Without tip live elsewhere, diverged head must classify as Stuck
+            st_live.tip_live_elsewhere = false;
+            let stuck_miss = history_cache::classify_miss(&st_live);
+            assert_eq!(
+                stuck_miss,
+                IndexMiss::Stuck,
+                "diverged tip not live elsewhere must classify as Stuck"
+            );
+            let stuck_note = crate::history_flow::fallback_note(stuck_miss);
+            assert!(
+                stuck_note.contains("rebuild"),
+                "Stuck fallback note must suggest rebuild:\n{stuck_note}"
+            );
+        }
+
+        #[test]
+        fn diverged_tip_is_live_elsewhere_detected_by_status_at() {
+            let mut fx = Fixture::new();
+            let mut s = Spec::new("STORY-1", "Story", "Live elsewhere");
+            fx.put(&s);
+            fx.commit("commit 1 on main");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+
+            // Create branch "other" at current tip
+            fx.git(&["branch", "other"]);
+
+            // Advance main with a new commit
+            s.status = "Approved".into();
+            fx.put(&s);
+            fx.commit("commit 2 on other path");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+
+            let st_after_rebuild = history_cache::status_at(&fx.store, &fx.db);
+            let indexed_tip = st_after_rebuild.tip.clone().unwrap();
+
+            // Create a diverged history on branch "diverged" starting from commit 1
+            fx.git(&["checkout", "-b", "diverged", "HEAD~1"]);
+            s.title = "Diverged story".into();
+            fx.put(&s);
+            fx.commit("commit 2 on diverged");
+
+            // HEAD and indexed_tip have diverged. Because branch "main" (or "other")
+            // still contains indexed_tip, tip_is_live_elsewhere is true!
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert_eq!(st.tip, Some(indexed_tip.clone()));
+            assert_ne!(st.head, st.tip);
+            assert!(!st.head_behind_tip);
+            assert!(
+                st.tip_live_elsewhere,
+                "tip must be recognized as live on other branch"
+            );
+
+            let miss = history_cache::classify_miss(&st);
+            assert_eq!(miss, IndexMiss::CheckoutBehind);
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(lines.contains("another checkout moved the shared index on"));
+            assert!(!lines.contains("catches up"));
+            assert!(!lines.contains("rebuild"));
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(doc.contains("another checkout moved the shared index on"));
+            assert!(!doc.contains("catches up"));
+            assert!(!doc.contains("rebuild"));
+
+            // Now delete all refs pointing to or containing indexed_tip
+            fx.git(&["branch", "-D", "main"]);
+            fx.git(&["branch", "-D", "other"]);
+
+            let st_orphaned = history_cache::status_at(&fx.store, &fx.db);
+            assert!(
+                !st_orphaned.tip_live_elsewhere,
+                "orphaned tip is not live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st_orphaned), IndexMiss::Stuck);
+        }
+    }
 }

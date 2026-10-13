@@ -13140,6 +13140,13 @@ pub(crate) fn history_index_doctor_line(
                  run `aida cache rebuild --history`."
             );
         }
+        if st.head_behind_tip || st.tip_live_elsewhere {
+            // trace:BUG-1998 | ai:antigravity
+            return format!(
+                "history index behind the store{by}{running} — another checkout moved \
+                 the shared index on."
+            );
+        }
         return format!(
             // trace:STORY-1650 | ai:claude
             "history index behind the store{by}{running} — it catches up on the next \
