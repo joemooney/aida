@@ -281,7 +281,22 @@ fn agent_new_reentry_respects_reasoned_operator_hold() {
 fn dead_recorded_pid_does_not_hide_observed_live_owner() {
     let _env = crate::test_env::env_lock();
     let (tmp, mut lease) = fixture();
-    lease.active_pid = Some(u32::MAX);
+    // Use a real reaped process, not a numeric sentinel: high unsigned PIDs
+    // can become Unix process-group selectors in the legacy probe.
+    let mut child = std::process::Command::new("/usr/bin/cat")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    lease.active_pid = Some(child.id());
+    lease.active_pid_start_time =
+        Some(process_probe::process_start_identity(child.id()).expect("live child start identity"));
+    drop(child.stdin.take());
+    assert!(child.wait().unwrap().success());
+    assert!(!process_probe::process_identity_is_alive(
+        lease.active_pid.unwrap(),
+        lease.active_pid_start_time.as_deref(),
+    ));
     let live = [process_probe::LiveSession {
         pid: 4242,
         cwd: lease.worktree_path.clone(),
