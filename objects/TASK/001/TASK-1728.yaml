@@ -12,12 +12,12 @@ description: |
   1. aida-pre-commit.sh (template master; then `make sync-templates`) exempts commits made while `CHERRY_PICK_HEAD` or `REVERT_HEAD` exists, next to the existing MERGE_HEAD exemption. Tests: a conflicted cherry-pick and a conflicted revert finished on main in the primary checkout with `block_primary_commits = true` succeed; a plain commit is still refused.
   2. The refusal message and the hooks docs state that `--amend` and `merge --squash` + commit on main in the primary checkout are also refused (with the AIDA_ALLOW_PRIMARY_COMMIT override).
   3. The unreachable `.aida-store` pwd branch in the exemption chain is removed (or kept with a comment saying why); existing primary-gate tests still pass.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-13T07:50:36.098904002Z
+modified_at: 2026-10-13T08:13:52.116723764Z
 req_type: Task
 tags:
 - follow-up:advisor-review
@@ -82,6 +82,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13453-3a57-7a81-8e0a-7cfb72384c3f
+  author: aida-auto-bump
+  timestamp: 2026-10-13T08:13:52.087856697Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13453-3a74-7b50-85f4-1a92868e5a4b
+  timestamp: 2026-10-13T08:13:52.116716671Z
+  agent: implementer
+  commit_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
+  summary: All 3 acceptance items met and tested via real git cherry-pick/revert conflicts; mutations in both directions caught; check-templates OK; .aida/config.toml change is comment-only
+  review_verdict: approved
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -90,3 +104,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T08:13:52.087852713Z
+  completion_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
