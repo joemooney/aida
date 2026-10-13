@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T12:43:05.744925015Z
+modified_at: 2026-10-13T12:44:20.531852025Z
 req_type: Task
 tags:
 - adr-9
@@ -43,6 +43,11 @@ comments:
     Acceptance-to-test mapping: (1) upgrade_release_test_calls_are_excluded_from_production_count for both cfg forms; (2) allowlisted_test_only_file_production_call_is_an_offender, covering calls before and after the test module, nested braces, and production modules; (3) existing only_allowlisted_files_call_the_one_engine_in_production plus the_queue_work_handler_still_routes_through_the_engine on the current tree. Add trace:TASK-1724 comments beside scanner and negative regressions. Risks: braces in strings/comments and multiline cfg attributes; use an existing parser dependency if available or a narrowly bounded scanner with those fixtures, never a blanket ignore after cfg(test). Existing groom comment explicitly removes split sequencing concern. All builds/tests on GitHub CI; make check-ci-fast before every push.
   created_at: 2026-10-13T06:40:15.810333932Z
   modified_at: 2026-10-13T06:40:15.810333932Z
+- id: 01a1354a-dab3-7153-b497-62c3b715e1ea
+  author: joe
+  content: 'FACTORY PLAN (codex): Reusing the existing plan with syn (already locked) as a dev-only parser for upgrade_release.rs. Remove its whole-file exemption; use AST module boundaries and cfg(test)/cfg(all(test,...)) attributes to count calls outside test modules, including code after them. Preserve the existing other-file counter and genuine production exceptions. Tests: upgrade_release_test_calls_are_excluded_from_production_count; allowlisted_test_only_file_production_call_is_an_offender (before/after and production-module cases); existing tree guard and handler assertion. Parser handles nested braces and strings/comments. Acceptance 1/2 mapped to new tests, 3 to existing tests. Risks: conditional-test attribute matching; conservative matching will not skip cfg(any(test,...)). GitHub CI only; check-ci-fast before push.'
+  created_at: 2026-10-13T12:44:20.531852025Z
+  modified_at: 2026-10-13T12:44:20.531852025Z
 history:
 - id: 01a1309d-17a9-79a0-bf89-99c5d5fcda6a
   author: joe
