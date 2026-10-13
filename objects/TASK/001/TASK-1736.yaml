@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T07:28:18.321266130Z
+modified_at: 2026-10-13T12:16:16.874648830Z
 req_type: Task
 tags:
 - authority
@@ -49,6 +49,12 @@ comments:
   created_at: 2026-10-13T07:28:18.321266130Z
   modified_at: 2026-10-13T07:28:18.321266130Z
   session_id: e651951a-cde3-4010-8494-7b15a84fb988
+- id: 01a13531-29ea-7f33-9370-780bd42bf94f
+  author: joe
+  content: 'ADVISOR SIGNOFF (ADR-73 cond. 5) for PR #2588 at 71243b77ce86a221eee007b8b9921022d7d3ff54. I read the authority-relevant diff (seat_authority.rs, role_cmd.rs). It only reads and reports. It never issues, widens or extends a grant. Refuse mode fails closed (exit 3) on an unresolved or revoked grant or parent, and a child''s expiry is capped at its parent''s. That matches the TASK-1736 intent. Combined with the merge seat''s independent round-2 APPROVE at this head and the green Build, it is cleared to merge once the operator clears the REWORK hold. Non-blocking follow-up: reenter_command() suggests ''aida role enter <seat>'' with no --delegate-seat, so a relay operator who follows it gets a grant that can''t launch children (FAQ-18). Fold that into TASK-1737 or a small task. Then #2587 needs its fresh review (C1-C4).'
+  created_at: 2026-10-13T12:16:16.874648830Z
+  modified_at: 2026-10-13T12:16:16.874648830Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a13351-a592-7cd0-af53-f8cf8dfb943d
   author: joe
