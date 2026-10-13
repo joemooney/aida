@@ -28,10 +28,3 @@
   added_at: 2026-10-11T01:51:13.306270483Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a133e8-3940-76b2-8eea-2342a7ce8078
-  position: 52000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-10-13T06:17:03.379169169Z
-  for_role: implementer
