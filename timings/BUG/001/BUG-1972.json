@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1972",
+  "publishes": [
+    {
+      "at": "2026-10-13T16:04:12.831278102Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:09.663260967Z",
+      "spec": "BUG-1972",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T01:11:52.382405743Z",
+      "spec": "BUG-1972",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T03:07:54.218631385Z",
+      "spec": "BUG-1972",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1972",
+        "branch": "bug-1972",
+        "first_seen": "2026-10-13T03:07:54.218458258+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T04:30:06.893319595Z",
+      "spec": "BUG-1972",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2582,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "33c15a41337b970a71a66ca2b9bddaca7b817820"
+      }
+    },
+    {
+      "ts": "2026-10-13T04:30:08.130653004Z",
+      "spec": "BUG-1972",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Token handling sound (M1-M4 caught). Blocker: a mirror re-run with --url B probes and creates a project at the EXISTING remote URL A, which the user did not name on that run; spec requires same-URL only.",
+        "recovery_hint": "address the review findings, move BUG-1972 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T14:53:43.288301328Z",
+      "spec": "BUG-1972",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2582,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e241935dc06ae97766a36f89e4c2bf9a50aae36b"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:44:36.995288757Z",
+      "spec": "BUG-1972",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2582,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e241935dc06ae97766a36f89e4c2bf9a50aae36b"
+      }
+    },
+    {
+      "ts": "2026-10-13T16:04:12.816828826Z",
+      "spec": "BUG-1972",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "aeb2069f077e65db378088cd138979240db33f60",
+        "pr": 2582,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
