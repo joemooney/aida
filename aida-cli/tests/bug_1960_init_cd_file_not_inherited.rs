@@ -81,3 +81,62 @@ fn a_child_of_aida_never_inherits_or_overwrites_the_outer_side_channel_file() {
         "a nested emitter must not overwrite the outer side-channel file"
     );
 }
+
+/// End to end through the real binary: `aida init <DIR>` run by the wrapper
+/// (side-channel path in `AIDA_INIT_CD_FILE`, `init-cd-file` advertised in
+/// `AIDA_SHELL_WRAPPER`) writes the marked `cd` block to that file, and never
+/// to stdout. The variable is scrubbed from the env at entry, so this guards
+/// `emit_enter_dir` against reading the (now empty) env instead of the value
+/// captured at entry: that regression would fall back to stdout markers.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn aida_init_writes_the_cd_block_to_the_wrappers_side_channel_file() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let home = base.join("home");
+    let work = base.join("work");
+    for d in [&home, &work] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let cd_file = base.join("aida-init-cd.e2e");
+    std::fs::write(&cd_file, "").unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_aida"))
+        .current_dir(&work)
+        .env_clear()
+        .env("HOME", &home)
+        .env("PATH", "/usr/bin:/bin")
+        .env("AIDA_TELEMETRY", "0")
+        .env("GIT_AUTHOR_NAME", "BUG-1960 Test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .env("GIT_COMMITTER_NAME", "BUG-1960 Test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
+        .env("AIDA_INIT_CD_FILE", &cd_file)
+        .env(
+            "AIDA_SHELL_WRAPPER",
+            "role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file",
+        )
+        .arg("init")
+        .arg("proj")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run aida init");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let ctx = format!("stdout:\n{stdout}\nstderr:\n{stderr}");
+    assert!(out.status.success(), "aida init must succeed:\n{ctx}");
+
+    let block = std::fs::read_to_string(&cd_file).unwrap();
+    let expected = format!(
+        "#aida:eval:begin\ncd '{}'\n#aida:eval:end\n",
+        work.join("proj").display()
+    );
+    assert_eq!(
+        block, expected,
+        "the side-channel file must hold exactly the cd block:\n{ctx}"
+    );
+    assert!(
+        !stdout.contains("#aida:eval:begin"),
+        "with a side-channel file the cd block must not go to stdout:\n{ctx}"
+    );
+}

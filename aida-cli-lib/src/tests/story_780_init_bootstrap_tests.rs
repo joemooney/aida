@@ -335,13 +335,17 @@ fn the_init_arm_never_captures_the_childs_stdout() {
     // An interrupt must not strand the file: a trap removes it on INT/TERM,
     // scoped to the call (zsh localtraps; bash saves and restores).
     assert!(
-        init_arm.contains("trap 'rm -f \"$_aida_cd_file\"' INT TERM"),
-        "init arm must remove its side-channel file on INT/TERM:\n{init_arm}"
+        init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=INT' INT")
+            && init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=TERM' TERM")
+            && init_arm.contains("TRAPINT() { rm -f \"$_aida_cd_file\"; return $((128 + $1)); }")
+            && init_arm.contains("TRAPTERM() { rm -f \"$_aida_cd_file\"; return $((128 + $1)); }"),
+        "init arm must remove its side-channel file on INT/TERM in bash and zsh:\n{init_arm}"
     );
     assert!(
         init_arm.contains("setopt localtraps")
             && init_arm.contains("_aida_traps=$(trap -p INT TERM)")
-            && init_arm.contains("eval \"$_aida_traps\""),
+            && init_arm.contains("eval \"$_aida_traps\"")
+            && init_arm.contains("kill -s \"$_aida_sig\" $$"),
         "the init arm's trap must be scoped to the call and the caller's traps restored:\n{init_arm}"
     );
 }

@@ -421,76 +421,185 @@ fn init_side_channel_agrees_across_shells() {
 
 // ── interrupts ───────────────────────────────────────────────────────────────
 
-/// A stub that records the side-channel path and then interrupts its OWN
-/// calling shell, the way a Ctrl-C reaches the wrapper's shell while init is
-/// running in the foreground.
+/// A stub that interrupts its OWN calling shell with `signal` while init is in
+/// the foreground (the way a Ctrl-C or a TERM reaches the wrapper's shell),
+/// then exits as an interrupted child would.
 // trace:BUG-1960 | ai:claude
 fn interrupting_stub(signal: &str) -> String {
+    let code = if signal == "INT" { 130 } else { 143 };
     format!(
         "#!/usr/bin/env bash\n\
-         printf '%s\\n' \"${env}\" > \"$AIDA_T_FILE\"\n\
-         kill -{signal} \"$PPID\"\n\
-         exit 130\n",
+         [ -n \"${env}\" ] && [ -e \"${env}\" ] && printf 'saw-file\\n' >&2\n\
+         kill -s {signal} \"$PPID\"\n\
+         exit {code}\n",
         env = INIT_CD_FILE_ENV,
     )
 }
 
-/// INT or TERM delivered to the shell while init runs removes the private
-/// file, and the trap is scoped to the call. Two scenarios per signal:
-///
-/// * no caller trap: the default disposition would kill the shell mid-call
-///   and strand the file, so the wrapper's own trap is what removes it; after
-///   the call the default is back (a second signal ends the shell, so
-///   `survived` never prints);
-/// * a caller trap: it is restored after the call and still fires.
+/// The outcome of one interrupt scenario: the shell's stdout, its exit code
+/// (`None` when a signal ended it), and the side-channel files left in the
+/// private TMPDIR afterwards.
+// trace:BUG-1960 | ai:claude
+struct InterruptRun {
+    stdout: String,
+    stderr: String,
+    code: Option<i32>,
+    leftover: Vec<String>,
+}
+
+/// Like `run_wrapper_in`, but `mktemp` writes into a TMPDIR this test owns,
+/// and it is inspected AFTER the shell exits: a shell that dies mid-init
+/// cannot report on its own leftovers.
+// trace:BUG-1960 | ai:claude
+fn run_interrupt_scenario(shell: &str, stub: &str, body: &str) -> InterruptRun {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let tmp = dir.path().join("tmp");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::create_dir(&tmp).unwrap();
+    crate::test_exec::write_executable(&dir.path().join("aida"), stub);
+    let script = format!(
+        "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
+        path = dir.path().display(),
+        helpers = crate::dev_cmd::SHELL_HELPERS,
+    );
+    let mut cmd = std::process::Command::new(shell);
+    if shell == "zsh" {
+        cmd.arg("-f");
+    }
+    let out = cmd
+        .arg("-c")
+        .arg(&script)
+        .env_clear()
+        .env("HOME", &home)
+        .env("TMPDIR", &tmp)
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .current_dir(dir.path())
+        .output_retrying_etxtbsy()
+        .unwrap_or_else(|e| panic!("{shell} available: {e}"));
+    let leftover = std::fs::read_dir(&tmp)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("aida-init-cd."))
+        .collect();
+    InterruptRun {
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        code: out.status.code(),
+        leftover,
+    }
+}
+
+/// INT or TERM delivered to the shell while init runs, with no trap of the
+/// caller's own: the signal must still take effect (the shell dies, exactly
+/// as it would without the wrapper) and the private file must be gone. A
+/// cleanup trap that swallowed the signal would let the script carry on.
 // trace:BUG-1960 | ai:claude
 #[test]
-fn an_interrupt_during_init_removes_the_side_channel_file_and_restores_traps() {
+fn an_interrupt_during_init_kills_the_shell_and_leaves_no_side_channel_file() {
     for signal in ["INT", "TERM"] {
-        for (label, caller_trap) in [
-            ("default", ""),
-            ("caller-trap", "trap 'echo caller-trap' SIG\n"),
-        ] {
-            for &shell in wrapper_shells() {
-                let body = format!(
-                    "export AIDA_T_FILE=\"$PWD/cdfile\"\n\
-                     _start=$PWD\n\
-                     {caller_trap}\
-                     aida init proj\n\
-                     echo \"rc:$?\"\n\
-                     _f=$(cat \"$_start/cdfile\" 2>/dev/null)\n\
-                     if [ -n \"$_f\" ] && [ -e \"$_f\" ]; then echo file:present; else echo file:gone; fi\n\
-                     if [ -n \"$_f\" ]; then echo recorded:yes; else echo recorded:no; fi\n\
-                     kill -{signal} $$\n\
-                     echo survived\n",
-                    caller_trap = caller_trap.replace("SIG", signal),
-                );
-                let (stdout, stderr, _) = run_wrapper_in(shell, &interrupting_stub(signal), &body);
-                let ctx = format!("[{shell}/{signal}/{label}]\n{stdout}\nstderr:\n{stderr}");
-                assert!(
-                    stdout.contains("recorded:yes"),
-                    "the stub must have seen the file: {ctx}"
-                );
-                assert!(
-                    stdout.contains("file:gone"),
-                    "an interrupted init must not leave its file behind: {ctx}"
-                );
-                assert!(
-                    stdout.contains("rc:130"),
-                    "the interrupted status propagates: {ctx}"
-                );
-                if caller_trap.is_empty() {
-                    assert!(
-                        !stdout.contains("survived"),
-                        "the wrapper's trap must not outlive the call: {ctx}"
-                    );
+        for &shell in wrapper_shells() {
+            let run = run_interrupt_scenario(
+                shell,
+                &interrupting_stub(signal),
+                "aida init proj\necho after-init\n",
+            );
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.stderr.contains("saw-file"),
+                "the stub must have seen the file: {ctx}"
+            );
+            assert!(
+                run.leftover.is_empty(),
+                "an interrupted init must not leave its file behind: {ctx}"
+            );
+            assert!(
+                !run.stdout.contains("after-init"),
+                "the signal must not be swallowed: the shell has to die during init: {ctx}"
+            );
+            // bash re-raises, so the kernel ends it (no exit code); zsh
+            // exits from TRAPINT/TRAPTERM with 128+signo, its own convention
+            // for a script ended by a signal.
+            let signo = if signal == "INT" { 2 } else { 15 };
+            assert!(
+                if shell == "bash" {
+                    run.code.is_none()
                 } else {
-                    assert!(
-                        stdout.contains("caller-trap\nsurvived"),
-                        "the caller's own trap must be restored after the call: {ctx}"
-                    );
-                }
+                    run.code.is_none() || run.code == Some(128 + signo)
+                },
+                "the shell must be ended by the signal: {ctx}"
+            );
+        }
+    }
+}
+
+/// With a caller trap installed, bash re-delivers the signal after restoring
+/// it, so the caller's handler still runs and decides what happens next. zsh
+/// treats the signal as delivered from TRAPINT/TRAPTERM itself, which ends a
+/// non-interactive shell. Either way the file is gone.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_reaches_the_callers_own_trap_in_bash() {
+    for signal in ["INT", "TERM"] {
+        for &shell in wrapper_shells() {
+            let body =
+                format!("trap 'echo caller-trap' {signal}\naida init proj\necho after-init\n");
+            let run = run_interrupt_scenario(shell, &interrupting_stub(signal), &body);
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.leftover.is_empty(),
+                "an interrupted init must not leave its file behind: {ctx}"
+            );
+            if shell == "bash" {
+                assert!(
+                    run.stdout.contains("caller-trap\nafter-init"),
+                    "the caller's trap must run once the wrapper's is gone: {ctx}"
+                );
+            } else {
+                assert!(
+                    !run.stdout.contains("after-init"),
+                    "zsh delivers the signal from its trap function: {ctx}"
+                );
             }
         }
+    }
+}
+
+/// A SUCCESSFUL init leaves the caller's traps exactly as they were: the
+/// caller's INT trap is still installed, and no cleanup trap of the
+/// wrapper's survives on INT or TERM.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn a_successful_init_restores_the_callers_traps() {
+    for &shell in wrapper_shells() {
+        let body = "trap 'echo caller-trap' INT\n\
+                    aida init proj\n\
+                    echo \"rc:$?\"\n\
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then trap; else trap -p INT TERM; fi\n\
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then functions TRAPINT TRAPTERM >/dev/null 2>&1 && echo trap-fn-leaked; fi\n";
+        let run = run_interrupt_scenario(shell, &side_channel_stub(0), body);
+        let ctx = format!(
+            "[{shell}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+            run.code, run.leftover, run.stdout, run.stderr
+        );
+        assert!(run.stdout.contains("rc:0"), "{ctx}");
+        assert!(
+            run.stdout.contains("trap -- 'echo caller-trap' SIGINT")
+                || run.stdout.contains("trap -- 'echo caller-trap' INT"),
+            "the caller's INT trap must still be installed: {ctx}"
+        );
+        assert!(
+            !run.stdout.contains("_aida_cd_file") && !run.stdout.contains("TERM"),
+            "no wrapper trap may outlive the call: {ctx}"
+        );
+        assert!(!run.stdout.contains("trap-fn-leaked"), "{ctx}");
+        assert!(run.leftover.is_empty(), "{ctx}");
     }
 }
