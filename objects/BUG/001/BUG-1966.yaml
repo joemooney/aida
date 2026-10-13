@@ -12,12 +12,12 @@ description: |
   - The cause of each failure mode is named: the fixture `aida add` failure at line 84 and the missing holder-gate line at line 228.
   - If the gate can be skipped under load, that is a production bug and is fixed (a live drain lock must block every launch entry point regardless of host load), with a test that proves it. If the failure is fixture-only (for example a timeout, or a lock-holder process that has not started yet), the fixture waits for its holder deterministically instead of relying on timing.
   - The test passes 20 consecutive runs of `cargo test -p aida-cli --test bug_1683_live_drain_lock` while a second `cargo test --workspace` runs in parallel.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:55:15.246332312Z
-modified_at: 2026-10-12T16:21:56.832648063Z
+modified_at: 2026-10-13T03:04:10.110699028Z
 req_type: Bug
 tags:
 - groom:approve
@@ -44,6 +44,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13337-b073-7132-ab68-9085ee8b519d
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:04:10.099453025Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13337-b07e-7ad2-bb37-a3b86de26154
+  timestamp: 2026-10-13T03:04:10.110678498Z
+  agent: aida
+  commit_sha: 0ea91161b556cd6626daaf1b8c68a1a64688046f
+  summary: 'Fresh reviewer APPROVE at ffeb27e12e: root cause fits both logged failures; test still proves the gate on every route (slip cannot pass); 3 Low'
+  review_verdict: approved
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
@@ -52,3 +66,7 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:04:10.099442760Z
+  completion_sha: 0ea91161b556cd6626daaf1b8c68a1a64688046f
