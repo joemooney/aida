@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-13T21:05:52.598764672Z
+modified_at: 2026-10-13T21:23:03.385593703Z
 req_type: Bug
 tags:
 - cross-repo
@@ -50,6 +50,11 @@ comments:
     5. Open factory draft PR.
   created_at: 2026-10-13T21:05:52.598764672Z
   modified_at: 2026-10-13T21:05:52.598764672Z
+- id: 01a13725-c059-7840-be27-a252c64d7a51
+  author: joe
+  content: 'FACTORY DRAFT: PR #2605 at 5b7239224c6fe5ebdf472fb89a9be87bb22187f5'
+  created_at: 2026-10-13T21:23:03.385593703Z
+  modified_at: 2026-10-13T21:23:03.385593703Z
 history:
 - id: 01a13675-0903-7f62-b1d1-00a3671129af
   author: joe
