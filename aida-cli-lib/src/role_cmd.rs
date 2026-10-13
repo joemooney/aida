@@ -42,6 +42,10 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Repair { name } => handle_role_repair(&project_root, name.as_deref()),
         RoleCommand::Active => handle_role_active(),
         RoleCommand::Current { check } => handle_role_current(*check),
+        RoleCommand::Expiry {
+            warn_within,
+            refuse_within,
+        } => handle_role_expiry(warn_within, refuse_within.as_deref()),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -855,6 +859,36 @@ fn handle_role_current(check: bool) -> Result<()> {
     println!("{}", role);
     if check && role.is_empty() {
         std::process::exit(1);
+    }
+    Ok(())
+}
+
+// `aida role expiry`: warn (stdout, exit 0) or refuse (stderr, exit 3) when
+// the session's seat grant is near expiry. Local file reads only, so the
+// SessionStart hook and a relay launcher can call it cheaply.
+// trace:TASK-1736 | ai:claude
+fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<()> {
+    let span = |raw: &str| -> Result<chrono::Duration> {
+        let std = crate::drain_caps::parse_duration(raw).ok_or_else(|| {
+            anyhow::anyhow!("invalid duration `{raw}`: use a form like 90m, 2h or 1h30m")
+        })?;
+        Ok(chrono::Duration::from_std(std)?)
+    };
+    let warn_within = span(warn_within)?;
+    let refuse_within = refuse_within.map(span).transpose()?;
+    let Some(expiry) = crate::seat_authority::session_grant_expiry() else {
+        return Ok(());
+    };
+    let now = chrono::Utc::now();
+    if let Some(within) = refuse_within {
+        if let Some(refusal) = crate::seat_authority::launch_refusal(&expiry, now, within) {
+            eprintln!("{refusal}");
+            std::process::exit(3);
+        }
+        return Ok(());
+    }
+    if let Some(warning) = crate::seat_authority::expiry_warning(&expiry, now, warn_within) {
+        println!("{warning}");
     }
     Ok(())
 }

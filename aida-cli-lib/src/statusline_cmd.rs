@@ -212,6 +212,23 @@ pub(crate) fn handle_statusline_command(
         let warn_enabled = !role_is_default && statusline_role_mismatch_enabled(&project_root);
         let (role_text, role_warning) =
             role_display_segment_text(&role_display, r, session_role, warn_enabled);
+        // TASK-1736: a held seat close to expiry says so, in the warning
+        // colour, before gated commands start refusing.
+        // trace:TASK-1736 | ai:claude
+        let (role_text, role_warning) =
+            match (&role_display, crate::seat_authority::session_grant_expiry()) {
+                (crate::seat_authority::RoleDisplay::Held(_), Some(expiry)) => {
+                    match crate::seat_authority::expiry_suffix(
+                        &expiry,
+                        chrono::Utc::now(),
+                        crate::seat_authority::EXPIRY_WARN_WITHIN,
+                    ) {
+                        Some(suffix) => (format!("{role_text} ({suffix})"), true),
+                        None => (role_text, role_warning),
+                    }
+                }
+                _ => (role_text, role_warning),
+            };
         let role_segment = if role_warning {
             role_text.red().bold().to_string()
         } else {
