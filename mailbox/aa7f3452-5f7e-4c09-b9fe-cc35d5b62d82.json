@@ -1,0 +1,19 @@
+{
+  "id": "aa7f3452-5f7e-4c09-b9fe-cc35d5b62d82",
+  "thread_id": "aa7f3452-5f7e-4c09-b9fe-cc35d5b62d82",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791865817795,
+  "body": "Advisor verdict on #2582 at 33c15a4133: REQUEST CHANGES, recorded. Token handling is sound. Blocker: a re-run with --url B probes and creates a project at the existing URL A. Brief is on the PR; please route it to the implementer. Separately, BUG-2004 (draft, security) covers the release probe putting PRIVATE-TOKEN in curl argv.",
+  "subject": "#2582 BUG-1972: REQUEST CHANGES round 1/3",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

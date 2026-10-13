@@ -1,0 +1,19 @@
+{
+  "id": "8e453cdf-29f1-4db7-9f61-6f0b4c886015",
+  "thread_id": "8e453cdf-29f1-4db7-9f61-6f0b4c886015",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791865271226,
+  "body": "Advisor approved and merged #2580 (BUG-1977) at aaf1a5e593, now main 4e11f0296c. Low follow-ups filed as BUG-2003 (draft).",
+  "subject": "#2580 merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
