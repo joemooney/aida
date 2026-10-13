@@ -30,7 +30,7 @@ pub(crate) struct SeatGrant {
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
-fn grant_dir() -> Result<PathBuf> {
+pub(crate) fn grant_dir() -> Result<PathBuf> {
     // BUG-1642 discipline: never resolve the home directly — `crate::aida_home_dir`
     // honours `$AIDA_HOME` / `$HOME` overrides and is fenced to the hermetic
     // temp home under `cfg(test)`. trace:STORY-1473 | ai:claude
@@ -256,6 +256,12 @@ fn read_grant_checked(id: &str) -> Result<SeatGrant, GrantRejection> {
 
 // trace:BUG-1983 | ai:claude
 pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
+    grant_check_at(project_root, Utc::now())
+}
+
+// Shared clock seam; notices never implement a second authority validator.
+// trace:BUG-2014 | ai:codex
+pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCheck {
     let Some(id) = std::env::var(GRANT_ENV)
         .ok()
         .filter(|id| !id.trim().is_empty())
@@ -274,7 +280,6 @@ pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
     // Checks run in the order `current_grant` always used: revoked, expired,
     // subject, roster; then the parent's revoked, expired, principal,
     // roster, delegable.
-    let now = Utc::now();
     let caller = crate::current_user_id(None);
     let own = check_lifetime(&grant, now).and_then(|()| {
         if grant.subject == caller {
@@ -490,6 +495,64 @@ fn display_grant_lookup() -> GrantLookup {
         }
     }
     GrantLookup::Expiry(GrantExpiry { seat, expires_at })
+}
+
+// Informational metadata only, never an authority-bearing grant.
+// trace:BUG-2014 | ai:codex
+pub(crate) struct NoticeGrant {
+    pub id: String,
+    pub expiry: GrantExpiry,
+}
+
+// Only Valid or typed own/parent Expired verdicts supply notice metadata.
+// Expired verdicts contribute captured timestamps/seats. Own expiry uses a
+// consistency-checked metadata read only to preserve a parent's earlier expiry.
+// trace:BUG-2014 | ai:codex
+pub(crate) fn notice_grant(root: &Path, now: DateTime<Utc>) -> Result<Option<NoticeGrant>> {
+    let (id, seat, expires_at) = match grant_check_at(root, now) {
+        GrantCheck::Valid(grant) => {
+            let mut at = grant.expires_at;
+            if let Some(parent) = grant.parent_grant_id.as_deref() {
+                at = at.min(read_grant(parent)?.expires_at);
+            }
+            (grant.id, grant.seat, at)
+        }
+        GrantCheck::Rejected {
+            id,
+            seat: Some(seat),
+            reason: GrantRejection::Expired { at },
+        } => {
+            // Own expiry wins the validator's rejection order. If both child
+            // and parent expired, display their minimum, retaining only
+            // consistent timestamp/seat metadata from the expired record.
+            let record = read_grant(&id)?;
+            if record.expires_at != at || record.seat != seat {
+                return Ok(None);
+            }
+            let effective = match record.parent_grant_id.as_deref() {
+                Some(parent) => at.min(read_grant(parent)?.expires_at),
+                None => at,
+            };
+            (id, seat, effective)
+        }
+        GrantCheck::Rejected {
+            id,
+            seat: Some(seat),
+            reason: GrantRejection::Parent(inner),
+        } => match *inner {
+            GrantRejection::Expired { at } => (id, seat, at),
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let seat = crate::canonical_role_name(&seat);
+    if matches!(seat.as_str(), "implementer" | "guest" | "requester") {
+        return Ok(None);
+    }
+    Ok(Some(NoticeGrant {
+        id,
+        expiry: GrantExpiry { seat, expires_at },
+    }))
 }
 
 /// The expiry of the grant named by `AIDA_SESSION_GRANT`. `None` when there

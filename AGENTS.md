@@ -1,3 +1,10 @@
+Claude tool-only sessions receive informational grant expiry context at the
+2h, 30m and expired crossings. The hook skips the CLI without a grant and caps
+it below 2s; a grant-local locked ledger deduplicates notices. Ledger failures
+produce no context and leave SessionStart/statusline as fallback. See
+[expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
+
 `role expiry --refuse-within` validates through the shared `grant_check` verdict,
 including subject, roster and parent delegation. Expiry is the earlier of the
 validated grant and parent. The statusline's expired-record timestamp reader is
