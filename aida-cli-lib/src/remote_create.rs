@@ -1009,20 +1009,22 @@ pub(crate) fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         "--write-out",
         "\n%{http_code}",
     ]);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
     let token = gitlab_release_token_for_api_url(api_url);
-    if token.is_some() {
+    let out = if let Some(token) = token {
         cmd.args(["-H", "@-"]);
         cmd.stdin(std::process::Stdio::piped());
-    }
-    let out = if let Some(token) = token {
         let mut child = cmd.arg(api_url).spawn().ok()?;
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
             let header = format!("PRIVATE-TOKEN: {token}\n");
             let _ = stdin.write_all(header.as_bytes());
+            drop(stdin);
         }
         child.wait_with_output().ok()?
     } else {
+        cmd.stdin(std::process::Stdio::null());
         cmd.arg(api_url).output().ok()?
     };
     if !out.status.success() {
