@@ -10,12 +10,12 @@ description: |
   - The section states the slice-stack exception (until rebase-merge support lands) and that mechanical enforcement is pending.
   - The section is vendor-neutral (no Claude-specific wording).
   - `make sync-templates` has been run and `make check-templates` passes.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:41:31.433481965Z
-modified_at: 2026-10-12T23:52:19.500050621Z
+modified_at: 2026-10-13T03:07:43.988975535Z
 req_type: Task
 tags:
 - docs
@@ -64,6 +64,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1333a-f3f1-7ba0-a3aa-2703f49f545b
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:07:43.985890769Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1333a-f3f4-7521-9f37-55c0ac45e201
+  timestamp: 2026-10-13T03:07:43.988969537Z
+  agent: implementer
+  commit_sha: eb5882c98270cf6208e88d88bcaabe82d4bb29f4
+  summary: Completed via merge eb5882c9
+  review_verdict: approved
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
@@ -72,3 +86,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:07:43.985886516Z
+  completion_sha: eb5882c98270cf6208e88d88bcaabe82d4bb29f4
