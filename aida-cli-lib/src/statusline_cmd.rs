@@ -359,11 +359,9 @@ pub(crate) fn handle_statusline_command(
     // (uncommitted edits, untracked files, off main, or diverged from its
     // upstream). One `git status` that takes no index lock; a clean checkout
     // or any git failure renders nothing. Read-only.
-    // trace:STORY-1648 | ai:claude
-    if let Some(marker) = crate::main_checkout_drift::statusline_marker(
-        crate::main_checkout_drift::probe(&drain_root).as_ref(),
-    ) {
-        parts.push(marker.red().bold().to_string());
+    // trace:TASK-1727 | ai:antigravity
+    if let Some(marker) = primary_checkout_drift_statusline_segment(&drain_root) {
+        parts.push(marker);
     }
     // sess:<scope> segment — emitted when cwd resolves into an active
     // session lease's worktree. TASK-282: this standalone segment now
@@ -499,6 +497,21 @@ pub(crate) fn role_display_segment_text(
 
 pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {
     (depth > 0).then(|| format!("drafts:{}", depth))
+}
+
+/// Compact marker segment rendered in the status line when the primary
+/// checkout has drifted (uncommitted edits, untracked files, off main, or
+/// diverged from its upstream). One `git status` that takes no index lock;
+/// returns `None` for a clean checkout, non-repository, or any git failure.
+// trace:STORY-1648 | ai:claude
+// trace:TASK-1727 | ai:antigravity
+pub(crate) fn primary_checkout_drift_statusline_segment(
+    drain_root: &std::path::Path,
+) -> Option<String> {
+    crate::main_checkout_drift::statusline_marker(
+        crate::main_checkout_drift::probe(drain_root).as_ref(),
+    )
+    .map(|marker| marker.red().bold().to_string())
 }
 
 /// Wrap a status line in an OSC 2 set-window-title escape sequence
