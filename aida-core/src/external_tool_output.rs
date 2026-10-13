@@ -92,6 +92,60 @@ pub const GIT_INDEX_LOCK: &[&str] = &[
 pub const GIT_NOTHING_TO_COMMIT: &[&str] = &["nothing to commit", "nothing added to commit"];
 /// Git 2.43.x: a push was rejected because the remote ref moved.
 pub const GIT_PUSH_REJECTED: &[&str] = &["non-fast-forward", "rejected", "fetch first"];
+/// Git 2.43.x plus GitHub/GitLab server messages: the remote refused a push
+/// because the target ref is protected. Checked before the generic
+/// server-declined and non-fast-forward classes, whose wording overlaps.
+// trace:BUG-1969 | ai:claude
+pub const GIT_PUSH_PROTECTED_REF: &[&str] = &["protected branch", "protected ref", "gh006"];
+/// Git 2.43.x plus GitHub/GitLab and ssh: the push was refused for lack of
+/// credentials or write permission. "access rights" is deliberately absent:
+/// git prints it after every failed connection, including unreachable hosts.
+// trace:BUG-1969 | ai:claude
+pub const GIT_PUSH_PERMISSION_DENIED: &[&str] = &[
+    "permission denied",
+    "permission to ",
+    "authentication failed",
+    "could not read username",
+    "could not read password",
+    "terminal prompts disabled",
+    "returned error: 401",
+    "returned error: 403",
+    "write access to repository not granted",
+    "remote: access denied",
+];
+/// Git 2.43.x: a server-side hook or policy declined the ref update
+/// (`! [remote rejected] ... (pre-receive hook declined)`). Must be checked
+/// before [`GIT_PUSH_REJECTED`], whose bare "rejected" also matches.
+// trace:BUG-1969 | ai:claude
+pub const GIT_PUSH_REMOTE_DECLINED: &[&str] = &["[remote rejected]", "hook declined"];
+/// Git 2.43.x over ssh, https (libcurl), git://, and local paths: the remote
+/// could not be reached, or the connection dropped (proxy, 5xx, broken
+/// ssh/TLS session) — the offline / flaky-network case.
+// trace:BUG-1969 | ai:claude
+pub const GIT_REMOTE_UNREACHABLE: &[&str] = &[
+    "could not resolve host",
+    "could not resolve hostname",
+    "temporary failure in name resolution",
+    "name or service not known",
+    "nodename nor servname provided",
+    "network is unreachable",
+    "no route to host",
+    "connection refused",
+    "connection timed out",
+    "operation timed out",
+    "connection reset",
+    "failed to connect to",
+    "couldn't connect to server",
+    "unable to connect to",
+    "timeout was reached",
+    "does not appear to be a git repository",
+    "could not resolve proxy",
+    "returned error: 50",
+    "connection closed by",
+    "remote end hung up unexpectedly",
+    "broken pipe",
+    "ssl_error_syscall",
+];
 /// Git 2.43.x: fetch refused because another worktree owns the branch.
 pub const GIT_BRANCH_CHECKED_OUT: &[&str] = &["checked out at", "refusing to fetch into branch"];
 /// Cargo/rustc 1.92.0: build-stage failure markers in mixed gate output.

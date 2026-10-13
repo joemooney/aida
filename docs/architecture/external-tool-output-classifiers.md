@@ -24,6 +24,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `forge::gitlab_merge_response_is_stale_head` |
 | `forge::glab_stderr_is_transient` |
 | `gh_stderr_is_network_error` |
+| `git_ops::classify_push_failure` |
 | `git_ops::commit` |
 | `git_ops::looks_like_index_lock_failure` |
 | `git_ops::push` |

@@ -2353,6 +2353,59 @@ fn unreachable_origin_files_locally_and_defers() {
     assert_eq!(fx.subjects("HEAD")[0], "update TASK-1");
 }
 
+/// BUG-1969: a reachable origin whose server hook declines the push is not
+/// the offline case: `add` keeps the local commit but fails with the hook's
+/// own message instead of the "origin unreachable" deferral.
+// trace:BUG-1969 | ai:claude
+#[cfg(unix)]
+#[test]
+fn hook_declined_push_fails_with_the_real_message_not_offline() {
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture();
+    let hook = fx.origin.join("hooks/pre-receive");
+    std::fs::write(
+        &hook,
+        "#!/bin/sh\necho 'store is frozen for audit' >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let add = fx.run(&["add", "filed under audit", "--type", "task"]);
+    let out = text(&add);
+    assert!(!add.status.success(), "{out}");
+    assert!(out.contains("hook or policy declined"), "{out}");
+    assert!(out.contains("store is frozen for audit"), "{out}");
+    assert!(!out.contains("unreachable"), "{out}");
+    assert!(fx
+        .subjects("HEAD")
+        .iter()
+        .any(|s| s.contains("filed under audit")));
+}
+
+/// BUG-1969: a push failure git describes in words no class recognises (here
+/// a local pre-push hook) defers like the offline case: `add` exits 0, keeps
+/// the commit, and shows git's message without claiming "unreachable".
+// trace:BUG-1969 | ai:claude
+#[cfg(unix)]
+#[test]
+fn unclassified_push_failure_defers_with_exit_zero() {
+    let fx = fixture();
+    install(
+        &fx.hooks.join("pre-push"),
+        "#!/bin/sh\necho 'pre-push: transient hiccup' >&2\nexit 1\n",
+    );
+    let add = fx.run(&["add", "filed through a hiccup", "--type", "task"]);
+    let out = text(&add);
+    assert!(add.status.success(), "{out}");
+    assert!(out.contains("filed locally, not yet published"), "{out}");
+    assert!(out.contains("pre-push: transient hiccup"), "{out}");
+    assert!(out.contains("aida db sync --push"), "{out}");
+    assert!(!out.contains("unreachable"), "{out}");
+    assert!(fx
+        .subjects("HEAD")
+        .iter()
+        .any(|s| s.contains("filed through a hiccup")));
+}
+
 /// Group 4: both sides edit the same spec object; the pull's window unions
 /// the structural conflict and the rebase completes.
 #[test]
