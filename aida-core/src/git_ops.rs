@@ -4101,11 +4101,13 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
                 if let Some(line) = body.lines().find(|l| !is_literal_config_line(l)) {
                     anyhow::bail!(
                         "refusing AIDA store write: {} is sourced as shell by the commit-msg hook and is not plain \
-                         `NAME=value` settings (`{}`). Git runs that hook while this command holds the store write \
-                         lock, and arbitrary shell there cannot be shown not to call back into aida. Nothing was \
-                         changed. Keep only `NAME=value` lines in it.",
+                         `NAME=value` settings of the hook's own variables (`{}`). Git runs that hook while this \
+                         command holds the store write lock, and arbitrary shell there, or a variable such as PATH \
+                         that changes which programs the hook runs, cannot be shown to be safe. Nothing was \
+                         changed. Keep only `NAME=value` lines setting {} in it.",
                         config.display(),
-                        line.trim()
+                        line.trim(),
+                        COMMIT_CONFIG_NAMES.join(", ")
                     );
                 }
             }
@@ -4498,9 +4500,25 @@ fn quoted_from(prefix: &str) -> Option<usize> {
     open.map(|(_, i)| i)
 }
 
+/// The variables the shipped commit-msg hook reads after it sources
+/// `.aida/commit-config`: the only names that file may set. Anything else
+/// (`PATH`, `IFS`, `BASH_ENV`, `ENV`, `LD_*`, `GIT_*`, `PS4`, ...) changes how
+/// the hook's own commands run rather than configuring it.
+// trace:BUG-1929 | ai:claude
+const COMMIT_CONFIG_NAMES: &[&str] = &[
+    "STRICT_MODE",
+    "REQUIRE_REQ_FOR_FEAT",
+    "REQUIRE_AI_TAG",
+    "AIDA_COMMIT_STRICT",
+    "AIDA_REQUIRE_REQ_FOR_FEAT",
+    "AIDA_REQUIRE_AI_TAG",
+    "AIDA_RELEASE",
+];
+
 /// A `.aida/commit-config` line that only sets a variable: blank, comment,
 /// or `NAME=value` with a bare, single-quoted or expansion-free double-quoted
-/// value.
+/// value, where `NAME` is one the commit-msg hook reads
+/// ([`COMMIT_CONFIG_NAMES`]).
 fn is_literal_config_line(line: &str) -> bool {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
@@ -4510,9 +4528,8 @@ fn is_literal_config_line(line: &str) -> bool {
     let Some((name, value)) = line.split_once('=') else {
         return false;
     };
-    let name_ok = !name.is_empty()
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && !name.starts_with(|c: char| c.is_ascii_digit());
+    // trace:BUG-1929 | ai:claude
+    let name_ok = COMMIT_CONFIG_NAMES.contains(&name);
     let value = value.trim_end();
     let value_ok = if let Some(inner) = value.strip_prefix('\'').and_then(|v| v.strip_suffix('\''))
     {
@@ -7688,6 +7705,176 @@ mod tests {
         );
     }
 
+    /// The commit-msg hook sources `.aida/commit-config`; only the names it
+    /// reads may be set there. Assignments that change how the hook's own
+    /// commands run (PATH, loader, shell start-up, git environment) are
+    /// refused, as is anything that is not a literal setting.
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_commit_config_allows_only_the_hooks_own_variables() {
+        for ok in [
+            "STRICT_MODE=true",
+            "REQUIRE_REQ_FOR_FEAT=false",
+            "REQUIRE_AI_TAG='false'",
+            "AIDA_COMMIT_STRICT=\"true\"",
+            "export AIDA_REQUIRE_REQ_FOR_FEAT=true",
+            "AIDA_REQUIRE_AI_TAG=false",
+            "AIDA_RELEASE=1",
+            "# a comment",
+            "",
+        ] {
+            assert!(is_literal_config_line(ok), "should accept {ok:?}");
+        }
+        for bad in [
+            "PATH=/srv/x/planted:/usr/bin:/bin",
+            "export PATH=/srv/x/planted",
+            "LD_PRELOAD=/srv/x/evil.so",
+            "LD_LIBRARY_PATH=/srv/x",
+            "BASH_ENV=/srv/x/evil.sh",
+            "ENV=/srv/x/evil.sh",
+            "IFS=x",
+            "PS4=x",
+            "GIT_DIR=/srv/x/elsewhere",
+            "GIT_EXEC_PATH=/srv/x/planted",
+            "EXCLUDE_PATTERNS=x",
+            "STRICT_MODE =true",
+            "STRICT_MODE=$(id)",
+        ] {
+            assert!(!is_literal_config_line(bad), "should refuse {bad:?}");
+        }
+    }
+
+    /// A store commit never runs `.aida/commit-config`. The store's tree is
+    /// writable by contained sessions, so a planted config setting PATH to a
+    /// planted `git` would run that binary on the host when the shipped
+    /// commit-msg hook next calls git. The store-write check refuses such a
+    /// config, and when the file is swapped after that check (the race the
+    /// check cannot close), the real `commit_paths` still does not run it:
+    /// the hook skips the file for every aida store commit and for a commit
+    /// made by hand on the store branch. The hook body before this fix is
+    /// stale, so existing installs are refused until refreshed.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1929_store_commit_never_sources_planted_commit_config() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test", "test@example.com").unwrap();
+        std::fs::write(main.join("README.md"), "hi").unwrap();
+        add(&main, &["README.md"]).unwrap();
+        commit(&main, "chore: init").unwrap();
+        let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+
+        let executable = |path: &Path, body: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        // The shipped commit-msg, as `aida init` installs it.
+        let template = crate::templates::EMBEDDED_TEMPLATES["hooks/aida-commit-msg"];
+        let installed =
+            crate::scaffolding::wrap_with_aida_header(Path::new(".git/hooks/commit-msg"), template);
+        executable(&hooks_dir(&main).unwrap().join("commit-msg"), &installed);
+
+        // Planted binaries in the sandbox-writable store tree.
+        let marker = dir.path().join("PWNED-ON-HOST");
+        let bin = store.join("bin");
+        for tool in ["git", "grep"] {
+            executable(
+                &bin.join(tool),
+                &format!("#!/bin/sh\necho {tool} >> '{}'\nexit 0\n", marker.display()),
+            );
+        }
+        let config = store.join(".aida").join("commit-config");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let planted = format!("PATH={}:/usr/bin:/bin\n", bin.display());
+
+        // (b) The store-write check refuses the planted config outright.
+        std::fs::write(&config, &planted).unwrap();
+        let err = ensure_store_hooks_supported(&store)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("PATH="), "{err}");
+
+        // (a) The check passes a benign config; the sandbox swaps in the
+        // planted one before the hook runs; the real commit still lands
+        // without running it.
+        std::fs::write(&config, "AIDA_COMMIT_STRICT=false\n").unwrap();
+        crate::db::with_store_write_lock(&store, || {
+            std::fs::write(&config, &planted)?;
+            std::fs::write(store.join("notes.txt"), "one\n")?;
+            add(&store, &["notes.txt"])?;
+            commit_paths(&store, "chore: store write", &["notes.txt"])
+        })
+        .expect("store commit");
+        assert!(
+            !marker.exists(),
+            "an aida store commit ran the planted commit-config: {}",
+            std::fs::read_to_string(&marker).unwrap_or_default()
+        );
+        assert_eq!(
+            git(&store, &["log", "-1", "--format=%s"]).unwrap().stdout,
+            "chore: store write"
+        );
+
+        // A commit made by hand on the store branch (no aida guard in the
+        // environment) skips it too.
+        std::fs::write(store.join("notes.txt"), "two\n").unwrap();
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args(["commit", "-q", "-am", "chore: by hand"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert!(
+            !marker.exists(),
+            "a hand commit on the store branch ran the planted commit-config: {}",
+            std::fs::read_to_string(&marker).unwrap_or_default()
+        );
+
+        // An aida commit in the store off the branch (detached, as during a
+        // rebase replay; the store-write lock refuses to start one there, so
+        // the commit is made directly): the guard alone skips the file.
+        assert!(
+            git(&store, &["checkout", "-q", "--detach"])
+                .unwrap()
+                .success
+        );
+        std::fs::write(&config, &planted).unwrap();
+        std::fs::write(store.join("notes.txt"), "three\n").unwrap();
+        add(&store, &["notes.txt"]).unwrap();
+        commit_paths(&store, "chore: detached store write", &["notes.txt"])
+            .expect("detached store commit");
+        assert!(
+            !marker.exists(),
+            "an aida store commit off the aida-store branch ran the planted commit-config: {}",
+            std::fs::read_to_string(&marker).unwrap_or_default()
+        );
+
+        // (d) The hook as shipped before this fix is a stale generated hook:
+        // the store-write check refuses it until it is refreshed.
+        let new_block_start = template
+            .find("# Load project-specific config if exists")
+            .unwrap();
+        let new_block_end =
+            template[new_block_start..].find("\nfi\n").unwrap() + new_block_start + 4;
+        let old_template = format!(
+            "{}# Load project-specific config if exists\nif [ -f \".aida/commit-config\" ]; then\n    source \".aida/commit-config\"\nfi\n{}",
+            &template[..new_block_start],
+            &template[new_block_end..]
+        );
+        let old_installed = crate::scaffolding::wrap_with_aida_header(
+            Path::new(".git/hooks/commit-msg"),
+            &old_template,
+        );
+        assert_eq!(
+            classify_hook("commit-msg", &old_installed),
+            HookKind::OtherAidaGenerated
+        );
+    }
+
     /// B2: a failing `git status` is an error for store writers, never
     /// "clean"; the tolerant reader keeps its contract for displays.
     // trace:TASK-1717 | ai:claude
@@ -7786,23 +7973,27 @@ mod tests {
         ] {
             assert!(aida_writer_call(bad).is_some(), "{bad}");
         }
+        // Value shapes, over names the commit-msg hook reads (BUG-1929: any
+        // other name is refused, see
+        // `bug_1929_commit_config_allows_only_the_hooks_own_variables`).
         for ok in [
             "",
             "# c",
-            "A=1",
-            "export B_2='x y'",
-            "C=\"plain\"",
-            "D=true",
+            "AIDA_RELEASE=1",
+            "export REQUIRE_AI_TAG='x y'",
+            "STRICT_MODE=\"plain\"",
+            "REQUIRE_REQ_FOR_FEAT=true",
         ] {
             assert!(is_literal_config_line(ok), "{ok}");
         }
         for bad in [
             "aida edit X",
-            "A=$(id)",
-            "A=\"$HOME\"",
-            "A=`id`",
-            "A=1; rm -rf x",
+            "STRICT_MODE=$(id)",
+            "STRICT_MODE=\"$HOME\"",
+            "STRICT_MODE=`id`",
+            "STRICT_MODE=1; rm -rf x",
             "1A=2",
+            "A=1",
         ] {
             assert!(!is_literal_config_line(bad), "{bad}");
         }
