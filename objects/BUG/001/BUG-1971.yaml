@@ -13,12 +13,12 @@ description: |
   2. The queue-work boundary announcement and the contained flags derive from the same root (either build flags with `claude_contained_flags_for(&lease.worktree_path)` or announce from `headless_worktree_root()`). Unit test: for a symlinked worktree path, announced roots equal the roots in the generated settings.
   3. `headless_worktree_root()` (or a contained-flags variant of it) yields no write roots when no git root is found, instead of falling back to cwd. Unit test outside a git repo.
   4. `spawn_claude_headless_resume` builds its contained flags from its `cwd` worktree argument (`claude_contained_flags_for(cwd)`), not the process cwd. Unit test on the resume argv.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-13T00:51:22.313202697Z
+modified_at: 2026-10-13T04:10:16.688318407Z
 req_type: Bug
 tags:
 - contained
@@ -67,6 +67,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13374-36f0-7262-b536-8355caa25d2c
+  author: aida-orchestrator
+  timestamp: 2026-10-13T04:10:16.688349206Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -75,3 +82,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Fail-closed code is correct, but the item-3 test never calls the production function: reverting contained_session_write_roots() to the old cwd/HOME fallback passes all 22 tests (mutation M2).'
+  recovery_hint: address the review findings, move BUG-1971 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-13T04:10:16.688318407Z
