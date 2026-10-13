@@ -20,12 +20,12 @@ description: |
   - A forged or stale grant (unknown grant id, grant for another seat, or expired) is still refused, with the same error class as review record.
   - One shared helper decides "has advisor authority" for both `aida edit --status` promotion and `aida review record`, so they cannot drift again. A test covers both commands against the same grant fixture.
   - The error text names the grant it found and why it was rejected, instead of "No active role" when a grant is present.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T05:03:30.106782834Z
+modified_at: 2026-10-13T13:52:33.593505641Z
 req_type: Bug
 tags:
 - authority
@@ -138,6 +138,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13589-4f39-7d82-a402-d0f9e22e169e
+  author: aida-orchestrator
+  timestamp: 2026-10-13T13:52:33.593546264Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
   branch: main
@@ -146,3 +153,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'D1/D3 and C1-C4 verified by mutation, but the edit/queue refusal wording change (AC2-AC4 on the edit side, AC3 shared-fixture test) is untested: reverting it in role.rs passes the entire lib suite.'
+  recovery_hint: address the review findings, move BUG-1983 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-13T13:52:33.593505641Z
