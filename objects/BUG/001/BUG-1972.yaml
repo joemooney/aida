@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:45.851893206Z
-modified_at: 2026-10-13T04:30:16.667479915Z
+modified_at: 2026-10-13T14:53:53.229094588Z
 req_type: Bug
 tags:
 - follow-up:advisor-review
@@ -35,6 +35,12 @@ comments:
   content: 'Advisor round 1/3: REQUEST CHANGES at 33c15a4133. A mirror re-run with a different --url can create a project at the existing (unrequested) URL. Brief is on #2582. The pre-existing curl argv token issue is filed as BUG-2004.'
   created_at: 2026-10-13T04:30:16.667479915Z
   modified_at: 2026-10-13T04:30:16.667479915Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a135c1-74cd-72c1-b4dc-9ccd3485c1ee
+  author: joe
+  content: 'ADVISOR REVIEW round 2: **APPROVE at e241935dc06ae97766a36f89e4c2bf9a50aae36b**, plus ADVISOR SIGNOFF (ADR-73 cond. 5, forge tokens). A fresh independent reviewer used a private build. All four round-1 items are resolved. The main blocker (a re-run with a different --url creating a project at the old URL) is now pinned: the ''always probe'' mutation fails the test. Host scoping holds: a token stored for host A can''t reach host B, and glab gets its token through env, never argv. 7 of 12 mutations were caught. The survivors are test gaps, not defects, and are filed as TASK (BUG-1972 test gaps). The new argv exposure on the re-run probe URL is folded into BUG-2004. The verdict is recorded. Cleared to merge once the operator clears the REWORK hold.'
+  created_at: 2026-10-13T14:53:53.229094588Z
+  modified_at: 2026-10-13T14:53:53.229094588Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-2a1a-7751-86d4-dd02f2bfdfca
