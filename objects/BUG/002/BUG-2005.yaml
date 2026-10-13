@@ -8,12 +8,46 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T12:40:14.138008318Z
+modified_at: 2026-10-13T12:42:22.026754521Z
 req_type: Bug
 tags:
 - review-follow-up
 - security
 - shell-wrapper
+comments:
+- id: 01a13549-0bca-7580-a0d5-413d336fc2df
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    • Approach:
+      1. aida-cli-lib/src/shell_eval.rs: Define ZSH_LOCALOPTS_CAP = "zsh-localopts" and helper marker_speaks_zsh_localopts.
+      2. aida-cli-lib/src/dev_cmd.rs: Bump AIDA_SHELL_WRAPPER in SHELL_HELPERS to include zsh-localopts.
+      3. aida-cli-lib/src/dev_cmd.rs: Update classify_wrapper to require ZSH_LOCALOPTS_CAP alongside EVAL_BLOCK_CAP for WrapperState::Current; classify pre-fix wrappers without it as WrapperState::Stale.
+      4. aida-cli-lib/src/dev_cmd.rs: Make installed_helpers_are_current check for ZSH_LOCALOPTS_CAP and setopt localoptions, ensuring installed pre-fix helpers report stale and trigger the re-install hint.
+      5. aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs: Add tests verifying pre-fix leaking wrapper fixture is classified stale and prompts for re-install, and fresh install is current. Update task_1171_eval_channel_tests.rs.
+      6. docs/environment-variables.md & docs/release-notes/2026-10-zsh-wrapper-leak.md: Document the zsh-localopts capability and provide release note instructing affected zsh users to re-run --install and rotate keys.
+    • Files to change:
+      - aida-cli-lib/src/shell_eval.rs
+      - aida-cli-lib/src/dev_cmd.rs
+      - aida-cli-lib/src/session_end.rs
+      - aida-cli-lib/src/tests/task_1171_eval_channel_tests.rs
+      - aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs (new)
+      - docs/environment-variables.md
+      - docs/release-notes/2026-10-zsh-wrapper-leak.md (new)
+    • Tests to add/run:
+      - pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall
+      - fresh_install_wrapper_is_current
+      - classify_wrapper_requires_zsh_localopts_capability
+      - installed_helpers_detects_leaking_local_dash_as_stale
+      - make check-ci-fast
+    • Risks:
+      - Preserving backwards compatibility for existing capability checks without breaking evaluation in bash or zsh.
+    • Acceptance mapping:
+      - Item 1 (pre-fix fixture classified stale with re-install command): tested in bug_2005_wrapper_staleness_tests.rs.
+      - Item 2 (fresh install is current): tested in bug_2005_wrapper_staleness_tests.rs.
+      - Item 3 (release note for zsh users to re-run --install and rotate keys): documented in docs/release-notes/2026-10-zsh-wrapper-leak.md.
+  created_at: 2026-10-13T12:42:22.026754521Z
+  modified_at: 2026-10-13T12:42:22.026754521Z
 history:
 - id: 01a13391-3292-7d80-a8ad-ec2e8a40c8a0
   author: joe
