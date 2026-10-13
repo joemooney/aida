@@ -217,7 +217,7 @@ doesn't match.
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
 | `AIDA_GITHUB_TOKEN` | GitHub PAT for API access. | unset = `None` (errors when a token is required). | user / launch-path | process env |
-| `AIDA_GITLAB_TOKEN` | GitLab PAT; checked first in the GitLab token resolution. | unset = `None`. | user | process env |
+| `AIDA_GITLAB_TOKEN` | GitLab PAT; checked first by the GitLab tracker integration. When AIDA creates a missing GitLab project (`aida init --gitlab`, `aida remote mirror`) or probes a GitLab release, a `glab auth login` token for the target host wins, and this variable (then `GITLAB_TOKEN`) is only the fallback (project creation says so) because it names no host. <!-- trace:BUG-1972 \| ai:claude --> | unset = `None`. | user | process env |
 | `AIDA_JIRA_TOKEN` | Jira API token. Cascade: `AIDA_JIRA_TOKEN` → `JIRA_API_KEY` → `JIRA_API_TOKEN`. | unset = `None`. | user | process env |
 | `AIDA_PUSH_DEFAULT` | Default scope for `aida push` when neither `--code-only` nor `--store-only` is given. | unset = both legs. Values: `code`/`code-only` or `store`/`store-only`. | user | process env |
 | `AIDA_PUSH_QUIET` | Suppress the non-blocking "N uncommitted change(s) not included in this push" notice (same effect as `aida push --no-notice`). **Presentation-only**: `aida agent new` does NOT propagate this from the launching shell into a spawned agent — see the `AIDA_OUTPUT_FORMAT` row. | unset = notice shown when the code tree is dirty. Truthy values suppress; `0`/`false`/`no`/empty do not. | user | process env |

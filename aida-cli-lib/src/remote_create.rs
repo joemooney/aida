@@ -854,12 +854,19 @@ pub(crate) fn gitlab_release_api_url(remote_url: &str, tag: &str) -> Option<Stri
     ))
 }
 
-fn gitlab_release_token_from_env() -> Option<String> {
-    std::env::var("AIDA_GITLAB_TOKEN")
-        .ok()
-        .or_else(|| std::env::var("GITLAB_TOKEN").ok())
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty())
+/// `AIDA_GITLAB_TOKEN`, else `GITLAB_TOKEN`, with the variable it came from.
+/// Neither is tied to a host, so callers try glab's host-scoped token first.
+// trace:BUG-1972 | ai:claude
+fn gitlab_release_token_from_env() -> Option<(&'static str, String)> {
+    ["AIDA_GITLAB_TOKEN", "GITLAB_TOKEN"]
+        .into_iter()
+        .find_map(|var| {
+            std::env::var(var)
+                .ok()
+                .map(|token| token.trim().to_string())
+                .filter(|token| !token.is_empty())
+                .map(|token| (var, token))
+        })
 }
 
 fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
@@ -913,23 +920,43 @@ fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<
     None
 }
 
-/// The GitLab token for `host`: `AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`, else the
-/// host-scoped token `glab auth login` stored. Backs the create-if-missing
-/// project fallback.
-// trace:STORY-1656 | ai:claude
-pub(crate) fn gitlab_token_for_host(host: &str) -> Option<String> {
-    gitlab_release_token_from_env()
-        .or_else(|| gitlab_release_token_from_glab_config_for_host(&host.to_ascii_lowercase()))
+/// Where a GitLab token came from.
+// trace:BUG-1972 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GitlabTokenSource {
+    /// The token `glab auth login --hostname <host>` stored for this host.
+    GlabHost,
+    /// An env var (`AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`) that names no host.
+    Env(&'static str),
 }
 
+/// The GitLab token for `host`: the host-scoped token `glab auth login`
+/// stored, else `AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`. The host-scoped token
+/// wins so an env token minted for one GitLab (say gitlab.com) is never sent
+/// to another host that has its own login; the env token is only a fallback,
+/// and [`GitlabTokenSource::Env`] lets the caller say so. Backs the
+/// create-if-missing project fallback.
+// trace:STORY-1656 | ai:claude
+// trace:BUG-1972 | ai:claude
+pub(crate) fn gitlab_token_for_host(host: &str) -> Option<(String, GitlabTokenSource)> {
+    if let Some(token) = gitlab_release_token_from_glab_config_for_host(&host.to_ascii_lowercase())
+    {
+        return Some((token, GitlabTokenSource::GlabHost));
+    }
+    gitlab_release_token_from_env().map(|(var, token)| (token, GitlabTokenSource::Env(var)))
+}
+
+/// The token for a GitLab release-API read, by the same host-scoped-first
+/// order as [`gitlab_token_for_host`]. A URL with no parsable host can only
+/// use the env token. The probe is a silent background read, so the env
+/// fallback is not announced here.
+// trace:TASK-1223 | ai:codex
+// trace:BUG-1972 | ai:claude
 fn gitlab_release_token_for_api_url(api_url: &str) -> Option<String> {
-    gitlab_release_token_from_env().or_else(|| {
-        // trace:TASK-1223 | ai:codex
-        // Private GitLab mirrors often rely on `glab auth login`; reuse glab's
-        // host-scoped token when no AIDA/GitLab env token is present.
-        let host = gitlab_host_from_api_url(api_url)?;
-        gitlab_release_token_from_glab_config_for_host(&host)
-    })
+    match gitlab_host_from_api_url(api_url) {
+        Some(host) => gitlab_token_for_host(&host).map(|(token, _)| token),
+        None => gitlab_release_token_from_env().map(|(_, token)| token),
+    }
 }
 
 fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
@@ -2053,10 +2080,10 @@ pub(crate) fn run_remote_mirror(
 
     // 1. The git remote itself.
     if aida_core::git_ops::has_remote(project_root, name) {
+        let existing = git_out(project_root, &["remote", "get-url", name])
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
         if let Some(u) = url {
-            let existing = git_out(project_root, &["remote", "get-url", name])
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default();
             if !existing.is_empty() && existing != u {
                 eprintln!(
                     "{warn} remote `{name}` already points at {existing} — keeping it (re-point with `git remote set-url {name} <url>`)"
@@ -2064,6 +2091,17 @@ pub(crate) fn run_remote_mirror(
             }
         }
         println!("{check} remote `{name}` already configured");
+        // A re-run (say after `glab auth login`) must still create a missing
+        // project, or fan-out is wired to a project that does not exist.
+        // Probe the URL the remote really has, which is what pushes use.
+        // trace:BUG-1972 | ai:claude
+        if !existing.is_empty() {
+            crate::gitlab_project_create::ensure_gitlab_project_exists(
+                project_root,
+                &existing,
+                false,
+            )?;
+        }
     } else {
         let Some(u) = url else {
             anyhow::bail!("remote `{name}` does not exist — pass --url <clone-url> to add it");
@@ -2967,12 +3005,44 @@ hosts:
         );
     }
 
+    /// Point the config dir at a temp home and write a glab config there
+    /// holding one token per `(host, token)`.
+    // trace:BUG-1972 | ai:claude
+    fn glab_login_fixture(
+        hosts: &[(&str, &str)],
+        env: &[(&'static str, Option<&str>)],
+    ) -> (tempfile::TempDir, crate::test_env::EnvVarsGuard) {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().display().to_string();
+        let xdg = tmp.path().join(".config").display().to_string();
+        let mut vars: Vec<(&'static str, Option<&str>)> = vec![
+            ("HOME", Some(home.as_str())),
+            ("XDG_CONFIG_HOME", Some(xdg.as_str())),
+        ];
+        vars.extend_from_slice(env);
+        let guard = crate::test_env::EnvVarsGuard::apply(&vars);
+        let mut body = String::from("hosts:\n");
+        for (host, token) in hosts {
+            body.push_str(&format!("  {host}:\n    token: {token}\n"));
+        }
+        let path = glab_config_path().expect("config dir under the temp home");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body).unwrap();
+        (tmp, guard)
+    }
+
+    /// The env tokens are only a fallback: with no glab login for the host,
+    /// `AIDA_GITLAB_TOKEN` beats `GITLAB_TOKEN` and the source says Env.
+    // trace:BUG-1972 | ai:claude
     #[test]
-    fn gitlab_release_token_env_wins_before_glab_config() {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_GITLAB_TOKEN", Some("env-token")),
-            ("GITLAB_TOKEN", Some("secondary-token")),
-        ]);
+    fn gitlab_token_falls_back_to_env_without_a_glab_login_for_the_host() {
+        let (_tmp, _env) = glab_login_fixture(
+            &[("gitlab.com", "glab-gitlab-com")],
+            &[
+                ("AIDA_GITLAB_TOKEN", Some("env-token")),
+                ("GITLAB_TOKEN", Some("secondary-token")),
+            ],
+        );
 
         assert_eq!(
             gitlab_release_token_for_api_url(
@@ -2980,6 +3050,54 @@ hosts:
             )
             .as_deref(),
             Some("env-token")
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.joemooney.com"),
+            Some((
+                "env-token".to_string(),
+                GitlabTokenSource::Env("AIDA_GITLAB_TOKEN")
+            ))
+        );
+    }
+
+    /// BUG-1972: with an env token AND a glab login for a different host
+    /// present, each host gets its own glab token, never the env one.
+    // trace:BUG-1972 | ai:claude
+    #[test]
+    fn gitlab_token_prefers_the_host_scoped_glab_login_over_env() {
+        let (_tmp, _env) = glab_login_fixture(
+            &[
+                ("gitlab.com", "glab-gitlab-com"),
+                ("gitlab.joemooney.com", "glab-self-hosted"),
+            ],
+            &[
+                ("AIDA_GITLAB_TOKEN", None),
+                ("GITLAB_TOKEN", Some("env-gitlab-com-token")),
+            ],
+        );
+
+        assert_eq!(
+            gitlab_token_for_host("GITLAB.joemooney.com"),
+            Some(("glab-self-hosted".to_string(), GitlabTokenSource::GlabHost))
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.com"),
+            Some(("glab-gitlab-com".to_string(), GitlabTokenSource::GlabHost))
+        );
+        assert_eq!(
+            gitlab_release_token_for_api_url(
+                "https://gitlab.joemooney.com:8443/api/v4/projects/ai%2Faida/releases/v0.15.0"
+            )
+            .as_deref(),
+            Some("glab-self-hosted")
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.example.test"),
+            Some((
+                "env-gitlab-com-token".to_string(),
+                GitlabTokenSource::Env("GITLAB_TOKEN")
+            )),
+            "a host with no glab login still falls back to the env token"
         );
     }
 

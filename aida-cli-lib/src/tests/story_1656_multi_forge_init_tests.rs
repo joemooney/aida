@@ -314,6 +314,7 @@ impl FakeForges {
             format!(
                 "#!/bin/sh\n\
                  printf 'glab %s\\n' \"$*\" >> '{rec}'\n\
+                 printf '%s\\n' \"$GITLAB_TOKEN\" >> '{root}/../glab-tokens.log'\n\
                  case \"$*\" in\n\
                    *\"-X POST projects\"*)\n\
                      name=''\n\
@@ -550,6 +551,179 @@ fn mirror_url_creates_missing_gitlab_project() {
             .count(),
         1
     );
+}
+
+// ───────────────────────── BUG-1972 follow-ups ─────────────────────────
+
+#[cfg(unix)]
+impl FakeForges {
+    /// Every token the fake `glab` was handed, one line per call.
+    fn glab_tokens(&self) -> Vec<String> {
+        std::fs::read_to_string(self.root.join("glab-tokens.log"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Write a glab config with a `glab auth login` token for `host`, under
+    /// the config dir [`FakeForges::env`] points at.
+    fn glab_login(&self, host: &str, token: &str) {
+        let dir = self.root.join("home").join(".config").join("glab-cli");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.yml"),
+            format!("hosts:\n  {host}:\n    token: {token}\n"),
+        )
+        .unwrap();
+    }
+
+    fn gitlab_project_exists(&self) -> bool {
+        self.gitlab_root.join("ai").join("proj.git").exists()
+    }
+}
+
+/// BUG-1972 (1): with both an env token and a glab login for the host, the
+/// project is created with the host-scoped glab token, never the env one.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn create_uses_the_host_scoped_glab_token_over_the_env_token() {
+    let forges = FakeForges::new();
+    let _env = forges.env(Some("glpat-env-for-gitlab-com"));
+    forges.glab_login("gitlab.example.test", "glpat-scoped");
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some("git@gitlab.example.test:ai/proj.git"),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("mirror wiring with create-if-missing");
+
+    assert!(forges.gitlab_project_exists());
+    let tokens = forges.glab_tokens();
+    assert!(!tokens.is_empty());
+    assert!(
+        tokens.iter().all(|t| t == "glpat-scoped"),
+        "only the host-scoped token may reach glab: {tokens:?}"
+    );
+}
+
+/// BUG-1972 (2): re-running the mirror after the first run could not create
+/// the project (no token yet) still creates it, though the remote exists.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_creates_the_project_when_the_remote_already_exists() {
+    let forges = FakeForges::new();
+    let url = "git@gitlab.example.test:ai/proj.git";
+    {
+        let _env = forges.env(None);
+        let err = crate::remote_create::run_remote_mirror(
+            &forges.project,
+            "gitlab",
+            Some(url),
+            crate::config_commit::CommitMode::Never,
+        )
+        .expect_err("no token: the first run cannot create the project")
+        .to_string();
+        assert!(err.contains("no GitLab token"), "{err}");
+    }
+    assert_eq!(git(&forges.project, &["remote", "get-url", "gitlab"]), url);
+    assert!(!forges.gitlab_project_exists());
+
+    // The operator logs in and re-runs the same command.
+    let _env = forges.env(None);
+    forges.glab_login("gitlab.example.test", "glpat-after-login");
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some(url),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("the re-run creates the missing project");
+    assert!(forges.gitlab_project_exists());
+    assert_eq!(forges.glab_tokens().last().unwrap(), "glpat-after-login");
+}
+
+/// BUG-1972 (3): a probe error that is NOT the refusal wires the mirror and
+/// creates nothing.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mirror_non_refusal_probe_error_wires_without_creating() {
+    let forges = FakeForges::new();
+    std::fs::write(forges.gitlab_root.join(".deny"), "").unwrap();
+    let _env = forges.env(Some("glpat-fake"));
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some("git@gitlab.example.test:ai/proj.git"),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("an unreachable mirror is still wired");
+
+    assert!(
+        !forges.calls().iter().any(|c| c.starts_with("glab")),
+        "{:?}",
+        forges.calls()
+    );
+    assert!(!forges.gitlab_root.join("ai").exists());
+    let cfg = crate::read_store_sync_config(&forges.project).unwrap();
+    assert_eq!(cfg.mirror_remotes, vec!["gitlab".to_string()]);
+}
+
+/// BUG-1972 (3): `aida init --gitlab` alone makes GitLab `origin`, pushed
+/// with `-u`, and wires no mirror hub.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn gitlab_only_init_publishes_to_origin_with_upstream() {
+    let forges = FakeForges::new();
+    let _env = forges.env(Some("glpat-fake"));
+    let mut plan = forges.plan();
+    plan.github = false;
+
+    let hubs = crate::init_bootstrap::publish_remotes(&plan, &forges.project)
+        .expect("publish to GitLab")
+        .expect("one hub");
+    assert_eq!(hubs, vec!["origin".to_string()]);
+    assert_eq!(
+        git(&forges.project, &["remote", "get-url", "origin"]),
+        "git@gitlab.example.test:ai/proj.git"
+    );
+    assert_eq!(
+        git(&forges.project, &["config", "branch.main.remote"]),
+        "origin"
+    );
+    assert!(git(&forges.project, &["remote"])
+        .lines()
+        .all(|r| r != "gitlab"));
+    let gitlab_bare = forges.gitlab_root.join("ai").join("proj.git");
+    for branch in ["main", "aida-store"] {
+        assert_eq!(
+            git(&gitlab_bare, &["rev-parse", branch]),
+            git(&forges.project, &["rev-parse", branch])
+        );
+    }
+    assert!(!forges.calls().iter().any(|c| c.starts_with("gh ")));
+    let cfg = crate::read_store_sync_config(&forges.project).unwrap();
+    assert!(cfg.mirror_remotes.is_empty(), "{:?}", cfg.mirror_remotes);
+}
+
+/// BUG-1972 (3): the ls-remote probe never waits on a credential prompt.
+// trace:BUG-1972 | ai:claude
+#[test]
+fn ls_remote_probe_disables_the_terminal_prompt() {
+    let cmd = ls_remote_probe(
+        std::path::Path::new("."),
+        "https://gitlab.example.test/ai/proj.git",
+    );
+    assert!(cmd
+        .get_envs()
+        .any(|(k, v)| k == "GIT_TERMINAL_PROMPT" && v == Some(std::ffi::OsStr::new("0"))));
 }
 
 /// AC4: a hub missing a leg (or on another tip) is reported, so init exits

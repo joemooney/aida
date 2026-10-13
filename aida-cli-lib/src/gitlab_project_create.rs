@@ -200,13 +200,22 @@ pub(crate) fn create_gitlab_project(
     name: &str,
     public: bool,
 ) -> Result<()> {
-    let Some(token) = crate::remote_create::gitlab_token_for_host(host) else {
+    let Some((token, source)) = crate::remote_create::gitlab_token_for_host(host) else {
         bail!(
             "{host} refused push-to-create and no GitLab token is available \
-             (set GITLAB_TOKEN or run `glab auth login --hostname {host}`).\n{}",
+             (run `glab auth login --hostname {host}`, or set GITLAB_TOKEN).\n{}",
             crate::remote_create::attach_fallback_hint(host, name)
         );
     };
+    // An env token names no host; say it is being sent to this one.
+    // trace:BUG-1972 | ai:claude
+    if let crate::remote_create::GitlabTokenSource::Env(var) = source {
+        println!(
+            "  {} no `glab auth login` token for {host}; using ${var}, which is not tied \
+             to a host (run `glab auth login --hostname {host}` to scope one)",
+            crate::glyph(crate::glyphs::Glyph::Warning)
+        );
+    }
     let namespace_id = if namespace.is_empty() {
         None
     } else {
@@ -295,6 +304,19 @@ pub(crate) fn push_with_create_fallback(
     }
 }
 
+/// The `git ls-remote --heads <url>` probe. `GIT_TERMINAL_PROMPT=0` makes an
+/// HTTPS URL without stored credentials fail instead of blocking on a
+/// username prompt.
+// trace:BUG-1972 | ai:claude
+fn ls_remote_probe(dir: &Path, url: &str) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(dir)
+        .args(["ls-remote", "--heads", url])
+        .env("GIT_TERMINAL_PROMPT", "0");
+    cmd
+}
+
 /// `aida remote mirror --url`: probe a GitLab URL with `git ls-remote`; when
 /// the project is missing (the refusal text), create it. Returns true when a
 /// project was created. Non-GitLab URLs and non-refusal probe errors are left
@@ -304,10 +326,7 @@ pub(crate) fn ensure_gitlab_project_exists(dir: &Path, url: &str, public: bool) 
     if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
         return Ok(false);
     }
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["ls-remote", "--heads", url])
+    let out = ls_remote_probe(dir, url)
         .output()
         .context("could not launch `git ls-remote`")?;
     if out.status.success() {
