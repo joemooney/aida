@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T13:28:56.738035053Z
+modified_at: 2026-10-13T13:44:32.720651560Z
 req_type: Bug
 comments:
 - id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
@@ -38,6 +38,11 @@ comments:
       - AC2: Binary tests verify warning appears when no commit exists on default branch, and is suppressed with doctor:no-code or a commit referencing the spec on main.
   created_at: 2026-10-13T13:28:56.738035053Z
   modified_at: 2026-10-13T13:28:56.738035053Z
+- id: 01a13581-f8d0-72c3-a878-f297b5628992
+  author: joe
+  content: 'FACTORY DRAFT: PR #2594 at d91b8c935d339330b801f9809fdec4c6b93f79a8'
+  created_at: 2026-10-13T13:44:32.720651560Z
+  modified_at: 2026-10-13T13:44:32.720651560Z
 history:
 - id: 01a13538-8035-7990-b7c4-2d187f92df56
   author: joe
