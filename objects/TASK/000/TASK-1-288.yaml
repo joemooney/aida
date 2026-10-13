@@ -1,0 +1,30 @@
+id: 01a135ea-281b-7772-9ac2-650df5d91857
+spec_id: TASK-1-288
+title: 'non-blocking: detection keys only on /proc/<pid>/cwd, so it depends on the work…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1990, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: detection keys only on /proc/<pid>/cwd, so it depends on the worker cwd policy (BUG-1947, worker_cwd_for = project root). If that ever moves outside the fixture, the wait silently becomes a no-op and the flake returns. Consider also matching the fixture path in /proc/<pid>/cmdline (the worker argv carries --store/--cache under temp)
+
+  PR: #2585
+  Reviewed sha: 5c08a2e150302f49f9459b9f4e9d2ca02a425451
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T15:38:20.571767591Z
+modified_at: 2026-10-13T15:38:20.571767591Z
+req_type: Task
+tags:
+- carried-from:BUG-1990
+- finding-hash:2c778eda
+- from-review:PR-2585
+- kind:carried-forward
+filed_at:
+  code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
