@@ -12941,8 +12941,8 @@ pub enum Command {
         /// (HOST or HOST/GROUP; PRIVATE unless --public) and publish both
         /// legs there. With --github it becomes a mirror hub; alone it is
         /// origin. When the group refuses push-to-create, the project is
-        /// created through the GitLab API (needs a `glab` login or
-        /// GITLAB_TOKEN).
+        /// created through the GitLab API (needs a `glab` login for the
+        /// host, else GITLAB_TOKEN).
         // trace:STORY-1656 | ai:claude
         #[clap(
             long,
