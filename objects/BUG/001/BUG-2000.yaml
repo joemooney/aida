@@ -19,8 +19,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T00:02:37.689446175Z
-modified_at: 2026-10-13T03:15:33.323734260Z
+modified_at: 2026-10-13T03:33:06.973121085Z
 req_type: Bug
+comments:
+- id: 01a13352-311d-7ee0-9c8a-53dff05b9d2f
+  author: joe
+  content: 'Night seat session #7: minimal fix is in PR #2584 (branch bug-2000-zsh-local): setopt localoptions under zsh, local - for bash only. It uses the same lines as #2577. Tests are in bug_2000_zsh_local_tests.rs. Only the bash leg ran locally because zsh is absent; make check-ci-fast passed 27/27. Operator key-rotation follow-up still applies.'
+  created_at: 2026-10-13T03:33:06.973121085Z
+  modified_at: 2026-10-13T03:33:06.973121085Z
+  session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
 history:
 - id: 01a1331b-22e3-79b1-afa0-a1f9544ff50e
   author: joe
