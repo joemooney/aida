@@ -856,10 +856,11 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
                 .to_string(),
         );
     }
-    // BUG-543, BUG-1996: a fully-delivered parent (every child Completed) should
-    // surface for a one-click close.
-    // trace:BUG-1996 | ai:antigravity
-    if f.req_type.eq_ignore_ascii_case("epic") || f.req_type.eq_ignore_ascii_case("story") {
+    if f.req_type.eq_ignore_ascii_case("epic") {
+        // BUG-543: a fully-delivered epic (every child Completed) should NOT
+        // read as a generic umbrella — surface it for a one-click close. Strict
+        // `completed == total` (a Rejected/remaining child keeps it umbrella):
+        // detection-only, so under-flagging is the safe direction.
         if let Some((completed, total)) = f.epic_rollup {
             if total > 0 && completed == total {
                 return (
@@ -872,8 +873,6 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
                 );
             }
         }
-    }
-    if f.req_type.eq_ignore_ascii_case("epic") {
         // TASK-808: only an epic that NEEDS a human belongs in `aida human`.
         // A childless epic needs decomposition (actionable). An epic with
         // in-flight children is SELF-DRIVING — it resolves as its children
@@ -3501,19 +3500,6 @@ mod tests {
         // A zero-total rollup (no children) is the same childless case → Umbrella.
         f.epic_rollup = Some((0, 0));
         assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
-    }
-
-    // BUG-1996: a story with all children completed is also ReadyToClose.
-    // trace:BUG-1996 | ai:antigravity
-    #[test]
-    fn explain_open_story_ready_to_close_when_rollup_complete() {
-        let mut f = open("story", "approved", &[], false, false, false);
-        f.id = "STORY-10".to_string();
-        f.epic_rollup = Some((3, 3));
-        let (bucket, reason) = explain_open(&f);
-        assert_eq!(bucket, OpenBucket::ReadyToClose);
-        assert!(reason.contains("ready to close"));
-        assert!(reason.contains("STORY-10"));
     }
 
     // TASK-884: a draft epic WITH children that are all still un-started (nothing

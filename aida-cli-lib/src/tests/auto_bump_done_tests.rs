@@ -3261,13 +3261,8 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
     drop(backend);
 
     let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
-    crate::queue_cmd::advance_dispatch(
-        crate::burndown::AdvanceAction::Close,
-        "BUG-12861",
-        &store,
-        false,
-    )
-    .expect("the close call itself must not error");
+    crate::queue_cmd::advance_dispatch(crate::burndown::AdvanceAction::Close, "BUG-12861", &store)
+        .expect("the close call itself must not error");
 
     let after = aida_core::CachedGitBackend::open(
         &store,
@@ -3287,6 +3282,175 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
         crate::events::read_all(&project_root).is_empty(),
         "and with no transition there must be no ship record"
     );
+}
+
+// ── BUG-1996: queue advance Close completion linkage warning ──────────
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_advance_close_dispatch_without_shipped_commit_warns() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("unshipped task".into(), String::new());
+    req.spec_id = Some("TASK-19961".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    crate::shipped_linkage::take_last_warning();
+
+    crate::queue_cmd::advance_dispatch(
+        crate::burndown::AdvanceAction::Close,
+        "TASK-19961",
+        &store_dir,
+    )
+    .expect("the close call itself must not error");
+
+    let warning = crate::shipped_linkage::take_last_warning()
+        .expect("warn_if_completed_without_shipped_commit must have been called")
+        .expect("unshipped code spec must produce a completion linkage warning");
+    assert!(
+        warning.contains("TASK-19961"),
+        "warning must name TASK-19961:\n{warning}"
+    );
+    assert!(
+        warning.contains("no commit found on"),
+        "warning must describe missing commit on default branch:\n{warning}"
+    );
+
+    let after = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let status = after
+        .get_requirement_by_spec_id("TASK-19961")
+        .unwrap()
+        .unwrap()
+        .status;
+    assert!(matches!(status, aida_core::RequirementStatus::Completed));
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_advance_close_dispatch_opted_out_does_not_warn() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("no-code task".into(), String::new());
+    req.spec_id = Some("TASK-19962".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.tags.push("doctor:no-code".into());
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    crate::shipped_linkage::take_last_warning();
+
+    crate::queue_cmd::advance_dispatch(
+        crate::burndown::AdvanceAction::Close,
+        "TASK-19962",
+        &store_dir,
+    )
+    .expect("the close call itself must not error");
+
+    let warning = crate::shipped_linkage::take_last_warning()
+        .expect("warn_if_completed_without_shipped_commit must have been called");
+    assert_eq!(
+        warning, None,
+        "doctor:no-code spec must not emit a warning on close"
+    );
+
+    let after = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let status = after
+        .get_requirement_by_spec_id("TASK-19962")
+        .unwrap()
+        .unwrap()
+        .status;
+    assert!(matches!(status, aida_core::RequirementStatus::Completed));
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("shipped task".into(), String::new());
+    req.spec_id = Some("TASK-19963".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+
+    // Commit on main mentioning TASK-19963
+    std::fs::write(project_root.join("work.txt"), "shipped work\n").unwrap();
+    run_git(&project_root, &["add", "work.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "feat: shipped work (TASK-19963) (#42)"],
+    );
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    let _auto = crate::test_env::EnvVarGuard::set("AIDA_TEST_AUTO_CLOSE", "1");
+    crate::shipped_linkage::take_last_warning();
+
+    crate::queue_cmd::advance_dispatch(
+        crate::burndown::AdvanceAction::Close,
+        "TASK-19963",
+        &store_dir,
+    )
+    .expect("the close call itself must not error");
+
+    let warning = crate::shipped_linkage::take_last_warning()
+        .expect("warn_if_completed_without_shipped_commit must have been called");
+    assert_eq!(
+        warning, None,
+        "shipped spec must not emit a warning on close"
+    );
+
+    let after = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let status = after
+        .get_requirement_by_spec_id("TASK-19963")
+        .unwrap()
+        .unwrap()
+        .status;
+    assert!(matches!(status, aida_core::RequirementStatus::Completed));
 }
 
 // Review fix: whole-id matching for the open-PR diagnostic.
