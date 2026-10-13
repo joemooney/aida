@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:55:32.825289932Z
-modified_at: 2026-10-13T22:05:48.215149139Z
+modified_at: 2026-10-13T22:28:30.183200885Z
 req_type: Bug
 comments:
 - id: 01a13675-1bfc-7aa2-88b3-af25fe4d880e
@@ -38,6 +38,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2607 at 8227aeb5fe6ffbe7f9caf9d201c86df5809ff88c'
   created_at: 2026-10-13T22:05:48.215149139Z
   modified_at: 2026-10-13T22:05:48.215149139Z
+- id: 01a13761-ab67-7ee3-802e-e55a803c3419
+  author: joe
+  content: 'FACTORY READY: PR #2607 green at 8227aeb5fe6ffbe7f9caf9d201c86df5809ff88c'
+  created_at: 2026-10-13T22:28:30.183200885Z
+  modified_at: 2026-10-13T22:28:30.183200885Z
 history:
 - id: 01a13675-1f5a-7cd3-be3e-6df5fde541f0
   author: joe
