@@ -15,12 +15,12 @@ description: |
   ## Acceptance
   - aida-handoff Step 1 names `/aida-capture` as a step that runs, not a mental sweep.
   - Mirrors are regenerated, and `make check-templates` and `make check-ci-fast` are green.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T06:16:59.456662055Z
-modified_at: 2026-10-13T06:46:31.794758185Z
+modified_at: 2026-10-13T07:26:45.332915757Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -58,6 +58,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13428-1774-7e13-8864-8b87a7a6f9eb
+  author: aida-auto-bump
+  timestamp: 2026-10-13T07:26:45.108290211Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13428-1854-7703-ae1c-2283f9d81176
+  timestamp: 2026-10-13T07:26:45.332908920Z
+  agent: implementer
+  commit_sha: 0ba979dca2975e4affae8a023f8a0201567e6d0c
+  summary: Step 1 now invokes /aida-capture (FAQ lens + autonomy rules deferred to capture); check-templates and check-ci-fast (27/27) green; nits only
+  review_verdict: approved
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
@@ -66,3 +80,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T07:26:45.108286171Z
+  completion_sha: 0ba979dca2975e4affae8a023f8a0201567e6d0c
