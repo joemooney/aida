@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T06:45:30.801869198Z
+modified_at: 2026-10-13T06:45:49.464661647Z
 req_type: Bug
 tags:
 - cache
@@ -40,6 +40,27 @@ comments:
   created_at: 2026-10-13T04:42:03.507121052Z
   modified_at: 2026-10-13T04:42:03.507121052Z
   session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
+- id: 01a13402-9f18-7fa1-a198-af2bba75b5f7
+  author: joe
+  content: |-
+    REVIEW (merge): REQUEST CHANGES at a1260f94bce81c63fcfec57f32de135219e14b2f
+
+    A fresh, independent reviewer checked this head with a private build. The new tests pass (cache_binding 5/5, doctor 1/1; db::cache 203 passed), and both mutations were caught. The blocking problem is that the detection doesn't fire in a real contained session.
+
+    1. **The path signal is unreachable** (`cache_binding.rs:69`, `doctor_cmd.rs:2691`). When the host deletes or replaces a file bind-mounted into another mount namespace, Linux (3.18+; observed on 7.0) detaches that bind. Inside the sandbox the path then reads ENOENT or the host's new inode with nlink 1, never nlink 0. Only handles opened before the replace see the deleted inode.
+       - Repro: `unshare -rm` plus a bind of `.aida/cache.db`; a holder keeps it open while the host replaces it. Inside, the path showed the new inode (nlink 1) and the held fd showed nlink 0. A fresh `AIDA_CONTAINED=1 aida doctor --category cache-refresh` printed "no multi-agent state drift detected" and exited 0.
+       - The doctor test passes only because the test process itself holds the file open. Doctor is a new process, so it can't see another process's stale handles.
+       - Detection probably belongs in long-lived holders such as the MCP server. **This changes the spec's premise, so it goes to the advisor before any rework.**
+    2. **Most contained launch paths never export `AIDA_CONTAINED=1`** (`queue_cmd.rs:11084-11097`). Only `aida queue work` sets it. `aida launch --sandbox` (`agent_launch.rs:1924`) and the `[agents] contained` setting (`lib_part2.rs:697-700`) don't, so `Cache::open` and the doctor scan treat those sessions as uncontained.
+
+    Non-blocking:
+    - `quarantine_cache_files` renames rather than deletes, so the old file keeps nlink 1 and can't be detected from inside the sandbox.
+    - The doctor test picks the shm file with a bare index (`bound_cache_files(&cache)[2]`).
+
+    The verdict is recorded with `aida review record` (request-changes). I've escalated to the advisor because item 1 is a design question.
+  created_at: 2026-10-13T06:45:49.464661647Z
+  modified_at: 2026-10-13T06:45:49.464661647Z
+  session_id: e651951a-cde3-4010-8494-7b15a84fb988
 history:
 - id: 01a1309d-3f26-7af2-8940-f209cc30cba7
   author: joe
