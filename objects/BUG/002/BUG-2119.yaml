@@ -1,0 +1,24 @@
+id: 01a13783-0eab-7133-b242-db85367a3371
+spec_id: BUG-2119
+agreed_id: BUG-2119
+title: GitLab credential embedded in remote URL appears in git-remote-http argv on every fetch/push/ls-remote
+description: 'Found in the review of #2599 (BUG-2004). Even when aida passes a remote NAME, git starts ''git-remote-http <name> http://oauth2:<token>@...'' with the credential URL in argv. Any local user can read it with ps or /proc. Use a credential helper, or an http.extraHeader passed through GIT_CONFIG_* env, instead of embedding oauth2:<token>@ in the remote URL.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T23:04:58.283290700Z
+modified_at: 2026-10-13T23:04:58.283290700Z
+req_type: Bug
+tags:
+- forge
+- review-follow-up
+- security
+filed_at:
+  code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
