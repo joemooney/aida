@@ -45,18 +45,21 @@ struct Fixture {
 // trace:BUG-1995 | ai:antigravity
 impl Drop for Fixture {
     fn drop(&mut self) {
+        let my_pid = std::process::id();
+        if let Ok(Some(info)) = aida_core::db::read_cache_lock_info(&cache_path(self)) {
+            if info.pid > 1 && info.pid != my_pid {
+                let _ = Command::new("kill")
+                    .args(["-9", &info.pid.to_string()])
+                    .status();
+            }
+        }
         if let Some(req) = aida_core::db::refresh_request::load(&cache_path(self)) {
             for attempt in &req.attempts {
-                if attempt.pid > 1 {
+                if attempt.pid > 1 && attempt.pid != my_pid {
                     let _ = Command::new("kill")
                         .args(["-9", &attempt.pid.to_string()])
                         .status();
                 }
-            }
-            if req.requester_pid > 1 {
-                let _ = Command::new("kill")
-                    .args(["-9", &req.requester_pid.to_string()])
-                    .status();
             }
         }
     }
