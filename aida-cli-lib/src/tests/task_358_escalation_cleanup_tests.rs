@@ -118,6 +118,7 @@ fn auto_release_disabled_always_reports_live() {
     let cfg = orchestrator::OrchestratorConfig {
         auto_release_dormant_leases: false,
         stale_lease_threshold_minutes: 10,
+        ..Default::default()
     };
     assert_eq!(
         auto_release_decision_for_lease(root, &lease, &cfg),

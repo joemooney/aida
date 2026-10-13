@@ -14,6 +14,18 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
+    let value = pipelined_child_result_sidecar_json(result);
+    if let Ok(bytes) = serde_json::to_vec_pretty(&value) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+/// The JSON a pipelined child leaves for its parent scheduler. Pure so the
+/// round trip through [`parse_pipelined_child_result_sidecar`] is unit-pinned.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) fn pipelined_child_result_sidecar_json(
+    result: &auto_complete::OrchestrationResult,
+) -> serde_json::Value {
     let escalation = result.escalation.as_ref().map(|e| {
         serde_json::json!({
             "kind": match e.kind {
@@ -24,7 +36,7 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
             "reason": e.reason,
         })
     });
-    let value = serde_json::json!({
+    serde_json::json!({
         "exit_code": result.exit_code,
         "failed_phase": result.failed_phase.map(|p| p.index()),
         "punt_reason": result.punt_reason,
@@ -33,10 +45,14 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
         "inconclusive_reason": result.inconclusive_reason,
         "shelved": result.shelved_reason.is_some(),
         "held_reason": result.held_reason,
-    });
-    if let Ok(bytes) = serde_json::to_vec_pretty(&value) {
-        let _ = std::fs::write(path, bytes);
-    }
+        // BUG-1930: the parent's consecutive-environmental-failure halt reads
+        // the failure kind and reason; without them every pipelined member
+        // looked like a non-environmental failure. trace:BUG-1930 | ai:claude
+        "failure": result.failure.as_ref().map(|f| serde_json::json!({
+            "kind": f.kind.cause_slug(),
+            "reason": f.reason,
+        })),
+    })
 }
 
 // trace:STORY-1091 trace:ADR-28 | ai:codex
@@ -46,6 +62,15 @@ pub(crate) fn read_pipelined_child_result_sidecar(
     let bytes = std::fs::read(path).ok()?;
     let _ = std::fs::remove_file(path);
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    parse_pipelined_child_result_sidecar(&value)
+}
+
+/// Rebuild a child's result from [`pipelined_child_result_sidecar_json`].
+/// Sidecars written before a field existed still parse (it reads as absent).
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) fn parse_pipelined_child_result_sidecar(
+    value: &serde_json::Value,
+) -> Option<auto_complete::OrchestrationResult> {
     let exit_code = value
         .get("exit_code")
         .and_then(|v| v.as_i64())
@@ -93,10 +118,17 @@ pub(crate) fn read_pipelined_child_result_sidecar(
             shelved_by: Some("orchestrator".to_string()),
             shelved_at: chrono::Utc::now(),
         });
+    // BUG-1930: an older sidecar has no `failure`, and an unknown kind slug
+    // is dropped; both read as `None`, as before. trace:BUG-1930 | ai:claude
+    let failure = value.get("failure").and_then(|f| {
+        let kind = auto_complete::FailureKind::from_cause_slug(f.get("kind")?.as_str()?)?;
+        let reason = f.get("reason").and_then(|r| r.as_str()).unwrap_or_default();
+        Some(auto_complete::PhaseFailure::of(kind, reason))
+    });
     Some(auto_complete::OrchestrationResult {
         exit_code,
         failed_phase,
-        failure: None,
+        failure,
         phase_durations: Vec::new(),
         total_ms: 0,
         punt_reason: value
@@ -605,6 +637,13 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             Some((root, since)) => sum_headless_log_tokens(root, *since),
             None => 0,
         }
+    }
+
+    // trace:BUG-1930 | ai:claude
+    fn environment_halt_after(&self) -> usize {
+        crate::find_project_root()
+            .map(|root| crate::orchestrator::OrchestratorConfig::load(&root).environment_halt_after)
+            .unwrap_or(auto_complete::DEFAULT_ENVIRONMENT_HALT_AFTER)
     }
 }
 
@@ -1811,17 +1850,7 @@ pub(crate) fn emit_batch_chain_summary(
     use auto_complete::BatchDrainOutcome;
 
     if json {
-        let outcome = match &result.outcome {
-            BatchDrainOutcome::Drained => "drained",
-            BatchDrainOutcome::MaxReached => "max-reached",
-            BatchDrainOutcome::Failed(_) => "failed",
-            BatchDrainOutcome::Stalled => "stalled",
-            BatchDrainOutcome::Mismatched { .. } => "mismatched",
-            BatchDrainOutcome::Inconclusive => "inconclusive",
-            BatchDrainOutcome::Held => "held",
-            // EPIC-28 trace:EPIC-28 | ai:claude
-            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
-        };
+        let outcome = crate::drain_next_n::batch_outcome_label(&result.outcome);
         let mut obj = serde_json::Map::new();
         obj.insert(
             "event".to_string(),
@@ -1918,6 +1947,11 @@ pub(crate) fn emit_batch_chain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // trace:BUG-1930 | ai:claude
+        obj.insert(
+            "halt_reason".to_string(),
+            crate::drain_next_n::batch_halt_reason(&result.outcome),
         );
         println!("{}", serde_json::Value::Object(obj));
         return;
@@ -2046,6 +2080,11 @@ pub(crate) fn emit_batch_chain_summary(
                 shipped_list
             );
         }
+        // trace:BUG-1930 | ai:claude
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            crate::drain_next_n::emit_environment_blocked_lines(cause, stopped, &shipped_list);
+        }
         // EPIC-28: every batch drained, but at least one member shelved
         // or was skipped. trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {
@@ -2124,18 +2163,7 @@ pub(crate) fn emit_batch_drain_summary(
     use auto_complete::BatchDrainOutcome;
 
     if json {
-        let outcome = match &result.outcome {
-            BatchDrainOutcome::Drained => "drained",
-            BatchDrainOutcome::MaxReached => "max-reached",
-            BatchDrainOutcome::Failed(_) => "failed",
-            BatchDrainOutcome::Stalled => "stalled",
-            BatchDrainOutcome::Mismatched { .. } => "mismatched",
-            BatchDrainOutcome::Inconclusive => "inconclusive",
-            BatchDrainOutcome::Held => "held",
-            // EPIC-28: a clean drain that shelved at least one member —
-            // the operator still has triage to do. trace:EPIC-28
-            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
-        };
+        let outcome = crate::drain_next_n::batch_outcome_label(&result.outcome);
         let mut obj = serde_json::Map::new();
         obj.insert(
             "event".to_string(),
@@ -2203,6 +2231,11 @@ pub(crate) fn emit_batch_drain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // trace:BUG-1930 | ai:claude
+        obj.insert(
+            "halt_reason".to_string(),
+            crate::drain_next_n::batch_halt_reason(&result.outcome),
         );
         // TASK-1297: the excluded-by-filter figure, so a machine consumer
         // can alarm without scraping the human line. trace:TASK-1297 | ai:claude
@@ -2387,6 +2420,11 @@ pub(crate) fn emit_batch_drain_summary(
                  `aida queue work --batch {batch_name} --auto-complete`",
                 "→".dimmed()
             );
+        }
+        // trace:BUG-1930 | ai:claude
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            crate::drain_next_n::emit_environment_blocked_lines(cause, stopped, &shipped_list);
         }
         // EPIC-28: the batch drained but parked at least one spec. The
         // top line stays green-ish — independents shipped — and the

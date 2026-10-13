@@ -817,6 +817,9 @@ mod tests {
         }
         // The integrity floor is never transient.
         assert!(!is_transient_failure_kind("ci-red"));
+        // BUG-1930: refused writes recur until the boundary changes.
+        // trace:BUG-1930 | ai:claude
+        assert!(!is_transient_failure_kind("permission-denied"));
         assert!(!is_transient_failure_kind("request-changes"));
         assert!(!is_transient_failure_kind("environmental"));
     }

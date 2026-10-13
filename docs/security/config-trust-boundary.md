@@ -40,7 +40,7 @@ applies. The branch-local copy is *never* used as a fallback.
 | `smoke_check` | `[pr-rebase]` | **Yes** — run via `sh -c` in the rebased worktree | **Trusted default branch** (fail-closed to built-in default) |
 | `disposition_bias`, `on_apply`, `do_not_approve_classes` | `[intake]` | No (policy enums / class list) | Branch-local |
 | `fork_mode`, `calibration_mode`, `allow_mtime_fallback`, `keep_fork_jsonls`, `max_source_size_mb` | `[advisor]` | No (behavior toggles / thresholds) | Branch-local |
-| `auto_release_dormant_leases`, `stale_lease_threshold_minutes` | `[orchestrator]` | No (toggle / threshold) | Branch-local |
+| `auto_release_dormant_leases`, `stale_lease_threshold_minutes`, `environment_halt_after` | `[orchestrator]` | No (toggle / threshold) | Branch-local |
 | `strategy` | `[integrate]` | No (merge-strategy enum) | Branch-local |
 | `workflow_hints` | `[hints]` | No (display toggle) | Branch-local |
 | `run_acceptance_commands`, `acceptance_command_allow` | `[review]` | **Yes** — gate on the spec-authored commands graded review runs via `bash -c` | **Machine-global `~/.aida/config.toml` only** (repo copy — branch-local and default-branch — ignored; fail-closed to denied) |

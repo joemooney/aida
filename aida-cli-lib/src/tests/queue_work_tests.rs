@@ -3296,10 +3296,10 @@ fn a_child_that_reported_nothing_is_not_blamed_on_the_spec() {
 ///
 /// Note on what crosses the process boundary: the sidecar format written by
 /// `write_pipelined_child_result_sidecar` carries `shelved: bool` and
-/// `failed_phase`, not the `FailureKind`, so the parent never sees the literal
-/// `FailureKind::CiRed` the child computed. At this seam the CI-red signal IS
-/// the ci-phase `shelved_reason` — that is the thing that must survive, and the
-/// thing an always-`Internal` regression would destroy.
+/// `failed_phase` (and, since BUG-1930, an optional `failure` this fixture
+/// omits), so at this seam the CI-red signal IS the ci-phase `shelved_reason`
+/// — that is the thing that must survive, and the thing an always-`Internal`
+/// regression would destroy.
 // trace:BUG-1570 | ai:claude
 #[test]
 fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
@@ -4211,4 +4211,106 @@ fn batch_registers_newly_unblocked_member_before_phase_entry() {
 #[test]
 fn next_n_registers_newly_unblocked_member_before_phase_entry() {
     newly_unblocked_member_reaches_phase_one(false);
+}
+
+/// BUG-1930: a pipelined child that stopped on permission denials must hand
+/// its failure kind and reason to the parent through the sidecar, or the
+/// parent's consecutive-environmental-failure halt never fires.
+// trace:BUG-1930 | ai:claude
+#[test]
+fn pipelined_sidecar_round_trips_a_permission_denied_failure() {
+    use crate::auto_complete::{FailureKind, OrchestrationResult, Phase, PhaseFailure};
+    let dir = tempfile::tempdir().expect("tempdir");
+    let sidecar_path = dir.path().join("BUG-81-1.json");
+    let reason = "phase 1 stopped: permission denied for Edit, Write";
+    let mut written = OrchestrationResult::failed(Phase::Implementer);
+    written.failure = Some(PhaseFailure::of(FailureKind::PermissionDenied, reason));
+    std::fs::write(
+        &sidecar_path,
+        serde_json::to_vec_pretty(&crate::pipelined_child_result_sidecar_json(&written))
+            .expect("serialize sidecar"),
+    )
+    .expect("write sidecar");
+
+    let read = crate::read_pipelined_child_result_sidecar(&sidecar_path).expect("sidecar parses");
+    let failure = read.failure.as_ref().expect("failure survives the sidecar");
+    assert_eq!(failure.kind, FailureKind::PermissionDenied);
+    assert_eq!(failure.reason, reason);
+    assert_eq!(read.exit_code, written.exit_code);
+    assert_eq!(
+        crate::auto_complete::environmental_failure_class(&read),
+        Some("permission-denied")
+    );
+}
+
+/// BUG-1930: sidecars written before `failure` existed (or with a kind this
+/// binary does not know) still parse, with no failure, as before.
+// trace:BUG-1930 | ai:claude
+#[test]
+fn pipelined_sidecar_without_failure_field_still_parses() {
+    let old = serde_json::json!({
+        "exit_code": 1,
+        "failed_phase": 1,
+        "punt_reason": null,
+        "shipped_spec_id": null,
+        "escalation": null,
+        "inconclusive_reason": null,
+        "shelved": true,
+        "held_reason": null,
+    });
+    let read = crate::parse_pipelined_child_result_sidecar(&old).expect("old sidecar parses");
+    assert!(read.failure.is_none());
+    assert!(read.shelved_reason.is_some());
+
+    let mut unknown = old.clone();
+    unknown["failure"] = serde_json::json!({"kind": "from-the-future", "reason": "x"});
+    let read = crate::parse_pipelined_child_result_sidecar(&unknown).expect("parses");
+    assert!(read.failure.is_none());
+}
+
+/// BUG-1930: `from_cause_slug` inverts `cause_slug` for every kind, so a
+/// failure's public cause survives the sidecar unchanged.
+// trace:BUG-1930 | ai:claude
+#[test]
+fn failure_kind_cause_slug_round_trips() {
+    use crate::auto_complete::FailureKind as K;
+    let all = [
+        K::Spawn,
+        K::MissingTool,
+        K::Internal,
+        K::NoPr,
+        K::CiRed,
+        K::CiTimeout,
+        K::CiUnavailable,
+        K::NoVerdict,
+        K::VerdictRequestChanges,
+        K::VerdictReject,
+        K::ReviewerWrote,
+        K::ReworkNoOp,
+        K::PrVerificationInconclusive,
+        K::Watchdog,
+        K::CacheLocked,
+        K::LeaseConflict,
+        K::PermissionDenied,
+        K::LaunchNoOutput,
+        K::HeadlessWait,
+        K::StaleBaseRefused,
+        K::StaleBaseConflict,
+        K::MergeHold,
+        K::StaleApproval,
+        K::ReviewInProgress,
+        K::ShippedMismatch,
+        K::LaunchRefused,
+        K::Failed,
+    ];
+    for kind in all {
+        let back = K::from_cause_slug(kind.cause_slug())
+            .unwrap_or_else(|| panic!("{kind:?} slug has no inverse"));
+        assert_eq!(back.cause_slug(), kind.cause_slug(), "{kind:?}");
+    }
+    assert_eq!(
+        K::from_cause_slug("permission-denied"),
+        Some(K::PermissionDenied)
+    );
+    assert_eq!(K::from_cause_slug("nonsense"), None);
 }

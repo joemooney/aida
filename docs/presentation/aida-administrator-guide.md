@@ -116,7 +116,7 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[deployment]` | `mode` (distributed/centralized), `store_path`, `store_type`, `branch` |
 | `[id_format]` | `policy`: node-aware-only / blocks-then-fallback (default) / blocks-only |
 | `[behavior]` | `permission_mode` for user-facing file writes |
-| `[orchestrator]` | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` |
+| `[orchestrator]` | `auto_release_dormant_leases`, `stale_lease_threshold_minutes`, `environment_halt_after` |
 | `[advisor]` | `calibration_mode` (off/on), fork settings for the headless advisor tier |
 | `[archive]` | `auto_after_days` — opt-in auto-archive sweep on pull |
 | `[list]` | `show_hidden_hints` — footer the archived/deferred hidden-count nudges on the default `aida list` view (default `false` = quiet); `default_sort` — order when no `--sort` is given (default `id`, natural numeric); `agent_limit` — agent-mode row cap for a bare `aida list` (default 100, 0 = unbounded, env `AIDA_LIST_LIMIT`) |

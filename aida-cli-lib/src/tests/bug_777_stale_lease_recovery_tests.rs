@@ -918,3 +918,87 @@ fn bug_1947_implementer_retry_reclaims_a_dead_predecessor_despite_an_orphaned_pr
     );
     drop(orphan);
 }
+
+/// BUG-1930: phase 1 exited cleanly (result event seen, child reaped), but
+/// `aida queue work` minted the lease in-process, so its `creator_pid` is the
+/// still-running orchestrator and a claude launch recorded no `active_pid`.
+/// The retry must reclaim on the first probe instead of re-probing a "live"
+/// owner until it gives up with a lease conflict.
+// trace:BUG-1930 | ai:claude
+#[test]
+fn implementer_retry_reclaims_clean_exit_predecessor_on_first_probe() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "bug-1930-clean-exit");
+    let mut lease = lease_at(worktree.path(), 5, Some(std::process::id()), None);
+    lease.id = "019f930clean".to_string();
+    lease.scope = "BUG-1930".to_string();
+    lease.slug = "bug-1930".to_string();
+    lease.branch = "bug-1930-clean-exit".to_string();
+    lease.role = Some("implementer".to_string());
+    lease.creator_pid_start_time = process_probe::process_start_identity(std::process::id());
+    write_lease(project.path(), &lease);
+
+    let mut sleeps = Vec::new();
+    let target = reclaim_implementer_retry_predecessor_with(
+        project.path(),
+        "BUG-1930",
+        3,
+        std::time::Duration::from_millis(7),
+        |lease| implementer_retry_predecessor_recovery(lease, std::process::id()),
+        |delay| sleeps.push(delay),
+    )
+    .expect("a cleanly exited predecessor must not be a lease conflict")
+    .expect("retry should return the predecessor branch/worktree");
+
+    assert_eq!(target.0, "bug-1930-clean-exit");
+    assert_eq!(target.1, worktree.path());
+    assert!(
+        sleeps.is_empty(),
+        "reclaimed only after re-probes: {sleeps:?}"
+    );
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "old lease should be removed so the retry can force-claim the scope"
+    );
+}
+
+/// BUG-1930: the clean-exit shortcut only covers a lease this orchestrator
+/// minted with no recorded vendor child. Another creator, a recorded
+/// `active_pid`, or a recycled pid (start time differs) keeps the normal
+/// liveness verdict.
+// trace:BUG-1930 | ai:claude
+#[test]
+fn returned_phase_child_shortcut_is_narrow() {
+    let dir = tempfile::tempdir().unwrap();
+    let me = std::process::id();
+    let own = lease_at(dir.path(), 5, Some(me), None);
+    assert!(lease_minted_by_returned_phase_child(&own, me, Some("t0")));
+
+    let other = lease_at(dir.path(), 5, Some(me + 1), None);
+    assert!(!lease_minted_by_returned_phase_child(
+        &other,
+        me,
+        Some("t0")
+    ));
+
+    let with_child = lease_at(dir.path(), 5, Some(me), Some(me + 1));
+    assert!(!lease_minted_by_returned_phase_child(
+        &with_child,
+        me,
+        Some("t0")
+    ));
+
+    let mut recycled = lease_at(dir.path(), 5, Some(me), None);
+    recycled.creator_pid_start_time = Some("t-old".to_string());
+    assert!(!lease_minted_by_returned_phase_child(
+        &recycled,
+        me,
+        Some("t0")
+    ));
+    recycled.creator_pid_start_time = Some("t0".to_string());
+    assert!(lease_minted_by_returned_phase_child(
+        &recycled,
+        me,
+        Some("t0")
+    ));
+}
