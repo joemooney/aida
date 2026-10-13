@@ -753,6 +753,9 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
 /// two binary swaps leaves a mixed pair the same way, and its `.promoted`
 /// records follow `aida`. Running `aida dev rollback` again only swaps that
 /// mixed pair with the equally mixed `prev/`; `aida dev build` is the fix.
+/// If an old-format rollback crashed after both swaps while live had no
+/// record, there is no `.rollback/.promoted`, so prev's record stays beside
+/// the wrong pair.
 pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
@@ -775,19 +778,19 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
         // trace:BUG-1999 | ai:antigravity
         // In STORY-1646 an older binary parked the live record directly at
         // `.rollback/.promoted` without writing `.swapping` or parking prev's
-        // record. Normalize it into the current layout: move `.rollback/.promoted`
-        // to `live.promoted`, treat parking as marked/complete, and if prev's
-        // record has not already moved to live, park it as `prev.promoted`.
+        // record. Normalize it into the current layout: write the marker first,
+        // park prev's record when live has none, and move `.rollback/.promoted` last.
         let old_promoted = swap.join(PROMOTED_FILE);
         let had_old_promoted = old_promoted.is_file();
         if had_old_promoted {
-            move_record(&old_promoted, &swap.join(PARKED_LIVE_RECORD))?;
+            std::fs::File::create(swap.join(ROLLBACK_MARKER))?;
             if !layout.live_dir.join(PROMOTED_FILE).exists() {
                 move_record(
                     &layout.prev_dir().join(PROMOTED_FILE),
                     &swap.join(PARKED_PREV_RECORD),
                 )?;
             }
+            move_record(&old_promoted, &swap.join(PARKED_LIVE_RECORD))?;
         }
         // A binary counts as swapped once its prev slot has moved live, or,
         // after parking finished, once its parked copy has moved on into

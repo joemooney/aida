@@ -1786,3 +1786,64 @@ fn recovery_with_old_format_promoted_without_prev_record() {
     assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
     assert_consistent(&f, &a, &b, "old format without prev record");
 }
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_crash_during_normalization_preserves_records() {
+    // Interruption after writing ROLLBACK_MARKER and parking prev's record,
+    // but before moving .rollback/.promoted to live.promoted.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&f.layout.live(n), &format!("B-{n}"));
+        write(&f.layout.prev(n), &format!("A-{n}"));
+    }
+    write(&swap.join(ROLLBACK_MARKER), "");
+    write(
+        &swap.join(PARKED_PREV_RECORD),
+        &serde_json::to_string(&b).unwrap(),
+    );
+    fs::remove_file(f.layout.prev_dir().join(PROMOTED_FILE)).unwrap();
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format crash during normalization");
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_crash_between_binary_swaps() {
+    // Old binary crashed between the two binary swaps: aida has been swapped
+    // (live has B, prev is gone/not-yet-restored, or aida parked), but aida-server
+    // has not been swapped yet.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    write(&f.layout.live("aida"), "B-aida");
+    write(&swap.join("aida"), "A-aida");
+    write(&swap.join("aida-server"), "A-aida-server");
+    write(&f.layout.prev("aida-server"), "B-aida-server");
+
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read(&f.layout.prev("aida")), "A-aida");
+    assert_eq!(read(&f.layout.prev("aida-server")), "A-aida-server");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+}
