@@ -1,0 +1,35 @@
+id: 01a1360f-b9e9-7ac0-b567-11dcf0fc1914
+spec_id: BUG-2016
+agreed_id: BUG-2016
+title: Contained launch derives the main checkout from the worktree's sandbox-writable .git pointer
+description: |-
+  Follow-up R1b from the round-5 advisor review of PR #2541 (BUG-1929), a1121bad7c.
+
+  claude_contained_settings_json derives the main checkout from write_roots.first() through main_worktree_root_from (worktree_gc.rs:725), which trusts the worktree's .git pointer file. That file is inside the granted write root, so the sandbox can rewrite it. The reviewer confirmed that rewriting a pool worktree's .git to 'gitdir: <other>/.git' makes git worktree list report <other>. The next launch or resume in that worktree would then grant <other>/.aida-store and its cache files.
+
+  This adds little on its own: a rewritten pointer already gives a host escape through other unhardened host git calls (the BUG-2012 class). But the main checkout used for write grants should come from host-owned data (the spec lease / session record), not from a file the sandbox controls.
+
+  ## Acceptance
+  - The contained launch and resume derive the main checkout from host-owned lease/session data, or verify the pointer against it and refuse on mismatch.
+  - A test rewrites the worktree's .git pointer to another repo and asserts that no store or cache path of the other repo is granted (and that the launch refuses or falls back to the leased main).
+  - Related: BUG-2012, BUG-1929, BUG-1971.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T16:19:22.729950376Z
+modified_at: 2026-10-13T16:19:22.729950376Z
+req_type: Bug
+tags:
+- contained
+- review-follow-up
+- sandbox
+- security
+filed_at:
+  code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: de277165-066b-453d-b88f-f2ec1f31d61d
