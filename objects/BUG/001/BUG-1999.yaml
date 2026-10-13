@@ -19,12 +19,12 @@ description: |-
   Also from the same review:
   - the .swapping marker is now redundant (mutating the marked guard away is an equivalent mutant), so the comments overstate it;
   - dev_build_tests.rs:1397 has a dangling, truncated doc comment.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:37:23.516314035Z
-modified_at: 2026-10-13T23:08:27.979641046Z
+modified_at: 2026-10-13T23:51:57.774888407Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -163,6 +163,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a137ae-144b-7740-8010-6354bc8c983f
+  author: aida-auto-bump
+  timestamp: 2026-10-13T23:51:57.771662283Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a137ae-144e-7983-b939-5803cab2e64a
+  timestamp: 2026-10-13T23:51:57.774880134Z
+  agent: implementer
+  commit_sha: 7230cf3f4921d842c101b110218bbef2098758be
+  summary: 'Round 3: normalization order correct at every crash point; round-2 mutations M1/M2/M6 now caught by recovery_with_old_format_crash_during_normalization_preserves_records; clippy -D warnings clean; 72/72 dev_build_tests pass.'
+  punted:
+  - 'punted: Old-format normalization parks both records without the .swapping marker; a crash inside that window re-creates the misattribution this bug fixes'
+  review_verdict: approved
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
@@ -171,11 +187,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Code fix for round-1 item 1 is correct (72/72 detectable old-format crash states probe-verified), but the required crash-inside-normalization test cannot catch the bug: reverting the fix keeps every PR test green'
-  recovery_hint: address the review findings, move BUG-1999 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-13T20:13:16.204356476Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T23:51:57.771657691Z
+  completion_sha: 7230cf3f4921d842c101b110218bbef2098758be
