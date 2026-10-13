@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-09-07T02:14:34.588710728Z
+modified_at: 2026-10-13T02:44:34.823654445Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-09-07T02:14:34.588710728Z
   modified_at: 2026-09-07T02:14:34.588710728Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a13325-c187-7183-96ca-3df92a66c2aa
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12 (via advisor): GitLab stays the target canonical hub, but GitHub remains the working hub (PRs, CI, merges) until the migration is ready. #2575 (hub-union + mirror_remotes flip) is HELD, not merged. Blockers found today: (1) GitLab CE and gitlab-runner (docker, concurrent=2) both run on the 6-core dev box, so MR pipelines would compete with agent builds — decide where GitLab CI runs before the flip; (2) .gitlab-ci.yml lacks the PR-only trace/coverage/doc-intent gates; (3) glab is not authenticated to gitlab.joemooney.com; (4) #2575 sets mirror_remotes=["github"] but the primary checkout has no ''github'' remote (origin=GitHub, gitlab, all). Advisor merge pause lifted.'
+  created_at: 2026-10-13T02:44:34.823654445Z
+  modified_at: 2026-10-13T02:44:34.823654445Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 deferred: true
 deferred_at: 2026-09-07T02:14:33.922660586Z
 deferred_until: EPIC-35 GitLab MR-drain parity ships (PR lifecycle wired through the forge trait) — at that point gitlab-canonical becomes a config flip instead of a migration project
