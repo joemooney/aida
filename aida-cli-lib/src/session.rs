@@ -7624,13 +7624,6 @@ mod tests {
             "store_path = \".aida-store\"\n",
         )
         .unwrap();
-        let launcher = crate::current_user_id(None);
-        let grant_id = crate::seat_authority::test_support::mint_grant_for(
-            &project,
-            &launcher,
-            "advisor",
-            &["implementer"],
-        );
         let fake = tmp.path().join("fake-claude");
         let env_out = tmp.path().join("env.txt");
         crate::test_exec::write_executable(
@@ -7645,12 +7638,16 @@ mod tests {
 
         // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
         {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
-                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
-                ("AIDA_OS_WRAP", Some("0")),
-                ("AIDA_CONTAINED", Some("1")),
-                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
-            ]);
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", Some("1")),
+                ],
+            );
             let status = spawn_vendor_headless_with_seat(
                 HeadlessVendor::Claude,
                 aida_core::agents_config::AgentSeat::Implementer,
@@ -7673,12 +7670,16 @@ mod tests {
 
         // 2. Contained without ambient AIDA_CONTAINED -> exported in child
         {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
-                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
-                ("AIDA_OS_WRAP", Some("0")),
-                ("AIDA_CONTAINED", None),
-                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
-            ]);
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", None),
+                ],
+            );
             let status = spawn_vendor_headless_with_seat(
                 HeadlessVendor::Claude,
                 aida_core::agents_config::AgentSeat::Implementer,
