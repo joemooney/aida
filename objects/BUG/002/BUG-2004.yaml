@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:30:08.591543166Z
-modified_at: 2026-10-13T19:45:38.808331276Z
+modified_at: 2026-10-13T19:52:58.698694084Z
 req_type: Bug
 tags:
 - forge
@@ -47,6 +47,11 @@ comments:
     - Acceptance: No token appears in child process argv for GitLab release checks or mirror re-run probes. Tested with recording mock executables.
   created_at: 2026-10-13T19:45:38.808331276Z
   modified_at: 2026-10-13T19:45:38.808331276Z
+- id: 01a136d3-484a-70b3-8007-50e965ad22b5
+  author: joe
+  content: 'FACTORY DRAFT: PR #2599 at 74c592f061fdc0a79d319b138d18fa56ae0a6693'
+  created_at: 2026-10-13T19:52:58.698694084Z
+  modified_at: 2026-10-13T19:52:58.698694084Z
 history:
 - id: 01a13538-8b6f-74b1-98dd-18b09af158a7
   author: joe
