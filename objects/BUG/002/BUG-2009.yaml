@@ -1,0 +1,37 @@
+id: 01a13558-e7d1-7da1-80d8-32b019628055
+spec_id: BUG-2009
+agreed_id: BUG-2009
+title: 'Hook refresh and the stale-hook check ignore the executable bit: a 0644 AIDA hook is reported current while git silently skips it'
+description: |
+  `aida scaffold upgrade --only git-hooks` (BUG-1977, #2580) and the store-write hook check compare each AIDA-generated hook's CONTENT with this build's hook, but not its executable bit. A hook with current content and mode 0644 is reported as current ("No stale AIDA git hooks"), yet git silently skips it on every commit. Git prints only a hint, if `advice.ignoredHook` is on.
+
+  Found 2026-10-13 after running the refresh:
+  - aida-relay: `commit-msg`, `post-commit` and `prepare-commit-msg` have been -rw-r--r-- since 2026-10-11 13:24, probably since a hook reinstall. Commit-format enforcement and the --no-verify bypass detector (TASK-917) haven't run there since.
+  - aida (this repo): `post-commit` has been -rw-r--r-- since 2026-10-04, so the TASK-917 bypass detector has been silently off here for 9 days.
+  - aida-host, aida-regen: fine.
+
+  ## Acceptance
+  - `scaffold upgrade --only git-hooks` treats an AIDA-generated hook without an executable bit as stale: it reports it in --dry-run and fixes the mode (and content, if needed) when applied.
+  - Every path that writes AIDA hooks (init, scaffold apply/upgrade, hook reinstall) sets 0755 explicitly, rather than relying on the source file's mode or the umask.
+  - `aida doctor` reports a non-executable AIDA hook.
+  - Tests cover a 0644 hook with current content.
+  - Find out what wrote 0644 hooks on Oct 4 and Oct 11 (the reinstall path), and fix it at the source.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T12:59:41.393918243Z
+modified_at: 2026-10-13T12:59:41.393918243Z
+req_type: Bug
+tags:
+- hooks
+- review-follow-up
+- security
+filed_at:
+  code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
