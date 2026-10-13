@@ -136,6 +136,21 @@ pub(crate) fn normalize_upgrade_mode(
     }
 }
 
+/// The replacement command named in the deprecation note for the hidden
+/// `--unused <window>` alias of `aida usage`. `aida usage unused` errors
+/// without its DURATION positional, so the hint carries the window the old
+/// flag was given, shell-quoted so a multi-word window (`24 hours ago`) is
+/// pasted as one argument. A window that does not parse is not echoed back;
+/// the hint shows the `<window>` placeholder instead.
+// trace:BUG-1973 | ai:claude
+pub(crate) fn usage_unused_alias_target(window: &str) -> String {
+    let window = window.trim();
+    if window.is_empty() || crate::queue_cmd::parse_lookback(window, "--unused").is_err() {
+        return "aida usage unused <window>".to_string();
+    }
+    format!("aida usage unused {}", shell_quote(window))
+}
+
 // trace:STORY-1028 | ai:codex
 #[allow(clippy::type_complexity)]
 pub(crate) fn normalize_usage_mode<'a>(
@@ -193,8 +208,14 @@ pub(crate) fn normalize_usage_mode<'a>(
             if slowest {
                 note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
             }
-            if unused.is_some() {
-                note_hidden_alias(concat!("aida usage ", "--unused"), "aida usage unused");
+            if let Some(window) = unused {
+                // `unused` requires its DURATION positional, so carry the
+                // window the old flag was given into the suggested command.
+                // trace:BUG-1973 | ai:claude
+                note_hidden_alias(
+                    concat!("aida usage ", "--unused"),
+                    &usage_unused_alias_target(window),
+                );
             }
             if errors {
                 note_hidden_alias(concat!("aida usage ", "--errors"), "aida usage errors");
@@ -300,6 +321,59 @@ pub(crate) fn classify_drain_merge_failure(
         "{merge_tool} merge failed for {}-{pr}: {detail}",
         forge.change_noun()
     ))
+}
+
+#[cfg(test)]
+mod bug_1973_usage_unused_hint_tests {
+    // trace:BUG-1973 | ai:claude
+    use super::usage_unused_alias_target;
+    use clap::Parser;
+
+    #[test]
+    fn hint_carries_the_duration_from_the_old_flag() {
+        assert_eq!(usage_unused_alias_target("60d"), "aida usage unused 60d");
+        assert_eq!(usage_unused_alias_target(" 2w "), "aida usage unused 2w");
+    }
+
+    #[test]
+    fn multi_word_window_is_shell_quoted() {
+        assert_eq!(
+            usage_unused_alias_target("24 hours ago"),
+            "aida usage unused '24 hours ago'"
+        );
+    }
+
+    #[test]
+    fn empty_or_invalid_window_shows_the_placeholder() {
+        assert_eq!(usage_unused_alias_target(""), "aida usage unused <window>");
+        assert_eq!(
+            usage_unused_alias_target("not a window; rm -rf"),
+            "aida usage unused <window>"
+        );
+    }
+
+    #[test]
+    fn hinted_command_parses_while_bare_form_does_not() {
+        for window in ["30d", "90d", "2w", "24 hours ago"] {
+            let hint = usage_unused_alias_target(window);
+            assert!(
+                hint.ends_with(&format!(" {}", crate::shell_quote(window))),
+                "hint must name the window as one shell word: {hint}"
+            );
+            assert!(
+                crate::cli::Cli::try_parse_from(["aida", "usage", "unused", window]).is_ok(),
+                "hinted command must parse for window {window:?}"
+            );
+        }
+        assert!(
+            usage_unused_alias_target("24 hours ago").contains("'24 hours ago'"),
+            "a multi-word window must be quoted in the hint"
+        );
+        assert!(
+            crate::cli::Cli::try_parse_from(["aida", "usage", "unused"]).is_err(),
+            "bare `aida usage unused` requires DURATION"
+        );
+    }
 }
 
 #[cfg(test)]
