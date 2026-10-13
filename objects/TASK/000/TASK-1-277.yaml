@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T08:11:40.042181818Z
-modified_at: 2026-10-13T08:11:40.042181818Z
+modified_at: 2026-10-13T18:10:32.807760120Z
 req_type: Task
 tags:
 - carried-from:BUG-2000
 - finding-hash:986e4de2
 - from-review:PR-2584
 - kind:carried-forward
+comments:
+- id: 01a13675-80e7-7043-a929-aa4e76962d86
+  author: joe
+  content: 'Obsolete: both #2577 (728809b94e) and #2584 (3618fe739b) merged.'
+  created_at: 2026-10-13T18:10:32.807760120Z
+  modified_at: 2026-10-13T18:10:32.807760120Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: 0ba979dca2975e4affae8a023f8a0201567e6d0c
   branch: main
