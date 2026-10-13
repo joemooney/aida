@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T16:04:13.206678783Z
-modified_at: 2026-10-13T18:10:13.166657246Z
+modified_at: 2026-10-13T18:11:10.741741278Z
 req_type: Task
 tags:
 - carried-from:BUG-1983
@@ -27,6 +27,12 @@ comments:
   content: 'Advisor triage 2026-10-13 (operator proxy): APPROVED. See .aida/handoff/advisor/draft-triage-2026-10-13.md.'
   created_at: 2026-10-13T18:10:12.166486168Z
   modified_at: 2026-10-13T18:10:12.166486168Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13676-1515-7251-8e68-ed191b665b97
+  author: joe
+  content: 'Duplicate of TASK-1741 (the same #2587 review finding: a valid-advisor end-to-end row). Superseded.'
+  created_at: 2026-10-13T18:11:10.741741278Z
+  modified_at: 2026-10-13T18:11:10.741741278Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a13675-342e-75c1-892a-df96d941e837
