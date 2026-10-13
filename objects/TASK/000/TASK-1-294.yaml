@@ -1,0 +1,30 @@
+id: 01a137ad-07dd-7051-8af8-0104461caa99
+spec_id: TASK-1-294
+title: pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash (bug_2005_wrapper_stalene…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2005, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash (bug_2005_wrapper_staleness_tests.rs:89) only proves the leak where zsh is installed; CI installs zsh 5.9 and the test passed there at this head, but on a zsh-less host the leak leg silently degrades to bash-only.
+
+  PR: #2592
+  Reviewed sha: 0c340ed6876df05b2d31e89a6cf6ee6b2b5cd9e4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:50:49.053343087Z
+modified_at: 2026-10-13T23:50:49.053343087Z
+req_type: Task
+tags:
+- carried-from:BUG-2005
+- finding-hash:70bf4b0f
+- from-review:PR-2592
+- kind:carried-forward
+filed_at:
+  code_sha: 1287c25b64d6447aedcb576bfaddb531da433999
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
