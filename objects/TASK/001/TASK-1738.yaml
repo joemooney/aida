@@ -1,0 +1,22 @@
+id: 01a133e8-3940-76b2-8eea-2342a7ce8078
+spec_id: TASK-1738
+agreed_id: TASK-1738
+title: aida-handoff Step 1 should run /aida-capture (incl. FAQ lens), not sweep mentally
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T06:16:59.456662055Z
+modified_at: 2026-10-13T06:16:59.456662055Z
+req_type: Task
+tags:
+- lifecycle:no-review
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
