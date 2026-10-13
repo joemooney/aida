@@ -14,12 +14,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T03:32:29.646283224Z
+modified_at: 2026-10-13T06:40:12.830572347Z
 req_type: Bug
 tags:
 - agent-new
 - leases
 - ux
+comments:
+- id: 01a133fd-7c1e-7612-be62-1a1a87d98f01
+  author: joe
+  content: |-
+    FACTORY PLAN (codex), night 2026-10-12 — PLAN ONLY: this session's higher-priority advisor-role instruction requires routing implementation to doer seats. No lease, worktree, code, compilation, review, approval or PR created. No matching open PR or live lease found.
+
+    Approach: focused launch-lease preflight helper, called by agent_new_with_config and agent_new_bg_dispatch in agent_launch.rs after preview returns but BEFORE gate_agent_bypass and maybe_handle_agent_resume_or_duplicate. Preserve a final ownership check at lease acquisition to close races. prepare_agent_launch currently refuses any matching scope late. Return typed conflict/adoption facts, not classification of error prose. Refusal should identify owning worktree/session and offer --cwd plus aida session leases --all; omit internal requirement IDs from user prose. Same-worktree adoption changes ownership semantics: post a separate sketch and obtain advisor/operator signoff before implementing it, rather than assuming --cwd already adopts. leases.rs::session_leases currently hides LeaseState::Stale while the launch guard still sees it; share blocking-lease selection so default human/JSON listings expose every blocking lease. cli.rs help should show explicit non-interactive background launch including --no-resume and the supported bypass flag (verify actual clap options).
+
+    Acceptance checks in GitHub CI: agent_new_foreground_conflict_precedes_all_prompts and agent_new_background_conflict_precedes_all_prompts (instrument prompt calls, assert zero calls); agent_new_conflict_lists_safe_reentry_commands; session_leases_default_includes_dispatch_blocking_stale_lease (human/JSON); agent_new_same_worktree_adoption_preserves_ownership_after_signoff; agent_new_preview_stays_side_effect_free; agent_new_bg_help_documents_noninteractive_form. Race test: ownership introduced after preflight is refused by final acquisition. Risks: adoption must not steal a live lease or end/delete its worktree, previews must remain pure, foreground/background gates must agree. Run make check-ci-fast before every push; compile/test only on GitHub CI.
+  created_at: 2026-10-13T06:40:12.830572347Z
+  modified_at: 2026-10-13T06:40:12.830572347Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
