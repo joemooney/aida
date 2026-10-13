@@ -3,12 +3,12 @@ spec_id: BUG-1970
 agreed_id: BUG-1970
 title: pr list docs overstate 'CI Failing' as gating checks only, and long CI labels misalign the table
 description: 'Noted by the fresh reviewer of PR #2516 (BUG-1935), non-blocking. docs/cli/04-git-lifecycle.md describes ''Failing'' as meaning only gating checks fail, which overstates the BUG-1935 classifier (it uses an informational allow-list; anything not on it counts). Separately, long CI labels push the pr list table out of alignment. Acceptance: the doc sentence matches the classifier''s actual rule; the CI column truncates or pads so a long label keeps the columns aligned (snapshot test with a long label).'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:38.875849366Z
-modified_at: 2026-10-12T21:17:17.954509427Z
+modified_at: 2026-10-13T03:06:42.187783697Z
 req_type: Bug
 tags:
 - docs
@@ -68,6 +68,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1333a-028b-76f2-82fc-557419d79f2b
+  author: joe
+  timestamp: 2026-10-13T03:06:42.187778774Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
@@ -76,3 +83,6 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:06:42.187763595Z
