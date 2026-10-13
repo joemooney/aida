@@ -12,12 +12,12 @@ description: |
   1. CI runs the zsh leg of bug_0445_init_side_channel_tests: install zsh in the CI Build job (ci.yml) so `wrapper_shells()` includes zsh, and the zsh case passes rather than skips.
   2. The init wrapper (dev_cmd.rs, around the `mktemp -t aida-init-cd.XXXXXX` block) removes the temp file on INT/TERM (a `trap` scoped to the function, restored afterwards); the generated-wrapper test asserts the trap is present.
   3. `AIDA_INIT_CD_FILE` is not inherited by processes init spawns: init reads it once and every child `Command` it spawns removes it (or it is cleared from the process env at init entry after reading). Test: a nested init/emit_enter_dir does not overwrite the outer file.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:03:14.762751326Z
-modified_at: 2026-10-13T03:36:06.068214627Z
+modified_at: 2026-10-13T07:02:58.678796322Z
 req_type: Bug
 tags:
 - groom:approve
@@ -63,6 +63,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13412-51c5-71b0-afcb-abca69c96100
+  author: aida-auto-bump
+  timestamp: 2026-10-13T07:02:58.245915525Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13412-5376-78b2-bc6b-a97bd87c7856
+  timestamp: 2026-10-13T07:02:58.678787618Z
+  agent: implementer
+  commit_sha: 728809b94e33956809e4b67c0176d310ae1c669a
+  summary: 'Strict independent review: all 3 acceptance items and every round-3 item covered by production-exercising tests; 31/31 lib tests pass under bash and zsh 5.9, 2/2 e2e; re-raise and env-scrub mutations both caught; rebase onto #2584 dropped nothing'
+  review_verdict: approved
 filed_at:
   code_sha: 1c9eca9bfff30c98da93f471f7f6d334f79482b7
   branch: main
@@ -71,3 +85,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: bb67ccbe-6bea-4da6-937b-e05b6490b715
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T07:02:58.245911358Z
+  completion_sha: 728809b94e33956809e4b67c0176d310ae1c669a
