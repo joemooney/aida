@@ -3327,7 +3327,7 @@ fn queue_advance_close_dispatch_without_shipped_commit_warns() {
         "warning must name TASK-19961:\n{warning}"
     );
     assert!(
-        warning.contains("no commit found on"),
+        warning.contains("no commit referencing it was found on"),
         "warning must describe missing commit on default branch:\n{warning}"
     );
 
