@@ -1406,7 +1406,15 @@ export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stal
 aida() {
     # trace:BUG-1811 | ai:antigravity
     # Suppress set -x trace for wrapper internals
-    local - 2>/dev/null || true
+    # trace:BUG-2000 | ai:claude
+    # zsh has no `local -`: there it is a bare `local`, which prints every
+    # shell parameter to stdout on each call. zsh scopes options with
+    # `localoptions` instead.
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        setopt localoptions
+    else
+        local - 2>/dev/null || true
+    fi
     set +x 2>/dev/null
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
