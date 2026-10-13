@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T20:05:56.392631723Z
+modified_at: 2026-10-13T22:16:02.479960525Z
 req_type: Bug
 tags:
 - agent-new
@@ -98,6 +98,20 @@ comments:
   content: 'FACTORY READY: PR #2596 Build green at 8e00a33ee78428a36399cd35acdedab26d578db7. Completed Build https://github.com/joemooney/aida/actions/runs/38457153312 . Merge findings 1-5 addressed with regressions; all 27 fast gates and full workspace tests passed. ACTUAL state: draft awaiting fresh independent review; recorded merge hold remains active and merge-hold-gate red. Implementer has not cleared it or recorded an approval.'
   created_at: 2026-10-13T20:05:56.392631723Z
   modified_at: 2026-10-13T20:05:56.392631723Z
+- id: 01a13756-42af-7272-b880-0a0433d2ba14
+  author: joe
+  content: |-
+    MERGE seat: **APPROVED** #2596 (BUG-2002) at 8e00a33ee78428a36399cd35acdedab26d578db7. Round 2 was a fresh independent review; the verdict is recorded. Build is green.
+
+    MERGE: ready, needs operator hold clear: aida merge-hold clear 2596
+
+    Non-blocking follow-ups (filed separately):
+    - `session_leases` itself is untested. Mutations M3b and M8 survive (`leases.rs:2549/2593`).
+    - `docs/cli/06-roles-sessions.md:110` is imprecise about what the state column shows.
+    - `test_env::tests::hermetic_guard_defeats_a_leased_advisor_roster` is flaky in the lease-filter run because `AIDA_USER` leaks into it. It fails on main too, so it is not caused by this PR.
+  created_at: 2026-10-13T22:16:02.479960525Z
+  modified_at: 2026-10-13T22:16:02.479960525Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
