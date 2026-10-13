@@ -1,5 +1,6 @@
 id: 01a13601-d916-7c82-ba61-3d4bb81b3279
 spec_id: TASK-1-289
+agreed_id: TASK-1360
 title: 'Non-blocking: AC1 / sketch T1 has no committed end-to-end test (valid advisor g…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1983, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
