@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:37:23.516314035Z
-modified_at: 2026-10-13T23:51:57.774888407Z
+modified_at: 2026-10-13T23:52:21.874279538Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -140,6 +140,12 @@ comments:
     - `recover_live_dir_with_steps` has no doc comment.
   created_at: 2026-10-13T23:08:27.979641046Z
   modified_at: 2026-10-13T23:08:27.979641046Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a137ae-7272-7a33-9c98-93d043eb1b60
+  author: joe
+  content: 'MERGE audit: #2595 (BUG-1999) was squash-merged as 7230cf3f49, pinned to the approved head c7f2afcc14. The operator cleared the hold; merge-hold-gate and Build were green, and the PR merged cleanly onto main after #2592. It was approved in round 3 (the final round) by a fresh independent review. Follow-up: TASK-1745.'
+  created_at: 2026-10-13T23:52:21.874279538Z
+  modified_at: 2026-10-13T23:52:21.874279538Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13538-86b5-7641-a40e-38e4325ffb0c
