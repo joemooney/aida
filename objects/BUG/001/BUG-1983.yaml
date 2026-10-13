@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T03:14:20.830169956Z
+modified_at: 2026-10-13T03:32:32.217696819Z
 req_type: Bug
 tags:
 - authority
@@ -101,6 +101,22 @@ comments:
   created_at: 2026-10-13T03:14:20.830169956Z
   modified_at: 2026-10-13T03:14:20.830169956Z
   session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
+- id: 01a13351-a959-7a62-bdda-affeb2ec0557
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED WITH CONDITIONS (2026-10-12 20:35). The root cause is evidence-based (an expired 24h grant reported as 'No active role'), and the design widens no authority. Rulings:
+    Q1 — APPROVE D3. A session that exports a grant which fails validation is claiming a seat it does not hold; letting review record attribute a verdict to that seat is authority forgery by omission. 'Absent' stays permissive as described. This is a deliberate narrowing, so it MUST be called out in the PR body and the CHANGELOG/release note.
+    Q2 — APPROVE commit trailers (git-canonical, no schema change), with conditions: emit them from the single store-commit path for every advisor-gated status advance, not only 'aida edit'; make the history parser tolerant of their absence and of unknown trailer keys; confirm that store commit-msg/provenance hooks accept them.
+    Q3 — FOLLOW-UP SPEC: filed and approved as TASK-1736 (expiry warning plus relay launch refusal). Sequence it to ship no later than D3, so long relay seats are warned before they hit the new refusal.
+    Conditions:
+    C1. T4's equivalence check must cover every GrantRejection variant, including the Parent(..) chains and ParentNotDelegating, and it must fail if any check is reordered or dropped.
+    C2. Error text shows only a short grant-id prefix (8 chars), never the full grant handle or any token-like material. Add an assertion that the full id does not appear in the refusal.
+    C3. Keep T5's 'env-only AIDA_SESSION_ROLE=advisor with no grant => false' as a hard regression pin.
+    C4. No change to MAX_GRANT_AGE in this PR.
+    Proceed to implementation.
+  created_at: 2026-10-13T03:32:32.217696819Z
+  modified_at: 2026-10-13T03:32:32.217696819Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-3b0f-7c80-b06e-0639346ad23f
   author: joe
