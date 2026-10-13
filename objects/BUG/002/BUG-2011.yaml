@@ -1,0 +1,33 @@
+id: 01a1358e-3cc2-7d31-9e33-40f381fb40eb
+spec_id: BUG-2011
+agreed_id: BUG-2011
+title: Grant-expiry lookup validates the grant separately from grant_check, so role expiry can pass a grant the authority gates reject
+description: |
+  Found by the merge review of PR #2587 (BUG-1983), non-blocking item 3.
+
+  `seat_authority::session_grant_lookup()` (the grant-expiry warning and `aida role expiry --refuse-within` gate from TASK-1736 / #2588) validates the exported `AIDA_SESSION_GRANT` independently of `seat_authority::grant_check()`, the one verdict every authority path (advisor gate, review record, statusline) now uses. The two diverge:
+
+  - It trims the handle (`id.trim()`) before reading the record; `grant_check` uses the handle as exported (whitespace-padded handles are rejected there as a bad handle).
+  - It checks only revocation and expiry (of the grant and, for expiry, its parent). It ignores the subject binding (grant minted for another identity), the team-roster ceiling (roster no longer allows the principal the seat), parent principal mismatch, and whether the parent still delegates the child's seat.
+
+  Consequence: `aida role expiry --refuse-within <d>` (and the SessionStart expiry warning) can report a healthy, long-lived grant and let a relay seat launch, while `grant_check` rejects that same grant, so the launched seat's first advisor-gated edit or review record is refused.
+
+  ## Acceptance
+  - `session_grant_lookup()` is built on top of `grant_check()`: `Rejected` maps to `Unresolved` with the rejection's reason; `Valid` supplies the seat and the effective expiry (min of grant and parent).
+  - A test covers, for each `GrantRejection` fixture (subject mismatch, roster denied, parent principal mismatch, parent not delegating, padded handle), that `aida role expiry --refuse-within 1h` refuses exactly when `grant_check` rejects.
+  - The existing TASK-1736 expiry-warning tests still pass unchanged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T13:57:56.546136069Z
+modified_at: 2026-10-13T13:57:56.546136069Z
+req_type: Bug
+filed_at:
+  code_sha: 76c06c9f9506fcce544abd71c24cb25fe8fdfc4e
+  branch: bug-1983-grant-verdict
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
