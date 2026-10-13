@@ -164,6 +164,7 @@ fn bad_duration_is_rejected() {
 /// The SessionStart hook surfaces the warning, so a session opens knowing
 /// its grant is about to lapse.
 #[test]
+#[cfg(target_os = "linux")]
 fn session_start_hook_prints_the_expiry_warning() {
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
