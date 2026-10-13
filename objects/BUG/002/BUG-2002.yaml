@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T19:38:52.336286673Z
+modified_at: 2026-10-13T20:05:56.392631723Z
 req_type: Bug
 tags:
 - agent-new
@@ -93,6 +93,11 @@ comments:
   content: 'FACTORY REWORK PLAN: address merge findings 1-5. Share the actual listing default/--all selector with behavioral test fixtures; show state in default human rows. Add duplicate-scope refusal and child session-ID environment tests, resolve symlinked worktree paths in live-owner detection, and exercise foreground/background entrypoints with explicit owning --cwd using a harmless recording child. PR #2596 remains mergeable at b6b442e825, so no rebase/force push is needed. All Rust execution stays on GitHub CI; complete make check-ci-fast before push.'
   created_at: 2026-10-13T19:38:52.336286673Z
   modified_at: 2026-10-13T19:38:52.336286673Z
+- id: 01a136df-2628-7943-a0a9-2880e0cf179e
+  author: ai:codex:joe
+  content: 'FACTORY READY: PR #2596 Build green at 8e00a33ee78428a36399cd35acdedab26d578db7. Completed Build https://github.com/joemooney/aida/actions/runs/38457153312 . Merge findings 1-5 addressed with regressions; all 27 fast gates and full workspace tests passed. ACTUAL state: draft awaiting fresh independent review; recorded merge hold remains active and merge-hold-gate red. Implementer has not cleared it or recorded an approval.'
+  created_at: 2026-10-13T20:05:56.392631723Z
+  modified_at: 2026-10-13T20:05:56.392631723Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
