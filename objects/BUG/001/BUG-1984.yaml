@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T06:44:47.190817316Z
+modified_at: 2026-10-13T06:45:30.801869198Z
 req_type: Bug
 tags:
 - cache
@@ -74,7 +74,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Detection rarely fires in real contained sessions: path nlink==0 signal unreachable on Linux>=3.18, doctor cannot see other processes'' stale fds, and AIDA_CONTAINED is only exported by aida queue work'
+  detail: 'Detection unreachable in real contained sessions: a host replace detaches the bind so the path never shows nlink 0; only queue work sets AIDA_CONTAINED'
   recovery_hint: address the review findings, move BUG-1984 back to In Progress, and clear the PR hold only after approval
   shelved_by: integrator
-  shelved_at: 2026-10-13T06:44:47.190817316Z
+  shelved_at: 2026-10-13T06:45:30.801869198Z
