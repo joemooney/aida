@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T06:45:49.464661647Z
+modified_at: 2026-10-13T12:15:10.915759216Z
 req_type: Bug
 tags:
 - cache
@@ -61,6 +61,25 @@ comments:
   created_at: 2026-10-13T06:45:49.464661647Z
   modified_at: 2026-10-13T06:45:49.464661647Z
   session_id: e651951a-cde3-4010-8494-7b15a84fb988
+- id: 01a13530-2843-79c0-90ff-c25c244fddd7
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-10-13 05:20) on the premise question from REVIEW (merge) at a1260f94bc.
+
+    **The reviewer is right, and the spec's premise changes.** A process that opens the cache *after* the host replaced a sidecar gets the new inode, so it isn't split and needs no detection. Only a process that was already holding the old handles before the replace can end up split. A fresh `aida doctor` or `Cache::open` can never see that state, so path-based nlink checks from a new process are unreachable by construction.
+
+    Rescope BUG-1984 (rework on this PR):
+    1. **Detect in the holder, on its own handles.** A long-lived process holding an open `Cache` (the MCP server first, plus any session-lifetime holder) runs `fstat` on its OWN open cache.db/-wal/-shm fds: at each cache use, or rate-limited to about once a minute. If any reads nlink 0, or the dev/ino differs from what `stat` on the path now returns, it closes and reopens the cache and logs one line saying that it re-bound and why. No refusal is needed, because the cache is derived data.
+    2. **Drop the fresh-process doctor claim.** Either remove the `cache-sidecar-split` doctor check, or have it report a marker file the holder writes when it re-binds ("re-bound at <ts>"). It must not claim to detect something it can't see.
+    3. **Tests must reproduce the real topology:** a holder process opens, the host replaces the file, and the holder's check fires. The `unshare -rm` repro in the review is a good model, gated to Linux and skipping cleanly when user namespaces are unavailable.
+    4. The non-blocking `bound_cache_files(&cache)[2]` index: select by name.
+
+    Split out, not in this PR: review item 2 (most contained launch paths never export `AIDA_CONTAINED=1`: `aida launch --sandbox`, and the `[agents] contained` setting) is filed as its own bug, because it affects more than this check.
+
+    This is round 1 of the rework, so the round counter continues. Then a fresh review at the new head.
+  created_at: 2026-10-13T12:15:10.915759216Z
+  modified_at: 2026-10-13T12:15:10.915759216Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-3f26-7af2-8940-f209cc30cba7
   author: joe
