@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T13:58:15.154372964Z
+modified_at: 2026-10-13T15:46:02.072630447Z
 req_type: Bug
 tags:
 - agent-new
@@ -42,6 +42,11 @@ comments:
   content: 'FACTORY PLAN (codex): Operator/advisor continuation instruction authorizes proceeding with the posted sketch. Preflight foreground/bg launches after preview returns and before bypass/resume prompts. Explicit --cwd equal to the owning worktree can re-enter only a non-live, same-role lease; retain its identity and do not create/remove worktree or change ownership/status. Recheck immediately before plan creation. Share blocking-lease selection with default human/JSON lease listing. Document --bg --no-resume --permission-mode bypassPermissions. Tests: foreground/background early-refusal call tests, safe-reentry commands, stale lease visibility, same-worktree identity and mismatches/live-owner refusal, pure previews, race refusal, help fixture. Risk: reuse must not duplicate a live owner; full CI tests on GitHub only; make check-ci-fast before every push.'
   created_at: 2026-10-13T13:58:15.154372964Z
   modified_at: 2026-10-13T13:58:15.154372964Z
+- id: 01a135f1-32d8-73f2-a19b-45ce84a0475b
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR opened on bug-2002-work at 4bd7714864a70b8f91bcba8834fa9301005a3256; rebased onto current main, make check-ci-fast passed all 27 gates. GitHub CI pending.'
+  created_at: 2026-10-13T15:46:02.072630447Z
+  modified_at: 2026-10-13T15:46:02.072630447Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
