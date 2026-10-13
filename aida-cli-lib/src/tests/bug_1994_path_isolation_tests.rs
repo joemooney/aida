@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 // Capture to files so a stuck descendant cannot keep an output pipe open after
 // the harness is killed. Only this invocation's process group is terminated.
 // trace:BUG-1994 | ai:codex
+#[cfg(unix)]
 fn bounded_output(command: &mut Command, cap: std::time::Duration) -> std::process::Output {
     let dir = tempfile::tempdir().unwrap();
     let stdout_path = dir.path().join("stdout");
@@ -42,6 +43,7 @@ fn bounded_output(command: &mut Command, cap: std::time::Duration) -> std::proce
 
 // trace:BUG-1994 | ai:codex
 #[test]
+#[cfg(unix)]
 #[should_panic(expected = "stress child exceeded")]
 fn stress_watchdog_refuses_a_stuck_child() {
     bounded_output(
@@ -192,6 +194,7 @@ fn unisolated_path_mutation_is_refused_before_setting_environment() {
 // scheduled by one 16-thread harness, rather than separate serial cargo runs.
 // trace:BUG-1994 | ai:codex
 #[test]
+#[cfg(unix)]
 fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
     let root = tempfile::tempdir().unwrap();
     let mut list = child_command(&root.path().join("home"));
