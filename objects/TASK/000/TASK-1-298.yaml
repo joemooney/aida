@@ -1,0 +1,30 @@
+id: 01a137af-0eb1-7bf2-90a5-f04ce3745a6f
+spec_id: TASK-1-298
+title: 'leases.rs:2549/2593 - session_leases rendering itself is still not exercised: i…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2002, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  leases.rs:2549/2593 - session_leases rendering itself is still not exercised: inlining the old hide-stale partition in place of select_lease_listing (M3b) and dropping the always-on state column (M8) both survive. Follow-up: one test running session_leases(false,false,true) and the human form against a temp project with a stale spec lease.
+
+  PR: #2596
+  Reviewed sha: 8e00a33ee78428a36399cd35acdedab26d578db7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:53:01.873802417Z
+modified_at: 2026-10-13T23:53:01.873802417Z
+req_type: Task
+tags:
+- carried-from:BUG-2002
+- finding-hash:71027d1b
+- from-review:PR-2596
+- kind:carried-forward
+filed_at:
+  code_sha: ccf36c0f4c33257f37d3f44da246bf388dfed114
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
