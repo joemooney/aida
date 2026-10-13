@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2005",
+  "publishes": [
+    {
+      "at": "2026-10-13T23:50:47.136632670Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T04:41:56.791847064Z",
+      "spec": "BUG-2005",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:40:16.901957914Z",
+      "spec": "BUG-2005",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T13:43:09.839620658Z",
+      "spec": "BUG-2005",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2005",
+        "branch": "bug-2005-work",
+        "first_seen": "2026-10-13T13:43:09.839572917+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:32:21.420576572Z",
+      "spec": "BUG-2005",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2592,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "d8f3ebf80a6df336fec67221486407090b208308"
+      }
+    },
+    {
+      "ts": "2026-10-13T15:32:22.378085494Z",
+      "spec": "BUG-2005",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Detection logic correct and mutation-killed, but the advisor's security bar (real installed leaking-wrapper fixture) and the 're-install command' acceptance clause are not tested",
+        "recovery_hint": "address the review findings, move BUG-2005 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T23:50:47.119286458Z",
+      "spec": "BUG-2005",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1287c25b64d6447aedcb576bfaddb531da433999",
+        "pr": 2592,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
