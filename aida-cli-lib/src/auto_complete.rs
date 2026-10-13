@@ -5342,6 +5342,30 @@ pub(crate) fn drain_batch_with_caps(
     start: std::time::Instant,
     cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
 ) -> BatchDrainResult {
+    drain_batch_with_caps_streak(
+        driver,
+        max,
+        max_failures,
+        caps,
+        start,
+        cap_stop_out,
+        &mut EnvironmentStreak::default(),
+    )
+}
+
+/// BUG-1930: [`drain_batch_with_caps`] with a caller-owned environment streak,
+/// so a `--batches` chain counts consecutive environmental failures across
+/// batch boundaries instead of restarting the count in every batch.
+// trace:BUG-1930 | ai:claude
+fn drain_batch_with_caps_streak(
+    driver: &mut dyn BatchDriver,
+    max: Option<usize>,
+    max_failures: Option<usize>,
+    caps: &crate::drain_caps::DrainCaps,
+    start: std::time::Instant,
+    cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
+    env_streak: &mut EnvironmentStreak,
+) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
     let mut escalated: Vec<String> = Vec::new();
@@ -5352,7 +5376,6 @@ pub(crate) fn drain_batch_with_caps(
     // `shelved` list keeps reporting final dispositions only.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
-    let mut env_streak = EnvironmentStreak::default(); // trace:BUG-1930 | ai:claude
     let env_halt_after = driver.environment_halt_after();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
@@ -5975,6 +5998,10 @@ where
     let mut escalated = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
+    // BUG-1930: one streak for the whole chain — a denied spec at the end of
+    // one batch and another at the start of the next are still consecutive.
+    // trace:BUG-1930 | ai:claude
+    let mut env_streak = EnvironmentStreak::default();
 
     for batch_name in batch_names {
         let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
@@ -5992,13 +6019,14 @@ where
         };
         let mut batch_cap_stop = None;
         let mut driver = make_driver(batch_name);
-        let result = drain_batch_with_caps(
+        let result = drain_batch_with_caps_streak(
             driver.as_mut(),
             remaining,
             max_failures,
             &batch_caps,
             start,
             &mut batch_cap_stop,
+            &mut env_streak,
         );
 
         for spec in &result.shipped {
@@ -12495,6 +12523,38 @@ mod tests {
             vec!["C"],
             "the rest of the queue is untouched"
         );
+    }
+
+    /// BUG-1930: a `--batches` chain shares one streak, so one denied spec
+    /// per single-spec batch still halts the chain instead of shelving every
+    /// batch in turn.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_streak_spans_chain_batches() {
+        let names = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
+        let result = drain_batch_chain(&names, None, None, |name| match name {
+            "alpha" => Box::new(MockBatchDriver::new(&["A"]).shelving_with(
+                "A",
+                FailureKind::PermissionDenied,
+                "denied",
+            )),
+            "beta" => Box::new(MockBatchDriver::new(&["B"]).shelving_with(
+                "B",
+                FailureKind::PermissionDenied,
+                "denied",
+            )),
+            "gamma" => Box::new(MockBatchDriver::new(&["C"])),
+            other => panic!("unexpected batch {other}"),
+        });
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.stopped_batch.as_deref(), Some("beta"));
+        assert_eq!(result.steps.len(), 2, "gamma should never start");
     }
 
     /// BUG-1930: the streak only counts CONSECUTIVE same-cause failures — a

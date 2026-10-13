@@ -337,7 +337,7 @@ pub(crate) fn emit_environment_blocked_lines(cause: &str, stopped: &str, shipped
         shipped_list
     );
     eprintln!(
-        "  {} the rest of the queue is untouched; no further specs were dispatched",
+        "  {} no further specs were started; a member already running in a pipelined drain is not interrupted",
         "→".dimmed()
     );
 }
