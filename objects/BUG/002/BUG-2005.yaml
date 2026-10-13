@@ -3,12 +3,12 @@ spec_id: BUG-2005
 agreed_id: BUG-2005
 title: Installed shell wrappers carrying the BUG-2000 zsh leak are never refreshed, and dev status reports them as current
 description: 'Found in the strict review of #2584 (BUG-2000), approved at e82b401d56. #2584 fixes newly generated wrappers. But the capability marker AIDA_SHELL_WRAPPER (dev_cmd.rs:1404) is unchanged, and classify_wrapper / installed_helpers_are_current (dev_cmd.rs:1298-1314) only check for ''eval-block''. A zsh user who ran ''aida dev shell-init --install'' from a main build after #2463 (BUG-1811) keeps the leaking ~/.aida/shell-init.sh after upgrading: every wrapped aida call still prints all shell parameters, including API keys, and ''aida dev status'' says ''Shell wrapper: current''. Fix: add a capability token (e.g. zsh-localopts) to the marker and require it for Current, so the stale/re-install hint fires; consider auto-refreshing an installed wrapper on ''aida dev build'' or the next ''aida'' call. Done when: a fixture install of the pre-fix wrapper is classified stale with the re-install command, a fresh install is current, and the release note tells zsh users to re-run --install and rotate keys. Released binaries (v0.15.0) are not affected; only main/dev builds are.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T13:02:08.212078998Z
+modified_at: 2026-10-13T15:32:21.437100653Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -68,6 +68,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a135e4-ad3d-7c31-a202-90e9883b73f8
+  author: aida-orchestrator
+  timestamp: 2026-10-13T15:32:21.437131070Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
@@ -76,3 +83,11 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Detection logic correct and mutation-killed, but the advisor's security bar (real installed leaking-wrapper fixture) and the 're-install command' acceptance clause are not tested
+  recovery_hint: address the review findings, move BUG-2005 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-13T15:32:21.437100653Z
