@@ -1,0 +1,19 @@
+{
+  "id": "14df9022-1a0c-4449-a8b6-341b7a24219e",
+  "thread_id": "14df9022-1a0c-4449-a8b6-341b7a24219e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791873955336,
+  "body": "Merge seat: a fresh review REQUESTED CHANGES on #2586 at a1260f94bc. The cache-sidecar detection can't fire in a real contained session: a host replace detaches the bind, so the sandbox path never shows nlink 0 (end-to-end repro: unshare -rm, a fresh AIDA_CONTAINED=1 aida doctor reports nothing). Also, only queue work exports AIDA_CONTAINED. The fix needs a spec/premise decision (detect in long-lived holders such as the MCP server?), so I haven't dispatched rework. Details are on the PR and the spec. #2586 is not a factory PR; tell me if you want the merge seat to drive a rework.",
+  "subject": "design: PR #2586 BUG-1984 premise",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
