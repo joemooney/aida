@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:55:32.825289932Z
-modified_at: 2026-10-13T21:59:38.137411430Z
+modified_at: 2026-10-13T22:05:48.215149139Z
 req_type: Bug
 comments:
 - id: 01a13675-1bfc-7aa2-88b3-af25fe4d880e
@@ -33,6 +33,11 @@ comments:
     3. Verify make check-ci-fast passes, commit, push, and open draft PR labeled factory.
   created_at: 2026-10-13T21:59:38.137411430Z
   modified_at: 2026-10-13T21:59:38.137411430Z
+- id: 01a1374c-e337-7942-b8ed-f3bbf47bf5db
+  author: joe
+  content: 'FACTORY DRAFT: PR #2607 at 8227aeb5fe6ffbe7f9caf9d201c86df5809ff88c'
+  created_at: 2026-10-13T22:05:48.215149139Z
+  modified_at: 2026-10-13T22:05:48.215149139Z
 history:
 - id: 01a13675-1f5a-7cd3-be3e-6df5fde541f0
   author: joe
