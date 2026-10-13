@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T12:16:16.874648830Z
+modified_at: 2026-10-13T12:23:28.119972998Z
 req_type: Task
 tags:
 - authority
@@ -54,6 +54,12 @@ comments:
   content: 'ADVISOR SIGNOFF (ADR-73 cond. 5) for PR #2588 at 71243b77ce86a221eee007b8b9921022d7d3ff54. I read the authority-relevant diff (seat_authority.rs, role_cmd.rs). It only reads and reports. It never issues, widens or extends a grant. Refuse mode fails closed (exit 3) on an unresolved or revoked grant or parent, and a child''s expiry is capped at its parent''s. That matches the TASK-1736 intent. Combined with the merge seat''s independent round-2 APPROVE at this head and the green Build, it is cleared to merge once the operator clears the REWORK hold. Non-blocking follow-up: reenter_command() suggests ''aida role enter <seat>'' with no --delegate-seat, so a relay operator who follows it gets a grant that can''t launch children (FAQ-18). Fold that into TASK-1737 or a small task. Then #2587 needs its fresh review (C1-C4).'
   created_at: 2026-10-13T12:16:16.874648830Z
   modified_at: 2026-10-13T12:16:16.874648830Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a13537-be77-7132-9181-58357b397f1b
+  author: joe
+  content: 'Completed: merged as #2588, squash commit 3163cc1b21 (2026-10-13 12:20Z), after the merge seat''s independent round-2 APPROVE at 71243b77ce, a green Build, and advisor signoff. The spec had been NeedsAttention since the round-1 REQUEST CHANGES at 00:26, so the merge-time auto-bump skipped it.'
+  created_at: 2026-10-13T12:23:28.119972998Z
+  modified_at: 2026-10-13T12:23:28.119972998Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a13351-a592-7cd0-af53-f8cf8dfb943d
