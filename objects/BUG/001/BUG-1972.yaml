@@ -3,12 +3,12 @@ spec_id: BUG-1972
 agreed_id: BUG-1972
 title: 'Multi-forge init follow-ups: an unscoped GitLab env token can be sent to another host; mirror re-run skips creation; missing tests'
 description: 'Non-blocking findings from the advisor review of PR #2536 (STORY-1656). (1) SECURITY: gitlab_token_for_host (remote_create.rs) prefers an unscoped AIDA_GITLAB_TOKEN/GITLAB_TOKEN over the host-scoped glab config token, so a gitlab.com token can be sent to a self-hosted --gitlab host. Prefer the host-scoped token; use an env token only when no host-scoped one exists, and say so in output. Test with both present and different hosts. (2) remote_create.rs ~2085: create-if-missing only runs when the remote is newly added, so re-running ''aida remote mirror gitlab --url ...'' after ''glab auth login'' wires fan-out to a project that doesn''t exist. Run the check when the remote exists with the same URL too. (3) Tests: the mirror path''s non-refusal branch; GitLab-only init (origin + -u). Set GIT_TERMINAL_PROMPT=0 on the ls-remote probe so an HTTPS URL can''t block on a credential prompt.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:45.851893206Z
-modified_at: 2026-10-13T01:27:29.509548982Z
+modified_at: 2026-10-13T04:30:06.928424961Z
 req_type: Bug
 tags:
 - follow-up:advisor-review
@@ -45,6 +45,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13386-6050-7221-9b54-505649a25cc6
+  author: aida-orchestrator
+  timestamp: 2026-10-13T04:30:06.928460764Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
@@ -53,3 +60,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Token handling sound (M1-M4 caught). Blocker: a mirror re-run with --url B probes and creates a project at the EXISTING remote URL A, which the user did not name on that run; spec requires same-URL only.'
+  recovery_hint: address the review findings, move BUG-1972 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-13T04:30:06.928424961Z
