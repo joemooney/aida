@@ -475,9 +475,7 @@ pub(crate) fn advance_dispatch(
         AdvanceAction::Close => {
             // BUG-543: a fully-delivered epic (all children Completed). Offer to
             // close it (status → Completed) — operator-confirmed, never silent.
-            let do_close = if std::env::var_os("AIDA_TEST_AUTO_CLOSE").is_some() {
-                true
-            } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            let do_close = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
                 // trace:STORY-809 | ai:claude
                 let card = crate::context_prompt::ContextCard {
                     decision: format!("whether to close {display} now that every child is Completed"),
@@ -497,10 +495,6 @@ pub(crate) fn advance_dispatch(
                 )
                 .unwrap_or(false)
             } else {
-                println!(
-                    "  {} is fully delivered and ready to close — run interactively to confirm",
-                    display
-                );
                 false
             };
             if !do_close {

@@ -3306,18 +3306,11 @@ fn queue_advance_close_dispatch_without_shipped_commit_warns() {
     backend.add_requirement(req).unwrap();
     drop(backend);
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_SESSION_ROLE", "advisor"),
-        ("AIDA_TEST_AUTO_CLOSE", "1"),
-    ]);
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     crate::shipped_linkage::take_last_warning();
 
-    crate::queue_cmd::advance_dispatch(
-        crate::burndown::AdvanceAction::Close,
-        "TASK-19961",
-        &store_dir,
-    )
-    .expect("the close call itself must not error");
+    crate::queue_cmd::advance_dispatch_close("TASK-19961", &store_dir)
+        .expect("the close call itself must not error");
 
     let warning = crate::shipped_linkage::take_last_warning()
         .expect("warn_if_completed_without_shipped_commit must have been called")
@@ -3365,18 +3358,11 @@ fn queue_advance_close_dispatch_opted_out_does_not_warn() {
     backend.add_requirement(req).unwrap();
     drop(backend);
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_SESSION_ROLE", "advisor"),
-        ("AIDA_TEST_AUTO_CLOSE", "1"),
-    ]);
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     crate::shipped_linkage::take_last_warning();
 
-    crate::queue_cmd::advance_dispatch(
-        crate::burndown::AdvanceAction::Close,
-        "TASK-19962",
-        &store_dir,
-    )
-    .expect("the close call itself must not error");
+    crate::queue_cmd::advance_dispatch_close("TASK-19962", &store_dir)
+        .expect("the close call itself must not error");
 
     let warning = crate::shipped_linkage::take_last_warning()
         .expect("warn_if_completed_without_shipped_commit must have been called");
@@ -3426,18 +3412,11 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
         &["commit", "-m", "feat: shipped work (TASK-19963) (#42)"],
     );
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_SESSION_ROLE", "advisor"),
-        ("AIDA_TEST_AUTO_CLOSE", "1"),
-    ]);
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     crate::shipped_linkage::take_last_warning();
 
-    crate::queue_cmd::advance_dispatch(
-        crate::burndown::AdvanceAction::Close,
-        "TASK-19963",
-        &store_dir,
-    )
-    .expect("the close call itself must not error");
+    crate::queue_cmd::advance_dispatch_close("TASK-19963", &store_dir)
+        .expect("the close call itself must not error");
 
     let warning = crate::shipped_linkage::take_last_warning()
         .expect("warn_if_completed_without_shipped_commit must have been called");
@@ -3457,6 +3436,59 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
         .unwrap()
         .status;
     assert!(matches!(status, aida_core::RequirementStatus::Completed));
+}
+
+/// BUG-1996: `queue advance --yes` leaves a ready-to-close parent open (B1 revert).
+/// Only autonomous actions (drain a ready spec, approve a groomed draft) run under `--yes`;
+/// Close is operator-confirmed and must never be auto-taken under `--yes`.
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_advance_yes_leaves_ready_to_close_parent_open() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+
+    let backend = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut epic = aida_core::Requirement::new("ready epic".into(), String::new());
+    epic.spec_id = Some("EPIC-19960".into());
+    epic.req_type = aida_core::RequirementType::Epic;
+    epic.set_status_from_str("In Progress");
+
+    let mut child = aida_core::Requirement::new("completed child".into(), String::new());
+    child.spec_id = Some("TASK-19964".into());
+    child.req_type = aida_core::RequirementType::Task;
+    child.set_status_from_str("Completed");
+    child.parent_id = Some(epic.id);
+
+    backend.add_requirement(epic).unwrap();
+    backend.add_requirement(child).unwrap();
+    drop(backend);
+
+    let storage = aida_core::Storage::new(&store_dir);
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+
+    crate::queue_cmd::handle_queue_advance(&storage, Some("EPIC-19960"), /* yes */ true, None)
+        .expect("handle_queue_advance should succeed");
+
+    let after = aida_core::CachedGitBackend::open(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let status = after
+        .get_requirement_by_spec_id("EPIC-19960")
+        .unwrap()
+        .unwrap()
+        .status;
+    assert!(
+        matches!(status, aida_core::RequirementStatus::InProgress),
+        "epic must remain InProgress when advance runs under --yes; status was {status:?}"
+    );
 }
 
 // Review fix: whole-id matching for the open-PR diagnostic.
