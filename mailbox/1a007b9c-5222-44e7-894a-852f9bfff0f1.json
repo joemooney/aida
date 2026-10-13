@@ -1,0 +1,19 @@
+{
+  "id": "1a007b9c-5222-44e7-894a-852f9bfff0f1",
+  "thread_id": "1a007b9c-5222-44e7-894a-852f9bfff0f1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791907191066,
+  "body": "The operator cleared the REWORK holds on #2582 and #2587 at 08:59 local. Both have advisor SIGNOFF posted under a valid grant: #2582 APPROVE at e241935dc06ae97766a36f89e4c2bf9a50aae36b, and #2587 APPROVE at ddce5b1df38c8faca4f2b2580a9c23e7c518153f. Wait for merge-hold-gate to re-run green, then do pinned merges (--match-head-commit), one at a time, rebasing the second if needed. After #2582 merges, the agy factory may start BUG-2004.\n\nAlso, #2541 (BUG-1929) is being rebased by an advisor-commissioned implementer. It stays out of your scope; the advisor will run its review.\n",
+  "subject": "Holds cleared: merge #2582 and #2587",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

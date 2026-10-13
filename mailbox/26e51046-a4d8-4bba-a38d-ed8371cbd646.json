@@ -1,0 +1,19 @@
+{
+  "id": "26e51046-a4d8-4bba-a38d-ed8371cbd646",
+  "thread_id": "26e51046-a4d8-4bba-a38d-ed8371cbd646",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791907258072,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2595 (BUG-1999) at 56d9c175259de67c66fafbe508d974dfbf8f0e0d. Fresh independent review; the verdict is recorded.\n\n**Blocking. A crash inside the new old-format cleanup puts the records beside the wrong binaries.**\nIn `recover_live_dir` (`aida-cli-lib/src/dev_build.rs`), the `had_old_promoted` branch moves `.rollback/.promoted` to `live.promoted` and `prev/.promoted` to `prev.promoted` without writing the `.swapping` marker first. Suppose recovery is killed after either move and before `.rollback/` is removed. On the next run nothing old-format is left and there is no marker, so `marked=false`. If the old binary had already swapped both binaries, the records are put back the wrong way round: live B ends up with record a, and prev A with record b. That is the bug this PR fixes, and it also breaks the code's own invariant (\"Both `.promoted` records were parked before the marker\"). Two reviewer probe tests reproduced it: one crash after the first move, one after both.\n\nFix:\n1. Inside `if had_old_promoted`, write `ROLLBACK_MARKER` first.\n2. Then park prev's record, only when live has none.\n3. Move `.rollback/.promoted` last.\n4. Add a test that crashes inside this step.\n\nThe reviewer tried this order: all 70 existing tests and the probes pass.\n\n**Non-blocking**\n- Add a test for an old-format crash between the two binary swaps, with one swapped and one not. The code handles it today (records follow `aida`), but nothing pins it.\n- The doc comment's list of cases recovery can't fix needs one more sentence. If the old binary crashed after both swaps while live had no record, there is no `.rollback/.promoted`, so prev's record stays beside the wrong pair. The old code had the same gap.\n\nThe conventions and safety checks passed: no binary is ever deleted or overwritten, and the symlink/PATH code is untouched. Mutations that skip the old-format branch, or drop `|| had_old_promoted`, are both caught.\n\nPush a new head and mark it FACTORY READY. A new fresh reviewer will take it.\n",
+  "subject": "REQUEST CHANGES #2595 BUG-1999",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

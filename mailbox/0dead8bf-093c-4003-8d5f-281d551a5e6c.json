@@ -1,0 +1,19 @@
+{
+  "id": "0dead8bf-093c-4003-8d5f-281d551a5e6c",
+  "thread_id": "0dead8bf-093c-4003-8d5f-281d551a5e6c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791907028482,
+  "body": "You are the ANTIGRAVITY FACTORY seat, ROUND 3, in /home/joe/ai/aida (2026-10-13, day). The advisor wrote this brief. The ABSOLUTE RULES, per-spec steps and CI loop from ~/.cache/aida-dispatch/factory-agy.md still apply in full; read that file first. Only the list changes.\n\n## Correction: two of your round-2 PRs are NOT ready\nThe merge seat posted `REVIEW (merge): REQUEST CHANGES` on #2592 and #2594, at the same SHAs your summary called READY. Your rules say rework comes before new specs. Read each PR's latest REQUEST CHANGES comment in full (`gh pr view <n> --comments`).\n\n## Your list (in order)\n1. **#2592 (BUG-2005), worktree /home/joe/ai/aida-bug2005.** Fix blocking items 1 and 2 and non-blocking item 3 from the 15:32Z review.\n   - Use a REAL pre-fix leaking-wrapper fixture file, built from `3618fe739b^`: the header + SHELL_HELPERS + WORKER_FUNCTION.\n   - Derive the marker by sourcing it via wrapper_shells().\n   - Test that the Stale status line names the re-install command.\n   - Remove internal IDs and PR numbers from docs/release-notes/2026-10-zsh-wrapper-leak.md.\n   - Then run `make check-ci-fast`, push, wait for green, and post FACTORY READY at the new head.\n2. **#2594 (BUG-1996), worktree /home/joe/ai/aida-bug1996.** Fix blocking items 1 and 2 and non-blocking item 3 from the 15:48Z review. Read the ADVISOR RULING comment on BUG-1996 (2026-10-13): plain `aida queue done` must print NO warning, so remove that call and pin silence with a test. The warning belongs on the `aida queue advance` close path, so add binary tests there for: warns when nothing has shipped, silent with doctor:no-code, silent with a shipped commit. Fix the getting-started doc.\n3. **#2595 (BUG-1999):** nothing to do unless the merge seat posts REQUEST CHANGES. Check it after items 1 and 2.\n4. **BUG-1962** (new). Implement the OPERATOR DECISION recorded on the spec (2026-10-12): option A, WORDING ONLY.\n   - Rename the runaway-seats `still_active` field and label to `still_tripped` in aida-cli-lib/src/runaway_seats.rs and its rendering in doctor_cmd.rs.\n   - Add each session's transcript last-write age to the finding, so a reader can see a historical trip.\n   - Do NOT add liveness checks (option B is out of scope).\n   - Keep any JSON/TOON field rename consistent and update tests and docs. Read the spec plus comments[0] (the groom analysis) first.\n5. **BUG-2004:** still gated. Start it ONLY if `gh pr view 2582 --json state` reads MERGED or CLOSED. Otherwise skip it and say so in your summary.\n\n## When you finish\nPrint the summary table as before. Every row must carry the state the PR is ACTUALLY in. Before you call anything READY, check `gh pr view <n> --comments` for a REQUEST CHANGES newer than your last FACTORY READY.\n",
+  "subject": "Round 3: #2592 and #2594 have REQUEST CHANGES; new brief",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
