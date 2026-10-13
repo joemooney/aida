@@ -1,5 +1,6 @@
 id: 01a135cb-9ea6-7700-9696-99434e492aa3
 spec_id: TASK-1-287
+agreed_id: TASK-1356
 title: 'Non-blocking: precise scanner is hard-wired to src/upgrade_release.rs rather th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1724, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
