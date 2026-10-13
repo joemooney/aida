@@ -2,18 +2,33 @@ id: 01a13397-1bf8-7c12-8ff6-b1fad474ec1d
 spec_id: FAQ-53
 agreed_id: FAQ-53
 title: Why does 'aida agent new --bg' ask me to confirm bypass, and why can't an agent launch it?
-description: '--bg detaches the agent from any terminal, so nobody can answer permission prompts, and it forces --permission-mode bypassPermissions. Turning prompts off requires a human to confirm at an interactive terminal. A headless agent (such as the advisor seat) can''t confirm, so it hands you the command. The launching shell also needs a seat grant that may delegate the implementer seat: run ''aida role enter advisor --no-resume --delegate-seat implementer'' first. Otherwise you get ''no valid parent seat grant is active''.'
+description: |
+  **`--bg` detaches the agent from any terminal, so it must run with permission prompts off. Turning them off needs a human to confirm at an interactive terminal, so a headless agent hands you the command instead.**
+
+  ## Why
+  A detached agent has nobody to answer permission prompts, so `--bg` forces `--permission-mode bypassPermissions`, and AIDA requires interactive confirmation for that. Dispatching also needs a parent seat grant that is allowed to delegate the child seat.
+
+  ## How
+  ```bash
+  aida role enter advisor --no-resume --delegate-seat implementer
+  aida agent new claude --bg --no-resume --role implementer --cwd <worktree> --prompt-file <brief>
+  ```
+  Answer `y` at `Continue with bypass?`. Seeing `backgrounded · <id>` means it launched.
+  Without the delegating grant, you get `no valid parent seat grant is active`.
+
+  ## See also
+  FAQ-51, BUG-2002, DOC-6
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:48:23.544629625Z
-modified_at: 2026-10-13T04:48:23.544629625Z
+modified_at: 2026-10-13T04:51:17.844504545Z
 req_type: Faq
 tags:
-- agent-new
-- bypass
-- dispatch
+- audience:user
+- topic:relay
+- topic:roles
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
