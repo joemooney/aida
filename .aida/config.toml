@@ -332,8 +332,11 @@ worktree_parent = "../aida-worktrees"
 
 # STORY-1647: the pre-commit hook refuses commits made in the PRIMARY checkout
 # on main — in this repo every change lands from a sibling worktree
-# (`aida worktree add <SPEC>`). Merges, rebase replays and .aida-store commits
-# stay exempt; the operator override is AIDA_ALLOW_PRIMARY_COMMIT=1. Other
-# projects get the gate only by opting in with this same key.
+# (`aida worktree add <SPEC>`). Merges, rebase replays, conflicted cherry-pick
+# / revert replays, and .aida-store commits stay exempt; git commit --amend and
+# git merge --squash + commit on main are refused without the operator
+# override AIDA_ALLOW_PRIMARY_COMMIT=1. Other projects get the gate only by
+# opting in with this same key.
+# trace:TASK-1728 | ai:antigravity
 [hooks]
 block_primary_commits = true

@@ -36,10 +36,14 @@ aida_precommit_sentinel() {
 # .aida/config.toml carries `[hooks] block_primary_commits = true`.
 # Runs BEFORE the --allow-intermediate bypass so only the dedicated operator
 # override AIDA_ALLOW_PRIMARY_COMMIT=1 lifts it. Exempt: linked worktrees
-# (incl. .aida-store), merge commits (MERGE_HEAD), rebase replays (rebase-merge
-# / rebase-apply), the aida-store branch, and detached HEAD. A primary checkout
-# on some other named branch is allowed with a one-line warning.
+# (incl. .aida-store), merge commits (MERGE_HEAD), conflicted cherry-pick
+# (CHERRY_PICK_HEAD) or revert (REVERT_HEAD) replays, rebase replays
+# (rebase-merge / rebase-apply), the aida-store branch, and detached HEAD.
+# git commit --amend and git merge --squash + commit on main are refused
+# without the operator override. A primary checkout on some other named branch
+# is allowed with a one-line warning.
 # trace:STORY-1647 | ai:claude
+# trace:TASK-1728 | ai:antigravity
 __aida_primary_gate_enabled() {
     local top cfg
     top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
@@ -76,12 +80,12 @@ if __aida_primary_gate_enabled; then  # trace:STORY-1647 | ai:claude
         __aida_pg_exempt=1   # linked worktree (or git dir unresolvable)
     elif [ -z "$__aida_pg_branch" ] || [ "$__aida_pg_branch" = "aida-store" ]; then
         __aida_pg_exempt=1   # detached HEAD (rebase replay) or the store branch
-    elif git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
-        __aida_pg_exempt=1   # merge commit (incl. git pull with a merge)
+    elif git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+        || git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 \
+        || git rev-parse -q --verify REVERT_HEAD >/dev/null 2>&1; then
+        __aida_pg_exempt=1   # merge commit (incl. git pull with a merge), conflicted cherry-pick or revert replay (trace:TASK-1728 | ai:antigravity)
     elif [ -d "$__aida_pg_git_dir/rebase-merge" ] || [ -d "$__aida_pg_git_dir/rebase-apply" ]; then
         __aida_pg_exempt=1   # rebase / pull --rebase replay
-    else
-        case "$(pwd -P)" in */.aida-store|*/.aida-store/*) __aida_pg_exempt=1 ;; esac
     fi
     if [ "$__aida_pg_exempt" = "0" ]; then
         # Protected branch: main, plus the remote default branch when known.
@@ -93,6 +97,7 @@ if __aida_primary_gate_enabled; then  # trace:STORY-1647 | ai:claude
             else
                 printf 'pre-commit: refusing commit in the primary checkout on %s.\n' "$__aida_pg_branch" >&2
                 printf 'pre-commit:   feature work belongs in a sibling worktree: run aida worktree add <SPEC> and commit there.\n' >&2
+                printf 'pre-commit:   --amend and merge --squash + commit on %s are also refused (use AIDA_ALLOW_PRIMARY_COMMIT=1 to override).\n' "$__aida_pg_branch" >&2
                 printf 'pre-commit:   operator override: AIDA_ALLOW_PRIMARY_COMMIT=1 git commit ...\n' >&2
                 printf 'pre-commit:   (enabled by [hooks] block_primary_commits = true in .aida/config.toml)\n' >&2
                 exit 1

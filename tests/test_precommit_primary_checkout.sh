@@ -4,11 +4,14 @@
 # in .aida/config.toml. Merges, rebase replays, the aida-store branch and
 # linked worktrees stay exempt; AIDA_ALLOW_PRIMARY_COMMIT=1 is the operator
 # override; a primary checkout on another branch is allowed with a warning.
+# TASK-1728: conflicted cherry-pick and revert (CHERRY_PICK_HEAD / REVERT_HEAD)
+# are also exempt; --amend and merge --squash + commit are explicitly refused.
 #
 # Drives the REAL template (aida-core/templates/hooks/aida-pre-commit.sh)
 # installed as .git/hooks/pre-commit in throwaway repos, via real `git commit`.
 #
 # trace:STORY-1647 | ai:claude
+# trace:TASK-1728 | ai:antigravity
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -112,6 +115,8 @@ rc=$(commit_in "$R" "feat: straight onto main")
 assert_exit "refused_on_main_primary: primary checkout on main is refused" 1 "$rc"
 assert_stderr_contains "refused_on_main_primary: names the worktree command" "aida worktree add <SPEC>"
 assert_stderr_contains "refused_on_main_primary: names the override" "AIDA_ALLOW_PRIMARY_COMMIT=1"
+assert_stderr_contains "refused_on_main_primary: names the amend refusal" "--amend"
+assert_stderr_contains "refused_on_main_primary: names the squash refusal" "merge --squash"
 if [ "$(git -C "$R" rev-list --count HEAD)" = "1" ]; then
     echo "ok   - refused_on_main_primary: no commit was created"
 else
@@ -152,6 +157,66 @@ else
     echo "FAIL - merge_commit_allowed: fixture did not leave MERGE_HEAD"
     fail=1
 fi
+
+# --- cherry_pick_conflict_allowed -------------------------------------------
+# trace:TASK-1728 | ai:antigravity
+# A conflicted cherry-pick resolved on main in the primary checkout leaves
+# CHERRY_PICK_HEAD until commit. The gate must exempt it; subsequent plain
+# commit must be refused again.
+git -C "$R" checkout -q main
+echo "base cp" >"$R/cp_conflict.txt"
+git -C "$R" add "$R/cp_conflict.txt"
+git -C "$R" commit --no-verify -qm "base for cherry-pick"
+git -C "$R" checkout -q -b cp-branch
+echo "branch cp" >"$R/cp_conflict.txt"
+git -C "$R" add "$R/cp_conflict.txt"
+git -C "$R" commit --no-verify -qm "branch commit to pick"
+git -C "$R" checkout -q main
+echo "main cp" >"$R/cp_conflict.txt"
+git -C "$R" add "$R/cp_conflict.txt"
+git -C "$R" commit --no-verify -qm "main diverged cp"
+git -C "$R" cherry-pick cp-branch >/dev/null 2>&1 || true
+if git -C "$R" rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+    echo "resolved cp" >"$R/cp_conflict.txt"
+    git -C "$R" add "$R/cp_conflict.txt"
+    rc=$(commit_in "$R" "cherry-pick: resolved conflict")
+    assert_exit "cherry_pick_conflict_allowed: conflicted cherry-pick allowed on main" 0 "$rc"
+    assert_stderr_lacks "cherry_pick_conflict_allowed: no refusal text" "refusing commit in the primary checkout"
+else
+    echo "FAIL - cherry_pick_conflict_allowed: fixture did not leave CHERRY_PICK_HEAD"
+    fail=1
+fi
+stage_change "$R" after_cp.txt
+rc=$(commit_in "$R" "plain commit after cp")
+assert_exit "cherry_pick_conflict_allowed: plain commit after cherry-pick is refused" 1 "$rc"
+
+# --- revert_conflict_allowed ------------------------------------------------
+# trace:TASK-1728 | ai:antigravity
+# A conflicted revert resolved on main in the primary checkout leaves
+# REVERT_HEAD until commit. The gate must exempt it; subsequent plain commit
+# must be refused again.
+git -C "$R" checkout -q main
+echo "base revert" >"$R/rev_conflict.txt"
+git -C "$R" add "$R/rev_conflict.txt"
+git -C "$R" commit --no-verify -qm "base for revert"
+target_rev_sha=$(git -C "$R" rev-parse HEAD)
+echo "second revert edit" >"$R/rev_conflict.txt"
+git -C "$R" add "$R/rev_conflict.txt"
+git -C "$R" commit --no-verify -qm "intermediate edit for revert"
+git -C "$R" revert --no-edit "$target_rev_sha" >/dev/null 2>&1 || true
+if git -C "$R" rev-parse -q --verify REVERT_HEAD >/dev/null 2>&1; then
+    echo "resolved revert" >"$R/rev_conflict.txt"
+    git -C "$R" add "$R/rev_conflict.txt"
+    rc=$(commit_in "$R" "revert: resolved conflict")
+    assert_exit "revert_conflict_allowed: conflicted revert allowed on main" 0 "$rc"
+    assert_stderr_lacks "revert_conflict_allowed: no refusal text" "refusing commit in the primary checkout"
+else
+    echo "FAIL - revert_conflict_allowed: fixture did not leave REVERT_HEAD"
+    fail=1
+fi
+stage_change "$R" after_rev.txt
+rc=$(commit_in "$R" "plain commit after revert")
+assert_exit "revert_conflict_allowed: plain commit after revert is refused" 1 "$rc"
 
 # --- rebase_replay_allowed ---------------------------------------------------
 # A rebase replay running the hook on main: simulate the in-progress state
