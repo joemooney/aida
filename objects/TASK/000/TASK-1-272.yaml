@@ -14,13 +14,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T04:20:51.183119353Z
-modified_at: 2026-10-13T18:10:20.163787711Z
+modified_at: 2026-10-13T18:10:20.842917657Z
 req_type: Task
 tags:
 - carried-from:BUG-1977
 - finding-hash:a7000eb1
 - from-review:PR-2580
 - kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1337d-497b-7df0-a511-bccfd0061f40
+  created_at: 2026-10-13T18:10:20.842911834Z
+  created_by: joe
 comments:
 - id: 01a13675-4c02-7021-920e-6a6f53752204
   author: joe
