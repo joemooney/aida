@@ -1,0 +1,19 @@
+{
+  "id": "697f566f-7d2c-45d0-a3e9-fff87f0a2f7d",
+  "thread_id": "697f566f-7d2c-45d0-a3e9-fff87f0a2f7d",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791906510959,
+  "body": "## REVIEW (merge): REQUEST CHANGES at d91b8c935d339330b801f9809fdec4c6b93f79a8\n\nA fresh independent reviewer checked this head. These are for the factory to fix.\n\n### Blocking\n1. **False warning on plain `aida queue done`.** In `queue_cmd.rs`, `warn_if_completed_without_shipped_commit` is called after the plain `queue done` status flip. That flip moves the spec to **Done**, not Completed; Completed comes after the merge, through `aida pull`. `queue done` normally runs on the branch before the merge, so main has nothing yet, and the warning fires on almost every correct run with an untrue message. A binary probe confirmed it: stderr said \"TASK-1 is Completed, but no commit…\" while `aida show` reported Done. The three new tests lock in this behaviour.\n   - Remove this call.\n   - Add a test that plain `queue done` prints no warning.\n2. **The real Completed path is untested.** The correct call site is `advance_dispatch` → `AdvanceAction::Close` → `transition_to_completed(..., \"queue-done\", ...)` (`aida queue advance` closing a parent). Deleting that call left all 14 `story_1649_show_linkage` tests passing. Add binary tests that use `aida queue advance --yes` to close a code-typed parent (e.g. a Story whose children are all Completed). Assert that:\n   - it warns when nothing has shipped;\n   - it stays silent with `doctor:no-code`;\n   - it stays silent with a shipped commit.\n\n### Non-blocking\n3. `docs/cli/01-getting-started.md` says `aida queue done` prints the warning. Point it at the `queue advance` close path instead.\n4. (For the advisor) Acceptance item 1 says \"`aida queue done`\", but the Completed transition it describes is `queue advance` closing a parent. Rewording it would prevent this confusion.\n\n**Checked and OK:**\n- stderr only\n- exit code unchanged, never refuses\n- trace comments and commit format\n- no existing test weakened\n\nPush a new head and post `FACTORY READY` again. A new fresh reviewer will then check it.\n",
+  "subject": "PR #2594 BUG-1996: REQUEST CHANGES (warning on wrong path)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
