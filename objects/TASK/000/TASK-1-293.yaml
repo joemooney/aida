@@ -1,0 +1,30 @@
+id: 01a137ad-04f1-7941-bd4d-4980f8c49019
+spec_id: TASK-1-293
+title: No test asserts the fixture's pinned sha256; the commit title says 'add provena…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2005, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  No test asserts the fixture's pinned sha256; the commit title says 'add provenance test' but the pin is only a doc comment. Corrupting a fixture byte (header line 1, AIDA->AIDX) passes all 19 tests. Suggest a test computing sha256 of PRE_FIX_LEAKING_WRAPPER against the pinned constant (no git history needed, so shallow-clone safe).
+
+  PR: #2592
+  Reviewed sha: 0c340ed6876df05b2d31e89a6cf6ee6b2b5cd9e4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:50:48.305225884Z
+modified_at: 2026-10-13T23:50:48.305225884Z
+req_type: Task
+tags:
+- carried-from:BUG-2005
+- finding-hash:4cecd371
+- from-review:PR-2592
+- kind:carried-forward
+filed_at:
+  code_sha: 1287c25b64d6447aedcb576bfaddb531da433999
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
