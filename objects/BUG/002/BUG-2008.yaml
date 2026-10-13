@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-13T18:10:02.115755049Z
+modified_at: 2026-10-13T21:05:52.598764672Z
 req_type: Bug
 tags:
 - cross-repo
@@ -39,6 +39,17 @@ comments:
   created_at: 2026-10-13T18:10:01.160951997Z
   modified_at: 2026-10-13T18:10:01.160951997Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13716-05d6-7d12-a8cd-64347777bade
+  author: joe
+  content: |-
+    FACTORY PLAN:
+    1. Update __aida_doc_is_provenance_leak in aida-core/templates/hooks/aida-pre-commit.sh to judge /// lines in context of doc-comment blocks: allow wrapped prose sentences where bare SPEC-ID continues a sentence from the previous /// line (previous line does not end a sentence, or current line ends with punctuation like ./,/ as running text), while still rejecting provenance markers (trace:... | ai:...) and standalone bare-ID doc blocks.
+    2. Run make sync-templates and make check-templates.
+    3. Add test coverage in tests/test_precommit_provenance_move.sh verifying two-line wrapped prose passes while one-line /// STORY-30 and /// trace:STORY-30 | ai:... are refused.
+    4. Verify with make check-ci-fast (27 gates).
+    5. Open factory draft PR.
+  created_at: 2026-10-13T21:05:52.598764672Z
+  modified_at: 2026-10-13T21:05:52.598764672Z
 history:
 - id: 01a13675-0903-7f62-b1d1-00a3671129af
   author: joe
