@@ -1,6 +1,6 @@
 use super::*;
 use crate::statusline_cmd::{
-    derive_session_branch_suffix, draft_backlog_statusline_segment,
+    derive_session_branch_suffix, draft_backlog_statusline_segment, drift_statusline_segment,
     primary_checkout_drift_statusline_segment, role_display_segment_text, routing_role,
     sess_anchor_annotation, sess_label_with_suffix, wt_divergence_segment,
 };
@@ -245,8 +245,10 @@ fn draft_backlog_statusline_segment_uses_drafts_label() {
 /// Asserts that a clean checkout or non-repo yields no segment (`None`), while
 /// a drifted checkout (untracked files, tracked changes, off main branch)
 /// produces the exact marker contract:
-/// - Uncolored/plain: exact `STATUSLINE_MARKER` ("⌂!") as consumed by statusline scripts.
-/// - Colored: exact red bold `STATUSLINE_MARKER` ("\u{1b}[1;31m⌂!\u{1b}[0m").
+/// - Uncolored/plain: exactly "⌂!".
+/// - Colored: exactly bold red "\u{1b}[1;31m⌂!\u{1b}[0m".
+/// The colour choice is a parameter, so the test never touches the
+/// process-wide `colored` override.
 // trace:TASK-1727 | ai:antigravity
 #[test]
 fn statusline_drift_segment_contract_for_clean_and_drifted_checkouts() {
@@ -281,7 +283,7 @@ fn statusline_drift_segment_contract_for_clean_and_drifted_checkouts() {
 
     // 1. Clean checkout on main: drift segment is None.
     assert_eq!(
-        primary_checkout_drift_statusline_segment(&root),
+        primary_checkout_drift_statusline_segment(&root, false),
         None,
         "clean primary checkout must emit no drift segment in statusline"
     );
@@ -290,60 +292,56 @@ fn statusline_drift_segment_contract_for_clean_and_drifted_checkouts() {
     let non_git = tmp.path().join("not-a-repo");
     std::fs::create_dir_all(&non_git).unwrap();
     assert_eq!(
-        primary_checkout_drift_statusline_segment(&non_git),
+        primary_checkout_drift_statusline_segment(&non_git, true),
         None,
         "non-repo directory must emit no drift segment in statusline"
     );
 
-    // 3. Drifted checkout (untracked file).
+    // 3. Drifted checkout (untracked file). Literal contract, asserted
+    // without toggling the process-wide colour override: the plain form is
+    // exactly "⌂!" and the coloured form is exactly bold red ESC[1;31m⌂!ESC[0m.
+    // trace:TASK-1727 | ai:claude
+    const PLAIN: &str = "\u{2302}!";
+    const BOLD_RED: &str = "\u{1b}[1;31m\u{2302}!\u{1b}[0m";
+    assert_eq!(PLAIN, "⌂!");
     std::fs::write(root.join("scratch.py"), "print(1)\n").unwrap();
-
-    // Contract: when color is suppressed (e.g. statusline scripts or --color never),
-    // the segment is exact STATUSLINE_MARKER ("⌂!").
-    colored::control::set_override(false);
-    let plain_segment = primary_checkout_drift_statusline_segment(&root);
     assert_eq!(
-        plain_segment.as_deref(),
-        Some(crate::main_checkout_drift::STATUSLINE_MARKER),
-        "uncolored drift segment contract must match STATUSLINE_MARKER ('⌂!') exactly"
+        primary_checkout_drift_statusline_segment(&root, false).as_deref(),
+        Some(PLAIN),
+        "uncoloured drift segment must be exactly '⌂!'"
+    );
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, true).as_deref(),
+        Some(BOLD_RED),
+        "coloured drift segment must be exactly bold red '⌂!'"
     );
 
-    // Contract: when color is enabled, the segment is exact red bold STATUSLINE_MARKER.
-    colored::control::set_override(true);
-    let colored_segment = primary_checkout_drift_statusline_segment(&root);
-    assert_eq!(
-        colored_segment,
-        Some(
-            crate::main_checkout_drift::STATUSLINE_MARKER
-                .red()
-                .bold()
-                .to_string()
-        ),
-        "colored drift segment contract must match red bold STATUSLINE_MARKER"
-    );
-    colored::control::unset_override();
-
-    // 4. Drifted checkout (tracked dirty): also yields exact marker.
+    // 4. Drifted checkout (tracked dirty): also yields the exact marker.
     std::fs::remove_file(root.join("scratch.py")).unwrap();
     std::fs::write(root.join("tracked.txt"), "two\n").unwrap();
-    colored::control::set_override(false);
     assert_eq!(
-        primary_checkout_drift_statusline_segment(&root).as_deref(),
-        Some(crate::main_checkout_drift::STATUSLINE_MARKER),
-        "tracked-dirty drift segment contract must match STATUSLINE_MARKER"
+        primary_checkout_drift_statusline_segment(&root, false).as_deref(),
+        Some(PLAIN),
+        "tracked-dirty drift segment must be exactly '⌂!'"
     );
-    colored::control::unset_override();
 
-    // 5. Drifted checkout (off main branch): also yields exact marker.
+    // 5. Drifted checkout (off main branch): also yields the exact marker.
     run_git(&root, &["checkout", "-q", "-f", "main"]);
     run_git(&root, &["checkout", "-q", "-b", "feature-x"]);
-    colored::control::set_override(false);
     assert_eq!(
-        primary_checkout_drift_statusline_segment(&root).as_deref(),
-        Some(crate::main_checkout_drift::STATUSLINE_MARKER),
-        "off-main drift segment contract must match STATUSLINE_MARKER"
+        primary_checkout_drift_statusline_segment(&root, true).as_deref(),
+        Some(BOLD_RED),
+        "off-main drift segment must be exactly bold red '⌂!'"
     );
-    colored::control::unset_override();
+}
+
+/// TASK-1727: the pure renderer never emits a segment for a missing probe
+/// (git failure), whatever the colour choice.
+// trace:TASK-1727 | ai:claude
+#[test]
+fn drift_statusline_segment_is_none_without_probe() {
+    assert_eq!(drift_statusline_segment(None, false), None);
+    assert_eq!(drift_statusline_segment(None, true), None);
 }
 
 /// BUG-1171: deferred drafts are parked outside the default advisor triage
