@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:03:14.762751326Z
-modified_at: 2026-10-13T00:39:35.986472143Z
+modified_at: 2026-10-13T03:36:06.068214627Z
 req_type: Bug
 tags:
 - groom:approve
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-10-13T00:39:35.986472143Z
   modified_at: 2026-10-13T00:39:35.986472143Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13354-ecb4-7903-90da-8e309e4cd223
+  author: joe
+  content: Commit 3f2a22ec68 references this requirement
+  created_at: 2026-10-13T03:36:06.068214627Z
+  modified_at: 2026-10-13T03:36:06.068214627Z
+  session_id: 7f606f8c-5b2e-492f-8c46-5a6d8ae96e30
 history:
 - id: 01a1309c-f35c-7b01-abc9-c69e0b065f8b
   author: joe
