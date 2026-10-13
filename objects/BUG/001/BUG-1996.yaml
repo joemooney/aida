@@ -9,12 +9,12 @@ description: |
 
   1. When `aida queue done` moves a code spec into Completed, it calls `shipped_linkage::warn_if_completed_without_shipped_commit`. The warning goes to stderr and never refuses.
   2. A binary test shows the warning for a spec with no shipped commit, and no warning for a spec tagged `doctor:no-code` or one with a shipped commit.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T12:24:17.717374794Z
+modified_at: 2026-10-13T13:24:47.630335287Z
 req_type: Bug
 history:
 - id: 01a13538-8035-7990-b7c4-2d187f92df56
@@ -24,6 +24,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1356f-e38e-7fe2-b093-e1c766b9c27a
+  author: aida-session-start
+  timestamp: 2026-10-13T13:24:47.630334549Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
   branch: main
