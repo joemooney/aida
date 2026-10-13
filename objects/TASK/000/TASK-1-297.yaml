@@ -1,0 +1,30 @@
+id: 01a137ae-1f32-7262-875b-d56abb36327e
+spec_id: TASK-1-297
+title: 'Non-blocking: recover_live_dir_with_steps (dev_build.rs:763) has no doc comment…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1999, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: recover_live_dir_with_steps (dev_build.rs:763) has no doc comment; the long doc stays on the wrapper.
+
+  PR: #2595
+  Reviewed sha: c7f2afcc1453b573a84066c46225ba484107730e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:52:00.562715122Z
+modified_at: 2026-10-13T23:52:00.562715122Z
+req_type: Task
+tags:
+- carried-from:BUG-1999
+- finding-hash:e0cb3283
+- from-review:PR-2595
+- kind:carried-forward
+filed_at:
+  code_sha: 7230cf3f4921d842c101b110218bbef2098758be
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
