@@ -2000,8 +2000,8 @@ mod tests {
             max_compactions_per_day: 2,
             ..WatchdogPolicy::default()
         };
-        // Run scan 4 hours after the transcript ended.
-        let now = t0() + Duration::hours(4);
+        // Run scan 4 hours after the transcript ended (last event at 361s).
+        let now = t0() + Duration::seconds(361) + Duration::hours(4);
         let (findings, cov) = scan("aida", &src, &policy, now, &HashMap::new());
         assert_eq!(cov.verdict, "tripped");
         assert!(
