@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:59:41.393918243Z
-modified_at: 2026-10-13T18:10:04.220099834Z
+modified_at: 2026-10-13T18:10:14.854144626Z
 req_type: Bug
 tags:
 - hooks
@@ -33,6 +33,12 @@ comments:
   content: 'Advisor triage 2026-10-13 (operator proxy): APPROVED. See .aida/handoff/advisor/draft-triage-2026-10-13.md.'
   created_at: 2026-10-13T18:10:03.081016894Z
   modified_at: 2026-10-13T18:10:03.081016894Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13675-3ac6-7d72-a526-bc68b2e16da6
+  author: joe
+  content: 'Triage: bundle with BUG-2003 (same function; aida-core/src/git_ops.rs:3884 skips non-executable hooks).'
+  created_at: 2026-10-13T18:10:14.854144626Z
+  modified_at: 2026-10-13T18:10:14.854144626Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a13675-113c-7dd0-a584-64bd74fa9d51
