@@ -1,0 +1,44 @@
+id: 01a133e7-dee9-7590-977c-eb3c6c722b51
+spec_id: FAQ-56
+agreed_id: FAQ-56
+title: Does a running relay pick up API keys I rotated?
+description: |
+  **No. A process keeps the environment it started with. A relay that was already running holds the old keys until you restart it from a shell that has the new ones.**
+
+  ## Why
+  Environment variables are copied into a process when it starts. Editing `~/.env` or re-exporting keys in your shell changes nothing for processes already running, or for their children. On 2026-10-12 a night relay started before a key rotation still held the old OpenAI, Gemini and AIDA keys. The Claude sessions kept working because they use the Claude login, not an API key. Anything the relay called through the rotated keys (evaluator, Codex, Gemini) would have failed.
+
+  ## How
+  Check a running process **without printing the key**, by comparing hashes:
+  ```bash
+  tr '\0' '\n' < /proc/<pid>/environ | grep '^OPENAI_API_KEY=' | sha256sum
+  printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" | sha256sum   # in the updated shell
+  ```
+  If the hashes differ, then at the relay's next handoff or halt, start it again from a fresh shell (`source ~/.env` first). Avoid killing a relay mid-PR.
+
+  ## Caveat
+  Never `env`, `printenv` or `cat` the environment in an agent session: transcripts are kept. Compare hashes only.
+
+  ## See also
+  DOC-7, BUG-2000, FAQ-20
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T06:16:36.329733874Z
+modified_at: 2026-10-13T06:16:36.329733874Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T06:16:36.329772844Z
