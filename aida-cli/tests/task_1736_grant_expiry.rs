@@ -7,6 +7,8 @@
 //! the SessionStart hook prints the warning with the renew command.
 // trace:TASK-1736 | ai:claude
 
+mod support;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -199,4 +201,121 @@ fn session_start_hook_prints_the_expiry_warning() {
         show(&out)
     );
     assert!(stdout.contains("aida role enter advisor"), "{}", show(&out));
+}
+
+/// A grant handle that names no usable record (missing, revoked, malformed) refuses a
+/// launch rather than passing it as "no grant": the session it would start
+/// meets refusals mid-run.
+// trace:TASK-1736 | ai:claude
+#[test]
+fn unresolvable_grant_refuses_a_launch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+
+    let missing = uuid::Uuid::new_v4().to_string();
+    let out = expiry(home, Some(&missing), &["--refuse-within", "1h"]);
+    assert_eq!(out.status.code(), Some(3), "{}", show(&out));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("Not launching"), "{}", show(&out));
+    assert!(stderr.contains("missing"), "{}", show(&out));
+    assert!(stderr.contains("aida role enter"), "{}", show(&out));
+    assert!(!stderr.contains("TASK-"), "{}", show(&out));
+    assert!(out.stdout.is_empty(), "{}", show(&out));
+
+    let revoked = write_grant(home, "advisor", 5 * 60);
+    let path = home
+        .join(".aida")
+        .join("session-grants")
+        .join(format!("{revoked}.json"));
+    let mut record: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    record["revoked_at"] = serde_json::json!(chrono::Utc::now());
+    std::fs::write(&path, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
+    let out = expiry(home, Some(&revoked), &["--refuse-within", "1h"]);
+    assert_eq!(out.status.code(), Some(3), "{}", show(&out));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("Not launching"), "{}", show(&out));
+    assert!(stderr.contains("revoked"), "{}", show(&out));
+    assert!(!stderr.contains("TASK-"), "{}", show(&out));
+
+    let malformed = uuid::Uuid::new_v4().to_string();
+    std::fs::write(
+        home.join(".aida")
+            .join("session-grants")
+            .join(format!("{malformed}.json")),
+        b"{ not json",
+    )
+    .unwrap();
+    let out = expiry(home, Some(&malformed), &["--refuse-within", "1h"]);
+    assert_eq!(out.status.code(), Some(3), "{}", show(&out));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("Not launching"), "{}", show(&out));
+    assert!(stderr.contains("malformed"), "{}", show(&out));
+    assert!(!stderr.contains("TASK-"), "{}", show(&out));
+
+    // Warn mode stays quiet: there is no expiry to announce.
+    for grant in [missing.as_str(), revoked.as_str(), malformed.as_str()] {
+        let out = expiry(home, Some(grant), &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+        assert!(out.stdout.is_empty(), "{}", show(&out));
+    }
+}
+
+/// Run `aida statusline` from `project` holding a valid, roster-allowed
+/// advisor grant that expires `minutes_left` from now.
+// trace:TASK-1736 | ai:claude
+fn statusline_with_grant(minutes_left: i64) -> Output {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&project).unwrap();
+    let subject = "tester";
+    let grant = support::grant_seat_for(&home, &project, subject, "advisor", &[]);
+    let path = home
+        .join(".aida")
+        .join("session-grants")
+        .join(format!("{grant}.json"));
+    let mut record: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    record["expires_at"] =
+        serde_json::json!(chrono::Utc::now() + chrono::Duration::minutes(minutes_left));
+    std::fs::write(&path, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
+
+    let mut cmd = Command::new(aida_bin());
+    isolate(&mut cmd, &home);
+    let out = cmd
+        .env("AIDA_USER", subject)
+        .env("AIDA_SESSION_GRANT", &grant)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .current_dir(&project)
+        .args(["statusline", "--color", "never"])
+        .output()
+        .expect("run aida statusline");
+    drop(tmp);
+    out
+}
+
+/// The statusline tags a held seat with the time left inside the warning
+/// window, and says nothing about expiry while there is time to spare.
+// trace:TASK-1736 | ai:claude
+#[test]
+fn statusline_tags_a_held_seat_near_expiry() {
+    let near = statusline_with_grant(30);
+    assert!(near.status.success(), "{}", show(&near));
+    let stdout = String::from_utf8_lossy(&near.stdout);
+    assert!(stdout.contains("advisor"), "{}", show(&near));
+    assert!(!stdout.contains("no grant"), "{}", show(&near));
+    assert!(
+        stdout.contains("(expires in 29m)") || stdout.contains("(expires in 30m)"),
+        "{}",
+        show(&near)
+    );
+
+    let fresh = statusline_with_grant(5 * 60);
+    assert!(fresh.status.success(), "{}", show(&fresh));
+    let stdout = String::from_utf8_lossy(&fresh.stdout);
+    assert!(stdout.contains("advisor"), "{}", show(&fresh));
+    assert!(!stdout.contains("expires in"), "{}", show(&fresh));
+    assert!(!stdout.contains("no grant"), "{}", show(&fresh));
 }
