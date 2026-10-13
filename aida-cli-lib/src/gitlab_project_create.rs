@@ -335,15 +335,16 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
     out
 }
 
-/// The `git ls-remote --heads <url>` probe. `GIT_TERMINAL_PROMPT=0` makes an
+/// The `git ls-remote --heads <remote>` probe. `GIT_TERMINAL_PROMPT=0` makes an
 /// HTTPS URL without stored credentials fail instead of blocking on a
 /// username prompt.
 // trace:BUG-1972 | ai:claude
-fn ls_remote_probe(dir: &Path, url: &str) -> Command {
+// trace:BUG-2004 | ai:antigravity
+fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(dir)
-        .args(["ls-remote", "--heads", url])
+        .args(["ls-remote", "--heads", remote])
         .env("GIT_TERMINAL_PROMPT", "0");
     cmd
 }
@@ -353,11 +354,17 @@ fn ls_remote_probe(dir: &Path, url: &str) -> Command {
 /// project was created. Non-GitLab URLs and non-refusal probe errors are left
 /// alone (the mirror is still wired; the first push reports the real error).
 // trace:STORY-1656 | ai:claude
-pub(crate) fn ensure_gitlab_project_exists(dir: &Path, url: &str, public: bool) -> Result<bool> {
+// trace:BUG-2004 | ai:antigravity
+pub(crate) fn ensure_gitlab_project_exists(
+    dir: &Path,
+    remote_name: &str,
+    url: &str,
+    public: bool,
+) -> Result<bool> {
     if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
         return Ok(false);
     }
-    let out = ls_remote_probe(dir, url)
+    let out = ls_remote_probe(dir, remote_name)
         .output()
         .context("could not launch `git ls-remote`")?;
     if out.status.success() {
@@ -437,3 +444,7 @@ fn short(sha: &str) -> &str {
 #[cfg(test)]
 #[path = "tests/story_1656_multi_forge_init_tests.rs"]
 mod story_1656_multi_forge_init_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2004_token_leak_argv_tests.rs"]
+mod bug_2004_token_leak_argv_tests;
