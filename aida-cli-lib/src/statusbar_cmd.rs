@@ -516,6 +516,7 @@ mod tests {
             ],
             pr_attribution_disagreements: Vec::new(),
             orphaned_in_progress: Vec::new(),
+            idle_in_progress: Vec::new(),
             blocked_seats: Vec::new(),
             role: None,
         };

@@ -959,11 +959,23 @@ pub(crate) fn collect_awaiting_report_inner(
     // notice-fast path to keep the per-turn hook local and fast (no
     // full-store load, no network).
     // trace:BUG-1564 | ai:claude
-    let orphaned_in_progress = if notice_fast {
-        Vec::new()
+    //
+    // STORY-1680: the same orphan pass also feeds the idle-in-progress channel
+    // (driver `idle`, idle past `[awaiting] idle_in_progress_hours`). A spec
+    // listed there is dropped from the orphan list so it is reported once.
+    // trace:STORY-1680 | ai:claude
+    let (orphaned_in_progress, idle_in_progress) = if notice_fast {
+        (Vec::new(), Vec::new())
     } else {
         let (_rows, orphans) = gather_running_work(project_root);
-        orphaned_in_progress_items(orphans, |spec| {
+        let idle = crate::idle_in_progress::collect_idle_in_progress(
+            project_root,
+            backend,
+            &orphans,
+            chrono::Utc::now(),
+        );
+        let orphans = crate::idle_in_progress::orphans_not_idle(orphans, &idle);
+        let orphaned = orphaned_in_progress_items(orphans, |spec| {
             summaries
                 .iter()
                 .find(|s| {
@@ -978,7 +990,8 @@ pub(crate) fn collect_awaiting_report_inner(
                     format!("last touched {} ago", humanize_duration_secs(secs))
                 })
                 .unwrap_or_else(|| "last-touched time unknown".to_string())
-        })
+        });
+        (orphaned, idle)
     };
 
     // TASK-1454: cheap on every path (see doc comment) — computed
@@ -1007,6 +1020,7 @@ pub(crate) fn collect_awaiting_report_inner(
         nightly_red,
         pr_attribution_disagreements,
         orphaned_in_progress,
+        idle_in_progress,
         blocked_seats,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
