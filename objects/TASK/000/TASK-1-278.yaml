@@ -1,5 +1,6 @@
 id: 01a13453-3e5e-7f02-ae6a-c603248b70ca
 spec_id: TASK-1-278
+agreed_id: TASK-1347
 title: 'non-blocking: exemption keys on CHERRY_PICK_HEAD/REVERT_HEAD existence only (a …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1728, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

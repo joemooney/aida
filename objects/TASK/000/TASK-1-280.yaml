@@ -1,5 +1,6 @@
 id: 01a13453-45a5-72c0-aa1f-49649822ada0
 spec_id: TASK-1-280
+agreed_id: TASK-1348
 title: 'non-blocking: --amend / merge --squash refusals are asserted only as message te…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1728, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
