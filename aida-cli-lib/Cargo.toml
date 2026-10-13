@@ -80,6 +80,9 @@ tui = ["aida-tui"]
 
 [dev-dependencies]
 tempfile = "3.8"
+# Parse test-module boundaries for the engine guard. trace:TASK-1724 | ai:codex
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = "1"
 
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }
