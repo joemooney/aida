@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T06:40:12.830572347Z
+modified_at: 2026-10-13T12:42:57.284494379Z
 req_type: Bug
 tags:
 - agent-new
@@ -31,6 +31,11 @@ comments:
     Acceptance checks in GitHub CI: agent_new_foreground_conflict_precedes_all_prompts and agent_new_background_conflict_precedes_all_prompts (instrument prompt calls, assert zero calls); agent_new_conflict_lists_safe_reentry_commands; session_leases_default_includes_dispatch_blocking_stale_lease (human/JSON); agent_new_same_worktree_adoption_preserves_ownership_after_signoff; agent_new_preview_stays_side_effect_free; agent_new_bg_help_documents_noninteractive_form. Race test: ownership introduced after preflight is refused by final acquisition. Risks: adoption must not steal a live lease or end/delete its worktree, previews must remain pure, foreground/background gates must agree. Run make check-ci-fast before every push; compile/test only on GitHub CI.
   created_at: 2026-10-13T06:40:12.830572347Z
   modified_at: 2026-10-13T06:40:12.830572347Z
+- id: 01a13549-9584-7003-a9d9-a983820d8c71
+  author: joe
+  content: 'FACTORY PLAN (codex) / plan:night: Reusing the existing plan. Sketch: preflight dispatch ownership before bypass/resume prompts; retain final acquisition race check; expose all dispatch-blocking leases in default listings; document noninteractive bg launch. Full acceptance also requires adopting an existing lease in its owning worktree, which changes lease ownership semantics. Proposed adoption retains the existing session/lease identity and refuses cwd mismatches, with no force-claim or cleanup. Architecture signoff is not recorded; parked pending advisor signoff rather than shipping only the prompt-order subset.'
+  created_at: 2026-10-13T12:42:57.284494379Z
+  modified_at: 2026-10-13T12:42:57.284494379Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
