@@ -73,6 +73,14 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     cmd.current_dir(cwd)
         .args(host_git_hardening(cwd))
         .args(transaction_git_config());
+    // Every commit an aida build makes in a store tree carries the store
+    // write marker, whatever the caller: the shipped hooks key their
+    // store-commit handling on it (the commit-msg hook never sources the
+    // tree's commit-config when it is set).
+    // trace:BUG-1929 | ai:claude
+    if is_store_tree(cwd) {
+        cmd.env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"));
+    }
     cmd
 }
 
@@ -109,21 +117,163 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 ///   into a planted `objects/zz/.git` would run its `remote.origin.uploadpack`
 ///   (F1). A code checkout keeps git's submodule handling: a user project
 ///   with real submodules must still see them as dirty.
+/// - In a store tree also `core.hooksPath=<absolute dir>` from
+///   [`resolve_store_hooks_dir`]. Git resolves a relative `core.hooksPath`
+///   (husky's `.husky/_`, `.githooks`) against the worktree it runs in, and
+///   the store's tree is writable by contained sessions, so without the pin
+///   a store commit would run hooks planted there. When the directory cannot
+///   be resolved, or resolves inside the store tree, the pin is
+///   [`NO_HOOKS_DIR`] so git runs no hook at all; store writes refuse that
+///   case before they start ([`refuse_embedded_repos`],
+///   [`ensure_store_hooks_supported`]).
 // trace:BUG-1929 | ai:claude
-pub fn host_git_hardening(cwd: &Path) -> &'static [&'static str] {
-    if is_store_tree(cwd) {
-        &[
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "diff.ignoreSubmodules=all",
-            "-c",
-            "submodule.recurse=false",
-            "-c",
-            "fetch.recurseSubmodules=false",
-        ]
-    } else {
-        &["-c", "core.fsmonitor=false"]
+pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
+    let mut args = vec!["-c".to_string(), "core.fsmonitor=false".to_string()];
+    if !is_store_tree(cwd) {
+        return args;
+    }
+    for setting in [
+        "diff.ignoreSubmodules=all",
+        "submodule.recurse=false",
+        "fetch.recurseSubmodules=false",
+    ] {
+        args.push("-c".to_string());
+        args.push(setting.to_string());
+    }
+    let hooks = resolve_store_hooks_dir(cwd)
+        .ok()
+        .flatten()
+        .and_then(|dir| dir.to_str().map(str::to_string))
+        .unwrap_or_else(|| NO_HOOKS_DIR.to_string());
+    args.push("-c".to_string());
+    args.push(format!("core.hooksPath={hooks}"));
+    args
+}
+
+/// A hooks directory that holds no hook: git run with it runs none.
+// trace:BUG-1929 | ai:claude
+pub const NO_HOOKS_DIR: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
+
+/// The absolute hooks directory git must use for a command run in the store
+/// tree `store`, or `None` when `store` is not inside a git repository.
+///
+/// - `core.hooksPath` set to an absolute path (after git's own `~` expansion):
+///   that path.
+/// - `core.hooksPath` set to a relative path: resolved against the MAIN
+///   checkout, which is what the project configured it for. Git would
+///   otherwise resolve it against the store's worktree.
+/// - Unset: `<git-common-dir>/hooks`.
+///
+/// Refuses a directory that lies inside the store tree (lexically or after
+/// following symlinks): hooks there could be written by a contained session
+/// and would run on this machine on a store commit.
+// trace:BUG-1929 | ai:claude
+pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
+    // Read-only lookups `host_git_command` itself depends on, so they cannot
+    // be built with it: `rev-parse`, `config --get` and `worktree list` run
+    // no hook, fsmonitor, filter or remote helper.
+    let read = |args: &[&str]| -> Result<Option<String>> {
+        // raw-git-ok(BUG-1929): read-only lookup used to build the hardening.
+        let out = Command::new("git")
+            .current_dir(store)
+            .args(["-c", "core.fsmonitor=false"])
+            .args(args)
+            .output()
+            .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
+        Ok(out.status.success().then(|| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim_end_matches(['\n', '\r'])
+                .to_string()
+        }))
+    };
+    let Some(common) = read(&["rev-parse", "--path-format=absolute", "--git-common-dir"])? else {
+        return Ok(None);
+    };
+    let common = PathBuf::from(common);
+    let configured =
+        read(&["config", "--type=path", "--get", "core.hooksPath"])?.filter(|v| !v.is_empty());
+    let dir = match configured {
+        None => common.join("hooks"),
+        Some(value) if Path::new(&value).is_absolute() => PathBuf::from(value),
+        Some(value) => {
+            let main = read(&["worktree", "list", "--porcelain"])?
+                .and_then(|list| {
+                    list.lines()
+                        .find_map(|l| l.strip_prefix("worktree ").map(PathBuf::from))
+                })
+                .with_context(|| {
+                    format!(
+                        "cannot find the main checkout for the AIDA store at {}",
+                        store.display()
+                    )
+                })?;
+            main.join(value)
+        }
+    };
+    let dir = lexically_normal(&dir);
+    let store_abs = lexically_normal(&std::path::absolute(store).unwrap_or(store.to_path_buf()));
+    let store_real = std::fs::canonicalize(store).unwrap_or_else(|_| store_abs.clone());
+    let dir_real = canonical_best_effort(&dir);
+    // A store that is its own repository (`<store>/.git` a directory, as in a
+    // cloned or override store) keeps its hooks in that git directory. It is
+    // not part of the tree a contained session may write (the store's `.git`
+    // is denied), so only the working tree counts as "inside the store".
+    let common_lex = lexically_normal(&common);
+    let common_real = canonical_best_effort(&common_lex);
+    let is_own_git_dir = |g: &Path| g == common_lex || g == common_real;
+    let in_own_git_dir = (is_own_git_dir(&store_abs.join(".git"))
+        || is_own_git_dir(&store_real.join(".git")))
+        && (dir.starts_with(&common_lex) || dir_real.starts_with(&common_real));
+    if !in_own_git_dir && (dir.starts_with(&store_abs) || dir_real.starts_with(&store_real)) {
+        anyhow::bail!(
+            "refusing AIDA store write: git's hooks directory for the store at {} is {}, inside the store's \
+             own files, which agent sessions can change. Hooks there would run on this machine at every store \
+             commit. Nothing was changed. Point core.hooksPath at a directory outside the store (a relative \
+             value is read from the main checkout).",
+            store.display(),
+            dir.display()
+        );
+    }
+    Ok(Some(dir))
+}
+
+/// `path` with `.` dropped and `..` applied, without touching the filesystem.
+// trace:BUG-1929 | ai:claude
+fn lexically_normal(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// `path` with its longest existing ancestor resolved through symlinks.
+// trace:BUG-1929 | ai:claude
+fn canonical_best_effort(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(cur) {
+            let mut out = real;
+            for part in rest.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
     }
 }
 
@@ -151,6 +301,9 @@ pub fn refuse_embedded_repos(store: &Path) -> Result<()> {
     if !is_store_tree(store) {
         return Ok(());
     }
+    // A hooks directory inside the store tree refuses the write too.
+    // trace:BUG-1929 | ai:claude
+    resolve_store_hooks_dir(store)?;
     let mut found: Vec<String> = Vec::new();
     let staged = git(store, &["ls-files", "--stage", "-z"])?;
     anyhow::ensure!(
@@ -4025,7 +4178,16 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     if !is_git_repo(store) {
         return Ok(());
     }
+    // In a store tree this is the directory `host_git_command` pins as
+    // `core.hooksPath`, so the check classifies exactly the hooks git runs.
+    // trace:BUG-1929 | ai:claude
     let dir = hooks_dir(store)?;
+    ensure_hooks_in_dir_supported(store, &dir)
+}
+
+/// [`ensure_store_hooks_supported`] over an already resolved hooks directory.
+// trace:BUG-1929 | ai:claude
+fn ensure_hooks_in_dir_supported(store: &Path, dir: &Path) -> Result<()> {
     let mut sources_config = false;
     // BUG-1977: every stale generated hook, reported together.
     let mut stale: Vec<(&str, PathBuf)> = Vec::new();
@@ -4125,8 +4287,19 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The hooks directory git uses for `repo` (`core.hooksPath` aware).
+/// The hooks directory git uses for `repo` (`core.hooksPath` aware). In a
+/// store tree, the directory [`resolve_store_hooks_dir`] pins (and its
+/// refusal when that lies inside the store).
 fn hooks_dir(repo: &Path) -> Result<PathBuf> {
+    // trace:BUG-1929 | ai:claude
+    if is_store_tree(repo) {
+        return resolve_store_hooks_dir(repo)?.with_context(|| {
+            format!(
+                "locate git hooks failed: {} is not in a git repository",
+                repo.display()
+            )
+        });
+    }
     let out = git(repo, &["rev-parse", "--git-path", "hooks"])?;
     anyhow::ensure!(out.success, "locate git hooks failed: {}", out.stderr);
     Ok(if Path::new(&out.stdout).is_absolute() {
@@ -4520,17 +4693,32 @@ const COMMIT_CONFIG_NAMES: &[&str] = &[
 /// value, where `NAME` is one the commit-msg hook reads
 /// ([`COMMIT_CONFIG_NAMES`]).
 fn is_literal_config_line(line: &str) -> bool {
-    let line = line.trim();
+    // Bash separates words only on space and tab: `str::trim` would also
+    // strip U+00A0, `\v`, `\f` and `\r`, which bash keeps as part of the
+    // word (so `\u{a0}STRICT_MODE=./x` runs `./x`). Any other control or
+    // non-ASCII character refuses the line.
+    // trace:BUG-1929 | ai:claude
+    const BLANK: [char; 2] = [' ', '\t'];
+    if line
+        .chars()
+        .any(|c| !BLANK.contains(&c) && (!c.is_ascii() || c.is_ascii_control()))
+    {
+        return false;
+    }
+    let line = line.trim_matches(BLANK);
     if line.is_empty() || line.starts_with('#') {
         return true;
     }
-    let line = line.strip_prefix("export ").unwrap_or(line).trim();
+    let line = line
+        .strip_prefix("export ")
+        .unwrap_or(line)
+        .trim_matches(BLANK);
     let Some((name, value)) = line.split_once('=') else {
         return false;
     };
     // trace:BUG-1929 | ai:claude
     let name_ok = COMMIT_CONFIG_NAMES.contains(&name);
-    let value = value.trim_end();
+    let value = value.trim_end_matches(BLANK);
     let value_ok = if let Some(inner) = value.strip_prefix('\'').and_then(|v| v.strip_suffix('\''))
     {
         !inner.contains('\'')
@@ -7875,6 +8063,264 @@ mod tests {
         );
     }
 
+    /// A main checkout with one commit and an `.aida-store` worktree.
+    // trace:BUG-1929 | ai:claude
+    fn bug_1929_main_with_store(dir: &Path) -> (PathBuf, PathBuf) {
+        let main = dir.join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test", "test@example.com").unwrap();
+        std::fs::write(main.join("README.md"), "hi").unwrap();
+        add(&main, &["README.md"]).unwrap();
+        commit(&main, "chore: init").unwrap();
+        let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+        (main, store)
+    }
+
+    /// An executable hook at `path` that appends `tag` to `marker`.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    fn bug_1929_marker_hook(path: &Path, marker: &Path, tag: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            format!("#!/bin/sh\necho {tag} >> '{}'\nexit 0\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    /// A relative `core.hooksPath` (husky's `.husky/_`) is resolved against
+    /// the main checkout for every store git call: a store commit through the
+    /// real `commit_paths` runs the main checkout's hook and never the one
+    /// planted at the same relative path inside the store tree.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1929_relative_hooks_path_runs_main_hooks_never_store_hooks() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, store) = bug_1929_main_with_store(dir.path());
+        assert!(
+            git(&main, &["config", "core.hooksPath", ".husky/_"])
+                .unwrap()
+                .success
+        );
+        let main_marker = dir.path().join("MAIN-HOOK-RAN");
+        let planted_marker = dir.path().join("PLANTED-HOOK-RAN");
+        bug_1929_marker_hook(&main.join(".husky/_/commit-msg"), &main_marker, "main");
+        bug_1929_marker_hook(
+            &store.join(".husky/_/commit-msg"),
+            &planted_marker,
+            "planted",
+        );
+
+        assert_eq!(
+            resolve_store_hooks_dir(&store).unwrap(),
+            Some(main.join(".husky/_"))
+        );
+        assert_eq!(hooks_dir(&store).unwrap(), main.join(".husky/_"));
+
+        crate::db::with_store_write_lock(&store, || {
+            std::fs::write(store.join("notes.txt"), "one\n")?;
+            add(&store, &["notes.txt"])?;
+            commit_paths(&store, "chore: store write", &["notes.txt"])
+        })
+        .expect("store commit");
+        assert!(
+            !planted_marker.exists(),
+            "a store commit ran the hook planted in the store tree"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&main_marker).unwrap_or_default(),
+            "main\n",
+            "the main checkout's configured hook must run"
+        );
+        assert!(host_git_hardening(&store).contains(&format!(
+            "core.hooksPath={}",
+            main.join(".husky/_").display()
+        )));
+        assert_eq!(
+            git(&store, &["log", "-1", "--format=%s"]).unwrap().stdout,
+            "chore: store write"
+        );
+    }
+
+    /// A hooks directory that resolves inside the store tree (relative,
+    /// absolute, or through a symlink in the main checkout) refuses the store
+    /// write before anything runs, and git is pinned to no hooks at all. A
+    /// store that is its own repository keeps using its own `.git/hooks`.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1929_hooks_dir_inside_store_refuses_store_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, store) = bug_1929_main_with_store(dir.path());
+        let marker = dir.path().join("PLANTED-HOOK-RAN");
+        bug_1929_marker_hook(&store.join("hooks/commit-msg"), &marker, "planted");
+        std::os::unix::fs::symlink(store.join("hooks"), main.join("hooks-link")).unwrap();
+        let absolute = store.join("hooks").display().to_string();
+        for value in [
+            ".aida-store/hooks",
+            "x/../.aida-store/hooks",
+            absolute.as_str(),
+            "hooks-link",
+        ] {
+            assert!(
+                git(&main, &["config", "core.hooksPath", value])
+                    .unwrap()
+                    .success
+            );
+            let err = resolve_store_hooks_dir(&store).unwrap_err().to_string();
+            assert!(err.contains("inside the store"), "{value}: {err}");
+            let err = ensure_store_hooks_supported(&store)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("inside the store"), "{value}: {err}");
+            assert!(
+                host_git_hardening(&store).contains(&format!("core.hooksPath={NO_HOOKS_DIR}")),
+                "{value}"
+            );
+            std::fs::write(store.join("notes.txt"), format!("{value}\n")).unwrap();
+            let err = add(&store, &["notes.txt"]).unwrap_err().to_string();
+            assert!(err.contains("inside the store"), "{value}: {err}");
+            let err = commit_paths(&store, "chore: x", &["notes.txt"])
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("inside the store"), "{value}: {err}");
+            assert!(!marker.exists(), "{value}: the planted hook ran");
+        }
+        // A hooks directory outside the store is fine.
+        assert!(
+            git(&main, &["config", "core.hooksPath", "githooks"])
+                .unwrap()
+                .success
+        );
+        assert_eq!(
+            resolve_store_hooks_dir(&store).unwrap(),
+            Some(main.join("githooks"))
+        );
+        assert!(
+            git(&main, &["config", "--unset", "core.hooksPath"])
+                .unwrap()
+                .success
+        );
+        let common = std::fs::canonicalize(main.join(".git")).unwrap();
+        assert_eq!(
+            resolve_store_hooks_dir(&store)
+                .unwrap()
+                .map(|d| std::fs::canonicalize(d.parent().unwrap())
+                    .unwrap()
+                    .join(d.file_name().unwrap())),
+            Some(common.join("hooks"))
+        );
+
+        // A store that is its own repository: its `.git/hooks` is allowed,
+        // a hooks directory in its working tree is not.
+        let own = dir.path().join("own").join(".aida-store");
+        init(&own).unwrap();
+        let own_real = std::fs::canonicalize(&own).unwrap();
+        assert_eq!(
+            resolve_store_hooks_dir(&own)
+                .unwrap()
+                .map(|d| canonical_best_effort(&d)),
+            Some(own_real.join(".git/hooks"))
+        );
+        assert!(
+            git(&own, &["config", "core.hooksPath", "hooks"])
+                .unwrap()
+                .success
+        );
+        let err = resolve_store_hooks_dir(&own).unwrap_err().to_string();
+        assert!(err.contains("inside the store"), "{err}");
+    }
+
+    /// Every git command `host_git_command` builds in a store tree carries
+    /// the store write marker (so a direct caller's commit, such as a doctor
+    /// heal, is a store commit to the shipped hooks); a code checkout's does
+    /// not.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1929_host_git_command_marks_store_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, store) = bug_1929_main_with_store(dir.path());
+        let guard = |cmd: &Command| {
+            cmd.get_envs()
+                .find(|(k, _)| *k == "AIDA_STORE_WRITE_GUARD")
+                .and_then(|(_, v)| v.map(|v| v.to_string_lossy().to_string()))
+        };
+        assert_eq!(
+            guard(&host_git_command(&store)).as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
+        assert_eq!(guard(&host_git_command(&main)), None);
+
+        // The marker reaches the hook of a commit made straight through the
+        // builder.
+        use std::os::unix::fs::PermissionsExt;
+        let seen = dir.path().join("guard-seen");
+        let hook = hooks_dir(&store).unwrap().join("commit-msg");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$AIDA_STORE_WRITE_GUARD\" > '{}'\n",
+                seen.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(store.join("notes.txt"), "one\n").unwrap();
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args(["add", "notes.txt"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let out = host_git_command(&store)
+            .args(["commit", "-q", "-m", "chore: direct"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(
+            std::fs::read_to_string(&seen).unwrap(),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    /// Only space and tab are blanks around a commit-config line: the
+    /// characters `str::trim` also strips, which bash keeps as part of a
+    /// word, refuse the line, as does any other control or non-ASCII
+    /// character.
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn bug_1929_commit_config_blanks_are_only_space_and_tab() {
+        for prefix in ["\u{a0}", "\u{b}", "\u{c}", "\r"] {
+            for line in [
+                format!("{prefix}STRICT_MODE=./x"),
+                format!("{prefix}STRICT_MODE=true"),
+                format!("STRICT_MODE=true{prefix}"),
+                format!("{prefix}# comment"),
+            ] {
+                assert!(!is_literal_config_line(&line), "should refuse {line:?}");
+            }
+        }
+        for bad in [
+            "STRICT_MODE=caf\u{e9}",
+            "STRICT_MODE=a\u{0}b",
+            "STRICT_MODE=\u{1b}x",
+        ] {
+            assert!(!is_literal_config_line(bad), "should refuse {bad:?}");
+        }
+        for ok in [
+            " \tSTRICT_MODE=true\t ",
+            "\texport REQUIRE_AI_TAG=false",
+            "  # note",
+        ] {
+            assert!(is_literal_config_line(ok), "should accept {ok:?}");
+        }
+    }
+
     /// B2: a failing `git status` is an error for store writers, never
     /// "clean"; the tolerant reader keeps its contract for displays.
     // trace:TASK-1717 | ai:claude
@@ -8139,7 +8585,7 @@ mod tests {
         let code = dir.path().join("code");
         std::fs::create_dir_all(&code).unwrap();
         assert!(!is_store_tree(&code));
-        assert_eq!(host_git_hardening(&code), &["-c", "core.fsmonitor=false"]);
+        assert_eq!(host_git_hardening(&code), ["-c", "core.fsmonitor=false"]);
         // A code checkout with a real nested repository is not refused.
         std::fs::create_dir_all(code.join("vendor/.git")).unwrap();
         assert!(refuse_embedded_repos(&code).is_ok());
@@ -8153,6 +8599,9 @@ mod tests {
             "diff.ignoreSubmodules=all",
             "submodule.recurse=false",
             "fetch.recurseSubmodules=false",
+            // Not in a git repository: no hooks directory can be resolved,
+            // so git is told to run none.
+            &format!("core.hooksPath={NO_HOOKS_DIR}"),
         ] {
             assert!(h.contains(flag), "{h}");
         }
