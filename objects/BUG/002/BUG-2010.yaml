@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-13T18:10:06.009238490Z
+modified_at: 2026-10-13T18:10:15.772131541Z
 req_type: Bug
 tags:
 - agent-new
@@ -29,6 +29,12 @@ comments:
   content: 'Advisor triage 2026-10-13 (operator proxy): APPROVED. See .aida/handoff/advisor/draft-triage-2026-10-13.md.'
   created_at: 2026-10-13T18:10:05.091528913Z
   modified_at: 2026-10-13T18:10:05.091528913Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13675-3e5c-7a33-91a3-88aa2f5b7043
+  author: joe
+  content: 'Triage: adjacent to BUG-2002 / PR #2596 (lease ownership); rebase on it if it merges first.'
+  created_at: 2026-10-13T18:10:15.772131541Z
+  modified_at: 2026-10-13T18:10:15.772131541Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
