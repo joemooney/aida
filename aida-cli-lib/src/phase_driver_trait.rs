@@ -1100,14 +1100,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // recorded permission denials means the writes were refused.
                 // trace:BUG-1930 | ai:claude
                 if headless_impl {
-                    let denied = crate::questions::read_headless_log_for_session(
-                        &self.project_root,
-                        &session_uuid,
-                    )
-                    .map(|log| crate::questions::headless_log_permission_denied_tools(&log))
-                    .unwrap_or_default();
-                    if !denied.is_empty() {
-                        return Err(auto_complete::permission_denied_failure(&denied));
+                    if let Some(failure) =
+                        no_pr_permission_denied_failure(&self.project_root, &session_uuid)
+                    {
+                        return Err(failure);
                     }
                 }
                 let failure = auto_complete::PhaseFailure::of(
@@ -3788,5 +3784,59 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 false
             }
         }
+    }
+}
+
+/// BUG-1930: the failure for a headless implementer that opened no PR and
+/// made no commit, when its stream recorded permission denials; `None`
+/// otherwise (no log, or no denials), leaving the ordinary NoPr path.
+// trace:BUG-1930 | ai:claude
+fn no_pr_permission_denied_failure(
+    project_root: &std::path::Path,
+    session_uuid: &str,
+) -> Option<auto_complete::PhaseFailure> {
+    let log = crate::questions::read_headless_log_for_session(project_root, session_uuid)?;
+    let denied = crate::questions::headless_log_permission_denied_tools(&log);
+    (!denied.is_empty()).then(|| auto_complete::permission_denied_failure(&denied))
+}
+
+#[cfg(test)]
+mod bug_1930_tests {
+    use super::*;
+
+    /// BUG-1930: the NoPr exit reads the session's own headless log; denials
+    /// there turn it into PermissionDenied, and a clean log (or none) keeps
+    /// the ordinary NoPr path.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn no_pr_with_denied_stream_becomes_permission_denied() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let logs = dir.path().join(".aida").join("headless-logs");
+        std::fs::create_dir_all(&logs).expect("log dir");
+        std::fs::write(
+            logs.join("bug-81-denied-sess.jsonl"),
+            "{\"type\":\"result\",\"permission_denials\":[{\"tool_name\":\"Edit\"},\
+             {\"tool_name\":\"Write\"}]}\n",
+        )
+        .expect("denied log");
+        std::fs::write(
+            logs.join("bug-83-clean-sess.jsonl"),
+            "{\"type\":\"result\",\"permission_denials\":[]}\n",
+        )
+        .expect("clean log");
+
+        let failure = no_pr_permission_denied_failure(dir.path(), "denied-sess")
+            .expect("denials classify the stop");
+        assert_eq!(failure.kind, auto_complete::FailureKind::PermissionDenied);
+        assert!(failure.reason.contains("Edit, Write"), "{}", failure.reason);
+
+        assert_eq!(
+            no_pr_permission_denied_failure(dir.path(), "clean-sess"),
+            None
+        );
+        assert_eq!(
+            no_pr_permission_denied_failure(dir.path(), "missing-sess"),
+            None
+        );
     }
 }

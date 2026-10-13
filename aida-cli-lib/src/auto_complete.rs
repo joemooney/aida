@@ -695,6 +695,41 @@ impl FailureKind {
             Self::ReviewInProgress => "review-in-progress",
         }
     }
+
+    /// BUG-1930: the inverse of [`Self::cause_slug`], used where a failure
+    /// crosses a process boundary as its slug (the pipelined child sidecar).
+    /// Shared slugs map to one representative kind with the same slug, so
+    /// `from_cause_slug(k.cause_slug()).cause_slug() == k.cause_slug()` for
+    /// every kind. An unknown slug is `None`.
+    // trace:BUG-1930 | ai:claude
+    pub(crate) fn from_cause_slug(slug: &str) -> Option<Self> {
+        Some(match slug {
+            "verdict:request-changes" => Self::VerdictRequestChanges,
+            "verdict:reject" => Self::VerdictReject,
+            "reviewer-wrote" => Self::ReviewerWrote,
+            "rework-no-op" => Self::ReworkNoOp,
+            "ci-red" => Self::CiRed,
+            "ci-unavailable" => Self::CiUnavailable,
+            "no-verdict" => Self::NoVerdict,
+            "no-pr" => Self::NoPr,
+            "watchdog" => Self::Watchdog,
+            "cache-locked" => Self::CacheLocked,
+            "lease-conflict" => Self::LeaseConflict,
+            "permission-denied" => Self::PermissionDenied,
+            "internal" => Self::Internal,
+            "environmental" => Self::LaunchNoOutput,
+            "headless-wait" => Self::HeadlessWait,
+            "stale-base-refused" => Self::StaleBaseRefused,
+            "stale-base-conflict" => Self::StaleBaseConflict,
+            "merge-hold" => Self::MergeHold,
+            "stale-approval" => Self::StaleApproval,
+            "launch-refused" => Self::LaunchRefused,
+            "tool-exit" => Self::Failed,
+            "shipped-mismatch" => Self::ShippedMismatch,
+            "review-in-progress" => Self::ReviewInProgress,
+            _ => return None,
+        })
+    }
 }
 
 /// A reviewer's verdict, read from `.aida/review-verdicts/PR-N.json`.
@@ -4990,6 +5025,15 @@ impl EnvironmentStreak {
         }
         (halt_after > 0 && self.count >= halt_after).then_some(class)
     }
+
+    /// Should the pipelined scheduler hold off launching another spec? Yes
+    /// while a streak is open and the `in_flight` members alone could bring
+    /// it to `halt_after`. With nothing in flight this is always `false`
+    /// (an open streak is below `halt_after`), so the scheduler never stalls.
+    // trace:BUG-1930 | ai:claude
+    fn defers_launch(&self, in_flight: usize, halt_after: usize) -> bool {
+        halt_after > 0 && self.count > 0 && self.count + in_flight >= halt_after
+    }
 }
 
 // why: the drain's disposition buckets are threaded through as separate
@@ -5153,6 +5197,13 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     loop {
         while !no_more_heads && in_flight.len() < depth {
             if driver.stop_requested() {
+                break;
+            }
+            // BUG-1930: an environmental streak is open and the members
+            // already in flight could complete it. Let them finish first
+            // rather than launch another spec into the same broken machine.
+            // trace:BUG-1930 | ai:claude
+            if env_streak.defers_launch(in_flight.len(), env_halt_after) {
                 break;
             }
             if let Some(limit) = max {
@@ -11806,6 +11857,9 @@ mod tests {
         reshelve: std::collections::HashMap<String, usize>,
         handle_spec: std::collections::HashMap<usize, String>,
         delayed_child: bool,
+        /// BUG-1930: pass each child result through the real sidecar JSON,
+        /// as the production child/parent process boundary does.
+        via_sidecar: bool,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11821,7 +11875,17 @@ mod tests {
                 reshelve: std::collections::HashMap::new(),
                 handle_spec: std::collections::HashMap::new(),
                 delayed_child: false,
+                via_sidecar: false,
             }
+        }
+
+        /// BUG-1930: `spec` stops in phase 1 with this failure kind/reason.
+        // trace:BUG-1930 | ai:claude
+        fn failing_through_ci_with(mut self, spec: &str, kind: FailureKind, reason: &str) -> Self {
+            let mut result = shelve_result(Phase::Implementer);
+            result.failure = Some(PhaseFailure::of(kind, reason));
+            self.through_ci_by_spec.insert(spec.to_string(), result);
+            self
         }
 
         /// STORY-1429: `spec` shelves through CI `times` times, and each
@@ -11898,6 +11962,13 @@ mod tests {
                 .through_ci_results
                 .remove(&handle.0)
                 .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci));
+            // BUG-1930: cross the same JSON boundary a real child does.
+            let result = if self.via_sidecar {
+                let json = crate::pipelined_child_result_sidecar_json(&result);
+                crate::parse_pipelined_child_result_sidecar(&json).expect("sidecar parses")
+            } else {
+                result
+            };
             // STORY-1429: a shelved spec with a pending requeue goes back to
             // the head, as `aida rework` would put it.
             if result.shelved_reason.is_some() {
@@ -12576,6 +12647,109 @@ mod tests {
         let result = drain_batch(&mut disk, None, None);
         assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
         assert_eq!(disk.runs, vec!["A", "B", "C"]);
+    }
+
+    /// BUG-1930: at pipeline depth 2, two members that stop on permission
+    /// denials halt the drain, and the third member is never launched. The
+    /// child results cross the real sidecar JSON, so a sidecar that drops the
+    /// failure fails this test.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_halts_after_consecutive_environmental_failures() {
+        let denied = "phase 1 stopped: permission denied for Edit, Write";
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2)
+            .failing_through_ci_with("A", FailureKind::PermissionDenied, denied)
+            .failing_through_ci_with("B", FailureKind::PermissionDenied, denied);
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        assert_eq!(
+            driver.events,
+            vec!["start:A", "start:B", "wait:1", "wait:2"],
+            "C must never be launched"
+        );
+        assert_eq!(
+            driver.heads,
+            vec!["C"],
+            "the rest of the queue is untouched"
+        );
+    }
+
+    /// BUG-1930: resource exhaustion travels the same pipelined path (its
+    /// class comes from the failure reason, which the sidecar must carry).
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_halts_on_resource_exhaustion_via_sidecar() {
+        let disk = "No space left on device";
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2)
+            .failing_through_ci_with("A", FailureKind::Internal, disk)
+            .failing_through_ci_with("B", FailureKind::Failed, disk);
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "resource-exhaustion"
+            }
+        );
+        assert!(!driver.events.iter().any(|e| e == "start:C"));
+    }
+
+    /// BUG-1930: an environmental failure only defers launches while the
+    /// in-flight members could complete the streak; a ship in between
+    /// reopens the pipeline and every member still runs.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_environment_gate_reopens_after_a_ship() {
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D"], 2)
+            .failing_through_ci_with("A", FailureKind::PermissionDenied, "denied");
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shelved, vec!["A"]);
+        assert_eq!(result.shipped, vec!["B", "C", "D"]);
+
+        let streak = EnvironmentStreak {
+            class: Some("permission-denied"),
+            count: 1,
+        };
+        assert!(streak.defers_launch(1, 2));
+        assert!(
+            !streak.defers_launch(0, 2),
+            "never stall with nothing in flight"
+        );
+        assert!(!streak.defers_launch(1, 3));
+        assert!(!streak.defers_launch(1, 0), "halt disabled, no gate");
+        assert!(!EnvironmentStreak::default().defers_launch(2, 2));
     }
 
     /// BUG-1930: `environment_halt_after = 0` disables the halt; the drain

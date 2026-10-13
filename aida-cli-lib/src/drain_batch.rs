@@ -14,6 +14,18 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
+    let value = pipelined_child_result_sidecar_json(result);
+    if let Ok(bytes) = serde_json::to_vec_pretty(&value) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+/// The JSON a pipelined child leaves for its parent scheduler. Pure so the
+/// round trip through [`parse_pipelined_child_result_sidecar`] is unit-pinned.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) fn pipelined_child_result_sidecar_json(
+    result: &auto_complete::OrchestrationResult,
+) -> serde_json::Value {
     let escalation = result.escalation.as_ref().map(|e| {
         serde_json::json!({
             "kind": match e.kind {
@@ -24,7 +36,7 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
             "reason": e.reason,
         })
     });
-    let value = serde_json::json!({
+    serde_json::json!({
         "exit_code": result.exit_code,
         "failed_phase": result.failed_phase.map(|p| p.index()),
         "punt_reason": result.punt_reason,
@@ -33,10 +45,14 @@ pub(crate) fn write_pipelined_child_result_sidecar(result: &auto_complete::Orche
         "inconclusive_reason": result.inconclusive_reason,
         "shelved": result.shelved_reason.is_some(),
         "held_reason": result.held_reason,
-    });
-    if let Ok(bytes) = serde_json::to_vec_pretty(&value) {
-        let _ = std::fs::write(path, bytes);
-    }
+        // BUG-1930: the parent's consecutive-environmental-failure halt reads
+        // the failure kind and reason; without them every pipelined member
+        // looked like a non-environmental failure. trace:BUG-1930 | ai:claude
+        "failure": result.failure.as_ref().map(|f| serde_json::json!({
+            "kind": f.kind.cause_slug(),
+            "reason": f.reason,
+        })),
+    })
 }
 
 // trace:STORY-1091 trace:ADR-28 | ai:codex
@@ -46,6 +62,15 @@ pub(crate) fn read_pipelined_child_result_sidecar(
     let bytes = std::fs::read(path).ok()?;
     let _ = std::fs::remove_file(path);
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    parse_pipelined_child_result_sidecar(&value)
+}
+
+/// Rebuild a child's result from [`pipelined_child_result_sidecar_json`].
+/// Sidecars written before a field existed still parse (it reads as absent).
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) fn parse_pipelined_child_result_sidecar(
+    value: &serde_json::Value,
+) -> Option<auto_complete::OrchestrationResult> {
     let exit_code = value
         .get("exit_code")
         .and_then(|v| v.as_i64())
@@ -93,10 +118,17 @@ pub(crate) fn read_pipelined_child_result_sidecar(
             shelved_by: Some("orchestrator".to_string()),
             shelved_at: chrono::Utc::now(),
         });
+    // BUG-1930: an older sidecar has no `failure`, and an unknown kind slug
+    // is dropped; both read as `None`, as before. trace:BUG-1930 | ai:claude
+    let failure = value.get("failure").and_then(|f| {
+        let kind = auto_complete::FailureKind::from_cause_slug(f.get("kind")?.as_str()?)?;
+        let reason = f.get("reason").and_then(|r| r.as_str()).unwrap_or_default();
+        Some(auto_complete::PhaseFailure::of(kind, reason))
+    });
     Some(auto_complete::OrchestrationResult {
         exit_code,
         failed_phase,
-        failure: None,
+        failure,
         phase_durations: Vec::new(),
         total_ms: 0,
         punt_reason: value
