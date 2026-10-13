@@ -1,0 +1,27 @@
+id: 01a13397-1bf8-7c12-8ff6-b1fad474ec1d
+spec_id: FAQ-53
+agreed_id: FAQ-53
+title: Why does 'aida agent new --bg' ask me to confirm bypass, and why can't an agent launch it?
+description: '--bg detaches the agent from any terminal, so nobody can answer permission prompts, and it forces --permission-mode bypassPermissions. Turning prompts off requires a human to confirm at an interactive terminal. A headless agent (such as the advisor seat) can''t confirm, so it hands you the command. The launching shell also needs a seat grant that may delegate the implementer seat: run ''aida role enter advisor --no-resume --delegate-seat implementer'' first. Otherwise you get ''no valid parent seat grant is active''.'
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:48:23.544629625Z
+modified_at: 2026-10-13T04:48:23.544629625Z
+req_type: Faq
+tags:
+- agent-new
+- bypass
+- dispatch
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T04:48:23.544657135Z
