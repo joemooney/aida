@@ -1,0 +1,25 @@
+id: 01a135c2-f9d9-7923-ae1d-fd859f7f2c01
+spec_id: BUG-2013
+agreed_id: BUG-2013
+title: 'Markdown terminal renderer: no test that the computed glyph profile reaches render'
+description: |-
+  Follow-up from the BUG-1979 round-4 review (PR #2566, merged ed5c5b7). A mutation that makes render_for_terminal_with ignore the profile computed by markdown_profile and always pass GlyphProfile::Unicode survives every test: 166 tests across the markdown_render, glyphs, status_display and show filters. The deleted env-mutating test was the only coverage of that step. Fix: either add a subprocess test of `aida show` that sets AIDA_GLYPHS=ascii only in the child's environment (race-free) and asserts ASCII table borders, or pass env into render_for_terminal_with so a unit test can reach it.
+
+  ## Acceptance
+  - The mutation 'render_for_terminal_with always passes GlyphProfile::Unicode' fails at least one test.
+  - No test sets AIDA_GLYPHS process-wide without the shared env lock.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T14:55:32.825289932Z
+modified_at: 2026-10-13T14:55:32.825289932Z
+req_type: Bug
+filed_at:
+  code_sha: ed5c5b7efd3561f55071f5860ecf64aa3fac9b47
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
