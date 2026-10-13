@@ -429,6 +429,9 @@ pub(crate) fn session_grant_lookup() -> GrantLookup {
             // and all other reasons come from the shared typed verdict.
             let reason = match reason {
                 GrantRejection::Revoked { .. } => "session grant was revoked".to_string(),
+                other @ GrantRejection::Unreadable => {
+                    format!("{other} (grant record missing)")
+                }
                 other => other.to_string(),
             };
             GrantLookup::Unresolved(reason)

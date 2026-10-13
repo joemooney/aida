@@ -21,6 +21,9 @@ fn aida_bin() -> PathBuf {
 fn isolate(cmd: &mut Command, home: &Path) {
     cmd.env("HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
+    // Bind the child to the fixture grant's subject for strict launch checks.
+    // trace:BUG-2011 | ai:codex
+    cmd.env("AIDA_USER", "tester");
     for k in [
         "AIDA_HOME",
         "AIDA_SESSION_ROLE",
@@ -39,28 +42,16 @@ fn isolate(cmd: &mut Command, home: &Path) {
 /// Write a grant record the way `seat_authority::write_grant` does, expiring
 /// `minutes_left` from now (negative: already expired). Returns its handle.
 fn write_grant(home: &Path, seat: &str, minutes_left: i64) -> String {
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = chrono::Utc::now();
-    let record = serde_json::json!({
-        "id": id,
-        "principal": "tester",
-        "subject": "tester",
-        "session_id": uuid::Uuid::new_v4().to_string(),
-        "seat": seat,
-        "tty_issued_at": now,
-        "delegable_seats": [],
-        "parent_grant_id": null,
-        "issued_at": now - chrono::Duration::hours(23),
-        "expires_at": now + chrono::Duration::minutes(minutes_left),
-        "revoked_at": null,
-    });
-    let dir = home.join(".aida").join("session-grants");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join(format!("{id}.json")),
-        serde_json::to_vec_pretty(&record).unwrap(),
-    )
-    .unwrap();
+    // The existing warning/refusal assertions now use an authority-valid
+    // fixture: shared support installs the roster ceiling as well as the grant.
+    // trace:BUG-2011 | ai:codex
+    let id = support::grant_seat_for(home, home, "tester", seat, &[]);
+    let path = home.join(".aida/session-grants").join(format!("{id}.json"));
+    let mut record: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    record["expires_at"] =
+        serde_json::json!(chrono::Utc::now() + chrono::Duration::minutes(minutes_left));
+    std::fs::write(path, serde_json::to_vec_pretty(&record).unwrap()).unwrap();
     id
 }
 
