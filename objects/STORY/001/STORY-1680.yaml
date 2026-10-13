@@ -19,12 +19,12 @@ description: |
 
   ## Related
   - Parent: STORY-1653 (slice A: PR #2542).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:32:57.266716488Z
-modified_at: 2026-10-12T16:29:23.676372981Z
+modified_at: 2026-10-13T02:54:54.756047286Z
 req_type: Story
 tags:
 - awaiting
@@ -106,6 +106,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1332f-3716-7381-817a-4130542c9c8c
+  author: aida-auto-bump
+  timestamp: 2026-10-13T02:54:54.742501420Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1332f-3724-7832-bcb6-13729861239d
+  timestamp: 2026-10-13T02:54:54.756015707Z
+  agent: implementer
+  commit_sha: 1359b463e9209d1987030ee94b5590b7b8ac7d62
+  summary: 'Fresh reviewer APPROVE at f84e9f6cda: M1/L2/L3/L4 fixed (M1 mutation-proven), rebase clean, AC1-4 met, 229+8 tests pass; 1 Low (stale doc comment awaiting_you.rs:153)'
+  punted:
+  - 'punted: AC1-4 met; M1: subagent-worked orphans (possibly_subagent) are listed as idle and dropped from the orphan channel'
+  review_verdict: approved
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
   branch: main
@@ -114,11 +130,7 @@ filed_at:
   aida_build_sha: 95f15a20d4
   vendor: claude
   session: bfa4262c-a911-4a31-a9b9-e564f5a1a33f
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1-4 met; M1: subagent-worked orphans (possibly_subagent) are listed as idle and dropped from the orphan channel'
-  recovery_hint: address the review findings, move STORY-1680 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-12T09:48:56.581712530Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T02:54:54.742486403Z
+  completion_sha: 1359b463e9209d1987030ee94b5590b7b8ac7d62
