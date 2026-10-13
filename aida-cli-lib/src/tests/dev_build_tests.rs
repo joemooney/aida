@@ -1823,27 +1823,26 @@ fn recovery_with_old_format_crash_during_normalization_preserves_records() {
 #[test]
 fn recovery_with_old_format_crash_between_binary_swaps() {
     // Old binary crashed between the two binary swaps: aida has been swapped
-    // (live has B, prev is gone/not-yet-restored, or aida parked), but aida-server
-    // has not been swapped yet.
+    // (B moved live, A moved to prev/), aida-server not yet started.
     let f = fixture();
     let (a, b) = pairs_a_b(&f, true, true);
     let swap = swap_dir(&f);
     fs::create_dir_all(&swap).unwrap();
-    write(&f.layout.live("aida"), "B-aida");
-    write(&swap.join("aida"), "A-aida");
-    write(&swap.join("aida-server"), "A-aida-server");
-    write(&f.layout.prev("aida-server"), "B-aida-server");
-
+    for n in LIVE_BINARIES {
+        write(&swap.join(n), &format!("A-{n}"));
+    }
     fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
     write(
         &swap.join(PROMOTED_FILE),
         &serde_json::to_string(&a).unwrap(),
     );
+    fs::rename(f.layout.prev("aida"), f.layout.live("aida")).unwrap();
+    fs::rename(swap.join("aida"), f.layout.prev("aida")).unwrap();
 
     recover(&f);
     assert_eq!(read(&f.layout.live("aida")), "B-aida");
-    assert_eq!(read(&f.layout.prev("aida")), "A-aida");
-    assert_eq!(read(&f.layout.prev("aida-server")), "A-aida-server");
+    assert_eq!(read(&f.layout.live("aida-server")), "A-aida-server");
     assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
     assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format between binary swaps");
 }
