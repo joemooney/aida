@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-13T17:53:05.816845195Z
+modified_at: 2026-10-13T17:53:09.140875253Z
 req_type: Bug
 tags:
 - contained
@@ -224,6 +224,12 @@ comments:
   content: 'Behaviour change (PR #2541, rounds 5-6): commits aida makes (store and main checkout) no longer read the project''s .aida/commit-config, so its STRICT_MODE / REQUIRE_* settings no longer apply to them. .aida/commit-config may set only the commit-msg hook''s own variables, in plain ASCII. Store git pins core.hooksPath to a host-resolved directory: a relative value resolves against the main checkout, and one that lands inside the store refuses store writes.'
   created_at: 2026-10-13T17:29:17.482424060Z
   modified_at: 2026-10-13T17:29:17.482424060Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13665-9414-76b1-ba4f-32cbf0e4ccba
+  author: joe
+  content: 'PARKED for the operator 2026-10-13 10:55: the round-7 fresh review found a third host-exec face of the same class (project hooks run with store cwd). Options A/B/C are on PR #2541; the advisor recommends A (store-tree git runs only the shipped aida hooks).'
+  created_at: 2026-10-13T17:53:09.140875253Z
+  modified_at: 2026-10-13T17:53:09.140875253Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
