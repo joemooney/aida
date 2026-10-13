@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T15:38:20.571767591Z
-modified_at: 2026-10-13T15:38:20.571767591Z
+modified_at: 2026-10-13T18:10:54.815023165Z
 req_type: Task
 tags:
 - carried-from:BUG-1990
 - finding-hash:2c778eda
 - from-review:PR-2585
 - kind:carried-forward
+comments:
+- id: 01a13675-d6df-7f90-904b-250c6d7d59c8
+  author: joe
+  content: 'Triage 2026-10-13: DEFER. Low value now; see .aida/handoff/advisor/draft-triage-2026-10-13.md for the revisit condition.'
+  created_at: 2026-10-13T18:10:54.815023165Z
+  modified_at: 2026-10-13T18:10:54.815023165Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
   branch: main
