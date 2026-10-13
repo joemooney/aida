@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - Each converts to the BUG-1967 pattern: the soft budget logs BUDGET-MISSED with loadavg; locks are held for the whole call; retry delays are stretched so a regression trips a hard ceiling (~60 s).
   - A mutation check shows each still catches the regression it guards.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T18:22:10.488159011Z
-modified_at: 2026-10-13T18:09:51.328427065Z
+modified_at: 2026-10-13T18:09:52.181550221Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -30,6 +30,14 @@ comments:
   created_at: 2026-10-13T18:09:51.328427065Z
   modified_at: 2026-10-13T18:09:51.328427065Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+history:
+- id: 01a13674-e235-7e90-ab91-86438bf5ec5e
+  author: joe
+  timestamp: 2026-10-13T18:09:52.181544874Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
