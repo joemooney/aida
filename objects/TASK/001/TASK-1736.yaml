@@ -3,12 +3,12 @@ spec_id: TASK-1736
 agreed_id: TASK-1736
 title: Warn before a seat grant expires; relay refuses to launch a seat whose grant has under 1h left
 description: 'Follow-up from the BUG-1983 sketch (D5). MAX_GRANT_AGE is 24h, and relay seats routinely outlive it. BUG-1983 makes review record refuse on an expired grant, so long relay seats will hit a hard stop mid-run. Scope: (1) the SessionStart hook and the statusline warn when the active grant expires in under 2h, naming the expiry time and the re-enter command; (2) the relay launcher refuses to start a seat session whose grant has under 1h left, telling the operator to re-enter first. Done when: both behaviours are tested with a fixture grant near expiry, and an expired grant never surfaces first as a refusal in the middle of a relay run. Should ship no later than BUG-1983''s D3.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T12:23:28.119972998Z
+modified_at: 2026-10-13T12:23:31.613933473Z
 req_type: Task
 tags:
 - authority
@@ -61,6 +61,11 @@ comments:
   created_at: 2026-10-13T12:23:28.119972998Z
   modified_at: 2026-10-13T12:23:28.119972998Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a13537-cc1d-7043-9857-4a4eb7faadad
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Expiry logic, role expiry CLI and SessionStart hook are well tested (11 pass, refusal mutation caught), but the statusline half of acceptance (1) has no test: removing the suffix wiring leaves all 300 statusline/seat tests green. No triage reason was given.'
+  created_at: 2026-10-13T12:23:31.613925299Z
+  modified_at: 2026-10-13T12:23:31.613925299Z
 history:
 - id: 01a13351-a592-7cd0-af53-f8cf8dfb943d
   author: joe
@@ -83,6 +88,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13537-cc1d-7043-9857-4a39506fe3bb
+  author: joe
+  timestamp: 2026-10-13T12:23:31.613915878Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
   branch: main
@@ -91,11 +103,3 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Expiry logic, role expiry CLI and SessionStart hook are well tested (11 pass, refusal mutation caught), but the statusline half of acceptance (1) has no test: removing the suffix wiring leaves all 300 statusline/seat tests green'
-  recovery_hint: address the review findings, move TASK-1736 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-13T07:26:54.243128631Z
