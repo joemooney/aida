@@ -46,9 +46,16 @@ struct Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         if let Some(req) = aida_core::db::refresh_request::load(&cache_path(self)) {
-            if req.pid > 1 {
+            for attempt in &req.attempts {
+                if attempt.pid > 1 {
+                    let _ = Command::new("kill")
+                        .args(["-9", &attempt.pid.to_string()])
+                        .status();
+                }
+            }
+            if req.requester_pid > 1 {
                 let _ = Command::new("kill")
-                    .args(["-9", &req.pid.to_string()])
+                    .args(["-9", &req.requester_pid.to_string()])
                     .status();
             }
         }
