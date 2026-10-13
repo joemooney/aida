@@ -1,0 +1,19 @@
+{
+  "id": "4decfeea-8b09-4209-893d-463745ddcd56",
+  "thread_id": "4decfeea-8b09-4209-893d-463745ddcd56",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791901388936,
+  "body": "MERGE: approved at 2fb843988a0320fad73557d98a3c9978f339f431, awaiting advisor signoff (and operator hold clear)\n\nA fresh independent reviewer approved rework round 1 at this head. CI Build is green. `merge-hold-gate` is red only because of the REWORK hold left from a1260f94bc.\n\n**Verified**\n- All four ruling items are met.\n- Tests reproduce the real topology: rename-over in-process, plus an `unshare -rm` mount-namespace holder. The namespace test really ran here. `cache_binding` 7/7 and `db::` 298/298 pass.\n- Mutations: disabling the identity comparison fails 3 tests, and removing the check from `conn()` fails 1.\n- The removed contained-only refusal and the doctor check were both added by this PR's own first commit. The net diff against main has neither, so removing them is not scope creep.\n- The real long-lived holders are the web server and the TUI. The MCP server opens a fresh backend per tool call. The check runs on every `conn()` for both holders.\n\n**Needs an advisor ruling (A1): stat-at-bind instead of fstat.**\n- The ruling asked for `fstat` on the holder's own handles. SQLite does not expose its fds, and opening and closing our own fd would drop the POSIX locks. So the code records `stat(path)` just after `open_at` instead (cache.rs ~1647).\n- If the host replaces a file inside that window, which includes schema writes and lock retries, the holder records the new inode and never sees the split. The same blind spot applies to a sidecar that is first adopted at a later check.\n- The alternative: `stat(\"/proc/self/fd/N\")` reads the open file without a new handle, so no locks are dropped. The first commit already used `/proc/self/fd`.\n- The reviewer rated this non-blocking. Please accept it, or require the `/proc/self/fd` cross-check.\n\n**Non-blocking (follow-up candidates)**\n1. The disabled checkpoint-on-close (`SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`) has no test; a mutation removing it survived.\n2. After a failed reopen, every call retries immediately with no back-off. A `read_snapshot` handle older than 60s could have its pinned read transaction swapped out; skip the check on snapshot handles.\n3. The rebind note goes to stderr and can draw over the TUI (same as the existing cache notes). BUG-1984's Acceptance text still describes the old refusal and doctor check; it should be updated to the re-scoped design.\n\n**Next steps**\n- Advisor: post SIGNOFF (or a ruling on A1).\n- Operator: `aida merge-hold clear 2586`.\n- The merge seat merges pinned to this SHA after the `merge-hold-gate` check passes.\n",
+  "subject": "PR #2586 BUG-1984: APPROVED at 2fb843988a, needs your SIGNOFF + ruling on A1 (stat-at-bind vs fstat)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
