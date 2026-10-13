@@ -772,14 +772,32 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     if swap.exists() {
         // trace:STORY-1646 | ai:claude
         // trace:BUG-1959 | ai:claude
+        // trace:BUG-1999 | ai:antigravity
+        // In STORY-1646 an older binary parked the live record directly at
+        // `.rollback/.promoted` without writing `.swapping` or parking prev's
+        // record. Normalize it into the current layout: move `.rollback/.promoted`
+        // to `live.promoted`, treat parking as marked/complete, and if prev's
+        // record has not already moved to live, park it as `prev.promoted`.
+        let old_promoted = swap.join(PROMOTED_FILE);
+        let had_old_promoted = old_promoted.is_file();
+        if had_old_promoted {
+            move_record(&old_promoted, &swap.join(PARKED_LIVE_RECORD))?;
+            if !layout.live_dir.join(PROMOTED_FILE).exists() {
+                move_record(
+                    &layout.prev_dir().join(PROMOTED_FILE),
+                    &swap.join(PARKED_PREV_RECORD),
+                )?;
+            }
+        }
         // A binary counts as swapped once its prev slot has moved live, or,
-        // after parking finished (the marker), once its parked copy has moved
-        // on into `prev/`. Without the marker a parked binary missing from
-        // `.rollback/` only means parking had not finished: nothing swapped.
+        // after parking finished, once its parked copy has moved on into
+        // `prev/`. The `.swapping` marker (or presence of an old-format
+        // `.rollback/.promoted`) notes that parking completed before any
+        // binary swaps began.
         // Both `.promoted` records were parked before the marker, so settling
         // them (forward when swapped, back otherwise) only ever moves files
         // out of `.rollback/` and is a no-op once done.
-        let marked = swap.join(ROLLBACK_MARKER).exists();
+        let marked = swap.join(ROLLBACK_MARKER).exists() || had_old_promoted;
         let swapped = LIVE_BINARIES
             .iter()
             .any(|n| !layout.prev(n).exists() || (marked && !swap.join(n).is_file()));
