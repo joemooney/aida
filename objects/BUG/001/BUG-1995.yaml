@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T18:22:10.488159011Z
-modified_at: 2026-10-13T18:09:52.181550221Z
+modified_at: 2026-10-13T20:45:00.111002839Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -30,6 +30,28 @@ comments:
   created_at: 2026-10-13T18:09:51.328427065Z
   modified_at: 2026-10-13T18:09:51.328427065Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13702-e94f-7f03-9374-e22634b9b664
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+
+    • Approach: Convert load-sensitive wall-clock asserts in bug_1956 and bug_1594 tests to the BUG-1967 budget + hard ceiling pattern.
+    • Files changed:
+      1. aida-cli/tests/bug_1956_reader_fallbacks_bounded_under_writer.rs:
+         - Define BUDGET (5 s), HARD_CEILING (60 s), and STRETCHED_LADDER_STEP_MS (120 s).
+         - Poll child execution with hard kill at HARD_CEILING.
+         - Log BUDGET-MISSED with load average when elapsed >= BUDGET without failing the test.
+         - Add Drop impl on Fixture to reap any detached refresh worker via refresh_request::load and libc::kill(pid, SIGKILL).
+         - Fix doc comment (show's flock budget is zero, not 1.5 s).
+      2. aida-cli/tests/bug_1594_show_bounded.rs:
+         - Define BUDGET (30 s) and HARD_CEILING (60 s).
+         - Update run_bounded_with to kill at HARD_CEILING and report BUDGET-MISSED with load average instead of hard-failing when elapsed >= BUDGET.
+      3. aida-core/src/db/cache.rs:
+         - Add const-level test verifying READ_LADDER_CAP <= 3 s (well under the 5 s budget).
+
+    Built only on GitHub CI; not compiled locally.
+  created_at: 2026-10-13T20:45:00.111002839Z
+  modified_at: 2026-10-13T20:45:00.111002839Z
 history:
 - id: 01a13674-e235-7e90-ab91-86438bf5ec5e
   author: joe
