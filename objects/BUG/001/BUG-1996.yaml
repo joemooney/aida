@@ -14,8 +14,30 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T13:24:47.630335287Z
+modified_at: 2026-10-13T13:28:56.738035053Z
 req_type: Bug
+comments:
+- id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    - Approach: Wire shipped_linkage::warn_if_completed_without_shipped_commit into queue completion paths: (1) in queue_cmd.rs under AdvanceAction::Close immediately after transition_to_completed(..., "queue-done", ...), and (2) in QueueCommand::Done after atomic spec update. Also document in docs/cli/01-getting-started.md alongside edit and done.
+    - Files & functions to change:
+      - aida-cli-lib/src/queue_cmd.rs: advance_dispatch (AdvanceAction::Close) and handle_queue_command (QueueCommand::Done).
+      - docs/cli/01-getting-started.md: mention aida queue done in the completion warning documentation.
+    - Tests to add:
+      - aida-cli/tests/story_1649_show_linkage.rs:
+        - queue_done_without_shipped_commit_warns
+        - queue_done_opted_out_spec_does_not_warn
+        - queue_done_with_shipped_commit_does_not_warn
+    - Risks:
+      - Warning must go to stderr and never refuse (exit 0).
+      - Existing automated queue done calls in integration tests (e.g. journey.rs) must not break.
+    - Acceptance criteria check:
+      - AC1: When aida queue done moves a code spec into Completed, warn_if_completed_without_shipped_commit writes warning to stderr and never refuses.
+      - AC2: Binary tests verify warning appears when no commit exists on default branch, and is suppressed with doctor:no-code or a commit referencing the spec on main.
+  created_at: 2026-10-13T13:28:56.738035053Z
+  modified_at: 2026-10-13T13:28:56.738035053Z
 history:
 - id: 01a13538-8035-7990-b7c4-2d187f92df56
   author: joe
