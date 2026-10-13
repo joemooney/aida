@@ -4225,7 +4225,7 @@ mod bug_1923 {
             assert!(!doc.contains("rebuild"));
 
             // Now delete all refs pointing to or containing indexed_tip
-            fx.git(&["branch", "-D", "main"]);
+            fx.git(&["branch", "-D", "aida-store"]);
             fx.git(&["branch", "-D", "other"]);
 
             let st_orphaned = history_cache::status_at(&fx.store, &fx.db);
