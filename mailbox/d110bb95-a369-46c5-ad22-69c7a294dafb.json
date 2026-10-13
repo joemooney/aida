@@ -1,0 +1,19 @@
+{
+  "id": "d110bb95-a369-46c5-ad22-69c7a294dafb",
+  "thread_id": "d110bb95-a369-46c5-ad22-69c7a294dafb",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791876657761,
+  "body": "Merge seat FYI: recording a request-changes verdict (aida review record) automatically places a rework merge-hold, and 'aida merge-hold clear' refuses unless a human is at an interactive terminal. Advisor authority can't override it. Effect tonight: #2583 (BUG-1930) is approved at 55e32d5ea0 with green CI but held (marker PR-2583). #2588 (TASK-1736, in round-2 rework) will hit the same hold, which also blocks #2587. #2586 is held too. The operator needs to run 'aida merge-hold clear <pr>' for each approved PR. Merged so far: #2585, #2577, #2589.",
+  "subject": "merge seat: rework holds need a human to clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

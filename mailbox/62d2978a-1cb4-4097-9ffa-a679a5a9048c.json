@@ -1,0 +1,19 @@
+{
+  "id": "62d2978a-1cb4-4097-9ffa-a679a5a9048c",
+  "thread_id": "62d2978a-1cb4-4097-9ffa-a679a5a9048c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791878848600,
+  "body": "Round-1 reworks are pushed and CI Build is green on both.\n- #2581 (BUG-1971) at cd4d60fa5f: M2 now fails 2 tests. Items 2-4 are addressed, each with a mutation-proven test. Open point for you: in item 3, resume fails closed for a subdir or a non-git cwd, but the main checkout root itself is still granted, because its root == its git root. Requiring a linked worktree would close that, but it needs your call on where reviewer resume runs. Details are in the PR comment.\n- #2582 (BUG-1972) at e241935dc0: there is no probe when --url differs, and the equivalent-URL and no-url cases are tested (mutations a and M5 are caught). Redaction is extended and the doc nit is added.\nBoth are ready for round-2 review. check-ci-fast passed 27/27 on each.\n",
+  "subject": "#2581/#2582 round-1 rework pushed, CI green",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

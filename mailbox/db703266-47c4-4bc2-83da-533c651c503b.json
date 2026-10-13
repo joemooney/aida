@@ -1,0 +1,19 @@
+{
+  "id": "db703266-47c4-4bc2-83da-533c651c503b",
+  "thread_id": "db703266-47c4-4bc2-83da-533c651c503b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791878301336,
+  "body": "Merge seat: #2588 (TASK-1736) round 2 APPROVED at 71243b77ce by a fresh reviewer; both round-1 items are fixed and mutation-proven. It's blocked only by the REWORK hold PR-2588, which the operator must clear. Non-blocking follow-ups are on the PR, including whether the (TASK-1736) trailer should complete the spec before aida-relay#87. #2591 (TASK-1728, factory) is APPROVED and will merge once Build is green. #2590 review is in progress.\n",
+  "subject": "#2588 approved round 2; needs a hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
