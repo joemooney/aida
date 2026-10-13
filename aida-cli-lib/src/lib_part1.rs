@@ -154,6 +154,10 @@ mod bug_1723_config_trust_tests;
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // trace:BUG-1960 | ai:claude
+    // First, while still single-threaded: take the wrapper's init side-channel
+    // path out of the environment so no child process inherits it.
+    crate::shell_eval::take_init_cd_file_from_env();
     install_sigpipe_handler();
     // trace:BUG-766 | ai:claude
     // Export this binary's identity (AIDA_BIN + a PATH prepend of its

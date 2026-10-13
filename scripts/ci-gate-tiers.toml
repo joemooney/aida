@@ -106,6 +106,7 @@
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"
 "Pin stable toolchain & verify cargo" = "runs `rustup default stable`, which would mutate this machine's toolchain"
 "Install Linux dependencies" = "`sudo apt-get` against the runner image"
+"Install zsh (shell-wrapper test matrix)" = "`sudo apt-get` against the runner image; the wrapper tests pick zsh up from PATH when present"
 "Live bwrap OS-wrap confinement gate" = "needs `sudo sysctl` to change the kernel's unprivileged-userns flag"
 "Report diff trace coverage (report-only)" = "report-only by its own name"
 "Validate commit SPEC-ID references (trace gate)" = "fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate"

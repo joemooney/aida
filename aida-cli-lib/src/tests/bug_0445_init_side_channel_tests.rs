@@ -64,13 +64,16 @@ fn file_content_stub(content_lines: &str) -> String {
 /// A binary from before the side channel: it never touches the file. This is
 /// the shape of an older binary that saw the (no longer advertised) `init-cd`
 /// token — markers on stdout — and of a bare in-place init that prints prose.
+/// The `cd` is relative so the printed block is identical across the per-shell
+/// tempdirs `init_side_channel_agrees_across_shells` compares byte for byte.
 // trace:BUG-0445 | ai:claude
+// trace:BUG-1960 | ai:claude
 fn stdout_only_stub() -> String {
     format!(
         "#!/usr/bin/env bash\n\
          mkdir -p \"$2\"\n\
          printf 'project ready:\\n'\n\
-         printf '%s\\n' '{begin}' \"cd '$PWD/$2'\" '{end}'\n\
+         printf '%s\\n' '{begin}' \"cd '$2'\" '{end}'\n\
          exit 0\n",
         begin = EVAL_BEGIN,
         end = EVAL_END,
@@ -412,6 +415,261 @@ fn init_side_channel_agrees_across_shells() {
                 actual.2, baseline.2,
                 "[{label}] {shell} status differs from bash"
             );
+        }
+    }
+}
+
+// ── interrupts ───────────────────────────────────────────────────────────────
+
+/// A stub that interrupts its OWN calling shell with `signal` while init is in
+/// the foreground (the way a Ctrl-C or a TERM reaches the wrapper's shell),
+/// then exits as an interrupted child would.
+// trace:BUG-1960 | ai:claude
+fn interrupting_stub(signal: &str) -> String {
+    let code = if signal == "INT" { 130 } else { 143 };
+    format!(
+        "#!/usr/bin/env bash\n\
+         [ -n \"${env}\" ] && [ -e \"${env}\" ] && printf 'saw-file\\n' >&2\n\
+         kill -s {signal} \"$PPID\"\n\
+         exit {code}\n",
+        env = INIT_CD_FILE_ENV,
+    )
+}
+
+/// The outcome of one interrupt scenario: the shell's stdout, its exit code
+/// (`None` when a signal ended it), and the side-channel files left in the
+/// private TMPDIR afterwards.
+// trace:BUG-1960 | ai:claude
+struct InterruptRun {
+    stdout: String,
+    stderr: String,
+    code: Option<i32>,
+    leftover: Vec<String>,
+}
+
+/// Like `run_wrapper_in`, but `mktemp` writes into a TMPDIR this test owns,
+/// and it is inspected AFTER the shell exits: a shell that dies mid-init
+/// cannot report on its own leftovers.
+// trace:BUG-1960 | ai:claude
+fn run_interrupt_scenario(shell: &str, stub: &str, body: &str) -> InterruptRun {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let tmp = dir.path().join("tmp");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::create_dir(&tmp).unwrap();
+    crate::test_exec::write_executable(&dir.path().join("aida"), stub);
+    let script = format!(
+        "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
+        path = dir.path().display(),
+        helpers = crate::dev_cmd::SHELL_HELPERS,
+    );
+    let mut cmd = std::process::Command::new(shell);
+    if shell == "zsh" {
+        cmd.arg("-f");
+    }
+    // Its own process group, so a stub that signals its whole group (the
+    // Ctrl-C shape) can never reach the test harness.
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
+    let out = cmd
+        .arg("-c")
+        .arg(&script)
+        .env_clear()
+        .env("HOME", &home)
+        .env("TMPDIR", &tmp)
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .current_dir(dir.path())
+        .output_retrying_etxtbsy()
+        .unwrap_or_else(|e| panic!("{shell} available: {e}"));
+    let leftover = std::fs::read_dir(&tmp)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("aida-init-cd."))
+        .collect();
+    InterruptRun {
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        code: out.status.code(),
+        leftover,
+    }
+}
+
+/// INT or TERM delivered to the shell while init runs, with no trap of the
+/// caller's own: the signal must still take effect (the shell dies, exactly
+/// as it would without the wrapper) and the private file must be gone. A
+/// cleanup trap that swallowed the signal would let the script carry on.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_kills_the_shell_and_leaves_no_side_channel_file() {
+    for signal in ["INT", "TERM"] {
+        for &shell in wrapper_shells() {
+            let run = run_interrupt_scenario(
+                shell,
+                &interrupting_stub(signal),
+                "aida init proj\necho after-init\n",
+            );
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.stderr.contains("saw-file"),
+                "the stub must have seen the file: {ctx}"
+            );
+            assert!(
+                run.leftover.is_empty(),
+                "an interrupted init must not leave its file behind: {ctx}"
+            );
+            assert!(
+                !run.stdout.contains("after-init"),
+                "the signal must not be swallowed: the shell has to die during init: {ctx}"
+            );
+            // Both shells re-raise the recorded signal at themselves once
+            // the caller's (default) disposition is back, so the kernel ends
+            // them: no exit code.
+            assert!(
+                run.code.is_none(),
+                "the shell must be ended by the signal: {ctx}"
+            );
+        }
+    }
+}
+
+/// With a caller trap installed, the wrapper re-delivers the signal after
+/// restoring it, so in both shells the caller's handler still runs and
+/// decides what happens next (here: carry on). Either way the file is gone.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_reaches_the_callers_own_trap() {
+    for signal in ["INT", "TERM"] {
+        for &shell in wrapper_shells() {
+            let body =
+                format!("trap 'echo caller-trap' {signal}\naida init proj\necho after-init\n");
+            let run = run_interrupt_scenario(shell, &interrupting_stub(signal), &body);
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.leftover.is_empty(),
+                "an interrupted init must not leave its file behind: {ctx}"
+            );
+            assert!(
+                run.stdout.contains("caller-trap\nafter-init"),
+                "the caller's trap must run once the wrapper's is gone: {ctx}"
+            );
+        }
+    }
+}
+
+/// A SUCCESSFUL init leaves the caller's traps exactly as they were: the
+/// caller's INT trap is still installed, and no cleanup trap of the
+/// wrapper's survives on INT or TERM.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn a_successful_init_restores_the_callers_traps() {
+    for &shell in wrapper_shells() {
+        let body = "trap 'echo caller-trap' INT\n\
+                    aida init proj\n\
+                    echo \"rc:$?\"\n\
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then trap; else trap -p INT TERM; fi\n\
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then functions TRAPINT TRAPTERM >/dev/null 2>&1 && echo trap-fn-leaked; fi\n";
+        let run = run_interrupt_scenario(shell, &side_channel_stub(0), body);
+        let ctx = format!(
+            "[{shell}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+            run.code, run.leftover, run.stdout, run.stderr
+        );
+        assert!(run.stdout.contains("rc:0"), "{ctx}");
+        assert!(
+            run.stdout.contains("trap -- 'echo caller-trap' SIGINT")
+                || run.stdout.contains("trap -- 'echo caller-trap' INT"),
+            "the caller's INT trap must still be installed: {ctx}"
+        );
+        assert!(
+            !run.stdout.contains("_aida_cd_file") && !run.stdout.contains("TERM"),
+            "no wrapper trap may outlive the call: {ctx}"
+        );
+        assert!(!run.stdout.contains("trap-fn-leaked"), "{ctx}");
+        assert!(run.leftover.is_empty(), "{ctx}");
+    }
+}
+
+/// The signal must be re-raised at the shell PROCESS running the wrapper, not
+/// at the top-level script: `$$` names the top-level shell even inside a
+/// subshell, so re-raising with it would kill the parent and let the
+/// interrupted subshell carry on. Here the stub signals its own parent, the
+/// subshell; the subshell must die and the parent must see it die.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_in_a_subshell_ends_the_subshell_not_the_parent() {
+    for signal in ["INT", "TERM"] {
+        let code = if signal == "INT" { 130 } else { 143 };
+        for &shell in wrapper_shells() {
+            let body = "( aida init proj; echo \"sub-after:$?\" )\necho \"parent-alive:$?\"\n";
+            let run = run_interrupt_scenario(shell, &interrupting_stub(signal), body);
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.stdout.contains(&format!("parent-alive:{code}")),
+                "the parent must survive and see the subshell killed by {signal}: {ctx}"
+            );
+            assert!(
+                !run.stdout.contains("sub-after"),
+                "the interrupted subshell must not carry on: {ctx}"
+            );
+            assert!(run.leftover.is_empty(), "{ctx}");
+        }
+    }
+}
+
+/// A stub that delivers SIGINT to its whole PROCESS GROUP, the way a terminal
+/// Ctrl-C does: the wrapper's shell and the child both receive it. It refuses
+/// to signal unless the group is the one `run_interrupt_scenario` created for
+/// the shell, so it can never reach a process outside the test.
+// trace:BUG-1960 | ai:claude
+fn group_interrupting_stub() -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         [ -n \"${env}\" ] && [ -e \"${env}\" ] && printf 'saw-file\\n' >&2\n\
+         _pg=$(ps -o pgid= -p $$ | tr -d ' ')\n\
+         [ \"$_pg\" = \"$PPID\" ] || {{ printf 'wrong-group\\n' >&2; exit 99; }}\n\
+         kill -s INT -- -\"$_pg\"\n\
+         exit 130\n",
+        env = INIT_CD_FILE_ENV,
+    )
+}
+
+/// SIGINT to the whole process group (shell and child together): with no
+/// caller trap the shell dies of it; with one, the caller's trap runs and the
+/// script continues. Neither leaves the private file behind.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn a_process_group_interrupt_during_init_behaves_like_ctrl_c() {
+    for &shell in wrapper_shells() {
+        for (body, trapped) in [
+            ("aida init proj\necho after-init\n", false),
+            (
+                "trap 'echo caller-trap' INT\naida init proj\necho after-init\n",
+                true,
+            ),
+        ] {
+            let run = run_interrupt_scenario(shell, &group_interrupting_stub(), body);
+            let ctx = format!(
+                "[{shell} trapped={trapped}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(run.stderr.contains("saw-file"), "{ctx}");
+            assert!(!run.stderr.contains("wrong-group"), "{ctx}");
+            assert!(run.leftover.is_empty(), "{ctx}");
+            if trapped {
+                assert!(run.stdout.contains("caller-trap\nafter-init"), "{ctx}");
+            } else {
+                assert!(!run.stdout.contains("after-init"), "{ctx}");
+                assert!(run.code.is_none(), "the shell must die of SIGINT: {ctx}");
+            }
         }
     }
 }

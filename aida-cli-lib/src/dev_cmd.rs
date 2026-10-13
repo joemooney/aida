@@ -1407,6 +1407,7 @@ aida() {
     # trace:BUG-1811 | ai:antigravity
     # Suppress set -x trace for wrapper internals
     # trace:BUG-2000 | ai:claude
+    # trace:BUG-1960 | ai:claude
     # zsh has no `local -`: there it is a bare `local`, which prints every
     # shell parameter to stdout on each call. zsh scopes options with
     # `localoptions` instead.
@@ -1515,8 +1516,47 @@ AIDA_WRAPPER_OUTPUT
                 command aida "$@"
                 return $?
             fi
-            AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
-            _aida_rc=$?
+            # trace:BUG-1960 | ai:claude
+            # An interrupt (Ctrl-C) or TERM while init runs must not strand
+            # the private file in TMPDIR, and must still interrupt. The
+            # handlers only remove the file and record which signal arrived;
+            # they never end the shell themselves. Once the child is done the
+            # caller's own INT/TERM traps are back in place and the recorded
+            # signal is re-raised at THIS shell process, so the caller's trap
+            # (or the default disposition) decides what happens, as if the
+            # wrapper were not there. `$$` names the top-level shell even
+            # inside a subshell, background job or pipeline, so the re-raise
+            # goes through `sh -c`, whose $PPID is this process. The helper
+            # then dies of the same signal: bash ignores a SIGINT that arrives
+            # while it waits for a foreground child unless that child was
+            # also killed by it (the child is presumed to have handled it).
+            # zsh: TRAPINT/TRAPTERM live in a helper under localtraps, so
+            # zsh restores the caller's traps when the helper returns.
+            # bash: traps are global, so save the caller's and restore them.
+            local _aida_traps='' _aida_sig=''
+            if [ -n "${ZSH_VERSION:-}" ]; then
+                _aida_init_zsh() {
+                    setopt localoptions localtraps
+                    TRAPINT() { rm -f "$_aida_cd_file"; _aida_sig=INT; return 0; }
+                    TRAPTERM() { rm -f "$_aida_cd_file"; _aida_sig=TERM; return 0; }
+                    AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                }
+                _aida_init_zsh "$@"
+                _aida_rc=$?
+            else
+                _aida_traps=$(trap -p INT TERM)
+                trap 'rm -f "$_aida_cd_file"; _aida_sig=INT' INT
+                trap 'rm -f "$_aida_cd_file"; _aida_sig=TERM' TERM
+                AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                _aida_rc=$?
+                trap - INT TERM
+                eval "$_aida_traps"
+            fi
+            if [ -n "$_aida_sig" ]; then
+                rm -f "$_aida_cd_file"
+                command sh -c 'kill -s "$1" "$PPID"; kill -s "$1" "$$"' aida "$_aida_sig"
+                return "$_aida_rc"
+            fi
             if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
                 rm -f "$_aida_cd_file"
                 return "$_aida_rc"
