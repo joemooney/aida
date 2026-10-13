@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1977",
+  "publishes": [
+    {
+      "at": "2026-10-13T04:20:48.762952495Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:12.722427057Z",
+      "spec": "BUG-1977",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T23:27:13.913840001Z",
+      "spec": "BUG-1977",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T03:07:54.162918084Z",
+      "spec": "BUG-1977",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1977",
+        "branch": "bug-1977",
+        "first_seen": "2026-10-13T03:07:54.162762410+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T04:20:11.215122453Z",
+      "spec": "BUG-1977",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2580,
+        "verdict": "APPROVED",
+        "reviewed_sha": "aaf1a5e5932e453567994ccfa9bfb87a6869cb7a"
+      }
+    },
+    {
+      "ts": "2026-10-13T04:20:48.744276685Z",
+      "spec": "BUG-1977",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4e11f0296c00e5688fe84b753b2a2ea7a4c8b005",
+        "pr": 2580,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
