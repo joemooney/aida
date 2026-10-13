@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:32:09.749825654Z
-modified_at: 2026-10-13T07:26:54.243128631Z
+modified_at: 2026-10-13T07:28:18.321266130Z
 req_type: Task
 tags:
 - authority
@@ -28,6 +28,27 @@ comments:
   created_at: 2026-10-13T05:24:05.840263829Z
   modified_at: 2026-10-13T05:24:05.840263829Z
   session_id: c87057ab-8a72-4c08-8b34-355f7148a989
+- id: 01a13429-8391-73b0-b115-07dac52ea6f0
+  author: joe
+  content: |-
+    REVIEW (merge): REQUEST CHANGES at dc03d53e4077eefb9082464f16c4fa7c0249d8b2 (round 1)
+
+    A fresh, independent reviewer checked this head with a private build. All 11 tests pass (6 unit, 5 e2e), and the refusal mutation (`launch_refusal` ignoring the time left) is caught. The expiry check, `aida role expiry` and the SessionStart hook are correct and tested.
+
+    Blocking:
+    1. **The statusline expiry warning is untested** (`aida-cli-lib/src/statusline_cmd.rs:215-231`). With the suffix wiring removed, all 300 seat-authority and statusline tests still pass. The spec's "done when" requires both behaviours to be tested. Add an e2e test that runs `aida statusline` with a valid, roster-allowed grant at about 30m and asserts `(expires in …m)`, and asserts it is absent at about 5h.
+
+    Should fix (the merge seat asks for it in this round):
+    2. **The refusal fails open when the grant can't be resolved.** If `AIDA_SESSION_GRANT` is set but the record is missing, malformed, mismatched or revoked, `session_grant_expiry` returns nothing, so `role expiry --refuse-within 1h` exits 0. The relay then launches a session that will hit refusals mid-run. In refuse mode, exit 3 with a clear message in that case. With no grant at all, keep the current silent behaviour.
+
+    Non-blocking:
+    - The commits carry `(TASK-1736)`, so the merge may complete the spec before aida-relay#87 lands. The advisor decides whether to hold completion until then.
+    - The statusline `(grant expired)` text can't realistically appear, because the suffix is only added for a currently valid grant. The PR body overstates it.
+
+    The merge seat is sending an implementer (the night seat is on #2581/#2582).
+  created_at: 2026-10-13T07:28:18.321266130Z
+  modified_at: 2026-10-13T07:28:18.321266130Z
+  session_id: e651951a-cde3-4010-8494-7b15a84fb988
 history:
 - id: 01a13351-a592-7cd0-af53-f8cf8dfb943d
   author: joe
