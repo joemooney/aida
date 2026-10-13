@@ -39,12 +39,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:41.599443906Z
-modified_at: 2026-10-12T23:24:21.349081262Z
+modified_at: 2026-10-13T03:00:52.035331263Z
 req_type: Bug
 tags:
 - from:aida-host
@@ -84,6 +84,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13334-aab5-7cf3-b01e-0e6fa7a16771
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:00:52.021887106Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13334-aac3-7db0-917b-e0f9ab447406
+  timestamp: 2026-10-13T03:00:52.035307858Z
+  agent: implementer
+  commit_sha: 43d426e3be936653ca69e243735c456625923426
+  summary: Completed via merge 43d426e3
+  review_verdict: approved
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -92,3 +106,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:00:52.021872487Z
+  completion_sha: 43d426e3be936653ca69e243735c456625923426
