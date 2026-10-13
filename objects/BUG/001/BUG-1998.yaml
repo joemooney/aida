@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   - With HEAD an ancestor of the index tip, `aida cache status` and the doctor history line neither say the index will catch up nor suggest a rebuild. Unit test on each formatter.
   - A diverged HEAD whose tip is live in another checkout gets a no-rebuild miss and note. A diverged HEAD whose tip is not live elsewhere stays Stuck. Unit tests for both.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:04:49.082266695Z
-modified_at: 2026-10-13T18:09:50.411980465Z
+modified_at: 2026-10-13T20:24:38.048531655Z
 req_type: Bug
 tags:
 - follow-up:review
@@ -36,6 +36,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a136f0-43a0-7c12-b48e-cd9ec1474e28
+  author: aida-session-start
+  timestamp: 2026-10-13T20:24:38.048530982Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
