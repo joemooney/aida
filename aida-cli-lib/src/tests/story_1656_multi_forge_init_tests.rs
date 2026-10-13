@@ -342,6 +342,7 @@ impl FakeForges {
             &ssh,
             r#"#!/bin/sh
 cmd="$2"
+printf '%s\n' "$cmd" >> 'ROOT/../ssh-commands.log'
 prog="${cmd%% *}"
 path=$(printf '%s' "$cmd" | sed -e "s/^[^']*'//" -e "s/'\$//")
 cd 'ROOT' || exit 1
@@ -581,6 +582,117 @@ impl FakeForges {
     fn gitlab_project_exists(&self) -> bool {
         self.gitlab_root.join("ai").join("proj.git").exists()
     }
+
+    /// Every command the fake GitLab SSH endpoint was asked to run
+    /// (`git-upload-pack` for an `ls-remote` probe).
+    fn ssh_commands(&self) -> Vec<String> {
+        std::fs::read_to_string(self.root.join("ssh-commands.log"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Asserts nothing reached the GitLab endpoint: no probe, no `glab`.
+    fn assert_gitlab_untouched(&self) {
+        assert!(self.ssh_commands().is_empty(), "{:?}", self.ssh_commands());
+        assert!(
+            !self.calls().iter().any(|c| c.starts_with("glab")),
+            "{:?}",
+            self.calls()
+        );
+        assert!(!self.gitlab_project_exists());
+    }
+}
+
+/// BUG-1972 rework: a re-run whose --url differs from the existing remote
+/// keeps the remote and never probes it, so nothing is created at a URL the
+/// operator did not name.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_with_a_different_url_never_probes_the_existing_remote() {
+    let forges = FakeForges::new();
+    let existing = "git@gitlab.example.test:ai/proj.git";
+    git(&forges.project, &["remote", "add", "gitlab", existing]);
+    let _env = forges.env(Some("glpat-fake"));
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some("git@gitlab.other.test:team/elsewhere.git"),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("the existing remote is kept and wired");
+
+    forges.assert_gitlab_untouched();
+    assert_eq!(
+        git(&forges.project, &["remote", "get-url", "gitlab"]),
+        existing
+    );
+    let cfg = crate::read_store_sync_config(&forges.project).unwrap();
+    assert_eq!(cfg.mirror_remotes, vec!["gitlab".to_string()]);
+}
+
+/// BUG-1972 rework: a re-run without --url stays offline: no probe, no
+/// `glab`, even with a token and a missing project.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_without_url_stays_offline() {
+    let forges = FakeForges::new();
+    git(
+        &forges.project,
+        &[
+            "remote",
+            "add",
+            "gitlab",
+            "git@gitlab.example.test:ai/proj.git",
+        ],
+    );
+    let _env = forges.env(Some("glpat-fake"));
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        None,
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("wiring an existing remote needs no network");
+
+    forges.assert_gitlab_untouched();
+    let cfg = crate::read_store_sync_config(&forges.project).unwrap();
+    assert_eq!(cfg.mirror_remotes, vec!["gitlab".to_string()]);
+}
+
+/// BUG-1972 rework: the same project written another way (HTTPS vs SCP)
+/// counts as the same URL, so the re-run still probes and creates it.
+// trace:BUG-1972 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_with_an_equivalent_url_still_probes() {
+    let forges = FakeForges::new();
+    git(
+        &forges.project,
+        &[
+            "remote",
+            "add",
+            "gitlab",
+            "git@gitlab.example.test:ai/proj.git",
+        ],
+    );
+    let _env = forges.env(Some("glpat-fake"));
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some("https://gitlab.example.test/ai/proj"),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("the re-run creates the missing project");
+
+    assert!(!forges.ssh_commands().is_empty());
+    assert!(forges.gitlab_project_exists());
 }
 
 /// BUG-1972 (1): with both an env token and a glab login for the host, the

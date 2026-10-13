@@ -899,6 +899,10 @@ fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> 
     gitlab_release_token_from_glab_config_body(host, &body)
 }
 
+/// The token a glab `config.yml` body stores for `host`. Keys compare
+/// case-insensitively with any `:port` and trailing dot dropped, so a key
+/// `host:port` matches every port on that host; the first matching key wins.
+// trace:BUG-1972 | ai:claude
 fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<String> {
     let yaml: serde_yaml::Value = serde_yaml::from_str(body).ok()?;
     let host_key = host.to_ascii_lowercase();
@@ -2089,25 +2093,30 @@ pub(crate) fn run_remote_mirror(
         let existing = git_out(project_root, &["remote", "get-url", name])
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
-        if let Some(u) = url {
-            if !existing.is_empty() && existing != u {
-                eprintln!(
-                    "{warn} remote `{name}` already points at {existing} — keeping it (re-point with `git remote set-url {name} <url>`)"
-                );
-            }
-        }
         println!("{check} remote `{name}` already configured");
         // A re-run with --url (say after `glab auth login`) must still
         // create a missing project, or fan-out is wired to a project that
-        // does not exist. Probe the URL the remote really has, which is what
-        // pushes use. Without --url the re-run stays offline.
+        // does not exist. Only when the remote already names the same
+        // project as --url: a different URL is kept, never probed, so no
+        // project is created at a URL the operator did not name. Without
+        // --url the re-run stays offline.
         // trace:BUG-1972 | ai:claude
-        if url.is_some() && !existing.is_empty() {
-            crate::gitlab_project_create::ensure_gitlab_project_exists(
-                project_root,
-                &existing,
-                false,
-            )?;
+        // An empty `existing` means `git remote get-url` failed: nothing to probe.
+        if let Some(u) = url.filter(|_| !existing.is_empty()) {
+            if crate::doctor_cmd::same_remote(&existing, u) {
+                crate::gitlab_project_create::ensure_gitlab_project_exists(
+                    project_root,
+                    &existing,
+                    false,
+                )?;
+            } else {
+                eprintln!(
+                    "{warn} remote `{name}` already points at {} — keeping it and not \
+                     checking for a missing project there (re-point with \
+                     `git remote set-url {name} <url>`)",
+                    crate::gitlab_project_create::redact_url_userinfo(&existing)
+                );
+            }
         }
     } else {
         let Some(u) = url else {
@@ -2120,9 +2129,16 @@ pub(crate) fn run_remote_mirror(
             .status()
             .context("invoking git remote add")?;
         if !add.success() {
-            anyhow::bail!("`git remote add {name} {u}` failed");
+            anyhow::bail!(
+                "`git remote add {name} {}` failed",
+                crate::gitlab_project_create::redact_url_userinfo(u)
+            );
         }
-        println!("{check} added remote `{name}` → {u}");
+        // trace:BUG-1972 | ai:claude
+        println!(
+            "{check} added remote `{name}` → {}",
+            crate::gitlab_project_create::redact_url_userinfo(u)
+        );
         // A GitLab group that refuses push-to-create gets the project made
         // through the API (private), so the first mirror push lands. A
         // missing token leaves the remote wired and exits non-zero with the

@@ -279,14 +279,20 @@ pub(crate) fn push_with_create_fallback(
         Ok(()) => return Ok(()),
         Err(stderr) => stderr,
     };
+    // A remote URL may embed a token; never echo it. trace:BUG-1972 | ai:claude
     if !is_push_to_create_refusal(&stderr) {
-        bail!("`git push {}` failed: {}", args.join(" "), stderr.trim());
+        bail!(
+            "`git push {}` failed: {}",
+            args.join(" "),
+            redact_url_userinfo(stderr.trim())
+        );
     }
     let Some((host, namespace, name)) = gitlab_target_of_url(url) else {
         bail!(
-            "`git push {}` was refused and `{url}` is not a GitLab project URL AIDA can create: {}",
+            "`git push {}` was refused and `{}` is not a GitLab project URL AIDA can create: {}",
             args.join(" "),
-            stderr.trim()
+            redact_url_userinfo(url),
+            redact_url_userinfo(stderr.trim())
         );
     };
     println!(
@@ -299,7 +305,7 @@ pub(crate) fn push_with_create_fallback(
         Err(stderr) => bail!(
             "`git push {}` still failed after creating the project: {}",
             args.join(" "),
-            stderr.trim()
+            redact_url_userinfo(stderr.trim())
         ),
     }
 }
