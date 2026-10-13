@@ -1394,8 +1394,6 @@ fn status_shows_unknown_for_an_empty_promoted_sha() {
     );
 }
 
-/// Live A (no record) / prev B (with a record): the reachable shape after
-
 // --- rollback crash points ----------------------------------------------------------
 // trace:BUG-1959 | ai:claude
 
@@ -1685,4 +1683,223 @@ fn a_completed_rollback_leaves_no_marker_or_swap_dir() {
     rollback(&f.layout).unwrap();
     assert_eq!(read(&f.layout.live("aida")), "B-aida");
     assert_consistent(&f, &a, &b, "completed rollback");
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_promoted_before_binary_swap_restores_records() {
+    // Old binary (STORY-1646) parked binaries and moved live .promoted to
+    // .rollback/.promoted, then crashed before any binary swaps began.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&swap.join(n), &format!("A-{n}"));
+    }
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+    // Notice: no ROLLBACK_MARKER, no PARKED_LIVE_RECORD, no PARKED_PREV_RECORD.
+    // prev/.promoted still exists in prev_dir.
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "A-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), a.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), b.clone());
+    assert_consistent(&f, &a, &b, "old format before binary swap");
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_promoted_after_binary_swap_swaps_records() {
+    // Old binary swapped both binaries, then crashed before moving records.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&f.layout.live(n), &format!("B-{n}"));
+        write(&f.layout.prev(n), &format!("A-{n}"));
+    }
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format after binary swap");
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_promoted_when_live_already_has_record() {
+    // Old binary swapped both binaries and moved prev/.promoted into live/.promoted,
+    // then crashed before moving .rollback/.promoted into prev/.promoted.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&f.layout.live(n), &format!("B-{n}"));
+        write(&f.layout.prev(n), &format!("A-{n}"));
+    }
+    // live has B's record already
+    write_meta(&f.layout.live_dir, b.as_ref().unwrap());
+    fs::remove_file(f.layout.prev_dir().join(PROMOTED_FILE)).unwrap();
+    // swap has old live record (.promoted)
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format when live already has record");
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_promoted_without_prev_record() {
+    // Live A has a record, prev B has no record.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, false);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&f.layout.live(n), &format!("B-{n}"));
+        write(&f.layout.prev(n), &format!("A-{n}"));
+    }
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), None);
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format without prev record");
+}
+
+/// Apply the first `k` steps of the pre-BUG-1959 (STORY-1646) rollback.
+fn apply_old_rollback_steps(f: &Fixture, k: usize) {
+    let l = &f.layout;
+    let swap = swap_dir(f);
+    let steps: Vec<Box<dyn Fn()>> = vec![
+        Box::new(|| {
+            fs::create_dir_all(&swap).unwrap();
+        }),
+        Box::new(|| {
+            fs::copy(l.live("aida"), swap.join("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::copy(l.live("aida-server"), swap.join("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            let m = l.live_dir.join(PROMOTED_FILE);
+            if m.is_file() {
+                fs::rename(&m, swap.join(PROMOTED_FILE)).unwrap();
+            }
+        }),
+        Box::new(|| {
+            fs::rename(l.prev("aida"), l.live("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(swap.join("aida"), l.prev("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(l.prev("aida-server"), l.live("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(swap.join("aida-server"), l.prev("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            let (lm, pm) = (
+                l.live_dir.join(PROMOTED_FILE),
+                l.prev_dir().join(PROMOTED_FILE),
+            );
+            if pm.is_file() && !lm.exists() {
+                fs::rename(&pm, &lm).unwrap();
+            }
+        }),
+        Box::new(|| {
+            let (p, pm) = (swap.join(PROMOTED_FILE), l.prev_dir().join(PROMOTED_FILE));
+            if p.is_file() && !pm.exists() {
+                fs::rename(&p, &pm).unwrap();
+            }
+        }),
+        Box::new(|| {
+            let _ = fs::remove_dir(&swap);
+        }),
+    ];
+    for s in steps.iter().take(k) {
+        s();
+    }
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_crash_during_normalization_preserves_records() {
+    for (a_rec, b_rec) in [(true, true), (true, false)] {
+        for k in 4..=9 {
+            for crash_step in ["marker", "parked_prev", "parked_live"] {
+                let f = fixture();
+                let (a, b) = pairs_a_b(&f, a_rec, b_rec);
+                apply_old_rollback_steps(&f, k);
+                assert!(swap_dir(&f).join(PROMOTED_FILE).is_file());
+                let ctx = format!("recs ({a_rec},{b_rec}) old-step {k} crash-at {crash_step}");
+                let first = {
+                    let _l = lock_live_dir(&f.layout).unwrap();
+                    recover_live_dir_with_steps(&f.layout, &mut |s| {
+                        if s == crash_step {
+                            bail!("simulated crash at {s}");
+                        }
+                        Ok(())
+                    })
+                };
+                if first.is_ok() {
+                    continue;
+                }
+                assert!(first.is_err(), "{ctx}: expected crash");
+                recover(&f);
+                assert_consistent(&f, &a, &b, &ctx);
+                recover(&f);
+                assert_consistent(&f, &a, &b, &format!("{ctx} twice"));
+            }
+        }
+    }
+}
+
+// trace:BUG-1999 | ai:antigravity
+#[test]
+fn recovery_with_old_format_crash_between_binary_swaps() {
+    // Old binary crashed between the two binary swaps: aida has been swapped
+    // (B moved live, A moved to prev/), aida-server not yet started.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    fs::create_dir_all(&swap).unwrap();
+    for n in LIVE_BINARIES {
+        write(&swap.join(n), &format!("A-{n}"));
+    }
+    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
+    write(
+        &swap.join(PROMOTED_FILE),
+        &serde_json::to_string(&a).unwrap(),
+    );
+    fs::rename(f.layout.prev("aida"), f.layout.live("aida")).unwrap();
+    fs::rename(swap.join("aida"), f.layout.prev("aida")).unwrap();
+
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read(&f.layout.live("aida-server")), "A-aida-server");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "old format between binary swaps");
 }
