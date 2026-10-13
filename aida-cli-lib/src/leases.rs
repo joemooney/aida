@@ -581,6 +581,21 @@ pub(crate) fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// Every persisted spec-scoped lease blocks agent dispatch, including stale ones.
+/// Keep default listing aligned with that conservative ownership check.
+// trace:BUG-2002 | ai:codex
+pub(crate) fn lease_blocks_agent_dispatch(lease: &SessionLease) -> bool {
+    !lease.scope.is_empty()
+        && !lease
+            .scope
+            .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
+}
+
+// trace:BUG-2002 | ai:codex
+pub(crate) fn lease_visible_in_default_listing(lease: &SessionLease, state: LeaseState) -> bool {
+    !matches!(state, LeaseState::Stale) || lease_blocks_agent_dispatch(lease)
+}
+
 /// BUG-574: pure decision — does THIS clone already hold a lease for `scope`?
 /// Returns the existing lease (the first by start time, matching `list_leases`'
 /// sort) so `aida session start` can treat a re-run as benign idempotent
@@ -2518,7 +2533,7 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
     } else {
         classified
             .into_iter()
-            .partition(|(_, state, _)| !matches!(state, LeaseState::Stale))
+            .partition(|(lease, state, _)| lease_visible_in_default_listing(lease, *state))
     };
 
     // STORY-301: cross-reference the active `--auto-complete` drain. A lease
