@@ -49,7 +49,7 @@ pub(crate) fn run_path_isolated_test() -> bool {
         "[user]\nname = AIDA Test\nemail = test@example.invalid\n[init]\ndefaultBranch = main\n",
     )
     .unwrap();
-    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    let mut command = std::process::Command::new(crate::aida_bin::running_executable_fallback());
     command
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())

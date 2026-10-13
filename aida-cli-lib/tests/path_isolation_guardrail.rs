@@ -182,19 +182,19 @@ fn raw_path_setters_require_process_isolation() {
 #[test]
 fn guard_rejects_direct_aliased_and_macro_path_setters() {
     for src in [
-        r#"fn t() { unsafe { std::env::set_var("PATH", "fake"); } }"#,
+        r#"fn t() { unsafe { std::env::set_var("PATH", "fake"); } }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"use std::env::set_var as change; fn t() { change("PATH", "fake"); }"#,
-        r#"const KEY: &str = "PATH"; fn t() { std::env::set_var(KEY, "fake"); }"#,
-        r#"fn t() { wrapper!(std::env::set_var("PATH", "fake")); }"#,
-        r#"fn t() { if false { crate::test_env::require_path_mutation_scope("PATH"); } std::env::set_var("PATH", "fake"); }"#,
-        r#"fn t() { let unused = || { crate::test_env::require_path_mutation_scope("PATH"); }; std::env::set_var("PATH", "fake"); }"#,
-        r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); } fn unguarded() { std::env::set_var("PATH", "fake"); }"#,
+        r#"const KEY: &str = "PATH"; fn t() { std::env::set_var(KEY, "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { wrapper!(std::env::set_var("PATH", "fake")); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { if false { crate::test_env::require_path_mutation_scope("PATH"); } std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let unused = || { crate::test_env::require_path_mutation_scope("PATH"); }; std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); } fn unguarded() { std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
     ] {
         assert_eq!(count(src), 1, "{src}");
     }
     assert_eq!(
         count(
-            r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); unsafe { std::env::set_var("PATH", "fake"); } }"#
+            r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); unsafe { std::env::set_var("PATH", "fake"); } }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
         ),
         0
     );
