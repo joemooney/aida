@@ -26,7 +26,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-12T23:58:15.588919855Z
+modified_at: 2026-10-13T03:16:02.731754376Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-10-12T23:58:15.588919855Z
   modified_at: 2026-10-12T23:58:15.588919855Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13342-902b-73e2-8e2f-d8a0e4db4d65
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-12: option 1. Apply the reviewer-verified one-line fix at pr_ship.rs:378 (Some(''.'') => !chars.next().is_some_and(char::is_alphanumeric)) plus the six positive forms from the round-3 verdict, plus the queue_cmd.rs:8698-8700 doc-comment Low. Then a FRESH strict review and a pinned merge. This is not a round 4: the residue came from the advisor''s own round-2 brief wording.'
+  created_at: 2026-10-13T03:16:02.731754376Z
+  modified_at: 2026-10-13T03:16:02.731754376Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309c-e7eb-7fb1-8857-ff0dcdcda374
   author: joe
