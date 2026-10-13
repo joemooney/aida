@@ -1,5 +1,6 @@
 id: 01a137ae-1c6b-7121-b652-dfdc7f76d97a
 spec_id: TASK-1-296
+agreed_id: TASK-1366
 title: 'Non-blocking: dev_build.rs:788 comment says ''write the marker first''; the load-…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1999, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

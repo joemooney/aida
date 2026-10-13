@@ -1,5 +1,6 @@
 id: 01a137ae-1f32-7262-875b-d56abb36327e
 spec_id: TASK-1-297
+agreed_id: TASK-1364
 title: 'Non-blocking: recover_live_dir_with_steps (dev_build.rs:763) has no doc comment…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1999, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
