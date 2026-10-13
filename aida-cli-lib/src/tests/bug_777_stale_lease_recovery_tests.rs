@@ -952,7 +952,10 @@ fn implementer_retry_reclaims_clean_exit_predecessor_on_first_probe() {
 
     assert_eq!(target.0, "bug-1930-clean-exit");
     assert_eq!(target.1, worktree.path());
-    assert!(sleeps.is_empty(), "reclaimed only after re-probes: {sleeps:?}");
+    assert!(
+        sleeps.is_empty(),
+        "reclaimed only after re-probes: {sleeps:?}"
+    );
     assert!(
         !lease_path(project.path(), &lease.id).exists(),
         "old lease should be removed so the retry can force-claim the scope"
@@ -972,14 +975,30 @@ fn returned_phase_child_shortcut_is_narrow() {
     assert!(lease_minted_by_returned_phase_child(&own, me, Some("t0")));
 
     let other = lease_at(dir.path(), 5, Some(me + 1), None);
-    assert!(!lease_minted_by_returned_phase_child(&other, me, Some("t0")));
+    assert!(!lease_minted_by_returned_phase_child(
+        &other,
+        me,
+        Some("t0")
+    ));
 
     let with_child = lease_at(dir.path(), 5, Some(me), Some(me + 1));
-    assert!(!lease_minted_by_returned_phase_child(&with_child, me, Some("t0")));
+    assert!(!lease_minted_by_returned_phase_child(
+        &with_child,
+        me,
+        Some("t0")
+    ));
 
     let mut recycled = lease_at(dir.path(), 5, Some(me), None);
     recycled.creator_pid_start_time = Some("t-old".to_string());
-    assert!(!lease_minted_by_returned_phase_child(&recycled, me, Some("t0")));
+    assert!(!lease_minted_by_returned_phase_child(
+        &recycled,
+        me,
+        Some("t0")
+    ));
     recycled.creator_pid_start_time = Some("t0".to_string());
-    assert!(lease_minted_by_returned_phase_child(&recycled, me, Some("t0")));
+    assert!(lease_minted_by_returned_phase_child(
+        &recycled,
+        me,
+        Some("t0")
+    ));
 }

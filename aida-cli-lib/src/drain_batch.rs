@@ -606,6 +606,13 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             None => 0,
         }
     }
+
+    // trace:BUG-1930 | ai:claude
+    fn environment_halt_after(&self) -> usize {
+        crate::find_project_root()
+            .map(|root| crate::orchestrator::OrchestratorConfig::load(&root).environment_halt_after)
+            .unwrap_or(auto_complete::DEFAULT_ENVIRONMENT_HALT_AFTER)
+    }
 }
 
 /// The environment a pipelined batch child is spawned with.
@@ -1811,17 +1818,7 @@ pub(crate) fn emit_batch_chain_summary(
     use auto_complete::BatchDrainOutcome;
 
     if json {
-        let outcome = match &result.outcome {
-            BatchDrainOutcome::Drained => "drained",
-            BatchDrainOutcome::MaxReached => "max-reached",
-            BatchDrainOutcome::Failed(_) => "failed",
-            BatchDrainOutcome::Stalled => "stalled",
-            BatchDrainOutcome::Mismatched { .. } => "mismatched",
-            BatchDrainOutcome::Inconclusive => "inconclusive",
-            BatchDrainOutcome::Held => "held",
-            // EPIC-28 trace:EPIC-28 | ai:claude
-            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
-        };
+        let outcome = crate::drain_next_n::batch_outcome_label(&result.outcome);
         let mut obj = serde_json::Map::new();
         obj.insert(
             "event".to_string(),
@@ -1918,6 +1915,11 @@ pub(crate) fn emit_batch_chain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // trace:BUG-1930 | ai:claude
+        obj.insert(
+            "halt_reason".to_string(),
+            crate::drain_next_n::batch_halt_reason(&result.outcome),
         );
         println!("{}", serde_json::Value::Object(obj));
         return;
@@ -2046,6 +2048,11 @@ pub(crate) fn emit_batch_chain_summary(
                 shipped_list
             );
         }
+        // trace:BUG-1930 | ai:claude
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            crate::drain_next_n::emit_environment_blocked_lines(cause, stopped, &shipped_list);
+        }
         // EPIC-28: every batch drained, but at least one member shelved
         // or was skipped. trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {
@@ -2124,18 +2131,7 @@ pub(crate) fn emit_batch_drain_summary(
     use auto_complete::BatchDrainOutcome;
 
     if json {
-        let outcome = match &result.outcome {
-            BatchDrainOutcome::Drained => "drained",
-            BatchDrainOutcome::MaxReached => "max-reached",
-            BatchDrainOutcome::Failed(_) => "failed",
-            BatchDrainOutcome::Stalled => "stalled",
-            BatchDrainOutcome::Mismatched { .. } => "mismatched",
-            BatchDrainOutcome::Inconclusive => "inconclusive",
-            BatchDrainOutcome::Held => "held",
-            // EPIC-28: a clean drain that shelved at least one member —
-            // the operator still has triage to do. trace:EPIC-28
-            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
-        };
+        let outcome = crate::drain_next_n::batch_outcome_label(&result.outcome);
         let mut obj = serde_json::Map::new();
         obj.insert(
             "event".to_string(),
@@ -2203,6 +2199,11 @@ pub(crate) fn emit_batch_drain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // trace:BUG-1930 | ai:claude
+        obj.insert(
+            "halt_reason".to_string(),
+            crate::drain_next_n::batch_halt_reason(&result.outcome),
         );
         // TASK-1297: the excluded-by-filter figure, so a machine consumer
         // can alarm without scraping the human line. trace:TASK-1297 | ai:claude
@@ -2387,6 +2388,11 @@ pub(crate) fn emit_batch_drain_summary(
                  `aida queue work --batch {batch_name} --auto-complete`",
                 "→".dimmed()
             );
+        }
+        // trace:BUG-1930 | ai:claude
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            crate::drain_next_n::emit_environment_blocked_lines(cause, stopped, &shipped_list);
         }
         // EPIC-28: the batch drained but parked at least one spec. The
         // top line stays green-ish — independents shipped — and the

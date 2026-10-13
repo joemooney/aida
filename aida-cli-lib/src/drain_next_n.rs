@@ -305,7 +305,41 @@ pub(crate) fn batch_outcome_label(outcome: &auto_complete::BatchDrainOutcome) ->
         BatchDrainOutcome::Inconclusive => "inconclusive",
         BatchDrainOutcome::Held => "held",
         BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
+        BatchDrainOutcome::EnvironmentBlocked { .. } => "environment-blocked", // trace:BUG-1930 | ai:claude
     }
+}
+
+/// BUG-1930: the machine `halt_reason` of a drain summary: the environmental
+/// cause slug when the drain halted on a blocked environment, else `null`.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn batch_halt_reason(outcome: &auto_complete::BatchDrainOutcome) -> serde_json::Value {
+    match outcome {
+        auto_complete::BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            serde_json::Value::String((*cause).to_string())
+        }
+        _ => serde_json::Value::Null,
+    }
+}
+
+/// BUG-1930: the human summary lines for an environment-blocked drain,
+/// shared by the `nextN` and `--batch` summaries.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn emit_environment_blocked_lines(cause: &str, stopped: &str, shipped_list: &str) {
+    eprintln!(
+        "{} {}",
+        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+        auto_complete::environment_blocked_message(cause)
+    );
+    eprintln!(
+        "  {} halted after {} — already shipped: {}",
+        "→".dimmed(),
+        stopped.bold(),
+        shipped_list
+    );
+    eprintln!(
+        "  {} the rest of the queue is untouched; no further specs were dispatched",
+        "→".dimmed()
+    );
 }
 
 /// TASK-967: `git diff --numstat <base>..HEAD` in the drain's main worktree —
@@ -598,6 +632,13 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             Some((root, since)) => sum_headless_log_tokens(root, *since),
             None => 0,
         }
+    }
+
+    // trace:BUG-1930 | ai:claude
+    fn environment_halt_after(&self) -> usize {
+        crate::find_project_root()
+            .map(|root| crate::orchestrator::OrchestratorConfig::load(&root).environment_halt_after)
+            .unwrap_or(auto_complete::DEFAULT_ENVIRONMENT_HALT_AFTER)
     }
 }
 
@@ -987,17 +1028,7 @@ pub(crate) fn emit_next_n_drain_summary(
     use auto_complete::BatchDrainOutcome;
 
     if json {
-        let outcome = match &result.outcome {
-            BatchDrainOutcome::Drained => "drained",
-            BatchDrainOutcome::MaxReached => "max-reached",
-            BatchDrainOutcome::Failed(_) => "failed",
-            BatchDrainOutcome::Stalled => "stalled",
-            BatchDrainOutcome::Mismatched { .. } => "mismatched",
-            BatchDrainOutcome::Inconclusive => "inconclusive",
-            BatchDrainOutcome::Held => "held",
-            // EPIC-28 trace:EPIC-28 | ai:claude
-            BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
-        };
+        let outcome = batch_outcome_label(&result.outcome);
         let mut obj = serde_json::Map::new();
         obj.insert(
             "event".to_string(),
@@ -1065,6 +1096,11 @@ pub(crate) fn emit_next_n_drain_summary(
         obj.insert(
             "exit_code".to_string(),
             serde_json::Value::Number(exit_code.into()),
+        );
+        // trace:BUG-1930 | ai:claude
+        obj.insert(
+            "halt_reason".to_string(),
+            batch_halt_reason(&result.outcome),
         );
         // TASK-1456: mirror the `--batch` drain's `ineligible` field so a
         // machine consumer can tell "genuinely nothing queued" apart from
@@ -1237,6 +1273,11 @@ pub(crate) fn emit_next_n_drain_summary(
                 "  {} run your gate, open the PR (`gh pr create`), then re-run",
                 "→".dimmed()
             );
+        }
+        // trace:BUG-1930 | ai:claude
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
+            emit_environment_blocked_lines(cause, stopped, &shipped_list);
         }
         // EPIC-28 trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {

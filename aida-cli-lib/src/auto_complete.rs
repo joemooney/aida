@@ -4731,6 +4731,12 @@ pub(crate) enum BatchDrainOutcome {
     /// failure, so the batch summary must not crash with a false "shipped 0".
     /// trace:BUG-250 | ai:claude
     Held,
+    /// BUG-1930: consecutive specs failed with the same environmental cause
+    /// (see [`environmental_failure_class`]), so the drain halted before
+    /// dispatching another one. The rest of the queue is untouched; the
+    /// operator fixes the environment and re-runs. `cause` is the class slug.
+    // trace:BUG-1930 | ai:claude
+    EnvironmentBlocked { cause: &'static str },
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -4865,6 +4871,13 @@ pub(crate) trait BatchDriver {
     /// drivers delegate to [`crate::drain_cmd::stop_requested_from_env`].
     // trace:BUG-1980 | ai:claude
     fn stop_requested(&mut self) -> bool;
+    /// BUG-1930: how many consecutive same-cause environmental failures halt
+    /// the drain (`0` = never). Real drivers read `[orchestrator]
+    /// environment_halt_after`.
+    // trace:BUG-1930 | ai:claude
+    fn environment_halt_after(&self) -> usize {
+        DEFAULT_ENVIRONMENT_HALT_AFTER
+    }
 }
 
 /// Handle for one pipelined implementer/CI child.
@@ -4919,6 +4932,66 @@ fn failure_budget_exhausted(shelve_events: usize, max_failures: Option<usize>) -
     max_failures.is_some_and(|cap| shelve_events >= cap)
 }
 
+/// BUG-1930: default for `[orchestrator] environment_halt_after`.
+pub(crate) const DEFAULT_ENVIRONMENT_HALT_AFTER: usize = 2;
+
+/// BUG-1930: the environmental class of a failed run, or `None` when the
+/// failure (if any) is about the spec itself. These causes are properties of
+/// the machine, so the next spec would hit them too.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn environmental_failure_class(result: &OrchestrationResult) -> Option<&'static str> {
+    if result.exit_code == 0 {
+        return None;
+    }
+    let failure = result.failure.as_ref()?;
+    if failure.kind == FailureKind::PermissionDenied {
+        return Some(FailureKind::PermissionDenied.cause_slug());
+    }
+    is_environmental_failure(&failure.reason).then_some("resource-exhaustion")
+}
+
+/// BUG-1930: the one-line halt message for an environment-blocked drain:
+/// what happened and what the operator should do about it.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn environment_blocked_message(cause: &str) -> String {
+    let fix = match cause {
+        "permission-denied" => {
+            "the agent's tool calls were denied; allow writes for the drain \
+             (permission mode or agent sandbox settings), then re-run the drain"
+        }
+        "resource-exhaustion" => "free disk space or memory, then re-run the drain",
+        _ => "fix the environment, then re-run the drain",
+    };
+    format!("environment blocked: consecutive specs failed with {cause}; {fix}")
+}
+
+/// BUG-1930: counts consecutive finished specs that failed with the same
+/// environmental class. Any other result resets it.
+// trace:BUG-1930 | ai:claude
+#[derive(Debug, Default)]
+struct EnvironmentStreak {
+    class: Option<&'static str>,
+    count: usize,
+}
+
+impl EnvironmentStreak {
+    /// Record one finished spec. Returns the class once `halt_after`
+    /// consecutive failures share it (`halt_after == 0` never halts).
+    fn observe(&mut self, result: &OrchestrationResult, halt_after: usize) -> Option<&'static str> {
+        let Some(class) = environmental_failure_class(result) else {
+            *self = Self::default();
+            return None;
+        };
+        if self.class == Some(class) {
+            self.count += 1;
+        } else {
+            self.class = Some(class);
+            self.count = 1;
+        }
+        (halt_after > 0 && self.count >= halt_after).then_some(class)
+    }
+}
+
 // why: the drain's disposition buckets are threaded through as separate
 // `&mut` lists (the same shape `forget_batch_disposition` takes); STORY-1429
 // adds the shelve-event counter alongside them.
@@ -4933,6 +5006,7 @@ fn apply_batch_result(
     skipped: &mut Vec<(String, String)>,
     max_failures: Option<usize>,
     shelve_events: &mut usize,
+    env_halt: Option<&'static str>,
 ) -> Option<BatchDrainResult> {
     if result.exit_code != 0 {
         let phase = result.failed_phase.unwrap_or(Phase::Implementer);
@@ -4944,6 +5018,21 @@ fn apply_batch_result(
             forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
             shelved.push(head.clone());
             *shelve_events += 1;
+            if let Some(cause) = env_halt {
+                // BUG-1930: the same environmental failure again — keep this
+                // spec's disposition, then halt instead of failing the next
+                // one the same way. trace:BUG-1930 | ai:claude
+                return Some(BatchDrainResult {
+                    shipped: shipped.clone(),
+                    punted: punted.clone(),
+                    escalated: escalated.clone(),
+                    shelved: shelved.clone(),
+                    skipped: skipped.clone(),
+                    stopped_at: Some(head),
+                    outcome: BatchDrainOutcome::EnvironmentBlocked { cause },
+                    exit_code: DRIVE_EXIT_HARD_FAIL,
+                });
+            }
             // BUG-1608: the budget is spent the moment the Nth shelve lands —
             // stop here, before the scheduler launches another member.
             // trace:BUG-1608 | ai:claude
@@ -4968,7 +5057,11 @@ fn apply_batch_result(
             shelved: shelved.clone(),
             skipped: skipped.clone(),
             stopped_at: Some(head),
-            outcome: BatchDrainOutcome::Failed(phase),
+            // BUG-1930: an un-shelvable stop that completes an environmental
+            // streak still reports the environment. trace:BUG-1930 | ai:claude
+            outcome: env_halt.map_or(BatchDrainOutcome::Failed(phase), |cause| {
+                BatchDrainOutcome::EnvironmentBlocked { cause }
+            }),
             exit_code: DRIVE_EXIT_HARD_FAIL,
         });
     }
@@ -5050,6 +5143,8 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     // STORY-1429: monotonic shelve-event count for the failure budget.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
+    let mut env_streak = EnvironmentStreak::default(); // trace:BUG-1930 | ai:claude
+    let env_halt_after = driver.environment_halt_after();
     let mut in_flight: std::collections::VecDeque<InFlightMember> =
         std::collections::VecDeque::new();
     let mut launched = 0usize;
@@ -5161,6 +5256,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             && through_ci.punt_reason.is_none()
             && through_ci.escalation.is_none();
         if !should_finish_serial {
+            let env_halt = env_streak.observe(&through_ci, env_halt_after);
             if let Some(done) = apply_batch_result(
                 member.spec,
                 through_ci,
@@ -5171,12 +5267,14 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut skipped,
                 max_failures,
                 &mut shelve_events,
+                env_halt,
             ) {
                 return done;
             }
             continue;
         }
         let final_result = driver.finish_spec_after_ci(&member.spec);
+        let env_halt = env_streak.observe(&final_result, env_halt_after);
         if let Some(done) = apply_batch_result(
             member.spec,
             final_result,
@@ -5187,6 +5285,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             &mut skipped,
             max_failures,
             &mut shelve_events,
+            env_halt,
         ) {
             return done;
         }
@@ -5253,6 +5352,8 @@ pub(crate) fn drain_batch_with_caps(
     // `shelved` list keeps reporting final dispositions only.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
+    let mut env_streak = EnvironmentStreak::default(); // trace:BUG-1930 | ai:claude
+    let env_halt_after = driver.environment_halt_after();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -5369,6 +5470,7 @@ pub(crate) fn drain_batch_with_caps(
         }
         let result = driver.run_spec(&head);
         acted += 1;
+        let env_halt = env_streak.observe(&result, env_halt_after);
         if result.exit_code != 0 {
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
             // EPIC-28: a shelvable failure parks the spec and the drain
@@ -5390,6 +5492,19 @@ pub(crate) fn drain_batch_with_caps(
                 );
                 shelved.push(head.clone());
                 shelve_events += 1;
+                if let Some(cause) = env_halt {
+                    // trace:BUG-1930 | ai:claude
+                    return BatchDrainResult {
+                        shipped,
+                        punted,
+                        escalated,
+                        shelved,
+                        skipped,
+                        stopped_at: Some(head),
+                        outcome: BatchDrainOutcome::EnvironmentBlocked { cause },
+                        exit_code: DRIVE_EXIT_HARD_FAIL,
+                    };
+                }
                 // BUG-1608: stop as soon as the Nth shelve lands — never pick
                 // (let alone run) another head on a spent failure budget.
                 // trace:BUG-1608 | ai:claude
@@ -5414,7 +5529,12 @@ pub(crate) fn drain_batch_with_caps(
                 shelved,
                 skipped,
                 stopped_at: Some(head),
-                outcome: BatchDrainOutcome::Failed(phase),
+                // BUG-1930: an un-shelvable stop that completes an
+                // environmental streak still reports the environment.
+                // trace:BUG-1930 | ai:claude
+                outcome: env_halt.map_or(BatchDrainOutcome::Failed(phase), |cause| {
+                    BatchDrainOutcome::EnvironmentBlocked { cause }
+                }),
                 // TASK-1054: a batch that hard-stopped on a failure (un-shelvable,
                 // or over the `--max-failures` budget) is the canonical hard
                 // failure — `3`, NOT the failed-phase index (which collided with
@@ -5978,6 +6098,21 @@ where
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Failed(phase),
+                    exit_code: result.exit_code,
+                };
+            }
+            // trace:BUG-1930 | ai:claude
+            outcome @ BatchDrainOutcome::EnvironmentBlocked { .. } => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome,
                     exit_code: result.exit_code,
                 };
             }
@@ -11401,6 +11536,9 @@ mod tests {
     /// like a real `NeedsAttention` punt — leaves the queue.
     struct MockBatchDriver {
         heads: Vec<String>,
+        /// BUG-1930: a shelved spec whose failure carries this kind/reason
+        /// instead of the generic mock failure.
+        shelve_failure: Vec<(String, PhaseFailure)>,
         fail_at: Option<(String, Phase)>,
         stall_spec: Option<String>,
         punt_spec: Option<String>,
@@ -11444,6 +11582,7 @@ mod tests {
             Self {
                 stop_file: None,
                 heads: heads.iter().map(|s| s.to_string()).collect(),
+                shelve_failure: Vec::new(),
                 fail_at: None,
                 stall_spec: None,
                 punt_spec: None,
@@ -11472,6 +11611,14 @@ mod tests {
 
         fn failing(mut self, spec: &str, phase: Phase) -> Self {
             self.fail_at = Some((spec.to_string(), phase));
+            self
+        }
+
+        /// BUG-1930: shelve `spec` at phase 1 with this failure kind/reason.
+        fn shelving_with(mut self, spec: &str, kind: FailureKind, reason: &str) -> Self {
+            self.shelve_at.push((spec.to_string(), Phase::Implementer));
+            self.shelve_failure
+                .push((spec.to_string(), PhaseFailure::of(kind, reason)));
             self
         }
 
@@ -11574,7 +11721,12 @@ mod tests {
                             self.skipped.push((dep, reason));
                         }
                     }
-                    return shelve_result(phase);
+                    let mut result = shelve_result(phase);
+                    if let Some((_, failure)) = self.shelve_failure.iter().find(|(s, _)| s == spec)
+                    {
+                        result.failure = Some(failure.clone());
+                    }
+                    return result;
                 }
             }
             if self.stall_spec.as_deref() == Some(spec) {
@@ -12315,6 +12467,100 @@ mod tests {
                 "blocked-by TASK-B (Needs Attention)".to_string()
             )]
         );
+    }
+
+    /// BUG-1930: two consecutive specs fail phase 1 on permission denials,
+    /// so the drain halts before dispatching the third, exits non-zero, and
+    /// reports the environment rather than a per-spec failure.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_halts_after_consecutive_environmental_failures() {
+        let denied = "phase 1 stopped: permission denied for Edit, Write";
+        let mut driver = MockBatchDriver::new(&["A", "B", "C"])
+            .shelving_with("A", FailureKind::PermissionDenied, denied)
+            .shelving_with("B", FailureKind::PermissionDenied, denied);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        assert_eq!(driver.runs, vec!["A", "B"], "C must never be dispatched");
+        assert_eq!(
+            driver.heads,
+            vec!["C"],
+            "the rest of the queue is untouched"
+        );
+    }
+
+    /// BUG-1930: the streak only counts CONSECUTIVE same-cause failures — a
+    /// different failure in between resets it, and so does a ship.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_streak_needs_consecutive_same_cause_failures() {
+        let mut driver = MockBatchDriver::new(&["A", "B", "C", "D"])
+            .shelving_with("A", FailureKind::PermissionDenied, "denied")
+            .shelving_with("B", FailureKind::NoPr, "no PR opened")
+            .shelving_with("C", FailureKind::PermissionDenied, "denied");
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(driver.runs, vec!["A", "B", "C", "D"]);
+
+        let mut disk = MockBatchDriver::new(&["A", "B", "C"])
+            .shelving_with("A", FailureKind::Internal, "No space left on device")
+            .shelving_with("B", FailureKind::PermissionDenied, "denied");
+        let result = drain_batch(&mut disk, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(disk.runs, vec!["A", "B", "C"]);
+    }
+
+    /// BUG-1930: `environment_halt_after = 0` disables the halt; the drain
+    /// falls back to shelving every failure.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_halt_disabled_by_zero() {
+        let mut streak = EnvironmentStreak::default();
+        let mut denied = shelve_result(Phase::Implementer);
+        denied.failure = Some(PhaseFailure::of(FailureKind::PermissionDenied, "denied"));
+        assert_eq!(streak.observe(&denied, 0), None);
+        assert_eq!(streak.observe(&denied, 0), None);
+        assert_eq!(streak.observe(&denied, 2), Some("permission-denied"));
+        assert_eq!(streak.observe(&ok_result(), 2), None);
+        assert_eq!(streak.observe(&denied, 2), None, "a ship resets the streak");
+    }
+
+    /// BUG-1930: the machine summary carries `halt_reason`, and the halt
+    /// threshold is configurable under `[orchestrator]`.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_halt_reason_and_config_key() {
+        let blocked = BatchDrainOutcome::EnvironmentBlocked {
+            cause: "permission-denied",
+        };
+        assert_eq!(
+            crate::drain_next_n::batch_halt_reason(&blocked),
+            serde_json::json!("permission-denied")
+        );
+        assert_eq!(
+            crate::drain_next_n::batch_outcome_label(&blocked),
+            "environment-blocked"
+        );
+        assert!(crate::drain_next_n::batch_halt_reason(&BatchDrainOutcome::Drained).is_null());
+        assert!(environment_blocked_message("permission-denied").contains("re-run the drain"));
+
+        let default = crate::orchestrator::OrchestratorConfig::from_toml_str("");
+        assert_eq!(
+            default.environment_halt_after,
+            DEFAULT_ENVIRONMENT_HALT_AFTER
+        );
+        let cfg = crate::orchestrator::OrchestratorConfig::from_toml_str(
+            "[orchestrator]\nenvironment_halt_after = 3\n",
+        );
+        assert_eq!(cfg.environment_halt_after, 3);
     }
 
     /// EPIC-28: the `max_failures` safety cap stops the drain when too

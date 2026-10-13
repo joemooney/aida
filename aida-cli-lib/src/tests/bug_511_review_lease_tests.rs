@@ -96,6 +96,7 @@ fn auto_release_review_lease_decides_by_pid_alone() {
     let cfg = orchestrator::OrchestratorConfig {
         auto_release_dormant_leases: false, // gate must not matter
         stale_lease_threshold_minutes: 10,
+        ..Default::default()
     };
 
     let alive = review_lease("rev005", "BUG-511", Some(std::process::id()));
