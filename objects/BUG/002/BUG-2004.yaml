@@ -1,0 +1,25 @@
+id: 01a13386-66cf-7fd3-b5e6-c56e3dab29fe
+spec_id: BUG-2004
+agreed_id: BUG-2004
+title: GitLab release probe passes PRIVATE-TOKEN to curl on the command line (visible in ps)
+description: 'Found in the strict review of #2582 (BUG-1972). This predates that PR, which now sends the glab host token down this path more often. remote_create.rs:1007-1008 runs curl with --header "PRIVATE-TOKEN: <token>". The token sits in argv, so any local user can read it with ps or /proc/<pid>/cmdline while the request is running. Fix: pass the header through stdin (curl -H @-) or a 0600 temp file that is removed afterwards. Done when: no token appears in any child process argv on this path, and a test runs a fake curl that records its argv and asserts the token is absent.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:30:08.591543166Z
+modified_at: 2026-10-13T04:30:08.591543166Z
+req_type: Bug
+tags:
+- forge
+- gitlab
+- review-follow-up
+- security
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
