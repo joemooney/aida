@@ -118,6 +118,18 @@ printf 'AIDA · role: %s · queue: %s · in-flight: %s\n' "$role" "$queue_depth"
 if [ -n "$ungranted" ]; then
     printf 'role %s is a label only: this shell holds no valid grant for it, so commands gated on that role will refuse. A human enters it at a terminal with: eval "$(aida role enter %s)"\n' "$ungranted" "$ungranted"
 fi
+# A seat grant close to expiry is announced up front, naming the expiry time
+# and the renew command, so it never surfaces first as a refusal mid-run.
+# Silent when there is no grant or it has more than 2h left; best-effort.
+# trace:TASK-1736 | ai:claude
+if [ -n "${AIDA_SESSION_GRANT:-}" ]; then
+    if command -v timeout >/dev/null 2>&1; then
+        expiry_note=$(timeout 2 aida role expiry --warn-within 2h 2>/dev/null)
+    else
+        expiry_note=$(aida role expiry --warn-within 2h 2>/dev/null)
+    fi
+    [ -n "$expiry_note" ] && printf '%s\n' "$expiry_note"
+fi
 if [ -n "$queue_lines" ]; then
     printf '%s\n' "$queue_lines"
 fi

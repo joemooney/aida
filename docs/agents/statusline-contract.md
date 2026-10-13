@@ -174,7 +174,9 @@ no business in a status line or a log file:
   (plain text only — see the ANSI note above).
 - **Unknown/stale AIDA values** — unchanged from the existing behavior:
   `cache:?` for unknown freshness, `role:X (default)` for an unset role,
-  `role:X (no grant)` for a role label without a valid seat grant, etc. The
+  `role:X (no grant)` for a role label without a valid seat grant,
+  `role:X (expires in 42m)` in the warning colour for a held seat whose grant
+  has under 2h left (TASK-1736), etc. The
   role shown is the seat of the validated grant; the `AIDA_SESSION_ROLE`
   label is only a display/routing hint. This contract only adds the live
   segment alongside that; it doesn't touch how the AIDA segment itself

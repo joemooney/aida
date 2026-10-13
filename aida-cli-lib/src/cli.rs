@@ -2393,6 +2393,25 @@ pub enum RoleCommand {
         check: bool,
     },
 
+    /// Report how close this session's seat grant is to expiry. By default
+    /// prints a one-line warning on stdout when the grant expires within
+    /// `--warn-within` (or has expired), and nothing otherwise; always exits
+    /// 0. With `--refuse-within`, prints the refusal on stderr and exits 3
+    /// when less than that is left: a relay runs it before launching each
+    /// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its
+    /// grant can't be used (missing, malformed, or revoked). No grant at all,
+    /// or an implementer grant, is never refused.
+    // trace:TASK-1736 | ai:claude
+    Expiry {
+        /// Warn when the grant expires within this span (e.g. `2h`, `90m`).
+        #[clap(long, default_value = "2h")]
+        warn_within: String,
+
+        /// Exit 3 with a refusal when less than this span is left.
+        #[clap(long)]
+        refuse_within: Option<String>,
+    },
+
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
     End,

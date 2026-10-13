@@ -182,6 +182,195 @@ pub(crate) fn role_display(project_root: &Path, label: Option<&str>) -> RoleDisp
     classify_role_display(label, seat.as_deref())
 }
 
+/// A seat grant inside this window is warned about (SessionStart hook,
+/// statusline), so expiry never surfaces first as a mid-run refusal.
+// trace:TASK-1736 | ai:claude
+pub(crate) const EXPIRY_WARN_WITHIN: Duration = Duration::hours(2);
+
+/// When this session's seat grant stops conferring its seat.
+// trace:TASK-1736 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GrantExpiry {
+    pub seat: String,
+    /// The earlier of the grant's and its parent's expiry: a child grant
+    /// dies with its parent.
+    pub expires_at: DateTime<Utc>,
+}
+
+/// What `AIDA_SESSION_GRANT` resolves to for expiry purposes.
+// trace:TASK-1736 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GrantLookup {
+    /// No grant handle in the environment.
+    NoGrant,
+    /// A grant for a seat the baseline confers anyway: its expiry costs nothing.
+    Baseline,
+    /// The handle is set but names no usable record (missing, malformed,
+    /// mismatched, or revoked, or its parent is). A launcher must not treat
+    /// this as "nothing to worry about".
+    Unresolved(String),
+    /// A live record and when it stops conferring its seat.
+    Expiry(GrantExpiry),
+}
+
+/// Classify the grant named by `AIDA_SESSION_GRANT`, reading the raw record
+/// rather than the validated grant so an already-expired grant still reports.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn session_grant_lookup() -> GrantLookup {
+    let Some(id) = std::env::var(GRANT_ENV)
+        .ok()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+    else {
+        return GrantLookup::NoGrant;
+    };
+    let grant = match read_grant(&id) {
+        Ok(grant) => grant,
+        Err(err) => return GrantLookup::Unresolved(err.to_string()),
+    };
+    if grant.revoked_at.is_some() {
+        return GrantLookup::Unresolved("session grant was revoked".to_string());
+    }
+    let seat = crate::canonical_role_name(&grant.seat);
+    if matches!(seat.as_str(), "implementer" | "guest" | "requester") {
+        return GrantLookup::Baseline;
+    }
+    let mut expires_at = grant.expires_at;
+    if let Some(parent_id) = grant.parent_grant_id.as_deref() {
+        match read_grant(parent_id) {
+            Ok(parent) if parent.revoked_at.is_some() => {
+                return GrantLookup::Unresolved(
+                    "the grant this session's grant was delegated from was revoked".to_string(),
+                )
+            }
+            Ok(parent) => expires_at = expires_at.min(parent.expires_at),
+            Err(err) => {
+                return GrantLookup::Unresolved(format!(
+                    "the grant this session's grant was delegated from: {err}"
+                ))
+            }
+        }
+    }
+    GrantLookup::Expiry(GrantExpiry { seat, expires_at })
+}
+
+/// The expiry of the grant named by `AIDA_SESSION_GRANT`. `None` when there
+/// is no grant, it is unresolvable or revoked, or its seat is one the
+/// baseline confers anyway (its expiry costs nothing).
+// trace:TASK-1736 | ai:claude
+pub(crate) fn session_grant_expiry() -> Option<GrantExpiry> {
+    match session_grant_lookup() {
+        GrantLookup::Expiry(expiry) => Some(expiry),
+        _ => None,
+    }
+}
+
+/// `1h05m` / `42m` / `under 1m` for a positive span.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn format_remaining(left: Duration) -> String {
+    let mins = left.num_minutes();
+    match mins {
+        m if m < 1 => "under 1m".to_string(),
+        m if m < 60 => format!("{m}m"),
+        m => format!("{}h{:02}m", m / 60, m % 60),
+    }
+}
+
+fn format_expiry_time(at: DateTime<Utc>) -> String {
+    at.format("%Y-%m-%d %H:%M UTC").to_string()
+}
+
+fn reenter_command(seat: &str) -> String {
+    format!("eval \"$(aida role enter {seat})\"")
+}
+
+/// Short statusline suffix for a grant inside `within` of expiry:
+/// `expires in 42m`, or `grant expired`.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn expiry_suffix(
+    expiry: &GrantExpiry,
+    now: DateTime<Utc>,
+    within: Duration,
+) -> Option<String> {
+    let left = expiry.expires_at - now;
+    if left >= within {
+        None
+    } else if left <= Duration::zero() {
+        Some("grant expired".to_string())
+    } else {
+        Some(format!("expires in {}", format_remaining(left)))
+    }
+}
+
+/// One-line warning for a grant inside `within` of expiry, naming the
+/// expiry time and the command that renews it.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn expiry_warning(
+    expiry: &GrantExpiry,
+    now: DateTime<Utc>,
+    within: Duration,
+) -> Option<String> {
+    let left = expiry.expires_at - now;
+    if left >= within {
+        return None;
+    }
+    let seat = &expiry.seat;
+    let at = format_expiry_time(expiry.expires_at);
+    let cmd = reenter_command(seat);
+    Some(if left <= Duration::zero() {
+        format!(
+            "The {seat} seat grant expired at {at}. Commands gated on {seat} will refuse until a human re-enters it at a terminal: {cmd}"
+        )
+    } else {
+        format!(
+            "The {seat} seat grant expires at {at} (in {}). Commands gated on {seat} will refuse after that. A human renews it at a terminal: {cmd}",
+            format_remaining(left)
+        )
+    })
+}
+
+/// The refusal a relay prints instead of launching a session whose grant
+/// has less than `within` left.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn launch_refusal(
+    expiry: &GrantExpiry,
+    now: DateTime<Utc>,
+    within: Duration,
+) -> Option<String> {
+    let left = expiry.expires_at - now;
+    if left >= within {
+        return None;
+    }
+    let seat = &expiry.seat;
+    let at = format_expiry_time(expiry.expires_at);
+    let state = if left <= Duration::zero() {
+        format!("expired at {at}")
+    } else {
+        format!("expires at {at}, in {}", format_remaining(left))
+    };
+    Some(format!(
+        "Not launching: the {seat} seat grant {state}, and a session needs at least {} left. Re-enter the seat at a terminal, then start again: {}",
+        format_remaining(within),
+        reenter_command(seat)
+    ))
+}
+
+/// The refusal a relay prints when `AIDA_SESSION_GRANT` is set but names no
+/// usable grant record: launching would only meet refusals mid-run. `label`
+/// is the session's role label, used to name the renew command when known.
+// trace:TASK-1736 | ai:claude
+pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> String {
+    let seat = label
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| crate::canonical_role_name(&s.to_ascii_lowercase()))
+        .unwrap_or_else(|| "<seat>".to_string());
+    format!(
+        "Not launching: this session's seat grant cannot be used ({reason}). Re-enter the seat at a terminal, then start again: {}",
+        reenter_command(&seat)
+    )
+}
+
 pub(crate) fn require_direct_tty() -> Result<()> {
     use std::io::IsTerminal;
     if !(std::io::stdin().is_terminal() && std::io::stderr().is_terminal()) {
@@ -572,6 +761,189 @@ mod tests {
                 role_display(root, Some("advisor")),
                 RoleDisplay::Ungranted("advisor".into()),
                 "a revoked grant reads as ungranted"
+            );
+        }
+    }
+
+    fn expiry_in(seat: &str, left: Duration) -> (GrantExpiry, DateTime<Utc>) {
+        let now = Utc::now();
+        (
+            GrantExpiry {
+                seat: seat.to_string(),
+                expires_at: now + left,
+            },
+            now,
+        )
+    }
+
+    /// A grant near expiry warns and refuses a launch; one with time to
+    /// spare does neither; an expired one says it expired.
+    // trace:TASK-1736 | ai:claude
+    #[test]
+    fn expiry_messages_follow_the_time_left() {
+        let (fresh, now) = expiry_in("advisor", Duration::hours(3));
+        assert_eq!(expiry_warning(&fresh, now, EXPIRY_WARN_WITHIN), None);
+        assert_eq!(expiry_suffix(&fresh, now, EXPIRY_WARN_WITHIN), None);
+        assert_eq!(launch_refusal(&fresh, now, Duration::hours(1)), None);
+
+        let (soon, now) = expiry_in("advisor", Duration::minutes(90));
+        let warning = expiry_warning(&soon, now, EXPIRY_WARN_WITHIN).expect("warns inside 2h");
+        assert!(warning.contains("expires at"), "{warning}");
+        assert!(warning.contains("(in 1h30m)"), "{warning}");
+        assert!(
+            warning.contains("eval \"$(aida role enter advisor)\""),
+            "{warning}"
+        );
+        assert_eq!(
+            expiry_suffix(&soon, now, EXPIRY_WARN_WITHIN).as_deref(),
+            Some("expires in 1h30m")
+        );
+        assert_eq!(
+            launch_refusal(&soon, now, Duration::hours(1)),
+            None,
+            "90m left is enough to launch"
+        );
+
+        let (close, now) = expiry_in("reviewer", Duration::minutes(30));
+        let refusal = launch_refusal(&close, now, Duration::hours(1)).expect("refuses under 1h");
+        assert!(refusal.starts_with("Not launching"), "{refusal}");
+        assert!(refusal.contains("in 30m"), "{refusal}");
+        assert!(refusal.contains("aida role enter reviewer"), "{refusal}");
+
+        let (gone, now) = expiry_in("advisor", -Duration::minutes(5));
+        let warning = expiry_warning(&gone, now, EXPIRY_WARN_WITHIN).unwrap();
+        assert!(warning.contains("expired at"), "{warning}");
+        assert_eq!(
+            expiry_suffix(&gone, now, EXPIRY_WARN_WITHIN).as_deref(),
+            Some("grant expired")
+        );
+        assert!(launch_refusal(&gone, now, Duration::hours(1))
+            .unwrap()
+            .contains("expired at"));
+    }
+
+    /// A set handle naming no usable record is `Unresolved`, never silently
+    /// `NoGrant`; the launch refusal names the renew command.
+    // trace:TASK-1736 | ai:claude
+    #[test]
+    fn unresolvable_grant_is_distinguished_from_no_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let subject = crate::current_user_id(None);
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some("  "))]);
+            assert_eq!(session_grant_lookup(), GrantLookup::NoGrant);
+        }
+        let missing = Uuid::new_v4().to_string();
+        for handle in [missing.as_str(), "not-a-uuid"] {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(handle))]);
+            assert!(
+                matches!(session_grant_lookup(), GrantLookup::Unresolved(_)),
+                "{handle}"
+            );
+        }
+        let id = test_support::mint_grant_for(root, &subject, "advisor", &[]);
+        let mut grant = read_grant(&id).unwrap();
+        grant.revoked_at = Some(Utc::now());
+        write_grant(&grant).unwrap();
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+            assert_eq!(
+                session_grant_lookup(),
+                GrantLookup::Unresolved("session grant was revoked".into())
+            );
+        }
+        let refusal = unresolved_launch_refusal("session grant was revoked", Some("Advisor"));
+        assert!(refusal.starts_with("Not launching"), "{refusal}");
+        assert!(refusal.contains("aida role enter advisor"), "{refusal}");
+        assert!(unresolved_launch_refusal("x", None).contains("aida role enter <seat>"));
+    }
+
+    // trace:TASK-1736 | ai:claude
+    #[test]
+    fn format_remaining_is_compact() {
+        assert_eq!(format_remaining(Duration::seconds(20)), "under 1m");
+        assert_eq!(format_remaining(Duration::minutes(42)), "42m");
+        assert_eq!(format_remaining(Duration::minutes(65)), "1h05m");
+        assert_eq!(format_remaining(Duration::hours(2)), "2h00m");
+    }
+
+    /// The expiry comes from the raw record, so an expired grant still
+    /// reports; a child grant dies with its parent; a revoked grant and the
+    /// implementer baseline report nothing.
+    // trace:TASK-1736 | ai:claude
+    #[test]
+    fn session_grant_expiry_reads_the_record_and_its_parent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let subject = crate::current_user_id(None);
+        let rewrite = |id: &str, edit: &dyn Fn(&mut SeatGrant)| {
+            let mut grant = read_grant(id).unwrap();
+            edit(&mut grant);
+            write_grant(&grant).unwrap();
+            grant
+        };
+
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, None)]);
+            assert_eq!(session_grant_expiry(), None, "no grant, nothing to report");
+        }
+
+        let id = test_support::mint_grant_for(root, &subject, "advisor", &["reviewer"]);
+        let soon = Utc::now() + Duration::minutes(30);
+        rewrite(&id, &|g| g.expires_at = soon);
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+            assert_eq!(
+                session_grant_expiry(),
+                Some(GrantExpiry {
+                    seat: "advisor".into(),
+                    expires_at: soon,
+                })
+            );
+        }
+
+        // A child carrying a later expiry than its parent still dies with it.
+        let parent = rewrite(&id, &|g| g.expires_at = soon);
+        let mut kid = parent.clone();
+        kid.id = Uuid::new_v4().to_string();
+        kid.seat = "reviewer".into();
+        kid.parent_grant_id = Some(parent.id.clone());
+        kid.expires_at = soon + Duration::hours(10);
+        write_grant(&kid).unwrap();
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(kid.id.as_str()))]);
+            assert_eq!(session_grant_expiry().map(|e| e.expires_at), Some(soon));
+        }
+
+        // Already expired: current_grant drops it, but the expiry still reports.
+        let past = Utc::now() - Duration::minutes(5);
+        rewrite(&id, &|g| g.expires_at = past);
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+            assert!(current_grant(root).is_none());
+            assert_eq!(session_grant_expiry().map(|e| e.expires_at), Some(past));
+        }
+
+        rewrite(&id, &|g| g.revoked_at = Some(Utc::now()));
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+            assert_eq!(
+                session_grant_expiry(),
+                None,
+                "a revoked grant reports nothing"
+            );
+        }
+
+        let implementer = test_support::mint_grant_for(root, &subject, "implementer", &[]);
+        rewrite(&implementer, &|g| g.expires_at = soon);
+        {
+            let _env =
+                crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(implementer.as_str()))]);
+            assert_eq!(
+                session_grant_expiry(),
+                None,
+                "the implementer baseline needs no grant, so its expiry costs nothing"
             );
         }
     }
