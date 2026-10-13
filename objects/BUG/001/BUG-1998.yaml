@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:04:49.082266695Z
-modified_at: 2026-10-13T20:24:38.048531655Z
+modified_at: 2026-10-13T20:25:58.023531920Z
 req_type: Bug
 tags:
 - follow-up:review
@@ -28,6 +28,31 @@ comments:
   created_at: 2026-10-13T18:09:49.508628880Z
   modified_at: 2026-10-13T18:09:49.508628880Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a136f1-7c07-76a0-aed6-6a0ae3e2dcac
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+
+    Approach:
+    1. In aida-cli-lib/src/history_cache.rs:
+       • Add tip_live_elsewhere: bool to HistoryCacheStatus.
+       • In status_at, when tip != head and !st.head_behind_tip, evaluate st.tip_live_elsewhere = tip_is_live_elsewhere(store, tip, head).
+       • In classify_miss, if st.head_behind_tip || st.tip_live_elsewhere, return IndexMiss::CheckoutBehind.
+    2. In aida-cli-lib/src/cache_cmd.rs (history_status_lines):
+       • Branch on st.head_behind_tip || st.tip_live_elsewhere to report:
+         "History status:   BEHIND — another checkout moved the shared index on".
+    3. In aida-cli-lib/src/doctor_cmd.rs (history_index_doctor_line):
+       • Branch on st.head_behind_tip || st.tip_live_elsewhere to report:
+         "history index behind the store{by}{running} — another checkout moved the shared index on.".
+    4. Tests:
+       • Unit tests for history_status_lines and history_index_doctor_line when head_behind_tip or tip_live_elsewhere is true: verify neither mentions "catches up" nor recommends "rebuild".
+       • Unit tests for classify_miss and status_at: verify a diverged HEAD with tip live elsewhere classifies as CheckoutBehind (with no-rebuild note), while a diverged HEAD without tip live elsewhere classifies as Stuck.
+
+    Acceptance Mapping:
+    - With HEAD an ancestor of the index tip, cache status and doctor lines neither say index will catch up nor suggest rebuild -> verified by formatter unit tests.
+    - Diverged HEAD with tip live in another checkout gets no-rebuild miss (CheckoutBehind) and note; diverged HEAD without tip live elsewhere stays Stuck -> verified by classify_miss / status_at tests.
+  created_at: 2026-10-13T20:25:58.023531920Z
+  modified_at: 2026-10-13T20:25:58.023531920Z
 history:
 - id: 01a13674-db4b-72f1-a3ed-13bc3fc38e01
   author: joe
