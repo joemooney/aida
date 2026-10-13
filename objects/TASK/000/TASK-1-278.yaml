@@ -1,0 +1,30 @@
+id: 01a13453-3e5e-7f02-ae6a-c603248b70ca
+spec_id: TASK-1-278
+title: 'non-blocking: exemption keys on CHERRY_PICK_HEAD/REVERT_HEAD existence only (a …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1728, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: exemption keys on CHERRY_PICK_HEAD/REVERT_HEAD existence only (a hand-made 'git update-ref CHERRY_PICK_HEAD HEAD' bypasses the gate), same pre-existing trust model as MERGE_HEAD and as specified
+
+  PR: #2591
+  Reviewed sha: bfd42471c3663b3285d121439e83afa9a43e45c8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T08:13:53.118016370Z
+modified_at: 2026-10-13T08:13:53.118016370Z
+req_type: Task
+tags:
+- carried-from:TASK-1728
+- finding-hash:57def9ff
+- from-review:PR-2591
+- kind:carried-forward
+filed_at:
+  code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 4d87a732-07ba-4048-9889-3384420e68d6
