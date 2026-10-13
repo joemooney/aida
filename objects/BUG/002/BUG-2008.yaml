@@ -1,0 +1,42 @@
+id: 01a1354b-4d7b-73b1-b496-26c28513af57
+spec_id: BUG-2008
+agreed_id: BUG-2008
+title: Pre-commit /// gate still refuses a wrapped prose sentence whose spec ID lands alone on the next line (BUG-629 residue)
+description: |
+  The pre-commit `///` provenance gate (template `aida-core/templates/hooks/aida-pre-commit.sh`, rule 5, ~line 323) rejects a doc-comment line whose content is only SPEC-ID token(s) and punctuation. BUG-629 relaxed it so that IDs inside prose pass. But when an ordinary prose sentence wraps so that the ID lands alone on its own line, it is still refused:
+
+  ```rust
+  /// Reuses the usage log introduced by
+  /// STORY-30.
+  ```
+
+  Seen in aida-relay on 2026-10-03 (aida-relay TASK-56). An agent worked around it by patching the installed hook locally, with no spec and no commit. The Oct 11 hook reinstall silently dropped that patch, and nobody could explain it two weeks later. That's the cost of leaving this unfixed.
+
+  ## Want
+  Judge a `///` line in the context of its doc-comment block. A bare-ID line that continues a sentence from the previous `///` line (the previous line doesn't end a sentence, or the ID line ends with `.`/`,`/`)` as running text) is prose, not provenance. Keep rejecting provenance markers (`trace:... | ai:...`) and standalone ID-only doc blocks.
+
+  ## Acceptance
+  - The two-line wrapped example above passes; a one-line `/// STORY-30` and a `/// trace:STORY-30 | ai:claude` line are still refused.
+  - Tests for both cases in the hook's test suite.
+  - `make sync-templates` and `make check-templates` run; the template master is the only file edited.
+
+  See also: BUG-629, aida-relay TASK-56.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T12:44:49.915842880Z
+modified_at: 2026-10-13T12:44:49.915842880Z
+req_type: Bug
+tags:
+- cross-repo
+- hooks
+- pre-commit
+filed_at:
+  code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
