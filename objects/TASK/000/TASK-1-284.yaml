@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T12:20:01.745063368Z
-modified_at: 2026-10-13T12:20:01.745063368Z
+modified_at: 2026-10-13T18:10:42.477521308Z
 req_type: Task
 tags:
 - carried-from:TASK-1727
 - finding-hash:70aee09d
 - from-review:PR-2590
 - kind:carried-forward
+comments:
+- id: 01a13675-a6ad-70e3-b439-010f28f04b83
+  author: joe
+  content: 'Rejected: covered by story_1648_main_checkout_drift_tests.rs behind_origin_is_drift / ahead_and_behind_both_render.'
+  created_at: 2026-10-13T18:10:42.477521308Z
+  modified_at: 2026-10-13T18:10:42.477521308Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: cca407e2a44acac7053e619e474ab00f15544ff4
   branch: main
