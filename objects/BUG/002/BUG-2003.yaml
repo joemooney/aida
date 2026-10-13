@@ -12,12 +12,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:20:11.259964808Z
-modified_at: 2026-10-13T04:25:28.123608270Z
+modified_at: 2026-10-13T18:10:16.620672191Z
 req_type: Bug
 tags:
 - follow-up
 - hooks
 - review-follow-up
+comments:
+- id: 01a13675-41ac-7901-9cd1-a23e9e748dc6
+  author: joe
+  content: 'Triage: item (2) is resolved as ''print a note when the hooks dir is outside the repo git dir'' (no confirmation prompt). Absorbs TASK-1340/TASK-1341. Bundle with BUG-2009. Note: PR #2541''s options may also touch hooksPath handling; coordinate.'
+  created_at: 2026-10-13T18:10:16.620672191Z
+  modified_at: 2026-10-13T18:10:16.620672191Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
   branch: main
