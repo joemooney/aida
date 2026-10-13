@@ -407,7 +407,7 @@ fn queue_done_does_not_warn() {
         "plain `aida queue done` moves to Done, not Completed, and must not warn:\n{stderr}"
     );
     let stdout = toon_show(&fx, &[&id]);
-    assert!(stdout.contains("status=done"), "{stdout}");
+    assert!(stdout.contains("status: done"), "{stdout}");
 }
 
 // trace:BUG-1996 | ai:antigravity
