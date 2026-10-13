@@ -1787,36 +1787,93 @@ fn recovery_with_old_format_promoted_without_prev_record() {
     assert_consistent(&f, &a, &b, "old format without prev record");
 }
 
+/// Apply the first `k` steps of the pre-BUG-1959 (STORY-1646) rollback.
+fn apply_old_rollback_steps(f: &Fixture, k: usize) {
+    let l = &f.layout;
+    let swap = swap_dir(f);
+    let steps: Vec<Box<dyn Fn()>> = vec![
+        Box::new(|| {
+            fs::create_dir_all(&swap).unwrap();
+        }),
+        Box::new(|| {
+            fs::copy(l.live("aida"), swap.join("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::copy(l.live("aida-server"), swap.join("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            let m = l.live_dir.join(PROMOTED_FILE);
+            if m.is_file() {
+                fs::rename(&m, swap.join(PROMOTED_FILE)).unwrap();
+            }
+        }),
+        Box::new(|| {
+            fs::rename(l.prev("aida"), l.live("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(swap.join("aida"), l.prev("aida")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(l.prev("aida-server"), l.live("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            fs::rename(swap.join("aida-server"), l.prev("aida-server")).unwrap();
+        }),
+        Box::new(|| {
+            let (lm, pm) = (
+                l.live_dir.join(PROMOTED_FILE),
+                l.prev_dir().join(PROMOTED_FILE),
+            );
+            if pm.is_file() && !lm.exists() {
+                fs::rename(&pm, &lm).unwrap();
+            }
+        }),
+        Box::new(|| {
+            let (p, pm) = (swap.join(PROMOTED_FILE), l.prev_dir().join(PROMOTED_FILE));
+            if p.is_file() && !pm.exists() {
+                fs::rename(&p, &pm).unwrap();
+            }
+        }),
+        Box::new(|| {
+            let _ = fs::remove_dir(&swap);
+        }),
+    ];
+    for s in steps.iter().take(k) {
+        s();
+    }
+}
+
 // trace:BUG-1999 | ai:antigravity
 #[test]
 fn recovery_with_old_format_crash_during_normalization_preserves_records() {
-    // Interruption after writing ROLLBACK_MARKER and parking prev's record,
-    // but before moving .rollback/.promoted to live.promoted.
-    let f = fixture();
-    let (a, b) = pairs_a_b(&f, true, true);
-    let swap = swap_dir(&f);
-    fs::create_dir_all(&swap).unwrap();
-    for n in LIVE_BINARIES {
-        write(&f.layout.live(n), &format!("B-{n}"));
-        write(&f.layout.prev(n), &format!("A-{n}"));
+    for (a_rec, b_rec) in [(true, true), (true, false)] {
+        for k in 4..=9 {
+            for crash_step in ["marker", "parked_prev", "parked_live"] {
+                let f = fixture();
+                let (a, b) = pairs_a_b(&f, a_rec, b_rec);
+                apply_old_rollback_steps(&f, k);
+                assert!(swap_dir(&f).join(PROMOTED_FILE).is_file());
+                let ctx = format!("recs ({a_rec},{b_rec}) old-step {k} crash-at {crash_step}");
+                let first = {
+                    let _l = lock_live_dir(&f.layout).unwrap();
+                    recover_live_dir_with_steps(&f.layout, &mut |s| {
+                        if s == crash_step {
+                            bail!("simulated crash at {s}");
+                        }
+                        Ok(())
+                    })
+                };
+                if first.is_ok() {
+                    continue;
+                }
+                assert!(first.is_err(), "{ctx}: expected crash");
+                recover(&f);
+                assert_consistent(&f, &a, &b, &ctx);
+                recover(&f);
+                assert_consistent(&f, &a, &b, &format!("{ctx} twice"));
+            }
+        }
     }
-    write(&swap.join(ROLLBACK_MARKER), "");
-    write(
-        &swap.join(PARKED_PREV_RECORD),
-        &serde_json::to_string(&b).unwrap(),
-    );
-    fs::remove_file(f.layout.prev_dir().join(PROMOTED_FILE)).unwrap();
-    fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE)).unwrap();
-    write(
-        &swap.join(PROMOTED_FILE),
-        &serde_json::to_string(&a).unwrap(),
-    );
-
-    recover(&f);
-    assert_eq!(read(&f.layout.live("aida")), "B-aida");
-    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
-    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
-    assert_consistent(&f, &a, &b, "old format crash during normalization");
 }
 
 // trace:BUG-1999 | ai:antigravity
