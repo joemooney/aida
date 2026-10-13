@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:30:08.591543166Z
-modified_at: 2026-10-13T19:44:26.034495944Z
+modified_at: 2026-10-13T19:45:38.808331276Z
 req_type: Bug
 tags:
 - forge
@@ -22,6 +22,31 @@ comments:
   created_at: 2026-10-13T14:53:43.357322132Z
   modified_at: 2026-10-13T14:53:43.357322132Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a136cc-91f8-7e41-9e10-8796258bc105
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    Approach:
+    1. In aida-cli-lib/src/remote_create.rs (gitlab_release_exists):
+       Instead of passing --header "PRIVATE-TOKEN: {token}" on curl's command line, pass -H @- and pipe the "PRIVATE-TOKEN: {token}\n" header via child.stdin. This prevents the token from appearing in curl's argv and /proc/<pid>/cmdline.
+    2. In aida-cli-lib/src/gitlab_project_create.rs (ls_remote_probe, ensure_gitlab_project_exists) and aida-cli-lib/src/remote_create.rs:
+       Update ensure_gitlab_project_exists to accept remote_name and pass remote_name to ls_remote_probe ('git ls-remote --heads <remote_name>') instead of passing the URL directly. The URL is still used to detect forge kind, redact userinfo for warnings, and extract GitLab target coordinates. This prevents any embedded user:token credentials in URLs from appearing in git ls-remote argv.
+    3. Tests:
+       Add unit tests in a focused test module aida-cli-lib/src/tests/bug_2004_token_leak_argv_tests.rs:
+       - test_gitlab_release_exists_passes_token_via_stdin_not_argv: Runs gitlab_release_exists with a mock curl binary that logs all argv arguments and stdin content. Asserts that the secret token is never present in any argv argument, but is delivered via stdin.
+       - test_ensure_gitlab_project_exists_passes_remote_name_to_ls_remote: Runs ensure_gitlab_project_exists with a mock git binary that records its argv. Asserts that git ls-remote --heads is called with the remote name rather than a URL containing credentials.
+       - test_gitlab_release_exists_without_token_does_not_pass_header_or_stdin: Asserts that when no token is configured, curl is called cleanly without stdin piping.
+
+    Files & Functions to change:
+    - aida-cli-lib/src/remote_create.rs: gitlab_release_exists, ensure_gitlab_project_exists call sites.
+    - aida-cli-lib/src/gitlab_project_create.rs: ls_remote_probe, ensure_gitlab_project_exists.
+    - aida-cli-lib/src/tests/bug_2004_token_leak_argv_tests.rs: new test module.
+
+    Risks & Acceptance:
+    - Risk: curl -H @- behavior with empty/missing token or streaming errors. Mitigation: only pass -H @- and pipe when gitlab_release_token_for_api_url returns Some(token).
+    - Acceptance: No token appears in child process argv for GitLab release checks or mirror re-run probes. Tested with recording mock executables.
+  created_at: 2026-10-13T19:45:38.808331276Z
+  modified_at: 2026-10-13T19:45:38.808331276Z
 history:
 - id: 01a13538-8b6f-74b1-98dd-18b09af158a7
   author: joe
