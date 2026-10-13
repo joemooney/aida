@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T18:22:10.488159011Z
-modified_at: 2026-10-13T20:45:00.111002839Z
+modified_at: 2026-10-13T21:00:15.993675906Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -52,6 +52,11 @@ comments:
     Built only on GitHub CI; not compiled locally.
   created_at: 2026-10-13T20:45:00.111002839Z
   modified_at: 2026-10-13T20:45:00.111002839Z
+- id: 01a13710-e2f9-7960-82da-0609c5c39408
+  author: joe
+  content: 'FACTORY DRAFT: PR #2603 at e93974c6ae4fd3f7c46927da85fa0b462fa9c656'
+  created_at: 2026-10-13T21:00:15.993675906Z
+  modified_at: 2026-10-13T21:00:15.993675906Z
 history:
 - id: 01a13674-e235-7e90-ab91-86438bf5ec5e
   author: joe
