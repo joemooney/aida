@@ -1,0 +1,27 @@
+id: 01a13396-f90a-7480-ad7c-37d95b405653
+spec_id: FAQ-51
+agreed_id: FAQ-51
+title: Why does 'aida agent new --spec <ID>' fail with 'scope is already owned by session ...'?
+description: 'Another session still holds the lease (work claim) on that spec, often an earlier implementer whose Claude process has exited. ''aida session leases'' hides older leases by default; use ''aida session leases --all'' to see them. To re-dispatch into the same worktree for a rework round, leave out --spec and pass --cwd <worktree>; the new agent works under the existing lease. Add --no-resume to skip the session picker. Don''t run ''aida session end <id>'' just to clear the lease: it deletes the worktree. (Tracked: BUG-2002.)'
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:48:14.602621519Z
+modified_at: 2026-10-13T04:48:14.602621519Z
+req_type: Faq
+tags:
+- agent-new
+- dispatch
+- leases
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T04:48:14.602652363Z
