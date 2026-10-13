@@ -6440,13 +6440,18 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
                 &rows,
             ));
         }
-        if !c.still_active.is_empty() {
+        // trace:BUG-1962 | ai:antigravity
+        if !c.still_tripped.is_empty() {
             let rows = c
-                .still_active
+                .still_tripped
                 .iter()
                 .map(|v| vec![v.clone()])
                 .collect::<Vec<_>>();
-            blocks.push(table_raw("runaway_seats_still_active", &["finding"], &rows));
+            blocks.push(table_raw(
+                "runaway_seats_still_tripped",
+                &["finding"],
+                &rows,
+            ));
         }
     }
     if let Some(v) = &report.error {
