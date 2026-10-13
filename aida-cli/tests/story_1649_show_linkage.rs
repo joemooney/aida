@@ -5,7 +5,7 @@
 //! `aida edit <ID> --status completed` warns — never refuses — when a code
 //! spec reaches Completed with nothing shipped on the default branch, checking
 //! both the local default branch and `origin/<default>`. BUG-1958 adds the
-//! same warning on `aida done`.
+//! same warning on `aida done`. BUG-1996 adds the same warning on `aida queue done`.
 // trace:STORY-1649 | ai:claude
 
 use std::path::Path;
@@ -355,5 +355,56 @@ fn done_with_shipped_commit_does_not_warn() {
     assert!(
         !stderr.contains(NO_SHIPPED_COMMIT),
         "shipped spec must not warn on `aida done`:\n{stderr}"
+    );
+}
+
+// ---- BUG-1996: `aida queue done` gets the same completion warning -----------
+
+fn queue_done(fixture: &Fixture, id: &str) -> (String, String) {
+    ok(
+        "aida queue done",
+        &aida(fixture, &["queue", "done", id, "--skip-pr-check", "--yes"]),
+    )
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_done_without_shipped_commit_warns() {
+    let fx = init_fixture();
+    let id = add_spec(&fx, "task");
+    let (_, stderr) = queue_done(&fx, &id);
+    assert!(
+        stderr.contains(NO_SHIPPED_COMMIT) && stderr.contains(&id),
+        "expected `aida queue done` to warn naming {id}:\n{stderr}"
+    );
+    assert!(stderr.contains("doctor:no-code"), "{stderr}");
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_done_opted_out_spec_does_not_warn() {
+    let fx = init_fixture();
+    let id = add_spec(&fx, "task");
+    ok(
+        "aida edit --add-tag",
+        &aida(&fx, &["edit", &id, "--add-tag", "doctor:no-code"]),
+    );
+    let (_, stderr) = queue_done(&fx, &id);
+    assert!(
+        !stderr.contains(NO_SHIPPED_COMMIT),
+        "doctor:no-code opt-out must silence the `aida queue done` warning:\n{stderr}"
+    );
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_done_with_shipped_commit_does_not_warn() {
+    let fx = init_fixture();
+    let id = add_spec(&fx, "task");
+    commit_on_main(&fx, "work.txt", &format!("feat: ship it ({id}) (#53)"));
+    let (_, stderr) = queue_done(&fx, &id);
+    assert!(
+        !stderr.contains(NO_SHIPPED_COMMIT),
+        "shipped spec must not warn on `aida queue done`:\n{stderr}"
     );
 }

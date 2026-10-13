@@ -526,7 +526,7 @@ pub(crate) fn advance_dispatch(
             // going through auto-bump or reconcile, so it must emit the ship
             // record itself. STORY-1418: stamp + persist + emit via the seam.
             // trace:BUG-1286 trace:STORY-1418 | ai:claude
-            crate::completion::transition_to_completed(
+            let into_completed = crate::completion::transition_to_completed(
                 &mut req,
                 store_path.parent(),
                 display,
@@ -550,6 +550,15 @@ pub(crate) fn advance_dispatch(
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display.bold()
             );
+            // BUG-1996: warn if completed without a shipped commit on the
+            // default branch (same check as `aida edit --status completed` and
+            // `aida done`).
+            // trace:BUG-1996 | ai:antigravity
+            if into_completed {
+                if let Some(root) = store_path.parent() {
+                    crate::shipped_linkage::warn_if_completed_without_shipped_commit(root, &req);
+                }
+            }
         }
         AdvanceAction::None => {
             println!(
@@ -5441,6 +5450,14 @@ pub(crate) fn handle_queue_command(
             // trace:STORY-1480 | ai:claude
             if let Ok(project_root) = find_project_root() {
                 let _ = crate::timing_record::publish(&project_root, &display_id, "queue-done");
+                // BUG-1996: `aida queue done` warns if completed without a shipped
+                // commit on the default branch, like `aida edit --status completed`
+                // and `aida done`.
+                // trace:BUG-1996 | ai:antigravity
+                crate::shipped_linkage::warn_if_completed_without_shipped_commit(
+                    &project_root,
+                    req,
+                );
             }
             let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
                 .ok()
