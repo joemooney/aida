@@ -1,0 +1,25 @@
+id: 01a135c1-521c-75a1-9cf5-60ef9e6454e0
+spec_id: TASK-1740
+agreed_id: TASK-1740
+title: 'BUG-1972 test gaps: same-host different-path mirror re-run, env-token-used notice, and redaction at each call site'
+description: 'Follow-up from the round-2 advisor review of #2582 (APPROVE at e241935dc0). All low; the code is correct today. (1) Pin a same-host, different-path re-run (e.g. ai/proj vs team/elsewhere): replacing same_remote with a host-only comparison currently survives every test and would bring back the round-1 bug on one host. (2) Assert the spec-required notice when the env token is used (gitlab_project_create.rs ~211-218); a mutation suppressing it survived. (3) Capture output at the redaction call sites (''already points at'', ''added remote'', push ''still failed''). Today only the helper is tested, and dropping redaction at any call site survived.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T14:53:44.348492787Z
+modified_at: 2026-10-13T14:53:44.348492787Z
+req_type: Task
+tags:
+- forge
+- gitlab
+- review-follow-up
+- tests
+filed_at:
+  code_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
