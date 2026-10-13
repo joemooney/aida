@@ -443,6 +443,32 @@ impl AmbientGuard {
         }));
         Self { prev, _env: env }
     }
+
+    /// [`Self::hermetic`] that exports `grant` as the session grant handle
+    /// instead of shedding it, without minting or validating anything: the
+    /// caller prepares the grant record (valid, expired, revoked, or none at
+    /// all) and this guard only seats the handle, as a relay launcher would.
+    // trace:BUG-1983 | ai:claude
+    pub(crate) fn hermetic_with_grant(
+        root: &std::path::Path,
+        role: Option<&str>,
+        grant: &str,
+    ) -> Self {
+        let env = EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_ROLE", role),
+            (crate::seat_authority::GRANT_ENV, Some(grant)),
+            ("AIDA_USER", Some(HERMETIC_TEST_USER)),
+            ("AIDA_ROLE_INSTANCE", None),
+            ("AIDA_AUTO_COMPLETE", None),
+            ("AIDA_AUTO_COMPLETE_TOKEN", None),
+        ]);
+        let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: root.to_path_buf(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+        }));
+        Self { prev, _env: env }
+    }
 }
 
 impl Drop for AmbientGuard {

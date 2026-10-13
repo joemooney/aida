@@ -89,9 +89,14 @@ fn delegated(root: &Path, me: &str) -> (String, String) {
 fn verdict(setup: impl FnOnce(&Path, &str) -> String) -> (String, GrantCheck) {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
+    // Hold the env lock across identity resolution, the mint and the check,
+    // so a sibling test that pins `AIDA_USER` cannot change who `me` is
+    // between minting and validating (a spurious subject mismatch).
+    // trace:BUG-1983 | ai:claude
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&[GRANT_ENV]);
     let me = crate::current_user_id(None);
     let id = setup(root, &me);
-    let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+    env.set_key(GRANT_ENV, &id);
     let check = grant_check(root);
     assert_eq!(
         legacy_current_grant(root).map(|g| g.id),
@@ -137,12 +142,17 @@ fn no_exported_grant_is_absent_not_rejected() {
 
 /// C3 regression pin: an env-only advisor label with no grant has no
 /// advisor authority.
+///
+/// Hermetic: the guard also clears `AIDA_AUTO_COMPLETE`,
+/// `AIDA_AUTO_COMPLETE_TOKEN` and `AIDA_ROLE_INSTANCE` and pins the ambient
+/// root and a non-TTY stdin, so a live drain or an interactive `cargo test`
+/// cannot flip the answer.
+// trace:BUG-1983 | ai:claude
 #[test]
 fn env_only_advisor_label_has_no_authority() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_SESSION_ROLE", Some("advisor")),
-        (GRANT_ENV, None),
-    ]);
+    let tmp = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor"));
+    assert!(std::env::var_os(GRANT_ENV).is_none());
     assert!(!crate::role::has_advisor_authority());
 }
 
@@ -357,10 +367,13 @@ fn an_expired_grant_reads_as_expired_not_roleless() {
 fn review_record_refuses_a_rejected_grant() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
+    // Same env-lock discipline as `verdict` (identity stable across mint
+    // and check). trace:BUG-1983 | ai:claude
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&[GRANT_ENV]);
     let me = crate::current_user_id(None);
     let id = mint_grant_for(root, &me, "reviewer", &[]);
     edit(&id, |g| g.revoked_at = Some(past()));
-    let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
+    env.set_key(GRANT_ENV, &id);
     let err = crate::handle_review_record_at(
         root.to_path_buf(),
         "BUG-1",
@@ -380,4 +393,282 @@ fn review_record_refuses_a_rejected_grant() {
         "{message}"
     );
     assert!(message.contains("revoked at"), "{message}");
+}
+
+// ---------------------------------------------------------------------------
+// Review fixes on PR #2587: the real gates, driven end to end.
+// trace:BUG-1983 | ai:claude
+// ---------------------------------------------------------------------------
+
+use crate::test_env::{AmbientGuard, HERMETIC_TEST_USER};
+
+const SPEC: &str = "TASK-1";
+const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// A throwaway project: the seat-grant scaffolding (`.aida/config.toml`,
+/// `.aida-store/registry`), a git-initialised store, and one Draft spec.
+/// Returns the tempdir and the store path.
+// trace:BUG-1983 | ai:claude
+fn draft_project() -> (tempfile::TempDir, std::path::PathBuf) {
+    use aida_core::db::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    // Scaffolding only; each case mints the grant it exports.
+    mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+    let store = crate::detect_distributed_store_from(root).unwrap();
+    aida_core::git_ops::init(&store).unwrap();
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    let backend = aida_core::CachedGitBackend::open(
+        &store,
+        &aida_core::CachedGitBackend::default_cache_path(&store),
+    )
+    .unwrap();
+    let mut req = aida_core::models::Requirement::new("fixture".into(), "desc".into());
+    req.spec_id = Some(SPEC.into());
+    req.status = aida_core::models::RequirementStatus::Draft;
+    backend.add_requirement(req).unwrap();
+    (tmp, store)
+}
+
+fn spec_status(store: &Path) -> aida_core::models::RequirementStatus {
+    use aida_core::db::DatabaseBackend;
+    aida_core::CachedGitBackend::open(
+        store,
+        &aida_core::CachedGitBackend::default_cache_path(store),
+    )
+    .unwrap()
+    .get_requirement_by_spec_id(SPEC)
+    .unwrap()
+    .unwrap()
+    .status
+}
+
+/// `aida edit TASK-1 --status approved`, parsed by the real CLI and run
+/// through the real command handler: the Draft->Approved advisor gate.
+// trace:BUG-1983 | ai:claude
+fn edit_gate_refusal(store: &Path) -> String {
+    use clap::Parser;
+    let cli = crate::Cli::try_parse_from(["aida", "edit", SPEC, "--status", "approved"]).unwrap();
+    let err = crate::git_backend_cmd::handle_git_backend_command(store, &cli.command)
+        .expect_err("the Draft->Approved gate must refuse");
+    assert_eq!(
+        spec_status(store),
+        aida_core::models::RequirementStatus::Draft,
+        "a refused promotion must leave the spec Draft"
+    );
+    format!("{err:#}")
+}
+
+/// `aida queue add TASK-1 --for implementer`: the queue's dispatch gate,
+/// which shares the edit gate's refusal tail (`roleless_recovery_sentence`).
+// trace:BUG-1983 | ai:claude
+fn queue_gate_refusal(store: &Path) -> String {
+    let cmd = crate::QueueCommand::Add {
+        id: SPEC.into(),
+        top: false,
+        bottom: false,
+        user: None,
+        note: None,
+        r#for: Some("implementer".into()),
+        scope: None,
+        for_session: None,
+        no_scope: true,
+        global: false,
+        force: false,
+    };
+    let storage = crate::Storage::new(store);
+    let err = crate::queue_cmd::handle_queue_command(&cmd, &storage, store)
+        .expect_err("queuing for execution without dispatch authority must refuse");
+    format!("{err:#}")
+}
+
+/// `aida review record TASK-1 --verdict approved` through its production
+/// handler, rooted at the same project.
+// trace:BUG-1983 | ai:claude
+fn review_record(root: &Path) -> anyhow::Result<()> {
+    crate::handle_review_record_at(
+        root.to_path_buf(),
+        SPEC,
+        "approved",
+        Some(SHA),
+        Some("some-branch"),
+        None,
+        &[],
+        &[],
+        None,
+    )
+}
+
+/// The refusal names the grant by its 8-character prefix only (C2), the
+/// failed check, and never the roleless "No active role" line (AC4).
+// trace:BUG-1983 | ai:claude
+fn assert_names_rejection(surface: &str, message: &str, id: &str, sentence: &str, phrase: &str) {
+    assert!(
+        message.contains(sentence),
+        "{surface}: missing `{sentence}` in: {message}"
+    );
+    assert!(
+        message.contains(&id[..8]),
+        "{surface}: no prefix in: {message}"
+    );
+    assert!(
+        !message.contains(id),
+        "{surface}: full handle leaked: {message}"
+    );
+    assert!(
+        message.contains(phrase),
+        "{surface}: no `{phrase}` in: {message}"
+    );
+    assert!(!message.contains("No active role"), "{surface}: {message}");
+}
+
+/// Blocking review item 1 (AC4, the edit side of AC2): the REAL Draft->Approved
+/// edit gate, given an expired advisor grant (the BUG-1983 incident), says
+/// which grant and why, not "No active role". The queue dispatch gate shares
+/// the same tail and is pinned too.
+// trace:BUG-1983 | ai:claude
+#[test]
+fn the_edit_gate_names_an_expired_grant_not_no_active_role() {
+    let (tmp, store) = draft_project();
+    let root = tmp.path();
+    let id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+    edit(&id, |g| g.expires_at = past());
+    let _ambient = AmbientGuard::hermetic_with_grant(root, Some("advisor"), &id);
+    let sentence = grant_check(root).rejection_sentence().expect("rejected");
+
+    let message = edit_gate_refusal(&store);
+    assert!(message.contains("needs advisor authority"), "{message}");
+    assert_names_rejection("edit", &message, &id, &sentence, "expired at");
+
+    let message = queue_gate_refusal(&store);
+    assert!(message.contains("needs dispatch authority"), "{message}");
+    assert_names_rejection("queue add", &message, &id, &sentence, "expired at");
+}
+
+/// Blocking review item 2 (AC3 / sketch T2): one rejection table drives BOTH
+/// the edit status-promotion gate and `review record` from the SAME grant
+/// fixture, and both refuse with the same reason sentence.
+///
+/// Designed divergence (sketch D3, advisor ruling Q1): `review record`
+/// refuses only a REJECTED grant. A VALID grant for another seat (reviewer)
+/// is not forged; the edit gate refuses it with the team-role clause (it is
+/// not an advisor), while `review record` records the reviewer's verdict.
+/// That row asserts the designed outcomes rather than identical ones.
+// trace:BUG-1983 | ai:claude
+#[test]
+fn one_rejection_table_drives_the_edit_gate_and_review_record() {
+    type Setup = fn(&Path) -> String;
+    // (case, AIDA_SESSION_ROLE label, grant fixture, reason phrase; `None`
+    // marks the valid-other-seat row).
+    let cases: Vec<(&str, &str, Setup, Option<&str>)> = vec![
+        (
+            "unknown grant id",
+            "advisor",
+            |_| uuid::Uuid::new_v4().to_string(),
+            Some("no grant record exists"),
+        ),
+        (
+            "expired",
+            "advisor",
+            |root| {
+                let id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+                edit(&id, |g| g.expires_at = past());
+                id
+            },
+            Some("expired at"),
+        ),
+        (
+            "revoked",
+            "advisor",
+            |root| {
+                let id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+                edit(&id, |g| g.revoked_at = Some(past()));
+                id
+            },
+            Some("was revoked at"),
+        ),
+        (
+            "subject mismatch",
+            "advisor",
+            |root| {
+                let id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+                edit(&id, |g| g.subject = "someone-else".into());
+                id
+            },
+            Some("was issued to `someone-else`"),
+        ),
+        (
+            "roster denied",
+            "advisor",
+            |root| {
+                let id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+                set_roster(root, HERMETIC_TEST_USER, &["reviewer"]);
+                id
+            },
+            Some("team roster no longer allows"),
+        ),
+        (
+            "parent no longer delegates",
+            "implementer",
+            |root| {
+                let (parent, child) = delegated(root, HERMETIC_TEST_USER);
+                edit(&parent, |g| g.delegable_seats.clear());
+                child
+            },
+            Some("no longer delegates this seat"),
+        ),
+        (
+            "valid grant for another seat",
+            "reviewer",
+            |root| mint_grant_for(root, HERMETIC_TEST_USER, "reviewer", &[]),
+            None,
+        ),
+    ];
+    for (case, label, setup, phrase) in cases {
+        let (tmp, store) = draft_project();
+        let root = tmp.path();
+        let id = setup(root);
+        let _ambient = AmbientGuard::hermetic_with_grant(root, Some(label), &id);
+        let edit_message = edit_gate_refusal(&store);
+        assert!(
+            edit_message.contains("needs advisor authority"),
+            "{case}: {edit_message}"
+        );
+        let review = review_record(root);
+        match phrase {
+            Some(phrase) => {
+                let sentence = grant_check(root)
+                    .rejection_sentence()
+                    .unwrap_or_else(|| panic!("{case}: the fixture must be rejected"));
+                assert_names_rejection(case, &edit_message, &id, &sentence, phrase);
+                let review_message = format!(
+                    "{:#}",
+                    review.expect_err("review record must refuse a rejected grant")
+                );
+                assert!(
+                    review_message.starts_with("refused: review record."),
+                    "{case}: {review_message}"
+                );
+                assert_names_rejection(case, &review_message, &id, &sentence, phrase);
+            }
+            None => {
+                assert!(matches!(grant_check(root), GrantCheck::Valid(_)), "{case}");
+                assert!(
+                    edit_message.contains("Your active session seat is `reviewer`"),
+                    "{case}: {edit_message}"
+                );
+                assert!(
+                    !edit_message.contains("was rejected"),
+                    "{case}: {edit_message}"
+                );
+                assert!(
+                    !edit_message.contains("No active role"),
+                    "{case}: {edit_message}"
+                );
+                review.unwrap_or_else(|e| {
+                    panic!("{case}: a valid reviewer seat records its verdict: {e:#}")
+                });
+            }
+        }
+    }
 }
