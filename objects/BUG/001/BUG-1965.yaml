@@ -12,12 +12,12 @@ description: |
   - Root cause named: which branch skipped the write attempt on the failing run (lock contention, deadline, or something else), shown by a test-only counter or log.
   - reader_incremental_lock_error_does_not_full_rebuild asserts its invariant (a reader that hits a SQLite write lock serves the stale rows labelled `writer_busy` and never does a full rebuild) without depending on winning a lock race against unrelated tests.
   - The test passes 50 consecutive runs of `cargo test -p aida-core reader_incremental_lock_error -- --test-threads=16` while a second `cargo test --workspace` runs in parallel.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:15:50.814508895Z
-modified_at: 2026-10-12T18:37:57.178492674Z
+modified_at: 2026-10-13T03:04:35.096716421Z
 req_type: Bug
 tags:
 - groom:approve
@@ -127,6 +127,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13338-1213-71b2-a352-e963d36571ce
+  author: aida-auto-bump
+  timestamp: 2026-10-13T03:04:35.091451174Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13338-1218-74f1-ba0b-a4c83f4f8eea
+  timestamp: 2026-10-13T03:04:35.096706341Z
+  agent: implementer
+  commit_sha: d1c1b5a2a56e4494aedce08d0157f64b92060682
+  summary: Completed via merge d1c1b5a2
+  review_verdict: approved
 filed_at:
   code_sha: ad50bb82332a86a9b0988714ec539f5c9728cb7b
   branch: main
@@ -135,3 +149,7 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T03:04:35.091444392Z
+  completion_sha: d1c1b5a2a56e4494aedce08d0157f64b92060682
