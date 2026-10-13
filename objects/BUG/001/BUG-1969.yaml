@@ -3,12 +3,12 @@ spec_id: BUG-1969
 agreed_id: BUG-1969
 title: push_store_after_id_allocation reports every push_exact error as 'origin unreachable', hiding auth, ref and hook failures
 description: 'Noted by the fresh reviewer of PR #2502 (TASK-1717), non-blocking. In aida-cli-lib/src/lib_part1.rs push_store_after_id_allocation (~12970), push_exact returning Err is treated as the TASK-857 offline case. A permission-denied, protected-ref or server-hook failure therefore prints the offline/unreachable guidance, and the operator retries a push that can never succeed. Latent today. Acceptance: distinguish a network/unreachable error from the rest (classify the git stderr); non-network errors bail with the real git message and the same recovery hint. Unit test with a fake push error of each kind.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:06.125560871Z
-modified_at: 2026-10-12T20:02:32.838029197Z
+modified_at: 2026-10-13T02:59:25.412997290Z
 req_type: Bug
 tags:
 - follow-up:merge-relay
@@ -106,6 +106,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13333-5861-7c00-8ca9-437195471925
+  author: aida-auto-bump
+  timestamp: 2026-10-13T02:59:25.409846861Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13333-5864-7e43-b0bb-6b711e262c1f
+  timestamp: 2026-10-13T02:59:25.412990222Z
+  agent: implementer
+  commit_sha: 91f97d991d633edcb1e839f931e4e10d17d6c095
+  summary: Completed via merge 91f97d99
+  review_verdict: approved
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
@@ -114,3 +128,7 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T02:59:25.409842919Z
+  completion_sha: 91f97d991d633edcb1e839f931e4e10d17d6c095
