@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T13:08:14.996092979Z
+modified_at: 2026-10-13T13:14:29.024149410Z
 req_type: Task
 tags:
 - adr-9
@@ -25,7 +25,6 @@ tags:
 - groom:approve
 - groomed:night
 - guardrail
-- parked:factory
 comments:
 - id: 01a12eb3-e633-76f0-8a64-9577d847c8f0
   author: joe
