@@ -3,12 +3,12 @@ spec_id: TASK-1727
 agreed_id: TASK-1727
 title: STORY-1648 status-line drift wiring has no contract test, and its timing test may flake on loaded runners
 description: 'Noted by the fresh reviewer of PR #2523 (STORY-1648), non-blocking. (1) No contract test pins the status-line output for the primary-checkout drift indicator (the format a statusline script consumes). (2) The timing assertion in the new test can flake under CI load. Acceptance: a contract test asserts the exact drift segment for drifted and clean checkouts; the timing test uses an injected clock or a generous bound with a comment explaining it; 20 consecutive local runs pass under parallel test load.'
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T16:31:31.066998060Z
-modified_at: 2026-10-13T08:25:20.691868264Z
+modified_at: 2026-10-13T12:20:00.392420896Z
 req_type: Task
 tags:
 - follow-up:merge-relay
@@ -74,6 +74,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13534-9305-7981-b849-7ae3b13180d0
+  author: aida-auto-bump
+  timestamp: 2026-10-13T12:20:00.389480653Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a13534-9308-7310-bdba-c7f53be01b22
+  timestamp: 2026-10-13T12:20:00.392416014Z
+  agent: implementer
+  commit_sha: cca407e2a44acac7053e619e474ab00f15544ff4
+  summary: 'Round 2: both blockers fixed; literal/ANSI marker and handler wiring pinned (mutations caught), no set_override race, 296 unit + 1 integration tests pass, range-diff unchanged'
+  punted:
+  - 'punted: Contract test pins the extracted helper against its own constant, not the handle_statusline_command wiring nor the literal marker; new set_override(true) races other colour-sensitive tests'
+  review_verdict: approved
 filed_at:
   code_sha: 97453570d61e9afed8cad49aeed3e14186c16d66
   branch: main
@@ -82,11 +98,7 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: ac2268c9-a663-49e5-a9ef-27117f872438
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Contract test pins the extracted helper against its own constant, not the handle_statusline_command wiring nor the literal marker; new set_override(true) races other colour-sensitive tests
-  recovery_hint: address the review findings, move TASK-1727 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-13T08:25:20.691868264Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T12:20:00.389476738Z
+  completion_sha: cca407e2a44acac7053e619e474ab00f15544ff4
