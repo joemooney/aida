@@ -13,12 +13,12 @@ description: |
   - The refusal lists ALL stale AIDA-generated hooks found in one pass, not just the first one.
   - Tests: (a) a repo with two stale AIDA hooks gets one refusal naming both and the hook-only command; (b) running the hook-only command replaces both, leaves a drifted README.md/CLAUDE.md/skill file untouched, and the next store write succeeds; (c) a custom hook is left alone.
   - FAQ-49's answer is updated to the new command.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:27:25.717576851Z
-modified_at: 2026-10-12T23:53:23.117660044Z
+modified_at: 2026-10-13T04:20:47.562008703Z
 req_type: Bug
 tags:
 - capture
@@ -56,6 +56,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1337d-d72f-7701-bc38-711b42bb86dc
+  author: aida-auto-bump
+  timestamp: 2026-10-13T04:20:47.535914661Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1337d-d749-7a73-b269-50897ca8595d
+  timestamp: 2026-10-13T04:20:47.561999031Z
+  agent: implementer
+  commit_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  summary: 'Fresh strict review: all 5 acceptance items met; atomic write keeps exec bit; custom hooks never touched; M1-M3 mutations all caught.'
+  review_verdict: approved
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -64,3 +78,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: ac2268c9-a663-49e5-a9ef-27117f872438
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T04:20:47.535909171Z
+  completion_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
