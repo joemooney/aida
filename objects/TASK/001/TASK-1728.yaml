@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-13T07:37:52.386272027Z
+modified_at: 2026-10-13T07:39:10.215193555Z
 req_type: Task
 tags:
 - follow-up:advisor-review
@@ -33,6 +33,35 @@ comments:
   created_at: 2026-10-12T06:01:24.357016674Z
   modified_at: 2026-10-12T06:01:24.357016674Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13433-7607-7143-83dc-4f59c1d3a9e3
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    • Decision: EXEMPT conflicted cherry-pick and revert (CHERRY_PICK_HEAD / REVERT_HEAD) next to MERGE_HEAD. Rationale: clean cherry-picks and reverts skip pre-commit, and merges/rebase replays are already exempt; refusing only the conflicted case is arbitrary and inconsistent.
+    • Approach:
+      1. aida-core/templates/hooks/aida-pre-commit.sh: In the exemption chain (~line 79), add git rev-parse checks for CHERRY_PICK_HEAD and REVERT_HEAD.
+      2. aida-core/templates/hooks/aida-pre-commit.sh: In the refusal message (~line 94), state that git commit --amend and git merge --squash + commit on main in the primary checkout are also refused.
+      3. aida-core/templates/hooks/aida-pre-commit.sh: Remove the unreachable case "$(pwd -P)" in */.aida-store|*/.aida-store/*) branch (~line 84), as linked worktrees are already exempted by the gitdir comparison.
+      4. Run make sync-templates and make check-templates.
+      5. tests/test_precommit_primary_checkout.sh: Add test cases verifying that a conflicted cherry-pick and a conflicted revert finished on main with block_primary_commits = true succeed, while normal commits are refused, and verify refusal message lists --amend and merge --squash.
+      6. docs/environment-variables.md: Document that git commit --amend and git merge --squash + commit on main are refused under block_primary_commits = true.
+    • Files to change:
+      - aida-core/templates/hooks/aida-pre-commit.sh
+      - .git/hooks/pre-commit (synced via make sync-templates)
+      - tests/test_precommit_primary_checkout.sh
+      - docs/environment-variables.md
+    • Tests to add/run:
+      - tests/test_precommit_primary_checkout.sh (new cases: conflicted cherry-pick on main, conflicted revert on main, refusal message content)
+      - make check-templates
+      - make check-ci-fast
+    • Risks:
+      - Ensuring git conflict simulation properly populates CHERRY_PICK_HEAD / REVERT_HEAD in the test runner.
+    • Acceptance mapping:
+      - Acceptance 1 (CHERRY_PICK_HEAD & REVERT_HEAD exempted): verified in template, synced hook, and test_precommit_primary_checkout.sh.
+      - Acceptance 2 (Refusal message and docs list --amend / merge --squash): verified in refusal message, test assertions, and docs/environment-variables.md.
+      - Acceptance 3 (Drop dead .aida-store pwd branch): verified by deletion in template and all existing tests passing.
+  created_at: 2026-10-13T07:39:10.215193555Z
+  modified_at: 2026-10-13T07:39:10.215193555Z
 history:
 - id: 01a1309d-61d7-7bf0-a2eb-4319405768b3
   author: joe
