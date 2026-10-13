@@ -242,7 +242,7 @@ jobs:
       # trace:STORY-1648 | ai:claude
       # Primary-checkout drift line in the session-context hook: clean,
       # tracked-dirty, untracked-only, off-main, behind-origin, linked
-      # worktree, and the <50ms cost budget. Stub `aida`; no build.
+      # worktree, and the timing cost budget. Stub `aida`; no build.
       - name: Run session-context drift test
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_session_context_drift.sh

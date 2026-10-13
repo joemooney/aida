@@ -359,11 +359,14 @@ pub(crate) fn handle_statusline_command(
     // (uncommitted edits, untracked files, off main, or diverged from its
     // upstream). One `git status` that takes no index lock; a clean checkout
     // or any git failure renders nothing. Read-only.
-    // trace:STORY-1648 | ai:claude
-    if let Some(marker) = crate::main_checkout_drift::statusline_marker(
-        crate::main_checkout_drift::probe(&drain_root).as_ref(),
-    ) {
-        parts.push(marker.red().bold().to_string());
+    // trace:TASK-1727 | ai:antigravity
+    // The colour decision is read once from the real setting (already forced
+    // by `apply_color_mode`) and passed in, so the segment builder never
+    // consults or toggles the process-wide override itself.
+    // trace:TASK-1727 | ai:claude
+    let drift_color = colored::control::SHOULD_COLORIZE.should_colorize();
+    if let Some(marker) = primary_checkout_drift_statusline_segment(&drain_root, drift_color) {
+        parts.push(marker);
     }
     // sess:<scope> segment — emitted when cwd resolves into an active
     // session lease's worktree. TASK-282: this standalone segment now
@@ -499,6 +502,43 @@ pub(crate) fn role_display_segment_text(
 
 pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {
     (depth > 0).then(|| format!("drafts:{}", depth))
+}
+
+/// Compact marker segment rendered in the status line when the primary
+/// checkout has drifted (uncommitted edits, untracked files, off main, or
+/// diverged from its upstream). One `git status` that takes no index lock;
+/// returns `None` for a clean checkout, non-repository, or any git failure.
+/// `color` selects the bold-red rendering; the caller derives it from the
+/// effective colour setting.
+// trace:STORY-1648 | ai:claude
+// trace:TASK-1727 | ai:antigravity
+// trace:TASK-1727 | ai:claude
+pub(crate) fn primary_checkout_drift_statusline_segment(
+    drain_root: &std::path::Path,
+    color: bool,
+) -> Option<String> {
+    drift_statusline_segment(
+        crate::main_checkout_drift::probe(drain_root).as_ref(),
+        color,
+    )
+}
+
+/// Pure rendering of the drift segment from an already-probed state. The
+/// bold-red form is written as literal ANSI (`ESC[1;31m … ESC[0m`, the same
+/// bytes `colored` emits for `.red().bold()`) so rendering never depends on
+/// the process-wide `colored` override.
+// trace:TASK-1727 | ai:claude
+pub(crate) fn drift_statusline_segment(
+    drift: Option<&crate::main_checkout_drift::CheckoutDrift>,
+    color: bool,
+) -> Option<String> {
+    crate::main_checkout_drift::statusline_marker(drift).map(|marker| {
+        if color {
+            format!("\u{1b}[1;31m{marker}\u{1b}[0m")
+        } else {
+            marker.to_string()
+        }
+    })
 }
 
 /// Wrap a status line in an OSC 2 set-window-title escape sequence
