@@ -467,6 +467,10 @@ fn run_interrupt_scenario(shell: &str, stub: &str, body: &str) -> InterruptRun {
     if shell == "zsh" {
         cmd.arg("-f");
     }
+    // Its own process group, so a stub that signals its whole group (the
+    // Ctrl-C shape) can never reach the test harness.
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
     let out = cmd
         .arg("-c")
         .arg(&script)
@@ -521,29 +525,23 @@ fn an_interrupt_during_init_kills_the_shell_and_leaves_no_side_channel_file() {
                 !run.stdout.contains("after-init"),
                 "the signal must not be swallowed: the shell has to die during init: {ctx}"
             );
-            // bash re-raises, so the kernel ends it (no exit code); zsh
-            // exits from TRAPINT/TRAPTERM with 128+signo, its own convention
-            // for a script ended by a signal.
-            let signo = if signal == "INT" { 2 } else { 15 };
+            // Both shells re-raise the recorded signal at themselves once
+            // the caller's (default) disposition is back, so the kernel ends
+            // them: no exit code.
             assert!(
-                if shell == "bash" {
-                    run.code.is_none()
-                } else {
-                    run.code.is_none() || run.code == Some(128 + signo)
-                },
+                run.code.is_none(),
                 "the shell must be ended by the signal: {ctx}"
             );
         }
     }
 }
 
-/// With a caller trap installed, bash re-delivers the signal after restoring
-/// it, so the caller's handler still runs and decides what happens next. zsh
-/// treats the signal as delivered from TRAPINT/TRAPTERM itself, which ends a
-/// non-interactive shell. Either way the file is gone.
+/// With a caller trap installed, the wrapper re-delivers the signal after
+/// restoring it, so in both shells the caller's handler still runs and
+/// decides what happens next (here: carry on). Either way the file is gone.
 // trace:BUG-1960 | ai:claude
 #[test]
-fn an_interrupt_during_init_reaches_the_callers_own_trap_in_bash() {
+fn an_interrupt_during_init_reaches_the_callers_own_trap() {
     for signal in ["INT", "TERM"] {
         for &shell in wrapper_shells() {
             let body =
@@ -557,17 +555,10 @@ fn an_interrupt_during_init_reaches_the_callers_own_trap_in_bash() {
                 run.leftover.is_empty(),
                 "an interrupted init must not leave its file behind: {ctx}"
             );
-            if shell == "bash" {
-                assert!(
-                    run.stdout.contains("caller-trap\nafter-init"),
-                    "the caller's trap must run once the wrapper's is gone: {ctx}"
-                );
-            } else {
-                assert!(
-                    !run.stdout.contains("after-init"),
-                    "zsh delivers the signal from its trap function: {ctx}"
-                );
-            }
+            assert!(
+                run.stdout.contains("caller-trap\nafter-init"),
+                "the caller's trap must run once the wrapper's is gone: {ctx}"
+            );
         }
     }
 }
@@ -601,5 +592,84 @@ fn a_successful_init_restores_the_callers_traps() {
         );
         assert!(!run.stdout.contains("trap-fn-leaked"), "{ctx}");
         assert!(run.leftover.is_empty(), "{ctx}");
+    }
+}
+
+/// The signal must be re-raised at the shell PROCESS running the wrapper, not
+/// at the top-level script: `$$` names the top-level shell even inside a
+/// subshell, so re-raising with it would kill the parent and let the
+/// interrupted subshell carry on. Here the stub signals its own parent, the
+/// subshell; the subshell must die and the parent must see it die.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn an_interrupt_during_init_in_a_subshell_ends_the_subshell_not_the_parent() {
+    for signal in ["INT", "TERM"] {
+        let code = if signal == "INT" { 130 } else { 143 };
+        for &shell in wrapper_shells() {
+            let body = "( aida init proj; echo \"sub-after:$?\" )\necho \"parent-alive:$?\"\n";
+            let run = run_interrupt_scenario(shell, &interrupting_stub(signal), body);
+            let ctx = format!(
+                "[{shell}/{signal}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(
+                run.stdout.contains(&format!("parent-alive:{code}")),
+                "the parent must survive and see the subshell killed by {signal}: {ctx}"
+            );
+            assert!(
+                !run.stdout.contains("sub-after"),
+                "the interrupted subshell must not carry on: {ctx}"
+            );
+            assert!(run.leftover.is_empty(), "{ctx}");
+        }
+    }
+}
+
+/// A stub that delivers SIGINT to its whole PROCESS GROUP, the way a terminal
+/// Ctrl-C does: the wrapper's shell and the child both receive it. It refuses
+/// to signal unless the group is the one `run_interrupt_scenario` created for
+/// the shell, so it can never reach a process outside the test.
+// trace:BUG-1960 | ai:claude
+fn group_interrupting_stub() -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         [ -n \"${env}\" ] && [ -e \"${env}\" ] && printf 'saw-file\\n' >&2\n\
+         _pg=$(ps -o pgid= -p $$ | tr -d ' ')\n\
+         [ \"$_pg\" = \"$PPID\" ] || {{ printf 'wrong-group\\n' >&2; exit 99; }}\n\
+         kill -s INT -- -\"$_pg\"\n\
+         exit 130\n",
+        env = INIT_CD_FILE_ENV,
+    )
+}
+
+/// SIGINT to the whole process group (shell and child together): with no
+/// caller trap the shell dies of it; with one, the caller's trap runs and the
+/// script continues. Neither leaves the private file behind.
+// trace:BUG-1960 | ai:claude
+#[test]
+fn a_process_group_interrupt_during_init_behaves_like_ctrl_c() {
+    for &shell in wrapper_shells() {
+        for (body, trapped) in [
+            ("aida init proj\necho after-init\n", false),
+            (
+                "trap 'echo caller-trap' INT\naida init proj\necho after-init\n",
+                true,
+            ),
+        ] {
+            let run = run_interrupt_scenario(shell, &group_interrupting_stub(), body);
+            let ctx = format!(
+                "[{shell} trapped={trapped}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+                run.code, run.leftover, run.stdout, run.stderr
+            );
+            assert!(run.stderr.contains("saw-file"), "{ctx}");
+            assert!(!run.stderr.contains("wrong-group"), "{ctx}");
+            assert!(run.leftover.is_empty(), "{ctx}");
+            if trapped {
+                assert!(run.stdout.contains("caller-trap\nafter-init"), "{ctx}");
+            } else {
+                assert!(!run.stdout.contains("after-init"), "{ctx}");
+                assert!(run.code.is_none(), "the shell must die of SIGINT: {ctx}");
+            }
+        }
     }
 }

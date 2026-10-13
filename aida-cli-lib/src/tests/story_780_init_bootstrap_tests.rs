@@ -332,21 +332,34 @@ fn the_init_arm_never_captures_the_childs_stdout() {
         "init arm must clean up its side-channel file:\n{init_arm}"
     );
     // trace:BUG-1960 | ai:claude
-    // An interrupt must not strand the file: a trap removes it on INT/TERM,
-    // scoped to the call (zsh localtraps; bash saves and restores).
+    // An interrupt must not strand the file: the handlers remove it on
+    // INT/TERM and record the signal, scoped to the call (zsh: a helper under
+    // localtraps; bash: save and restore), then the signal is re-raised at
+    // this shell process. `$$` would target the top-level shell from inside a
+    // subshell, so the re-raise must not use it.
     assert!(
         init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=INT' INT")
             && init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=TERM' TERM")
-            && init_arm.contains("TRAPINT() { rm -f \"$_aida_cd_file\"; return $((128 + $1)); }")
-            && init_arm.contains("TRAPTERM() { rm -f \"$_aida_cd_file\"; return $((128 + $1)); }"),
+            && init_arm
+                .contains("TRAPINT() { rm -f \"$_aida_cd_file\"; _aida_sig=INT; return 0; }")
+            && init_arm
+                .contains("TRAPTERM() { rm -f \"$_aida_cd_file\"; _aida_sig=TERM; return 0; }"),
         "init arm must remove its side-channel file on INT/TERM in bash and zsh:\n{init_arm}"
     );
     assert!(
-        init_arm.contains("setopt localtraps")
+        init_arm.contains("_aida_init_zsh() {")
+            && init_arm.contains("setopt localoptions localtraps")
+            && init_arm.contains("_aida_init_zsh \"$@\"")
             && init_arm.contains("_aida_traps=$(trap -p INT TERM)")
             && init_arm.contains("eval \"$_aida_traps\"")
-            && init_arm.contains("kill -s \"$_aida_sig\" $$"),
+            && init_arm.contains(
+                "command sh -c 'kill -s \"$1\" \"$PPID\"; kill -s \"$1\" \"$$\"' aida \"$_aida_sig\""
+            ),
         "the init arm's trap must be scoped to the call and the caller's traps restored:\n{init_arm}"
+    );
+    assert!(
+        !init_arm.contains("kill -s \"$_aida_sig\" $$"),
+        "the re-raise must target this shell process, not the top-level `$$`:\n{init_arm}"
     );
 }
 

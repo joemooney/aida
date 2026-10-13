@@ -1518,32 +1518,47 @@ AIDA_WRAPPER_OUTPUT
             fi
             # trace:BUG-1960 | ai:claude
             # An interrupt (Ctrl-C) or TERM while init runs must not strand
-            # the private file in TMPDIR, and must still interrupt: the
-            # handlers remove the file and then let the signal take effect.
-            # Scoped to this call. zsh: TRAPINT/TRAPTERM under localtraps
-            # (restored on function exit); a non-zero return makes zsh treat
-            # the signal as delivered. bash: traps are global, so save the
-            # caller's, record which signal arrived, restore on every return
-            # path and re-deliver it to this shell.
+            # the private file in TMPDIR, and must still interrupt. The
+            # handlers only remove the file and record which signal arrived;
+            # they never end the shell themselves. Once the child is done the
+            # caller's own INT/TERM traps are back in place and the recorded
+            # signal is re-raised at THIS shell process, so the caller's trap
+            # (or the default disposition) decides what happens, as if the
+            # wrapper were not there. `$$` names the top-level shell even
+            # inside a subshell, background job or pipeline, so the re-raise
+            # goes through `sh -c`, whose $PPID is this process. The helper
+            # then dies of the same signal: bash ignores a SIGINT that arrives
+            # while it waits for a foreground child unless that child was
+            # also killed by it (the child is presumed to have handled it).
+            # zsh: TRAPINT/TRAPTERM live in a helper under localtraps, so
+            # zsh restores the caller's traps when the helper returns.
+            # bash: traps are global, so save the caller's and restore them.
             local _aida_traps='' _aida_sig=''
             if [ -n "${ZSH_VERSION:-}" ]; then
-                setopt localtraps
-                TRAPINT() { rm -f "$_aida_cd_file"; return $((128 + $1)); }
-                TRAPTERM() { rm -f "$_aida_cd_file"; return $((128 + $1)); }
+                _aida_init_zsh() {
+                    setopt localoptions localtraps
+                    TRAPINT() { rm -f "$_aida_cd_file"; _aida_sig=INT; return 0; }
+                    TRAPTERM() { rm -f "$_aida_cd_file"; _aida_sig=TERM; return 0; }
+                    AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                }
+                _aida_init_zsh "$@"
+                _aida_rc=$?
             else
                 _aida_traps=$(trap -p INT TERM)
                 trap 'rm -f "$_aida_cd_file"; _aida_sig=INT' INT
                 trap 'rm -f "$_aida_cd_file"; _aida_sig=TERM' TERM
+                AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                _aida_rc=$?
+                trap - INT TERM
+                eval "$_aida_traps"
             fi
-            AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
-            _aida_rc=$?
+            if [ -n "$_aida_sig" ]; then
+                rm -f "$_aida_cd_file"
+                command sh -c 'kill -s "$1" "$PPID"; kill -s "$1" "$$"' aida "$_aida_sig"
+                return "$_aida_rc"
+            fi
             if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
                 rm -f "$_aida_cd_file"
-                if [ -z "${ZSH_VERSION:-}" ]; then
-                    trap - INT TERM
-                    eval "$_aida_traps"
-                    [ -n "$_aida_sig" ] && kill -s "$_aida_sig" $$
-                fi
                 return "$_aida_rc"
             fi
             while IFS= read -r _aida_line; do
@@ -1562,11 +1577,6 @@ AIDA_WRAPPER_OUTPUT
                 esac
             done < "$_aida_cd_file"
             rm -f "$_aida_cd_file"
-            if [ -z "${ZSH_VERSION:-}" ]; then
-                trap - INT TERM
-                eval "$_aida_traps"
-                [ -n "$_aida_sig" ] && kill -s "$_aida_sig" $$
-            fi
             if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ] && [ -n "$_aida_eval" ]; then
                 eval "$_aida_eval"
             fi
