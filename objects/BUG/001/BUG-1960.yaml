@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:03:14.762751326Z
-modified_at: 2026-10-13T00:02:55.017026729Z
+modified_at: 2026-10-13T00:39:35.986472143Z
 req_type: Bug
 tags:
 - groom:approve
@@ -35,6 +35,12 @@ comments:
   content: 'Round-1 strict REQUEST CHANGES at a11233809f: INT/TERM trap swallows the signal (shell survives, SIGTERM reports success); fix = record + re-raise (bash), TRAPINT/TRAPTERM return 128+n (zsh). Lows: success-path restore test, e2e binary test. CI green incl. zsh 5.9. Note: the zsh ''local -'' removal here also fixes BUG-2000 (SECURITY: main''s zsh wrapper prints whole env). Brief on PR #2577.'
   created_at: 2026-10-13T00:02:55.017026729Z
   modified_at: 2026-10-13T00:02:55.017026729Z
+  session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a132b3-5532-7a13-a3e3-80feec3d5ac6
+  author: joe
+  content: 'Round-2 strict review at 082be32cb7: REQUEST CHANGES. (1) Medium regression: $$ re-raise kills the parent from a subshell — use sh -c ''kill -s "$1" "$PPID"''. (2) zsh drops the caller''s trap — move it into a nested localtraps helper; the advisor rejects Deviation 2. Full round-3 brief is on #2577. Not dispatched (end of day); next session or the operator runs round 3 (final).'
+  created_at: 2026-10-13T00:39:35.986472143Z
+  modified_at: 2026-10-13T00:39:35.986472143Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
 history:
 - id: 01a1309c-f35c-7b01-abc9-c69e0b065f8b
