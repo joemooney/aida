@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-13T21:23:04.058619480Z
+modified_at: 2026-10-13T21:35:29.401028632Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -43,6 +43,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2604 at 2b2ade55020c273ee085dc4d7f998e6299ee7247. ADVISOR SIGNOFF REQUIRED BEFORE MERGE (authority code). Final author-controlled self-check found stale expiry documentation, corrected; no remaining findings. All 27 make check-ci-fast gates passed at final commit. Full GitHub Build pending; no manual Rust test execution.'
   created_at: 2026-10-13T21:23:04.058619480Z
   modified_at: 2026-10-13T21:23:04.058619480Z
+- id: 01a13731-2279-7252-aa1a-e51474e0da11
+  author: ai:codex:joe
+  content: 'CI round 1: all new grant-verdict tests passed; old TASK-1736 binary suite exposed informational-warning regressions plus fixtures minted for tester but launched as runner with no roster. Restoring warning-only role expiry to the private informational reader (strict lookup remains exclusive to --refuse-within). Existing TASK-1736 test bodies/assertions stay unchanged; helper now pins AIDA_USER=tester and uses shared grant/roster support before setting the requested expiry. Missing-record refusal retains shared reason plus legacy missing wording. No assertion weakened. This fixture-only adaptation is necessary for the new strict validation contract; Rust execution remains GitHub-only under factory rules.'
+  created_at: 2026-10-13T21:35:29.401028632Z
+  modified_at: 2026-10-13T21:35:29.401028632Z
 history:
 - id: 01a135f0-b4ff-7f43-a1ab-ae2f0ac64930
   author: joe
