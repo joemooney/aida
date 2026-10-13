@@ -302,6 +302,7 @@ fn rework_pr_head_match_accepts_branch_for_same_spec() {
         "story-994-pr1704",
         "Rework unrelated title",
         "",
+        |_| None,
     ));
 }
 
@@ -312,6 +313,7 @@ fn rework_pr_head_match_rejects_branch_for_different_spec() {
         "story-1033-followup",
         "STORY-1028",
         "Body mentions STORY-1028, but the branch trailer owns STORY-1033.",
+        |_| None,
     ));
 }
 
@@ -322,6 +324,7 @@ fn rework_pr_head_match_allows_metadata_when_branch_has_no_spec_id() {
         "followup-polish",
         "[AI:codex] fix(queue): tighten rework reuse (BUG-1074)",
         "",
+        |_| None,
     ));
 }
 
@@ -4313,4 +4316,110 @@ fn failure_kind_cause_slug_round_trips() {
         Some(K::PermissionDenied)
     );
     assert_eq!(K::from_cause_slug("nonsense"), None);
+}
+
+/// BUG-1957: the review-calibration credit applies ship's store-backed closure
+/// hold, so a `closure:pending` spec recovered only from the branch name is
+/// not credited, while an unheld spec still is.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_review_calibration_skips_closure_pending_branch_spec() {
+    let mut held = aida_core::Requirement::new("held".to_string(), String::new());
+    held.spec_id = Some("TASK-1538".to_string());
+    held.tags
+        .insert(aida_core::pickability::CLOSURE_PENDING_TAG.to_string());
+    let mut open = aida_core::Requirement::new("open".to_string(), String::new());
+    open.spec_id = Some("TASK-1601".to_string());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![held, open],
+        ..Default::default()
+    };
+    assert!(
+        review_calibration_spec_ids_in(Some(&store), "fix: prose", "task-1538-x", "").is_empty()
+    );
+    assert_eq!(
+        review_calibration_spec_ids_in(Some(&store), "fix: prose", "task-1601-x", ""),
+        vec!["TASK-1601".to_string()]
+    );
+    // An explicit title trailer is a deliberate directive, exactly as in ship.
+    assert_eq!(
+        review_calibration_spec_ids_in(Some(&store), "fix: prose (TASK-1538)", "x", ""),
+        vec!["TASK-1538".to_string()]
+    );
+    // No readable store: nothing is known to be held.
+    assert_eq!(
+        review_calibration_spec_ids_in(None, "fix: prose", "task-1538-x", ""),
+        vec!["TASK-1538".to_string()]
+    );
+}
+
+/// BUG-1957: the reviewer call site's entry point reads the project's own
+/// store for the hold, so a `closure:pending` spec on disk is not credited.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_review_calibration_reads_project_store() {
+    // Only the legacy `requirements.yaml` arm of `load_store_for_lookup` is
+    // exercised: the distributed `.aida/config.toml` arm refuses to adopt a
+    // store under the system temp root (the BUG-1598 guard), so a tempdir
+    // fixture cannot reach it. Both arms feed the same hold check.
+    let root = tempfile::TempDir::new().unwrap();
+    let mut held = aida_core::Requirement::new("held".to_string(), String::new());
+    held.spec_id = Some("TASK-1538".to_string());
+    held.tags
+        .insert(aida_core::pickability::CLOSURE_PENDING_TAG.to_string());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![held],
+        ..Default::default()
+    };
+    Storage::new(root.path().join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+    assert!(review_calibration_spec_ids(root.path(), "fix: prose", "task-1538-x", "").is_empty());
+    let empty = tempfile::TempDir::new().unwrap();
+    assert_eq!(
+        review_calibration_spec_ids(empty.path(), "fix: prose", "task-1538-x", ""),
+        vec!["TASK-1538".to_string()]
+    );
+}
+
+/// BUG-1957: the rework PR-head match consults the closure hold only on the
+/// metadata path. A branch-name id decides the match outright, so a held
+/// spec's own open PR branch is still reused for its rework, and the hold
+/// closure is never consulted there. With no id in the branch, the hold
+/// cannot withhold anything either: the only ids left come from an explicit
+/// title trailer, which ship honours even for a held spec.
+// trace:BUG-1957 | ai:claude
+#[test]
+fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
+    let consulted = std::cell::Cell::new(0);
+    let held = |id: &str| {
+        consulted.set(consulted.get() + 1);
+        (id == "TASK-1538").then(|| "held".to_string())
+    };
+    assert!(rework_pr_head_matches_spec(
+        "TASK-1538",
+        "task-1538-x",
+        "fix: prose",
+        "",
+        held
+    ));
+    assert_eq!(
+        consulted.get(),
+        0,
+        "a branch-name id decides without the hold"
+    );
+    assert!(rework_pr_head_matches_spec(
+        "TASK-1538",
+        "followup-polish",
+        "fix: prose (TASK-1538)",
+        "",
+        held
+    ));
+    assert!(!rework_pr_head_matches_spec(
+        "TASK-1538",
+        "followup-polish",
+        "fix: prose",
+        "Traces TASK-1538.",
+        held
+    ));
 }

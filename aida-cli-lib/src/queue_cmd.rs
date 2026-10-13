@@ -8695,11 +8695,19 @@ pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<Stri
     }
 }
 
+/// `completion_held` is the store-backed closure-hold check
+/// ([`pr_ship::spec_completion_hold_reason`]). For rework matching it is
+/// inert: a spec id in the branch name decides the match and returns before
+/// the hold is consulted, and an explicit title trailer is honoured even for a
+/// held spec, so the hold never changes this function's result. Dropping the
+/// parameter is tracked in BUG-1997.
+// trace:BUG-1957 | ai:claude
 pub(crate) fn rework_pr_head_matches_spec(
     spec: &str,
     head_branch: &str,
     pr_title: &str,
     pr_body: &str,
+    completion_held: impl Fn(&str) -> Option<String>,
 ) -> bool {
     let wanted = spec.trim().to_ascii_uppercase();
     if wanted.is_empty() {
@@ -8711,7 +8719,12 @@ pub(crate) fn rework_pr_head_matches_spec(
         return branch_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted));
     }
 
-    let meta_ids = pr_ship::derive_squash_subject_spec_ids(pr_title, head_branch, pr_body);
+    let meta_ids = pr_ship::derive_squash_subject_spec_ids_held(
+        pr_title,
+        head_branch,
+        pr_body,
+        completion_held,
+    );
     meta_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted))
 }
 
@@ -8862,7 +8875,16 @@ fn rework_pr_head_branch_override(
     let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
         .map(|meta| meta.body)
         .unwrap_or_default();
-    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body).then_some(head_branch)
+    // Loaded only if the hold check actually runs.
+    // trace:BUG-1957 | ai:claude
+    let store = std::cell::OnceCell::new();
+    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body, |id| {
+        store
+            .get_or_init(|| crate::load_store_for_lookup(project_root))
+            .as_ref()
+            .and_then(|s| pr_ship::spec_completion_hold_reason(s, id))
+    })
+    .then_some(head_branch)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12667,6 +12689,34 @@ pub(crate) fn handle_queue_work(
     setup_result
 }
 
+/// The specs a reviewed PR credits for calibration: the same title / branch
+/// derivation `aida pr ship` uses, including its store-backed closure hold, so
+/// a held spec ship would not complete is not credited either. The hold reads
+/// `project_root`'s store; with no readable store nothing is known to be held.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn review_calibration_spec_ids(
+    project_root: &std::path::Path,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+) -> Vec<String> {
+    let store = crate::load_store_for_lookup(project_root);
+    review_calibration_spec_ids_in(store.as_ref(), pr_title, branch, pr_body)
+}
+
+/// [`review_calibration_spec_ids`] over an already-loaded store.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn review_calibration_spec_ids_in(
+    store: Option<&aida_core::RequirementsStore>,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+) -> Vec<String> {
+    pr_ship::derive_squash_subject_spec_ids_held(pr_title, branch, pr_body, |id| {
+        store.and_then(|s| pr_ship::spec_completion_hold_reason(s, id))
+    })
+}
+
 /// BUG-226: drive a standalone `aida queue work <PR-N> --role reviewer`
 /// launch — spawn `claude` (not `exec`) so this process survives to read
 /// the verdict file + headless JSONL log and print an end-of-command
@@ -12881,7 +12931,7 @@ pub(crate) fn run_standalone_reviewer(
     // slot per spec. Best-effort; never blocks the summary print.
     // trace:STORY-439 | ai:claude
     if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
-        for spec in pr_ship::derive_squash_subject_spec_ids(&meta.title, branch, &meta.body) {
+        for spec in review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body) {
             capture_review_calibration_for_spec(project_root, verdict_path, &spec);
         }
     }
