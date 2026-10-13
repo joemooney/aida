@@ -1,0 +1,27 @@
+id: 01a1337d-497b-7df0-a511-bccfd0061f40
+spec_id: BUG-2003
+agreed_id: BUG-2003
+title: 'Hook refresh follow-ups from the BUG-1977 review: custom-hook refusal hides the stale list; core.hooksPath followed silently'
+description: |-
+  From the strict review of #2580 (BUG-1977), approved at aaf1a5e593.
+  (1) git_ops.rs ~3813-3821: the refusal for a custom hook that calls aida still returns at the first such hook, so a stale pre-commit next to a custom post-commit is reported only on a second attempt. Collect custom-hook problems too and report everything together.
+  (2) hooks_dir ~3872: the refresh follows core.hooksPath without saying so. A shared global hooks directory gets changed for every repo that uses it, and a tracked in-repo hooks directory gets untracked backup files. Print a note, or require confirmation, when the hooks directory is outside the repo's git directory.
+  Nits: the header checksum is unused; no fsync before the rename; the output ignores --format json/toon; --only handling is duplicated in lib_part1.rs and scaffold_cmd.rs.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:20:11.259964808Z
+modified_at: 2026-10-13T04:20:11.259964808Z
+req_type: Bug
+tags:
+- follow-up
+- hooks
+filed_at:
+  code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
