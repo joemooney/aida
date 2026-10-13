@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:20:29.880301545Z
-modified_at: 2026-10-13T03:33:15.942591634Z
+modified_at: 2026-10-13T03:44:11.542805416Z
 req_type: Bug
 tags:
 - ci
@@ -32,6 +32,12 @@ comments:
   created_at: 2026-10-12T21:37:02.102323873Z
   modified_at: 2026-10-12T21:37:02.102323873Z
   session_id: abd37323-5d22-48a8-84ee-1bff20c9a9e5
+- id: 01a1335c-5516-7680-88ae-8db976475946
+  author: joe
+  content: 'Night seat session #7: PR #2585. Confirmed root cause: detached ''aida cache refresh --worker'' processes (cwd = fixture project) still alive at teardown; in 1 run of 5 three of them were alive. The test now waits up to 60s for fixture-cwd processes before cleanup and logs them. Assertions unchanged.'
+  created_at: 2026-10-13T03:44:11.542805416Z
+  modified_at: 2026-10-13T03:44:11.542805416Z
+  session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
 history:
 - id: 01a13328-d077-7c53-be36-5b749f8beacf
   author: joe
