@@ -81,13 +81,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:47:58.982226627Z
-modified_at: 2026-10-13T04:47:58.982226627Z
+modified_at: 2026-10-13T06:17:22.919672320Z
 req_type: Doc
 tags:
 - blog
 - product
 - retrospective
 - strategy
+comments:
+- id: 01a133e8-94e7-7e62-bc69-969177be909e
+  author: joe
+  content: 'Correction from the /aida-capture sweep, same evening. `aida metrics cycle-time` already exists (STORY-1479 / EPIC-73), so the "open question" about making cycle time a standing metric is already answered. Its 30-day view (2026-10-13, 859 of 1,212 completions included) sharpens the diagnosis: **waiting dominates, work does not.** Work is under 1% of tracked time: implementer p50 about 7 min, CI p50 about 8 min, reviewer p50 under 1 min of tracked span. Queued has p50 2.7h and p90 49h; awaiting approval has p50 25 min and p90 23h. The hand-computed medians in this doc (bugs 2.4h and so on) are still right as elapsed time, but most of that time is queue and approval wait, not CI plus review. Implication: STORY-1684 (fasttrack auto-routing) and approval latency are the levers. STORY-1683 (tiered review) matters less for throughput than it first looked. See FAQ-55.'
+  created_at: 2026-10-13T06:17:22.919672320Z
+  modified_at: 2026-10-13T06:17:22.919672320Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
