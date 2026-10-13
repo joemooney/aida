@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:18:10.341676814Z
-modified_at: 2026-10-13T00:33:21.149895410Z
+modified_at: 2026-10-13T00:51:22.313202697Z
 req_type: Bug
 tags:
 - contained
@@ -46,6 +46,12 @@ comments:
   created_at: 2026-10-12T06:00:32.036287084Z
   modified_at: 2026-10-12T06:00:32.036287084Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a132be-1c49-7c73-8dc3-6bc1fced79b4
+  author: joe
+  content: 'Implemented in PR #2581 (head 0ce883f5c5). Real-claude contained test (AIDA_TEST_REAL_CLAUDE=1, real_claude_contained) PASSED locally in 5.5s with operator HOME passed only to the claude child. Supervised: operator merge. Follow-up: OS wrapper still binds headless_worktree_root() rw (cwd/$HOME fallback outside git) — filed separately.'
+  created_at: 2026-10-13T00:51:22.313202697Z
+  modified_at: 2026-10-13T00:51:22.313202697Z
+  session_id: 708486eb-7208-40d5-9d42-c2f9760386b3
 history:
 - id: 01a1309d-255a-7633-b5c3-1f2c032437b4
   author: joe
