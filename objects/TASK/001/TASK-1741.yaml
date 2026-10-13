@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:45:47.396313407Z
-modified_at: 2026-10-13T22:03:09.505552132Z
+modified_at: 2026-10-13T22:09:57.958217099Z
 req_type: Task
 tags:
 - review-follow-up
@@ -35,6 +35,11 @@ comments:
   content: 'FACTORY PLAN (codex): extend one_rejection_table_drives_the_edit_gate_and_review_record with an explicit valid-advisor row under the existing hermetic no-TTY ambient guard. Parse real edit CLI and execute the production handler, assert stored Draft -> Approved, then execute review record and inspect persisted reviewer_role=advisor. Pin grant_check Valid so wrongly rejecting the healthy fixture fails the row. Preserve every rejection and valid-reviewer assertion. Record sketch D2 deviation (shared grant_check plus rejection_sentence, no AdvisorAuthority type) on BUG-1983. Tests only; source reading/rustfmt and full make check-ci-fast locally, full Rust test execution only GitHub CI.'
   created_at: 2026-10-13T22:03:09.505552132Z
   modified_at: 2026-10-13T22:03:09.505552132Z
+- id: 01a13750-b2c6-79e0-a41d-8e32216453dd
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2608 at 1b7d17d432538f7ff72e268d09795318e5dae5c1. Valid advisor row covers real edit persistence and review attribution with both TTY inputs false; D2 deviation comment on BUG-1983. Author-controlled self-check found no findings. All 27 fast gates passed. Full GitHub Build pending.'
+  created_at: 2026-10-13T22:09:57.958217099Z
+  modified_at: 2026-10-13T22:09:57.958217099Z
 history:
 - id: 01a135f1-47bb-71b2-8629-1957bef07eb9
   author: joe
