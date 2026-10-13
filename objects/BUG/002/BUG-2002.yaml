@@ -9,17 +9,25 @@ description: |-
   3. There is no way to say 'continue under the existing lease' when re-dispatching the same seat into its own worktree, e.g. for a rework round. The only workarounds are dropping --spec, or 'session end', which deletes the worktree.
   4. The resume picker appears even when --prompt-file names fresh work; --no-resume exists but isn't suggested.
   Done when: the lease conflict surfaces before any prompt, with an actionable choice (adopt the lease for the same worktree, or abort); the default 'session leases' shows every lease that can block a dispatch; and the bg-dispatch help shows the non-interactive form.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T03:28:56.204087120Z
+modified_at: 2026-10-13T03:31:40.242169935Z
 req_type: Bug
 tags:
 - agent-new
 - leases
 - ux
+history:
+- id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
+  author: joe
+  timestamp: 2026-10-13T03:31:40.242166100Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
   branch: main
