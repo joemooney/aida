@@ -213,12 +213,25 @@ fn session_leases_default_includes_dispatch_blocking_stale_lease() {
         LeaseState::Stale
     );
     assert!(lease_blocks_agent_dispatch(&lease));
-    assert!(lease_visible_in_default_listing(&lease, LeaseState::Stale));
-    let rows = leases_json_rows(&[(lease.clone(), LeaseState::Stale, None)], None);
-    assert_eq!(rows[0]["id"], lease.id);
+    let spec_lease = lease.clone();
+    lease.id = "stale-harness".into();
     lease.scope = worktree_lease::HARNESS_WORKTREE_SCOPE.into();
-    assert!(!lease_blocks_agent_dispatch(&lease));
-    assert!(!lease_visible_in_default_listing(&lease, LeaseState::Stale));
+    let classified = vec![
+        (spec_lease.clone(), LeaseState::Stale, None),
+        (lease.clone(), LeaseState::Stale, None),
+    ];
+    let (shown, hidden) = select_lease_listing(classified.clone(), false);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].0.id, spec_lease.id);
+    assert_eq!(shown[0].1, LeaseState::Stale);
+    assert_eq!(hidden.len(), 1);
+    assert_eq!(hidden[0].0.id, lease.id);
+    let rows = leases_json_rows(&shown, None);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"], spec_lease.id);
+    let (all, hidden) = select_lease_listing(classified, true);
+    assert_eq!(all.len(), 2);
+    assert!(hidden.is_empty());
 }
 
 // trace:BUG-2002 | ai:codex
@@ -308,4 +321,141 @@ fn dead_recorded_pid_does_not_hide_observed_live_owner() {
         LeaseState::Stale
     );
     assert!(agent_launch_lease_is_active(tmp.path(), &lease, &live));
+}
+
+// trace:BUG-2002 | ai:codex
+#[test]
+fn agent_new_duplicate_scope_owners_refuse_even_with_owning_cwd() {
+    let _env = crate::test_env::env_lock();
+    let (tmp, lease) = fixture();
+    let mut other = lease.clone();
+    other.id = "second-owner-2002".into();
+    persist(tmp.path(), &other);
+    let error = preflight_agent_launch_lease(
+        tmp.path(),
+        Some("implementer"),
+        Some("BUG-2002"),
+        Some(&lease.worktree_path),
+    )
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("multiple sessions own this work"),
+        "{error}"
+    );
+    assert_eq!(list_leases(tmp.path()).len(), 2);
+}
+
+// trace:BUG-2002 | ai:codex
+#[cfg(unix)]
+#[test]
+fn agent_new_live_owner_is_seen_through_a_symlinked_lease_path() {
+    let _env = crate::test_env::env_lock();
+    let (tmp, mut lease) = fixture();
+    let real = lease.worktree_path.clone();
+    let alias = tmp.path().join("alias");
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+    lease.worktree_path = alias;
+    let live = [process_probe::LiveSession {
+        pid: 4242,
+        cwd: real,
+        jsonl: None,
+        stale_cwd: false,
+    }];
+    assert!(agent_launch_lease_is_active(tmp.path(), &lease, &live));
+}
+
+// trace:BUG-2002 | ai:codex
+#[cfg(unix)]
+#[test]
+fn child_lease_identity_overrides_or_removes_the_launchers_identity() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ID", "unrelated-parent");
+    for id in [Some("new-lease"), Some("reused-lease"), None] {
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args(["-c", "printf '%s' \"${AIDA_SESSION_ID-unset}\""]);
+        apply_agent_lease_identity(&mut command, id);
+        let output = command.output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            id.unwrap_or("unset")
+        );
+    }
+}
+
+// Exercise the entrypoints all the way through spawning the harmless child.
+// The child records its effective cwd and lease identity; no real vendor starts.
+// trace:BUG-2002 | ai:codex
+#[cfg(unix)]
+#[test]
+fn agent_new_foreground_and_background_reenter_with_explicit_owning_cwd() {
+    for (background, scoped) in [(false, true), (true, true), (false, false), (true, false)] {
+        let (tmp, lease) = fixture();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            tmp.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_BUILD_PROFILE", None),
+                ("AIDA_BIN", None),
+                ("AIDA_SESSION_ID", Some("unrelated-parent")),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_FOCUS_EPIC", None),
+            ],
+        );
+        let script = tmp.path().join("record-child.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"${AIDA_SESSION_ID-unset}\" > child-record\n",
+        )
+        .unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "/bin/sh",
+            default_args: vec![script.display().to_string()],
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let launch = if background {
+            agent_new_bg_dispatch
+        } else {
+            agent_new_with_config
+        };
+        let cwd = if scoped {
+            lease.worktree_path.as_path()
+        } else {
+            tmp.path()
+        };
+        launch(
+            config,
+            scoped.then(|| "implementer".into()),
+            scoped.then(|| "BUG-2002".into()),
+            false,
+            Some(cwd),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(Some("fresh work".into()), false),
+            AgentResumeOptions::new(false, None, false, false),
+            AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            Some("reentry-recording-child".into()),
+            None,
+            false,
+        )
+        .unwrap();
+        let record = std::fs::read_to_string(cwd.join("child-record")).unwrap();
+        let lines: Vec<_> = record.lines().collect();
+        assert_eq!(
+            std::path::Path::new(lines[0]).canonicalize().unwrap(),
+            cwd.canonicalize().unwrap()
+        );
+        assert_eq!(lines[1], if scoped { lease.id.as_str() } else { "unset" });
+        let leases = list_leases(tmp.path());
+        assert_eq!(leases.len(), 1);
+        assert_eq!(leases[0].id, lease.id);
+        assert_eq!(leases[0].scope, lease.scope);
+        assert_eq!(leases[0].started_at, lease.started_at);
+    }
 }

@@ -2594,13 +2594,7 @@ pub(crate) fn agent_new_bg_dispatch(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
-    // Preserve the minted or reused scope's identity in the launched child.
-    // trace:BUG-2002 | ai:codex
-    if let Some(id) = &plan.lease_id {
-        command.env("AIDA_SESSION_ID", id);
-    } else {
-        command.env_remove("AIDA_SESSION_ID");
-    }
+    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     if let Some(ctx) = &launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
@@ -3009,6 +3003,16 @@ fn preflight_agent_launch_lease(
     Ok(Some(lease))
 }
 
+// A child gets its own lease identity, or sheds the launcher's unrelated one.
+// trace:BUG-2002 | ai:codex
+fn apply_agent_lease_identity(command: &mut std::process::Command, lease_id: Option<&str>) {
+    if let Some(id) = lease_id {
+        command.env("AIDA_SESSION_ID", id);
+    } else {
+        command.env_remove("AIDA_SESSION_ID");
+    }
+}
+
 // trace:BUG-2002 | ai:codex
 fn agent_launch_lease_is_active(
     project_root: &std::path::Path,
@@ -3016,8 +3020,18 @@ fn agent_launch_lease_is_active(
     live: &[process_probe::LiveSession],
 ) -> bool {
     live.iter().any(|session| {
-        !session.stale_cwd
-            && (session.cwd == lease.worktree_path || session.cwd.starts_with(&lease.worktree_path))
+        // A lease may record a symlink while /proc reports the real cwd.
+        // Preserve the recorded path if it cannot be resolved.
+        // trace:BUG-2002 | ai:codex
+        let owned = lease
+            .worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| lease.worktree_path.clone());
+        let cwd = session
+            .cwd
+            .canonicalize()
+            .unwrap_or_else(|_| session.cwd.clone());
+        !session.stale_cwd && (cwd == owned || cwd.starts_with(&owned))
     }) || matches!(
         lease_state_for(lease, live, chrono::Utc::now()),
         LeaseState::Live
@@ -4486,13 +4500,7 @@ pub(crate) fn run_tracked_agent(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
-    // Preserve the minted or reused scope's identity in the launched child.
-    // trace:BUG-2002 | ai:codex
-    if let Some(id) = &plan.lease_id {
-        command.env("AIDA_SESSION_ID", id);
-    } else {
-        command.env_remove("AIDA_SESSION_ID");
-    }
+    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
