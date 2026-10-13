@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-13T21:01:49.018282715Z
+modified_at: 2026-10-13T21:23:04.058619480Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -38,6 +38,11 @@ comments:
   content: 'FACTORY PLAN (codex): route session_grant_lookup through grant_check on the existing project-root resolver; preserve exported handle bytes and map every rejection to Unresolved. Valid records provide canonical seat and parent-minimum expiry. Preserve TASK-1736 informational expired-record display behavior in a separate private display reader, never used by the launch-refusal gate; keep all existing tests unchanged, including legacy revoked wording. Add a real CLI-dispatch child test table for subject mismatch, roster denied, parent principal mismatch, parent not delegating and padded handle, plus valid and other rejection controls. Each child parses role expiry --refuse-within 1h and calls the actual handler, records entry, and must exit 3 exactly for rejection fixtures. Add effective-parent-expiry and no-cache-load checks. Authority code: PR remains draft and requires ADVISOR SIGNOFF before merge. Rust verification only on GitHub CI; full make check-ci-fast before push.'
   created_at: 2026-10-13T21:01:49.018282715Z
   modified_at: 2026-10-13T21:01:49.018282715Z
+- id: 01a13725-c2fa-7241-a61c-274e0f13ecee
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2604 at 2b2ade55020c273ee085dc4d7f998e6299ee7247. ADVISOR SIGNOFF REQUIRED BEFORE MERGE (authority code). Final author-controlled self-check found stale expiry documentation, corrected; no remaining findings. All 27 make check-ci-fast gates passed at final commit. Full GitHub Build pending; no manual Rust test execution.'
+  created_at: 2026-10-13T21:23:04.058619480Z
+  modified_at: 2026-10-13T21:23:04.058619480Z
 history:
 - id: 01a135f0-b4ff-7f43-a1ab-ae2f0ac64930
   author: joe
