@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T06:40:17.159665204Z
+modified_at: 2026-10-13T12:49:46.635676128Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -46,6 +46,11 @@ comments:
     Acceptance-to-test mapping: fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected (concurrent readers + real repository operation), fake_git_fixture_lifetime_covers_child_exit, source guard PATH_mutation_requires_isolated_child_or_shared_reader_guard including indirect guard setters and aliases, GitHub CI stress job 15 rounds x 16 threads running task_1507 history tests alongside all former PATH mutators. Carry the added unmet BUG-1955 acceptance explicitly: retain raw exec/exit/cwd/shim-lifetime evidence, identify the actual temporary-file/commit-object failure mechanism, add a failing reproduction and permanent regression. Do not claim that obligation satisfied merely by removing global PATH mutation. Risks: nested env-lock deadlocks if choosing universal serialization, missed reader call sites, global cwd/env contamination beyond PATH. Sketch/signoff required if new reusable command-injection contract becomes necessary. make check-ci-fast before every push; all Rust compilation/tests and stress evidence only on GitHub CI.
   created_at: 2026-10-13T06:40:17.159665204Z
   modified_at: 2026-10-13T06:40:17.159665204Z
+- id: 01a1354f-d48b-70e0-a253-dbd8c33835e3
+  author: joe
+  content: 'FACTORY PLAN (codex) / plan:night — sketch for signoff: inventory confirms process-wide PATH writers in status_prs, handle_pull_command_tests, story_1656, pr_cmd and lib_part3, including indirect EnvVarsGuard and prepend_path calls. Writer-only env_lock cannot protect unrelated git readers. Proposed test-only isolation harness re-executes the current test binary for an exact test name, one thread, with child-scoped PATH via Command::env; parent retains shim TempDirs until child exit. Move every PATH-changing scenario behind that boundary and add a source-shape guard rejecting direct/indirect parent PATH writers. Add CI stress invoking history tests alongside these parent launchers, 15 rounds at 16 threads. This introduces a reusable harness/new test convention, so the repository sketch-first rule requires advisor signoff before implementation. Also read BUG-1955 rework/strace findings: all 441 foreign-shim execs in that earlier trace were ENOENT probes; original temporary-file/object-write root cause remains unconfirmed, so do not claim PATH isolation proves it. Acceptance must separately include named mechanism and reproducer for the carried obligation. Parked pending harness signoff and root-cause evidence; no lease/code/PR created.'
+  created_at: 2026-10-13T12:49:46.635676128Z
+  modified_at: 2026-10-13T12:49:46.635676128Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
