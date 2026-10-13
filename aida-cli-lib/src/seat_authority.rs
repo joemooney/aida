@@ -101,32 +101,232 @@ pub(crate) fn roster_allows(project_root: &Path, principal: &str, seat: &str) ->
         .unwrap_or(false)
 }
 
-pub(crate) fn current_grant(project_root: &Path) -> Option<SeatGrant> {
-    let id = std::env::var(GRANT_ENV).ok()?;
-    let grant = read_grant(&id).ok()?;
-    let now = Utc::now();
-    if grant.revoked_at.is_some()
-        || now >= grant.expires_at
-        || grant.subject != crate::current_user_id(None)
-        || !roster_allows(project_root, &grant.principal, &grant.seat)
-    {
-        return None;
-    }
-    if let Some(parent_id) = &grant.parent_grant_id {
-        let parent = read_grant(parent_id).ok()?;
-        if parent.revoked_at.is_some()
-            || now >= parent.expires_at
-            || parent.principal != grant.principal
-            || !roster_allows(project_root, &parent.principal, &parent.seat)
-            || !parent
-                .delegable_seats
-                .iter()
-                .any(|seat| seat == &grant.seat)
-        {
-            return None;
+/// Why an exported grant failed validation. The checks and their order are
+/// exactly those [`current_grant`] has always applied; this only names which
+/// one failed so a refusal can say "expired" instead of "no active role".
+// trace:BUG-1983 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GrantRejection {
+    /// The exported handle is not a grant id.
+    BadHandle,
+    /// No readable record for the handle.
+    Unreadable,
+    /// The record does not parse, or names a different id.
+    Malformed,
+    Revoked {
+        at: DateTime<Utc>,
+    },
+    Expired {
+        at: DateTime<Utc>,
+    },
+    /// The grant was minted for another identity than this process runs as.
+    SubjectMismatch {
+        grant_subject: String,
+        caller: String,
+    },
+    /// The team roster no longer allows the principal this seat.
+    RosterDenied {
+        principal: String,
+        seat: String,
+    },
+    /// The parent grant failed one of the checks above.
+    Parent(Box<GrantRejection>),
+    /// The parent belongs to another principal than the child.
+    ParentPrincipalMismatch,
+    /// The parent grant does not delegate the child's seat.
+    ParentNotDelegating {
+        parent_seat: String,
+    },
+}
+
+impl std::fmt::Display for GrantRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stamp = |at: &DateTime<Utc>| at.format("%Y-%m-%dT%H:%MZ").to_string();
+        match self {
+            Self::BadHandle => write!(f, "the exported handle is not a grant id"),
+            Self::Unreadable => write!(f, "no grant record exists for it on this machine"),
+            Self::Malformed => write!(f, "its record is malformed"),
+            Self::Revoked { at } => write!(f, "it was revoked at {}", stamp(at)),
+            Self::Expired { at } => write!(f, "it expired at {}", stamp(at)),
+            Self::SubjectMismatch {
+                grant_subject,
+                caller,
+            } => write!(
+                f,
+                "it was issued to `{grant_subject}` but this process runs as `{caller}`"
+            ),
+            Self::RosterDenied { principal, seat } => write!(
+                f,
+                "the team roster no longer allows `{principal}` the `{seat}` seat"
+            ),
+            Self::Parent(inner) => write!(f, "the grant it was delegated from is invalid: {inner}"),
+            Self::ParentPrincipalMismatch => {
+                write!(
+                    f,
+                    "the grant it was delegated from belongs to another principal"
+                )
+            }
+            Self::ParentNotDelegating { parent_seat } => write!(
+                f,
+                "the `{parent_seat}` grant it was delegated from no longer delegates this seat"
+            ),
         }
     }
-    Some(grant)
+}
+
+/// The verdict on the grant this process exports through `AIDA_SESSION_GRANT`.
+// trace:BUG-1983 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) enum GrantCheck {
+    /// No grant is exported.
+    Absent,
+    Valid(SeatGrant),
+    /// A grant is exported but fails validation. `seat` is known when the
+    /// record could be read.
+    Rejected {
+        id: String,
+        seat: Option<String>,
+        reason: GrantRejection,
+    },
+}
+
+impl GrantCheck {
+    pub(crate) fn into_valid(self) -> Option<SeatGrant> {
+        match self {
+            Self::Valid(grant) => Some(grant),
+            _ => None,
+        }
+    }
+
+    /// One sentence for a refusal, naming the grant by an 8-character prefix
+    /// only (never the full handle) and the failed check. `None` unless the
+    /// grant was rejected.
+    // trace:BUG-1983 | ai:claude
+    pub(crate) fn rejection_sentence(&self) -> Option<String> {
+        let Self::Rejected { id, seat, reason } = self else {
+            return None;
+        };
+        let prefix: String = id.chars().take(8).collect();
+        let seat_label = seat.as_deref().unwrap_or("unknown seat");
+        let recovery = match seat.as_deref() {
+            Some(seat) => format!("Re-enter it at a terminal: `aida role enter {seat}`"),
+            None => "Re-enter your role at a terminal: `aida role enter <role>`".to_string(),
+        };
+        Some(format!(
+            "Session grant {prefix}… ({seat_label}) was rejected: {reason}. {recovery}"
+        ))
+    }
+}
+
+fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantRejection> {
+    if let Some(at) = grant.revoked_at {
+        return Err(GrantRejection::Revoked { at });
+    }
+    if now >= grant.expires_at {
+        return Err(GrantRejection::Expired {
+            at: grant.expires_at,
+        });
+    }
+    Ok(())
+}
+
+fn check_roster(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
+    if roster_allows(project_root, &grant.principal, &grant.seat) {
+        Ok(())
+    } else {
+        Err(GrantRejection::RosterDenied {
+            principal: grant.principal.clone(),
+            seat: grant.seat.clone(),
+        })
+    }
+}
+
+fn read_grant_checked(id: &str) -> Result<SeatGrant, GrantRejection> {
+    if Uuid::parse_str(id).is_err() {
+        return Err(GrantRejection::BadHandle);
+    }
+    let path = grant_path(id).map_err(|_| GrantRejection::BadHandle)?;
+    let bytes = std::fs::read(&path).map_err(|_| GrantRejection::Unreadable)?;
+    let grant: SeatGrant = serde_json::from_slice(&bytes).map_err(|_| GrantRejection::Malformed)?;
+    if grant.id != id {
+        return Err(GrantRejection::Malformed);
+    }
+    Ok(grant)
+}
+
+// trace:BUG-1983 | ai:claude
+pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
+    let Some(id) = std::env::var(GRANT_ENV)
+        .ok()
+        .filter(|id| !id.trim().is_empty())
+    else {
+        return GrantCheck::Absent;
+    };
+    let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
+        id: id.clone(),
+        seat,
+        reason,
+    };
+    let grant = match read_grant_checked(&id) {
+        Ok(grant) => grant,
+        Err(reason) => return rejected(None, reason),
+    };
+    // Checks run in the order `current_grant` always used: revoked, expired,
+    // subject, roster; then the parent's revoked, expired, principal,
+    // roster, delegable.
+    let now = Utc::now();
+    let caller = crate::current_user_id(None);
+    let own = check_lifetime(&grant, now).and_then(|()| {
+        if grant.subject == caller {
+            check_roster(project_root, &grant)
+        } else {
+            Err(GrantRejection::SubjectMismatch {
+                grant_subject: grant.subject.clone(),
+                caller,
+            })
+        }
+    });
+    if let Err(reason) = own {
+        return rejected(Some(grant.seat), reason);
+    }
+    if let Some(parent_id) = &grant.parent_grant_id {
+        let parent = read_grant_checked(parent_id)
+            .and_then(|parent| check_lifetime(&parent, now).map(|()| parent))
+            .map_err(|reason| GrantRejection::Parent(Box::new(reason)))
+            .and_then(|parent| {
+                if parent.principal == grant.principal {
+                    Ok(parent)
+                } else {
+                    Err(GrantRejection::ParentPrincipalMismatch)
+                }
+            })
+            .and_then(|parent| {
+                check_roster(project_root, &parent)
+                    .map(|()| parent)
+                    .map_err(|reason| GrantRejection::Parent(Box::new(reason)))
+            });
+        let parent = match parent {
+            Ok(parent) => parent,
+            Err(reason) => return rejected(Some(grant.seat), reason),
+        };
+        if !parent
+            .delegable_seats
+            .iter()
+            .any(|seat| seat == &grant.seat)
+        {
+            return rejected(
+                Some(grant.seat),
+                GrantRejection::ParentNotDelegating {
+                    parent_seat: parent.seat,
+                },
+            );
+        }
+    }
+    GrantCheck::Valid(grant)
+}
+
+pub(crate) fn current_grant(project_root: &Path) -> Option<SeatGrant> {
+    grant_check(project_root).into_valid()
 }
 
 pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
