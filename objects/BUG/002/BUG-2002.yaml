@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T03:28:56.204087120Z
-modified_at: 2026-10-13T15:46:02.072630447Z
+modified_at: 2026-10-13T15:46:12.257992780Z
 req_type: Bug
 tags:
 - agent-new
@@ -47,6 +47,11 @@ comments:
   content: 'FACTORY DRAFT: PR opened on bug-2002-work at 4bd7714864a70b8f91bcba8834fa9301005a3256; rebased onto current main, make check-ci-fast passed all 27 gates. GitHub CI pending.'
   created_at: 2026-10-13T15:46:02.072630447Z
   modified_at: 2026-10-13T15:46:02.072630447Z
+- id: 01a135f1-5aa2-76f3-a71b-aeace09d388b
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2596 at 4bd7714864a70b8f91bcba8834fa9301005a3256'
+  created_at: 2026-10-13T15:46:12.257992780Z
+  modified_at: 2026-10-13T15:46:12.257992780Z
 history:
 - id: 01a13350-de52-7900-98fa-3eb3d7c7f8e3
   author: joe
