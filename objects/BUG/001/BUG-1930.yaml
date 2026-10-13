@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-13T01:38:00.696534232Z
+modified_at: 2026-10-13T02:45:06.730543464Z
 req_type: Bug
 tags:
 - drain
@@ -84,6 +84,12 @@ comments:
   created_at: 2026-10-13T01:38:00.696534232Z
   modified_at: 2026-10-13T01:38:00.696534232Z
   session_id: 7b1a0319-d7e7-4149-996c-aba2427a4985
+- id: 01a13326-3e2a-7241-bca6-90a5e1e524aa
+  author: joe
+  content: 'PR #2583 opened (AC1-AC4 complete). Review follow-ups fixed: streak spans --batches chain; halt text no longer claims pipelined in-flight members were not dispatched. Open policy question in PR: narrow PermissionDenied reclassification to Edit/Write denials? Sandbox-unavailable class not implemented.'
+  created_at: 2026-10-13T02:45:06.730543464Z
+  modified_at: 2026-10-13T02:45:06.730543464Z
+  session_id: 77afed63-7db8-4ea2-9e32-2eabc278fc4d
 history:
 - id: 01a1309d-20ef-7d02-95ba-9172526ce25c
   author: joe
