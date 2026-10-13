@@ -2,18 +2,33 @@ id: 01a13397-0bf8-7b30-917e-c7789ef36bb7
 spec_id: FAQ-52
 agreed_id: FAQ-52
 title: 'Why does ''aida pull'' print ''main → gitlab FAILED: non-fast-forward''?'
-description: The mirror hub's main has commits that origin's main doesn't, so a fast-forward mirror push is impossible. The store mirror is unaffected and nothing on origin is broken. Find what is extra with 'git log --oneline origin/main..gitlab/main'. If those commits are preserved elsewhere, realign the mirror with 'git push --force-with-lease=main:<old-mirror-sha> gitlab origin/main:main'. GitLab blocks force pushes to a protected main, so allow force push temporarily in Settings → Repository → Protected branches, push, then turn it back off (make sure main stays protected). Otherwise leave the warning until the hub migration.
+description: |
+  **The mirror hub's `main` has commits that origin's `main` lacks, so the fast-forward mirror push is refused. Nothing on origin is broken, and the store mirror still syncs.**
+
+  ## Why
+  `aida pull` mirrors origin to each `mirror_remotes` hub by fast-forward only. A hub that diverged (for example, commits pushed straight to it) can't be fast-forwarded.
+
+  ## How
+  1. See what is extra: `git log --oneline origin/main..gitlab/main`.
+  2. If those commits are preserved elsewhere, realign the hub:
+     `git push --force-with-lease=main:<old-hub-sha> gitlab origin/main:main`
+  3. GitLab refuses force pushes to a protected `main`. Allow force push temporarily (Settings → Repository → Protected branches), push, then turn it off again, and make sure `main` is still protected afterwards.
+  4. Or leave the warning until a planned hub migration.
+
+  ## See also
+  EPIC-44, TASK-1735, DOC-7
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:48:19.448420998Z
-modified_at: 2026-10-13T04:48:19.448420998Z
+modified_at: 2026-10-13T04:51:16.457306253Z
 req_type: Faq
 tags:
-- gitlab
-- hub
-- mirror
+- audience:dev
+- audience:user
+- topic:ci
+- topic:merge
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
