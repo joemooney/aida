@@ -1398,6 +1398,17 @@ pub(crate) fn record_auto_complete_run(
                     );
                 }
             }
+            // BUG-1930: refused writes are environmental; the shelve already
+            // names the denied tools. trace:BUG-1930 | ai:claude
+            None if failure.kind == auto_complete::FailureKind::PermissionDenied => {
+                if !json {
+                    eprintln!(
+                        "  {} permission-denied failure — not auto-drafting a BUG \
+                         (fix the sandbox / permission mode, then re-drive)",
+                        "📋".dimmed(),
+                    );
+                }
+            }
             // TASK-1564: the narrative record is a comment on the parent spec,
             // not a new draft spec. Nothing else moves — the non-zero exit, the
             // ledger line appended below, and the seat routing are untouched.

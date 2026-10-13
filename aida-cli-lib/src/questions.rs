@@ -2439,6 +2439,33 @@ pub(crate) fn headless_log_permission_stall(content: &str) -> Option<String> {
     content.lines().find_map(headless_line_permission_stall)
 }
 
+/// BUG-1930: every tool the headless stream reported in a
+/// `permission_denials` array, de-duplicated in first-seen order. Empty when
+/// the stream recorded no denial (or is not JSONL).
+// trace:BUG-1930 | ai:claude
+pub(crate) fn headless_log_permission_denied_tools(content: &str) -> Vec<String> {
+    let mut tools: Vec<String> = Vec::new();
+    for line in content.lines() {
+        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
+            continue;
+        };
+        let Some(denials) = parsed.get("permission_denials").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for denial in denials {
+            let tool = denial
+                .get("tool_name")
+                .or_else(|| denial.get("tool"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("an unknown tool");
+            if !tools.iter().any(|t| t == tool) {
+                tools.push(tool.to_string());
+            }
+        }
+    }
+    tools
+}
+
 /// First non-empty trimmed line of a string, or the empty string. Small pure
 /// helper so a multi-line `result` detail collapses to one log-friendly row.
 /// trace:TASK-298 | ai:claude

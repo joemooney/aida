@@ -1096,6 +1096,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         &branch,
                     ));
                 }
+                // No PR and no commit to open one from: a stream that
+                // recorded permission denials means the writes were refused.
+                // trace:BUG-1930 | ai:claude
+                if headless_impl {
+                    let denied = crate::questions::read_headless_log_for_session(
+                        &self.project_root,
+                        &session_uuid,
+                    )
+                    .map(|log| crate::questions::headless_log_permission_denied_tools(&log))
+                    .unwrap_or_default();
+                    if !denied.is_empty() {
+                        return Err(auto_complete::permission_denied_failure(&denied));
+                    }
+                }
                 let failure = auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoPr,
                     "the implementer session exited cleanly but opened no PR — \

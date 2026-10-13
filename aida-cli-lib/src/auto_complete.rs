@@ -514,6 +514,12 @@ pub(crate) enum FailureKind {
     /// lease/worktree that blocked retry and auto-draft suppresses duplicates.
     // trace:BUG-908 | ai:codex
     LeaseConflict,
+    /// BUG-1930: the phase's headless stream recorded permission denials and
+    /// the phase produced no commit or PR. The agent stopped because its
+    /// writes were refused (sandbox / permission mode), an environmental
+    /// cause: never transient-retried, and not a reason to draft a BUG.
+    // trace:BUG-1930 | ai:claude
+    PermissionDenied,
     /// BUG-826: the headless vendor process exited non-zero after creating a
     /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
     /// the implementer attempted the work and failed.
@@ -632,6 +638,7 @@ impl FailureKind {
                 | Self::Watchdog
                 | Self::CacheLocked
                 | Self::LeaseConflict
+                | Self::PermissionDenied
                 // trace:BUG-826 | ai:codex
                 | Self::LaunchNoOutput
                 // trace:BUG-1063 | ai:codex
@@ -667,6 +674,7 @@ impl FailureKind {
             Self::Watchdog | Self::CiTimeout => "watchdog",
             Self::CacheLocked => "cache-locked",
             Self::LeaseConflict => "lease-conflict",
+            Self::PermissionDenied => "permission-denied",
             Self::Internal => "internal",
             Self::Spawn
             | Self::MissingTool
@@ -1209,6 +1217,21 @@ pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
     matches!(
         cause,
         "watchdog" | "no-verdict" | "no-pr" | "tool-exit" | "cache-locked" | "headless-wait"
+    )
+}
+
+/// BUG-1930: the failure for a phase that stopped on permission denials
+/// (`tools`, as [`crate::questions::headless_log_permission_denied_tools`]
+/// lists them) without producing a commit or PR.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn permission_denied_failure(tools: &[String]) -> PhaseFailure {
+    PhaseFailure::of(
+        FailureKind::PermissionDenied,
+        format!(
+            "the agent stopped after permission denials ({}) and produced no commit or PR — \
+             its writes were refused, so this is an environment problem, not the spec",
+            tools.join(", ")
+        ),
     )
 }
 
@@ -2038,6 +2061,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
     // [`FailureKind::Failed`] default (the spawned work ran and reported
     // failure) — the pre-BUG-218 behaviour for that phase.
     match (phase, kind) {
+        // BUG-1930: writes were refused, so re-running changes nothing until
+        // the permission boundary does. trace:BUG-1930 | ai:claude
+        (_, FailureKind::PermissionDenied) => format!(
+            "The agent's writes were denied — check the sandbox / permission mode \
+             (`[agents] contained` in ~/.aida/agents.toml, `aida doctor`), then re-drive: \
+             `aida queue work {spec}`"
+        ),
         (Phase::Implementer, FailureKind::NoPr) => {
             let resume = ctx
                 .implementer_session
@@ -7766,6 +7796,8 @@ mod tests {
             "verdict:reject",
             "ci-red",
             "lease-conflict",
+            // trace:BUG-1930 | ai:claude
+            "permission-denied",
             "merge-hold",
             "environmental",
             "internal",
@@ -10217,6 +10249,46 @@ mod tests {
             driver.reconcile_failure(Phase::Implementer, &PhaseFailure::new("x")),
             PhaseReconcile::GenuineFailure
         );
+    }
+
+    /// BUG-1930: a synthetic headless stream whose implementer stopped on
+    /// permission denials classifies as PermissionDenied (not LeaseConflict,
+    /// not a transient NoPr): never retried, the reason names the denied
+    /// tools, and the hint points at the permission boundary.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn permission_denied_stream_is_a_distinct_unretried_failure() {
+        let stream = concat!(
+            "{\"type\":\"system\",\"subtype\":\"init\"}\n",
+            "not json\n",
+            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,",
+            "\"permission_denials\":[{\"tool_name\":\"Edit\"},{\"tool_name\":\"Edit\"},",
+            "{\"tool_name\":\"Write\"},{\"tool\":\"Bash\"}]}\n",
+        );
+        let tools = crate::questions::headless_log_permission_denied_tools(stream);
+        assert_eq!(tools, vec!["Edit", "Write", "Bash"]);
+        assert!(crate::questions::headless_log_permission_denied_tools(
+            "{\"type\":\"result\",\"permission_denials\":[]}\n"
+        )
+        .is_empty());
+
+        let failure = permission_denied_failure(&tools);
+        assert_eq!(failure.kind, FailureKind::PermissionDenied);
+        assert!(
+            failure.reason.contains("(Edit, Write, Bash)"),
+            "{}",
+            failure.reason
+        );
+        assert!(failure.kind.is_shelvable());
+        assert_eq!(failure.kind.cause_slug(), "permission-denied");
+        assert!(!should_retry_transient_failure(failure.kind, 0, 3));
+        assert_eq!(
+            failure.clone().reclassify_transient().kind,
+            FailureKind::PermissionDenied
+        );
+        let hint = recovery_hint(Phase::Implementer, failure.kind, &ctx());
+        assert!(hint.contains("writes were denied"), "{hint}");
+        assert!(hint.contains("aida queue work TASK-247"), "{hint}");
     }
 
     // --- Recovery hints: per phase, per failure kind ----------------------
