@@ -12,12 +12,12 @@ description: |
   1. aida-pre-commit.sh (template master; then `make sync-templates`) exempts commits made while `CHERRY_PICK_HEAD` or `REVERT_HEAD` exists, next to the existing MERGE_HEAD exemption. Tests: a conflicted cherry-pick and a conflicted revert finished on main in the primary checkout with `block_primary_commits = true` succeed; a plain commit is still refused.
   2. The refusal message and the hooks docs state that `--amend` and `merge --squash` + commit on main in the primary checkout are also refused (with the AIDA_ALLOW_PRIMARY_COMMIT override).
   3. The unreachable `.aida-store` pwd branch in the exemption chain is removed (or kept with a comment saying why); existing primary-gate tests still pass.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T18:21:04.774030180Z
-modified_at: 2026-10-12T14:56:22.999927868Z
+modified_at: 2026-10-13T07:37:52.386272027Z
 req_type: Task
 tags:
 - follow-up:advisor-review
@@ -41,6 +41,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13432-4602-7763-8199-3679557d32f7
+  author: aida-session-start
+  timestamp: 2026-10-13T07:37:52.386271381Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ff2f6d5bccb14e213a7de9d02078abe0a49baa4a
   branch: main
