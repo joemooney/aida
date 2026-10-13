@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-12T17:48:32.147960871Z
+modified_at: 2026-10-13T02:58:52.763521050Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -28,6 +28,12 @@ comments:
   created_at: 2026-10-12T17:48:32.147960871Z
   modified_at: 2026-10-12T17:48:32.147960871Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a13332-d8db-71d2-9278-6a4a96bfc0ce
+  author: joe
+  content: 'Now carries the unmet acceptance of BUG-1955, which completed via #2560 as hardening only: (a) name the root cause of the history-cache fixture''s ''unable to create temporary file / failed to write commit object'' CI failures, (b) make it non-recurring, (c) show it with a reproduction.'
+  created_at: 2026-10-13T02:58:52.763521050Z
+  modified_at: 2026-10-13T02:58:52.763521050Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
