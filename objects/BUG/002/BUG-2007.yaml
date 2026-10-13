@@ -1,0 +1,38 @@
+id: 01a13530-96c7-76f0-8f16-d131cae77026
+spec_id: BUG-2007
+agreed_id: BUG-2007
+title: A Codex agent launched with --role implementer received the advisor role context (another session's seat), so it refused to implement all night
+description: |
+  On the night of 2026-10-12 the operator launched a Codex factory implementer from a terminal holding a **product** seat grant:
+  `aida agent new codex --no-resume --role implementer --cwd ~/ai/aida --no-default-flags --extra-flag=--sandbox=danger-full-access ...`.
+  The Codex child's environment is correct (`AIDA_SESSION_ROLE=implementer`, `AIDA_AGENT_TYPE=codex`, checked in /proc). But the context Codex got at startup said **`AIDA · role: advisor`** and **`# AIDA active role: advisor`**, with the advisor's purpose and rules. The advisor seat was held by a different session (a Claude advisor session, 6fd5497b).
+
+  Consequence: Codex followed the advisor rule "never implement; route implementation to doer roles". For 5.5 hours it posted PLAN-ONLY comments on all four of its specs (BUG-2002, TASK-1724, BUG-1994, STORY-1664) and wrote no code. A whole factory lane was lost. The Antigravity lane launched the same way from a product-seat terminal worked normally.
+
+  Evidence: Codex rollout `~/.codex/sessions/2026/10/12/rollout-2026-10-12T23-37-44-01a133fb-*.jsonl`, lines 8-9 (developer messages carrying the advisor header and role body).
+
+  Suspected cause (unverified): the startup context for Codex comes from a path that resolves the role from project-level or last-active role state, or from another session's grant (`aida role list` marks `advisor` with `*` as the project's active role), not from the launched session's own `AIDA_SESSION_ROLE` and grant. `aida-role-context.sh` itself reads `$AIDA_SESSION_ROLE`, so look at the Codex-side hook wiring or the status-header producer.
+
+  ## Acceptance
+  - A session launched with `--role X` gets role X's context, never another live session's role. Test it for Codex (and Antigravity), with a different role held by a concurrent session.
+  - When the role can't be resolved for this session, the header says so, rather than borrowing another session's role.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T12:15:39.207274461Z
+modified_at: 2026-10-13T12:15:39.207274461Z
+req_type: Bug
+tags:
+- agent-new
+- codex
+- cross-vendor
+- roles
+filed_at:
+  code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
