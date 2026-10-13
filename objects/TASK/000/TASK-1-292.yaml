@@ -1,5 +1,6 @@
 id: 01a137ad-021d-7903-b38b-dc73ac5d6e60
 spec_id: TASK-1-292
+agreed_id: TASK-1361
 title: bug_2005_wrapper_staleness_tests.rs:18 provenance doc names source commit fba16…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2005, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
