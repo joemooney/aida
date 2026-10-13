@@ -1,0 +1,38 @@
+id: 01a13390-5bef-7720-baaf-e6f6fb853d55
+spec_id: STORY-1683
+agreed_id: STORY-1683
+title: 'Risk-tiered review: size the independent review to the change''s risk'
+description: |-
+  Problem (measured 2026-10-12): the median bug takes 2.4h from start to completion, and independent review plus CI is about half of that. Tonight every PR got the same strict review with mutation checks, 35-55 minutes each. That is right for security, credential or authority changes and too much for test-only or docs PRs. Each rework round adds roughly another hour of CI plus review.
+
+  Proposal: three review tiers, chosen from the change itself, not from memory.
+  - STRICT (today's review): paths or specs tagged security, sandbox, authority, seats, credentials or forge tokens; hook and gate code; anything changing who may merge or approve.
+  - STANDARD: an independent reviewer verifies every acceptance item with evidence and runs the narrow tests; mutation checks only on the core change.
+  - LIGHT: docs-only, test-only or small diffs that touch no STRICT paths. The reviewer checks the acceptance items and confirms CI and the diff scope; no mutation run.
+  The tier is computed by a single function from the diff paths, the spec tags and the size, is printed in the review request, and can be escalated by the advisor (never lowered by the implementer).
+
+  Acceptance:
+  1. A tier classifier with table tests: a docs-only diff gives LIGHT; a diff touching sandbox/authority/hooks paths gives STRICT whatever its size; a security-tagged spec gives STRICT.
+  2. The reviewer prompt/template per tier lives in aida-core/templates (the source of truth) and records the tier in the review verdict.
+  3. The advisor can escalate the tier; an implementer cannot lower it. Tested.
+  4. Measured: after two weeks, median review time and start-to-done median for LIGHT and STANDARD PRs are reported against the 2026-10-12 baseline (bugs: median 2.4h start to done).
+  Process change: needs a sketch on this spec and advisor signoff before implementation.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:41:01.167108550Z
+modified_at: 2026-10-13T04:41:01.167108550Z
+req_type: Story
+tags:
+- cycle-time
+- process
+- review
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
