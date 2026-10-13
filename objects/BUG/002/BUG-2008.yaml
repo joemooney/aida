@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-13T21:23:03.385593703Z
+modified_at: 2026-10-13T21:50:48.211909314Z
 req_type: Bug
 tags:
 - cross-repo
@@ -55,6 +55,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2605 at 5b7239224c6fe5ebdf472fb89a9be87bb22187f5'
   created_at: 2026-10-13T21:23:03.385593703Z
   modified_at: 2026-10-13T21:23:03.385593703Z
+- id: 01a1373f-2793-7940-b0fe-138a2ff8db21
+  author: joe
+  content: 'FACTORY READY: PR #2605 green at 5b7239224c4ce8b109860f5d7129929bffba9956'
+  created_at: 2026-10-13T21:50:48.211909314Z
+  modified_at: 2026-10-13T21:50:48.211909314Z
 history:
 - id: 01a13675-0903-7f62-b1d1-00a3671129af
   author: joe
