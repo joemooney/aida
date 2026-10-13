@@ -14,12 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:13.679762298Z
-modified_at: 2026-10-13T12:15:13.679762298Z
+modified_at: 2026-10-13T18:09:57.318960750Z
 req_type: Bug
 tags:
 - contained
 - review-follow-up
 - sandbox
+comments:
+- id: 01a13674-f646-7fc0-9984-4e61731d2c33
+  author: joe
+  content: 'Advisor triage 2026-10-13 (operator proxy): APPROVED. See .aida/handoff/advisor/draft-triage-2026-10-13.md.'
+  created_at: 2026-10-13T18:09:57.318960750Z
+  modified_at: 2026-10-13T18:09:57.318960750Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 filed_at:
   code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
   branch: main
