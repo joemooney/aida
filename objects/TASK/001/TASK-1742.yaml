@@ -1,0 +1,20 @@
+id: 01a136df-1fe3-7a31-a1ea-6b602d9704c1
+spec_id: TASK-1742
+agreed_id: TASK-1742
+title: Pin BUG-2005 leaking-wrapper fixture with a sha256 assertion and fix its source SHA comment
+description: 'Follow-up from the #2592 round-3 review (APPROVE at 0c340ed687). (1) aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs:18 names source commit fba16d9b9c…, which does not exist; the real 3618fe739b^ is 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005. (2) The fixture sha256 5344afd3…1109 is only a doc comment. Add a test that hashes PRE_FIX_LEAKING_WRAPPER and asserts the pinned constant, so it is shallow-clone safe. The review''s one-byte fixture mutation survived. (3) Optional: the zsh leak-proof test silently covers bash only on hosts without zsh; consider an explicit skip notice.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T20:05:54.787516554Z
+modified_at: 2026-10-13T20:05:54.787516554Z
+req_type: Task
+filed_at:
+  code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
