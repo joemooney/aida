@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1727",
+  "publishes": [
+    {
+      "at": "2026-10-13T12:20:01.298917577Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:06.093380094Z",
+      "spec": "TASK-1727",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T06:53:59.497219591Z",
+      "spec": "TASK-1727",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T07:01:57.277797900Z",
+      "spec": "TASK-1727",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1727",
+        "branch": "task-1727-work",
+        "first_seen": "2026-10-13T07:01:57.275198616+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T08:25:20.676329167Z",
+      "spec": "TASK-1727",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2590,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5e1854a32f0ae7ece126505c6226ed37d6a69931"
+      }
+    },
+    {
+      "ts": "2026-10-13T08:25:21.261306065Z",
+      "spec": "TASK-1727",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Contract test pins the extracted helper against its own constant, not the handle_statusline_command wiring nor the literal marker; new set_override(true) races other colour-sensitive tests",
+        "recovery_hint": "address the review findings, move TASK-1727 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T10:03:53.826022146Z",
+      "spec": "TASK-1727",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2590,
+        "verdict": "APPROVED",
+        "reviewed_sha": "464e1a54a17a478c453c8da24ac451cc76ac3c3b"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:20:01.284847493Z",
+      "spec": "TASK-1727",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cca407e2a44acac7053e619e474ab00f15544ff4",
+        "pr": 2590,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
