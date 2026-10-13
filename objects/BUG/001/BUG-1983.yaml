@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:49:36.141263854Z
-modified_at: 2026-10-13T04:31:28.087337364Z
+modified_at: 2026-10-13T05:03:30.106782834Z
 req_type: Bug
 tags:
 - authority
@@ -117,6 +117,12 @@ comments:
   created_at: 2026-10-13T03:32:32.217696819Z
   modified_at: 2026-10-13T03:32:32.217696819Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+- id: 01a133a4-f13a-7970-a6c0-cd1c07a889e5
+  author: joe
+  content: 'PR #2587 opened (night relay #7), implementing D1–D3 per the advisor signoff. C1–C4 are covered; see the PR body. D4 is split to TASK-1737 (Q2 conditions carried over). The title was updated so the generated CHANGELOG names the review-record narrowing. Sequencing: TASK-1736 (expiry warning) should land no later than #2587. check-ci-fast 27/27.'
+  created_at: 2026-10-13T05:03:30.106782834Z
+  modified_at: 2026-10-13T05:03:30.106782834Z
+  session_id: 1dd86797-c3d1-407e-8495-d477a0e53767
 history:
 - id: 01a1309d-3b0f-7c80-b06e-0639346ad23f
   author: joe
