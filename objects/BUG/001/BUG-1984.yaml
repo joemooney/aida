@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:39.317607675Z
-modified_at: 2026-10-13T15:44:20.702465673Z
+modified_at: 2026-10-13T15:44:22.237462869Z
 req_type: Bug
 tags:
 - cache
@@ -123,6 +123,12 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Detection unreachable in real contained sessions: a host replace detaches the bind so the path never shows nlink 0; only queue work sets AIDA_CONTAINED. No triage reason was given.'
   created_at: 2026-10-13T15:44:20.702458280Z
   modified_at: 2026-10-13T15:44:20.702458280Z
+- id: 01a135ef-acdd-7872-92a2-a507ab430f5b
+  author: joe
+  content: 'Merged in #2586 as 0f5182ee79 on origin/main. Completing it by hand because the merge-time auto-bump skipped it: it was in needs-attention. — advisor'
+  created_at: 2026-10-13T15:44:22.237462869Z
+  modified_at: 2026-10-13T15:44:22.237462869Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a1309d-3f26-7af2-8940-f209cc30cba7
   author: joe
