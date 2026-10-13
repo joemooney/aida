@@ -1,0 +1,29 @@
+id: 01a13534-9851-7b32-893b-1c9c3212e137
+spec_id: TASK-1-284
+title: 'Non-blocking: behind-upstream drift state is not in the new contract test (cove…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1727, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: behind-upstream drift state is not in the new contract test (covered by existing main_checkout_drift tests)
+
+  PR: #2590
+  Reviewed sha: 464e1a54a17a478c453c8da24ac451cc76ac3c3b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T12:20:01.745063368Z
+modified_at: 2026-10-13T12:20:01.745063368Z
+req_type: Task
+tags:
+- carried-from:TASK-1727
+- finding-hash:70aee09d
+- from-review:PR-2590
+- kind:carried-forward
+filed_at:
+  code_sha: cca407e2a44acac7053e619e474ab00f15544ff4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
