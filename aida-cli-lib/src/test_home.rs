@@ -399,6 +399,16 @@ pub(crate) fn test_home() -> &'static Path {
     &installed().test_home
 }
 
+/// BUG-1971: the operator's real home, the first entry of the
+/// `AIDA_LIB_TEST_REAL_HOMES` fence, for the ONE case that needs it: an
+/// env-gated test handing it to an external child (a real `claude`, which
+/// authenticates from its own home) via `Command::env("HOME", ..)` on that
+/// child only. Never set it on this process or resolve a test path under it.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn operator_real_home() -> Option<&'static Path> {
+    installed().real_homes.first().map(PathBuf::as_path)
+}
+
 /// Panic if `path` is one of the operator's real homes or lies under a real
 /// `~/.aida`. Called by every global-dir resolver under `cfg(test)`.
 #[track_caller]
