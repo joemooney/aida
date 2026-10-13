@@ -1,0 +1,30 @@
+id: 01a137af-11ac-7023-9a9c-147477858284
+spec_id: TASK-1-299
+title: docs/cli/06-roles-sessions.md:110 - still says '--all includes stale leases wit…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2002, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  docs/cli/06-roles-sessions.md:110 - still says '--all includes stale leases with a state column'; the state column is now shown in the default view too. Reword to say every view has a state column and --all adds stale harness leases.
+
+  PR: #2596
+  Reviewed sha: 8e00a33ee78428a36399cd35acdedab26d578db7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T23:53:02.636679580Z
+modified_at: 2026-10-13T23:53:02.636679580Z
+req_type: Task
+tags:
+- carried-from:BUG-2002
+- finding-hash:5d3c1726
+- from-review:PR-2596
+- kind:carried-forward
+filed_at:
+  code_sha: ccf36c0f4c33257f37d3f44da246bf388dfed114
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
