@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-13T21:00:45.052798602Z
+modified_at: 2026-10-13T21:01:49.018282715Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -32,6 +32,12 @@ relationships:
   target_id: 01a13601-dd47-7c03-894e-867674881008
   created_at: 2026-10-13T18:10:31.799220158Z
   created_by: joe
+comments:
+- id: 01a13712-4e5a-7490-aa07-fd642a8df555
+  author: ai:codex:joe
+  content: 'FACTORY PLAN (codex): route session_grant_lookup through grant_check on the existing project-root resolver; preserve exported handle bytes and map every rejection to Unresolved. Valid records provide canonical seat and parent-minimum expiry. Preserve TASK-1736 informational expired-record display behavior in a separate private display reader, never used by the launch-refusal gate; keep all existing tests unchanged, including legacy revoked wording. Add a real CLI-dispatch child test table for subject mismatch, roster denied, parent principal mismatch, parent not delegating and padded handle, plus valid and other rejection controls. Each child parses role expiry --refuse-within 1h and calls the actual handler, records entry, and must exit 3 exactly for rejection fixtures. Add effective-parent-expiry and no-cache-load checks. Authority code: PR remains draft and requires ADVISOR SIGNOFF before merge. Rust verification only on GitHub CI; full make check-ci-fast before push.'
+  created_at: 2026-10-13T21:01:49.018282715Z
+  modified_at: 2026-10-13T21:01:49.018282715Z
 history:
 - id: 01a135f0-b4ff-7f43-a1ab-ae2f0ac64930
   author: joe
