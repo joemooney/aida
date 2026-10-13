@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-13T18:23:57.883060377Z
+modified_at: 2026-10-13T18:35:37.775524925Z
 req_type: Bug
 tags:
 - plan:night
@@ -84,6 +84,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2597 at 07f9fedf8a29802fa320861d6035cc42d60b859e. All 27 make check-ci-fast gates passed. C1 audit now covers 26 conversions; author-controlled self-check found the missed squash-subject writer, fixed it, and round 2 found no further blockers. C2 explicitly disclosed in PR body and split into BUG-2118. GitHub Build pending; draft retained for merge relay.'
   created_at: 2026-10-13T18:23:57.883060377Z
   modified_at: 2026-10-13T18:23:57.883060377Z
+- id: 01a1368c-77af-7473-9719-416e3417c166
+  author: joe
+  content: Commit cdaea00951 references this requirement
+  created_at: 2026-10-13T18:35:37.775524925Z
+  modified_at: 2026-10-13T18:35:37.775524925Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
