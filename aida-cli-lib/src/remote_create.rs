@@ -1031,7 +1031,7 @@ pub(crate) fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         return None;
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let (body, status) = stdout.rsplit_once('\n')?;
+    let (body, status) = stdout.trim_end().rsplit_once('\n')?;
     let status_code = status.trim().parse::<u16>().ok()?;
     if (200..300).contains(&status_code) {
         Some(gitlab_release_body_exists(tag, body).unwrap_or(true))
