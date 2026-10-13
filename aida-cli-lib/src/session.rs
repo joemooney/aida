@@ -7637,7 +7637,10 @@ mod tests {
             format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
-        let tee_opts = crate::headless_tee::TeeOptions::Silent;
+        let tee_opts = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
 
         // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
         {
@@ -7719,7 +7722,10 @@ mod tests {
             format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
-        let tee_opts = crate::headless_tee::TeeOptions::Silent;
+        let tee_opts = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
 
         // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
         {

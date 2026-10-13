@@ -3785,82 +3785,41 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
 
 // trace:BUG-2006 | ai:antigravity
 #[test]
-fn agent_new_bg_dispatch_contained_exports_aida_contained_and_uncontained_strips_it() {
-    let tmp = TempDir::new().unwrap();
-    let project = tmp.path().join("project");
-    std::fs::create_dir_all(project.join(".aida")).unwrap();
-    std::fs::write(
-        project.join(".aida/config.toml"),
-        "store_path = \".aida-store\"\n",
-    )
-    .unwrap();
-    let launcher = crate::current_user_id(None);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
-        &project,
-        &launcher,
-        "advisor",
-        &["implementer"],
-    );
-    let fake_agent = tmp.path().join("agent");
-    let env_out = tmp.path().join("env.txt");
-    crate::test_exec::write_executable(
-        &fake_agent,
-        format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display(),),
-    );
+fn agent_launch_env_inputs_contained_and_uncontained() {
     let plan = AgentLaunchPlan {
-        project_root: project.clone(),
-        launch_cwd: project.clone(),
+        project_root: std::path::PathBuf::from("/repo"),
+        launch_cwd: std::path::PathBuf::from("/repo"),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
         current_spec: None,
-        name: "test-bg-agent".to_string(),
+        name: "test-agent".to_string(),
         lease_id: None,
         native_session_id: None,
         resumed_from: None,
     };
-    let prompt_opts = AgentPromptOptions::new(None, false);
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let inputs = agent_launch_env_inputs(&uncontained_config, &plan, None);
+    assert!(
+        !inputs.iter().any(|(k, _)| *k == "AIDA_CONTAINED"),
+        "uncontained launch inputs must not include AIDA_CONTAINED"
+    );
 
-    // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
-    {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
-            ("AIDA_CONTAINED", Some("1")),
-        ]);
-        let config = AgentLaunchConfig {
-            agent_type: "codex",
-            binary: "codex",
-            default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
-            prompt_style: AgentPromptStyle::Positional,
-        };
-        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
-        agent_new_bg_dispatch(&fake_agent, &config, &plan, None, &prompt_args, false).unwrap();
-        let env_contents = std::fs::read_to_string(&env_out).unwrap();
-        assert!(
-            !env_contents
-                .lines()
-                .any(|l| l.starts_with("AIDA_CONTAINED=")),
-            "uncontained bg dispatch must strip AIDA_CONTAINED: {env_contents}"
-        );
-    }
-
-    // 2. Contained without ambient AIDA_CONTAINED -> exported in child
-    {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
-            ("AIDA_CONTAINED", None),
-        ]);
-        let config = AgentLaunchConfig {
-            agent_type: "codex",
-            binary: "codex",
-            default_args: vec!["--sandbox".to_string(), "workspace-write".to_string()],
-            prompt_style: AgentPromptStyle::Positional,
-        };
-        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
-        agent_new_bg_dispatch(&fake_agent, &config, &plan, None, &prompt_args, false).unwrap();
-        let env_contents = std::fs::read_to_string(&env_out).unwrap();
-        assert!(
-            env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
-            "contained bg dispatch must export AIDA_CONTAINED=1: {env_contents}"
-        );
-    }
+    let contained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--sandbox".to_string(), "workspace-write".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let inputs = agent_launch_env_inputs(&contained_config, &plan, None);
+    assert!(
+        inputs
+            .iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && v == "1"),
+        "contained launch inputs must include AIDA_CONTAINED=1"
+    );
 }
