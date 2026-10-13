@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T12:50:21.218139493Z
+modified_at: 2026-10-13T13:08:14.996092979Z
 req_type: Task
 tags:
 - adr-9
@@ -59,6 +59,12 @@ comments:
   content: 'FACTORY PARKED: local head 323acba558a971993a489a2f748dfff6293a3faa in /home/joe/ai/aida-task1724; no PR/push. Blocker: scripts/ci-gate-tiers.toml puts Check aida-cli without default features and TUI seam guard in fast, and both invoke cargo check, forbidden by operator instructions. Required make check-ci-fast was attempted and stopped while queued for a build slot. Options: authorize moving these compile gates to full (GitHub CI unchanged), or retain classification and defer this factory item. Two self-check rounds; final no findings; diff and formatting pass. Retained worktree and own lease to preserve unpushed implementation; no other sessions touched.'
   created_at: 2026-10-13T12:50:21.218139493Z
   modified_at: 2026-10-13T12:50:21.218139493Z
+- id: 01a13560-be14-7383-840c-d4905a7d45dc
+  author: joe
+  content: 'ADVISOR RULING 2026-10-13 06:10: un-park. make check-ci-fast is the required pre-push gate and is allowed IN FULL, including the cargo check steps it runs itself (the ''Check aida-cli without default features'' and ''TUI seam guard'' tiers). The no-local-compile rule covers cargo commands you run by hand, not the gate''s own steps. Waiting in the cargo slot queue is expected: wait for a slot, run the gate, then push and open the draft PR. The factory brief is updated.'
+  created_at: 2026-10-13T13:08:14.996092979Z
+  modified_at: 2026-10-13T13:08:14.996092979Z
+  session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
 history:
 - id: 01a1309d-17a9-79a0-bf89-99c5d5fcda6a
   author: joe
