@@ -1,0 +1,33 @@
+id: 01a13566-8899-73c0-9720-1642a99c83d0
+spec_id: BUG-2010
+agreed_id: BUG-2010
+title: 'aida ps reports Codex/agy factory lanes as ''stale lease — process dead'' while the agent is alive: lease records the transient worktree-add pid'
+description: |
+  2026-10-13 06:14: `aida ps` listed BUG-2005 and TASK-1724 under "Orphaned In-Progress specs" as "stale lease — process dead", and their sessions as "⚠ stalled". Both lanes were live: an interactive Antigravity agent (pid 1658735) had just pushed PR #2592 for BUG-2005, and a Codex agent (pid 2317829) held TASK-1724 parked on an advisor question.
+
+  Both agents were launched with `aida agent new <codex|antigravity> --cwd ~/ai/aida` and ran `aida worktree add <ID>` themselves, then worked in the worktree. The lease records the pid of a short-lived process from that command, not the agent session, so liveness and attribution fail. An operator or monitor reading `aida ps` would conclude both factory lanes had died.
+
+  ## Acceptance
+  - A lease taken from inside an `aida agent new` session (AIDA_AGENT_NAME set) is attributed to that agent's process (the registered agent pid, or the nearest ancestor that is a registered agent), not the transient CLI pid.
+  - `aida ps` shows such a lane as live while the agent process lives, for Codex and Antigravity as well as Claude.
+  - "Orphaned In-Progress" excludes specs whose lease belongs to a live registered agent.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T13:14:34.521672701Z
+modified_at: 2026-10-13T13:14:34.521672701Z
+req_type: Bug
+tags:
+- agent-new
+- cross-vendor
+- leases
+- ps
+filed_at:
+  code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
