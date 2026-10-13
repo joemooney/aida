@@ -1345,3 +1345,344 @@ fn install_links_refusal_after_promote_says_the_promote_succeeded() {
     assert_eq!(read(&f.layout.live("aida")), "NEW-aida");
     assert_eq!(read(&f.layout.link("aida")), "REAL-FILE");
 }
+
+// --- review follow-ups ------------------------------------------------------------
+// trace:BUG-1959 | ai:claude
+
+fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
+    PromotionMeta {
+        sha: sha.into(),
+        allow_dirty,
+        promoted_at: "2026-10-12T00:00:00Z".into(),
+    }
+}
+
+fn write_meta(dir: &Path, m: &PromotionMeta) {
+    write(
+        &dir.join(PROMOTED_FILE),
+        &serde_json::to_string_pretty(m).unwrap(),
+    );
+}
+
+#[test]
+fn smoke_command_removes_the_git_env_vars() {
+    let cmd = smoke_command(Path::new("/nonexistent/aida"));
+    for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+        assert!(
+            cmd.get_envs()
+                .any(|(k, v)| k == std::ffi::OsStr::new(var) && v.is_none()),
+            "{var} is not removed from the smoke command"
+        );
+    }
+}
+
+#[test]
+fn status_shows_unknown_for_an_empty_promoted_sha() {
+    let line = promoted_line(&meta("", true));
+    assert_eq!(
+        line,
+        "Promoted:     HEAD unknown at 2026-10-12T00:00:00Z (--allow-dirty)"
+    );
+    assert_eq!(
+        promoted_line(&meta(HEAD, false)),
+        format!("Promoted:     HEAD {HEAD} at 2026-10-12T00:00:00Z")
+    );
+    let notes = live_status_notes(Some("abc1234567+dirty"), Some(&meta("", true)), None, None);
+    assert!(
+        notes.iter().any(|n| n.contains("HEAD unknown")),
+        "{notes:?}"
+    );
+}
+
+/// Live A (no record) / prev B (with a record): the reachable shape after
+
+// --- rollback crash points ----------------------------------------------------------
+// trace:BUG-1959 | ai:claude
+
+/// Live pair A and prev pair B, each with its record when asked for.
+/// Returns (A's record, B's record).
+fn pairs_a_b(
+    f: &Fixture,
+    a_rec: bool,
+    b_rec: bool,
+) -> (Option<PromotionMeta>, Option<PromotionMeta>) {
+    put_live(&f.layout, "A");
+    for n in LIVE_BINARIES {
+        write(&f.layout.prev(n), &format!("B-{n}"));
+    }
+    let a = a_rec.then(|| meta("aaaaaaaaaa", false));
+    let b = b_rec.then(|| meta("bbbbbbbbbb", true));
+    if let Some(a) = &a {
+        write_meta(&f.layout.live_dir, a);
+    }
+    if let Some(b) = &b {
+        write_meta(&f.layout.prev_dir(), b);
+    }
+    (a, b)
+}
+
+fn swap_dir(f: &Fixture) -> PathBuf {
+    f.layout.live_dir.join(".rollback")
+}
+
+fn recover(f: &Fixture) {
+    let _lock = lock_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+}
+
+/// Shape `.rollback/` the way a finished parking step leaves it.
+fn parked_state(f: &Fixture, a: &Option<PromotionMeta>, b: &Option<PromotionMeta>) -> PathBuf {
+    let swap = swap_dir(f);
+    for n in LIVE_BINARIES {
+        write(&swap.join(n), &format!("A-{n}"));
+    }
+    let _ = fs::remove_file(f.layout.live_dir.join(PROMOTED_FILE));
+    let _ = fs::remove_file(f.layout.prev_dir().join(PROMOTED_FILE));
+    if let Some(a) = a {
+        write(
+            &swap.join(PARKED_LIVE_RECORD),
+            &serde_json::to_string(a).unwrap(),
+        );
+    }
+    if let Some(b) = b {
+        write(
+            &swap.join(PARKED_PREV_RECORD),
+            &serde_json::to_string(b).unwrap(),
+        );
+    }
+    write(&swap.join(ROLLBACK_MARKER), "");
+    swap
+}
+
+/// Every binary is in exactly one slot and each record sits beside the pair
+/// whose `aida` it describes (records follow `aida` in a mixed pair).
+fn assert_consistent(f: &Fixture, a: &Option<PromotionMeta>, b: &Option<PromotionMeta>, ctx: &str) {
+    let rec_for = |tag: &str| {
+        if tag.starts_with("A-") {
+            a.clone()
+        } else {
+            b.clone()
+        }
+    };
+    let live_aida = read(&f.layout.live("aida"));
+    let prev_aida = read(&f.layout.prev("aida"));
+    assert_ne!(live_aida[..2], prev_aida[..2], "{ctx}");
+    for n in LIVE_BINARIES {
+        let mut both = [read(&f.layout.live(n)), read(&f.layout.prev(n))];
+        both.sort();
+        assert_eq!(both, [format!("A-{n}"), format!("B-{n}")], "{ctx}");
+    }
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir),
+        rec_for(&live_aida),
+        "{ctx}: live record"
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.prev_dir()),
+        rec_for(&prev_aida),
+        "{ctx}: prev record"
+    );
+    assert!(!swap_dir(f).exists(), "{ctx}: .rollback/ left behind");
+}
+
+#[test]
+fn a_rollback_crashing_after_any_step_recovers_consistent_records() {
+    // Count the steps of a clean run, then crash after each one in turn,
+    // for every combination of records present.
+    let f = fixture();
+    pairs_a_b(&f, true, true);
+    let mut total = 0;
+    rollback_with_steps(&f.layout, &mut |_| {
+        total += 1;
+        Ok(())
+    })
+    .unwrap();
+    assert!(total >= 13, "{total}");
+    for (a_rec, b_rec) in [(true, true), (true, false), (false, true), (false, false)] {
+        for crash_at in 1..=total {
+            let f = fixture();
+            let (a, b) = pairs_a_b(&f, a_rec, b_rec);
+            let mut seen = 0;
+            let mut label = "";
+            let r = rollback_with_steps(&f.layout, &mut |s| {
+                seen += 1;
+                if seen == crash_at {
+                    label = s;
+                    bail!("simulated crash")
+                }
+                Ok(())
+            });
+            let ctx = format!("records ({a_rec}, {b_rec}), crash after step {crash_at} ({label})");
+            assert!(r.is_err(), "{ctx}");
+            recover(&f);
+            assert_consistent(&f, &a, &b, &ctx);
+            // A second recovery is a no-op.
+            fs::create_dir_all(swap_dir(&f)).unwrap();
+            recover(&f);
+            assert_consistent(&f, &a, &b, &format!("{ctx}, recovered twice"));
+        }
+    }
+}
+
+#[test]
+fn rollback_parks_both_records_before_the_marker() {
+    let f = fixture();
+    pairs_a_b(&f, true, true);
+    let swap = swap_dir(&f);
+    let mut checked = false;
+    rollback_with_steps(&f.layout, &mut |s| {
+        if s == "marked" {
+            assert!(
+                swap.join(ROLLBACK_MARKER).is_file(),
+                "no marker at the marker step"
+            );
+            assert!(swap.join(PARKED_LIVE_RECORD).is_file());
+            assert!(swap.join(PARKED_PREV_RECORD).is_file());
+            assert!(!f.layout.live_dir.join(PROMOTED_FILE).exists());
+            assert!(!f.layout.prev_dir().join(PROMOTED_FILE).exists());
+            for n in LIVE_BINARIES {
+                assert!(swap.join(n).is_file());
+                assert!(f.layout.prev(n).is_file(), "no binary moved yet");
+            }
+            checked = true;
+        } else if s == "parked-prev-record" {
+            assert!(
+                !swap.join(ROLLBACK_MARKER).exists(),
+                "marker before parking finished"
+            );
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert!(checked);
+    assert!(!swap.exists());
+}
+
+#[test]
+fn a_leftover_marker_after_a_finished_rollback_moves_no_record() {
+    // Path 1: live A with a record, prev B without; rollback finished but
+    // the marker was left behind.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, false);
+    rollback(&f.layout).unwrap();
+    write(&swap_dir(&f).join(ROLLBACK_MARKER), "");
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b);
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a);
+    assert_consistent(&f, &a, &b, "leftover marker");
+}
+
+#[test]
+fn a_partly_deleted_rollback_dir_with_the_marker_moves_no_record() {
+    // Path 2: marker down, nothing swapped, records already settled back,
+    // then a recovery died mid-delete after removing parked `aida`.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, false, true);
+    let swap = swap_dir(&f);
+    write(&swap.join("aida-server"), "A-aida-server");
+    write(&swap.join(ROLLBACK_MARKER), "");
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "A-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), None);
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), b.clone());
+    assert_consistent(&f, &a, &b, "partly deleted .rollback/");
+}
+
+#[test]
+fn recovery_after_a_crash_while_parking_leaves_the_records_alone() {
+    // `.rollback/` holding only `aida`, and empty (crash right after
+    // fresh_dir): parking never finished, so nothing was swapped.
+    for parked in [&["aida"][..], &[][..]] {
+        let f = fixture();
+        let (a, b) = pairs_a_b(&f, false, true);
+        let swap = swap_dir(&f);
+        fs::create_dir_all(&swap).unwrap();
+        for n in parked {
+            write(&swap.join(n), &format!("A-{n}"));
+        }
+        recover(&f);
+        assert_eq!(read_promotion_meta(&f.layout.live_dir), None, "{parked:?}");
+        assert_eq!(
+            read_promotion_meta(&f.layout.prev_dir()),
+            b.clone(),
+            "{parked:?}"
+        );
+        assert_eq!(read(&f.layout.live("aida")), "A-aida");
+        assert_consistent(&f, &a, &b, &format!("{parked:?}"));
+    }
+}
+
+#[test]
+fn recovery_after_parking_but_before_any_swap_restores_both_records() {
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    parked_state(&f, &a, &b);
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "A-aida");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), a.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), b.clone());
+    assert_consistent(&f, &a, &b, "parked, nothing swapped");
+}
+
+#[test]
+fn recovery_between_the_two_binary_swaps_moves_the_records_with_aida() {
+    // `aida` fully swapped (A parked into prev/), `aida-server` not started.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = parked_state(&f, &a, &b);
+    fs::rename(f.layout.prev("aida"), f.layout.live("aida")).unwrap();
+    fs::rename(swap.join("aida"), f.layout.prev("aida")).unwrap();
+    recover(&f);
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_eq!(read(&f.layout.live("aida-server")), "A-aida-server");
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "between binary swaps");
+}
+
+#[test]
+fn recovery_finishes_the_record_swap_after_both_binaries_were_swapped() {
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = parked_state(&f, &a, &b);
+    for n in LIVE_BINARIES {
+        fs::rename(f.layout.prev(n), f.layout.live(n)).unwrap();
+        fs::rename(swap.join(n), f.layout.prev(n)).unwrap();
+    }
+    recover(&f);
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "both binaries swapped");
+}
+
+#[test]
+fn recovery_mid_record_swap_keeps_the_parked_record() {
+    // Both binaries swapped; B's record already went live, A's is still
+    // parked.
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, true);
+    let swap = parked_state(&f, &a, &b);
+    for n in LIVE_BINARIES {
+        fs::rename(f.layout.prev(n), f.layout.live(n)).unwrap();
+        fs::rename(swap.join(n), f.layout.prev(n)).unwrap();
+    }
+    fs::rename(
+        swap.join(PARKED_PREV_RECORD),
+        f.layout.live_dir.join(PROMOTED_FILE),
+    )
+    .unwrap();
+    recover(&f);
+    assert_eq!(read_promotion_meta(&f.layout.live_dir), b.clone());
+    assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
+    assert_consistent(&f, &a, &b, "mid record swap");
+}
+
+#[test]
+fn a_completed_rollback_leaves_no_marker_or_swap_dir() {
+    let f = fixture();
+    let (a, b) = pairs_a_b(&f, true, false);
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "B-aida");
+    assert_consistent(&f, &a, &b, "completed rollback");
+}

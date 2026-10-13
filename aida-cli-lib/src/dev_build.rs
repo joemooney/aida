@@ -749,7 +749,10 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
 /// mid-swap (the parked live binary is moved into `prev/`); leftover staging
 /// dirs. Not repairable here: a crash between the two per-binary renames
 /// leaves a mixed live pair (new `aida`, old `aida-server` or the reverse);
-/// re-run `aida dev build` or `aida dev rollback` to fix that.
+/// re-run `aida dev build` to fix that. A rollback that crashes between its
+/// two binary swaps leaves a mixed pair the same way, and its `.promoted`
+/// records follow `aida`. Running `aida dev rollback` again only swaps that
+/// mixed pair with the equally mixed `prev/`; `aida dev build` is the fix.
 pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
@@ -768,17 +771,19 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     let swap = live.join(".rollback");
     if swap.exists() {
         // trace:STORY-1646 | ai:claude
-        // A binary already swapped means the rollback was under way: finish
-        // the `.promoted` swap too; otherwise put the parked record back.
+        // trace:BUG-1959 | ai:claude
+        // A binary counts as swapped once its prev slot has moved live, or,
+        // after parking finished (the marker), once its parked copy has moved
+        // on into `prev/`. Without the marker a parked binary missing from
+        // `.rollback/` only means parking had not finished: nothing swapped.
+        // Both `.promoted` records were parked before the marker, so settling
+        // them (forward when swapped, back otherwise) only ever moves files
+        // out of `.rollback/` and is a no-op once done.
+        let marked = swap.join(ROLLBACK_MARKER).exists();
         let swapped = LIVE_BINARIES
             .iter()
-            .any(|n| swap.join(n).is_file() && !layout.prev(n).exists());
-        let parked_meta = swap.join(PROMOTED_FILE);
-        if swapped {
-            swap_meta_forward(layout, &swap)?;
-        } else if parked_meta.is_file() && !live.join(PROMOTED_FILE).exists() {
-            std::fs::rename(&parked_meta, live.join(PROMOTED_FILE))?;
-        }
+            .any(|n| !layout.prev(n).exists() || (marked && !swap.join(n).is_file()));
+        settle_records(layout, &swap, swapped, &mut |_| Ok(()))?;
         for name in LIVE_BINARIES {
             let parked = swap.join(name);
             if parked.is_file() && !layout.prev(name).exists() {
@@ -789,6 +794,12 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
                     layout.live(name).display()
                 ));
             }
+        }
+        // Marker first: a partly deleted `.rollback/` must never look like
+        // "parking finished, binaries gone".
+        let marker = swap.join(ROLLBACK_MARKER);
+        if marker.exists() {
+            std::fs::remove_file(&marker)?;
         }
         std::fs::remove_dir_all(&swap)?;
     }
@@ -818,6 +829,18 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
     }
     Ok(incoming)
 }
+
+/// Marker `rollback` writes into `.rollback/` once the live pair and both
+/// records are parked, before the first binary swap.
+// trace:BUG-1959 | ai:claude
+pub(crate) const ROLLBACK_MARKER: &str = ".swapping";
+
+/// Where `rollback` parks the live pair's and `prev/`'s `.promoted` records
+/// inside `.rollback/` before the marker goes down.
+// trace:BUG-1959 | ai:claude
+pub(crate) const PARKED_LIVE_RECORD: &str = "live.promoted";
+// trace:BUG-1959 | ai:claude
+pub(crate) const PARKED_PREV_RECORD: &str = "prev.promoted";
 
 /// Name of the promotion record kept beside each live pair (and in `prev/`).
 // trace:STORY-1646 | ai:claude
@@ -909,21 +932,39 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
     Ok(())
 }
 
-/// Second half of a rollback's `.promoted` swap (the live record is already
-/// parked in `swap`): prev's record goes live, the parked one into `prev/`.
-// trace:STORY-1646 | ai:claude
-fn swap_meta_forward(layout: &DevLayout, swap: &Path) -> Result<()> {
-    let live_meta = layout.live_dir.join(PROMOTED_FILE);
-    let prev_meta = layout.prev_dir().join(PROMOTED_FILE);
-    let parked = swap.join(PROMOTED_FILE);
-    if prev_meta.is_file() && !live_meta.exists() {
-        std::fs::rename(&prev_meta, &live_meta)?;
-    }
-    if parked.is_file() && !prev_meta.exists() {
-        std::fs::create_dir_all(layout.prev_dir())?;
-        std::fs::rename(&parked, &prev_meta)?;
+/// Move a `.promoted` record when it is still at `from` (else a no-op).
+// trace:BUG-1959 | ai:claude
+fn move_record(from: &Path, to: &Path) -> Result<()> {
+    if from.is_file() {
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::rename(from, to)
+            .with_context(|| format!("moving {} to {}", from.display(), to.display()))?;
     }
     Ok(())
+}
+
+/// Put the two parked `.promoted` records in place: swapped when the
+/// binaries were swapped (each record follows its pair), back where they
+/// came from otherwise. Every source is in `swap`, so re-running after a
+/// crash is a no-op for the moves already made.
+// trace:BUG-1959 | ai:claude
+fn settle_records(
+    layout: &DevLayout,
+    swap: &Path,
+    swapped: bool,
+    step: &mut dyn FnMut(&'static str) -> Result<()>,
+) -> Result<()> {
+    let (to_live, to_prev) = if swapped {
+        (PARKED_PREV_RECORD, PARKED_LIVE_RECORD)
+    } else {
+        (PARKED_LIVE_RECORD, PARKED_PREV_RECORD)
+    };
+    move_record(&swap.join(to_live), &layout.live_dir.join(PROMOTED_FILE))?;
+    step("settled-live-record")?;
+    move_record(&swap.join(to_prev), &layout.prev_dir().join(PROMOTED_FILE))?;
+    step("settled-prev-record")
 }
 
 /// `aida dev rollback`: swap `live/prev/` and the live pair, under the
@@ -931,6 +972,17 @@ fn swap_meta_forward(layout: &DevLayout, swap: &Path) -> Result<()> {
 /// previous build" is a clean no-op error. Running it twice rolls forward.
 /// Returns notes about any interrupted-state repairs.
 pub(crate) fn rollback(layout: &DevLayout) -> Result<Vec<String>> {
+    rollback_with_steps(layout, &mut |_| Ok(()))
+}
+
+/// [`rollback`], calling `step` after every on-disk change so tests can
+/// inspect each intermediate state or stop there (an `Err` simulates a
+/// crash at that point).
+// trace:BUG-1959 | ai:claude
+pub(crate) fn rollback_with_steps(
+    layout: &DevLayout,
+    step: &mut dyn FnMut(&'static str) -> Result<()>,
+) -> Result<Vec<String>> {
     let _lock = lock_live_dir(layout)?;
     let notes = recover_live_dir(layout)?;
     for name in LIVE_BINARIES {
@@ -947,25 +999,42 @@ pub(crate) fn rollback(layout: &DevLayout) -> Result<Vec<String>> {
             );
         }
     }
-    // Park the live pair first; then per binary, prev -> live and the parked
-    // copy -> prev. [`recover_live_dir`] completes a swap interrupted
-    // between those two renames.
+    // Park the live pair and both records, mark parking done, then per
+    // binary prev -> live and the parked copy -> prev, then settle the
+    // records. [`recover_live_dir`] finishes or undoes a crash at any step.
     let swap = layout.live_dir.join(".rollback");
     fresh_dir(&swap)?;
+    step("fresh")?;
     for name in LIVE_BINARIES {
         link_or_copy(&layout.live(name), &swap.join(name))?;
+        step("parked-binary")?;
     }
     // trace:STORY-1646 | ai:claude
-    let live_meta = layout.live_dir.join(PROMOTED_FILE);
-    if live_meta.is_file() {
-        std::fs::rename(&live_meta, swap.join(PROMOTED_FILE))?;
-    }
+    // trace:BUG-1959 | ai:claude
+    move_record(
+        &layout.live_dir.join(PROMOTED_FILE),
+        &swap.join(PARKED_LIVE_RECORD),
+    )?;
+    step("parked-live-record")?;
+    move_record(
+        &layout.prev_dir().join(PROMOTED_FILE),
+        &swap.join(PARKED_PREV_RECORD),
+    )?;
+    step("parked-prev-record")?;
+    // Parking is complete; from here a parked binary missing from `.rollback/`
+    // means it was swapped into `prev/` (see [`recover_live_dir`]).
+    std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
+    step("marked")?;
     for name in LIVE_BINARIES {
         std::fs::rename(layout.prev(name), layout.live(name))
             .with_context(|| format!("restoring {}", layout.live(name).display()))?;
+        step("restored-binary")?;
         std::fs::rename(swap.join(name), layout.prev(name))?;
+        step("swapped-binary")?;
     }
-    swap_meta_forward(layout, &swap)?;
+    settle_records(layout, &swap, true, step)?;
+    std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
+    step("unmarked")?;
     let _ = std::fs::remove_dir(&swap);
     Ok(notes)
 }
@@ -1200,6 +1269,19 @@ fn smoke_check(
     Ok(())
 }
 
+/// A smoke-test [`Command`] for `bin`, with the git env vars a hook may
+/// export removed: a stray GIT_DIR would point the read-only check at
+/// another repo.
+// trace:STORY-1646 | ai:claude
+// trace:BUG-1959 | ai:claude
+pub(crate) fn smoke_command(bin: &Path) -> Command {
+    let mut c = Command::new(bin);
+    c.env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE");
+    c
+}
+
 /// The production [`BuildSteps`].
 pub(crate) struct RealSteps;
 
@@ -1245,15 +1327,7 @@ impl BuildSteps for RealSteps {
     }
 
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()> {
-        // trace:STORY-1646 | ai:claude
-        // A hook-exported GIT_DIR would point the read-only check at another repo.
-        let cmd = |bin: &Path| {
-            let mut c = Command::new(bin);
-            c.env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE");
-            c
-        };
+        let cmd = smoke_command;
         smoke_check(
             "aida --version",
             cmd(aida).arg("--version"),
@@ -1432,7 +1506,7 @@ pub(crate) fn live_status_notes(
     match live_meta {
         Some(meta) if meta.allow_dirty => notes.push(format!(
             "the live binary was promoted with --allow-dirty from a dirty checkout ({live}, HEAD {})",
-            meta.sha
+            meta_sha(meta)
         )),
         Some(_) => {}
         None if live.ends_with("+dirty") => notes.push(format!(
@@ -1451,6 +1525,34 @@ pub(crate) fn live_status_notes(
         notes.push("the previous build has the same SHA as the live one".to_string());
     }
     notes
+}
+
+/// The recorded HEAD sha, or `unknown` when the record has none (an
+/// `--allow-dirty` promotion where `git rev-parse HEAD` failed).
+// trace:BUG-1959 | ai:claude
+fn meta_sha(meta: &PromotionMeta) -> &str {
+    let sha = meta.sha.trim();
+    if sha.is_empty() {
+        "unknown"
+    } else {
+        sha
+    }
+}
+
+/// The `Promoted:` line of `aida dev status`.
+// trace:STORY-1646 | ai:claude
+// trace:BUG-1959 | ai:claude
+pub(crate) fn promoted_line(meta: &PromotionMeta) -> String {
+    format!(
+        "Promoted:     HEAD {} at {}{}",
+        meta_sha(meta),
+        meta.promoted_at,
+        if meta.allow_dirty {
+            " (--allow-dirty)"
+        } else {
+            ""
+        }
+    )
 }
 
 /// The live-binary block of `aida dev status`.
@@ -1479,16 +1581,7 @@ pub(crate) fn print_live_status() {
     // trace:STORY-1646 | ai:claude
     let live_meta = read_promotion_meta(&live_dir);
     if let Some(meta) = &live_meta {
-        println!(
-            "Promoted:     HEAD {} at {}{}",
-            meta.sha,
-            meta.promoted_at,
-            if meta.allow_dirty {
-                " (--allow-dirty)"
-            } else {
-                ""
-            }
-        );
+        println!("{}", promoted_line(meta));
     }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {
