@@ -1,0 +1,30 @@
+id: 01a1337d-e56f-7681-bcd4-a496dedd6643
+spec_id: TASK-1-272
+title: 'Low: core.hooksPath followed silently'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1977, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Low: core.hooksPath followed silently
+
+  PR: #2580
+  Reviewed sha: aaf1a5e5932e453567994ccfa9bfb87a6869cb7a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T04:20:51.183119353Z
+modified_at: 2026-10-13T04:20:51.183119353Z
+req_type: Task
+tags:
+- carried-from:BUG-1977
+- finding-hash:a7000eb1
+- from-review:PR-2580
+- kind:carried-forward
+filed_at:
+  code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
