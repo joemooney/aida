@@ -21,12 +21,12 @@ description: |
   4. The withheld-trailer note no longer claims the id is "traced in the PR body only" unless that is checked; simplest acceptable fix is rewording the note (e.g. "not completed by this merge"). Existing note tests updated.
   5. Tests: a clap parse test for `aida pr ship --no-complete`; a unit test that `derive_pr_ship_squash_subject` returns the completion trailer; `--dry-run` output includes the trailer-provenance line (test on the dry-run plan).
   6. The two drain-side `derive_squash_subject_spec_ids` callers in queue_cmd.rs pass the store-backed hold check (`spec_completion_hold_reason`) instead of `|_| None`, so a held spec is not credited. Unit test with a `closure-pending`-tagged spec.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T10:36:16.497896486Z
-modified_at: 2026-10-13T03:16:02.731754376Z
+modified_at: 2026-10-13T14:02:39.289727156Z
 req_type: Bug
 tags:
 - batch:night-2026-10-10
@@ -85,6 +85,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13592-8d01-7d12-9460-2798a5103c86
+  author: aida-auto-bump
+  timestamp: 2026-10-13T14:02:39.233800044Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13592-8d39-7482-87db-3898c8830bee
+  timestamp: 2026-10-13T14:02:39.289724719Z
+  agent: implementer
+  commit_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
+  summary: Completed via merge c7ec6a46
 filed_at:
   code_sha: 0c62bfd7eaff1a03da00e8fd4e234040110b2e70
   branch: main
@@ -93,3 +106,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: acfbf100-b965-4582-a364-9323fd734a00
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-13T14:02:39.233672386Z
+  completion_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
