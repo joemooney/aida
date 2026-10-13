@@ -1,0 +1,30 @@
+id: 01a135cb-9ea6-7700-9696-99434e492aa3
+spec_id: TASK-1-287
+title: 'Non-blocking: precise scanner is hard-wired to src/upgrade_release.rs rather th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1724, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: precise scanner is hard-wired to src/upgrade_release.rs rather than applied generally; a future test-only caller file would again need special-casing.
+
+  PR: #2593
+  Reviewed sha: 323acba558a971993a489a2f748dfff6293a3faa
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T15:04:59.302049245Z
+modified_at: 2026-10-13T15:04:59.302049245Z
+req_type: Task
+tags:
+- carried-from:TASK-1724
+- finding-hash:94cbea96
+- from-review:PR-2593
+- kind:carried-forward
+filed_at:
+  code_sha: 01dc156f6efc02e96962480f09c6d28a54696743
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
