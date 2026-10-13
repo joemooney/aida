@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1973",
+  "publishes": [
+    {
+      "at": "2026-10-13T03:05:46.127500877Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:55:58.509763631Z",
+      "spec": "BUG-1973",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T18:42:09.580503460Z",
+      "spec": "BUG-1973",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T19:13:13.012728661Z",
+      "spec": "BUG-1973",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1973",
+        "branch": "bug-1973-work",
+        "first_seen": "2026-10-12T19:13:13.012671241+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-12T20:22:07.429640988Z",
+      "spec": "BUG-1973",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "6fd6fbbbab1098fdf000ac0370fe301a9813b1f6"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:05:46.113917437Z",
+      "spec": "BUG-1973",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "40de62f54e5e2ecd7dd2b47cafc73000d1883990",
+        "pr": 2565,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
