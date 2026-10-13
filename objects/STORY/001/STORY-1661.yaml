@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T06:26:58.058888299Z
-modified_at: 2026-10-12T08:33:57.305223842Z
+modified_at: 2026-10-13T15:50:02.289459594Z
 req_type: Story
 tags:
 - history
@@ -116,6 +116,28 @@ comments:
   created_at: 2026-10-12T08:33:48.227892621Z
   modified_at: 2026-10-12T08:33:48.227892621Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a135f4-dd31-70a3-aa3c-ca9a98229ad0
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF 2026-10-13 (advisor seat, acting as operator proxy): the design in comments[3] is APPROVED with trigger option (a), the schedule tick. Grounding verified on origin/main 0f5182ee79: FLOW_CATCH_UP_CAP=16 (history_cache.rs:122), IndexLock::try_acquire (:400), catch_up_guarded increments CATCH_UP_FAILURES_KEY (:1374-1398), finish_append clears it (:1559), and the cache refresh --if-requested tick is at maintenance_schedule.rs:2757.
+
+    Rulings:
+    - Trigger: (a) only for this slice. Add a maintenance-schedule entry `cache refresh --history --if-behind` that runs inline in the tick. Option (b) (a detached spawn on store commit) is NOT authorized here. It is a later slice behind a config knob, with its own sketch, filed only if (a) proves too slow.
+    - Stall coordination (BUG-1942/BUG-1974): the background path bypasses the stall refusal and NEVER increments catch_up_failures. A kept chunk clears the counter through finish_append, which re-enables inline catch-up.
+
+    Conditions, each checked at review:
+    C1. Lock invariant: the tick takes ONLY IndexLock. It never takes RefreshLock or the store write lock. State this in the module doc and pin it with tick_and_cache_refresh_run_concurrently_without_deadlock.
+    C2. Never build a missing index off-path: the tick returns NotBuilt (tick_does_not_build_missing_index).
+    C3. Bounded: the tick loop stops at a runtime deadline (reuse the existing refresh runtime cap or an explicit constant) and reports Advanced{appended, lag} when lag remains. A test pins that the deadline stops the loop.
+    C4. Busy exits 0, and a lock that falsely reads as held (BUG-1974/BUG-1987, a fork/exec window) is treated as Busy: skip the tick, never error or retry-spin.
+    C5. Disabled: with cache_enabled() false or the history index off, the tick is Disabled, creates no db file, and does no work (tick_disabled_spawns_nothing).
+    C6. A new focused module (history_indexer.rs), with no logic in lib.rs/lib_part*.rs. CLI prose names no spec IDs.
+    C7. Acceptance 'within one tick' means one maintenance-schedule tick. tick_after_200_commits_reaches_zero_lag also asserts that the next serve_flow answers with no inline catch-up beyond FLOW_CATCH_UP_CAP.
+
+    This is now a mechanical slice for an implementer, which unblocks STORY-1664's sequencing once it merges. Review: one fresh strict reviewer. No further advisor signoff is needed unless the implementation deviates from C1-C6.
+  created_at: 2026-10-13T15:50:02.289459594Z
+  modified_at: 2026-10-13T15:50:02.289459594Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
 history:
 - id: 01a12a01-9e8b-7502-ae6d-15a3366a2b21
   author: joe
