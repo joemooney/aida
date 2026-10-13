@@ -738,6 +738,10 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:TASK-1527 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "cache-refresh")? {
         findings.extend(scan_cache_refresh(&project_root));
+        findings.extend(scan_cache_binding(
+            &project_root,
+            aida_core::db::cache_binding::running_contained(),
+        ));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -2680,6 +2684,32 @@ fn scan_cache_refresh(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     findings
 }
 
+/// BUG-1984: in a contained session, report cache files whose bound inode no
+/// longer matches the host's path. The same check fails the cache open, so
+/// this finding explains why every cache read in the session errors.
+// trace:BUG-1984 | ai:claude
+fn scan_cache_binding(project_root: &std::path::Path, contained: bool) -> Vec<DoctorFinding> {
+    if !contained {
+        return Vec::new();
+    }
+    let cache = aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+    aida_core::db::cache_binding::sidecar_binding_problems(&cache)
+        .into_iter()
+        .map(|problem| DoctorFinding {
+            category: "cache-refresh".to_string(),
+            id: "cache-sidecar-split".to_string(),
+            summary: format!(
+                "contained session cache file {} no longer matches the host's: {}",
+                problem.path.display(),
+                problem.detail
+            ),
+            action: "restart the contained session so the sandbox re-binds the cache files"
+                .to_string(),
+            safe_heal: false,
+        })
+        .collect()
+}
+
 fn scan_disk_headroom(project_root: &std::path::Path, min_free_gib: u64) -> Vec<DoctorFinding> {
     disk_headroom_findings(disk_free_bytes(project_root), min_free_gib)
 }
@@ -3732,6 +3762,31 @@ mod story_1367_disk_headroom_tests {
         let findings = scan_cache_refresh(root);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "cache-refresh-request-stuck");
+    }
+
+    /// BUG-1984: a deleted shm sidecar is a finding only in a contained
+    /// session; outside one the scan is silent.
+    // trace:BUG-1984 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn scan_cache_binding_reports_a_deleted_sidecar_only_when_contained() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        let shm = aida_core::db::cache_binding::bound_cache_files(&cache)[2].clone();
+        std::fs::write(&shm, b"").unwrap();
+        // A held handle to the file, then the host deletes it.
+        let _held = std::fs::File::open(&shm).unwrap();
+        assert!(scan_cache_binding(root, true).is_empty());
+        std::fs::remove_file(&shm).unwrap();
+        assert!(scan_cache_binding(root, false).is_empty());
+        let findings = scan_cache_binding(root, true);
+        if cfg!(target_os = "linux") {
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            assert_eq!(findings[0].id, "cache-sidecar-split");
+            assert!(findings[0].summary.contains("cache.db-shm"), "{findings:?}");
+        }
     }
 
     #[test]

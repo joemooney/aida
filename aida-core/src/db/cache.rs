@@ -1450,7 +1450,18 @@ impl Cache {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         // trace:BUG-1940 | ai:claude
-        Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))
+        let cache =
+            Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))?;
+        // A contained session's sandbox binds the cache files by inode, so a
+        // host-side delete or replace silently splits the cache. Fail the open
+        // loudly instead. trace:BUG-1984 | ai:claude
+        if super::cache_binding::running_contained() {
+            let problems = super::cache_binding::sidecar_binding_problems(&cache.path);
+            if !problems.is_empty() {
+                return Err(super::cache_binding::binding_error(&problems));
+            }
+        }
+        Ok(cache)
     }
 
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
