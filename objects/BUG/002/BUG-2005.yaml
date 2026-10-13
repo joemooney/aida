@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T19:03:50.586786133Z
+modified_at: 2026-10-13T20:06:21.646747413Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -97,6 +97,25 @@ comments:
     Push a new head and mark it FACTORY READY. A new fresh reviewer will take it. The next failed round parks the PR for the operator.
   created_at: 2026-10-13T19:03:50.586786133Z
   modified_at: 2026-10-13T19:03:50.586786133Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a136df-88ce-7442-a859-b358523153f8
+  author: joe
+  content: |-
+    MERGE: ready, needs operator hold clear: `aida merge-hold clear 2592`
+
+    A fresh, independent round-3 review **APPROVED** at 0c340ed6876df05b2d31e89a6cf6ee6b2b5cd9e4. CI Build is green, including the zsh leak-proof test run under zsh 5.9 in CI. The PR merges cleanly with main. The REWORK merge-hold is the only blocker.
+
+    - The round-2 blocker is fixed: the advisory now says "October 8 to October 12, 2026". The reviewer checked this against `0ffe03948e` and `3618fe739b`, and the merge seat confirmed it independently. The rest of the advisory is accurate, and the v0.15.0 not-affected claim holds.
+    - The fixture is byte-identical to the pre-fix wrapper. The new test proves it leaks a secret under zsh and not under bash. The whole path runs from `installed_helpers_are_current` to `format_shell_wrapper_status` to the remedy line.
+    - Mutations on the leak classification and on the remedy text are caught. Nothing is weakened.
+
+    Non-blocking follow-ups are in **TASK-1742**:
+    - the provenance comment names a SHA that doesn't exist (the real `3618fe739b^` is 4e11f0296c);
+    - the sha256 is a doc comment only, with no assertion, so a one-byte fixture corruption isn't caught.
+
+    Once the hold is cleared and merge-hold-gate passes, the merge will be pinned to `--match-head-commit 0c340ed6876df05b2d31e89a6cf6ee6b2b5cd9e4`.
+  created_at: 2026-10-13T20:06:21.646747413Z
+  modified_at: 2026-10-13T20:06:21.646747413Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13391-3292-7d80-a8ad-ec2e8a40c8a0
