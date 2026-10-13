@@ -1,0 +1,30 @@
+id: 01a135cb-9bdd-7ee1-9636-0d95cf2078df
+spec_id: TASK-1-286
+title: 'Non-blocking: AST scanner counts only ExprCall paths, so a method-call form (x.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1724, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: AST scanner counts only ExprCall paths, so a method-call form (x.orchestrate_with_resume(..)) or an aliased import (use ..::orchestrate_with_resume as go; go(..)) in upgrade_release.rs's production code passes; the line scanner used for other files catches the method form. No regression vs the prior whole-file exemption.
+
+  PR: #2593
+  Reviewed sha: 323acba558a971993a489a2f748dfff6293a3faa
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T15:04:58.589478903Z
+modified_at: 2026-10-13T15:04:58.589478903Z
+req_type: Task
+tags:
+- carried-from:TASK-1724
+- finding-hash:f48d52be
+- from-review:PR-2593
+- kind:carried-forward
+filed_at:
+  code_sha: 01dc156f6efc02e96962480f09c6d28a54696743
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
