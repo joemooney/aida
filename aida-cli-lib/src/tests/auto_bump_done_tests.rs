@@ -3358,7 +3358,7 @@ fn queue_advance_close_dispatch_opted_out_does_not_warn() {
     let mut req = aida_core::Requirement::new("no-code task".into(), String::new());
     req.spec_id = Some("TASK-19962".into());
     req.req_type = aida_core::RequirementType::Task;
-    req.tags.push("doctor:no-code".into());
+    req.tags.insert("doctor:no-code".into());
     req.set_status_from_str("Done");
     backend.add_requirement(req).unwrap();
     drop(backend);
