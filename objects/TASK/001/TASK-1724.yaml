@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T12:07:58.251995249Z
-modified_at: 2026-10-13T12:44:20.531852025Z
+modified_at: 2026-10-13T12:48:09.930403240Z
 req_type: Task
 tags:
 - adr-9
@@ -48,6 +48,11 @@ comments:
   content: 'FACTORY PLAN (codex): Reusing the existing plan with syn (already locked) as a dev-only parser for upgrade_release.rs. Remove its whole-file exemption; use AST module boundaries and cfg(test)/cfg(all(test,...)) attributes to count calls outside test modules, including code after them. Preserve the existing other-file counter and genuine production exceptions. Tests: upgrade_release_test_calls_are_excluded_from_production_count; allowlisted_test_only_file_production_call_is_an_offender (before/after and production-module cases); existing tree guard and handler assertion. Parser handles nested braces and strings/comments. Acceptance 1/2 mapped to new tests, 3 to existing tests. Risks: conditional-test attribute matching; conservative matching will not skip cfg(any(test,...)). GitHub CI only; check-ci-fast before push.'
   created_at: 2026-10-13T12:44:20.531852025Z
   modified_at: 2026-10-13T12:44:20.531852025Z
+- id: 01a1354e-5aca-7372-a54f-33a74e07a447
+  author: joe
+  content: Implementation committed locally; required fast gate unexpectedly invokes cargo check through two fast-tier entries. Stopped my queued gate process before compilation to honor operator no-local-compile rule. Awaiting operator choice on preserving these checks in CI while reclassifying them full. No push or PR yet. Self-check found macro string false positives; fixed with token traversal and a regression fixture. Rustfmt/diff checks pass; Rust tests remain unrun pending CI.
+  created_at: 2026-10-13T12:48:09.930403240Z
+  modified_at: 2026-10-13T12:48:09.930403240Z
 history:
 - id: 01a1309d-17a9-79a0-bf89-99c5d5fcda6a
   author: joe
