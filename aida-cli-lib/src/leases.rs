@@ -3851,8 +3851,6 @@ impl StaleLeaseRecoveryReport {
 /// `git status --porcelain` probe the BUG-307 auto-release gate uses.
 // trace:BUG-777 | ai:claude
 pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryReport {
-    let live = process_probe::probe_live_claude_sessions();
-    let lease_state = lease_state_for(lease, &live, chrono::Utc::now());
     // BUG-1111: `lease_owner_process_gone` treats an `active_pid` vendor child
     // as authoritative over the creator/orchestrator pid.
     // trace:BUG-1111 | ai:codex
@@ -3863,6 +3861,57 @@ pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLease
         lease.creator_pid_start_time.as_deref(),
         process_probe::process_identity_is_alive,
     );
+    stale_lease_recovery_with_owner(lease, owner_gone)
+}
+
+/// BUG-1930: was this lease minted by a phase child of `orchestrator_pid`
+/// that has already returned? `aida queue work` creates the phase-1 lease
+/// in-process, so its `creator_pid` is the drain orchestrator, which is still
+/// alive when it retries. A claude-vendor launch records no `active_pid`, so
+/// without this the predecessor of a cleanly exited attempt reads as live on
+/// every probe. Only the retry path may ask: it runs after the orchestrator
+/// has reaped that child. A recorded start time must match, so a recycled
+/// pid never qualifies.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn lease_minted_by_returned_phase_child(
+    lease: &SessionLease,
+    orchestrator_pid: u32,
+    orchestrator_start_time: Option<&str>,
+) -> bool {
+    lease.active_pid.is_none()
+        && lease.creator_pid == Some(orchestrator_pid)
+        && match (
+            lease.creator_pid_start_time.as_deref(),
+            orchestrator_start_time,
+        ) {
+            (Some(recorded), Some(current)) => recorded == current,
+            _ => true,
+        }
+}
+
+/// BUG-1930: the recovery picture for a phase-1 retry's predecessor lease.
+/// Same as [`stale_lease_recovery_for_lease`], except that a lease this
+/// orchestrator minted through a phase child that has since returned counts
+/// as owner-gone. A live claude still in the worktree keeps it live.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn implementer_retry_predecessor_recovery(
+    lease: &SessionLease,
+    orchestrator_pid: u32,
+) -> StaleLeaseRecoveryReport {
+    let orchestrator_start = process_probe::process_start_identity(orchestrator_pid);
+    if lease_minted_by_returned_phase_child(lease, orchestrator_pid, orchestrator_start.as_deref())
+    {
+        return stale_lease_recovery_with_owner(lease, Some(true));
+    }
+    stale_lease_recovery_for_lease(lease)
+}
+
+fn stale_lease_recovery_with_owner(
+    lease: &SessionLease,
+    owner_gone: Option<bool>,
+) -> StaleLeaseRecoveryReport {
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease_state_for(lease, &live, chrono::Utc::now());
     // A worktree-less advisory lease (review / claim verb, or the TASK-474
     // empty-path MCP claim) has no tree to inspect — treat it as "missing",
     // which is exactly right: there is no uncommitted work to strand.
@@ -3997,6 +4046,7 @@ pub(crate) const IMPLEMENTER_RETRY_PREDECESSOR_REPROBE_DELAY: std::time::Duratio
 /// the implementer against that same branch/path with force-claim. The dirty
 /// tree is the attempt-1 work product; `--steal` is never involved.
 // trace:BUG-908 BUG-1078 | ai:codex
+// trace:BUG-1930 | ai:claude
 pub(crate) fn reclaim_implementer_retry_predecessor(
     project_root: &std::path::Path,
     scope: &str,
@@ -4006,7 +4056,7 @@ pub(crate) fn reclaim_implementer_retry_predecessor(
         scope,
         IMPLEMENTER_RETRY_PREDECESSOR_REPROBES,
         IMPLEMENTER_RETRY_PREDECESSOR_REPROBE_DELAY,
-        |lease| stale_lease_recovery_for_lease(lease),
+        |lease| implementer_retry_predecessor_recovery(lease, std::process::id()),
         std::thread::sleep,
     )
 }
