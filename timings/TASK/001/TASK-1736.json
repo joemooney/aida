@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1736",
+  "publishes": [
+    {
+      "at": "2026-10-13T12:23:33.788488134Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T03:32:32.122337875Z",
+      "spec": "TASK-1736",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T05:17:15.091792567Z",
+      "spec": "TASK-1736",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T07:26:54.211638775Z",
+      "spec": "TASK-1736",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2588,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dc03d53e4077eefb9082464f16c4fa7c0249d8b2"
+      }
+    },
+    {
+      "ts": "2026-10-13T07:26:55.500269891Z",
+      "spec": "TASK-1736",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Expiry logic, role expiry CLI and SessionStart hook are well tested (11 pass, refusal mutation caught), but the statusline half of acceptance (1) has no test: removing the suffix wiring leaves all 300 statusline/seat tests green",
+        "recovery_hint": "address the review findings, move TASK-1736 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T07:57:51.388756739Z",
+      "spec": "TASK-1736",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2588,
+        "verdict": "APPROVED",
+        "reviewed_sha": "71243b77ce86a221eee007b8b9921022d7d3ff54"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:23:32.668485433Z",
+      "spec": "TASK-1736",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:23:32.668864431Z",
+      "spec": "TASK-1736",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:23:33.771092133Z",
+      "spec": "TASK-1736",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-13T12:23:33.772523123Z",
+      "spec": "TASK-1736",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
