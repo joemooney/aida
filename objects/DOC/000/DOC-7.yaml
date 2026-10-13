@@ -1,0 +1,98 @@
+id: 01a13396-bc06-7bc3-99aa-dffb22c955fc
+spec_id: DOC-7
+agreed_id: DOC-7
+title: 'Retrospective 2026-10-12: is AIDA becoming something special? (governance, coherence, cycle time, layering)'
+description: |
+  # Retrospective, 2026-10-12: is AIDA becoming something special?
+
+  *An evening advisor session with the operator, after the day relay halted for review. It started as handoff triage and turned into a conversation about what AIDA is and where it is going. This is written down so later sessions, of any seat, can pick up where it left off. It probably belonged in a product-seat session.*
+
+  ## The evening's operational work
+  - **A security incident was handled.** The zsh shell wrapper on main (`local -`, from BUG-1811) printed the whole environment, and a reviewer subagent's transcript caught API keys. The operator rotated all four keys, and each new one was checked against its real API. The minimal fix, #2584 (BUG-2000), merged. Installed wrappers still need a refresh (BUG-2005). Released binaries were never affected.
+  - **Hub decision.** GitLab remains the *target* canonical hub (EPIC-44), but GitHub stays the working hub until GitLab CI has a home off the 6-core dev box (TASK-1735). #2575 is held. GitLab main was realigned to GitHub; its 3 operator commits are preserved on #2575's branch.
+  - **Throughput.** 18 PRs merged in one evening: 15 from the day queue, 1 by the advisor during the drain, and 2 more (#2580, #2584) after fresh strict reviews. Two PRs got REQUEST CHANGES (#2581, #2582). The decisions on PRs at the review-round limit were recorded (#2571 gets the one-line fix plus a fresh review; #2566 gets round 4).
+
+  ## The question: is AIDA special?
+  **The advisor's view:** yes, in one specific way. Much of the 2025-26 tooling covers pieces of this: spec-driven development (Kiro, spec-kit), agent issue memory (beads, Linear agents), parallel agents (Claude Code subagents, Codex, Cursor, Devin). What is rare is **governance for multi-agent software work**:
+  - separation of duties (the advisor never merges what it dispatched);
+  - verdicts pinned to an exact commit;
+  - seat grants with expiry and validation;
+  - a three-round cap with escalation to a human;
+  - a human-decision inbox;
+  - traceability from spec to code to commit to completion, all in git.
+
+  That answers the question every organization will ask once agents write most of the code: *who approved this, at which commit, under what authority, against which requirement?* The same evening showed it working. Independent reviews caught a containment test that guarded nothing (mutation M2 on #2581), a mirror re-run that could create projects at an unrequested URL (#2582), and a token visible in `ps` (BUG-2004).
+
+  **The advisor's worries:**
+  1. Surface area. The operator, who designed the tool, found the dispatch flow confusing (BUG-2002), and the advisor misread whether a lease existed.
+  2. A loop where AIDA builds around itself: many fixes are to coordination machinery that AIDA itself needs.
+  3. Proof outside this repo.
+
+  **The operator's pushback, which the advisor accepts:**
+  - Everything in AIDA was added to deal with a real problem.
+  - aida-relay and aida-host are real use outside this repo, and aida-regen is a promising addition.
+  - A single developer's focus can produce coherence that looks like chaos up close.
+
+  The advisor withdrew "cut ~90% of the surface" as too glib. The more useful framing is **coherence**: concepts that compose, with one obvious path through them, can stay. Concepts that overlap, or that only exist to repair other concepts, are the ones to merge or retire. The specs filed tonight mostly *reduce* ceremony or *restructure*: fasttrack routing reuses an existing lane, tiered review lowers review cost for most PRs, and EPIC-78 is layering, not a new concept.
+
+  ## What the numbers said (measured 2026-10-12)
+  - **Bugs, all time:** 1,621 filed. 1,135 completed, 444 rejected, about 40 open. The backlog is small. The feeling of "opening more than we close" comes from strict review turning findings into tickets.
+  - **Commits on main, last 30 days:** 361 `fix` vs 122 `feat`. To make that ratio readable, review-found polish now carries the `review-follow-up` tag (BUG-1992, 1995, 1997, 1999, 2003, 2004, 2005). Real field bugs stay untagged; BUG-1994 is one.
+  - **Cycle time, start to done** (296 specs completed in 30 days):
+
+    | Type | Median | p90 | Share over 24h |
+    |---|---|---|---|
+    | Bugs | 2.4h | 10.7h | 3% |
+    | Tasks | 3.7h | 51h | 22% |
+    | Stories | 7.6h | 33h | 14% |
+
+    The time from approval to the start of work also has a tail: the 90th percentile is 20 to 60 hours. PR open to merge: median 1.1h, p90 10.8h.
+  - **Reading:** typical work is fast. The pain is the long tail, mostly tasks, plus queue waits. For a simple bug, CI (about 20 minutes) plus a strict review (35 to 55 minutes) is about half the elapsed time. Fasttrack has been used for only 11 specs ever, because it depends on someone remembering it.
+  - **Code size:** about 750k lines of Rust, but the UIs are under 10% of it (TUI 29k, server 14k, web 18k TS). aida-cli-lib alone is about 584k.
+
+  ## Architecture diagnosis
+  aida-cli-lib is the whole application, not a CLI library:
+  - only 22 of its 355 non-test files use clap;
+  - non-test code contains 6,653 `println!` calls and 780 `Command::new` calls, mixed into the logic;
+  - the MCP server lives inside it;
+  - aida-server and aida-tui can't reach queue, review or session logic, because they depend only on aida-core.
+
+  What is missing is a **use-case layer** (hexagonal / ports and adapters / "functional core, imperative shell"). The plan is EPIC-78: an `aida-app` crate whose functions return typed results and reach the outside world only through traits, with thin delivery layers (CLI, MCP, server, TUI) on top. It should be done as a gradual strangler migration, guided by an ADR. This is a cycle-time issue as much as a tidiness one: the 15-16k-line hotspot files slow builds and cause merge conflicts between parallel agents.
+
+  ## Decisions and specs from tonight
+  - **Process:** STORY-1683 (risk-tiered review), STORY-1684 (automatic fasttrack routing).
+  - **Architecture:** EPIC-78 (layered architecture), STORY-1682 (keep the UI crates splittable: dependency guard, CI path filters, versioned server API). Split-readiness signals are recorded on STORY-1682.
+  - **Security and auth:** BUG-2004, BUG-2005; TASK-1736 (grant-expiry warning); BUG-1983 sketch approved with conditions.
+  - **Usability and hub:** BUG-2002 (agent-new dispatch flow), TASK-1735 (where GitLab CI runs).
+
+  ## Lessons
+  - **A shared cargo target directory across review worktrees gives false test results.** Cargo ran main's binary instead of the PR's. Each reviewer needs a private target directory.
+  - **`aida session leases` hides older leases that still block `agent new --spec`.** Check with `--all`.
+  - **A relay acts on the letter of a handoff.** "If #2577 stalls, ship the zsh part alone" produced a second PR while #2577 was still active. Handoff conditions should be checkable.
+  - **Capture FAQs as they come up.** Tonight's are filed alongside this entry.
+
+  ## Open questions for future sessions
+  - Which concepts overlap enough to merge? This is a coherence audit, not a cut list.
+  - What would a 10-minute onboarding on a fresh repo look like? That is the test of whether the governance core comes through.
+  - When do the split-readiness signals on STORY-1682 trip?
+  - Make cycle time a standing metric (`aida metrics cycle-time`), and recheck the fix:feat ratio and the `review-follow-up` share in two weeks.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T04:47:58.982226627Z
+modified_at: 2026-10-13T04:47:58.982226627Z
+req_type: Doc
+tags:
+- blog
+- product
+- retrospective
+- strategy
+filed_at:
+  code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dc1ae63c3
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
