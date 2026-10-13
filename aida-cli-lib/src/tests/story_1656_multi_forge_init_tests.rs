@@ -354,6 +354,10 @@ if [ ! -d "$path" ]; then
   echo "ERROR: The project you were looking for could not be found or you don't have permission to view it." >&2
   exit 1
 fi
+if [ -f .fail_push_stderr ]; then
+  cat .fail_push_stderr >&2
+  exit 1
+fi
 case "$prog" in
   git-receive-pack) exec git receive-pack "$path" ;;
   git-upload-pack) exec git upload-pack "$path" ;;
@@ -618,6 +622,11 @@ impl FakeForges {
             self.calls()
         );
         assert!(!self.gitlab_project_exists());
+    }
+
+    // trace:TASK-1740 | ai:antigravity
+    fn fail_second_push_with_stderr(&self, stderr: &str) {
+        std::fs::write(self.gitlab_root.join(".fail_push_stderr"), stderr).unwrap();
     }
 }
 
@@ -931,4 +940,315 @@ fn hub_disagreement_is_reported() {
 
     git(&project, &["push", "-q", "gitlab", "aida-store"]);
     assert!(hub_disagreements(&project, &hubs, &["main", "aida-store"]).is_empty());
+}
+
+// ───────────────────────── TASK-1740 test gaps ─────────────────────────
+
+#[cfg(unix)]
+struct StdioCapture {
+    old_stdout: libc::c_int,
+    old_stderr: libc::c_int,
+    stdout_path: std::path::PathBuf,
+    stderr_path: std::path::PathBuf,
+    _tempdir: tempfile::TempDir,
+}
+
+#[cfg(unix)]
+impl StdioCapture {
+    fn new() -> Self {
+        use std::os::unix::io::AsRawFd;
+        let tempdir = tempfile::tempdir().unwrap();
+        let stdout_path = tempdir.path().join("stdout.log");
+        let stderr_path = tempdir.path().join("stderr.log");
+        let stdout_file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&stdout_path)
+            .unwrap();
+        let stderr_file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&stderr_path)
+            .unwrap();
+
+        let old_stdout = unsafe { libc::dup(libc::STDOUT_FILENO) };
+        let old_stderr = unsafe { libc::dup(libc::STDERR_FILENO) };
+        unsafe {
+            libc::dup2(stdout_file.as_raw_fd(), libc::STDOUT_FILENO);
+            libc::dup2(stderr_file.as_raw_fd(), libc::STDERR_FILENO);
+        }
+
+        Self {
+            old_stdout,
+            old_stderr,
+            stdout_path,
+            stderr_path,
+            _tempdir: tempdir,
+        }
+    }
+
+    fn finish(mut self) -> (String, String) {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+
+        unsafe {
+            if self.old_stdout >= 0 {
+                libc::dup2(self.old_stdout, libc::STDOUT_FILENO);
+                libc::close(self.old_stdout);
+                self.old_stdout = -1;
+            }
+            if self.old_stderr >= 0 {
+                libc::dup2(self.old_stderr, libc::STDERR_FILENO);
+                libc::close(self.old_stderr);
+                self.old_stderr = -1;
+            }
+        }
+
+        let out = std::fs::read_to_string(&self.stdout_path).unwrap_or_default();
+        let err = std::fs::read_to_string(&self.stderr_path).unwrap_or_default();
+        (out, err)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for StdioCapture {
+    fn drop(&mut self) {
+        unsafe {
+            if self.old_stdout >= 0 {
+                libc::dup2(self.old_stdout, libc::STDOUT_FILENO);
+                libc::close(self.old_stdout);
+                self.old_stdout = -1;
+            }
+            if self.old_stderr >= 0 {
+                libc::dup2(self.old_stderr, libc::STDERR_FILENO);
+                libc::close(self.old_stderr);
+                self.old_stderr = -1;
+            }
+        }
+    }
+}
+
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+fn capture_output<F, R>(f: F) -> ((String, String), R)
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    static CAPTURE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = CAPTURE_MUTEX.lock().unwrap();
+
+    let capture = StdioCapture::new();
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    struct Payload {
+        run: Box<dyn FnOnce() + Send>,
+    }
+
+    extern "C" fn pthread_runner(arg: *mut libc::c_void) -> *mut libc::c_void {
+        let payload: Box<Payload> = unsafe { Box::from_raw(arg as *mut Payload) };
+        (payload.run)();
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        std::ptr::null_mut()
+    }
+
+    let payload = Box::new(Payload {
+        run: Box::new(move || {
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+            let _ = tx.send(res);
+        }),
+    });
+    let raw = Box::into_raw(payload);
+    let mut thread: libc::pthread_t = 0;
+    unsafe {
+        let rc = libc::pthread_create(
+            &mut thread,
+            std::ptr::null(),
+            pthread_runner,
+            raw as *mut libc::c_void,
+        );
+        assert_eq!(rc, 0, "pthread_create failed: {rc}");
+        let join_rc = libc::pthread_join(thread, std::ptr::null_mut());
+        assert_eq!(join_rc, 0, "pthread_join failed: {join_rc}");
+    }
+
+    let (stdout, stderr) = capture.finish();
+    let res = rx
+        .recv()
+        .expect("child pthread must send result")
+        .unwrap_or_else(|e| std::panic::resume_unwind(e));
+    ((stdout, stderr), res)
+}
+
+/// TASK-1740 (1): a re-run whose --url has the same host but a different path
+/// (e.g. ai/proj vs team/elsewhere) keeps the existing remote and never probes
+/// or creates the existing project.
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_with_same_host_different_path_never_probes_existing_remote() {
+    let forges = FakeForges::new();
+    let existing = "git@gitlab.example.test:ai/proj.git";
+    git(&forges.project, &["remote", "add", "gitlab", existing]);
+    let _env = forges.env(Some("glpat-fake"));
+
+    crate::remote_create::run_remote_mirror(
+        &forges.project,
+        "gitlab",
+        Some("git@gitlab.example.test:team/elsewhere.git"),
+        crate::config_commit::CommitMode::Never,
+    )
+    .expect("the existing remote is kept and wired");
+
+    forges.assert_gitlab_untouched();
+    assert_eq!(
+        git(&forges.project, &["remote", "get-url", "gitlab"]),
+        existing
+    );
+    let cfg = crate::read_store_sync_config(&forges.project).unwrap();
+    assert_eq!(cfg.mirror_remotes, vec!["gitlab".to_string()]);
+}
+
+/// TASK-1740 (2): when creating a project using an env token rather than a host-scoped
+/// glab login token, the spec-required notice is printed to stdout.
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn create_gitlab_project_prints_notice_when_using_env_token() {
+    let forges = FakeForges::new();
+    let bin_path = forges.bin.display().to_string();
+    let glab_path = forges.bin.join("glab").display().to_string();
+
+    let ((stdout, _stderr), res) = capture_output(move || {
+        let path = format!("{}:{}", bin_path, std::env::var("PATH").unwrap_or_default());
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(path.as_str())),
+            ("AIDA_TEST_GLAB_BINARY", Some(glab_path.as_str())),
+            ("GITLAB_TOKEN", Some("glpat-env-token")),
+            ("AIDA_GITLAB_TOKEN", None),
+        ]);
+        crate::gitlab_project_create::create_gitlab_project(
+            "gitlab.example.test",
+            "ai",
+            "proj",
+            false,
+        )
+    });
+    res.expect("create_gitlab_project should succeed with valid env token");
+    assert!(
+        stdout.contains("no `glab auth login` token for gitlab.example.test; using $GITLAB_TOKEN"),
+        "expected env-token notice on stdout, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("run `glab auth login --hostname gitlab.example.test`"),
+        "expected hint to scope token in notice, got:\n{stdout}"
+    );
+}
+
+/// TASK-1740 (3): 'already points at' warning redacts embedded credentials from the existing remote URL.
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn mirror_rerun_redacts_credentials_in_already_points_at_warning() {
+    let forges = FakeForges::new();
+    let secret = "glpat-supersecret-existing-token";
+    let existing = format!("https://oauth2:{secret}@gitlab.example.test/ai/proj.git");
+    git(&forges.project, &["remote", "add", "gitlab", &existing]);
+    let project = forges.project.clone();
+
+    let ((_stdout, stderr), res) = capture_output(move || {
+        let _env = forges.env(Some("glpat-fake"));
+        crate::remote_create::run_remote_mirror(
+            &project,
+            "gitlab",
+            Some("https://gitlab.example.test/team/different.git"),
+            crate::config_commit::CommitMode::Never,
+        )
+    });
+    res.expect("remote mirror run should succeed");
+    assert!(
+        stderr.contains("already points at"),
+        "expected 'already points at' warning on stderr, got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains(secret),
+        "embedded secret must NOT appear in stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("https://***@gitlab.example.test/ai/proj.git"),
+        "expected redacted URL with *** in stderr, got:\n{stderr}"
+    );
+}
+
+/// TASK-1740 (3): 'added remote' announcement redacts embedded credentials from the URL.
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn run_remote_mirror_redacts_credentials_in_added_remote_notice() {
+    let forges = FakeForges::new();
+    let secret = "glpat-supersecret-add-token";
+    let url = format!("https://oauth2:{secret}@gitlab.example.test/ai/newproj.git");
+    let project = forges.project.clone();
+
+    let ((stdout, _stderr), res) = capture_output(move || {
+        let _env = forges.env(Some("glpat-fake"));
+        crate::remote_create::run_remote_mirror(
+            &project,
+            "gitlab",
+            Some(&url),
+            crate::config_commit::CommitMode::Never,
+        )
+    });
+    res.expect("adding new remote mirror should succeed");
+    assert!(
+        stdout.contains("added remote `gitlab`"),
+        "expected 'added remote' announcement on stdout, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains(secret),
+        "embedded secret must NOT appear in stdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("https://***@gitlab.example.test/ai/newproj.git"),
+        "expected redacted URL with *** in stdout, got:\n{stdout}"
+    );
+}
+
+/// TASK-1740 (3): push fallback error redacts credentials in the 'still failed' error message.
+// trace:TASK-1740 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn push_fallback_redacts_credentials_in_still_failed_error() {
+    let forges = FakeForges::new();
+    let url = "git@gitlab.example.test:ai/proj.git";
+    git(&forges.project, &["remote", "add", "gitlab", url]);
+    let secret = "glpat-supersecret-second-push";
+    let credential_url = format!("https://oauth2:{secret}@gitlab.example.test/ai/proj.git");
+    let fake_stderr = format!("fatal: access denied to '{credential_url}'");
+    forges.fail_second_push_with_stderr(&fake_stderr);
+    let _env = forges.env(Some("glpat-fake"));
+
+    let err = push_with_create_fallback(&forges.project, "gitlab", url, "main", false, false)
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        err.contains("still failed after creating the project"),
+        "expected 'still failed' error message, got: {err}"
+    );
+    assert!(
+        !err.contains(secret),
+        "embedded secret must NOT appear in still-failed error: {err}"
+    );
+    assert!(
+        err.contains("https://***@gitlab.example.test/ai/proj.git"),
+        "expected redacted URL with ***, got: {err}"
+    );
 }
