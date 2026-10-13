@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-13T21:35:29.401028632Z
+modified_at: 2026-10-13T22:01:58.172987732Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -48,6 +48,11 @@ comments:
   content: 'CI round 1: all new grant-verdict tests passed; old TASK-1736 binary suite exposed informational-warning regressions plus fixtures minted for tester but launched as runner with no roster. Restoring warning-only role expiry to the private informational reader (strict lookup remains exclusive to --refuse-within). Existing TASK-1736 test bodies/assertions stay unchanged; helper now pins AIDA_USER=tester and uses shared grant/roster support before setting the requested expiry. Missing-record refusal retains shared reason plus legacy missing wording. No assertion weakened. This fixture-only adaptation is necessary for the new strict validation contract; Rust execution remains GitHub-only under factory rules.'
   created_at: 2026-10-13T21:35:29.401028632Z
   modified_at: 2026-10-13T21:35:29.401028632Z
+- id: 01a13749-609d-7a22-b812-60993ed39d2a
+  author: ai:codex:joe
+  content: 'FACTORY READY: PR #2604 green at 01c287987496090ce7b77e85c5ddd8c073ef11d1. Completed Build https://github.com/joemooney/aida/actions/runs/38472191406 . Draft; ADVISOR SIGNOFF REQUIRED BEFORE MERGE. Full workspace verification passed. Existing TASK-1736 test assertions/bodies preserved with authority-valid binary fixture helpers.'
+  created_at: 2026-10-13T22:01:58.172987732Z
+  modified_at: 2026-10-13T22:01:58.172987732Z
 history:
 - id: 01a135f0-b4ff-7f43-a1ab-ae2f0ac64930
   author: joe
