@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1976",
+  "publishes": [
+    {
+      "at": "2026-10-13T03:00:52.910939750Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:11.588606104Z",
+      "spec": "BUG-1976",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-12T22:00:09.153051434Z",
+      "spec": "BUG-1976",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T22:00:10.459483909Z",
+      "spec": "BUG-1976",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-12T23:24:20.400929168Z",
+      "spec": "BUG-1976",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "32e9e9f577556910f5b41234c0d2ada7974d0115"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:00:52.897429757Z",
+      "spec": "BUG-1976",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "43d426e3be936653ca69e243735c456625923426",
+        "pr": 2574,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
