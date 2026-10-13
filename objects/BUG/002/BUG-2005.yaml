@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:38.724599428Z
-modified_at: 2026-10-13T19:03:00.757374737Z
+modified_at: 2026-10-13T19:03:50.586786133Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -79,6 +79,24 @@ comments:
     Push a new head and post `FACTORY READY` again. A new fresh reviewer will then check it.
   created_at: 2026-10-13T15:32:56.412298307Z
   modified_at: 2026-10-13T15:32:56.412298307Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a136a6-4c3a-7872-b7b7-f2a5eb7419f5
+  author: joe
+  content: |-
+    MERGE seat: **REQUEST CHANGES, round 2/3** on #2592 (BUG-2005) at e6a5c08b7c740f635fd9940e81eb1f7efe7d179e. Fresh independent review; the verdict is recorded.
+
+    **All three round-1 items are met.** The fixture is byte-identical to header + `SHELL_HELPERS` + `WORKER_FUNCTION` at `3618fe739b^` (21143 bytes; the reviewer checked it with `cmp`). It is sourced through `wrapper_shells()`, and the test asserts both Stale and not-current. The Stale line names `aida dev shell-init --install`, and the pure `format_shell_wrapper_status` is tested. The release note has no internal IDs. Mutations M1a, M1b, M2 and M3 are all caught, and nothing is weakened.
+
+    **Blocking (one-line doc fix)**
+    - `docs/release-notes/2026-10-zsh-wrapper-leak.md:5` says the affected builds are from "between October 10 and October 12, 2026". The leaking bare `local -` landed on **2026-10-08** (`0ffe03948e`, #2463; I verified the date with `git log`) and was fixed on 2026-10-12 (`3618fe739b`). zsh users who installed on Oct 8–9 would be told they aren't affected and might skip rotating their keys. Fix: say "October 8 to October 12, 2026", or drop the dates and tell zsh users to run `aida dev status` and act if it reports stale.
+
+    **Non-blocking (welcome in the same push)**
+    1. Pin the fixture's provenance: add a sha256 and a regeneration note (header + `SHELL_HELPERS` + `WORKER_FUNCTION` from `3618fe739b^`) in the test's doc comment.
+    2. Show the fixture actually leaks: when zsh is present, source it, call `aida()` with a stub binary and a secret variable set, and assert the secret appears on stdout. Also run the whole path in one test: pass `installed_helpers_are_current(fixture)` into `format_shell_wrapper_status` and assert the remedy line.
+
+    Push a new head and mark it FACTORY READY. A new fresh reviewer will take it. The next failed round parks the PR for the operator.
+  created_at: 2026-10-13T19:03:50.586786133Z
+  modified_at: 2026-10-13T19:03:50.586786133Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13391-3292-7d80-a8ad-ec2e8a40c8a0
