@@ -1,0 +1,31 @@
+id: 01a135aa-02c0-7213-980c-eae3ec2d844d
+spec_id: TASK-1739
+agreed_id: TASK-1739
+title: 'BUG-1984 follow-ups: /proc/self/fd cross-check for the bind window (A1), test no-checkpoint-on-close, reopen back-off, skip snapshot handles, TUI-safe rebind note'
+description: |
+  Follow-ups from the merge-seat review of PR #2586 (BUG-1984, APPROVE at 2fb843988a) and the advisor's A1 ruling.
+
+  1. **A1, close the bind window:** the holder records `stat(path)` just after `open_at` (cache.rs ~1647). A host replace inside that window (schema writes, lock retries), or before a sidecar is first adopted at a later check, records the new inode and never sees the split. On Linux, cross-check with `stat("/proc/self/fd/N")` for SQLite's own fds (find them by readlink-matching cache.db/-wal/-shm under /proc/self/fd). That reads the open file without opening a new handle, so no POSIX locks are dropped. Keep stat-at-bind as the non-Linux fallback.
+  2. Test the disabled checkpoint-on-close (`SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`); a mutation removing it survived.
+  3. Back off after a failed reopen instead of retrying on every `conn()` call.
+  4. Skip the identity check on `read_snapshot` handles, so a pinned read transaction older than 60s isn't swapped out from under its reader.
+  5. Route the rebind note away from raw stderr while a TUI owns the terminal (same issue as the existing cache notes).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-13T14:28:16.704568419Z
+modified_at: 2026-10-13T14:28:16.704568419Z
+req_type: Task
+tags:
+- cache
+- contained
+- review-follow-up
+filed_at:
+  code_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 6fd5497b-0c27-4e83-9725-0bf46198f394
