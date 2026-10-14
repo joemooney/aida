@@ -21,12 +21,12 @@ description: |
   - `make sync-templates` and `make check-templates` run; the template master is the only file edited.
 
   See also: BUG-629, aida-relay TASK-56.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-14T01:37:47.222805482Z
+modified_at: 2026-10-14T01:44:41.459195701Z
 req_type: Bug
 tags:
 - cross-repo
@@ -121,6 +121,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13815-48a9-7de0-9182-d2e53ae4f8f0
+  author: aida-auto-bump
+  timestamp: 2026-10-14T01:44:41.385979895Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13815-48f3-7e51-9658-631d2d5127e4
+  timestamp: 2026-10-14T01:44:41.459185957Z
+  agent: aida
+  commit_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  summary: 'Round 2 strict review: all 3 round-1 blockers fixed; full case table matches expectations (spec FP allowed, every main-refused negative shape still refused); 9/9 targeted mutations caught; templates in sync; POSIX awk (mawk+busybox) OK; no bypass.'
+  review_verdict: approved
 filed_at:
   code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
   branch: main
@@ -129,11 +143,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fixes the spec false positive but opens holes: any non-leak /// line (incl. empty ///, code fence, an excused bare-ID line) counts as prose, so standalone ID paragraphs and chained bare IDs now pass; suite misses it'
-  recovery_hint: address the review findings, move BUG-2008 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-14T00:21:27.520569160Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T01:44:41.385974760Z
+  completion_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
