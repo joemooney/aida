@@ -344,3 +344,69 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let reloaded: SessionLease = toml::from_str(&body).unwrap();
     assert_eq!(reloaded.branch, "epic-23-10");
 }
+
+/// TASK-1750: the orchestrated lease's owner liveness honours the start time
+/// recorded beside the pid. The true owner reads live, a recycled pid (same
+/// pid, different start time) reads dead, and a legacy lease without a start
+/// time degrades to the bare pid probe.
+// trace:TASK-1750 | ai:claude
+#[test]
+fn orchestrated_lease_owner_alive_rejects_recycled_pid() {
+    let me = std::process::id();
+    let Some(my_start) = aida_core::liveness::process_start_identity(me) else {
+        return; // platform cannot report start times; nothing to distinguish
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let sessions = root.join(".aida").join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let mint = |lease_id: &str, claude_id: &str, owner_lines: &str| {
+        std::fs::write(
+            sessions.join(format!("{lease_id}.toml")),
+            format!("id = \"{lease_id}\"\nbranch = \"b\"\n{owner_lines}"),
+        )
+        .unwrap();
+        let manifest = session_manifest::SessionManifest {
+            session_id: lease_id.to_string(),
+            planned_at: chrono::Utc::now(),
+            plan_source: "queue work".to_string(),
+            claude_session_id: Some(claude_id.to_string()),
+            batch_name: None,
+            plan: None,
+            items: vec![],
+        };
+        session_manifest::save(&session_manifest::manifest_path(root, lease_id), &manifest)
+            .unwrap();
+    };
+    mint(
+        "lease-true",
+        "claude-true",
+        &format!("active_pid = {me}\nactive_pid_start_time = \"{my_start}\"\n"),
+    );
+    mint(
+        "lease-recycled",
+        "claude-recycled",
+        &format!("active_pid = {me}\nactive_pid_start_time = \"2000-01-01T00:00:00+00:00\"\n"),
+    );
+    mint(
+        "lease-creator-recycled",
+        "claude-creator-recycled",
+        &format!("creator_pid = {me}\ncreator_pid_start_time = \"2000-01-01T00:00:00+00:00\"\n"),
+    );
+    mint(
+        "lease-legacy",
+        "claude-legacy",
+        &format!("creator_pid = {me}\n"),
+    );
+    mint("lease-nopid", "claude-nopid", "");
+
+    assert!(orchestrated_lease_owner_alive(root, "claude-true"));
+    assert!(!orchestrated_lease_owner_alive(root, "claude-recycled"));
+    assert!(!orchestrated_lease_owner_alive(
+        root,
+        "claude-creator-recycled"
+    ));
+    assert!(orchestrated_lease_owner_alive(root, "claude-legacy"));
+    assert!(!orchestrated_lease_owner_alive(root, "claude-nopid"));
+    assert!(!orchestrated_lease_owner_alive(root, "no-such-id"));
+}
