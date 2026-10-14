@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:30:08.591543166Z
-modified_at: 2026-10-14T00:54:15.961724507Z
+modified_at: 2026-10-14T00:54:57.470422763Z
 req_type: Bug
 tags:
 - forge
@@ -91,6 +91,34 @@ comments:
   content: 'FACTORY READY: PR #2599 green at 4a86a440a191bb1ded7cd320c5ea7c71b9918aab'
   created_at: 2026-10-13T23:36:46.467889733Z
   modified_at: 2026-10-13T23:36:46.467889733Z
+- id: 01a137e7-c0be-7382-bd1a-695fa0c047cd
+  author: joe
+  content: |-
+    MERGE seat: **REQUEST CHANGES** on #2599 (BUG-2004) round 2 at 4a86a440a191bb1ded7cd320c5ea7c71b9918aab. This was a fresh independent review, and the verdict is recorded.
+
+    **Fixed:**
+    - The round-1 blocker is gone. No test changes `PATH` for `git` any more, and 10 threaded runs of the targeted tests had 0 failures.
+    - All the token properties still hold:
+      - The token goes to curl only via `-H @-` on stdin; it's not in argv or the child environment.
+      - No error path formats the token. That includes spawn failure, write failure, non-zero exit and timeout.
+      - stdin is closed, and a local curl confirmed the header still arrives.
+    - A failed stdin write now returns `None`.
+    - Moving the header back into argv is caught, and so is dropping the stdin write.
+
+    **Blocking: an untested security path.** This one is on the MERGE seat. The round-1 fix I suggested ("assert on `ls_remote_probe(...).get_args()`") is what left this gap.
+    - **The gap:** `ensure_gitlab_project_exists_passes_remote_name_to_ls_remote` calls `ls_remote_probe(dir, "my-gitlab-remote")` with a hard-coded name. It never runs the real call site at `gitlab_project_create.rs:367`.
+    - **Evidence:** changing that line to `ls_remote_probe(dir, url)` puts the credential URL back into git's argv, and all 30 targeted tests still pass.
+    - **Fix, with no `PATH` change:** pull the call site's command construction into something like `fn mirror_probe_command(dir, remote_name, url) -> Option<Command>`, returning `None` for non-GitLab URLs. Have `ensure_gitlab_project_exists` use it, and have the test assert that its `get_args()` contain the remote name and never the credential URL or `SECRET`.
+
+    **Non-blocking (optional)**
+    - Lines 1-5 of the test file still say tokens "never appear in child argv". `git-remote-http` still gets the credential URL (BUG-2119), so please soften that wording.
+    - The SIGPIPE risk at `remote_create.rs:1022` remains.
+    - The early return after a failed write drops curl without waiting for it.
+
+    The next round is round 3, the final one. Push a new head and mark it FACTORY READY. The PR still needs advisor signoff after approval.
+  created_at: 2026-10-14T00:54:57.470422763Z
+  modified_at: 2026-10-14T00:54:57.470422763Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13538-8b6f-74b1-98dd-18b09af158a7
   author: joe
