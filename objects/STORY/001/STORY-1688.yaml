@@ -1,0 +1,42 @@
+id: 01a1380e-2128-76a3-889a-4d1d759e76bf
+spec_id: STORY-1688
+agreed_id: STORY-1688
+title: 'Lane liveness substrate job: detect dead lanes, unpicked READY PRs and stale gate waits within one tick, with no model-side polling'
+description: |
+  ## Problem
+  On 2026-10-13, four lanes stopped silently and stayed stopped until someone happened to look:
+  1. The role leak (BUG-2007) stopped Codex at 09:50.
+  2. The merge seat's PR watcher used a fixed list, so 8 FACTORY READY PRs went unseen for up to 5h.
+  3. The headless Codex run exited at 16:51.
+  4. An implementer subagent died when its parent advisor session rotated at 16:51, and that went unnoticed for 1.5h.
+
+  Each lane's liveness depended on an LLM seat noticing. Model-side polling is (rightly) forbidden by BUG-1589.
+
+  ## Proposal
+  Add a deterministic substrate job, `lane-liveness` (every 10m via `aida schedule tick`, no model). It checks:
+  - **Lane process / log liveness:** for each registered lane (relay, factory, headless exec), the process is alive and its log moved within N minutes while it has assigned work.
+  - **Review pickup:** an open `factory` PR has had a `FACTORY READY` at its current head for more than 30m with no review started.
+  - **Gate waits:** a PR has carried `awaiting advisor signoff` or `needs operator hold clear` for more than 15m.
+  - **Orphaned work:** a spec lease is held by a dead process with no pushed progress for more than 30m.
+
+  Each finding routes to the owning seat as a seat job. Once TASK-1511 lands, that job is cold-booted headlessly. A human-only gate wait becomes an operator push notification. The job never relaunches a lane on its own in slice 1; it detects and routes.
+
+  ## Acceptance
+  1. Fixture tests for each check, including a dead lane, a stale log, an unpicked READY PR and a stale gate wait.
+  2. The 2026-10-13 incidents, replayed, each produce a finding within one tick.
+  3. No model-side polling anywhere.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T01:36:52.520942602Z
+modified_at: 2026-10-14T01:36:52.520942602Z
+req_type: Story
+filed_at:
+  code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
