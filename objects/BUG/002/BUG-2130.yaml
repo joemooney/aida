@@ -1,0 +1,20 @@
+id: 01a13cc4-100a-7042-ae98-c7a0c3134bcb
+spec_id: BUG-2130
+agreed_id: BUG-2130
+title: Process start-identity (rfc3339 via sysinfo btime) shifts on a wall-clock step, so live lock holders read as dead
+description: 'From the advisor review of #2627/#2628 (TASK-1750). liveness::process_start_time (aida-core/src/liveness.rs:389) uses sysinfo, which derives start time from /proc/stat btime plus ticks at whole-second resolution. An NTP step or a VM resume shifts btime, so the recomputed identity differs from the recorded one, and process_identity_is_alive returns dead for a LIVE holder. Worst case: the drain double-run guard (drain_cmd.rs:1029; its comment says ''any doubt resolves to alive'') plus solo locks, merge_lock and review markers. Fix: compare the exact linux-starttime:<ticks> identity (cache_lock already records it). This is step 3 of the TASK-1750 consolidation sketch, gated on steps 1 and 2 shipping first (N-1 readers). Acceptance: a simulated btime shift leaves a live holder alive; records written before the change still read correctly.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T23:34:04.554872418Z
+modified_at: 2026-10-14T23:34:04.554872418Z
+req_type: Bug
+filed_at:
+  code_sha: b6ba49699119e94ef5204b90c4bcc9c23f055d83
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
