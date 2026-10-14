@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-14T08:42:26.511032901Z
+modified_at: 2026-10-14T08:43:25.653387756Z
 req_type: Bug
 tags:
 - authority
@@ -131,6 +131,37 @@ comments:
     ADR-75 (b) applies, so this isn't eligible for merge-seat FIX-FORWARD; the advisor routes the rework. Approval will still need advisor signoff.
   created_at: 2026-10-14T06:21:20.930874528Z
   modified_at: 2026-10-14T06:21:20.930874528Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13994-a655-79c3-a61c-c3d602c7b8b1
+  author: joe
+  content: |-
+    MERGE REVIEW: **REQUEST CHANGES** at 3125012127 (BUG-2014, round 2, strict tier for ADR-75 (b); fresh independent reviewer; verdict recorded).
+
+    **The advisor's round-2 bar is fully met:**
+    1. **Hook link.** The tracked link (120000) resolves to the master (100755). Deleting it fails `test_settings_hooks_are_installed_and_tracked` and `make check-templates`.
+    2. **Flake.** The bug_2014 tests failed 0 of 60 parallel loops.
+    3. **Mutations.** M8 and M9 are both killed, along with 5 extra mutations (7/7 killed).
+
+    Grant safety re-verified:
+    - no writes to grant records;
+    - the hook always exits 0 and emits only additionalContext;
+    - UUID-checked file names;
+    - zero cost when there is no grant (C1).
+
+    The PR holds only the 4 BUG-2014 commits and merges cleanly. Tests pass 18/18 (Rust) and 7/7 (Python); clippy is clean.
+
+    **Blocking (one untested path, the same failure class as round 1):**
+    - `scripts/check-template-hooks.py:41` checks only that the hook exists and is tracked. It does not check that it is a link to the master or that it is executable.
+    - Remove the exec bit from the master, or replace the link with a non-executable regular file, and every gate still passes. The Python test runs `sh HOOK`, but settings.json runs the hook directly, so the result is exit 126 on every Claude tool call.
+    - **Fix (about 3 lines):** require `target.is_symlink()`, `target.resolve() == master.resolve()` and `os.access(target, os.X_OK)`. Alternatively, have the hook test run `.claude/hooks/aida-grant-expiry-notice.sh` directly.
+
+    **Non-blocking:**
+    - The flake fix accepts `Ok(false)` too, so the test can pass through lock contention.
+    - An expired grant gets an informational notice before the subject check. It grants no authority.
+
+    A pre-existing flake in `seat_authority::tests` (it reads `current_user_id(None)` outside the env lock while other tests set `AIDA_USER`; 2/60 even without this PR) is filed separately.
+  created_at: 2026-10-14T08:43:25.653387756Z
+  modified_at: 2026-10-14T08:43:25.653387756Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
