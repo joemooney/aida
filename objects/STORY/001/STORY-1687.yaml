@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T01:57:03.098735593Z
+modified_at: 2026-10-14T02:07:20.945424140Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -127,6 +127,11 @@ comments:
   content: 'FACTORY PLAN (codex): implementing signed slice 1 R1-R8 in /home/joe/ai/aida-story1687. One factual correction to R4: current merge_hold::write_typed_hold/write_marker uses atomic replacement, but there is no hold lock in origin/main (rg lock merge_hold.rs confirms only unrelated prose). I will reuse that seam and re-read immediately before release, introduce no new lock as directed, and document the deferred concurrency limitation. The release must retain the recorded reviewer grant handle so auto-release can validate that reviewer rather than the seat invoking the retry. Current main has no author ledger overlap rule; the shared implementer-seat refusal is its available independence check, explicitly limited in the PR body.'
   created_at: 2026-10-14T01:57:03.098735593Z
   modified_at: 2026-10-14T01:57:03.098735593Z
+- id: 01a1382a-0771-72e2-a795-c38b01476d82
+  author: joe
+  content: Commit 014a28d3f7 references this requirement
+  created_at: 2026-10-14T02:07:20.945424140Z
+  modified_at: 2026-10-14T02:07:20.945424140Z
 history:
 - id: 01a137b5-cce3-72e2-8548-0abd8462d4d8
   author: joe
