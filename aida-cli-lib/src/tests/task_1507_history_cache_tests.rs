@@ -4236,6 +4236,78 @@ mod bug_1923 {
             assert_eq!(history_cache::classify_miss(&st_orphaned), IndexMiss::Stuck);
         }
 
+        /// The diverged + live-elsewhere setup of
+        /// `diverged_tip_is_live_elsewhere_detected_by_status_at`: HEAD has
+        /// diverged from the indexed tip, which another branch still holds.
+        // trace:BUG-1998 | ai:claude
+        fn diverged_live_elsewhere_fixture() -> Fixture {
+            let mut fx = Fixture::new();
+            let mut s = Spec::new("STORY-1", "Story", "Live elsewhere");
+            fx.put(&s);
+            fx.commit("commit 1 on main");
+            fx.git(&["branch", "other"]);
+            s.status = "Approved".into();
+            fx.put(&s);
+            fx.commit("commit 2 on other path");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+            fx.git(&["checkout", "-b", "diverged", "HEAD~1"]);
+            s.title = "Diverged story".into();
+            fx.put(&s);
+            fx.commit("commit 2 on diverged");
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(st.error.is_none(), "{:?}", st.error);
+            assert!(!st.head_behind_tip);
+            assert!(st.tip_live_elsewhere, "fixture must start live elsewhere");
+            fx
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn unreadable_store_root_sha_reports_unreadable_not_live_elsewhere() {
+            let fx = diverged_live_elsewhere_fixture();
+            let conn = rusqlite::Connection::open(&fx.db).unwrap();
+            let n = conn
+                .execute(
+                    "UPDATE meta SET value = x'00ff' WHERE key = 'store_root_sha'",
+                    [],
+                )
+                .unwrap();
+            assert_eq!(n, 1, "store_root_sha row must exist");
+            drop(conn);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(
+                st.error.is_some(),
+                "a corrupt store_root_sha must surface as a read error"
+            );
+            assert!(
+                !st.tip_live_elsewhere,
+                "a corrupt store_root_sha must not fail open to live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st), IndexMiss::Unreadable);
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn missing_store_root_sha_row_reads_as_replaced_root_and_stays_stuck() {
+            let fx = diverged_live_elsewhere_fixture();
+            let conn = rusqlite::Connection::open(&fx.db).unwrap();
+            let n = conn
+                .execute("DELETE FROM meta WHERE key = 'store_root_sha'", [])
+                .unwrap();
+            assert_eq!(n, 1, "store_root_sha row must exist");
+            drop(conn);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(st.error.is_none(), "{:?}", st.error);
+            assert!(
+                !st.tip_live_elsewhere,
+                "no recorded root reads as a replaced root, not live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st), IndexMiss::Stuck);
+        }
+
         // trace:BUG-1998 | ai:claude
         #[test]
         fn behind_or_elsewhere_with_a_stalled_index_gets_no_rebuild_advice() {
