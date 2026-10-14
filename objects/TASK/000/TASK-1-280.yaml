@@ -9,12 +9,12 @@ description: |-
 
   PR: #2591
   Reviewed sha: bfd42471c3663b3285d121439e83afa9a43e45c8
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T08:13:54.981183561Z
-modified_at: 2026-10-13T23:01:17.705942564Z
+modified_at: 2026-10-14T06:20:12.169032049Z
 req_type: Task
 tags:
 - carried-from:TASK-1728
@@ -58,6 +58,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13911-8605-75c2-ac8d-4aacf1ecd3ae
+  author: aida-auto-bump
+  timestamp: 2026-10-14T06:20:12.165320092Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13911-8609-7af2-9084-7a5ece06c66c
+  timestamp: 2026-10-14T06:20:12.169027126Z
+  agent: implementer
+  commit_sha: ea5362335b3916af768719841b8c14cc3a66bcc0
+  summary: Test-only. A real --amend and a real merge --squash commit on main in the primary checkout are both refused, with HEAD, tree and staging unchanged; each has a positive control showing AIDA_ALLOW_PRIMARY_COMMIT=1 permits it, which proves the fixture is valid. CI green.
+  review_verdict: approved
 filed_at:
   code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
   branch: main
@@ -66,3 +80,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 4d87a732-07ba-4048-9889-3384420e68d6
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T06:20:12.165313730Z
+  completion_sha: ea5362335b3916af768719841b8c14cc3a66bcc0
