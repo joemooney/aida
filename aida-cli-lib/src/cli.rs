@@ -6277,9 +6277,9 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
-    /// Mark a requirement as completed AND remove it from your queue in one
+    /// Mark a requirement as done AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
-    /// loop. Equivalent to: `aida edit <id> --status completed && aida queue remove <id>`.
+    /// loop. Equivalent to: `aida edit <id> --status done && aida queue remove <id>`.
     Done {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
@@ -8892,6 +8892,13 @@ pub enum AgentNewCommand {
         /// also passed, AIDA records the captured sessionId on the
         /// lease so the cross-substrate view links them automatically.
         /// Without `--bg`, the foreground launch path is unchanged.
+        /// For non-interactive dispatch, first set `[agents] confirm_bypass = false`
+        /// in `~/.aida/config.toml`; trusted project config can still require consent.
+        /// Then use: `aida agent new claude --bg --role implementer
+        /// --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume
+        /// --permission-mode bypassPermissions`. An explicit owning cwd reuses
+        /// its inactive same-role lease; it never takes over a live agent.
+        // trace:BUG-2002 | ai:codex
         // trace:SPIKE-34 | ai:claude
         #[clap(long = "bg")]
         bg: bool,

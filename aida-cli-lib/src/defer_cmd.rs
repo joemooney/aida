@@ -10,7 +10,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use aida_core::DatabaseBackend;
+use aida_core::{DatabaseBackend, Storage};
 
 use crate::not_found;
 use crate::record_role_activity;
@@ -45,6 +45,32 @@ pub(crate) fn hold_refusal(
         trigger: trigger.unwrap_or("no revisit trigger recorded").to_string(),
     }
     .into()
+}
+
+/// Shared read-only hold gate for session creation and existing-lease re-entry.
+// trace:BUG-2002 | ai:codex
+pub(crate) fn enforce_reasoned_operator_hold(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Result<()> {
+    let path = project_root.join(".aida-store");
+    // Storage::load creates a missing legacy file. A preflight must not do that.
+    if path.exists() {
+        if let Some(req) = Storage::new(path)
+            .load()
+            .ok()
+            .and_then(|store| store.get_requirement_by_spec_id(spec).cloned())
+        {
+            if req.deferred && req.deferred_reason.is_some() {
+                return Err(hold_refusal(
+                    req.spec_id.as_deref().unwrap_or(spec),
+                    req.deferred_reason.as_deref(),
+                    req.deferred_until.as_deref(),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 // trace:BUG-1793 | ai:antigravity

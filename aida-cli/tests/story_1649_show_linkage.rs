@@ -5,7 +5,7 @@
 //! `aida edit <ID> --status completed` warns — never refuses — when a code
 //! spec reaches Completed with nothing shipped on the default branch, checking
 //! both the local default branch and `origin/<default>`. BUG-1958 adds the
-//! same warning on `aida done`.
+//! same warning on `aida done`. BUG-1996 adds the same warning on `aida queue advance` closing a parent.
 // trace:STORY-1649 | ai:claude
 
 use std::path::Path;
@@ -356,4 +356,27 @@ fn done_with_shipped_commit_does_not_warn() {
         !stderr.contains(NO_SHIPPED_COMMIT),
         "shipped spec must not warn on `aida done`:\n{stderr}"
     );
+}
+
+// ---- BUG-1996: `aida queue done` must NOT warn (status moves to Done) --------
+
+fn queue_done(fixture: &Fixture, id: &str) -> (String, String) {
+    ok(
+        "aida queue done",
+        &aida(fixture, &["queue", "done", id, "--skip-pr-check", "--yes"]),
+    )
+}
+
+// trace:BUG-1996 | ai:antigravity
+#[test]
+fn queue_done_does_not_warn() {
+    let fx = init_fixture();
+    let id = add_spec(&fx, "task");
+    let (_, stderr) = queue_done(&fx, &id);
+    assert!(
+        !stderr.contains(NO_SHIPPED_COMMIT),
+        "plain `aida queue done` moves to Done, not Completed, and must not warn:\n{stderr}"
+    );
+    let stdout = toon_show(&fx, &[&id]);
+    assert!(stdout.contains("status: done"), "{stdout}");
 }

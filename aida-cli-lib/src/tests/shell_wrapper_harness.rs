@@ -37,7 +37,7 @@ fn shell_runs(shell: &str) -> bool {
 /// own `~/.zshenv`; bash keeps the plain `-c` the existing tests have always
 /// used.
 // trace:TASK-1174 | ai:claude
-fn shell_args(shell: &str) -> &'static [&'static str] {
+pub(crate) fn shell_args(shell: &str) -> &'static [&'static str] {
     match shell {
         "zsh" => &["-f", "-c"],
         _ => &["-c"],

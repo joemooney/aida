@@ -4,6 +4,12 @@ only IndexLock, skips missing/disabled/busy indexes, and never spawns on commits
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
 
+`role expiry --refuse-within` validates through the shared `grant_check` verdict,
+including subject, roster and parent delegation. Expiry is the earlier of the
+validated grant and parent. The statusline's expired-record timestamp reader is
+informational and grants no authority.
+<!-- trace:BUG-2011 | ai:codex -->
+
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures
