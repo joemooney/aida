@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T09:22:05.220513737Z
-modified_at: 2026-10-14T11:12:12.668775317Z
+modified_at: 2026-10-14T17:35:22.501814707Z
 req_type: Task
 tags:
 - review-follow-up
@@ -31,6 +31,12 @@ comments:
   created_at: 2026-10-14T11:12:12.668775317Z
   modified_at: 2026-10-14T11:12:12.668775317Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13b7b-a985-7300-b222-d3950e4aa9c6
+  author: joe
+  content: 'FIRE: batch D covers item 3 (the 120s bounded_output on --list was dropped, along with the now-unused helper and its self-test), item 4 (the probe child is #[ignore]d and the parent passes --ignored), (a) (the guardrail asserts there is no ''if:'' on the stress step or job) and (b) (the ci.yml absence check also rejects the module name and the test suffix). Items 1 and 2 are already resolved on main, since the stress moved to weekly-linux.yml. Item 5 (guardrail for aida-cli/tests) and (c) (watching the first scheduled run) are left open.'
+  created_at: 2026-10-14T17:35:22.501814707Z
+  modified_at: 2026-10-14T17:35:22.501814707Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: 237e401b07e057129a1a4fe09bb5bd372b5ac0eb
   dirty: false
