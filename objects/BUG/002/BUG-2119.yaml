@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:04:58.283290700Z
-modified_at: 2026-10-14T01:34:15.371846657Z
+modified_at: 2026-10-14T07:15:29.095502909Z
 req_type: Bug
 tags:
 - forge
 - review-follow-up
 - security
+comments:
+- id: 01a13944-22c7-78f0-8fa8-6ec78482065a
+  author: joe
+  content: 'Advisor 2026-10-14 00:17 (from the #2599 strict review): acceptance additions. (a) A test on the real run_remote_mirror re-run and fresh-add call sites (remote_create.rs ~2127 and ~2168) that fails if the URL is passed instead of the remote name (mutations M3/M4 survived at 2dd8397a3f). (b) A test that a curl failure in the GitLab release lookup never writes the token to stderr or logs (M5 survived).'
+  created_at: 2026-10-14T07:15:29.095502909Z
+  modified_at: 2026-10-14T07:15:29.095502909Z
+  session_id: 3d8fc102-1166-4ecc-afbc-275650aca76e
 history:
 - id: 01a13789-6625-74a0-8c98-a64393dd8b43
   author: joe
