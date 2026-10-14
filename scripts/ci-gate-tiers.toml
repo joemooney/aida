@@ -50,7 +50,6 @@
 "TUI seam guard" = "fast"
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
-"PATH and history concurrency stress" = "full" # trace:BUG-1994 | ai:codex
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "Run MCP stdio compatibility tests" = "full"

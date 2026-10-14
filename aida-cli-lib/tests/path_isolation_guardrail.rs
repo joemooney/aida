@@ -218,8 +218,11 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
 }
 
 // trace:BUG-1994 | ai:codex
+// The stress is too slow for every PR Build: it runs only in the scheduled /
+// manually dispatched weekly Linux workflow, and the Build job keeps its
+// 25-minute fail-fast bound. trace:BUG-1994 | ai:claude
 #[test]
-fn stress_runs_only_in_its_bounded_explicit_ci_step() {
+fn stress_runs_only_in_its_bounded_scheduled_job() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let name = "history_and_path_mutators_pass_15_rounds_at_16_threads";
     let source = std::fs::read_to_string(
@@ -239,29 +242,68 @@ fn stress_runs_only_in_its_bounded_explicit_ci_step() {
         test.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
         "default suite must skip the expensive stress loop"
     );
-    let workflow: serde_yaml::Value = serde_yaml::from_str(
-        &std::fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap(),
-    )
-    .unwrap();
-    let steps = workflow["jobs"]["build"]["steps"].as_sequence().unwrap();
+    let load = |file: &str| -> (String, serde_yaml::Value) {
+        let text = std::fs::read_to_string(root.join(".github/workflows").join(file)).unwrap();
+        let yaml = serde_yaml::from_str(&text).unwrap();
+        (text, yaml)
+    };
+
+    // Scheduled + manually dispatchable home for the stress.
+    let (_, weekly) = load("weekly-linux.yml");
+    let on = &weekly["on"];
+    assert!(
+        on.get("schedule").is_some(),
+        "stress workflow must be scheduled"
+    );
+    assert!(
+        on.get("workflow_dispatch").is_some(),
+        "stress workflow must be manually dispatchable"
+    );
+    let job = &weekly["jobs"]["path-history-stress"];
+    assert!(
+        job["timeout-minutes"]
+            .as_u64()
+            .is_some_and(|n| n > 0 && n <= 60),
+        "stress job needs a bounded timeout"
+    );
+    let steps = job["steps"].as_sequence().expect("stress job has steps");
     let step = steps
         .iter()
-        .find(|step| step["name"].as_str() == Some("PATH and history concurrency stress"))
-        .expect("stress has a dedicated CI step");
+        .find(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains(&format!("bug_1994_path_isolation_tests::{name}")))
+        })
+        .expect("scheduled job runs the stress");
     let run = step["run"].as_str().unwrap();
-    assert!(run.contains(&format!("test_env::bug_1994_path_isolation_tests::{name}")));
-    for argument in ["cargo test -p aida-cli-lib --lib", "--ignored", "--exact"] {
+    for argument in [
+        "cargo test -p aida-cli-lib --lib",
+        "--ignored",
+        "--exact",
+        "< /dev/null",
+    ] {
         assert!(run.contains(argument), "missing {argument}");
     }
-    assert_eq!(
-        step["if"].as_str(),
-        Some("steps.changes.outputs.full_ci == 'true'")
-    );
-    assert!(step["timeout-minutes"]
-        .as_u64()
-        .is_some_and(|n| n > 0 && n <= 30));
     assert!(
-        step.get("continue-on-error").is_none(),
-        "stress failures must fail Build"
+        step["timeout-minutes"]
+            .as_u64()
+            .is_some_and(|n| n > 0 && n <= 40),
+        "stress step needs a bounded timeout"
+    );
+    assert!(
+        step.get("continue-on-error").is_none() && job.get("continue-on-error").is_none(),
+        "stress failures must fail the scheduled run"
+    );
+
+    // ...and never back on the per-PR Build path.
+    let (ci_text, ci) = load("ci.yml");
+    assert!(
+        !ci_text.contains(name),
+        "the stress must not run in per-PR ci.yml"
+    );
+    assert_eq!(
+        ci["jobs"]["build"]["timeout-minutes"].as_u64(),
+        Some(25),
+        "Build keeps its 25-minute fail-fast bound (BUG-611)"
     );
 }

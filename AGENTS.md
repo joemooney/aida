@@ -6,7 +6,9 @@ informational and grants no authority.
 
 PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
 fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
-the guards require an exact one-test child. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+the guards require an exact one-test child. The ignored 15-round PATH/history
+stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
+per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
 <!-- trace:BUG-1994 | ai:codex -->
 
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;

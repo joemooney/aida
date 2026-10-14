@@ -29,11 +29,29 @@ setter does not authorize another function.
 `history_and_path_mutators_pass_15_rounds_at_16_threads` runs the history-cache
 suite alongside every migrated PATH-changing test in one 16-thread harness per
 round. It lists members first, checks that every writer is included, and checks
-completed pass counts for all 15 rounds. The stress test is ignored by default and runs in the explicit **PATH and
-history concurrency stress** CI step, after the normal workspace suite. It
-retains all 15 rounds and 16 threads, with a 30-minute step timeout and the
-45-minute Build timeout as bounds. Rounds have no load-sensitive deadline;
-any assertion failure still fails Build. No separate compile is needed.
+completed pass counts for all 15 rounds. The stress takes about 18 minutes,
+so it is `#[ignore]`d in the default suite and does not run in per-PR CI (the
+Build job keeps its 25-minute bound). It runs as the **PATH and history
+concurrency stress** job in `.github/workflows/weekly-linux.yml`, on that
+workflow's weekly schedule or on manual dispatch:
+
+```bash
+gh workflow run weekly-linux.yml
+```
+
+That dispatch runs every job in the workflow. To run only the stress locally:
+
+```bash
+cargo test -p aida-cli-lib --lib \
+  test_env::bug_1994_path_isolation_tests::history_and_path_mutators_pass_15_rounds_at_16_threads \
+  -- --ignored --exact --nocapture < /dev/null
+```
+
+It retains all 15 rounds and 16 threads. A 40-minute step timeout and a
+60-minute job timeout bound it. Rounds have no load-sensitive deadline, and any
+assertion failure fails the scheduled run. The guardrail test
+`stress_runs_only_in_its_bounded_scheduled_job` pins the `#[ignore]`, the
+scheduled job's command and bounds, and its absence from `ci.yml`.
 
 The earlier BUG-1955 investigation retracted the alleged foreign-shim strace
 proof: those exec entries were ENOENT search probes. The original Git

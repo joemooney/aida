@@ -197,7 +197,7 @@ fn unisolated_path_mutation_is_refused_before_setting_environment() {
 // trace:BUG-1994 | ai:codex
 #[test]
 #[cfg(unix)]
-#[ignore = "15-round stress runs in its explicit CI step"]
+#[ignore = "15-round stress runs in the scheduled weekly-linux.yml job"]
 fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
     let root = tempfile::tempdir().unwrap();
     let mut list = child_command(&root.path().join("home"));
@@ -232,7 +232,7 @@ fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
                 "task_1507_history_cache_tests",
             ])
             .args(PATH_TESTS);
-        // CI step/job timeout bounds all rounds without a load-sensitive round cap.
+        // The scheduled step/job timeout bounds all rounds without a load-sensitive round cap.
         let output = command.output().expect("run stress round");
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
