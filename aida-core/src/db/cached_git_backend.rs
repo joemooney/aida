@@ -1242,15 +1242,25 @@ impl CachedGitBackend {
     pub fn rebuild_cache_recovering(&self) -> Result<CacheRebuildOutcome> {
         use super::cache::{is_cache_corruption_error, tag_cache_corruption};
         let path = self.cache.path().to_path_buf();
-        let err = match self.rebuild_cache() {
-            Ok(count) => {
-                return Ok(CacheRebuildOutcome {
-                    count,
-                    quarantined: Vec::new(),
-                    problem: None,
-                })
+        // Check integrity BEFORE rebuilding. A rebuild rewrites rows inside the
+        // existing file, so page-level damage that ordinary reads never touch
+        // (2026-10-14: "2nd reference to page", "Rowid out of order") would
+        // survive a "successful" rebuild. A damaged file goes straight to the
+        // quarantine path below and the rebuild lands in a fresh file.
+        // trace:BUG-1940 | ai:claude
+        let err = if let Ok(Some(problem)) = self.cache.integrity_problem() {
+            anyhow::anyhow!("the cache failed its integrity check: {problem}")
+        } else {
+            match self.rebuild_cache() {
+                Ok(count) => {
+                    return Ok(CacheRebuildOutcome {
+                        count,
+                        quarantined: Vec::new(),
+                        problem: None,
+                    })
+                }
+                Err(err) => err,
             }
-            Err(err) => err,
         };
         let damaged = is_cache_corruption_error(&err)
             || matches!(self.cache.integrity_problem(), Ok(Some(_)));

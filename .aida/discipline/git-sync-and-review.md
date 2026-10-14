@@ -113,7 +113,7 @@ Host/build:
 - [codegraph local setup + 1MiB cap](reference_codegraph_local_setup_and_1mib_cap.md) — systemd timer keeps it fresh; lib.rs (4.7MB) NEVER indexed, confirm no-callers with rg; init can exit 0 on "database is locked"
 - [sccache + shared target serves stale worktree builds](feedback_sccache_shared_target_serves_stale_worktree_builds.md) — same unit hash as main, relative dep-info; strings-verify the artifact, then touch + RUSTC_WRAPPER= rebuild
 
-- [merge-hold clear is human-only](reference_merge_hold_clear_is_human_only.md) — integrity floor; closing paste is clear → gate rerun → merge
+- [merge-hold clearance policy](reference_merge_hold_clear_is_human_only.md) — nonsensitive Rework-only holds may auto-release on a fresh granted approval; other holds retain human clear → gate rerun → merge
 - [Idle peer sessions as independent review seats](feedback_idle_peer_sessions_as_independent_review_seats.md) — ListAgents+SendMessage; confirm pickup by artifact, instant-idle may mean exited
 
 Dispatch/codex:

@@ -993,6 +993,16 @@ pub(crate) fn record_clearance_with_verdict(
     actor: &PrincipalIdentity,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
+    record_clearance_by(project_root, record, &actor.key(), released_by_verdict)
+}
+
+// trace:STORY-1687 | ai:codex
+pub(crate) fn record_clearance_by(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    principal: &str,
+    released_by_verdict: Option<VerdictRef>,
+) -> std::io::Result<()> {
     let path = clearance_path(project_root, record.pr);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1001,7 +1011,7 @@ pub(crate) fn record_clearance_with_verdict(
         pr: record.pr,
         reason_kind: record.reason_kind,
         detail: record.detail.clone(),
-        cleared_by: actor.key(),
+        cleared_by: principal.to_string(),
         target_head_sha: record.target_head_sha.clone(),
         cleared_at: chrono::Utc::now().to_rfc3339(),
         released_by_verdict,

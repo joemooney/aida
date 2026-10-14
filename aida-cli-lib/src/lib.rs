@@ -410,6 +410,7 @@ mod not_found;
 mod pr_claim_surface;
 mod reconcile_evidence;
 mod reconstitute;
+mod rework_hold_release;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
@@ -491,6 +492,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2014 | ai:codex
+mod grant_expiry_notice;
 mod seat_rotation;
 mod seats;
 mod server_cmd;

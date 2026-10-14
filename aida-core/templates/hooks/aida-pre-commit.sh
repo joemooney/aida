@@ -479,15 +479,26 @@ __aida_prov_offenders=$(__aida_staged_rs_diffs | awk -v spec_re="$SPEC_ID_RE" -v
 function doc_has_prose(doc,    residual) {
     residual = doc
     sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", residual)
-    if (residual ~ /^(#|[-*+]|[0-9]+\.|```)/) return 0
+    # A markdown table row is structure, not prose. trace:TASK-1369 | ai:claude
+    if (residual ~ /^(#|[-*+]|[0-9]+\.|```|\|)/) return 0
     gsub(spec_re, " ", residual)
     return (residual ~ /[A-Za-z][A-Za-z]/) ? 1 : 0
+}
+# A `///` line that opens or closes a fenced code block.
+# trace:TASK-1369 | ai:claude
+function doc_is_fence(doc,    inner) {
+    inner = doc
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", inner)
+    return (inner ~ /^```/) ? 1 : 0
 }
 function doc_ends_sentence(doc,    s) {
     s = trim_ws(doc)
     sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", s)
     s = trim_ws(s)
-    if (s ~ /[.?!:]$/ && s !~ /(e\.g|i\.e|etc|vs)\.$/) return 1
+    # The abbreviation guard is word-anchored so "devs." still ends a
+    # sentence; U+2026 and U+3002 end one too. trace:TASK-1371 | ai:claude
+    if (s ~ /(…|。)$/) return 1
+    if (s ~ /[.?!:]$/ && s !~ /(^|[^A-Za-z])(e\.g|i\.e|etc|vs)\.$/) return 1
     return 0
 }
 # trace:BUG-2008 | ai:antigravity
@@ -546,6 +557,8 @@ function settle(    i, key, off) {
     prev_add_ends_sentence = 0
     prev_rem_has_prose = 0
     prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
     next
 }
 {
@@ -565,12 +578,15 @@ function settle(    i, key, off) {
             prev_rem_has_prose = 0
             prev_rem_ends_sentence = 0
         } else {
-            prev_rem_has_prose = doc_has_prose(text)
+            # A code line inside a fenced block is not prose. trace:TASK-1369 | ai:claude
+            if (doc_is_fence(text)) rem_in_fence = !rem_in_fence
+            prev_rem_has_prose = rem_in_fence ? 0 : doc_has_prose(text)
             prev_rem_ends_sentence = doc_ends_sentence(text)
         }
     } else {
         prev_rem_has_prose = 0
         prev_rem_ends_sentence = 0
+        rem_in_fence = 0
     }
     next
 }
@@ -582,6 +598,8 @@ function settle(    i, key, off) {
     prev_add_ends_sentence = 0
     prev_rem_has_prose = 0
     prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
     next
 }
 /^@@ / {
@@ -589,6 +607,8 @@ function settle(    i, key, off) {
     prev_add_ends_sentence = 0
     prev_rem_has_prose = 0
     prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
     next
 }
 /^\+/ {
@@ -603,12 +623,15 @@ function settle(    i, key, off) {
             prev_add_has_prose = 0
             prev_add_ends_sentence = 0
         } else {
-            prev_add_has_prose = doc_has_prose(text)
+            # A code line inside a fenced block is not prose. trace:TASK-1369 | ai:claude
+            if (doc_is_fence(text)) add_in_fence = !add_in_fence
+            prev_add_has_prose = add_in_fence ? 0 : doc_has_prose(text)
             prev_add_ends_sentence = doc_ends_sentence(text)
         }
     } else {
         prev_add_has_prose = 0
         prev_add_ends_sentence = 0
+        add_in_fence = 0
     }
     next
 }

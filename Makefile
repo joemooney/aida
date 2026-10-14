@@ -429,6 +429,8 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
 	done
 	@$(MAKE) --no-print-directory sync-agent-skills
+	@# trace:BUG-2014 | ai:codex
+	@python3 scripts/check-template-hooks.py --sync
 	@echo "Template sync complete!"
 
 # trace:TASK-1520 | ai:codex
@@ -502,6 +504,8 @@ check-ci-list: ## Show which CI gates run locally, which are skipped, and why
 # trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
+	@# trace:BUG-2014 | ai:codex
+	@python3 scripts/check-template-hooks.py
 	@test -f aida-core/templates/hooks/aida-sync-agent-skills.sh || { echo "MISSING: portable-pack hook master"; exit 1; }
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \

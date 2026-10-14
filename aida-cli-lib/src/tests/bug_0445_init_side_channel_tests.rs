@@ -574,7 +574,8 @@ fn a_successful_init_restores_the_callers_traps() {
                     aida init proj\n\
                     echo \"rc:$?\"\n\
                     if [ -n \"${ZSH_VERSION:-}\" ]; then trap; else trap -p INT TERM; fi\n\
-                    if [ -n \"${ZSH_VERSION:-}\" ]; then functions TRAPINT TRAPTERM >/dev/null 2>&1 && echo trap-fn-leaked; fi\n";
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then functions TRAPINT TRAPTERM >/dev/null 2>&1 && echo trap-fn-leaked; fi\n\
+                    if [ -n \"${ZSH_VERSION:-}\" ]; then functions _aida_init_zsh >/dev/null 2>&1 && echo helper-fn-leaked; fi\n";
         let run = run_interrupt_scenario(shell, &side_channel_stub(0), body);
         let ctx = format!(
             "[{shell}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
@@ -591,6 +592,11 @@ fn a_successful_init_restores_the_callers_traps() {
             "no wrapper trap may outlive the call: {ctx}"
         );
         assert!(!run.stdout.contains("trap-fn-leaked"), "{ctx}");
+        // trace:TASK-1344 | ai:claude
+        assert!(
+            !run.stdout.contains("helper-fn-leaked"),
+            "the zsh helper must not stay defined in the caller's shell: {ctx}"
+        );
         assert!(run.leftover.is_empty(), "{ctx}");
     }
 }
@@ -671,5 +677,46 @@ fn a_process_group_interrupt_during_init_behaves_like_ctrl_c() {
                 assert!(run.code.is_none(), "the shell must die of SIGINT: {ctx}");
             }
         }
+    }
+}
+
+/// An interrupt that lands while `mktemp` is creating the private file (the
+/// window before the child starts) must not strand the file either: the
+/// cleanup handlers are installed before `mktemp` runs, the child is skipped,
+/// and the signal still ends the shell. A stub `mktemp` on PATH creates the
+/// file and then signals the top-level shell before returning its path.
+// trace:TASK-1343 | ai:claude
+#[test]
+fn an_interrupt_while_the_side_channel_file_is_created_leaves_no_file() {
+    for &shell in wrapper_shells() {
+        let body = "cat > ./mktemp <<'AIDA_STUB'\n\
+                    #!/bin/sh\n\
+                    f=\"$TMPDIR/aida-init-cd.raced\"\n\
+                    : > \"$f\"\n\
+                    printf '%s\\n' \"$f\"\n\
+                    kill -s INT \"$AIDA_TEST_TOP\"\n\
+                    AIDA_STUB\n\
+                    chmod +x ./mktemp\n\
+                    AIDA_TEST_TOP=$$\n\
+                    export AIDA_TEST_TOP\n\
+                    aida init proj\n\
+                    echo after-init\n";
+        let run = run_interrupt_scenario(shell, "#!/bin/sh\necho child-ran >&2\n", body);
+        let ctx = format!(
+            "[{shell}] code={:?} leftover={:?}\n{}\nstderr:\n{}",
+            run.code, run.leftover, run.stdout, run.stderr
+        );
+        assert!(
+            run.leftover.is_empty(),
+            "an interrupt during mktemp must not strand the file: {ctx}"
+        );
+        assert!(
+            !run.stderr.contains("child-ran"),
+            "an interrupt before the child starts must skip it: {ctx}"
+        );
+        assert!(
+            !run.stdout.contains("after-init"),
+            "the signal must not be swallowed: {ctx}"
+        );
     }
 }

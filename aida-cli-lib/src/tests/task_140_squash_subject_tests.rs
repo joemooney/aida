@@ -131,3 +131,105 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
         "{out}"
     );
 }
+
+/// BUG-1997: `derive_pr_ship_squash_subject` never returns None when spec IDs
+/// are withheld, even when the normalized subject equals the branch-head commit
+/// subject. If it returned None, `gh pr merge --squash` would fall back to its
+/// default (the PR title on multi-commit PRs), resurrecting the withheld ID.
+/// The PR metadata is passed in directly (no fake `gh` on the shared PATH).
+// trace:BUG-1997 | ai:antigravity
+// trace:BUG-1997 | ai:claude
+#[test]
+fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "t@t.t"]);
+    git(root, &["config", "user.name", "t"]);
+    std::fs::write(root.join("a"), "1").unwrap();
+    git(root, &["add", "a"]);
+    git(root, &["commit", "-q", "-m", "init"]);
+    git(root, &["checkout", "-q", "-b", "fix-branch"]);
+
+    let mut req = aida_core::Requirement::new("t".to_string(), String::new());
+    req.spec_id = Some("TASK-1538".to_string());
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::InProgress;
+    let store = aida_core::RequirementsStore {
+        requirements: vec![req],
+        ..Default::default()
+    };
+    let backend = aida_core::GitBackend::new(&root.join(".aida-store")).unwrap();
+    aida_core::DatabaseBackend::save(&backend, &store).unwrap();
+    // The store save commits too, so the subject-matching head commit
+    // ("fix: prose", the normalized clean title) comes after it.
+    std::fs::write(root.join("a"), "2").unwrap();
+    git(root, &["commit", "-q", "-am", "fix: prose"]);
+    assert_eq!(
+        branch_head_commit_message(root, "fix-branch").as_deref(),
+        Some("fix: prose\n\n")
+    );
+
+    let pr = |title: &str, body: &str| PrShipMetadata {
+        title: title.to_string(),
+        body: body.to_string(),
+    };
+
+    // --no-complete: normalized is "fix: prose", equal to the head commit
+    // subject. It must return Some("fix: prose"), NOT None.
+    let (subject, trailer) = derive_pr_ship_squash_subject_from(
+        root,
+        &pr("fix: prose (TASK-1538)", ""),
+        "fix-branch",
+        true,
+    )
+    .unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+    assert_eq!(
+        subject.as_deref(),
+        Some("fix: prose"),
+        "must pass explicit subject when ids are withheld to prevent gh PR-title fallback"
+    );
+
+    // PR-body non-completing marker, no_complete = false.
+    let (subject, trailer) = derive_pr_ship_squash_subject_from(
+        root,
+        &pr("fix: prose (TASK-1538)", "aida: no-complete"),
+        "fix-branch",
+        false,
+    )
+    .unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+    assert_eq!(
+        subject.as_deref(),
+        Some("fix: prose"),
+        "must pass explicit subject when body withholds completion"
+    );
+
+    // The title's ID does not resolve in the store, so it is stripped with
+    // no note; the stripped ID still forces an explicit subject.
+    let (subject, trailer) = derive_pr_ship_squash_subject_from(
+        root,
+        &pr("fix: prose (TASK-9999)", ""),
+        "fix-branch",
+        false,
+    )
+    .unwrap();
+    assert!(
+        trailer.ids.is_empty() && trailer.notes.is_empty(),
+        "{trailer:?}"
+    );
+    assert_eq!(
+        subject.as_deref(),
+        Some("fix: prose"),
+        "a stripped title ID must not reach main via gh's PR-title default"
+    );
+
+    // Negative: nothing withheld and the title equals the head subject, so
+    // GitHub's default is already right and no explicit subject is needed.
+    let (subject, trailer) =
+        derive_pr_ship_squash_subject_from(root, &pr("fix: prose", ""), "fix-branch", false)
+            .unwrap();
+    assert!(trailer.ids.is_empty(), "{trailer:?}");
+    assert_eq!(subject, None);
+}

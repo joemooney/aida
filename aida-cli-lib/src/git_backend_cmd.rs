@@ -1345,7 +1345,15 @@ pub(crate) fn handle_git_backend_command(
     if notice_fast_fail {
         aida_core::db::set_fast_fail_cache(true);
     }
-    let backend_result = if notice_fast_fail {
+    // `aida cache rebuild` must not depend on the old cache being readable: the
+    // ordinary open refreshes a stale cache first, and page-level damage fails
+    // that refresh before the rebuild's own quarantine can run (2026-10-14).
+    // Open the bare snapshot; the rebuild replaces it. trace:BUG-1940 | ai:claude
+    let cache_rebuild = matches!(
+        command,
+        Command::Cache(CacheCommand::Rebuild { history: false })
+    );
+    let backend_result = if notice_fast_fail || cache_rebuild {
         // BUG-1569: even a non-contended normal open may refresh a stale cache
         // by scanning every canonical object before dispatch reaches the
         // targeted notice lookup. The advisory path instead consumes the last
@@ -1366,7 +1374,10 @@ pub(crate) fn handle_git_backend_command(
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
-    if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
+    if !notice_fast_fail
+        && !cache_rebuild
+        && !matches!(command, Command::Report { recheck: true, .. })
+    {
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }

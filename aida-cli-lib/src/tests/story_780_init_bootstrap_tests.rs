@@ -350,6 +350,8 @@ fn the_init_arm_never_captures_the_childs_stdout() {
         init_arm.contains("_aida_init_zsh() {")
             && init_arm.contains("setopt localoptions localtraps")
             && init_arm.contains("_aida_init_zsh \"$@\"")
+            // trace:TASK-1344 | ai:claude
+            && init_arm.contains("unfunction _aida_init_zsh 2>/dev/null")
             && init_arm.contains("_aida_traps=$(trap -p INT TERM)")
             && init_arm.contains("eval \"$_aida_traps\"")
             && init_arm.contains(

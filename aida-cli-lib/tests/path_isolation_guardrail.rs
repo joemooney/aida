@@ -220,7 +220,7 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
 // trace:BUG-1994 | ai:codex
 // The stress is too slow for every PR Build: it runs only in the scheduled /
 // manually dispatched weekly Linux workflow, and the Build job keeps its
-// 25-minute fail-fast bound. trace:BUG-1994 | ai:claude
+// 40-minute fail-fast bound. trace:BUG-1994 | ai:claude
 #[test]
 fn stress_runs_only_in_its_bounded_scheduled_job() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -294,16 +294,30 @@ fn stress_runs_only_in_its_bounded_scheduled_job() {
         step.get("continue-on-error").is_none() && job.get("continue-on-error").is_none(),
         "stress failures must fail the scheduled run"
     );
+    // trace:TASK-1754 | ai:claude
+    assert!(
+        step.get("if").is_none() && job.get("if").is_none(),
+        "an `if:` on the stress step or job could silently disable it"
+    );
 
     // ...and never back on the per-PR Build path.
     let (ci_text, ci) = load("ci.yml");
-    assert!(
-        !ci_text.contains(name),
-        "the stress must not run in per-PR ci.yml"
-    );
+    // Any filter naming the stress module (not just the full test name)
+    // would select it with `--ignored`.
+    // trace:TASK-1754 | ai:claude
+    for needle in [
+        name,
+        "bug_1994_path_isolation_tests",
+        "15_rounds_at_16_threads",
+    ] {
+        assert!(
+            !ci_text.contains(needle),
+            "the stress must not run in per-PR ci.yml (found `{needle}`)"
+        );
+    }
     assert_eq!(
         ci["jobs"]["build"]["timeout-minutes"].as_u64(),
-        Some(25),
-        "Build keeps its 25-minute fail-fast bound (BUG-611)"
+        Some(40),
+        "Build keeps its 40-minute fail-fast bound (BUG-611): healthy runs take 17-25 min"
     );
 }

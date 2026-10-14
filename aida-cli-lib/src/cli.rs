@@ -201,6 +201,13 @@ pub enum InternalCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Release eligible Rework-only holds using a fresh recorded approval.
+    /// Sensitive or composed holds still require a human clear.
+    // trace:STORY-1687 | ai:codex
+    AutoRelease {
+        /// PR to inspect; omit to inspect all local hold markers.
+        pr: Option<u64>,
+    },
     /// Inspect or provision the three repository-level merge-hold label definitions.
     // trace:BUG-1747 | ai:codex
     Labels {
@@ -1759,11 +1766,12 @@ pub enum SessionCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
-        /// Include stale leases in the listing. Default hides leases
-        /// whose worktree no longer exists OR which have no live
-        /// claude AND are >24h old. With --all, every lease renders
-        /// with a state column (live ● / dormant ◐ / stale ⚠).
+        /// Include stale harness leases in the listing. Every view has a
+        /// state column (live ● / dormant ◐ / stale ⚠). The default view
+        /// keeps every spec-scoped lease, even a stale one, because it
+        /// still blocks dispatch; it hides only stale harness leases.
         // trace:TASK-55 | ai:claude
+        // trace:TASK-1743 | ai:claude
         #[clap(long)]
         all: bool,
         /// Emit the lease list as JSON for machine consumers. Each lease
@@ -2411,6 +2419,11 @@ pub enum RoleCommand {
         #[clap(long)]
         refuse_within: Option<String>,
     },
+
+    /// Emit a deduplicated informational tool-hook expiry notice.
+    // trace:BUG-2014 | ai:codex
+    #[clap(hide = true)]
+    ExpiryNotice,
 
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
