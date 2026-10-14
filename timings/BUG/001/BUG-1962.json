@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1962",
+  "publishes": [
+    {
+      "at": "2026-10-14T15:26:14.138010198Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T15:02:29.633189628Z",
+      "spec": "BUG-1962",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T18:36:52.693282288Z",
+      "spec": "BUG-1962",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T19:53:51.241655045Z",
+      "spec": "BUG-1962",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1962",
+        "branch": "bug-1962-work",
+        "first_seen": "2026-10-13T19:53:51.241588487+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T11:16:23.724100474Z",
+      "spec": "BUG-1962",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2598,
+        "verdict": "APPROVED",
+        "reviewed_sha": "28dbe03cd66ee602687570ddf6e3cefea6121e65"
+      }
+    },
+    {
+      "ts": "2026-10-14T15:26:14.123687258Z",
+      "spec": "BUG-1962",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a24e2e19cc8c5eae0b004e7e8dcf250a29f9d38f",
+        "pr": 2598,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
