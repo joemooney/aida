@@ -136,6 +136,14 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
+every = "15m"
+enabled = true
+
 [[schedule.jobs]]
 name = "performance-guard"
 command = "doctor check performance --fail-on-findings"

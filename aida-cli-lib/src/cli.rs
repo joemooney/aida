@@ -3037,6 +3037,15 @@ pub enum CacheCommand {
     /// Bring the cache current now; worker/scheduler forms drive the detached refresh protocol
     // trace:TASK-1527 | ai:claude
     Refresh {
+        /// Catch up the existing history index inline, without refreshing the requirements cache
+        // trace:STORY-1661 | ai:codex
+        #[clap(long, conflicts_with_all = ["worker", "if_requested", "cache"])]
+        history: bool,
+
+        /// Maintenance tick: catch up the existing history index only when it is behind
+        #[clap(long, requires = "history")]
+        if_behind: bool,
+
         /// Run as the detached refresh worker (internal; spawned automatically)
         #[clap(long, hide = true)]
         worker: bool,
