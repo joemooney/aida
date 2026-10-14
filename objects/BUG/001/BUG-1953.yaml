@@ -14,12 +14,12 @@ description: |
   - A test ships a PR by number from `main` with a lease on the PR head branch and asserts the lease is ended (or the BUG-61 inside-worktree skip is reported, not "nothing to clean up").
 
   Found by the night-fable review sweep of pr_ship post-merge cleanup. Related: BUG-733 (fixed the delete/stacked logic but not step 5). Size S.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T01:58:38.896055400Z
+modified_at: 2026-10-14T02:36:50.418442180Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -68,6 +68,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13845-0772-7733-802d-b4d1ddc0869e
+  author: aida-orchestrator
+  timestamp: 2026-10-14T02:36:50.418451487Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
@@ -77,3 +84,11 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-unavailable
+  detail: phase-1 PR/MR 2615 is Closed, not open
+  recovery_hint: 'CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1953 --auto-complete`.'
+  shelved_by: integrator
+  shelved_at: 2026-10-14T02:36:50.418442180Z
