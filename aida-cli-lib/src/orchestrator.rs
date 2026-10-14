@@ -230,7 +230,7 @@ pub(crate) fn read_live_run(project_root: &Path, token: &str) -> Option<RunMarke
     let path = run_path(project_root, token)?;
     let marker: RunMarker = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
     let state = drain_state::DrainState::read(project_root)?;
-    (process_probe::pid_is_alive(state.orchestrator_pid)
+    (state.orchestrator_alive()
         && process_probe::pid_is_alive(marker.pid)
         && state.members.iter().any(|m| m.spec == marker.spec))
     .then_some(marker)
