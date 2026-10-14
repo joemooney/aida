@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T16:25:09.603045209Z
+modified_at: 2026-10-14T17:40:09.348896397Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -110,6 +110,12 @@ comments:
   content: 'Rework round 2 complete: all git subprocesses bounded with timeouts, total worst-case linkage sum strictly capped at 4100ms under 5000ms ceiling, fixture populated with commits/branch/traces, latency test asserts populated linkage under 2s hang guard. CI green at d3112202407a86215ad6c0fd3d47bf735bc693be (PR #2620).'
   created_at: 2026-10-14T16:25:09.603045209Z
   modified_at: 2026-10-14T16:25:09.603045209Z
+- id: 01a13b80-0a04-7643-80bc-5bb1cb39fa7f
+  author: joe
+  content: 'ADVISOR 2026-10-14: PR #2620 closed at the two-round cap; the budgets were below the real command cost, so show reported specs as unshipped. Next attempt: (1) per-phase timings in show telemetry, (2) budgets from measured costs on this repo, (3) a timeout renders as partial or unknown, (4) a slow git/gh shim test.'
+  created_at: 2026-10-14T17:40:09.348896397Z
+  modified_at: 2026-10-14T17:40:09.348896397Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
