@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2004",
+  "publishes": [
+    {
+      "at": "2026-10-14T11:30:37.982615022Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T12:24:21.813995083Z",
+      "spec": "BUG-2004",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T19:44:28.293955724Z",
+      "spec": "BUG-2004",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T19:53:51.242330297Z",
+      "spec": "BUG-2004",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2004",
+        "branch": "bug-2004-work",
+        "first_seen": "2026-10-13T19:53:51.242279832+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T07:14:25.723227442Z",
+      "spec": "BUG-2004",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2599,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2dd8397a3f6a3d0b6318c24819ae99eb1f3c8a65"
+      }
+    },
+    {
+      "ts": "2026-10-14T11:30:37.962123262Z",
+      "spec": "BUG-2004",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fb2265432829d1c3a72a48ede120936559791bfb",
+        "pr": 2599,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

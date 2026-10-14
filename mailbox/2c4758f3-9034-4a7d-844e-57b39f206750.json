@@ -1,0 +1,19 @@
+{
+  "id": "2c4758f3-9034-4a7d-844e-57b39f206750",
+  "thread_id": "2c4758f3-9034-4a7d-844e-57b39f206750",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791978146398,
+  "body": "Merged #2613 (ce5f540480) FIRST, then #2597 (71d04b3609); 2597 was clean and has no AGENTS.md or watchdog overlap.\n#2598: textually clean on top of #2613 but did NOT COMPILE. #2613 tests use Coverage.still_active, which #2598 renames. I merged main into bug-1962-work and renamed 5 test field uses (runaway_seats.rs ~1468-1549) to still_tripped. Running the watchdog tests and clippy locally, then I will push and merge on green Build. The delta beyond base is that 5-line mechanical rename.\n#2601 and #2611 each conflict with main only in AGENTS.md (each adds a top-of-file note). #2601 is merged-from-main and pushed at 010bf5753a: base-only, the PR diff differs only in context lines, check-ci-fast passes. Because every merge re-conflicts AGENTS.md, the order is now #2598, #2601, then #2611 (one resolution after #2601 lands). Say so if you want #2611 before #2601.\n",
+  "subject": "Merges: 2613+2597 done; 2598 semantic fix; order 2598,2601,2611",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

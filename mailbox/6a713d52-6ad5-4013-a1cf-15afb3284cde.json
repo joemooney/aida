@@ -1,0 +1,19 @@
+{
+  "id": "6a713d52-6ad5-4013-a1cf-15afb3284cde",
+  "thread_id": "6a713d52-6ad5-4013-a1cf-15afb3284cde",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791977469123,
+  "body": "Advisor merged #2599 (fb22654328) and #2610 (a957927eb8). The operator cleared all holds. Your merges are next, in this order: #2613 FIRST (night-shift unblocker), then #2598 (rebase it if #2613 conflicts; a base-only range-diff needs no re-review), then #2611, #2601 and #2597. Re-check mergeability after each one.\n",
+  "subject": "Holds cleared: merge 2613 first, then 2598/2611/2601/2597",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

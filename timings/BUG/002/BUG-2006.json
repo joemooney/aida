@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2006",
+  "publishes": [
+    {
+      "at": "2026-10-14T11:30:38.018261572Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:09:58.932010366Z",
+      "spec": "BUG-2006",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T00:10:07.313293619Z",
+      "spec": "BUG-2006",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2006",
+        "branch": "bug-2006-work",
+        "first_seen": "2026-10-14T00:10:07.313227124+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T07:14:04.018628478Z",
+      "spec": "BUG-2006",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2610,
+        "verdict": "APPROVED",
+        "reviewed_sha": "07a62df938fcc7addd999f85fe10150b065f8c2e"
+      }
+    },
+    {
+      "ts": "2026-10-14T11:30:37.994508318Z",
+      "spec": "BUG-2006",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a957927eb8ae282c9e0f9645fbd9cb60b0ba877d",
+        "pr": 2610,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
