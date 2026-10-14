@@ -62,12 +62,21 @@ fn git(repo: &Path, home: &Path, args: &[&str]) {
 fn write_stale_lease(repo: &Path, id: &str, scope: &str) {
     let started = "2020-01-01T00:00:00Z";
     let missing = repo.join("missing-worktrees").join(id);
-    let body = format!(
-        "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{id}\"\nowner = \"tester\"\n\
-         worktree_path = \"{}\"\nbranch = \"{id}-branch\"\nstarted_at = \"{started}\"\n\
-         hostname = \"test\"\nrole = \"implementer\"\n",
-        missing.display()
-    );
+    let mut lease = toml::map::Map::new();
+    for (k, v) in [
+        ("id", id.to_string()),
+        ("scope", scope.to_string()),
+        ("slug", id.to_string()),
+        ("owner", "tester".to_string()),
+        ("worktree_path", missing.display().to_string()),
+        ("branch", format!("{id}-branch")),
+        ("started_at", started.to_string()),
+        ("hostname", "test".to_string()),
+        ("role", "implementer".to_string()),
+    ] {
+        lease.insert(k.to_string(), toml::Value::String(v));
+    }
+    let body = toml::to_string(&toml::Value::Table(lease)).unwrap();
     let dir = repo.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
