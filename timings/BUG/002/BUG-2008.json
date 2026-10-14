@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2008",
+  "publishes": [
+    {
+      "at": "2026-10-14T01:44:43.124495571Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:10:02.770182144Z",
+      "spec": "BUG-2008",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T00:10:07.412820313Z",
+      "spec": "BUG-2008",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2008",
+        "branch": "bug-2008-work",
+        "first_seen": "2026-10-14T00:10:07.412791685+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:36:43.452294545Z",
+      "spec": "BUG-2008",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2605,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b6775ca8120b89266547818f3a2775db5802319c"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:44:43.104265197Z",
+      "spec": "BUG-2008",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "014a28d3f7621809d6a6ccc7c7972e42df00d972",
+        "pr": 2605,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
