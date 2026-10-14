@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:23.530993833Z
-modified_at: 2026-10-14T03:29:40.334506046Z
+modified_at: 2026-10-14T03:30:27.262613384Z
 req_type: Bug
 comments:
 - id: 01a1380f-10d5-79b1-b05f-5558c567aaaf
@@ -32,6 +32,34 @@ comments:
   content: 'FACTORY DRAFT: PR #2613 at 8d5b60d146d52f1bb33213f407b14e1208d9efb9. All 27 check-ci-fast gates passed before push. Draft factory PR: https://github.com/joemooney/aida/pull/2613'
   created_at: 2026-10-14T01:44:54.023339241Z
   modified_at: 2026-10-14T01:44:54.023339241Z
+- id: 01a13876-1d3e-7c33-a869-77f15bb0f0c1
+  author: joe
+  content: |-
+    REQUEST CHANGES (round 1): #2613 (BUG-2120) at 8d5b60d146d52f1bb33213f407b14e1208d9efb9. Fresh strict reviewer; the verdict is recorded. Tests pass (76/76, three repeats) and the branch merges cleanly into origin/main. One blocking fail-open:
+
+    **B1. A live session can be judged dead, which is the BUG-1589 regression that acceptance 2 forbids.**
+    - Where: `aida-cli-lib/src/runaway_seats.rs:960-963` together with `registry_attribution` (:256-279).
+    - Cause: a resumed Claude session keeps its session id, and its old registry entries with dead PIDs stay on disk next to the new live one. `registry_attribution` collects them in a HashMap, so whichever file `read_dir` returns last wins.
+    - Effect: if a dead-PID entry wins, `holder_alive` is false and the mail-poll finding clears even though the transcript shows fresh activity.
+    - This happens on this machine: 27 session ids under `.aida/agents` have several entries, up to 7 PIDs each.
+    - Reproduced: with 8 dead entries and 1 live entry for the same session id, `registry_attribution` returned the dead pid in 3 of 3 runs.
+
+    Required fix: treat the holder as dead only when NO un-ended registry entry for that session id has a live PID. Either prefer a live (or most recent) entry in attribution, or carry every PID through.
+
+    Required test: several dead entries plus one live entry for the same session id, in both file orders, with a recent poll. It must still trip `mail-poll-setup`.
+
+    **Should fix in this round (both mutations survived):**
+    2. The window-start boundary is unpinned (:958). Changing `>=` to `>` clears one minute early. Assert that activity exactly `window_minutes - 1` minutes old keeps the finding active.
+    3. The fallback for older saved state (no `last_activity_minute`, :957) is untested. Dropping the fallback, or using the first bucket, both survive. Add a test that loads saved state without the field and checks that a recent poll still trips.
+
+    Non-blocking:
+    - `touch_session_start_agent` (agent_registry.rs:569) falls back to the short-lived hook PID when it can't find the claude ancestor. That would also clear a live session. It isn't observed today.
+    - A future timestamp counts as "not recent", and because last_activity_minute is a running max, one skewed line hides later activity. Counting future timestamps as recent would fail closed.
+
+    Post FACTORY READY at the new head. This PR is priority (it unblocks the night shift), so it gets re-reviewed immediately.
+  created_at: 2026-10-14T03:30:27.262613384Z
+  modified_at: 2026-10-14T03:30:27.262613384Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a1380e-c224-7633-aae2-ccc714ccde6a
   author: aida-session-start
