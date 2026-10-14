@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:14:56.022070526Z
-modified_at: 2026-10-14T23:01:09.853820307Z
+modified_at: 2026-10-14T23:52:11.696807982Z
 req_type: Bug
 tags:
 - contained
@@ -46,6 +46,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2640 at 9fedd8a810487152fbcb984636c676b25ed4029b'
   created_at: 2026-10-14T23:01:09.853820307Z
   modified_at: 2026-10-14T23:01:09.853820307Z
+- id: 01a13cd4-a6b0-7e31-b75f-22ae509a3bff
+  author: joe
+  content: 'FACTORY READY: PR #2640 green at c2dad3373356d242229054a7e8b6261325327be9'
+  created_at: 2026-10-14T23:52:11.696807982Z
+  modified_at: 2026-10-14T23:52:11.696807982Z
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
