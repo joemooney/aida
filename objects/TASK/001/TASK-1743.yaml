@@ -12,8 +12,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T22:16:03.363236907Z
-modified_at: 2026-10-13T22:16:03.363236907Z
+modified_at: 2026-10-14T18:29:47.179586669Z
 req_type: Task
+comments:
+- id: 01a13bad-7a2b-7f42-bd79-35a9342f882f
+  author: joe
+  content: 'Deterministic repro (2026-10-14, main ffab18d692): `RUST_MIN_STACK=8388608 cargo test -p aida-cli-lib --lib -- advisor` fails hermetic_guard_defeats_a_leased_advisor_roster every time (110 tests in the filter set) with ''ambient identity is the hermetic id''. The test passes alone. So a sibling test in that set leaks HERMETIC_TEST_USER into the process-wide identity.'
+  created_at: 2026-10-14T18:29:47.179586669Z
+  modified_at: 2026-10-14T18:29:47.179586669Z
+  session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
