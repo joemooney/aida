@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T20:00:40.622035844Z
+modified_at: 2026-10-14T20:27:05.350888602Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -134,6 +134,12 @@ comments:
   created_at: 2026-10-14T20:00:40.622035844Z
   modified_at: 2026-10-14T20:00:40.622035844Z
   session_id: bf89205c-934c-4d25-9540-c55d7da46b72
+- id: 01a13c18-df06-7900-91fa-731a1091a686
+  author: joe
+  content: 'Slice 5 opened as #2635: the default-branch shipped scan (the TOON linkage line + completion warning) now shares one 3 s deadline; a timeout reads shipped=unknown / files=unknown and the warning stays silent. Remaining: resolve_default_branch_ref and worktree-list bounds, and the overall in-flight budget sum.'
+  created_at: 2026-10-14T20:27:05.350888602Z
+  modified_at: 2026-10-14T20:27:05.350888602Z
+  session_id: e130049a-3361-4749-9068-b3e8a10decc0
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
