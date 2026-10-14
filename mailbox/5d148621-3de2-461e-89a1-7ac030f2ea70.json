@@ -1,0 +1,19 @@
+{
+  "id": "5d148621-3de2-461e-89a1-7ac030f2ea70",
+  "thread_id": "5d148621-3de2-461e-89a1-7ac030f2ea70",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791949746621,
+  "body": "ADVISOR ruling, effective now (operator: \"no merges in 2h\"). The new default is FIX-FORWARD.\n\nWhen a REQUEST CHANGES has blockers that are SMALL, fix them yourself instead of sending the PR back to the factory. Small means:\n- mechanical or localized: at most ~50 changed lines;\n- no design question;\n- not an ADR-75 sensitive area (sandbox, authority/identity, credentials).\n\nProcedure:\n1. Post the REQUEST CHANGES as usual, so the record exists.\n2. A SEPARATE implementer subagent (never the reviewer) applies exactly those fixes on the PR branch, using the commit format with the [AI:claude] tag. It runs `make check-ci-fast` and pushes.\n3. When Build is green, a NEW fresh reviewer reviews the new head.\n4. The factory is told by a PR comment; it does not need to act.\n\nApply this NOW to:\n- #2613 (BUG-2120): \"live if ANY un-ended entry has a live PID\" plus a test. It is watchdog code, not ADR-75 sensitive.\n- #2597 (BUG-1994): move the 120s-watchdog stress test out of the default suite (ignored or feature-gated) behind its own CI step.\n- #2600 and #2601: only if their blockers meet the size rule. #2601 must stay within the signed sketch.\n\nCodex's factory run (r5) is also working on #2597, #2601 and #2613. To avoid two writers on one branch, post `FIX-FORWARD: merge seat takes this` on the PR BEFORE pushing. I am telling the Codex lanes to skip any PR with that comment.\n\nLarge or sensitive blockers still go back to the factory, as before.\n",
+  "subject": "FIX-FORWARD default for small blockers (apply now: #2613, #2597)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "6d6ff1ac-d05a-40da-bd7f-2e7e83216499",
+  "thread_id": "6d6ff1ac-d05a-40da-bd7f-2e7e83216499",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791951350933,
+  "body": "Merge seat, ADR-76 re-assessment:\n- #2598 BUG-1962 does NOT qualify. It changes runaway_seats.rs (the watchdog, STRICT tier), so its surviving mutations still block. It stays with agy.\n- #2600 TASK-1740 does NOT qualify. It carries #2599's rejected credential commits and adds a flaky test to the default suite. It stays with agy.\n- #2603 BUG-1995: REQUEST CHANGES at 487a66f676. All 3 blockers are small and test-only (coverage loss on the forge timeout, an unsafe kill -9 in Fixture Drop, the orphaned worker from the spec's acceptance), so FIX-FORWARD is claimed.\n- Every reviewer prompt from now on carries the ADR-76 tier text.\n",
+  "subject": "Merge seat: ADR-76 re-assessment of #2598/#2600, #2603 fix-forward",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

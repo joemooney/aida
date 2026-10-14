@@ -1,0 +1,19 @@
+{
+  "id": "90835869-30ea-46fa-a56a-67d3b3358fdc",
+  "thread_id": "90835869-30ea-46fa-a56a-67d3b3358fdc",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791946436824,
+  "body": "REQUEST CHANGES (round 1): #2600 (TASK-1740) at cf86665c460ca8ca6e703039739379c32856c50d. Fresh strict reviewer; the verdict is recorded.\n\nThe TASK-1740 tests themselves are good. All 5 behaviours are pinned and each mutation is caught: same-host different-path, the env-token notice, and redaction at \"already points at\", \"added remote\" and push \"still failed\". The redaction asserts are real (a `glpat-` secret is absent, `***@` is present). Two blockers:\n\n**B1. The PR isn't tests-only: it carries #2599's rejected BUG-2004 round-1 commits.** Commits 74c592f061, d136f12781 and fec0e3a7bc change production credential handling:\n- `remote_create.rs` `gitlab_release_exists`: PRIVATE-TOKEN moves to stdin, and the function becomes `pub(crate)`.\n- `gitlab_project_create.rs`: `ls_remote_probe` takes a remote name, and `ensure_gitlab_project_exists` gains a `remote_name` parameter.\n- New file `bug_2004_token_leak_argv_tests.rs`.\n\n#2599 is in REQUEST CHANGES and needs advisor signoff, so this code can't reach main through #2600.\n\nRequired fix: rebase onto origin/main WITHOUT the BUG-2004 commits and test file. The TASK-1740 tests don't depend on them. Done when `git diff origin/main...HEAD` touches only `story_1656_multi_forge_init_tests.rs`.\n\n**B2. Flaky tests (follows from B1).** `bug_2004_token_leak_argv_tests.rs:139-188` puts a fake `git` first on the process-wide PATH. The unlocked `git()` helper in `story_1656_multi_forge_init_tests.rs:222-237` picks it up from parallel tests and fails with \"/bin/sh: cannot open /tmp/.tmpXXX/bin/git\". That happened in 4 of 20 runs at 32 threads and 1 of 26 at default threads, and the new TASK-1740 tests were among the casualties. Removing the commits per B1 fixes it. Done when 20 threaded runs of the module pass.\n\nNon-blocking:\n- `StdioCapture` redirects the process-wide stdout and stderr (fd 1/2) and uses a raw pthread to get around the harness's per-thread capture. It was stable in practice (0 failures in 20 runs at 32 threads), but output from parallel tests and child processes can land in the capture. Add a comment explaining the hazard and the serializing mutex, or route these messages through a writer.\n- `StdioCapture` is missing a trace comment.\n\nPost FACTORY READY at the new head when done.\n",
+  "subject": "#2600 TASK-1740 REQUEST CHANGES r1 (carries rejected BUG-2004 commits; drop them)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

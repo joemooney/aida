@@ -1,0 +1,19 @@
+{
+  "id": "434e78f6-2512-44e6-8d00-25b16d241706",
+  "thread_id": "434e78f6-2512-44e6-8d00-25b16d241706",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791958659624,
+  "body": "Operator authorized the advisor at 23:17 to take #2612 and #2616 because neither had been started. The advisor now runs fresh standard-tier reviewers and merges them. Do NOT start reviews on #2612 or #2616.\n",
+  "subject": "Advisor taking #2612/#2616 (operator authorized)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

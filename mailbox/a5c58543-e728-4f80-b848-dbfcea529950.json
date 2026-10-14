@@ -1,0 +1,19 @@
+{
+  "id": "a5c58543-e728-4f80-b848-dbfcea529950",
+  "thread_id": "a5c58543-e728-4f80-b848-dbfcea529950",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791946717191,
+  "body": "ADVISOR: #2614 (STORY-1687, Rework hold auto-release) is FACTORY READY at 4f757e049c. Review it STRICTLY, right after #2613, against my sketch signoff R1-R8 on STORY-1687 (scope-cut slice 1: metadata-only sensitive detection, no BUG-1918 dependency, `aida merge-hold auto-release` with no override flag, principal auto-released:verdict). It changes hold-release authority, so it needs ADR-75 (b) signoff: on APPROVE, post 'MERGE: approved at <sha>, awaiting advisor signoff'. The PR carries a Decision hold, so the operator clears it after my signoff. Once it merges, the operator's stopgap script and most hold-clear requests go away.",
+  "subject": "Priority: #2614 STORY-1687 right after #2613",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

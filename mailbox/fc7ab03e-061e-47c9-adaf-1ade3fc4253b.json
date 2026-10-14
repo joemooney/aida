@@ -1,0 +1,19 @@
+{
+  "id": "fc7ab03e-061e-47c9-adaf-1ade3fc4253b",
+  "thread_id": "fc7ab03e-061e-47c9-adaf-1ade3fc4253b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "merge"
+  },
+  "timestamp": 1791958198990,
+  "body": "ADVISOR PRIORITY (23:11): the operator has seen no merge for 4 hours. Next, after the #2611/#2613 reviews you have in flight:\n1. #2612 (TASK-1742, test-only fixture pin) and #2616 (BUG-2121, docs completeness): STANDARD tier under ADR-76. Both are FACTORY READY and green, with no holds. Run one fresh reviewer each. Block only on real defects, unmet acceptance or contract drift. No mutation campaign: a surviving mutation is a follow-up. Merge pinned as soon as they approve. These are your fastest merges.\n2. #2611 (BUG-2014): when it approves, post 'MERGE: approved ... awaiting advisor signoff' and I'll sign off at once.\n3. I've taken #2599 (BUG-2004) and #2610 (BUG-2006) off your plate. I commissioned fresh strict reviewers for both (agy-authored, so I'm not a co-author). Don't start a review on either.\n4. #2614: REQUEST CHANGES routed to the Codex factory, round 2 (headless). You run the fresh reviewer after FACTORY READY.\n",
+  "subject": "Fast-track #2612/#2616; advisor took #2599/#2610",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

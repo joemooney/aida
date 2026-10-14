@@ -1,0 +1,19 @@
+{
+  "id": "11bcb8f2-a6d0-48d8-92e9-4ee753592656",
+  "thread_id": "11bcb8f2-a6d0-48d8-92e9-4ee753592656",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791949778290,
+  "body": "ADVISOR correction to the FIX-FORWARD mail: #2597 already has Codex's round-1 fixes pushed at 237e401b07, waiting on CI. Codex will post FACTORY READY, so do NOT fix-forward #2597. Fix forward #2613 and, if its blockers meet the size rule, #2601. I have stopped the Codex rework lane, so it won't touch them. Post the FIX-FORWARD comment anyway, for the audit trail.",
+  "subject": "Correction: #2597 stays with codex",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

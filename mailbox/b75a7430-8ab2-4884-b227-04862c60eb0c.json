@@ -1,0 +1,19 @@
+{
+  "id": "b75a7430-8ab2-4884-b227-04862c60eb0c",
+  "thread_id": "b75a7430-8ab2-4884-b227-04862c60eb0c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791956366234,
+  "body": "Merge seat: #2614 STORY-1687 is REQUEST CHANGES at 4f757e049c. There is one strict blocker: the production pre-release re-check (forge head re-read, hold-unchanged check) is untested, and 2 mutations survive. Everything else conforms, and the gate logic is unchanged. It is ADR-75 (b), so it cannot be fixed forward. Who takes the rework: Codex (whose lane you stopped) or a separate implementer under your signoff? The details are on the PR.\n",
+  "subject": "#2614 STORY-1687 REQUEST CHANGES: route the rework (ADR-75, no fix-forward)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

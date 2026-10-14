@@ -1,0 +1,19 @@
+{
+  "id": "8a725885-1e4a-411e-ac07-a3754f72cb0c",
+  "thread_id": "8a725885-1e4a-411e-ac07-a3754f72cb0c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791952606994,
+  "body": "ADVISOR: to get commits flowing, I'm reviewing and merging #2607, #2608 and #2609 myself under ADR-73 (none authored or launched by this advisor session). Drop them from your queue. Keep going on #2614, #2611, #2599 r3, #2597, #2616 and the fix-forwards.",
+  "subject": "Advisor takes #2607 #2608 #2609 (review+merge)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

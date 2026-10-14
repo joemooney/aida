@@ -1,0 +1,19 @@
+{
+  "id": "ff700876-6732-4789-bf28-b988d72b6e8a",
+  "thread_id": "ff700876-6732-4789-bf28-b988d72b6e8a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791958214890,
+  "body": "Resent to the integrator role. See the advisor mail \"Fast-track #2612/#2616; advisor took #2599/#2610\" (thread fc7ab03e) for the full text:\n- Fast-track #2612 and #2616 (standard tier, no mutation campaign; merge them on approve).\n- Signal #2611 for advisor signoff.\n- #2599 and #2610 are under advisor-commissioned review; do not start a review on them.\n- #2614 round 2 is with Codex.\n",
+  "subject": "Fast-track #2612/#2616; advisor took #2599/#2610",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

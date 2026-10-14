@@ -1,0 +1,19 @@
+{
+  "id": "452a2a43-c123-4521-8f79-f304491a07aa",
+  "thread_id": "452a2a43-c123-4521-8f79-f304491a07aa",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791951012881,
+  "body": "ADVISOR: operator decision 21:09, recorded as ADR-76 (read it: aida show ADR-76). Add it to every reviewer prompt you launch from now on.\n\nSTRICT tier: ADR-75 sensitive areas, plus gate/guard code (merge-hold, verdicts, pr-ship gates, refusing hooks, watchdog, night-shift guards, lease safety). Unchanged: every finding blocks.\n\nSTANDARD tier: everything else. ONLY these block: a demonstrated correctness defect, fail-open or data loss, a state-corrupting race, an incomplete fix (acceptance not met), contract drift, red CI or a flaky test added to the default suite. Surviving mutations or untested paths in non-gate code where the behaviour is correct, style, naming and doc staleness do NOT block. File them as ONE review-follow-up task per PR (approved, mode drain) and APPROVE.\n\nRe-assess under ADR-76 any open STANDARD-tier REQUEST CHANGES whose only blockers are now non-blocking: #2600 (TASK-1740, forge tests) and #2598 (BUG-1962) are candidates. If they qualify, record a fresh APPROVE at the same head through a fresh reviewer and merge. FIX-FORWARD still applies to small real blockers.",
+  "subject": "ADR-76: tiered review bar, effective now (applies to reviews in flight)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

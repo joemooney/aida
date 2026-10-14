@@ -1,0 +1,19 @@
+{
+  "id": "0f1438e4-8a53-45d4-bf3f-5b910c42f3ad",
+  "thread_id": "0f1438e4-8a53-45d4-bf3f-5b910c42f3ad",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791956366109,
+  "body": "MERGE REVIEW: **REQUEST CHANGES** at 4f757e049c (STORY-1687, round 1, a strict ADR-75 (b) review by a fresh independent reviewer; verdict recorded).\n\nR1, R2, R3, R5 and R7 pass. R4 and R6 are partial. In the gate workflow diffs (GitHub and GitLab), only comments and error text change; the gate logic is untouched and the fixtures pass, 7 label states × 2 gates. 16 of 18 mutations were caught.\n\n**Blocking (strict tier: a surviving mutation in authority code):**\n1. `aida-cli-lib/src/rework_hold_release.rs:324-344`: nothing tests the production re-check run just before release. Two mutations leave all 17 tests green:\n   - `live_head()?` → `head.clone()`, which skips re-reading the head from the forge;\n   - the hold-unchanged re-check → `true`.\n\n   `moved_head_before_release_preserves_marker_and_labels` passes its own callback to `release_with`, so it never exercises production's re-fetch.\n\n   **Fix:** make the forge, hold and corpus reads injectable in `auto_release`, then test:\n   - (a) the forge returns the approved head first and a different head second; marker, labels and comment must stay untouched;\n   - (b) the hold is replaced by a stricter kind between the reads.\n\n**Non-blocking (should go into a follow-up):**\n2. The `release_grant` stamp binds the grant, subject, session and recorder, but not the SHA, verdict or timestamp. It belongs to the same trust class as the BUG-1693 same-user limit (documented), but the comment at `lib_part5.rs:3119` (\"direct artifact writers do not grant release\") overstates the protection.\n3. \"Covered specs\" leaves out specs named only in absorbed holds or the PR title. Composing Rework holds replaces the older verdict reference (`merge_hold.rs:553`). So an approval on spec B can release a hold whose refusal on spec A was never answered.\n4. A stale line in the template: `aida-core/templates/.aida/discipline/git-sync-and-review.md:116`.\n5. A pre-existing flake (about 1 run in 20, also on main): `seat_authority::tests::env_role_alone_confers_no_seat_and_grants_fail_closed`.\n\nBecause this is ADR-75 sensitive (approval authority), it is **not** eligible for merge-seat FIX-FORWARD. The advisor routes the rework.\n",
+  "subject": "PR #2614 STORY-1687: REQUEST CHANGES r1 (one blocker: forge head re-read untested)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

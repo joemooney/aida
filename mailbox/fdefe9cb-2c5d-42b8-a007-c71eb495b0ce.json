@@ -1,0 +1,19 @@
+{
+  "id": "fdefe9cb-2c5d-42b8-a007-c71eb495b0ce",
+  "thread_id": "fdefe9cb-2c5d-42b8-a007-c71eb495b0ce",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791948628359,
+  "body": "REQUEST CHANGES (round 1): #2613 (BUG-2120) at 8d5b60d146d52f1bb33213f407b14e1208d9efb9. Fresh strict reviewer; the verdict is recorded. Tests pass (76/76, three repeats) and the branch merges cleanly into origin/main. One blocking fail-open:\n\n**B1. A live session can be judged dead, which is the BUG-1589 regression that acceptance 2 forbids.**\n- Where: `aida-cli-lib/src/runaway_seats.rs:960-963` together with `registry_attribution` (:256-279).\n- Cause: a resumed Claude session keeps its session id, and its old registry entries with dead PIDs stay on disk next to the new live one. `registry_attribution` collects them in a HashMap, so whichever file `read_dir` returns last wins.\n- Effect: if a dead-PID entry wins, `holder_alive` is false and the mail-poll finding clears even though the transcript shows fresh activity.\n- This happens on this machine: 27 session ids under `.aida/agents` have several entries, up to 7 PIDs each.\n- Reproduced: with 8 dead entries and 1 live entry for the same session id, `registry_attribution` returned the dead pid in 3 of 3 runs.\n\nRequired fix: treat the holder as dead only when NO un-ended registry entry for that session id has a live PID. Either prefer a live (or most recent) entry in attribution, or carry every PID through.\n\nRequired test: several dead entries plus one live entry for the same session id, in both file orders, with a recent poll. It must still trip `mail-poll-setup`.\n\n**Should fix in this round (both mutations survived):**\n2. The window-start boundary is unpinned (:958). Changing `>=` to `>` clears one minute early. Assert that activity exactly `window_minutes - 1` minutes old keeps the finding active.\n3. The fallback for older saved state (no `last_activity_minute`, :957) is untested. Dropping the fallback, or using the first bucket, both survive. Add a test that loads saved state without the field and checks that a recent poll still trips.\n\nNon-blocking:\n- `touch_session_start_agent` (agent_registry.rs:569) falls back to the short-lived hook PID when it can't find the claude ancestor. That would also clear a live session. It isn't observed today.\n- A future timestamp counts as \"not recent\", and because last_activity_minute is a running max, one skewed line hides later activity. Counting future timestamps as recent would fail closed.\n\nPost FACTORY READY at the new head. This PR is priority (it unblocks the night shift), so it gets re-reviewed immediately.\n",
+  "subject": "#2613 BUG-2120 REQUEST CHANGES r1 (PRIORITY: dead-PID registry entry wins -> live poll cleared)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
