@@ -1,5 +1,6 @@
 id: 01a137af-0eb1-7bf2-90a5-f04ce3745a6f
 spec_id: TASK-1-298
+agreed_id: TASK-1368
 title: 'leases.rs:2549/2593 - session_leases rendering itself is still not exercised: i…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2002, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
