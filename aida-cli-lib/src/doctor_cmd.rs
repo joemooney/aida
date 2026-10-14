@@ -6440,13 +6440,18 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
                 &rows,
             ));
         }
-        if !c.still_active.is_empty() {
+        // trace:BUG-1962 | ai:antigravity
+        if !c.still_tripped.is_empty() {
             let rows = c
-                .still_active
+                .still_tripped
                 .iter()
                 .map(|v| vec![v.clone()])
                 .collect::<Vec<_>>();
-            blocks.push(table_raw("runaway_seats_still_active", &["finding"], &rows));
+            blocks.push(table_raw(
+                "runaway_seats_still_tripped",
+                &["finding"],
+                &rows,
+            ));
         }
     }
     if let Some(v) = &report.error {
@@ -13879,6 +13884,26 @@ mod bug_1505_review_verdict_doctor_tests {
         assert_eq!(
             normalize_doctor_category("verdicts").unwrap(),
             "review-verdicts"
+        );
+    }
+
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn render_doctor_report_toon_includes_runaway_seats_still_tripped_table() {
+        let mut report = DoctorReport::default();
+        report.runaway_seats = Some(crate::runaway_seats::Coverage {
+            verdict: "tripped".to_string(),
+            still_tripped: vec!["compactions:sess-1".to_string()],
+            ..Default::default()
+        });
+        let rendered = render_doctor_report_toon(&report);
+        assert!(
+            rendered.contains("runaway_seats_still_tripped"),
+            "TOON output must include runaway_seats_still_tripped table: {rendered}"
+        );
+        assert!(
+            rendered.contains("compactions:sess-1"),
+            "TOON output must list still tripped finding: {rendered}"
         );
     }
 }
