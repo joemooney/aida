@@ -1,0 +1,55 @@
+id: 01a137b5-84f2-78f3-8c06-ab9efbf1fff1
+spec_id: STORY-1687
+agreed_id: STORY-1687
+title: A Rework merge-hold releases itself on a fresh independent APPROVE at the current head, so approved PRs do not wait on operator presence
+description: |
+  ## Problem
+
+  On 2026-10-13 main received no commits from 09:01 to 16:50 while the merge seat worked the whole time. Three PRs were approved by a fresh, independent merge-seat reviewer at a pinned head with Build green, then waited only on `aida merge-hold clear` at a human TTY:
+
+  | PR | Spec | Approved | Merged | Waited |
+  |---|---|---|---|---|
+  | #2592 | BUG-2005 | 13:08 | 16:50 | ~3h45m |
+  | #2596 | BUG-2002 | 15:16 | 16:52 | ~1h35m |
+  | #2595 | BUG-1999 | 16:08 | 16:51 | ~45m |
+
+  All three holds were of kind `Rework` (`HoldReasonKind::Rework`, aida-cli-lib/src/merge_hold.rs). A previous REQUEST CHANGES verdict armed the hold automatically (BUG-1773/1774 verdict-corpus machinery), and BUG-1693 made every release require a recorded human clearance. For a Rework hold, the premise ("this head was rejected") is fully answered by a later APPROVED verdict from an independent reviewer at the PR's current head. `aida merge-hold list` already detects that state and flags it `premise stale`. The hold then guards nothing, but it still costs operator presence. Whenever the operator is away, every factory PR that needed even one rework round stops at the gate.
+
+  ## Proposal
+
+  When the only hold on a PR is of kind `Rework`, a fresh APPROVED verdict releases it automatically and records the release as `auto-released:verdict` rather than `human:<user>`. The verdict must:
+  1. be recorded at the PR's current head SHA,
+  2. come from a reviewer seat that is independent of the author, under a valid grant (the same independence rule `aida review record` enforces), and
+  3. post-date the REQUEST CHANGES verdict that armed the hold.
+
+  Nothing else changes:
+  - `Supervision`, `Recusal`, `Decision` and `Unknown` holds keep the human-TTY floor. When a Rework hold composes with any stricter kind, the stricter kind wins (BUG-1691 strictness), so no auto-release happens.
+  - Specs that require ADVISOR SIGNOFF (ADR-73 cond. 5: security, authority, contained-sandbox) also keep the human clear, even if their hold is only Rework.
+  - The release is visible: a PR comment and an `aida merge-hold list` history row naming the verdict file, the reviewer seat and the head SHA.
+
+  ## Acceptance criteria
+
+  1. A Rework-only hold whose spec needs no advisor signoff is released, and the merge-hold-gate check turns green, once an independent APPROVED verdict is recorded at the current head. No human action is needed.
+  2. An APPROVED verdict at a stale head, from the author's own seat, under an expired or rejected grant, or older than the arming verdict, does NOT release it. Each refusal reason is named.
+  3. Any composition with Supervision, Recusal, Decision or Unknown, and any spec flagged for advisor signoff, still requires `aida merge-hold clear` at a human TTY. Regression tests cover each of these.
+  4. Every auto-release leaves an audit trail: a recorded clearance with principal `auto-released:verdict`, plus a PR comment.
+  5. Mutation tests: removing any one of the three verdict conditions makes a test fail.
+
+  ## Notes
+
+  This deliberately narrows the human-only integrity floor recorded in reference_merge_hold_clear_is_human_only (docs/agents/aida-repository-guide.md) and BUG-1693. It changes the architecture and policy of an integrity floor, so it needs a sketch on this spec and advisor signoff before implementation, and the floor docs must be updated in the same PR. The operator approved the direction on 2026-10-13 16:59.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T00:00:05.362176722Z
+modified_at: 2026-10-14T00:00:05.362176722Z
+req_type: Story
+filed_at:
+  code_sha: ccf36c0f4c33257f37d3f44da246bf388dfed114
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
