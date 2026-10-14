@@ -1,0 +1,23 @@
+id: 01a13994-f044-7bf3-9374-24757327c7e1
+spec_id: BUG-2125
+agreed_id: BUG-2125
+title: 'seat_authority tests flake: current_user_id(None) read outside the env lock while other tests set AIDA_USER'
+description: 'Found by the PR #2611 r2 review. seat_authority::tests::env_role_alone_confers_no_seat_and_grants_fail_closed (:1002/:1009) and role_display_validates_the_grant_store (:1109) fail about 2-4/60 in parallel loops, including on main 014a28d3f7 without #2611. Likely cause: these tests read current_user_id(None) outside the env lock while BUG-2011/BUG-2014 tests set AIDA_USER. Fix: take the shared env lock (or pass an explicit user) in these tests.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T08:43:44.580503001Z
+modified_at: 2026-10-14T08:43:44.580503001Z
+req_type: Bug
+tags:
+- flaky-test
+- review-follow-up
+filed_at:
+  code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
