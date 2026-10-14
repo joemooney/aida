@@ -13,6 +13,7 @@
 //! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
 //! recent descendant work from a finished seat.
 
+use crate::leases::SessionLease;
 use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 
@@ -479,6 +480,151 @@ fn find_launcher_ancestor_entry(
         entry.source == "agent-launcher"
             && registry_entry_is_live(project_root, entry)
             && pid_has_ancestor(child_pid, entry.pid)
+    })
+}
+
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn with_registry_lock<T, F: FnOnce() -> Result<T>>(
+    project_root: &Path,
+    f: F,
+) -> Result<T> {
+    use fs2::FileExt;
+    let dir = agents_dir(project_root);
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent registry dir {}", dir.display()))?;
+    let lock_path = dir.join(".registry.lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("opening registry lock {}", lock_path.display()))?;
+    file.lock_exclusive()
+        .with_context(|| format!("acquiring registry lock {}", lock_path.display()))?;
+    struct LockGuard<'a>(&'a std::fs::File);
+    impl<'a> Drop for LockGuard<'a> {
+        fn drop(&mut self) {
+            use fs2::FileExt;
+            let _ = self.0.unlock();
+        }
+    }
+    let _guard = LockGuard(&file);
+    f()
+}
+
+/// Update the current process's own registry entry under the registry lock.
+/// Preserves pause-state, ended_at, and verifies against AIDA_AGENT_NAME if set.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn update_current_process_entry(
+    project_root: &Path,
+    current_spec: &str,
+    worktree_path: &Path,
+) -> Result<()> {
+    let my_pid = std::process::id();
+    with_registry_lock(project_root, || {
+        let entries = load_entries(project_root);
+        if let Some((path, mut entry)) = entries.into_iter().find(|(_, e)| e.pid == my_pid) {
+            if let Ok(agent_name) = std::env::var("AIDA_AGENT_NAME") {
+                let trimmed = agent_name.trim();
+                if !trimmed.is_empty() && entry.name.as_deref() != Some(trimmed) {
+                    return Ok(());
+                }
+            }
+            entry.current_spec = Some(current_spec.to_string());
+            entry.worktree_path = worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| worktree_path.to_path_buf());
+            let body = toml::to_string_pretty(&entry)
+                .context("serialising updated agent registry entry")?;
+            aida_core::write_atomic(&path, body.as_bytes())?;
+        }
+        Ok(())
+    })
+}
+
+/// Resolve the live registered agent associated with the current session when minting a lease.
+/// Attributes ONLY to an `aida agent new` factory lane, verified against process hierarchy.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn resolve_session_agent_for_lease(project_root: &Path) -> Option<AgentRegistryEntry> {
+    let agent_name = std::env::var("AIDA_AGENT_NAME").ok()?;
+    let trimmed = agent_name.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let entries = load_entries(project_root);
+    let current_pid = std::process::id();
+
+    entries.into_iter().map(|(_, e)| e).find(|entry| {
+        // Must match name exactly
+        if entry.name.as_deref() != Some(trimmed) {
+            return false;
+        }
+        // Must be an `aida agent new` factory lane, not a Claude session-start hook or role-enter
+        if entry.source != "agent-launcher" {
+            return false;
+        }
+        // Must be a factory lane type (e.g. codex, antigravity), never a Claude operator session
+        if entry.agent_type == "claude"
+            || (!["codex", "antigravity"].contains(&entry.agent_type.as_str())
+                && std::env::var("AIDA_AGENT_TYPE")
+                    .map(|t| t != entry.agent_type)
+                    .unwrap_or(true))
+        {
+            return false;
+        }
+        // Must be currently alive
+        if !registry_entry_is_live(project_root, entry) {
+            return false;
+        }
+        // Anti-spoofing: caller must be the agent process or a child/descendant of it
+        if current_pid != entry.pid && !pid_has_ancestor(current_pid, entry.pid) {
+            return false;
+        }
+        true
+    })
+}
+
+/// Find a live registered agent that matches a lease by exact owner identity.
+/// Requires an exact owner match (lease.owner == agent.name or agent.id).
+/// No worktree-prefix matching in either direction.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn live_agent_for_lease_or_spec<'a>(
+    live_agents: &'a [AgentRegistryEntry],
+    lease: Option<&SessionLease>,
+    spec_id: Option<&str>,
+) -> Option<&'a AgentRegistryEntry> {
+    let lease = lease?;
+    live_agents.iter().find(|agent| {
+        // Exact owner-identity match: lease owner must match agent name or id
+        let owner_matches = agent
+            .name
+            .as_deref()
+            .map(|n| n == lease.owner)
+            .unwrap_or(false)
+            || agent.id == lease.owner;
+
+        if !owner_matches {
+            return false;
+        }
+
+        // If spec_id or lease.scope is specified and agent records current_spec, ensure it agrees
+        let target_spec = spec_id.or_else(|| {
+            if !lease.scope.is_empty() {
+                Some(&lease.scope)
+            } else {
+                None
+            }
+        });
+        if let Some(spec) = target_spec {
+            if let Some(agent_spec) = agent.current_spec.as_deref() {
+                if !agent_spec.eq_ignore_ascii_case(spec) {
+                    return false;
+                }
+            }
+        }
+
+        true
     })
 }
 
@@ -1482,7 +1628,7 @@ pub(crate) fn mcp_authority_status_lines_for_project(project_root: &Path) -> Vec
     mcp_authority_status_lines(&agents)
 }
 
-fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
+pub(crate) fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -1563,7 +1709,8 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
 }
 
 // trace:BUG-1156 | ai:codex
-fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
     if entry.ended_at.is_some() || !crate::process_probe::pid_is_alive(entry.pid) {
         return false;
     }
@@ -2278,6 +2425,11 @@ fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
 #[cfg(not(unix))]
 fn pid_has_ancestor(_child_pid: u32, _ancestor_pid: u32) -> bool {
     false
+}
+
+#[cfg(not(unix))]
+fn parent_pid(_pid: u32) -> Option<u32> {
+    None
 }
 
 #[cfg(not(unix))]

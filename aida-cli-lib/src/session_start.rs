@@ -1968,10 +1968,20 @@ pub(crate) fn session_start(
     // Compose lease.
     let id_long = uuid::Uuid::now_v7().to_string();
     let id = id_long.replace('-', "")[..12].to_string();
-    let owner = aida_core::git_ops::git_config_get("user.email")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "unknown".to_string());
+    // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set or
+    // an ancestor in the agent registry), attribute the lease to that agent's
+    // live process rather than a short-lived transient CLI / shell PID.
+    // trace:BUG-2010 | ai:antigravity
+    let session_agent = agent_registry::resolve_session_agent_for_lease(&project_root);
+    let owner = if let Some(ref agent) = session_agent {
+        agent.name.clone().unwrap_or_else(|| agent.id.clone())
+    } else {
+        std::env::var("AIDA_USER")
+            .ok()
+            .or_else(|| aida_core::git_ops::git_config_get("user.email").ok())
+            .or_else(|| std::env::var("USER").ok())
+            .unwrap_or_else(|| "unknown".to_string())
+    };
     // STORY-65 + TASK-67: role resolution by INTENT, not blind env
     // inheritance. Order:
     //   1. --role <name>             explicit override always wins
@@ -2027,8 +2037,17 @@ pub(crate) fn session_start(
     // even when cwd doesn't help. Best effort — if PPID isn't set / process
     // self-introspection fails, we leave the field None and fall back to
     // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
-    let creator_pid = creator_shell_pid();
-    let creator_pid_start_time = creator_pid.and_then(process_probe::process_start_identity);
+    let (creator_pid, creator_pid_start_time, active_pid, active_pid_start_time) =
+        if let Some(ref agent) = session_agent {
+            let pid = agent.pid;
+            let start = process_probe::process_start_identity(pid);
+            (Some(pid), start.clone(), Some(pid), start)
+        } else {
+            let creator_pid = creator_shell_pid();
+            let creator_pid_start_time =
+                creator_pid.and_then(process_probe::process_start_identity);
+            (creator_pid, creator_pid_start_time, None, None)
+        };
 
     let lease = SessionLease {
         id: id.clone(),
@@ -2044,8 +2063,8 @@ pub(crate) fn session_start(
         role: inherited_role.clone(),
         creator_pid,
         creator_pid_start_time,
-        active_pid: None,
-        active_pid_start_time: None,
+        active_pid,
+        active_pid_start_time,
         cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -2090,6 +2109,10 @@ pub(crate) fn session_start(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+
+    // Also update the current process's own registry entry if it is registered
+    // trace:BUG-2010 | ai:antigravity
+    let _ = agent_registry::update_current_process_entry(&project_root, owns, &worktree_path);
 
     // BUG-379: atomic-enough with the lease just persisted, bump
     // Approved → InProgress. Idempotent — if the spec already moved

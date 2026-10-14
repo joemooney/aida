@@ -2525,6 +2525,15 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
     // off the same data. trace:TASK-55 | ai:claude
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
+    let live_agents: Vec<agent_registry::AgentRegistryEntry> = find_main_worktree_root()
+        .map(|r| {
+            agent_registry::load_entries(&r)
+                .into_iter()
+                .map(|(_, e)| e)
+                .filter(|e| agent_registry::registry_entry_is_live(&r, e))
+                .collect()
+        })
+        .unwrap_or_default();
     let classified: Vec<(SessionLease, LeaseState, Option<u32>)> = leases
         .iter()
         .map(|l| {
@@ -2532,8 +2541,8 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
             // BUG-511: review-verb leases classify by creator PID, not worktree.
-            let state = lease_state_for(l, &live, now);
-            let pid = l
+            let mut state = lease_state_for(l, &live, now);
+            let mut pid = l
                 .active_pid
                 .filter(|p| process_probe::pid_is_alive(*p))
                 .or_else(|| live_in_worktree.map(|s| s.pid))
@@ -2542,6 +2551,19 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
                 } else {
                     None
                 });
+            // BUG-2010: a live registered agent (Codex, Antigravity, Claude) keeps the lease live
+            // even if its recorded pid was dead or transient.
+            // trace:BUG-2010 | ai:antigravity
+            if !matches!(state, LeaseState::Live) {
+                if let Some(agent) =
+                    agent_registry::live_agent_for_lease_or_spec(&live_agents, Some(l), None)
+                {
+                    state = LeaseState::Live;
+                    if pid.is_none() {
+                        pid = Some(agent.pid);
+                    }
+                }
+            }
             (l.clone(), state, pid)
         })
         .collect();
