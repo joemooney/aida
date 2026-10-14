@@ -565,6 +565,7 @@ mod usage_timeline_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -733,6 +734,7 @@ mod usage_perf_lens_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -1648,6 +1650,7 @@ mod task_872_read_write_audit_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 

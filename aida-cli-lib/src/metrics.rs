@@ -623,6 +623,7 @@ mod tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 

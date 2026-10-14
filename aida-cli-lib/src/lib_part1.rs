@@ -283,6 +283,8 @@ pub fn main_entry() {
             // in scheduler telemetry, not just as silent repeated failures.
             // trace:BUG-1600 | ai:claude
             schedule_source: usage::schedule_invocation_source(&argv),
+            // trace:BUG-1993 | ai:claude
+            phases: usage::take_phases(),
         };
         usage::append_event(&ev);
     }
