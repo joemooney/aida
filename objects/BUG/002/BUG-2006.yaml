@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:13.679762298Z
-modified_at: 2026-10-14T00:58:12.888042416Z
+modified_at: 2026-10-14T00:59:10.814616657Z
 req_type: Bug
 tags:
 - contained
@@ -37,6 +37,45 @@ comments:
   content: 'FACTORY READY: PR #2610 green at 4d0c049a59254b8938b062c8323778acaf5c6558'
   created_at: 2026-10-14T00:11:55.473119771Z
   modified_at: 2026-10-14T00:11:55.473119771Z
+- id: 01a137eb-9e5e-7402-a222-a4d4e933f10f
+  author: joe
+  content: |-
+    MERGE seat: **REQUEST CHANGES** on #2610 (BUG-2006) at 4d0c049a59254b8938b062c8323778acaf5c6558. This was a strict, fresh independent containment-security review, and the verdict is recorded.
+
+    **Blocking**
+    1. **Codex and Agy headless launches are told they're contained when they aren't (fails open).**
+       - `spawn_vendor_headless_with_seat` (`session.rs:1252`) and `exec_vendor_headless` (`session.rs:2998`) export `AIDA_CONTAINED=1` whenever `contained` is set.
+       - But `headless_vendor_args` (`session.rs:2000-2006`) only applies containment for Claude. Codex and Agy get their bypass argv regardless.
+       - `queue work` passes `contained` for any vendor (`queue_cmd.rs:12644`), even though it limits containment to Claude itself (`:12624`).
+       - **Result:** a Codex or Agy child gets `=1` while running fully bypassed. The variable must come from the same decision that applies the sandbox.
+    2. **The Codex reviewer path has the same problem.** The Codex arm of `interactive_reviewer_launch_plan` (`session.rs:1504-1525`) sets `plan.contained = contained`, but `codex_session_args` adds no sandbox. `spawn_reviewer_launch_plan` (`:1552`) then exports `=1`.
+    3. **A launch path is missed.**
+       - `exec_codex_session` (`session.rs:1442`, called from `queue_cmd.rs:12491`) neither sets nor strips the variable.
+       - `queue work` does `std::env::set_var("AIDA_CONTAINED","1")` for the whole process (`queue_cmd.rs:11119`), so this child inherits `=1` while uncontained.
+    4. **The spec's "a test per launch path" is not met.** These paths have no child-environment test:
+       - `exec_claude`, `run_claude_session`, `exec_claude_resume`;
+       - `exec_vendor_headless`;
+       - `agent_new_bg_dispatch`;
+       - `queue work`'s `remove_var`.
+
+       The mutations that drop each of these all survive the full aida-cli-lib suite.
+    5. **A new test is flaky.** `spawn_reviewer_launch_plan_contained_exports_aida_contained_and_uncontained_strips_it` failed 1 in 5 with "no valid parent seat grant is active" (`session.rs:7537`).
+       - **Cause:** it mints the grant with `current_user_id(None)` before taking the env lock, so a concurrent hermetic test can change `AIDA_USER` in between.
+       - The `spawn_claude_headless_resume` test (`:7712`) has the same pattern.
+       - **Fix:** use `AmbientGuard::hermetic_with_seat_and`, as the vendor_headless test already does.
+
+    **Suggested shape:** one function decides whether containment is *actually applied* for a given vendor and flag, for example `fn containment_applied(vendor, contained) -> bool`. It feeds both the argv builder and the env set/strip, so the two can't drift. Every launch path that runs an agent, including `exec_codex_session`, sets or strips the variable from it.
+
+    **Non-blocking**
+    - `is_contained_args` (`agent_launch.rs:4221`) guesses containment from argv. It reports contained for a user's own `--settings` file without `--permission-mode`, and misses `--settings=`, `-s`, `--sandbox=` and `--full-auto`. Prefer carrying the decision forward.
+    - `spawn_claude_resume` now resolves through `resolve_agent_program`, so `AIDA_AGENT_CMD` affects interactive resume. That's an unrelated production change; keep it only if it's intended.
+    - Some uncontained launchers never strip an inherited variable: `phase_driver.rs:2145`, `phase_driver_trait.rs:3683`, `burndown_run.rs:570/1997`, `autopilot_intake.rs:964`, `questions.rs:1623` and `compete.rs`. Consider stripping there too, or file a follow-up.
+    - **Readers today:** the only reader is `queue work` itself, where `=1` only makes a launch more restrictive, so nothing can be bypassed right now. Findings 1–3 would mislead any future reader that trusts the variable.
+
+    Push a new head and mark it FACTORY READY. The PR needs advisor SIGNOFF after approval.
+  created_at: 2026-10-14T00:59:10.814616657Z
+  modified_at: 2026-10-14T00:59:10.814616657Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13674-fa30-7603-9336-9657202fa1d8
   author: joe
