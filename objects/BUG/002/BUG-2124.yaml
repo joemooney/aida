@@ -12,11 +12,35 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:14:56.022070526Z
-modified_at: 2026-10-14T07:14:56.022070526Z
+modified_at: 2026-10-14T22:47:21.762084731Z
 req_type: Bug
 tags:
 - contained
 - follow-up
+comments:
+- id: 01a13c99-4ba2-7282-a4d9-9be86f1378de
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    1. Approach:
+    - Uncontained launchers (phase_driver, burndown_run, autopilot_intake, questions, compete) must route through session::containment_applied(vendor, contained) so an inherited AIDA_CONTAINED=1 is stripped via cmd.env_remove("AIDA_CONTAINED").
+    - Replace argv inference in is_contained_args with explicit containment tracking in AgentLaunchConfig (config.contained).
+    2. Files to change:
+    - aida-cli-lib/src/agent_launch.rs: Add contained: bool to AgentLaunchConfig; update is_contained_launch to check config.contained; replace is_contained_args.
+    - aida-cli-lib/src/lib_part2.rs: Set config.contained in apply_agent_default_flags when contained posture is applied.
+    - aida-cli-lib/src/phase_driver.rs: Use build_advisor_command which strips AIDA_CONTAINED.
+    - aida-cli-lib/src/phase_driver_trait.rs: Use build_ci_fix_command which strips AIDA_CONTAINED.
+    - aida-cli-lib/src/burndown_run.rs: Use build_burndown_quiet_command / build_burndown_verbose_command stripping AIDA_CONTAINED.
+    - aida-cli-lib/src/autopilot_intake.rs: Use build_autopilot_intake_command stripping AIDA_CONTAINED.
+    - aida-cli-lib/src/questions.rs: Use build_questions_clarify_command stripping AIDA_CONTAINED.
+    - aida-cli-lib/src/compete_cmd.rs: Use build_compete_arm_command / build_compete_judge_command stripping AIDA_CONTAINED.
+    3. Tests to add:
+    - One production-builder test per launcher asserting the child command strips AIDA_CONTAINED when uncontained.
+    - Tests for config.contained in AgentLaunchConfig and agent_launch_env_inputs.
+    4. Risks:
+    - Ensure no production launchers regress or change arguments. Builders construct identical Command with explicit env strip.
+  created_at: 2026-10-14T22:47:21.762084731Z
+  modified_at: 2026-10-14T22:47:21.762084731Z
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
