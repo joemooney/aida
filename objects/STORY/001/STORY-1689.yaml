@@ -1,0 +1,41 @@
+id: 01a13a49-05b9-7022-9371-928d91569c4e
+spec_id: STORY-1689
+agreed_id: STORY-1689
+title: Promote the live dev binary automatically when main moves and its CI is green
+description: |
+  On 2026-10-14 the live dev binary was still at 3163cc1b21 (built 2026-10-13 05:47) roughly 20 merges later, including the night-shift unblocker BUG-2120. Nothing promotes a new binary unless someone runs `aida dev build` in the primary checkout by hand, so agents run stale fixes for hours.
+
+  Operator stopgap in place: ~/bin/aida-autobuild.sh on cron every 30 min. It promotes only when the primary checkout is a clean `main`, origin/main has moved past the live SHA, and the newest CI run for origin/main's exact SHA succeeded. It fast-forwards main and runs `aida dev build`. Delete it when this ships.
+
+  Want: a native mode, e.g. `aida dev build --if-main-green` (name TBD), runnable as a [[schedule.jobs]] substrate job in .aida/config.toml, with the same guards:
+  - the primary checkout only; on main; no tracked changes;
+  - fast-forward only, never merge or reset;
+  - skip quietly when the live SHA == origin/main;
+  - skip when CI for that exact SHA is not completed+success (forge-neutral: GitHub and GitLab);
+  - respect --after-wave semantics (never swap under a live drain wave);
+  - a single-flight lock.
+  Each promote/skip outcome is logged, and the build failure route goes to the advisor seat (on CronJobFailed).
+
+  Acceptance:
+  - tests for each skip reason (dirty, off-main, unchanged, CI red, CI pending, non-ff) and for the promote path with a fake forge;
+  - a schedule job entry plus a route job;
+  - docs in the dev-build section of the repository guide.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T12:00:26.553324153Z
+modified_at: 2026-10-14T12:00:26.553324153Z
+req_type: Story
+tags:
+- dev-build
+- schedule
+- throughput
+filed_at:
+  code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
