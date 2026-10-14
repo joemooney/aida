@@ -10,12 +10,12 @@ description: |-
   Acceptance:
   1. Both peer checks ignore an mcp-claim whose scope matches the ending session's target scope. Equivalently, tears_down_worktree is computed from a lease list without the session's own claim.
   2. An integration test writes such a claim, starts a live holder in the worktree, runs session end, and asserts the refusal and that the tree is intact.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:53:22.959521365Z
-modified_at: 2026-10-14T18:39:32.621876426Z
+modified_at: 2026-10-14T23:25:18.436650632Z
 req_type: Bug
 tags:
 - data-safety
@@ -45,6 +45,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13cbc-08e0-7a82-a625-afc80a973204
+  author: aida-auto-bump
+  timestamp: 2026-10-14T23:25:18.432551596Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13cbc-08e4-7cb0-9a7b-c5ff691c2468
+  timestamp: 2026-10-14T23:25:18.436648091Z
+  agent: aida
+  commit_sha: 7ffe0e4625bd9c9830a3b7112886998f8f221329
+  summary: Completed via merge 7ffe0e46
 execution_mode: drive
 filed_at:
   code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
@@ -54,3 +67,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2057f093-34f4-4dd8-8426-9a0077db8580
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T23:25:18.432507181Z
+  completion_sha: 7ffe0e4625bd9c9830a3b7112886998f8f221329
