@@ -3,12 +3,12 @@ spec_id: BUG-2004
 agreed_id: BUG-2004
 title: GitLab release probe passes PRIVATE-TOKEN to curl on the command line (visible in ps)
 description: 'Found in the strict review of #2582 (BUG-1972). This predates that PR, which now sends the glab host token down this path more often. remote_create.rs:1007-1008 runs curl with --header "PRIVATE-TOKEN: <token>". The token sits in argv, so any local user can read it with ps or /proc/<pid>/cmdline while the request is running. Fix: pass the header through stdin (curl -H @-) or a 0600 temp file that is removed afterwards. Done when: no token appears in any child process argv on this path, and a test runs a fake curl that records its argv and asserts the token is absent.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:30:08.591543166Z
-modified_at: 2026-10-14T03:52:09.653117760Z
+modified_at: 2026-10-14T11:30:35.995452752Z
 req_type: Bug
 tags:
 - forge
@@ -146,6 +146,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13a2d-b357-7963-8f0a-0e48d6f61fe6
+  author: aida-auto-bump
+  timestamp: 2026-10-14T11:30:35.991347005Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a13a2d-b35b-7b92-9c1c-ceaed111cc1b
+  timestamp: 2026-10-14T11:30:35.995441434Z
+  agent: implementer
+  commit_sha: fb2265432829d1c3a72a48ede120936559791bfb
+  summary: 'Strict credential review (ADR-75) round 3: APPROVE. The GitLab release token [REDACTED] to curl only via -H @- on stdin. It is not in argv or added env, and no failure path formats it. Stdin write failure returns None and reaps curl. The mirror probe passes the remote name, tested through mirror_probe_command. Mutations: token [REDACTED] in argv FAILS test; probe using URL FAILS test. Surviving, non-blocking: the run_remote_mirror call-site name/url swap (no extra exposure beyond BUG-2119''s git-remote-http argv) and a stderr-print of the token [REDACTED] log surface exists). 30/30 targeted tests pass.'
+  review_verdict: approved
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
@@ -154,11 +168,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2 security review: PATH flake fixed (0/10 flake runs), curl token-via-stdin correct, but the ls-remote fix has no regression guard; mutation M3 (pass the URL to ls-remote) survives.'
-  recovery_hint: address the review findings, move BUG-2004 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-14T00:54:15.961724507Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T11:30:35.991340954Z
+  completion_sha: fb2265432829d1c3a72a48ede120936559791bfb
