@@ -14,12 +14,12 @@ description: |
   - A test ships a PR by number from `main` with a lease on the PR head branch and asserts the lease is ended (or the BUG-61 inside-worktree skip is reported, not "nothing to clean up").
 
   Found by the night-fable review sweep of pr_ship post-merge cleanup. Related: BUG-733 (fixed the delete/stacked logic but not step 5). Size S.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T01:57:33.019057417Z
+modified_at: 2026-10-14T01:58:38.896055400Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -61,6 +61,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13822-1064-77e2-8ea8-0566c2ec113d
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-14T01:58:38.948081300Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
