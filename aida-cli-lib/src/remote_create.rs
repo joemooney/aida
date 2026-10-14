@@ -998,7 +998,8 @@ fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
     None
 }
 
-fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
+// trace:BUG-2004 | ai:antigravity
+pub(crate) fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
     let mut cmd = Command::new("curl");
     cmd.args([
         "--silent",
@@ -1008,15 +1009,33 @@ fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         "--write-out",
         "\n%{http_code}",
     ]);
-    if let Some(token) = gitlab_release_token_for_api_url(api_url) {
-        cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
-    }
-    let out = cmd.arg(api_url).output().ok()?;
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let token = gitlab_release_token_for_api_url(api_url);
+    let out = if let Some(token) = token {
+        cmd.args(["-H", "@-"]);
+        cmd.stdin(std::process::Stdio::piped());
+        let mut child = cmd.arg(api_url).spawn().ok()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            let header = format!("PRIVATE-TOKEN: {token}\n");
+            if stdin.write_all(header.as_bytes()).is_err() {
+                drop(stdin);
+                let _ = child.wait();
+                return None;
+            }
+            drop(stdin);
+        }
+        child.wait_with_output().ok()?
+    } else {
+        cmd.stdin(std::process::Stdio::null());
+        cmd.arg(api_url).output().ok()?
+    };
     if !out.status.success() {
         return None;
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let (body, status) = stdout.rsplit_once('\n')?;
+    let (body, status) = stdout.trim_end().rsplit_once('\n')?;
     let status_code = status.trim().parse::<u16>().ok()?;
     if (200..300).contains(&status_code) {
         Some(gitlab_release_body_exists(tag, body).unwrap_or(true))
@@ -2104,8 +2123,10 @@ pub(crate) fn run_remote_mirror(
         // An empty `existing` means `git remote get-url` failed: nothing to probe.
         if let Some(u) = url.filter(|_| !existing.is_empty()) {
             if crate::doctor_cmd::same_remote(&existing, u) {
+                // trace:BUG-2004 | ai:antigravity
                 crate::gitlab_project_create::ensure_gitlab_project_exists(
                     project_root,
+                    name,
                     &existing,
                     false,
                 )?;
@@ -2143,7 +2164,8 @@ pub(crate) fn run_remote_mirror(
         // through the API (private), so the first mirror push lands. A
         // missing token leaves the remote wired and exits non-zero with the
         // manual recipe. trace:STORY-1656 | ai:claude
-        crate::gitlab_project_create::ensure_gitlab_project_exists(project_root, u, false)?;
+        // trace:BUG-2004 | ai:antigravity
+        crate::gitlab_project_create::ensure_gitlab_project_exists(project_root, name, u, false)?;
     }
 
     // 2. Store-leg fan-out config.
