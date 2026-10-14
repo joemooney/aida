@@ -2,13 +2,20 @@ id: 01a12b25-7b85-7fb2-8d45-cb7abe584601
 spec_id: BUG-1962
 agreed_id: BUG-1962
 title: runaway-seats lists sessions that have ended or gone idle as still_active compaction findings
-description: 'Seen 2026-10-11 01:10 local while clearing the watchdog-route seat job. ''aida doctor check runaway-seats'' reported runaway_seats_still_active = compactions:fe2e54bf, compactions:d28185fc and compactions:acdb011f, verdict tripped. fe2e54bf was the product relay''s session; it had finished (TASK_COMPLETE) and its claude process had exited at 00:33. d28185fc''s transcript was last written at 21:07, four hours earlier. Only acdb011f (the factory relay''s session 1, compacted once) was alive. A finding labelled still_active should mean the session is live now; including ended or idle sessions sends the watchdog-route seat on false alarms. Acceptance: still_active only includes sessions whose transcript advanced within the window AND whose process or harness is alive (or a lease or driver says live); ended sessions are reported separately as historical; a test with an ended session''s transcript asserts it is not still_active.'
+description: |-
+  Seen 2026-10-11 01:10 local while clearing the watchdog-route seat job. 'aida doctor check runaway-seats' reported runaway_seats_still_active = compactions:fe2e54bf, compactions:d28185fc and compactions:acdb011f, verdict tripped. fe2e54bf was the product relay's session; it had finished (TASK_COMPLETE) and its claude process had exited at 00:33. d28185fc's transcript was last written at 21:07, four hours earlier. A finding labelled still_active suggested the session was live now; including ended or idle sessions sends the watchdog-route seat on false alarms.
+
+  Per Operator Decision 2026-10-12 (Option A, wording only):
+  Acceptance:
+  - Rename still_active to still_tripped across JSON, TOON, and Coverage models.
+  - Session findings report the transcript last-write age (e.g. 'transcript last written 4h ago') relative to scan time.
+  - Tests pin last_written_at accuracy, sub-minute precision, file-mtime fallback, and verify ended or idle sessions report transcript last-write age and populate still_tripped.
 status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-14T01:27:33.897858331Z
+modified_at: 2026-10-14T04:05:18.732304595Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
