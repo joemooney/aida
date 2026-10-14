@@ -1255,32 +1255,43 @@ pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
     )
 }
 
-/// TASK-1350: built-in tools whose denial means the agent's *writes* were
-/// refused. Only a denial of one of these (or of a tool treated as
+/// TASK-1350: the shell tools — Claude Code's `Bash` and its Windows
+/// counterpart `PowerShell` — which can write just like the file-editing
+/// tools. Together with [`crate::contained_boundary::WRITE_TOOLS`] (derived
+/// from it so the two lists cannot drift apart) they form the write-capable
+/// built-in set: only a denial of one of these (or of a tool treated as
 /// write-capable by [`is_write_capable_tool`]) reclassifies a stop as
 /// [`FailureKind::PermissionDenied`], which feeds the environment-blocked
 /// batch halt. A denial of a read/network tool (Read, Grep, WebFetch,
 /// WebSearch, ...) on a stop that failed for spec reasons must not halt the
 /// batch or blame the environment.
 // trace:TASK-1350 | ai:claude
-pub(crate) const WRITE_CAPABLE_TOOLS: &[&str] =
-    &["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+pub(crate) const SHELL_TOOLS: [&str; 2] = ["Bash", "PowerShell"];
 
 /// TASK-1350: can a denial of `tool` mean the agent's writes were refused?
 ///
-/// Deliberate handling of tools outside [`WRITE_CAPABLE_TOOLS`]:
+/// The built-in write set (`contained_boundary::WRITE_TOOLS` plus
+/// [`SHELL_TOOLS`]) is an ALLOWLIST: a new mutating built-in tool Claude Code
+/// adds defaults to read-only here until it is added to one of those lists.
+///
+/// Deliberate handling of tools outside that set:
 /// - MCP tools (`mcp__<server>__<tool>`) are unknown to AIDA — any of them
 ///   may write (a database, a ticket, a file) — so they are treated
 ///   conservatively as write-capable.
 /// - A denial with no tool name (`"an unknown tool"`, as
-///   [`crate::questions::headless_log_permission_denied_tools`] records it)
-///   is likewise treated as write-capable: nothing proves it was a read.
+///   [`crate::questions::headless_log_permission_denied_tools`] records it,
+///   or an empty/blank `tool_name`) is likewise treated as write-capable:
+///   nothing proves it was a read.
 /// - Every other named built-in tool (Read, Glob, Grep, WebFetch, WebSearch,
 ///   Task, ...) is read-only for this purpose, per the advisor ruling that
 ///   only the explicit write set reclassifies the stop.
 // trace:TASK-1350 | ai:claude
 pub(crate) fn is_write_capable_tool(tool: &str) -> bool {
-    WRITE_CAPABLE_TOOLS.contains(&tool) || tool.starts_with("mcp__") || tool == "an unknown tool"
+    crate::contained_boundary::WRITE_TOOLS.contains(&tool)
+        || SHELL_TOOLS.contains(&tool)
+        || tool.starts_with("mcp__")
+        || tool.trim().is_empty()
+        || tool == "an unknown tool"
 }
 
 /// TASK-1350: should these denied tools reclassify a failed stop as
@@ -10508,7 +10519,18 @@ mod tests {
     fn only_write_capable_denials_reclassify_as_permission_denied() {
         let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         // Explicit write set.
-        for tool in ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"] {
+        for tool in [
+            "Edit",
+            "Write",
+            "MultiEdit",
+            "NotebookEdit",
+            "Bash",
+            "PowerShell",
+        ] {
+            assert!(is_write_capable_tool(tool), "{tool}");
+        }
+        // The file-editing half is derived from the contained boundary's list.
+        for tool in crate::contained_boundary::WRITE_TOOLS {
             assert!(is_write_capable_tool(tool), "{tool}");
         }
         // Named read-only built-ins.
@@ -10518,6 +10540,12 @@ mod tests {
         // Unknown MCP tools and unnamed denials are conservatively write-capable.
         assert!(is_write_capable_tool("mcp__github__get_issue"));
         assert!(is_write_capable_tool("an unknown tool"));
+        assert!(is_write_capable_tool(""));
+        assert!(denials_reclassify_as_permission_denied(&v(&[
+            "", "WebFetch"
+        ])));
+        // Only a PowerShell denial reclassifies, like Bash.
+        assert!(denials_reclassify_as_permission_denied(&v(&["PowerShell"])));
 
         // Only a read denial: keeps the original kind.
         assert!(!denials_reclassify_as_permission_denied(&v(&["WebFetch"])));
