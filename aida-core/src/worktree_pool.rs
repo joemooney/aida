@@ -82,6 +82,12 @@ pub struct PoolEntry {
     /// when the owner dies (PID-liveness).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_pid: Option<i32>,
+    /// Kernel start time of `owner_pid`, so a recycled pid does not read as
+    /// the live owner. `None` in a registry written before TASK-1750; the
+    /// liveness check then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_pid_start: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_started_at: Option<i64>,
     /// Durable reservation — survives with zero live processes inside the
@@ -262,16 +268,17 @@ fn lock_path(project_root: &Path) -> PathBuf {
 
 // ── PID liveness ─────────────────────────────────────────────────────────────
 
-/// True when `pid` is a live process. Delegates to the one canonical probe
-/// (`liveness::pid_is_alive`: `kill(pid, 0)` on Unix, a single-pid sysinfo
-/// refresh elsewhere). The previous local copy returned `true` for every pid
-/// on non-Unix, so a dead owner was never healed on Windows — `acquire`
-/// minted a second tree instead of reusing the crashed owner's. A pid that
-/// is not a positive u32 can never name a live process.
+/// True when the entry's recorded owner is a live process. Delegates to the
+/// canonical identity probe (`liveness::process_identity_is_alive`): the pid
+/// must be alive AND, when the entry recorded one, carry the same kernel start
+/// time, so a pid the OS recycled after the owner crashed does not pin the
+/// tree. The previous local copy returned `true` for every pid on non-Unix
+/// (BUG-1021). A pid that is not a positive u32 can never name a live process.
 // trace:BUG-1021 | ai:claude
-fn pid_is_alive(pid: i32) -> bool {
+// trace:TASK-1750 | ai:claude
+fn owner_pid_is_alive(pid: i32, recorded_start: Option<&str>) -> bool {
     match u32::try_from(pid) {
-        Ok(p) if p > 0 => crate::liveness::pid_is_alive(p),
+        Ok(p) if p > 0 => crate::liveness::process_identity_is_alive(p, recorded_start),
         _ => false,
     }
 }
@@ -283,7 +290,9 @@ fn now_ts() -> i64 {
 /// True when the entry has a live owner process. Public so the destroy
 /// classifier can distinguish a self-healable crash from a genuine in-use tree.
 pub fn owner_is_live(entry: &PoolEntry) -> bool {
-    entry.owner_pid.map(pid_is_alive).unwrap_or(false)
+    entry
+        .owner_pid
+        .is_some_and(|pid| owner_pid_is_alive(pid, entry.owner_pid_start.as_deref()))
 }
 
 // ── State I/O + locking ──────────────────────────────────────────────────────
@@ -369,8 +378,9 @@ pub fn heal_state(pool: &mut Pool) {
     pool.entries.retain(|e| e.path.exists());
     for e in &mut pool.entries {
         if let Some(pid) = e.owner_pid {
-            if !pid_is_alive(pid) {
+            if !owner_pid_is_alive(pid, e.owner_pid_start.as_deref()) {
                 e.owner_pid = None;
+                e.owner_pid_start = None;
                 e.owner_started_at = None;
             }
         }
@@ -721,6 +731,7 @@ fn pool_full_message(in_pool: usize, max_trees: usize, skipped: &ReclaimSkips) -
 
 fn stamp_acquired(entry: &mut PoolEntry, opts: &AcquireOptions) {
     entry.owner_pid = Some(std::process::id() as i32);
+    entry.owner_pid_start = crate::liveness::process_start_identity(std::process::id());
     entry.owner_started_at = Some(now_ts());
     entry.destroying = false;
     // Clear any prior lease first — a reclaimed stale-expired lease (TASK-1008)
@@ -777,6 +788,7 @@ pub fn return_to_pool(project_root: &Path, worktree_path: &Path) -> Result<()> {
             .with_context(|| format!("reset returned worktree {}", path.display()))?;
         let e = &mut pool.entries[idx];
         e.owner_pid = None;
+        e.owner_pid_start = None;
         e.owner_started_at = None;
         e.leased = false;
         e.lease_holder = None;
@@ -940,6 +952,42 @@ mod tests {
         e.leased_at = Some(1);
         e.destroying = true;
         assert!(!e.is_lease_expired(now, ttl));
+    }
+
+    /// TASK-1750: an owner pid that is alive but carries a different kernel
+    /// start time was recycled by the OS after the real owner died, so heal
+    /// clears it; the same pid with its true start time stays the owner.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn heal_state_clears_recycled_owner_pid_keeps_true_owner() {
+        let me = std::process::id();
+        let Some(my_start) = crate::liveness::process_start_identity(me) else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        let entry = |name: &str, start: &str| PoolEntry {
+            name: name.into(),
+            path: path.clone(),
+            owner_pid: Some(me as i32),
+            owner_pid_start: Some(start.into()),
+            owner_started_at: Some(1),
+            ..Default::default()
+        };
+        let mut pool = Pool {
+            entries: vec![
+                entry("true-owner", &my_start),
+                entry("recycled", "2000-01-01T00:00:00+00:00"),
+            ],
+            ..Default::default()
+        };
+        assert!(owner_is_live(&pool.entries[0]));
+        assert!(!owner_is_live(&pool.entries[1]));
+        heal_state(&mut pool);
+        assert_eq!(pool.entries[0].owner_pid, Some(me as i32));
+        assert_eq!(pool.entries[1].owner_pid, None);
+        assert_eq!(pool.entries[1].owner_pid_start, None);
+        assert_eq!(pool.entries[1].owner_started_at, None);
     }
 
     #[test]

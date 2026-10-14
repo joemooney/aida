@@ -383,6 +383,137 @@ assert_exit "refuses bare id when prose is in earlier hunk" 1 "$(commit "feat: s
 assert_stderr_contains "refusal names bare id in separate hunk" "STORY-30"
 git reset -q --hard HEAD~1
 
+# 8c. TASK-1369: a code line inside a fenced block is not prose, so a bare id
+#     after it is still refused; so is one after a markdown table row.
+#     trace:TASK-1369 | ai:claude
+cat >>src/prose.rs <<'EOF'
+/// ```
+/// let x = foo();
+/// STORY-30
+pub fn fenced_code_line() {}
+EOF
+git add -A
+assert_exit "refuses bare id after a code line inside a fence" 1 "$(commit "feat: fenced code line")"
+assert_stderr_contains "refusal names the bare id after fenced code" "STORY-30"
+git reset -q --hard
+
+cat >>src/prose.rs <<'EOF'
+/// | name | value |
+/// STORY-30
+pub fn table_row() {}
+EOF
+git add -A
+assert_exit "refuses bare id after a markdown table row" 1 "$(commit "feat: table row")"
+assert_stderr_contains "refusal names the bare id after table row" "STORY-30"
+git reset -q --hard
+
+# After the fence closes, a wrapped prose sentence still continues normally.
+cat >>src/prose.rs <<'EOF'
+/// ```
+/// let x = foo();
+/// ```
+/// Reuses the usage log introduced by
+/// STORY-30.
+pub fn fence_then_prose() {}
+EOF
+git add -A
+assert_exit "wrapped prose after a closed fence is allowed" 0 "$(commit "docs: fence then prose")"
+git reset -q --hard HEAD~1
+
+# 8d. TASK-1371: the abbreviation guard is word-anchored. "e.g." does not end
+#     a sentence, so the wrapped id is allowed; "devs." does, so it is refused.
+#     U+2026 and U+3002 end a sentence too.
+#     trace:TASK-1371 trace:TASK-1370 | ai:claude
+cat >>src/prose.rs <<'EOF'
+/// Works with any cache, e.g.
+/// STORY-30.
+pub fn abbreviation() {}
+EOF
+git add -A
+assert_exit "bare id after an e.g. continuation is allowed" 0 "$(commit "docs: abbreviation")"
+git reset -q --hard HEAD~1
+
+cat >>src/prose.rs <<'EOF'
+/// Written for the devs.
+/// STORY-30
+pub fn devs_period() {}
+EOF
+git add -A
+assert_exit "refuses bare id after a word that merely ends in vs." 1 "$(commit "feat: devs period")"
+assert_stderr_contains "refusal names the bare id after devs." "STORY-30"
+git reset -q --hard
+
+for ender in '…' '。'; do
+    cat >>src/prose.rs <<EOF
+/// The work is done${ender}
+/// STORY-30
+pub fn unicode_ender() {}
+EOF
+    git add -A
+    assert_exit "refuses bare id after unicode sentence end ${ender}" 1 "$(commit "feat: unicode ender")"
+    git reset -q --hard
+done
+
+# 8e. TASK-1370: removal-side context decides whether a removed bare id is a
+#     move credit. trace:TASK-1370 | ai:claude
+#     (i) Removed wrapped prose: the removed id continues a sentence, so it is
+#     NOT debt and earns no credit; a new standalone id is still refused.
+cat >src/ctx.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// STORY-30
+pub fn wrapped_old() {}
+EOF
+git add src/ctx.rs
+git commit --no-verify -qm "chore: seed wrapped prose"
+rm src/ctx.rs
+cat >src/fresh.rs <<'EOF'
+/// STORY-30
+pub fn standalone_new() {}
+EOF
+git add -A
+assert_exit "removed wrapped-prose id earns no credit for a new standalone id" 1 "$(commit "feat: no credit")"
+assert_stderr_contains "refusal names the uncredited id" "STORY-30"
+git reset -q --hard HEAD~1
+
+#     (ii) Removed id after a heading IS debt; moving it is credited.
+cat >src/ctx.rs <<'EOF'
+/// # Provenance
+/// STORY-30
+pub fn heading_old() {}
+EOF
+git add src/ctx.rs
+git commit --no-verify -qm "chore: seed heading debt"
+rm src/ctx.rs
+cat >src/moved.rs <<'EOF'
+/// STORY-30
+pub fn moved() {}
+EOF
+git add -A
+assert_exit "removed id after a heading credits its move" 0 "$(commit "refactor: move after heading")"
+git reset -q --hard HEAD~2
+
+#     (iii) Add side: after a credited leak line the prose context resets, so
+#     a following bare id is new debt even though the line before the leak
+#     was unfinished prose.
+cat >src/ctx.rs <<'EOF'
+/// trace:STORY-30 | ai:claude
+pub fn seeded() {}
+EOF
+git add src/ctx.rs
+git commit --no-verify -qm "chore: seed trace debt"
+rm src/ctx.rs
+cat >src/moved.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// trace:STORY-30 | ai:claude
+/// STORY-31
+pub fn seeded() {}
+EOF
+git add -A
+assert_exit "bare id after a credited leak line is still refused" 1 "$(commit "feat: after credited leak")"
+assert_stderr_contains "refusal names the id after the credited leak" "STORY-31"
+assert_stderr_lacks "the credited leak line itself is excused" "trace:STORY-30"
+git reset -q --hard HEAD~1
+
 # 9. `////` is a PLAIN comment to rustc (four or more slashes are never
 #    rustdoc, so never `--help` text). Provenance on such a line is fine and
 #    must not be refused; the three-slash form right next to it still is.

@@ -1683,10 +1683,13 @@ mod tests {
         }
     }
 
-    /// Last activity is a running max across files: a transcript that sorts
-    /// later (e.g. a subagent's) but holds older lines for the same session
-    /// must not make a live session look idle.
+    /// Last activity is a running max across files: whichever transcript is
+    /// folded last, if it holds only older lines for the same session it must
+    /// not make a live session look idle. (In real layouts a subagent's
+    /// `<sid>/subagents/x.jsonl` sorts BEFORE `<sid>.jsonl`; this test just
+    /// pins a fold order where the older file comes last.)
     // trace:BUG-2120 | ai:claude
+    // trace:TASK-1755 | ai:claude
     #[test]
     fn later_sorted_transcript_with_older_lines_keeps_recent_poll_active() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2604,6 +2607,226 @@ mod tests {
             cov2.still_tripped.contains(&format!("compactions:{sid}")),
             "rule is retained in still_tripped: {:?}",
             cov2.still_tripped
+        );
+    }
+
+    /// TASK-1756 (1): `last_written_at` survives a state round-trip, so an
+    /// incremental scan reads back the persisted value.
+    // trace:TASK-1756 | ai:claude
+    #[test]
+    fn task_1756_last_written_at_round_trips_through_state_json() {
+        let at = t0() + Duration::seconds(50);
+        let agg = SessionAgg {
+            timed: true,
+            last_written_at: Some(at),
+            ..SessionAgg::default()
+        };
+        let json = serde_json::to_string(&agg).unwrap();
+        let back: SessionAgg = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.last_written_at, Some(at), "{json}");
+    }
+
+    /// TASK-1756 (2): an untimed line's file mtime folds with `max`: a later
+    /// mtime wins over an earlier timed line, an earlier one keeps it.
+    // trace:TASK-1756 | ai:claude
+    #[test]
+    fn task_1756_untimed_mtime_folds_with_max_over_timed_line() {
+        let sid = "session-fold";
+        let fold = |line: &Line, mtime: Option<DateTime<Utc>>, s: &mut BTreeMap<_, _>| {
+            fold_line(
+                line,
+                b"{}",
+                sid,
+                &WatchdogPolicy::default(),
+                t0(),
+                0,
+                mtime,
+                s,
+            )
+        };
+        let timed = Line {
+            kind: Some("assistant".to_string()),
+            timestamp: Some(ts(600)),
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let untimed = Line {
+            kind: Some("assistant".to_string()),
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let mut later = BTreeMap::new();
+        fold(&timed, None, &mut later);
+        let late = t0() + Duration::seconds(900);
+        fold(&untimed, Some(late), &mut later);
+        assert_eq!(later[sid].last_written_at, Some(late));
+
+        let mut earlier = BTreeMap::new();
+        fold(&timed, None, &mut earlier);
+        fold(&untimed, Some(t0() + Duration::seconds(60)), &mut earlier);
+        assert_eq!(
+            earlier[sid].last_written_at,
+            Some(t0() + Duration::seconds(600)),
+            "an earlier mtime must not replace the newer timed write"
+        );
+    }
+
+    /// TASK-1756 (3): `scan_file` passes the file's mtime into the fold, so
+    /// an untimed line records it.
+    // trace:TASK-1756 | ai:claude
+    #[test]
+    fn task_1756_scan_file_records_pinned_mtime_for_untimed_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "session-scan-mtime";
+        let body = format!(
+            "{}\n",
+            serde_json::json!({"type": "assistant", "sessionId": sid})
+        );
+        let path = write(tmp.path(), &format!("{sid}.jsonl"), &body);
+        let pinned = t0() + Duration::minutes(7);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(std::time::SystemTime::from(pinned))
+            .unwrap();
+        let mut sessions = BTreeMap::new();
+        let mut budget = Budget {
+            started: Instant::now(),
+            bytes: 0,
+            partial: false,
+        };
+        let policy = WatchdogPolicy::default();
+        scan_file(&path, None, &policy, t0(), &mut sessions, &mut budget).unwrap();
+        assert_eq!(sessions[sid].last_written_at, Some(pinned));
+    }
+
+    /// TASK-1756 (4): every `format_age` branch boundary.
+    // trace:TASK-1756 | ai:claude
+    #[test]
+    fn task_1756_format_age_branches() {
+        let now = t0();
+        let age = |secs: i64| format_age(now - Duration::seconds(secs), now);
+        assert_eq!(age(-1), "just now");
+        assert_eq!(age(0), "0s ago");
+        assert_eq!(age(59), "59s ago");
+        assert_eq!(age(60), "1m ago");
+        assert_eq!(age(59 * 60 + 59), "59m ago");
+        assert_eq!(age(3600), "1h ago");
+        assert_eq!(age(23 * 3600 + 59 * 60), "23h ago");
+        assert_eq!(age(24 * 3600), "1d ago");
+    }
+
+    /// TASK-1756 (5): a resolved seat's summary carries the pid and the
+    /// transcript age together.
+    // trace:TASK-1756 | ai:claude
+    #[test]
+    fn task_1756_resolved_seat_summary_names_pid_and_transcript_age() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000001756";
+        let mut transcript = String::new();
+        for i in 0..3 {
+            let at = i * 60;
+            transcript.push_str(&format!(
+                "{}\n",
+                serde_json::json!({
+                    "type": "system",
+                    "subtype": "compact_boundary",
+                    "timestamp": ts(at),
+                    "sessionId": sid,
+                })
+            ));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        let mut seats = HashMap::new();
+        seats.insert(
+            sid.to_string(),
+            SeatInfo {
+                seat: "implementer".to_string(),
+                pid: Some(4242),
+            },
+        );
+        let now = t0() + Duration::seconds(120) + Duration::hours(2);
+        let (findings, _) = scan("aida", &src, &policy, now, &seats);
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding
+                .summary
+                .contains("(seat implementer, pid 4242, transcript last written 2h ago)"),
+            "{}",
+            finding.summary
+        );
+    }
+
+    /// TASK-1755 (3): an untimed line never moves `last_activity_minute`
+    /// (it lands on the file's mtime minute, which is not activity
+    /// evidence), while a timed line does.
+    // trace:TASK-1755 | ai:claude
+    #[test]
+    fn task_1755_untimed_lines_do_not_count_as_last_activity() {
+        let sid = "session-untimed-activity";
+        let mut sessions = BTreeMap::new();
+        let untimed = Line {
+            kind: Some("assistant".to_string()),
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let untimed_minute = minute_of(t0()) + 90;
+        fold_line(
+            &untimed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        assert_eq!(sessions[sid].last_activity_minute, None);
+        let timed = Line {
+            timestamp: Some(ts(600)),
+            ..Line {
+                kind: Some("assistant".to_string()),
+                session_id: Some(sid.to_string()),
+                ..Line::default()
+            }
+        };
+        fold_line(
+            &timed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        fold_line(
+            &untimed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        assert_eq!(
+            sessions[sid].last_activity_minute,
+            Some(minute_of(t0()) + 10),
+            "a later untimed minute must not advance last activity"
         );
     }
 }

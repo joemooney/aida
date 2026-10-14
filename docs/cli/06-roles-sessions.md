@@ -107,7 +107,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `new --permission-mode` — the faithful-launcher knob: omit it and Claude uses its native posture (prompts); pass `bypassPermissions`/`acceptEdits`/`auto`/etc. to opt in. Fleet-wide bypass is `[agents] bypass = true` in `agents.toml`, not a baked-in default.
 - Supervised launches that resolve to bypass ask for confirmation by default. The setting is `[agents] confirm_bypass = true` in `.aida/config.toml`; only `~/.aida/config.toml` may set it to `false`. Project config can require confirmation but cannot disable it. A non-TTY configured bypass is downgraded to native; an explicit bypass request and detached agent launch require a terminal confirmation. This guard does not stop edits by an agent already running in bypass, a fake TTY, or direct edits to the user config with an editor that already has write authority.
 - `[agents] vendor = "codex"` (agents.toml/config.toml; precedence: project `.aida/agents.toml` per-clone > project `.aida/config.toml` TRACKED & worktree-inherited > user-global `~/.aida/agents.toml`) — the set-once default-vendor knob for codex-first/codex-mandated machines: every launch surface (interactive `queue work` host, orchestrator headless phases, TUI tabs, and queue-work launch chains) falls back to it when no per-surface flag/env/config picks a vendor. Per-surface knobs keep priority.
-- `leases --verbose` / `--all` — `-v` probes live claude PIDs (and flags `(deleted)`-cwd zombies); `--all` includes stale leases with a state column. The default view includes every spec-scoped lease that can block dispatch, even when stale; only stale harness leases are hidden. <!-- trace:BUG-2002 | ai:codex -->
+- `leases --verbose` / `--all` — `-v` probes live claude PIDs (and flags `(deleted)`-cwd zombies); every view has a state column. The default view includes every spec-scoped lease that can block dispatch, even when stale, and hides only stale harness leases; `--all` adds those stale harness leases back. <!-- trace:BUG-2002 | ai:codex --> <!-- trace:TASK-1367 | ai:claude -->
 - `manifest` — record which specs a session *intends* to work, so other commands can surface "planned by another session" cues. Coordination *before* the lease, for a planned cluster.
 - `prune` — bulk disk-cleanup of old session.jsonl files by age (and skips dirs with active leases, defensively). It only touches conversation metadata; worktree cleanup is a separate concern — `gc` removes stale agent isolation worktrees, `reap` tears down finished scoped sessions (see below).
 - `reap --dry-run` / `--yes` / `--json` — the reap predicate is deliberately narrow: spec Done or Completed, **and** branch merged, **and** process exited. All three are read from state (the spec's status, git ancestry or a merged PR, the process table) — never from what a terminal printed, because inferring "the agent looks finished" from scrollback is exactly the class of unreliable signal that produces confidently wrong cleanups. A session whose process is still *alive* fails the predicate and is left completely alone: its worktree is its working directory, and closing a running agent is your call, not the tool's. It gets reaped on a later pass, once it exits on its own.
@@ -268,3 +268,21 @@ You now own the seat model and the coordination substrates: who's wearing which 
 - **[Chapter 8 — Reporting](08-reporting.md)**: `aida status` — the unified "what's going on here?" view that the advisor dashboard complements.
 - [`docs/review-process.md`](../review-process.md) — **who reviews by mode**, and the precise reviewer-vs-advisor-tier distinction (the reviewer gates code in every mode; the cold-boot advisor tier fires only on a punt). The authoritative source for the seat/review lore in this chapter.
 - The autonomy + escalation architecture in full — the three-mode ladder, the implementer→advisor→human cascade, the file-based handshake substrate — is [`docs/architecture/autonomy-and-escalation.md`](../architecture/autonomy-and-escalation.md).
+
+### Mid-session expiry notices in Claude Code
+
+The Claude Code template installs an informational `PreToolUse` hook covering
+every tool. It emits context once when a seat grant crosses 2h, 30m and expiry,
+including the terminal renewal command. It never prompts or decides tool
+permissions. New grants or renewal timestamps reset the notice epoch. Child
+expiry uses the earlier of child and parent expiry. Baseline seats stay silent.
+
+Without `AIDA_SESSION_GRANT`, the shell exits without launching the CLI. With
+a grant it caps the notice command below 2 seconds. The notice path initializes
+no requirements graph or cache; valid grants use the shared validator, including
+the local team roster lookup. Runtime notice ledgers live beside grant records
+and use permanent lock sidecars plus atomic replacement. Unreadable, corrupt or
+unwritable ledgers yield no context, one stderr diagnostic and exit 0. Existing
+SessionStart and statusline warnings remain available. Codex and Antigravity
+delivery is a separate follow-up. See [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->

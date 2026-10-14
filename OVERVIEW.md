@@ -520,9 +520,20 @@ store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
 
+Claude Code tool hooks deliver informational seat-grant expiry notices once at
+the 2h, 30m and expired crossings, without requiring a user prompt. A local
+grant-id ledger uses a permanent flock sidecar and atomic replacement. No
+requirements graph or cache is initialized; the shared authority validator
+retains its local roster lookup. Failed ledger access emits no context and
+leaves SessionStart/statusline warnings as fallback. See
+[verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
+
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index
-lock and a 30-second chunk budget, skips disabled/missing/busy indexes, and
-preserves foreground stall behavior. The scaffold runs it every 15 minutes.
+lock and a 30-second chunk budget, skips disabled/missing/current/busy indexes
+and a checkout that is behind the shared index (or whose indexed tip is live on
+another checkout), and preserves foreground stall behavior. A replaced root or
+rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->

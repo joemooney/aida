@@ -1846,6 +1846,10 @@ fn apply_old_rollback_steps(f: &Fixture, k: usize) {
 // trace:BUG-1999 | ai:antigravity
 #[test]
 fn recovery_with_old_format_crash_during_normalization_preserves_records() {
+    // trace:TASK-1365 | ai:claude
+    // Every named step must actually crash in some iteration, so dropping a
+    // `step(..)` call from recovery cannot pass by skipping every case.
+    let mut crashed: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for (a_rec, b_rec) in [(true, true), (true, false)] {
         for k in 4..=9 {
             for crash_step in ["marker", "parked_prev", "parked_live"] {
@@ -1867,6 +1871,7 @@ fn recovery_with_old_format_crash_during_normalization_preserves_records() {
                     continue;
                 }
                 assert!(first.is_err(), "{ctx}: expected crash");
+                crashed.insert(crash_step);
                 recover(&f);
                 assert_consistent(&f, &a, &b, &ctx);
                 recover(&f);
@@ -1874,6 +1879,11 @@ fn recovery_with_old_format_crash_during_normalization_preserves_records() {
             }
         }
     }
+    assert_eq!(
+        crashed.into_iter().collect::<Vec<_>>(),
+        vec!["marker", "parked_live", "parked_prev"],
+        "every normalization step must fire and crash in at least one case"
+    );
 }
 
 // trace:BUG-1999 | ai:antigravity

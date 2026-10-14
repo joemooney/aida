@@ -425,3 +425,15 @@ fn tick_errors_on_replaced_root_even_when_a_branch_keeps_the_old_tip() {
     assert!(handle_tick(Some(&fx.store)).is_err());
     assert_eq!(test_support::meta(&fx.db, "tip_sha"), tip);
 }
+
+/// TASK-1753 (4): HEAD behind the indexed tip with NO other ref holding the
+/// tip. Only the `HeadBehind` classification makes this a skip; without it
+/// the state would fall through to `Rewritten` and the tick would error.
+// trace:TASK-1753 | ai:claude
+#[test]
+fn task_1753_tick_skips_when_behind_and_no_ref_holds_the_tip() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    move_head_behind_index(&fx, None);
+    assert_skip_without_write(&fx);
+}

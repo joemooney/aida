@@ -3198,3 +3198,25 @@ pub(crate) fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod show_forge_budget_tests {
+    use super::SHOW_FORGE_LOOKUP_BUDGET;
+    use crate::FORGE_CLI_CALL_TIMEOUT;
+    use std::time::Duration;
+
+    /// BUG-1594's integration test reports its wall-clock only as a soft
+    /// budget, so this pins the worst case structurally: the last forge
+    /// call may start just before the lookup budget expires and then run to
+    /// its own per-call timeout.
+    // trace:BUG-1995 | ai:claude
+    #[test]
+    fn show_forge_lookup_worst_case_stays_within_ten_seconds() {
+        assert!(
+            SHOW_FORGE_LOOKUP_BUDGET + FORGE_CLI_CALL_TIMEOUT <= Duration::from_secs(10),
+            "SHOW_FORGE_LOOKUP_BUDGET ({SHOW_FORGE_LOOKUP_BUDGET:?}) + FORGE_CLI_CALL_TIMEOUT \
+             ({FORGE_CLI_CALL_TIMEOUT:?}) must stay within show's 10 s forge ceiling"
+        );
+        assert!(FORGE_CLI_CALL_TIMEOUT > Duration::ZERO);
+    }
+}

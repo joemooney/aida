@@ -66,6 +66,11 @@ fn now_secs() -> u64 {
 pub(crate) struct Holder {
     pub host: String,
     pub pid: u32,
+    /// Kernel start time of `pid` when it took the lease, so a recycled pid
+    /// does not read as the live holder. `None` for a lockfile written before
+    /// TASK-1750; the liveness check then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    pub pid_start: Option<String>,
     pub pr: Option<u64>,
     pub note: String,
     pub acquired_at: u64,
@@ -74,9 +79,10 @@ pub(crate) struct Holder {
 
 fn serialize(h: &Holder) -> String {
     format!(
-        "host={}\npid={}\npr={}\nnote={}\nacquired_at={}\nttl_secs={}\n",
+        "host={}\npid={}\npid_start={}\npr={}\nnote={}\nacquired_at={}\nttl_secs={}\n",
         h.host,
         h.pid,
+        h.pid_start.as_deref().unwrap_or_default(),
         h.pr.map(|p| p.to_string()).unwrap_or_default(),
         h.note.replace('\n', " "),
         h.acquired_at,
@@ -90,6 +96,7 @@ fn parse(body: &str) -> Holder {
     let mut h = Holder {
         host: String::new(),
         pid: 0,
+        pid_start: None,
         pr: None,
         note: String::new(),
         acquired_at: 0,
@@ -101,6 +108,7 @@ fn parse(body: &str) -> Holder {
             match k.trim() {
                 "host" => h.host = v.to_string(),
                 "pid" => h.pid = v.parse().unwrap_or(0),
+                "pid_start" => h.pid_start = Some(v.to_string()).filter(|v| !v.is_empty()),
                 "pr" => h.pr = v.parse().ok(),
                 "note" => h.note = v.to_string(),
                 "acquired_at" => h.acquired_at = v.parse().unwrap_or(0),
@@ -112,19 +120,21 @@ fn parse(body: &str) -> Holder {
     h
 }
 
-/// Is `pid` currently running on THIS machine? Routed through the canonical
-/// `aida_core::liveness::pid_is_alive` (BUG-1741) so a defunct (zombie)
-/// holder reads dead instead of pinning the lock until its TTL: same
-/// `kill(pid, 0)`/EPERM semantics on unix, O(1) single-pid probe elsewhere.
+/// Is the holder's process still running on THIS machine? Routed through the
+/// canonical `aida_core::liveness::process_identity_is_alive` (BUG-1741,
+/// TASK-1750): a defunct (zombie) holder reads dead instead of pinning the
+/// lock until its TTL, and a pid the OS recycled for an unrelated process
+/// reads dead because its kernel start time no longer matches `pid_start`.
 // trace:BUG-1741 | ai:claude
-fn pid_alive(pid: u32) -> bool {
-    aida_core::liveness::pid_is_alive(pid)
+// trace:TASK-1750 | ai:claude
+fn holder_alive(h: &Holder) -> bool {
+    aida_core::liveness::process_identity_is_alive(h.pid, h.pid_start.as_deref())
 }
 
 /// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid on our host
 /// (fast, exact), or any holder aged past its TTL (backstop). `None` ⇒ live.
 fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
-    if !h.host.is_empty() && h.host == our_host && !pid_alive(h.pid) {
+    if !h.host.is_empty() && h.host == our_host && !holder_alive(h) {
         return Some(format!("holder pid {} is dead on this host", h.pid));
     }
     let ttl = if h.ttl_secs == 0 {
@@ -190,6 +200,7 @@ pub(crate) fn acquire(
                 let h = Holder {
                     host: our_host.clone(),
                     pid: std::process::id(),
+                    pid_start: aida_core::liveness::process_start_identity(std::process::id()),
                     pr,
                     note: note.to_string(),
                     acquired_at: now_secs(),
@@ -287,6 +298,7 @@ mod tests {
         let h = Holder {
             host: crate::coordination::hostname(),
             pid: 999_999_999,
+            pid_start: None,
             pr: Some(9),
             note: "dead".into(),
             acquired_at: now_secs(),
@@ -322,6 +334,7 @@ mod tests {
         let h = Holder {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
+            pid_start: None,
             pr: Some(9),
             note: "fresh live pid".into(),
             acquired_at: now_secs(),
@@ -354,6 +367,69 @@ mod tests {
         .unwrap();
     }
 
+    /// TASK-1750: a same-host holder whose pid is alive but whose recorded
+    /// start time differs is a recycled pid — reclaimed at once, not after
+    /// the TTL. The matching start time keeps the live holder's lock.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_pid_same_host_is_reclaimed_but_true_holder_waits() {
+        let Some(our_start) = aida_core::liveness::process_start_identity(std::process::id())
+        else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        let mut h = Holder {
+            host: crate::coordination::hostname(),
+            pid: std::process::id(),
+            pid_start: Some(our_start),
+            pr: Some(9),
+            note: "true holder".into(),
+            acquired_at: now_secs(),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
+        let err = acquire(
+            root,
+            "main",
+            Some(10),
+            "blocked",
+            Duration::from_millis(200),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+
+        h.pid_start = Some("2000-01-01T00:00:00+00:00".into());
+        h.note = "recycled pid".into();
+        std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
+        let _g = acquire(root, "main", Some(11), "steal", Duration::from_millis(200))
+            .expect("a recycled pid must not hold the merge-lease");
+    }
+
+    #[test]
+    fn pid_start_round_trips_and_legacy_lockfile_parses_without_it() {
+        // trace:TASK-1750 | ai:claude
+        let h = Holder {
+            host: "h".into(),
+            pid: 42,
+            pid_start: Some("2026-10-14T16:00:00+00:00".into()),
+            pr: None,
+            note: String::new(),
+            acquired_at: 1,
+            ttl_secs: 2,
+        };
+        assert_eq!(parse(&serialize(&h)).pid_start, h.pid_start);
+        let legacy = parse("host=h\npid=42\npr=\nnote=\nacquired_at=1\nttl_secs=2\n");
+        assert_eq!(legacy.pid, 42);
+        assert_eq!(legacy.pid_start, None);
+        let empty = Holder {
+            pid_start: None,
+            ..h
+        };
+        assert_eq!(parse(&serialize(&empty)).pid_start, None);
+    }
+
     #[test]
     fn stale_ttl_expired_is_reclaimed_any_host() {
         // trace:STORY-1171.acf58627 | ai:codex
@@ -364,6 +440,7 @@ mod tests {
         let h = Holder {
             host: "some-other-host".into(),
             pid: std::process::id(), // alive here, but host differs so pid path is skipped
+            pid_start: None,
             pr: Some(1),
             note: "old".into(),
             acquired_at: now_secs().saturating_sub(10_000),

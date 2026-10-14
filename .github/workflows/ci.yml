@@ -146,6 +146,10 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
+        # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
+        # must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude
+        env:
+          AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
         run: cargo test --workspace --no-fail-fast < /dev/null
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
@@ -472,6 +476,11 @@ jobs:
           export AIDA_BIN="$PWD/target/debug/aida"
           python3 scripts/check-template-commands.py
           python3 -m unittest tests/test_check_template_commands.py
+
+      # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
+      # trace:BUG-2014 | ai:codex
+      - name: Grant expiry hook protocol
+        run: python3 tests/test_grant_expiry_notice_hook.py
 
       # BUG-1950: docs/cli/12-glossary.md is GENERATED from `aida docs
       # glossary` (ADR-5), but nothing compared the committed page with the

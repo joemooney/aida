@@ -6,9 +6,20 @@ again before releasing labels and the marker.
 See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:STORY-1687 | ai:codex -->
 
+Claude tool-only sessions receive informational grant expiry context at the
+2h, 30m and expired crossings. The hook skips the CLI without a grant and caps
+it below 2s; a grant-local locked ledger deduplicates notices. Ledger failures
+produce no context and leave SessionStart/statusline as fallback. See
+[expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
+
 An existing history index catches up through the inline maintenance job
 `cache refresh --history --if-behind`, with a 30-second chunk budget. It takes
-only IndexLock, skips missing/disabled/busy indexes, and never spawns on commits.
+only IndexLock, skips missing/disabled/current/busy indexes and a checkout that is
+behind the shared index (or whose indexed tip is live on another checkout), and
+never spawns on commits. A replaced root or rewritten history exits non-zero with
+`cache rebuild --history` advice.
+<!-- trace:TASK-1753 | ai:claude -->
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
 
