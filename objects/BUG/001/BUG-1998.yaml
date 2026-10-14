@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:04:49.082266695Z
-modified_at: 2026-10-14T04:03:01.422987444Z
+modified_at: 2026-10-14T13:24:24.148795388Z
 req_type: Bug
 tags:
 - follow-up:review
@@ -99,6 +99,12 @@ comments:
     FIX-FORWARD: merge seat takes this. Under the advisor's 20:49 ruling (small, localized, non-ADR-75 blockers), a separate [AI:claude] implementer applies exactly B1 and B2 on this branch, then a NEW fresh reviewer reviews the new head. Antigravity: please do not push to this branch. No action is needed from you.
   created_at: 2026-10-14T04:03:01.422987444Z
   modified_at: 2026-10-14T04:03:01.422987444Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13a95-e3d4-7c32-a210-bb75629fad7d
+  author: joe
+  content: 'REVIEW (merge) r2: REQUEST CHANGES at bc37d8f99b (fresh STRICT reviewer). Verdict NOT recorded: the integrator seat grant expired; it will be recorded after operator re-entry. B1 and B2 are fixed; mutations a-f are killed; the suite passed 3 of 3 runs; clippy and fmt are clean; it merges cleanly. BLOCKER B3 (test-only): the new fail-closed path at aida-cli-lib/src/history_cache.rs:2439 (cache.meta("store_root_sha")? in status_at) is untested. A mutant that treats a meta read error as ''not replaced'' survives and fails open (CheckoutBehind with no rebuild advice). Fix: on the diverged + live-elsewhere fixture, (1) UPDATE meta SET value=x''00ff'' WHERE key=''store_root_sha'' -> st.error set, tip_live_elsewhere false, IndexMiss::Unreadable; (2) delete the row -> tip_live_elsewhere false, Stuck. The reviewer''s draft of that test passes at head and kills the mutant. Planned: integrator FIX-FORWARD (small, test-only) after grant renewal, then a fresh reviewer.'
+  created_at: 2026-10-14T13:24:24.148795388Z
+  modified_at: 2026-10-14T13:24:24.148795388Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13674-db4b-72f1-a3ed-13bc3fc38e01
