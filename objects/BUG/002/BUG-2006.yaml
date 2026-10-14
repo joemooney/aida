@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:13.679762298Z
-modified_at: 2026-10-13T22:58:52.465634037Z
+modified_at: 2026-10-14T00:11:55.473119771Z
 req_type: Bug
 tags:
 - contained
@@ -32,6 +32,11 @@ comments:
   content: 'PR #2610 filed with fix and unit tests, CI in flight at 7b79986a13618dac157be4ee9fc2625c2fe5218e'
   created_at: 2026-10-13T22:58:52.465634037Z
   modified_at: 2026-10-13T22:58:52.465634037Z
+- id: 01a137c0-5ad1-77e3-9340-9e4d32a418ba
+  author: joe
+  content: 'FACTORY READY: PR #2610 green at 4d0c049a59254b8938b062c8323778acaf5c6558'
+  created_at: 2026-10-14T00:11:55.473119771Z
+  modified_at: 2026-10-14T00:11:55.473119771Z
 history:
 - id: 01a13674-fa30-7603-9336-9657202fa1d8
   author: joe
