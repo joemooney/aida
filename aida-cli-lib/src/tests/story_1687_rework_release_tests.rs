@@ -416,3 +416,134 @@ fn happy_fixture_also_passes_existing_corpus_gate() {
         mh::CorpusMergeGate::Clear
     ));
 }
+
+// Drive auto_release's actual eligibility and release-time validation closure,
+// rather than supplying a test validation callback to release_with.
+// trace:STORY-1687 | ai:codex
+fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
+    let mut f = Fixture::new();
+    f.req.spec_id = Some("TASK-37".into());
+    let root = tempfile::tempdir().unwrap();
+    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    let verdict_path = rv::verdict_path(root.path(), "TASK-37");
+    std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
+    std::fs::write(&verdict_path, serde_json::to_vec(&f.body).unwrap()).unwrap();
+    let original_marker = std::fs::read(mh::hold_path(root.path(), 37)).unwrap();
+    let expected_marker = std::cell::RefCell::new(original_marker);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(f.req.clone());
+    let ids = vec!["TASK-37".into()];
+    let head_reads = Cell::new(0);
+    let hold_reads = Cell::new(0);
+    let corpus_reads = Cell::new(0);
+    let comments = std::cell::RefCell::new(Vec::new());
+    let original_labels = vec![
+        "aida:merge-hold".to_string(),
+        "aida:merge-hold-recorded".into(),
+    ];
+    let labels = std::cell::RefCell::new(original_labels.clone());
+    let mut expected_hold = f.hold.clone();
+    if stricter_hold {
+        expected_hold.reason_kind = HoldReasonKind::Decision;
+        expected_hold.detail = "human decision required".into();
+    }
+    let result = auto_release_with(
+        root.path(),
+        &f.hold,
+        AutoReleaseIo {
+            live_head: &|| {
+                head_reads.set(head_reads.get() + 1);
+                if head_reads.get() == 2 && stricter_hold {
+                    mh::write_typed_hold(root.path(), &expected_hold)?;
+                    *expected_marker.borrow_mut() = std::fs::read(mh::hold_path(root.path(), 37))?;
+                }
+                Ok(if head_reads.get() >= 2 && move_head {
+                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into()
+                } else {
+                    HEAD.into()
+                })
+            },
+            read_hold: &|| {
+                hold_reads.set(hold_reads.get() + 1);
+                mh::read_hold_record(root.path(), 37)
+            },
+            covered_specs: &|| Ok((ids.clone(), store.clone())),
+            read_body: &|key| {
+                assert_eq!(key, "TASK-37");
+                Ok(serde_json::from_slice(&std::fs::read(&verdict_path)?)?)
+            },
+            read_corpus: &|ids| {
+                corpus_reads.set(corpus_reads.get() + 1);
+                mh::corpus_gate_bodies(&[root.path()], 37, ids).map_err(anyhow::Error::msg)
+            },
+            grant_check: &|id, subject| {
+                assert_eq!(id, f.grant.id);
+                assert_eq!(subject, f.grant.subject);
+                sa::GrantCheck::Valid(f.grant.clone())
+            },
+            comment: &|body| {
+                comments.borrow_mut().push(body.to_string());
+                Ok(())
+            },
+            labels: &|| {
+                labels.borrow_mut().clear();
+                Ok(())
+            },
+        },
+    );
+    if move_head || stricter_hold {
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains(if move_head {
+                "head moved"
+            } else {
+                "hold changed"
+            }),
+            "{error}"
+        );
+        assert_eq!(head_reads.get(), 2);
+        assert_eq!(hold_reads.get(), 1);
+        let retained_hold = mh::read_hold_record(root.path(), 37).unwrap();
+        assert_eq!(retained_hold.reason_kind, expected_hold.reason_kind);
+        if stricter_hold {
+            assert_eq!(retained_hold.absorbed.len(), 1);
+            assert_eq!(
+                retained_hold.absorbed[0].reason_kind,
+                HoldReasonKind::Rework
+            );
+        } else {
+            assert_eq!(retained_hold, expected_hold);
+        }
+        assert_eq!(
+            std::fs::read(mh::hold_path(root.path(), 37)).unwrap(),
+            *expected_marker.borrow()
+        );
+        assert!(!mh::clearance_path(root.path(), 37).exists());
+        assert!(comments.borrow().is_empty());
+        assert_eq!(*labels.borrow(), original_labels);
+    } else {
+        assert!(result.unwrap());
+        assert_eq!(head_reads.get(), 3);
+        assert_eq!(hold_reads.get(), 2);
+        assert_eq!(corpus_reads.get(), 2);
+        assert!(!mh::hold_path(root.path(), 37).exists());
+        assert!(mh::clearance_path(root.path(), 37).is_file());
+        assert_eq!(comments.borrow().len(), 1);
+        assert!(labels.borrow().is_empty());
+    }
+}
+
+#[test]
+fn auto_release_current_head_and_unchanged_hold_releases() {
+    auto_release_fixture(false, false);
+}
+
+#[test]
+fn auto_release_refetches_moved_forge_head_before_any_release_effect() {
+    auto_release_fixture(true, false);
+}
+
+#[test]
+fn auto_release_rereads_stricter_hold_before_any_release_effect() {
+    auto_release_fixture(false, true);
+}

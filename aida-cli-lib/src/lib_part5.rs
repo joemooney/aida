@@ -3116,7 +3116,8 @@ pub(crate) fn handle_review_record_at(
     // this spec) so merge surfaces now read the verdict instead.
     // trace:STORY-1405 | ai:claude
     clear_review_markers_for_verdict(&project_root, spec, pr);
-    // A verified record is required; direct artifact writers do not grant release.
+    // The record-time stamp binds grant, subject, session and recorder; it does
+    // not bind the SHA, verdict or timestamp (the same-user trust limit remains).
     // trace:STORY-1687 | ai:codex
     if kind == review_verdict::VerdictKind::Approved {
         if let Some(pr) = pr {

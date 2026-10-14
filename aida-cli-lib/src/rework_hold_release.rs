@@ -234,6 +234,20 @@ fn release_with(
     Ok(())
 }
 
+// Reads and forge effects are injected; eligibility and both release-time rechecks
+// stay in the same path used by production. No test-only authority bypass.
+// trace:STORY-1687 | ai:codex
+struct AutoReleaseIo<'a> {
+    live_head: &'a dyn Fn() -> Result<String>,
+    read_hold: &'a dyn Fn() -> Option<mh::MergeHoldRecord>,
+    covered_specs: &'a dyn Fn() -> Result<(Vec<String>, aida_core::RequirementsStore)>,
+    read_body: &'a dyn Fn(&str) -> Result<Value>,
+    read_corpus: &'a dyn Fn(&[String]) -> Result<Vec<(String, String)>>,
+    grant_check: &'a dyn Fn(&str, &str) -> sa::GrantCheck,
+    comment: &'a dyn Fn(&str) -> Result<()>,
+    labels: &'a dyn Fn() -> Result<()>,
+}
+
 pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
     let root = crate::main_worktree_root_from(project);
     let Some(hold) = mh::read_hold_record(&root, pr) else {
@@ -250,23 +264,94 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
         ensure!(change.state == mh::ChangeState::Open, "change is not open");
         change.head_sha.context("current head could not be read")
     };
-    let head = live_head()?;
-    let forge = crate::forge::forge_for_kind(&root, kind);
-    let mut sink = crate::network_retry::StderrSink;
-    let mut ids: Vec<String> = forge
-        .change_commit_headlines(pr, &mut sink)?
-        .iter()
-        .flat_map(|s| crate::pr_ship::extract_trailing_spec_ids_from_subject(s))
-        .collect();
-    if let Some(spec) = &hold.spec {
-        if !spec.starts_with("PR-") {
-            ids.push(spec.clone());
-        }
-    }
-    ids.sort();
-    ids.dedup();
-    let store = crate::pr_lookup::load_review_story_inventory(&root)
-        .context("covered spec store is unreadable; human clear required")?;
+    let verdict_root = std::cell::Cell::new(None::<&Path>);
+    auto_release_with(
+        &root,
+        &hold,
+        AutoReleaseIo {
+            live_head: &live_head,
+            read_hold: &|| mh::read_hold_record(&root, pr),
+            covered_specs: &|| {
+                let forge = crate::forge::forge_for_kind(&root, kind);
+                let mut sink = crate::network_retry::StderrSink;
+                let mut ids: Vec<String> = forge
+                    .change_commit_headlines(pr, &mut sink)?
+                    .iter()
+                    .flat_map(|s| crate::pr_ship::extract_trailing_spec_ids_from_subject(s))
+                    .collect();
+                if let Some(spec) = &hold.spec {
+                    if !spec.starts_with("PR-") {
+                        ids.push(spec.clone());
+                    }
+                }
+                ids.sort();
+                ids.dedup();
+                let store = crate::pr_lookup::load_review_story_inventory(&root)
+                    .context("covered spec store is unreadable; human clear required")?;
+                Ok((ids, store))
+            },
+            read_body: &|key| {
+                let verdict_root = match verdict_root.get() {
+                    Some(path) => path,
+                    None => {
+                        let path = [project, root.as_path()]
+                            .into_iter()
+                            .find(|r| rv::verdict_path(r, key).is_file())
+                            .context("arming verdict is missing")?;
+                        verdict_root.set(Some(path));
+                        path
+                    }
+                };
+                Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
+                    verdict_root,
+                    key,
+                ))?)?)
+            },
+            read_corpus: &|ids| {
+                mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
+            },
+            grant_check: &|id, subject| sa::grant_check_for(&root, id, subject),
+            comment: &|body| {
+                let (cli, args) = match kind {
+                    crate::forge::ForgeKind::GitHub => ("gh", vec!["pr", "comment"]),
+                    crate::forge::ForgeKind::GitLab => ("glab", vec!["mr", "note"]),
+                    _ => bail!("no forge audit comment support"),
+                };
+                let output = std::process::Command::new(cli)
+                    .current_dir(&root)
+                    .args(args)
+                    .arg(pr.to_string())
+                    .arg("-R")
+                    .arg(pin.repo_arg())
+                    .arg(if kind == crate::forge::ForgeKind::GitHub {
+                        "--body"
+                    } else {
+                        "--message"
+                    })
+                    .arg(body)
+                    .output()?;
+                ensure!(
+                    output.status.success(),
+                    "audit comment failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                Ok(())
+            },
+            labels: &|| {
+                mh::sync_label(&root, pr, false)
+                    .map_err(|e| anyhow::anyhow!("release labels failed: {e}"))
+            },
+        },
+    )
+}
+
+fn auto_release_with(
+    root: &Path,
+    hold: &mh::MergeHoldRecord,
+    io: AutoReleaseIo<'_>,
+) -> Result<bool> {
+    let head = (io.live_head)()?;
+    let (ids, store) = (io.covered_specs)()?;
     let specs: Vec<_> = ids
         .iter()
         .map(|id| {
@@ -280,22 +365,11 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
             })
         })
         .collect();
-    let key = hold
+    let key = &hold
         .verdict_ref
         .as_ref()
         .context("hold has no arming verdict reference")?
-        .key
-        .clone();
-    let verdict_root = [project, root.as_path()]
-        .into_iter()
-        .find(|r| rv::verdict_path(r, &key).is_file())
-        .context("arming verdict is missing")?;
-    let read_body = || -> Result<Value> {
-        Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
-            verdict_root,
-            &key,
-        ))?)?)
-    };
+        .key;
     let check = |body: &Value| -> Result<mh::VerdictRef> {
         let att = body
             .get("release_grant")
@@ -308,70 +382,35 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
             .get("subject")
             .and_then(Value::as_str)
             .context("approval lacks reviewer subject")?;
-        eligible(
-            &hold,
-            body,
-            &head,
-            &specs,
-            &sa::grant_check_for(&root, id, subject),
-        )
+        eligible(hold, body, &head, &specs, &(io.grant_check)(id, subject))
     };
-    let verdict = check(&read_body()?)?;
+    let verdict = check(&(io.read_body)(key)?)?;
     release_with(
-        &root,
-        &hold,
+        root,
+        hold,
         &verdict,
         || {
-            let current_head = live_head()?;
+            let current_head = (io.live_head)()?;
             ensure!(
-                mh::read_hold_record(&root, pr).as_ref() == Some(&hold),
+                (io.read_hold)().as_ref() == Some(hold),
                 "hold changed before release"
             );
             ensure!(
-                check(&read_body()?)? == verdict,
+                check(&(io.read_body)(key)?)? == verdict,
                 "approval changed before release"
             );
-            let bodies =
-                mh::corpus_gate_bodies(&[project, &root], pr, &ids).map_err(anyhow::Error::msg)?;
+            let bodies = (io.read_corpus)(&ids)?;
             ensure!(
                 matches!(
-                    mh::corpus_merge_gate(pr, &bodies, Some(&head)),
+                    mh::corpus_merge_gate(hold.pr, &bodies, Some(&head)),
                     mh::CorpusMergeGate::Clear
                 ),
                 "verdict corpus still refuses this head"
             );
             Ok(current_head)
         },
-        |body| {
-            let (cli, args) = match kind {
-                crate::forge::ForgeKind::GitHub => ("gh", vec!["pr", "comment"]),
-                crate::forge::ForgeKind::GitLab => ("glab", vec!["mr", "note"]),
-                _ => bail!("no forge audit comment support"),
-            };
-            let output = std::process::Command::new(cli)
-                .current_dir(&root)
-                .args(args)
-                .arg(pr.to_string())
-                .arg("-R")
-                .arg(pin.repo_arg())
-                .arg(if kind == crate::forge::ForgeKind::GitHub {
-                    "--body"
-                } else {
-                    "--message"
-                })
-                .arg(body)
-                .output()?;
-            ensure!(
-                output.status.success(),
-                "audit comment failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            Ok(())
-        },
-        || {
-            mh::sync_label(&root, pr, false)
-                .map_err(|e| anyhow::anyhow!("release labels failed: {e}"))
-        },
+        io.comment,
+        io.labels,
     )?;
     Ok(true)
 }
