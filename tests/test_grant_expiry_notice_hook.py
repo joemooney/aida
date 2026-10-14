@@ -16,6 +16,14 @@ PAYLOAD = {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalCont
 
 
 class NoticeHook(unittest.TestCase):
+    # trace:BUG-2014 | ai:codex
+    def test_settings_hooks_are_installed_and_tracked(self):
+        result = subprocess.run(
+            ["python3", str(ROOT / "scripts/check-template-hooks.py")],
+            text=True, capture_output=True, cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def run_hook(self, body, grant='fixture'):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

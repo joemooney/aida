@@ -509,11 +509,20 @@ pub(crate) struct NoticeGrant {
 // consistency-checked metadata read only to preserve a parent's earlier expiry.
 // trace:BUG-2014 | ai:codex
 pub(crate) fn notice_grant(root: &Path, now: DateTime<Utc>) -> Result<Option<NoticeGrant>> {
-    let (id, seat, expires_at) = match grant_check_at(root, now) {
+    notice_grant_from_check(grant_check_at(root, now), read_grant)
+}
+
+// Keep the captured verdict and subsequent metadata read independently testable.
+// trace:BUG-2014 | ai:codex
+fn notice_grant_from_check(
+    check: GrantCheck,
+    read: impl Fn(&str) -> Result<SeatGrant>,
+) -> Result<Option<NoticeGrant>> {
+    let (id, seat, expires_at) = match check {
         GrantCheck::Valid(grant) => {
             let mut at = grant.expires_at;
             if let Some(parent) = grant.parent_grant_id.as_deref() {
-                at = at.min(read_grant(parent)?.expires_at);
+                at = at.min(read(parent)?.expires_at);
             }
             (grant.id, grant.seat, at)
         }
@@ -525,12 +534,12 @@ pub(crate) fn notice_grant(root: &Path, now: DateTime<Utc>) -> Result<Option<Not
             // Own expiry wins the validator's rejection order. If both child
             // and parent expired, display their minimum, retaining only
             // consistent timestamp/seat metadata from the expired record.
-            let record = read_grant(&id)?;
+            let record = read(&id)?;
             if record.expires_at != at || record.seat != seat {
                 return Ok(None);
             }
             let effective = match record.parent_grant_id.as_deref() {
-                Some(parent) => at.min(read_grant(parent)?.expires_at),
+                Some(parent) => at.min(read(parent)?.expires_at),
                 None => at,
             };
             (id, seat, effective)
@@ -921,6 +930,50 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A record can change between the validator and informational metadata read.
+    // Reject either inconsistency; matching metadata still emits an expired notice.
+    // trace:BUG-2014 | ai:codex
+    #[test]
+    fn expired_notice_rejects_changed_timestamp_or_seat() {
+        let at = Utc::now();
+        let record = SeatGrant {
+            id: "fixture".into(),
+            principal: "notice-user".into(),
+            subject: "notice-user".into(),
+            session_id: "fixture-session".into(),
+            seat: "advisor".into(),
+            tty_issued_at: at,
+            delegable_seats: Vec::new(),
+            parent_grant_id: None,
+            issued_at: at,
+            expires_at: at,
+            revoked_at: None,
+        };
+        for (expires_at, seat, emits) in [
+            (at, "advisor", true),
+            (at + Duration::minutes(1), "advisor", false),
+            (at, "reviewer", false),
+        ] {
+            let mut reread = record.clone();
+            reread.expires_at = expires_at;
+            reread.seat = seat.into();
+            let notice = notice_grant_from_check(
+                GrantCheck::Rejected {
+                    id: record.id.clone(),
+                    seat: Some(record.seat.clone()),
+                    reason: GrantRejection::Expired { at },
+                },
+                |_| Ok(reread.clone()),
+            )
+            .unwrap();
+            assert_eq!(
+                notice.is_some(),
+                emits,
+                "timestamp={expires_at}, seat={seat}"
+            );
+        }
+    }
 
     /// ADR-66 acceptance: an env-only `AIDA_SESSION_ROLE=advisor` confers no
     /// seat; a validated grant does; revocation and a shrunk roster ceiling

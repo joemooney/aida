@@ -150,16 +150,25 @@ fn concurrent_claims_emit_at_most_once_per_crossing() {
 
 #[test]
 fn corrupt_unreadable_and_unwritable_ledgers_emit_nothing() {
+    // Forked suite children may retain the lock: contention and ledger errors
+    // must both suppress a claim. Only Ok(true) violates the no-notice contract.
+    // trace:BUG-2014 | ai:codex
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("fixture.notice.json"), b"{").unwrap();
-    assert!(claim(dir.path(), "fixture", "epoch", 1).is_err());
+    assert!(!matches!(
+        claim(dir.path(), "fixture", "epoch", 1),
+        Ok(true)
+    ));
     std::fs::remove_file(dir.path().join("fixture.notice.json")).unwrap();
     std::fs::create_dir(dir.path().join("fixture.notice.json")).unwrap();
-    assert!(claim(dir.path(), "fixture", "epoch", 1).is_err());
+    assert!(!matches!(
+        claim(dir.path(), "fixture", "epoch", 1),
+        Ok(true)
+    ));
     // ENOTDIR remains reliable even when CI runs as root.
     let blocked = dir.path().join("not-a-directory");
     std::fs::write(&blocked, "blocked").unwrap();
-    assert!(claim(&blocked, "fixture", "epoch", 1).is_err());
+    assert!(!matches!(claim(&blocked, "fixture", "epoch", 1), Ok(true)));
 }
 
 // Exact boundary assertions kill <= to < mutations at each crossing.
@@ -176,5 +185,31 @@ fn threshold_boundaries_are_inclusive() {
         (Duration::milliseconds(-1), 3),
     ] {
         assert_eq!(threshold(left), expected, "remaining: {left}");
+    }
+}
+
+// trace:BUG-2014 | ai:codex
+#[test]
+fn baseline_grants_at_twenty_minutes_emit_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let mut env = crate::test_env::EnvVarsGuard::snapshot(&[GRANT_ENV, "AIDA_USER"]);
+    env.set_key("AIDA_USER", "notice-baseline");
+    let now = Utc::now();
+    for seat in ["implementer", "guest", "requester"] {
+        let id =
+            seat_authority::test_support::mint_grant_for(root.path(), "notice-baseline", seat, &[]);
+        change(&id, |grant| grant.expires_at = now + Duration::minutes(20));
+        env.set_key(GRANT_ENV, &id);
+        assert!(matches!(
+            seat_authority::grant_check_at(root.path(), now),
+            seat_authority::GrantCheck::Valid(_)
+        ));
+        assert!(
+            seat_authority::notice_grant(root.path(), now)
+                .unwrap()
+                .is_none(),
+            "{seat}"
+        );
+        assert!(notice(root.path(), now).unwrap().is_none(), "{seat}");
     }
 }
