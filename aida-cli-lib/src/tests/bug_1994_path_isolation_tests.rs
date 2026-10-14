@@ -99,13 +99,7 @@ fn fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected() {
     let mut child = child_command(&root.path().join("home"))
         .env("AIDA_TEST_PATH_CHILD", name)
         .env("AIDA_TEST_PATH_PROBE_ROOT", root.path())
-        .args([
-            "--ignored",
-            "--exact",
-            "--nocapture",
-            "--test-threads=1",
-            name,
-        ])
+        .args(["--exact", "--nocapture", "--test-threads=1", name])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
