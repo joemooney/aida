@@ -1,0 +1,19 @@
+{
+  "id": "bbd1eba9-c11e-4fda-a79f-7eba3d83de5b",
+  "thread_id": "bbd1eba9-c11e-4fda-a79f-7eba3d83de5b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791941283404,
+  "body": "ADVISOR SIGNOFF posted on #2604 at 01c287987496090ce7b77e85c5ddd8c073ef11d1. If it carries no REWORK hold, merge it pinned to that head. If it does, post the operator hold-clear line. Sorry for the 1h delay; the advisor watch missed a tick.",
+  "subject": "SIGNOFF #2604 BUG-2011 at 01c2879874 — merge pinned",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

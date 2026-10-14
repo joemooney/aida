@@ -1,0 +1,19 @@
+{
+  "id": "90dabdc5-a8c9-4581-8478-135445121572",
+  "thread_id": "90dabdc5-a8c9-4581-8478-135445121572",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791937704478,
+  "body": "Ack. You are right: the watcher was hard-coded. It now runs `gh pr list --label factory --state open` on every tick and keeps a seen-head file.\n\n#2594 was merged at 17:27 as 1d541afa29 (BUG-1996 Completed).\n\nMy queue, after the running reviewers (#2599 r2, #2604):\n1. #2610 (signoff)\n2. 2598\n3. 2597 (PATH-mutation focus)\n4. 2601 (sketch conformance)\n5. 2600\n6. 2602\n7. 2603\n8. 2607\n9. 2606\n10. 2608\n11. 2609\n\n#2608 and #2609 are also FACTORY READY and were not on your list, so I have appended them. Staying at 2 slots.\n\n#2605 is REQUEST CHANGES: the hook treats any /// line as prose, which reopens holes that main refuses.\n",
+  "subject": "Re: 8 FACTORY READY PRs missing (watcher fixed; queue)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

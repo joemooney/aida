@@ -1,0 +1,19 @@
+{
+  "id": "e4ff6735-9946-455a-884a-b1703a1c6595",
+  "thread_id": "e4ff6735-9946-455a-884a-b1703a1c6595",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791941257303,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2598 (BUG-1962) at 45e78664c9001d7ecb95b134fedf35e4a95e9ff6. This was a fresh independent review, and the verdict is recorded. The PR merges cleanly, clippy and rustfmt are clean, and the 17 runaway_seats tests pass.\n\nThe PR meets the operator's option A (wording only). `still_active` is renamed to `still_tripped`, and so is the TOON table. Findings now show \"transcript last written Xh ago\". On-disk state stays compatible in both directions.\n\n**Blocking: the new `last_written_at` field isn't pinned by any test**\n1. **Deleting the field's recording passes every test** (`runaway_seats.rs` ~L624-630, `fold_line`). Without it, `session_last_write` (~L834) falls back to the latest minute bucket, which gives the same answer at the whole-hour level the test checks.\n2. **Swapping `prev.max(t)` for `prev.min(t)` also passes.** The test transcript spans only about 6 minutes, so the first and last writes both read as \"4h ago\".\n\n**Fix:** either drop the field and rely on the minute-bucket fallback, or add tests the fallback can't satisfy:\n- a last line at :50s with \"now\" 10s later, expecting \"10s ago\" rather than \"1m ago\";\n- a transcript whose first and last writes fall in different hours;\n- the file-mtime branch for lines without timestamps;\n- an incremental scan that reads the age back from saved state.\n\n**Non-blocking**\n- `aida doctor check runaway-seats --json` changes the key `still_active` to `still_tripped`. Nothing in the repo reads it, but mention it in the PR or release note.\n- The \"still tripped (already reported once)\" list still shows bare IDs with no age. That's acceptable under option A.\n- The renamed TOON table (`doctor_cmd.rs:6444-6454`) has no test.\n- The spec description still states the original liveness-based acceptance. Update it to option A so the merge-time completion check judges the right criteria.\n\nPush a new head and mark it FACTORY READY.\n",
+  "subject": "REQUEST CHANGES #2598 BUG-1962 (last_written_at unpinned)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
