@@ -24,12 +24,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:20.284960861Z
-modified_at: 2026-10-14T04:11:36.825864017Z
+modified_at: 2026-10-14T16:14:59.735139155Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
 - tech-debt
+comments:
+- id: 01a13b32-1297-7831-aadf-591827a60c84
+  author: joe
+  content: 'Slice 1 in PR #2621 (13d037c2ee, Build green): pid_is_alive now rejects pids > pid_t::MAX (u32::MAX became kill(-1,0), which reads as alive), live_pids routed through the canonical probe, and a guard test against raw kill(pid,0) in production code. Slice 2 still to do: pid records without a start time; cache_lock''s second start-time format (linux-starttime:<ticks> vs rfc3339).'
+  created_at: 2026-10-14T16:14:59.735139155Z
+  modified_at: 2026-10-14T16:14:59.735139155Z
+  session_id: 0ffb0e8c-1f0f-448b-ab25-94b62ee21ce9
 execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
