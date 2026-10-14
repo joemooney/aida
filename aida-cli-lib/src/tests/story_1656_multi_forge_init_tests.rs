@@ -944,6 +944,12 @@ fn hub_disagreement_is_reported() {
 
 // ───────────────────────── TASK-1740 test gaps ─────────────────────────
 
+/// Redirects the process-wide fd 1/2 into temp files so the notices printed
+/// by the code under test can be asserted. Hazard: while a capture is open,
+/// output from parallel tests and child processes also lands in it, so
+/// asserts only check for presence/absence of the expected lines, and
+/// `capture_output` serializes captures with a mutex so two never overlap.
+// trace:TASK-1740 | ai:claude
 #[cfg(unix)]
 struct StdioCapture {
     old_stdout: libc::c_int,
