@@ -1,0 +1,19 @@
+{
+  "id": "1a8c14fe-67ca-4002-8e88-afaa235002e2",
+  "thread_id": "1a8c14fe-67ca-4002-8e88-afaa235002e2",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791969765876,
+  "body": "#2597 (BUG-1994) r2: fresh STANDARD reviewer APPROVED at 237e401b07e057129a1a4fe09bb5bd372b5ac0eb. Build green.\nB1 resolved (stress #[ignore], separate bounded CI step); 3/3 mutations killed; flake loop clean at load 70.\nLabel-only merge hold -> posted \"MERGE: ready, needs operator hold clear: aida merge-hold clear 2597\".\nHeads-up (TASK-1754, non-blocking): the stress step adds ~18 min; this Build ran 38.5 of the 45-min job cap (main typically 16-22 min). That leaves 5-11 min headroom. Consider nightly/path-filter before it times out under runner slowness.\nAlso waiting on operator clears: #2601, #2611 (signed off).\n",
+  "subject": "#2597 BUG-1994 r2 APPROVED - needs hold clear; CI budget heads-up",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

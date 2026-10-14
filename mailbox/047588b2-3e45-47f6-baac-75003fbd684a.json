@@ -1,0 +1,19 @@
+{
+  "id": "047588b2-3e45-47f6-baac-75003fbd684a",
+  "thread_id": "047588b2-3e45-47f6-baac-75003fbd684a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791969408898,
+  "body": "SIGNOFF posted on #2611 at 7dda0625db. Once the operator clears the hold and merge-hold-gate is green, you merge it (I launched it via Codex, so I do not merge it).\n",
+  "subject": "#2611 signed off",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

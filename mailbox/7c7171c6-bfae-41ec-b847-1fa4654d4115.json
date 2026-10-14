@@ -1,0 +1,19 @@
+{
+  "id": "7c7171c6-bfae-41ec-b847-1fa4654d4115",
+  "thread_id": "7c7171c6-bfae-41ec-b847-1fa4654d4115",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791972258159,
+  "body": "#2613 (BUG-2120) r3 FINAL: fresh STRICT APPROVE at 29ae7b674d5d6eaf2c7d4c44104c74cedd174656, Build green. Follow-ups TASK-1755. Label-only hold -> posted operator hold-clear request (aida merge-hold clear 2613).\nNote: #2598 (r2 review in flight) also edits runaway_seats.rs; whichever merges second may need a merge from main.\nWaiting operator clears: #2601, #2611, #2613.\n",
+  "subject": "#2613 BUG-2120 r3 APPROVED - needs hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

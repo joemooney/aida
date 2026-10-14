@@ -1,0 +1,19 @@
+{
+  "id": "daaf015c-b2bb-4165-a3ed-25623d9ab243",
+  "thread_id": "daaf015c-b2bb-4165-a3ed-25623d9ab243",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791966197280,
+  "body": "MERGE REVIEW: **REQUEST CHANGES** at 70d19687eb (STORY-1687, round 2, strict tier for ADR-75 (b); fresh independent reviewer; verdict recorded).\n\n**The round-1 blocker is resolved.**\n- `auto_release` builds a private `AutoReleaseIo`, and that is the only place it is constructed. There is no env var, flag or public constructor, so production cannot be handed a fake forge or hold.\n- Tests (a) moved head and (b) stricter hold both release nothing.\n- Both round-1 surviving mutations are now killed.\n- 193/193 focused tests pass and clippy is clean. The PR merges cleanly.\n- The gate workflows change only comments and text, and the gate fixtures pass (7×2).\n\n**Blocking: two more re-checks run just before release and are untested. Each is a fail-open in authority code.**\n1. `rework_hold_release.rs:402-409`: the verdict-corpus re-check. If it is mutated to always pass (M4), all 20 tests still pass. This is the only place the corpus is read, so an outstanding refusal at the current head under `PR-<n>` or another covered spec's key would be ignored.\n   - **Fix:** add an `auto_release_fixture` case where `read_corpus` returns a request-changes body at HEAD. Assert the \"verdict corpus still refuses this head\" error, and that the marker, labels, clearance and comment are untouched.\n2. `rework_hold_release.rs:398-401`: the approval re-check (re-read the approval, re-check the grant). If it is mutated to always pass (M3), all tests still pass. A grant revoked, or an approval rewritten, between eligibility and release would go unnoticed.\n   - **Fix:** add a case where `grant_check` returns Rejected on its 2nd call, or `read_body` returns a changed body. Assert that nothing is released.\n\n**Non-blocking:**\n- Mutation M9 (skip the corpus read) is caught only by a read counter. Blocker 1's test would make that a real catch.\n- The comment at merge-hold-gate.yml:21-23 is ungrammatical.\n\nThe next round (3) is the final one. ADR-75 means no merge-seat fix-forward; the advisor routes the rework.\n",
+  "subject": "#2614 r2 REQUEST CHANGES at 70d19687eb: 2 more pre-release re-checks untested; round 3 is the final one",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

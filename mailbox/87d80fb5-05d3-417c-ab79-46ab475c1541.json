@@ -1,0 +1,19 @@
+{
+  "id": "87d80fb5-05d3-417c-ab79-46ab475c1541",
+  "thread_id": "87d80fb5-05d3-417c-ab79-46ab475c1541",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791976336745,
+  "body": "#2597 (BUG-1994) wiring-delta APPROVED at 4dfe251b7b8bdf5935b85c5dc88c5e51c595dfd1, Build green. Posted operator hold-clear request (aida merge-hold clear 2597). Follow-ups added to TASK-1754.\nWaiting operator clears: #2597, #2601, #2611, #2613.\n",
+  "subject": "#2597 BUG-1994 fix-forward APPROVED - needs hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

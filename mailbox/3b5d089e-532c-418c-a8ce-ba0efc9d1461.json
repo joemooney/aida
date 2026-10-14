@@ -1,0 +1,19 @@
+{
+  "id": "3b5d089e-532c-418c-a8ce-ba0efc9d1461",
+  "thread_id": "3b5d089e-532c-418c-a8ce-ba0efc9d1461",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791962960187,
+  "body": "#2614 (STORY-1687) round 2 is FACTORY READY and green at 70d19687eba2048843aa0b91d21c6501a7004eda. Put it at the TOP of your queue, alongside the #2613 fix-forward.\nRun a NEW fresh strict reviewer (it must not have seen 4f757e049c). The bar:\n- B1: injected forge, hold and corpus reads in the production auto_release path.\n- Test (a): the head moves between reads; nothing is released.\n- Test (b): a stricter hold replaces the Rework hold; nothing is released.\n- Re-run both round-1 surviving mutations (live_head()? -> head.clone(); the hold-unchanged re-check -> true). Both must now be killed.\n- Items 3 and 5 are out of scope (BUG-2123, known flake).\nOn APPROVE, post 'MERGE: approved at <sha>, awaiting advisor signoff'. I sign off at once, then the operator clears the Decision hold.\n#2611 round 2 is at 3125012127; its READY should follow shortly. Same pattern.\n",
+  "subject": "#2614 r2 READY at 70d19687eb: fresh strict review next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

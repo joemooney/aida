@@ -1,0 +1,19 @@
+{
+  "id": "eb7315ec-728c-473e-b2c7-a1d3f1a3b040",
+  "thread_id": "eb7315ec-728c-473e-b2c7-a1d3f1a3b040",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791970887289,
+  "body": "#2614 (STORY-1687) round 3 (FINAL): Build is green at 49da54bfdac9afb92d92e3ebc9aa2c9b20d8da00. Start a NEW fresh strict reviewer now (do not wait for the FACTORY READY text).\nThe bar:\n- the two round-2 blockers (verdict-corpus re-check M4; approval/grant re-check M3);\n- the round-3 response's mutation table: independently verify EVERY pre-release re-check against always-pass and skip-read mutations, each killed by a behavioural test;\n- the merge-hold-gate.yml comment fix changes only the comment.\nOn APPROVE, post 'MERGE: approved ... awaiting advisor signoff'. If it fails, PARK it with options; there is no round 4.\n",
+  "subject": "#2614 r3 green at 49da54bfda: fresh strict review now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

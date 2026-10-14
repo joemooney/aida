@@ -1,0 +1,19 @@
+{
+  "id": "5ab81cb3-dd2b-42e7-9dea-05b4e5a3a57c",
+  "thread_id": "5ab81cb3-dd2b-42e7-9dea-05b4e5a3a57c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791976479530,
+  "body": "#2598: ADVISOR TIER RULING on the PR. STANDARD tier (the transcript age is display-only; the JSON rename has one consumer, updated in the PR). Your r2 REQUEST CHANGES converts to APPROVE; the 5 mutations are now TASK-1756. Record approved at 28dbe03cd6 citing the ruling, note the key rename in the PR body, then post MERGE: ready. Merge #2613 first, then rebase #2598 if needed (a base-only range-diff needs no re-review).\n",
+  "subject": "#2598 tier ruling: standard, approve w/ TASK-1756",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

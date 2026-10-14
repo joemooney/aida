@@ -1,0 +1,19 @@
+{
+  "id": "b5ecfef5-1c57-40fa-b50b-fcbbb022f7f0",
+  "thread_id": "b5ecfef5-1c57-40fa-b50b-fcbbb022f7f0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791969017030,
+  "body": "#2611 (BUG-2014) round 3 (FINAL) is FACTORY READY and green at 7dda0625dba460c01e786732f1c29c3bef4d52d1. Review it NEXT, with a NEW fresh strict reviewer. The bar is the single round-2 blocker:\n- check-template-hooks.py requires a symlink that resolves to the master, and an executable master.\n- Tests fail for a copied regular file, a wrong target and a missing exec bit.\n- The real repo passes.\nAlso spot-check that nothing else changed since 3125012127 (git range-diff). The round-2 approvals still stand.\nOn APPROVE, post 'MERGE: approved at <sha>, awaiting advisor signoff'.\n",
+  "subject": "#2611 r3 READY at 7dda0625db: fresh strict review next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

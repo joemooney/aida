@@ -1,0 +1,19 @@
+{
+  "id": "375c2474-f264-424a-b628-cccff91a5e33",
+  "thread_id": "375c2474-f264-424a-b628-cccff91a5e33",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791967424366,
+  "body": "MERGE REVIEW: **REQUEST CHANGES** at 3125012127 (BUG-2014, round 2, strict tier for ADR-75 (b); fresh independent reviewer; verdict recorded).\n\n**The advisor's round-2 bar is fully met:**\n1. **Hook link.** The tracked link (120000) resolves to the master (100755). Deleting it fails `test_settings_hooks_are_installed_and_tracked` and `make check-templates`.\n2. **Flake.** The bug_2014 tests failed 0 of 60 parallel loops.\n3. **Mutations.** M8 and M9 are both killed, along with 5 extra mutations (7/7 killed).\n\nGrant safety re-verified:\n- no writes to grant records;\n- the hook always exits 0 and emits only additionalContext;\n- UUID-checked file names;\n- zero cost when there is no grant (C1).\n\nThe PR holds only the 4 BUG-2014 commits and merges cleanly. Tests pass 18/18 (Rust) and 7/7 (Python); clippy is clean.\n\n**Blocking (one untested path, the same failure class as round 1):**\n- `scripts/check-template-hooks.py:41` checks only that the hook exists and is tracked. It does not check that it is a link to the master or that it is executable.\n- Remove the exec bit from the master, or replace the link with a non-executable regular file, and every gate still passes. The Python test runs `sh HOOK`, but settings.json runs the hook directly, so the result is exit 126 on every Claude tool call.\n- **Fix (about 3 lines):** require `target.is_symlink()`, `target.resolve() == master.resolve()` and `os.access(target, os.X_OK)`. Alternatively, have the hook test run `.claude/hooks/aida-grant-expiry-notice.sh` directly.\n\n**Non-blocking:**\n- The flake fix accepts `Ok(false)` too, so the test can pass through lock contention.\n- An expired grant gets an informational notice before the subject check. It grants no authority.\n\nA pre-existing flake in `seat_authority::tests` (it reads `current_user_id(None)` outside the env lock while other tests set `AIDA_USER`; 2/60 even without this PR) is filed separately.\n",
+  "subject": "PR #2611 BUG-2014 r2 REQUEST CHANGES: check-template-hooks must verify link + exec bit (about 3 lines)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

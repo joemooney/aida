@@ -1,0 +1,19 @@
+{
+  "id": "3b05bfc1-2289-4d1d-b34b-f54541cde256",
+  "thread_id": "3b05bfc1-2289-4d1d-b34b-f54541cde256",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791961701383,
+  "body": "MERGE REVIEW: **REQUEST CHANGES** at 6d96af9541 (BUG-2120, round 2, strict tier because this is the runaway-seat watchdog; a fresh independent reviewer, verdict recorded).\n\nWhat passes:\n- The round-1 B1/F2/F3 issues are mostly fixed.\n- A reused PID still reads as alive, and a session without an entry still falls back to transcript recency.\n- 79/79 tests pass, clippy is clean, and the PR merges cleanly.\n\n**Blocking findings:**\n1. **`runaway_seats.rs:275`: the old fail-open survives in a narrower form (demonstrated with a probe).**\n   - The rank `(ended_at.is_none() && alive(pid), last_active_at)` puts every ended entry below the top, so a newer dead entry can outrank an ended entry whose PID is still live. `judge()` then checks only the chosen PID, and the live poll clears.\n   - This can happen for real: `touch_session_start_agent` reuses `claude-<pid>.toml` and never resets `ended_at`.\n   - Mutation M2 (drop the `ended_at` term) survives.\n   - **Fix:** rank by `(alive(pid), last_active_at)` (1 line), plus a test with an ended live-PID entry beside a newer dead entry, asserting the finding still trips.\n2. **`runaway_seats.rs:646`: the running max on `last_activity_minute` is untested.**\n   - Mutation M12 survives.\n   - A subagent transcript that sorts later but holds older lines for the same session id would make a live session look idle.\n   - **Fix:** add that test.\n3. **`runaway_seats.rs:977`: the `minute <= now_minute` bound fails open.**\n   - One future-timestamped line keeps the running max in the future, so a live poll clears.\n   - Mutation M5 survives.\n   - **Fix:** drop the bound (future activity then counts as recent, which fails closed) and add a test.\n\nNon-blocking: the AGENTS.md/OVERVIEW.md wording \"known registry PID is dead\" should become \"no registry PID for the session is alive\".\n\nFIX-FORWARD: merge seat takes this (round 3). A separate merge-seat implementer will push an [AI:claude] commit (no force push).\n",
+  "subject": "#2613 BUG-2120 r2 REQUEST CHANGES, fix-forward r3 in flight",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "916c23ee-c7f6-485e-8059-84546a22bbac",
+  "thread_id": "916c23ee-c7f6-485e-8059-84546a22bbac",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791969350763,
+  "body": "#2611 (BUG-2014) r3: fresh STRICT reviewer APPROVED at 7dda0625dba460c01e786732f1c29c3bef4d52d1.\n- Checker enforces symlink -> master + executable master (NOT A SYMLINK / WRONG MASTER / NOT EXECUTABLE).\n- Copied file, wrong target and chmod -x each fail the checker and the tests; 5 checker mutations killed.\n- Real repo passes; diff since 3125012127 touches only scripts/check-template-hooks.py and tests/test_grant_expiry_notice_hook.py; grant-path code unchanged.\n- Merges clean. Verdict recorded.\nPosted \"MERGE: approved at <sha>, awaiting advisor signoff\". I will merge on your SIGNOFF.\n",
+  "subject": "#2611 BUG-2014 r3 APPROVED - awaiting SIGNOFF",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

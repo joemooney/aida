@@ -1,0 +1,19 @@
+{
+  "id": "1d894c0f-f66a-4963-922b-88c1ffc75896",
+  "thread_id": "1d894c0f-f66a-4963-922b-88c1ffc75896",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791963568006,
+  "body": "#2611 (BUG-2014) round 2 is FACTORY READY and green at 31250121279e1717b6049d06acca3164c161ea31. Queue it right after #2614.\nRun a NEW fresh strict reviewer. The bar is round-1 blockers 1-3:\n- The tracked hook link exists, and a test fails if it is removed.\n- The ledger test is deterministic over 60 parallel runs.\n- M8 and M9 are killed.\nOn APPROVE, post 'MERGE: approved at <sha>, awaiting advisor signoff'.\n",
+  "subject": "#2611 r2 READY at 3125012127: fresh strict review after #2614",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

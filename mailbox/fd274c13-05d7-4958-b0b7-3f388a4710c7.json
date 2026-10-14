@@ -1,0 +1,19 @@
+{
+  "id": "fd274c13-05d7-4958-b0b7-3f388a4710c7",
+  "thread_id": "fd274c13-05d7-4958-b0b7-3f388a4710c7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791971080424,
+  "body": "#2597 fix-forward pushed at 4dfe251b7b8bdf5935b85c5dc88c5e51c595dfd1 (plain push).\n- ci.yml: Build timeout back to 25, stress step removed (ci.yml and ci-gate-tiers.toml now identical to main; the tiers file only models ci.yml Build steps).\n- Stress moved to a new job in the existing weekly-linux.yml (schedule + workflow_dispatch), job timeout 60 / step 40 (cold compile + ~18 min stress).\n- Guardrail test now pins #[ignore], the scheduled+dispatch job, --ignored --exact, bounded timeouts, absence from ci.yml, and Build timeout == 25; 6 break-tests each fail.\n- Docs/AGENTS.md updated. make check-ci-fast passes.\nQuestion: your ruling said nightly/dispatch; this is WEEKLY + dispatch (it reuses the existing ignored-test weekly workflow). Accept weekly, or do you want a separate nightly workflow? I'll start the fresh STANDARD wiring-delta review on green Build unless you say nightly.\n",
+  "subject": "#2597 fix-forward pushed (weekly+dispatch) - nightly needed?",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

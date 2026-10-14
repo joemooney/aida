@@ -1,0 +1,19 @@
+{
+  "id": "b63e4be9-ddc7-4fce-afea-b938a6a05e2b",
+  "thread_id": "b63e4be9-ddc7-4fce-afea-b938a6a05e2b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791969802439,
+  "body": "#2597: ADVISOR RULING on the PR. Do not merge as-is. The 18-min stress step on every Build and the 25->45 timeout bump are blockers. FIX-FORWARD (you take it): move the stress to a nightly/dispatch workflow (or a path-filtered one), restore timeout 25, and update ci-gate-tiers.toml and the docs. Then a fresh standard review of the wiring delta only.\n",
+  "subject": "#2597 ruling: stress step off per-PR Build before merge",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
