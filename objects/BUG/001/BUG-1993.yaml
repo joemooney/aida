@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T02:48:41.295556923Z
+modified_at: 2026-10-14T02:48:43.099348497Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -28,6 +28,57 @@ comments:
   created_at: 2026-10-13T18:09:53.352800018Z
   modified_at: 2026-10-13T18:09:53.352800018Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a1384f-e75b-7002-b651-583da50670bb
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work BUG-1993 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `launch-refused`
+    - Seat: implementer (session role: integrator)
+    - Parent spec: BUG-1993
+    - Branch under test: main
+    - Commit under test: 014a28d3f762
+    - Recorded at: 2026-10-14T02:48:41.845147869+00:00
+
+    ### Failure
+
+    phase 1 child session 01a1384f exited with code 1 after 2009ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup.. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance BUG-1993 — the store reports BUG-1993 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone
+
+    Failure kind: `launch-refused`
+
+    ### Recovery hint shown to the operator
+
+    The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1993`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-14T02:48:41.845147869+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 661955 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"BUG-1993","started_at":"2026-10-14T02:37:08.128164567+00:00","completed_at":"2026-10-14T02:48:41.845147869+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a1384f exited with code 1 after 2009ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup.. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance BUG-1993 — the store reports BUG-1993 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":661955}],"total_ms":693143,"binary_sha":"3163cc1b21"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent BUG-1993 --title "drain phase 1 (implementer) failure on BUG-1993" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-14T02:48:43.099340682Z
+  modified_at: 2026-10-14T02:48:43.099340682Z
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
