@@ -152,14 +152,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a130fa-86cc-7933-8301-b80b6ea230ef
-  position: 466000
-  added_by: role:implementer
-  note: groomed drain 2026-10-13 (operator-approved night-shift feed)
-  added_at: 2026-10-14T01:33:51.860851230Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a13530-96c7-76f0-8f16-d131cae77026
   position: 467000
   added_by: role:implementer
@@ -188,5 +180,12 @@
   position: 470000
   added_by: role:implementer
   added_at: 2026-10-14T01:37:43.689005187Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a130fa-86cc-7933-8301-b80b6ea230ef
+  position: 471000
+  added_by: role:implementer
+  added_at: 2026-10-14T03:38:51.044618904Z
   for_role: implementer
   added_by_machine: imac
