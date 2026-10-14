@@ -49,13 +49,13 @@ fn run_ok(cmd: &mut Command) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-/// Real `git`, resolved before any shim directory is put in front of PATH.
+/// Real `git`, resolved from PATH before any shim directory is put in front.
 fn real_git() -> PathBuf {
-    let out = Command::new("sh")
-        .args(["-c", "command -v git"])
-        .output()
-        .expect("resolve git");
-    PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
+    let path = std::env::var_os("PATH").expect("PATH set");
+    std::env::split_paths(&path)
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
 }
 
 /// A shim dir whose `git` sleeps when any argument equals `slow_arg`, and
