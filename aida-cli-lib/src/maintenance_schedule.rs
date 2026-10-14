@@ -2748,6 +2748,16 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: true,
             },
         ),
+        // Inline history-only work belongs to timer ticks, never prompt hooks.
+        // trace:STORY-1661 | ai:codex
+        (
+            &["cache refresh --history --if-behind"],
+            ScheduledCommand {
+                display: "cache refresh --history --if-behind",
+                args: &["cache", "refresh", "--history", "--if-behind"],
+                hook_allowed: false,
+            },
+        ),
         // TASK-1527: retire an orphaned cache refresh request. A silent no-op
         // without a pending request; when one pends it refreshes the cache
         // inline, which can take seconds — timer-tick territory, not a
@@ -3485,6 +3495,75 @@ mod tests {
             min_gap: DEFAULT_MIN_GAP.to_string(),
             tasks,
         }
+    }
+
+    // One actual maintenance tick runs the inline job. The scheduler's own
+    // ledger commit is a subsequent store write and remains inside the flow cap.
+    // trace:STORY-1661 | ai:codex
+    #[test]
+    fn story_1661_schedule_tick_runs_history_inline_and_skips_prompt_hooks() {
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+        let fx = crate::history_indexer::tests::Fixture::new();
+        for n in 1..=200 {
+            fx.append(n);
+        }
+        let job = task(
+            "history-index-tick",
+            "15m",
+            "cache refresh --history --if-behind",
+        );
+        assert!(!job.command.as_ref().unwrap().hook_allowed);
+        assert_eq!(
+            job.command.as_ref().unwrap().args,
+            &["cache", "refresh", "--history", "--if-behind"]
+        );
+        let calls = std::cell::Cell::new(0);
+        let mut state = ScheduleState::default();
+        let lines = tick_with_executor(
+            fx.root.path(),
+            config(vec![job.clone()]),
+            &mut state,
+            at(12),
+            true,
+            |_root, _cmd| panic!("history indexing cannot run from a prompt hook"),
+        )
+        .unwrap();
+        assert!(lines.is_empty());
+        let lines = tick_with_executor(
+            fx.root.path(),
+            config(vec![job]),
+            &mut state,
+            at(13),
+            false,
+            |_root, _cmd| {
+                calls.set(calls.get() + 1);
+                assert_eq!(
+                    crate::history_indexer::run_tick(&fx.store).unwrap(),
+                    crate::history_indexer::TickOutcome::Advanced {
+                        appended: 200,
+                        lag: 0
+                    }
+                );
+                Ok(TaskOutcome {
+                    status: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            },
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(lines.len(), 1);
+        assert!(schedule_ledger::load(&fx.store, "history-index-tick").is_some());
+        let before = crate::history_cache::test_support::commit_count(&fx.db);
+        crate::history_cache::serve_flow(&fx.store, &crate::history_indexer::tests::opts())
+            .unwrap();
+        let extra = crate::history_cache::test_support::commit_count(&fx.db) - before;
+        assert_eq!(extra, 1, "the scheduler ledger is a real subsequent commit");
+        assert!(
+            extra <= crate::history_cache::FLOW_CATCH_UP_CAP as i64,
+            "scheduler bookkeeping must not push the next flow beyond its existing cap"
+        );
     }
 
     fn ok_exec(

@@ -1,3 +1,9 @@
+An existing history index catches up through the inline maintenance job
+`cache refresh --history --if-behind`, with a 30-second chunk budget. It takes
+only IndexLock, skips missing/disabled/busy indexes, and never spawns on commits.
+See [cache commands](docs/cli/10-storage.md).
+<!-- trace:STORY-1661 | ai:codex -->
+
 Model-side mail poll findings clear after a session is silent beyond
 `watchdog.window_minutes`, or no registry PID for the session is alive. Recent
 activity keeps an older setup observable for live or unregistered sessions.

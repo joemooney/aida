@@ -2550,6 +2550,14 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
+every = "15m"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would
@@ -2740,6 +2748,7 @@ mod story_1226_init_schedule_section_tests {
             "shelf-triage",
             // trace:TASK-1527 | ai:claude
             "cache-refresh-tick",
+            "history-index-tick",
             "groom-drafts",
             "hub-drift-guard",
             "hub-drift-guard-route",
@@ -2761,8 +2770,9 @@ mod story_1226_init_schedule_section_tests {
         assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
         let parsed: toml::Value = toml::from_str(section).expect("defaults parse");
         let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
-        // TASK-1527 added cache-refresh-tick as the fourth enabled default.
-        assert_eq!(jobs.len(), 4);
+        // The history tick joins the four existing enabled defaults.
+        // trace:STORY-1661 | ai:codex
+        assert_eq!(jobs.len(), 5);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
@@ -2776,6 +2786,15 @@ mod story_1226_init_schedule_section_tests {
             Some("cache refresh --if-requested")
         );
         assert_eq!(tick["every"].as_str(), Some("15m"));
+        let history = jobs
+            .iter()
+            .find(|job| job["name"].as_str() == Some("history-index-tick"))
+            .expect("history-index-tick scaffolded");
+        assert_eq!(
+            history["command"].as_str(),
+            Some("cache refresh --history --if-behind")
+        );
+        assert_eq!(history["every"].as_str(), Some("15m"));
     }
 }
 
