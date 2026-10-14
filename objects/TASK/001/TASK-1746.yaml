@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:37:34.380337028Z
-modified_at: 2026-10-14T11:57:45.183689407Z
+modified_at: 2026-10-14T12:19:46.030221537Z
 req_type: Task
 tags:
 - batch:drain-20261013
@@ -18,6 +18,11 @@ comments:
   content: 'FACTORY PLAN (antigravity): Update aida-core/templates/.aida/discipline/two-seat-protocol.md condition 5 to reflect ADR-75''s narrowed merge-time signoff (sandbox/confinement, authority/grants/identity, credentials; architecture signed at sketch time with merge reviewer checking conformance; drop second merge-time architecture signoff). Sync to .aida/discipline/ via make sync-templates. Verify with make check-templates and make check-ci-fast.'
   created_at: 2026-10-14T11:57:45.183689407Z
   modified_at: 2026-10-14T11:57:45.183689407Z
+- id: 01a13a5a-b6ee-7f62-b0e7-55cf47f26c92
+  author: joe
+  content: 'FACTORY DRAFT: PR #2617 at 090e58033e4b59bf41db09e5102088d0519f9996'
+  created_at: 2026-10-14T12:19:46.030221537Z
+  modified_at: 2026-10-14T12:19:46.030221537Z
 history:
 - id: 01a13a46-2a27-7eb3-9546-3194b371fee5
   author: aida-session-start
