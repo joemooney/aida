@@ -31,7 +31,7 @@ suite alongside every migrated PATH-changing test in one 16-thread harness per
 round. It lists members first, checks that every writer is included, and checks
 completed pass counts for all 15 rounds. The stress takes about 18 minutes,
 so it is `#[ignore]`d in the default suite and does not run in per-PR CI (the
-Build job keeps its 25-minute bound). It runs as the **PATH and history
+Build job keeps its 40-minute bound). It runs as the **PATH and history
 concurrency stress** job in `.github/workflows/weekly-linux.yml`, on that
 workflow's weekly schedule or on manual dispatch:
 
