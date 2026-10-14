@@ -1,0 +1,20 @@
+id: 01a13cc4-2d1d-7401-bdd5-de95d3b63bb7
+spec_id: TASK-1758
+agreed_id: TASK-1758
+title: Codex sessions attached to the shared app-server daemon still inherit the daemon's AIDA_SESSION_ROLE and grant for CLI authority
+description: 'Follow-up from the #2637 (BUG-2007) review. The hooks now display role: unresolved under the daemon, but authority is unchanged: aida commands and aida-advisor-code-guard.sh run inside a daemon-attached session still act with the daemon''s role and grant. Related to BUG-1934. Also: codex runs the gitignored per-machine .codex/hooks/ copies, which are stale (Sep 21), so the hook half of BUG-2007 reaches codex only after re-scaffolding. Decide whether the CLI should refuse role-scoped mutations when it detects the shared daemon in its ancestry, and how to refresh the .codex/hooks copies.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T23:34:11.997358746Z
+modified_at: 2026-10-14T23:34:11.997358746Z
+req_type: Task
+filed_at:
+  code_sha: b6ba49699119e94ef5204b90c4bcc9c23f055d83
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
