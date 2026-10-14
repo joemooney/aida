@@ -475,25 +475,28 @@ __aida_prov_started=$SECONDS
 __aida_prov_offenders=$(__aida_staged_rs_diffs | awk -v spec_re="$SPEC_ID_RE" -v doc_re="$DOC_COMMENT_RE" '
 function doc_has_prose(doc,    residual) {
     residual = doc
-    sub(/^[[:space:]]*\/\/\/+/, "", residual)
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", residual)
+    if (residual ~ /^(#|[-*+]|[0-9]+\.|```)/) return 0
     gsub(spec_re, " ", residual)
-    return (residual ~ /[A-Za-z][A-Za-z]/)
+    return (residual ~ /[A-Za-z][A-Za-z]/) ? 1 : 0
 }
 function doc_ends_sentence(doc,    s) {
     s = trim_ws(doc)
-    sub(/^[[:space:]]*\/\/\/+/, "", s)
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", s)
     s = trim_ws(s)
-    if (s ~ /[.?!:]$/ && s !~ /(e\.g\.|i\.e\.|etc\.|vs\.)\.$/) return 1
+    if (s ~ /[.?!:]$/ && s !~ /(e\.g|i\.e|etc|vs)\.$/) return 1
     return 0
 }
 # trace:BUG-2008 | ai:antigravity
-function __aida_doc_is_provenance_leak(doc, prev_has_prose, prev_ends_sentence,    residual) {
+function __aida_doc_is_provenance_leak(doc, prev_has_prose, prev_ends_sentence,    residual, inner) {
     if (doc !~ spec_re) return 0
     if (index(doc, "trace:") > 0) return 1
-    residual = doc
-    sub(/^[[:space:]]*\/\/\/+/, "", residual)
+    inner = doc
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", inner)
+    residual = inner
     gsub(spec_re, " ", residual)
     if (residual ~ /[A-Za-z][A-Za-z]/) return 0
+    if (inner ~ /^(#|[-*+]|[0-9]+\.|```)/) return 1
     # A bare-ID line that continues a sentence from the previous /// line
     # (previous line has prose and does not end a sentence) is prose, not provenance.
     if (prev_has_prose && !prev_ends_sentence) return 0
@@ -559,7 +562,7 @@ function settle(    i, key, off) {
             prev_rem_has_prose = 0
             prev_rem_ends_sentence = 0
         } else {
-            prev_rem_has_prose = 1
+            prev_rem_has_prose = doc_has_prose(text)
             prev_rem_ends_sentence = doc_ends_sentence(text)
         }
     } else {
@@ -597,7 +600,7 @@ function settle(    i, key, off) {
             prev_add_has_prose = 0
             prev_add_ends_sentence = 0
         } else {
-            prev_add_has_prose = 1
+            prev_add_has_prose = doc_has_prose(text)
             prev_add_ends_sentence = doc_ends_sentence(text)
         }
     } else {
