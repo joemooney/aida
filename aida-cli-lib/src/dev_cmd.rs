@@ -1531,19 +1531,12 @@ AIDA_WRAPPER_OUTPUT
             # empty file (older binary, in-place init) or a malformed file all
             # leave the shell where it was. The env assignment is a per-command
             # prefix, so it never leaks into this shell.
-            local _aida_cd_file _aida_rc _aida_eval=''
+            local _aida_cd_file='' _aida_rc=0 _aida_eval=''
             local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
-            if [ -z "$_aida_cd_file" ]; then
-                # No private file available: plain pass-through; the binary
-                # prints the copy-paste `cd` hint.
-                command aida "$@"
-                return $?
-            fi
             # trace:BUG-1960 | ai:claude
             # An interrupt (Ctrl-C) or TERM while init runs must not strand
             # the private file in TMPDIR, and must still interrupt. The
@@ -1561,28 +1554,54 @@ AIDA_WRAPPER_OUTPUT
             # zsh: TRAPINT/TRAPTERM live in a helper under localtraps, so
             # zsh restores the caller's traps when the helper returns.
             # bash: traps are global, so save the caller's and restore them.
+            # trace:TASK-1343 | ai:claude
+            # The handlers are installed BEFORE mktemp creates the file, so
+            # there is no window in which an interrupt strands it; a signal
+            # that lands during mktemp skips the child, and the re-raise leg
+            # below removes whatever file was created. No private file means
+            # a plain pass-through: the binary prints the copy-paste `cd` hint.
             local _aida_traps='' _aida_sig=''
             if [ -n "${ZSH_VERSION:-}" ]; then
                 _aida_init_zsh() {
                     setopt localoptions localtraps
                     TRAPINT() { rm -f "$_aida_cd_file"; _aida_sig=INT; return 0; }
                     TRAPTERM() { rm -f "$_aida_cd_file"; _aida_sig=TERM; return 0; }
-                    AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                    _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
+                    [ -z "$_aida_sig" ] || return 130
+                    if [ -n "$_aida_cd_file" ]; then
+                        AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                    else
+                        command aida "$@"
+                    fi
                 }
                 _aida_init_zsh "$@"
                 _aida_rc=$?
+                # trace:TASK-1344 | ai:claude
+                # Do not leave the helper defined in the caller's shell.
+                unfunction _aida_init_zsh 2>/dev/null
             else
                 _aida_traps=$(trap -p INT TERM)
                 trap 'rm -f "$_aida_cd_file"; _aida_sig=INT' INT
                 trap 'rm -f "$_aida_cd_file"; _aida_sig=TERM' TERM
-                AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
-                _aida_rc=$?
+                _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
+                if [ -n "$_aida_sig" ]; then
+                    _aida_rc=130
+                elif [ -n "$_aida_cd_file" ]; then
+                    AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                    _aida_rc=$?
+                else
+                    command aida "$@"
+                    _aida_rc=$?
+                fi
                 trap - INT TERM
                 eval "$_aida_traps"
             fi
             if [ -n "$_aida_sig" ]; then
                 rm -f "$_aida_cd_file"
                 command sh -c 'kill -s "$1" "$PPID"; kill -s "$1" "$$"' aida "$_aida_sig"
+                return "$_aida_rc"
+            fi
+            if [ -z "$_aida_cd_file" ]; then
                 return "$_aida_rc"
             fi
             if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
