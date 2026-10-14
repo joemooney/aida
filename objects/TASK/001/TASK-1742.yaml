@@ -3,12 +3,12 @@ spec_id: TASK-1742
 agreed_id: TASK-1742
 title: Pin BUG-2005 leaking-wrapper fixture with a sha256 assertion and fix its source SHA comment
 description: 'Follow-up from the #2592 round-3 review (APPROVE at 0c340ed687). (1) aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs:18 names source commit fba16d9b9c…, which does not exist; the real 3618fe739b^ is 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005. (2) The fixture sha256 5344afd3…1109 is only a doc comment. Add a test that hashes PRE_FIX_LEAKING_WRAPPER and asserts the pinned constant, so it is shallow-clone safe. The review''s one-byte fixture mutation survived. (3) Optional: the zsh leak-proof test silently covers bash only on hosts without zsh; consider an explicit skip notice.'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T20:05:54.787516554Z
-modified_at: 2026-10-14T06:17:42.187797212Z
+modified_at: 2026-10-14T06:47:42.825736058Z
 req_type: Task
 comments:
 - id: 01a137d5-3a9a-7a73-b97a-6da5cdbc2f2f
@@ -47,6 +47,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1392a-b5d7-7961-b42e-61a6492260a3
+  author: aida-auto-bump
+  timestamp: 2026-10-14T06:47:42.807618453Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1392a-b5e9-7af1-a464-5b9d37261f28
+  timestamp: 2026-10-14T06:47:42.825725014Z
+  agent: implementer
+  commit_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
+  summary: 'Standard tier: provenance SHA corrected (3618fe739b^=4e11f0296c verified), sha256 pin test hashes include_str bytes (verified 21143 B / 5344afd3...1109; fixture contains historical SHELL_HELPERS+WORKER_FUNCTION verbatim), explicit zsh skip notice; 7/7 tests pass locally, CI green; tests-only, nothing weakened'
+  review_verdict: approved
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
@@ -55,3 +69,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T06:47:42.807613841Z
+  completion_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
