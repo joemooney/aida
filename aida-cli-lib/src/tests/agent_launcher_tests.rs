@@ -3967,7 +3967,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2006 | ai:antigravity
 #[test]
 fn apply_queue_work_contained_env_sets_and_removes() {
-    let _guard = crate::test_env::EnvVarsGuard::new();
+    let _guard = crate::test_env::EnvVarsGuard::snapshot(&["AIDA_CONTAINED"]);
 
     crate::queue_cmd::apply_queue_work_contained_env(true);
     assert_eq!(
