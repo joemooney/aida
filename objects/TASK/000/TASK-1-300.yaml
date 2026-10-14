@@ -1,0 +1,30 @@
+id: 01a13815-521a-7773-9b9b-b24c7d8a3c9b
+spec_id: TASK-1-300
+title: 'Non-blocking: a code line inside a fenced block counts as prose, so ''/// ```'' /…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: a code line inside a fenced block counts as prose, so '/// ```' / '/// let x = foo();' / '/// STORY-30' passes where main refuses (aida-pre-commit.sh:476-482 doc_has_prose has no fence state). Same for a markdown table row ('/// | a | b |'). Optional follow-up: track in-fence state.
+
+  PR: #2605
+  Reviewed sha: b6775ca8120b89266547818f3a2775db5802319c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-14T01:44:43.802729087Z
+modified_at: 2026-10-14T01:44:43.802729087Z
+req_type: Task
+tags:
+- carried-from:BUG-2008
+- finding-hash:0f63beb4
+- from-review:PR-2605
+- kind:carried-forward
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
