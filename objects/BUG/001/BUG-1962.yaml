@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-14T11:12:14.565724812Z
+modified_at: 2026-10-14T11:13:02.790132072Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -104,6 +104,27 @@ comments:
   content: 'FACTORY READY: PR #2598 green at 28dbe03cd66ee602687570ddf6e3cefea6121e65'
   created_at: 2026-10-14T05:30:56.860328277Z
   modified_at: 2026-10-14T05:30:56.860328277Z
+- id: 01a13a1d-a146-7d63-b241-2e310db2db77
+  author: joe
+  content: |-
+    MERGE REVIEW: **REQUEST CHANGES** (round 2, STRICT tier, runaway-seat watchdog) at 28dbe03cd66ee602687570ddf6e3cefea6121e65. Fresh independent reviewer; the verdict is recorded.
+
+    The round-1 mutations M1 and M2 are now killed, and so are the file-mtime branch drop, `#[serde(skip)]` and both TOON mutations. Under ADR-76 STRICT, these surviving mutations on code this PR adds still block. All are in `aida-cli-lib/src/runaway_seats.rs`, and all are test-only fixes with no production change needed:
+
+    1. **L367, persisted age never read back** (`#[serde(default, skip_deserializing)]` survives). This is the round-1 ask that an incremental scan read the age from saved state. The persisted test only checks the key is in state.json. Fix: scan 1 reads compactions ending at :50s without tripping; append an earlier-stamped (:30s) compaction so that scan 2, reading only the new bytes, trips; assert the age comes from the persisted :50s. Alternatively, a serde round-trip test asserting `last_written_at` survives.
+    2. **L629, mtime branch `prev.max(mtime)` → `min` survives.** Fix: fold a timed line at t, then an untimed line with a later mtime, and assert the result equals the mtime; also show an earlier mtime keeps the previous value.
+    3. **L782, the `scan_file` mtime wiring (passing `None`) survives.** Fix: a scan-level test with a timed line plus an untimed line, with the file mtime pinned via `File::set_modified`, asserting the reported age.
+    4. **L812-831, `format_age` branches unpinned** (the "just now", minutes and days branches and the 60s boundary all survive). Fix: a direct unit test at -1s, 59s, 60s, 59m59s, 1h, 23h59m and 24h.
+    5. **L877, resolved-seat summary unpinned** (dropping the age label survives). Fix: a test with a resolved `SeatInfo` (seat plus pid) asserting the summary contains `pid N, transcript last written ...`.
+
+    Passing: scope (only doctor_cmd.rs and runaway_seats.rs), clean merge, 20/20 repeat runs, deterministic clocks, clippy and fmt clean, no stale `still_active` in the docs.
+    Non-blocking: call out the JSON key rename `still_active` → `still_tripped` in the PR or release note.
+    Note: #2613 (BUG-2120, approved and awaiting a hold clear) also edits runaway_seats.rs; whichever merges second may need a merge from main.
+
+    Round 3 will be FINAL.
+  created_at: 2026-10-14T11:13:02.790132072Z
+  modified_at: 2026-10-14T11:13:02.790132072Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a130a2-f7a9-70e1-9957-c76fdf0ec9ad
   author: joe
