@@ -1,0 +1,20 @@
+id: 01a1387d-894c-7f13-9219-5a3d86bea7ec
+spec_id: BUG-2121
+agreed_id: BUG-2121
+title: verify-manual.py completeness counts PATH extensions (aida-<name> executables) as commands, so every local drain publication is auto-closed on a machine with aida-* plugins
+description: 'help_all_commands() in docs/cli/verify-manual.py matches every 2-space-indented line of `aida help-all`, including the external-extension section (`gui  external ~/.cargo/bin/aida-gui`, `host-bench  external ~/.local/bin/aida-host-bench`). On the operator''s machine, the publication guard ''CLI-manual drift-guard'' therefore fails for every drain PR, and the PR is auto-closed before review: BUG-1953''s PR #2615 was closed 2026-10-13 19:36. CI passes because its PATH has no plugins. Fix: exclude external-extension rows from the completeness universe (the script''s own comment at ~line 399 already says aida <name> may be a PATH extension). Acceptance: a test or fixture where help-all includes external rows and completeness ignores them, while a built-in undocumented command still fails.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T03:38:33.676159841Z
+modified_at: 2026-10-14T03:38:33.676159841Z
+req_type: Bug
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
