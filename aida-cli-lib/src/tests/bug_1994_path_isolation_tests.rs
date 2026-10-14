@@ -2,56 +2,6 @@ use super::*;
 use std::io::Read;
 use std::process::{Command, Stdio};
 
-// Capture to files so a stuck descendant cannot keep an output pipe open after
-// the harness is killed. Only this invocation's process group is terminated.
-// trace:BUG-1994 | ai:codex
-#[cfg(unix)]
-fn bounded_output(command: &mut Command, cap: std::time::Duration) -> std::process::Output {
-    let dir = tempfile::tempdir().unwrap();
-    let stdout_path = dir.path().join("stdout");
-    let stderr_path = dir.path().join("stderr");
-    command
-        .stdout(std::fs::File::create(&stdout_path).unwrap())
-        .stderr(std::fs::File::create(&stderr_path).unwrap());
-    use std::os::unix::process::CommandExt;
-    command.process_group(0);
-    let mut child = command.spawn().unwrap();
-    let deadline = std::time::Instant::now() + cap;
-    let status = loop {
-        if let Some(status) = child.try_wait().unwrap() {
-            break status;
-        }
-        if std::time::Instant::now() >= deadline {
-            // SAFETY: spawn created a distinct process group with this live
-            // child's PID; the negative PID selects only its descendants.
-            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
-            child.wait().unwrap();
-            panic!(
-                "stress child exceeded {cap:?}: {command:?}\n{}\n{}",
-                std::fs::read_to_string(&stdout_path).unwrap(),
-                std::fs::read_to_string(&stderr_path).unwrap()
-            );
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    };
-    std::process::Output {
-        status,
-        stdout: std::fs::read(stdout_path).unwrap(),
-        stderr: std::fs::read(stderr_path).unwrap(),
-    }
-}
-
-// trace:BUG-1994 | ai:codex
-#[test]
-#[cfg(unix)]
-#[should_panic(expected = "stress child exceeded")]
-fn stress_watchdog_refuses_a_stuck_child() {
-    bounded_output(
-        Command::new("/bin/sh").args(["-c", "sleep 10"]),
-        std::time::Duration::from_millis(50),
-    );
-}
-
 // trace:BUG-1994 | ai:codex
 const PATH_TESTS: &[&str] = &[
     "bug_1957_pr_ship_squash_subject_returns_completion_trailer",
@@ -106,7 +56,14 @@ fn child_command(home: &std::path::Path) -> Command {
 // This child installs and actually executes the shim, then holds it live until
 // the parent finishes an unlocked Git lookup. Its fixture stays alive through
 // the parent's wait, so passing cannot be attributed to an expired shim.
+// Child-only helper, not a check: in a default run (no
+// AIDA_TEST_PATH_PROBE_ROOT) it returns at once and counts as a pass. It is
+// not #[ignore]d because is_path_isolated_process() pins the child's exact
+// argv, which `--ignored` would change; the real assertions run in the child
+// that fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected
+// spawns.
 // trace:BUG-1994 | ai:codex
+// trace:TASK-1754 | ai:claude
 #[test]
 fn fake_git_path_probe_child() {
     let Some(root) = std::env::var_os("AIDA_TEST_PATH_PROBE_ROOT") else {
@@ -206,7 +163,12 @@ fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
     let skip = "task_1507_random_dag_sweep_fixed_seeds";
     list.args(["--list", "--skip", skip, "task_1507_history_cache_tests"])
         .args(PATH_TESTS);
-    let output = bounded_output(&mut list, std::time::Duration::from_secs(120));
+    // trace:TASK-1754 | ai:claude
+    // No fixed deadline: the scheduled step/job timeout bounds discovery too.
+    let output = list
+        .stdin(Stdio::null())
+        .output()
+        .expect("list stress members");
     assert!(output.status.success());
     let names: Vec<_> = String::from_utf8_lossy(&output.stdout)
         .lines()
