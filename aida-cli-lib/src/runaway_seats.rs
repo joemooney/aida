@@ -1465,17 +1465,17 @@ mod tests {
             let (first, _) = scan("aida", &src, &p, t0(), &seats);
             assert_eq!(rules(&first, sid), vec!["mail-poll-setup"]);
             let (_, active) = scan("aida", &src, &p, t0(), &seats);
-            assert_eq!(active.still_active, vec![format!("mail-poll-setup:{sid}")]);
+            assert_eq!(active.still_tripped, vec![format!("mail-poll-setup:{sid}")]);
             // Beyond the configured window, not merely beyond the default.
             let now = t0() + Duration::minutes(p.window_minutes);
             let (findings, quiet) = scan("aida", &src, &p, now, &seats);
             assert!(findings.is_empty());
-            assert!(quiet.still_active.is_empty());
+            assert!(quiet.still_tripped.is_empty());
             assert_eq!(quiet.verdict, "ok");
             assert!(load_state(src.state_path.as_deref()).active.is_empty());
             let (findings, quiet) = scan("aida", &src, &p, t0() + Duration::hours(10), &seats);
             assert!(findings.is_empty());
-            assert!(quiet.still_active.is_empty());
+            assert!(quiet.still_tripped.is_empty());
             assert_eq!(quiet.verdict, "ok");
             // Shift consumes this persisted evidence; quiet ticks no longer
             // create failed watchdog jobs (old failures age out after 2h).
@@ -1520,7 +1520,7 @@ mod tests {
         );
         let (findings, cov) = scan("aida", &src, &p, t0() + Duration::hours(2), &seats);
         assert!(findings.is_empty(), "already reported, but still tripped");
-        assert_eq!(cov.still_active, vec!["mail-poll-setup:live"]);
+        assert_eq!(cov.still_tripped, vec!["mail-poll-setup:live"]);
         assert_eq!(cov.verdict, "tripped");
     }
 
@@ -1546,7 +1546,7 @@ mod tests {
         )]);
         let (findings, cov) = scan("aida", &src, &p, t0(), &seats);
         assert!(findings.is_empty());
-        assert!(cov.still_active.is_empty());
+        assert!(cov.still_tripped.is_empty());
         assert_eq!(cov.verdict, "ok");
     }
 
