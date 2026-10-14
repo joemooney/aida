@@ -1,0 +1,19 @@
+{
+  "id": "72e5cd48-c7bb-482b-858e-1a21dcdd3c20",
+  "thread_id": "72e5cd48-c7bb-482b-858e-1a21dcdd3c20",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791941868224,
+  "body": "MERGE: ready, needs operator hold clear: aida merge-hold clear 2605\n\nFresh reviewer verdict APPROVE at b6775ca8120b89266547818f3a2775db5802319c (round 2). All three round-1 blockers are fixed; 5/5 required mutations are caught; 5 hook suites are green, including under busybox awk; make check-templates passes; the test diff only adds lines. Build is green and the PR merges cleanly against origin/main. The only failing check is merge-hold-gate, which is the operator hold.\nNon-blocking follow-ups filed as TASK-1747 (fence/table lines count as prose, the abbreviation guard isn't word-anchored, untested removal-side context).\n",
+  "subject": "#2605 BUG-2008 APPROVED r2 at b6775ca812 — needs operator hold clear",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

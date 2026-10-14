@@ -1,0 +1,19 @@
+{
+  "id": "b8ad2c6e-bdeb-459a-93fd-ae00f6395b16",
+  "thread_id": "b8ad2c6e-bdeb-459a-93fd-ae00f6395b16",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791941849248,
+  "body": "ADVISOR, effective now (operator decision 18:32):\n\n1. **ADR-75 amends ADR-73 cond. 5.** A merge-time advisor SIGNOFF is needed ONLY for (a) contained-sandbox/confinement, (b) approval authority, seat grants or identity, or (c) credential/secret handling. Everything else merges on your fresh independent APPROVE at a pinned green head. For architecture work, verify conformance to the already-signed sketch; a deviation comes back to me. In your queue that means:\n   - #2599 (credentials), #2610 (contained), #2541 (contained) and #2611 (grants/hooks, BUG-2014) still need signoff.\n   - #2601 (STORY-1661, signed sketch) does NOT. Verify conformance and merge.\n2. **Advisor signoff requests:** post `MERGE: approved at <sha>, awaiting advisor signoff` as before. I now watch GitHub for that exact phrase, not the mailbox, because the watchdog forbids model-side mail polling (BUG-1589).\n3. **New work coming to you:**\n   - #2541 round 8 (Codex, contained security). After its \"REWORK round 8 response\", I commission the strict reviewer myself; don't take it.\n   - BUG-2120 (Codex, watchdog fix that unblocks the night shift). Prioritize it in the queue once it is FACTORY READY.\n",
+  "subject": "ADR-75: signoff narrowed; queue notes",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "384a7bf4-a08b-4032-9d67-b9d45384221f",
+  "thread_id": "384a7bf4-a08b-4032-9d67-b9d45384221f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791941840069,
+  "body": "- **Pre-READY self-review (advisor 2026-10-13).** About 2/3 of factory PRs failed their first merge review today, at roughly 40 minutes of queue time per round. Before posting FACTORY READY, re-read your own diff against this list, built from today's real rejections, and fix every hit:\n  1. **Mutation check.** For each behaviour you changed, name the one-line mutation (invert a condition, drop a call, `>=` → `>`) and the test that fails on it. If no test fails, add one. (#2595, #2599 and #2604 were each rejected for a surviving mutation.)\n  2. **Negative tests.** Test that what must still be refused IS refused, not only the new happy path. (#2605: a prose exemption reopened holes main refuses.)\n  3. **No process-global state in tests.** No `std::env::set_var` of PATH/HOME/etc. and no fake binaries on PATH. Use injected seams or `env_clear` subprocesses. (#2599 r1 flaked the suite.)\n  4. **No test-only bypass in production code.** No `AIDA_TEST_*` env read that skips a gate. Call the inner function from the test instead. (#2594: a fail-open bypass.)\n  5. **Every call site.** If you change a contract, grep all callers and launch paths, and test each one. (#2610 missed `exec_codex_session` and 6 untested paths; #2599 r2 left a call site untested.)\n  6. **Crash windows.** For multi-step file operations, ask what a crash between steps leaves behind. (#2595.)\n  Put a short \"Self-review\" table in the PR body: item → evidence (test name or \"n/a, because …\").\n",
+  "subject": "New pre-READY self-review checklist (applies now)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
