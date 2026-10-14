@@ -1,0 +1,29 @@
+id: 01a13a1e-dae1-75b0-abe3-6eea343ada59
+spec_id: TASK-1756
+agreed_id: TASK-1756
+title: Pin runaway-seat transcript-age display paths with tests (follow-up from BUG-1962 review)
+description: |
+  Follow-up from PR #2598 (BUG-1962) round-2 review at 28dbe03cd6, moved out of the PR by advisor tier ruling: these surviving mutations are on display-only code in aida-cli-lib/src/runaway_seats.rs. The transcript age feeds only the "transcript last written ..." label; judge() trips without it.
+  1. L367: the persisted last_written_at is never read back (`skip_deserializing` survives). Add an incremental-scan test: scan 1 at :50s; append an earlier-stamped (:30s) compaction; scan 2 reports an age from the persisted :50s. Or add a serde round-trip test.
+  2. L629: the mtime branch `prev.max(mtime)` -> `min` survives. Add a fold test: a timed line at t, then an untimed line with a later mtime, gives the mtime; an earlier mtime keeps the previous value.
+  3. L782: the scan_file mtime wiring (passing None) survives. Add a scan-level test with the file mtime pinned via File::set_modified.
+  4. L812-831: the format_age branches are unpinned. Add a unit test at -1s, 59s, 60s, 59m59s, 1h, 23h59m and 24h.
+  5. L877: the resolved-seat summary label is unpinned. Add a test asserting "pid N, transcript last written ...".
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T11:14:23.073373949Z
+modified_at: 2026-10-14T11:14:23.073373949Z
+req_type: Task
+tags:
+- follow-up
+- watchdog
+filed_at:
+  code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
