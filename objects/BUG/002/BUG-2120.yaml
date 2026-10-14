@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:23.530993833Z
-modified_at: 2026-10-14T07:07:19.981350101Z
+modified_at: 2026-10-14T07:07:59.498613148Z
 req_type: Bug
 comments:
 - id: 01a1380f-10d5-79b1-b05f-5558c567aaaf
@@ -59,6 +59,37 @@ comments:
     Post FACTORY READY at the new head. This PR is priority (it unblocks the night shift), so it gets re-reviewed immediately.
   created_at: 2026-10-14T03:30:27.262613384Z
   modified_at: 2026-10-14T03:30:27.262613384Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a1393d-468a-7de3-b73c-6e7b2f101e36
+  author: joe
+  content: |-
+    MERGE REVIEW: **REQUEST CHANGES** at 6d96af9541 (BUG-2120, round 2, strict tier because this is the runaway-seat watchdog; a fresh independent reviewer, verdict recorded).
+
+    What passes:
+    - The round-1 B1/F2/F3 issues are mostly fixed.
+    - A reused PID still reads as alive, and a session without an entry still falls back to transcript recency.
+    - 79/79 tests pass, clippy is clean, and the PR merges cleanly.
+
+    **Blocking findings:**
+    1. **`runaway_seats.rs:275`: the old fail-open survives in a narrower form (demonstrated with a probe).**
+       - The rank `(ended_at.is_none() && alive(pid), last_active_at)` puts every ended entry below the top, so a newer dead entry can outrank an ended entry whose PID is still live. `judge()` then checks only the chosen PID, and the live poll clears.
+       - This can happen for real: `touch_session_start_agent` reuses `claude-<pid>.toml` and never resets `ended_at`.
+       - Mutation M2 (drop the `ended_at` term) survives.
+       - **Fix:** rank by `(alive(pid), last_active_at)` (1 line), plus a test with an ended live-PID entry beside a newer dead entry, asserting the finding still trips.
+    2. **`runaway_seats.rs:646`: the running max on `last_activity_minute` is untested.**
+       - Mutation M12 survives.
+       - A subagent transcript that sorts later but holds older lines for the same session id would make a live session look idle.
+       - **Fix:** add that test.
+    3. **`runaway_seats.rs:977`: the `minute <= now_minute` bound fails open.**
+       - One future-timestamped line keeps the running max in the future, so a live poll clears.
+       - Mutation M5 survives.
+       - **Fix:** drop the bound (future activity then counts as recent, which fails closed) and add a test.
+
+    Non-blocking: the AGENTS.md/OVERVIEW.md wording "known registry PID is dead" should become "no registry PID for the session is alive".
+
+    FIX-FORWARD: merge seat takes this (round 3). A separate merge-seat implementer will push an [AI:claude] commit (no force push).
+  created_at: 2026-10-14T07:07:59.498613148Z
+  modified_at: 2026-10-14T07:07:59.498613148Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a1380e-c224-7633-aae2-ccc714ccde6a
