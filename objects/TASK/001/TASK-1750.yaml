@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:20.284960861Z
-modified_at: 2026-10-14T17:34:21.347279067Z
+modified_at: 2026-10-14T18:07:32.501841711Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -55,6 +55,12 @@ comments:
   created_at: 2026-10-14T17:34:21.347279067Z
   modified_at: 2026-10-14T17:34:21.347279067Z
   session_id: b77eee45-d6a7-4d3a-98db-de1a7440f66f
+- id: 01a13b99-1c95-71e1-ad5e-27274854976b
+  author: joe
+  content: 'Slice 3: PR #2627 (non-completing). solo_lock, triage_lease and review_marker now record the pid start time; exit_signal pgid kill-target guard (follow-up b). Still open: (a) the guard scanner cfg(test) span, (c) the /proc guard and (d) the status_sections doc merge, all after #2621 merges; drain orchestrator_pid and agent_registry are still bare pid; cache_lock format consolidation.'
+  created_at: 2026-10-14T18:07:32.501841711Z
+  modified_at: 2026-10-14T18:07:32.501841711Z
+  session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
 execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
