@@ -81,6 +81,11 @@ pub(crate) struct Marker {
     pub host: String,
     /// Holder pid; `0` = no process to watch (TTL only).
     pub pid: u32,
+    /// Kernel start time of `pid`, so a recycled pid does not keep a dead
+    /// reviewer's marker alive. `None` on markers written by older binaries
+    /// (and on pid-0 claims); liveness then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    pub pid_start: Option<String>,
     pub started_at: u64,
     pub ttl_secs: u64,
 }
@@ -100,6 +105,7 @@ impl Marker {
             by: by.to_string(),
             host: crate::coordination::hostname(),
             pid: std::process::id(),
+            pid_start: aida_core::liveness::process_start_identity(std::process::id()),
             started_at: now_secs(),
             ttl_secs: PID_BACKED_TTL_SECS,
         }
@@ -130,13 +136,14 @@ impl Marker {
 
 fn serialize(m: &Marker) -> String {
     format!(
-        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\nstarted_at={}\nttl_secs={}\n",
+        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nttl_secs={}\n",
         m.pr,
         m.head_sha,
         m.spec.as_deref().unwrap_or(""),
         m.by.replace('\n', " "),
         m.host,
         m.pid,
+        m.pid_start.as_deref().unwrap_or_default(),
         m.started_at,
         m.ttl_secs,
     )
@@ -152,6 +159,7 @@ fn parse(pr: u64, body: &str) -> Marker {
         by: "a reviewer".to_string(),
         host: String::new(),
         pid: 0,
+        pid_start: None,
         started_at: 0,
         ttl_secs: CLAIM_TTL_SECS,
     };
@@ -164,6 +172,7 @@ fn parse(pr: u64, body: &str) -> Marker {
                 "by" if !v.is_empty() => m.by = v.to_string(),
                 "host" => m.host = v.to_string(),
                 "pid" => m.pid = v.parse().unwrap_or(0),
+                "pid_start" if !v.is_empty() => m.pid_start = Some(v.to_string()),
                 "started_at" => m.started_at = v.parse().unwrap_or(0),
                 "ttl_secs" => m.ttl_secs = v.parse().unwrap_or(CLAIM_TTL_SECS),
                 _ => {}
@@ -222,7 +231,8 @@ pub(crate) fn expired_reason(m: &Marker, our_host: &str, now: u64) -> Option<Str
     if m.pid != 0
         && !m.host.is_empty()
         && m.host == our_host
-        && !aida_core::liveness::pid_is_alive(m.pid)
+        // trace:TASK-1750 | ai:claude
+        && !aida_core::liveness::process_identity_is_alive(m.pid, m.pid_start.as_deref())
     {
         return Some(format!("its reviewer (pid {}) is no longer running", m.pid));
     }
@@ -368,6 +378,7 @@ mod tests {
             by: "reviewer-1".into(),
             host: "some-host".into(),
             pid: 0,
+            pid_start: None,
             started_at,
             ttl_secs: ttl,
         }
@@ -432,6 +443,24 @@ mod tests {
         // Our own live pid does not expire.
         let live = Marker::for_this_process(7, Some("abc"), None, "drain reviewer");
         assert!(expired_reason(&live, &live.host.clone(), now_secs()).is_none());
+    }
+
+    /// TASK-1750: our own live pid with a different recorded start time is a
+    /// recycled pid, so the marker expires at once; the start time round-trips.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_pid_on_this_host_expires_at_once() {
+        let live = Marker::for_this_process(7, Some("abc"), None, "drain reviewer");
+        if live.pid_start.is_none() {
+            return; // platform cannot report start times; nothing to distinguish
+        }
+        assert_eq!(parse(7, &serialize(&live)), live);
+        let mut recycled = live.clone();
+        recycled.pid_start = Some("2000-01-01T00:00:00+00:00".into());
+        let reason = expired_reason(&recycled, &recycled.host.clone(), now_secs()).unwrap();
+        assert!(reason.contains("no longer running"), "{reason}");
+        let legacy = parse(7, "pid=1\nhost=h\nstarted_at=1\n");
+        assert_eq!(legacy.pid_start, None);
     }
 
     #[test]
