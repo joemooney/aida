@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T02:36:50.418442180Z
+modified_at: 2026-10-14T02:36:56.039245239Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -53,6 +53,58 @@ comments:
   created_at: 2026-10-12T09:25:21.631086868Z
   modified_at: 2026-10-12T09:25:21.631086868Z
   session_id: e2bad11d-5e52-4b29-b5d0-6238d10778dd
+- id: 01a13845-1d67-7320-a044-4cdf6de6c73c
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 2 (ci)
+
+    Recorded by `aida queue work BUG-1953 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 2 (ci) · kind `ci-unavailable`
+    - Seat: ci (session role: integrator)
+    - Parent spec: BUG-1953
+    - Branch under test: main
+    - Commit under test: 014a28d3f762
+    - Recorded at: 2026-10-14T02:36:53.703884972+00:00
+
+    ### Failure
+
+    phase-1 PR/MR 2615 is Closed, not open
+
+    Failure kind: `ci-unavailable`
+
+    ### Recovery hint shown to the operator
+
+    CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1953 --auto-complete`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-14T02:36:53.703884972+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 2259489 ms
+      - phase 2 (ci): 578 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"BUG-1953","started_at":"2026-10-14T01:58:39.402728635+00:00","completed_at":"2026-10-14T02:36:53.703884972+00:00","outcome":"failed","variant":"through-ci","failed_phase":2,"failure_kind":"ci-unavailable","failure_message":"phase-1 PR/MR 2615 is Closed, not open","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":2259489},{"phase":2,"slug":"ci","elapsed_ms":578}],"total_ms":2290985,"binary_sha":"3163cc1b21"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent BUG-1953 --title "drain phase 2 (ci) failure on BUG-1953" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-14T02:36:56.039237767Z
+  modified_at: 2026-10-14T02:36:56.039237767Z
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
   author: joe
