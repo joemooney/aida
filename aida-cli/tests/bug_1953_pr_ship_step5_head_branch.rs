@@ -63,6 +63,7 @@ else
 fi
 "###;
 
+// trace:BUG-1953.ac87d12b | ai:claude
 #[test]
 fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     let temp = tempfile::tempdir().unwrap();
