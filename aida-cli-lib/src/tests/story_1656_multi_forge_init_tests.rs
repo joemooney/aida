@@ -429,6 +429,10 @@ exit 1
 #[cfg(unix)]
 #[test]
 fn init_github_plus_gitlab_creates_both_and_publishes_in_order() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let _env = forges.env(Some("glpat-fake"));
 
@@ -471,6 +475,10 @@ fn init_github_plus_gitlab_creates_both_and_publishes_in_order() {
 #[cfg(unix)]
 #[test]
 fn non_refusal_push_error_never_creates_project() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     std::fs::write(forges.gitlab_root.join(".deny"), "").unwrap();
     let _env = forges.env(Some("glpat-fake"));
@@ -492,6 +500,10 @@ fn non_refusal_push_error_never_creates_project() {
 #[cfg(unix)]
 #[test]
 fn no_token_prints_manual_recipe_and_keeps_github_repo() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let _env = forges.env(None);
 
@@ -518,6 +530,10 @@ fn no_token_prints_manual_recipe_and_keeps_github_repo() {
 #[cfg(unix)]
 #[test]
 fn mirror_url_creates_missing_gitlab_project() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let _env = forges.env(Some("glpat-fake"));
 
@@ -612,6 +628,10 @@ impl FakeForges {
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_with_a_different_url_never_probes_the_existing_remote() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let existing = "git@gitlab.example.test:ai/proj.git";
     git(&forges.project, &["remote", "add", "gitlab", existing]);
@@ -640,6 +660,10 @@ fn mirror_rerun_with_a_different_url_never_probes_the_existing_remote() {
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_without_url_stays_offline() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     git(
         &forges.project,
@@ -671,6 +695,10 @@ fn mirror_rerun_without_url_stays_offline() {
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_with_an_equivalent_url_still_probes() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     git(
         &forges.project,
@@ -701,6 +729,10 @@ fn mirror_rerun_with_an_equivalent_url_still_probes() {
 #[cfg(unix)]
 #[test]
 fn create_uses_the_host_scoped_glab_token_over_the_env_token() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let _env = forges.env(Some("glpat-env-for-gitlab-com"));
     forges.glab_login("gitlab.example.test", "glpat-scoped");
@@ -728,6 +760,10 @@ fn create_uses_the_host_scoped_glab_token_over_the_env_token() {
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_creates_the_project_when_the_remote_already_exists() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let url = "git@gitlab.example.test:ai/proj.git";
     {
@@ -765,6 +801,10 @@ fn mirror_rerun_creates_the_project_when_the_remote_already_exists() {
 #[cfg(unix)]
 #[test]
 fn mirror_non_refusal_probe_error_wires_without_creating() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     std::fs::write(forges.gitlab_root.join(".deny"), "").unwrap();
     let _env = forges.env(Some("glpat-fake"));
@@ -793,6 +833,10 @@ fn mirror_non_refusal_probe_error_wires_without_creating() {
 #[cfg(unix)]
 #[test]
 fn gitlab_only_init_publishes_to_origin_with_upstream() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let _env = forges.env(Some("glpat-fake"));
     let mut plan = forges.plan();

@@ -581,6 +581,39 @@ pub(crate) fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// Every persisted spec-scoped lease blocks agent dispatch, including stale ones.
+/// Keep default listing aligned with that conservative ownership check.
+// trace:BUG-2002 | ai:codex
+pub(crate) fn lease_blocks_agent_dispatch(lease: &SessionLease) -> bool {
+    !lease.scope.is_empty()
+        && !lease
+            .scope
+            .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
+}
+
+// trace:BUG-2002 | ai:codex
+pub(crate) fn lease_visible_in_default_listing(lease: &SessionLease, state: LeaseState) -> bool {
+    !matches!(state, LeaseState::Stale) || lease_blocks_agent_dispatch(lease)
+}
+
+// The actual listing and its tests share the default/--all selection boundary.
+// trace:BUG-2002 | ai:codex
+type ClassifiedLease = (SessionLease, LeaseState, Option<u32>);
+
+// trace:BUG-2002 | ai:codex
+pub(crate) fn select_lease_listing(
+    classified: Vec<ClassifiedLease>,
+    all: bool,
+) -> (Vec<ClassifiedLease>, Vec<ClassifiedLease>) {
+    if all {
+        (classified, Vec::new())
+    } else {
+        classified
+            .into_iter()
+            .partition(|(lease, state, _)| lease_visible_in_default_listing(lease, *state))
+    }
+}
+
 /// BUG-574: pure decision — does THIS clone already hold a lease for `scope`?
 /// Returns the existing lease (the first by start time, matching `list_leases`'
 /// sort) so `aida session start` can treat a re-run as benign idempotent
@@ -2513,13 +2546,7 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         })
         .collect();
 
-    let (shown, hidden_stale): (Vec<_>, Vec<_>) = if all {
-        (classified, Vec::new())
-    } else {
-        classified
-            .into_iter()
-            .partition(|(_, state, _)| !matches!(state, LeaseState::Stale))
-    };
+    let (shown, hidden_stale) = select_lease_listing(classified, all);
 
     // STORY-301: cross-reference the active `--auto-complete` drain. A lease
     // whose scope is the drain's current member is an orchestrator phase
@@ -2555,16 +2582,15 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
     println!("{}", "Active session leases".bold());
     println!();
     // STORY-65: role column shows the persona inherited at session start.
-    // TASK-55: adds a `state` column when --all is set. TASK-56: adds
+    // BUG-2002: always show state, since stale spec leases block dispatch.
+    // TASK-56: adds
     // `pid` + `cc-session` columns when --verbose is set.
     // trace:STORY-65, TASK-55, TASK-56 | ai:claude
     let mut header = format!(
         "{:<14} {:<20} {:<18} {:<14}",
         "id", "scope", "branch", "role"
     );
-    if all {
-        header.push_str(&format!(" {:<10}", "state"));
-    }
+    header.push_str(&format!(" {:<10}", "state"));
     if verbose {
         header.push_str(&format!(" {:<10} {:<20}", "pid", "cc-session"));
     }
@@ -2587,15 +2613,13 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
             truncate(&l.branch, 18),
             truncate(l.role.as_deref().unwrap_or("-"), 14),
         );
-        if all {
-            let label = format!("{} {}", state.glyph(), state.label());
-            let colored = match state {
-                LeaseState::Live => label.green(),
-                LeaseState::Dormant => label.cyan(),
-                LeaseState::Stale => label.yellow(),
-            };
-            row.push_str(&format!(" {:<10}", colored));
-        }
+        let label = format!("{} {}", state.glyph(), state.label());
+        let colored = match state {
+            LeaseState::Live => label.green(),
+            LeaseState::Dormant => label.cyan(),
+            LeaseState::Stale => label.yellow(),
+        };
+        row.push_str(&format!(" {:<10}", colored));
         if verbose {
             let pid_col = pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
             let cc = cc_session_id_for_worktree(&l.worktree_path)

@@ -878,9 +878,20 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     let refuse_within = refuse_within.map(span).transpose()?;
     // In refuse mode a grant handle that resolves to nothing fails closed: a
     // relay would otherwise launch a session that meets refusals mid-run. No
-    // handle at all, or a baseline grant, stays silent.
+    // handle at all stays silent; every valid exported grant supplies expiry.
     // trace:TASK-1736 | ai:claude
-    let expiry = match crate::seat_authority::session_grant_lookup() {
+    // Warning-only callers retain informational timestamps, including expired
+    // records. Only launch refusal consumes the strict authority verdict.
+    // trace:BUG-2011 | ai:codex
+    let lookup = if refuse_within.is_some() {
+        crate::seat_authority::session_grant_lookup()
+    } else {
+        match crate::seat_authority::session_grant_expiry() {
+            Some(expiry) => crate::seat_authority::GrantLookup::Expiry(expiry),
+            None => crate::seat_authority::GrantLookup::NoGrant,
+        }
+    };
+    let expiry = match lookup {
         crate::seat_authority::GrantLookup::Expiry(expiry) => expiry,
         crate::seat_authority::GrantLookup::Unresolved(reason) if refuse_within.is_some() => {
             let label = std::env::var("AIDA_SESSION_ROLE").ok();
