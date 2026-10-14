@@ -1,6 +1,6 @@
-//! BUG-2004: Ensure tokens never appear in child process argv:
+//! BUG-2004: Ensure tokens avoid unnecessary command argv exposure:
 //! (1) GitLab release probe (`gitlab_release_exists`) streams `PRIVATE-TOKEN`
-//!     via curl stdin (`-H @-`), never on the command line.
+//!     via curl stdin (`-H @-`), avoiding the curl command line.
 //! (2) Mirror re-run probe (`ensure_gitlab_project_exists`) passes the remote
 //!     NAME to `git ls-remote`, so raw URLs with embedded credentials are not passed in git's argv.
 // trace:BUG-2004 | ai:antigravity
@@ -135,9 +135,24 @@ fn gitlab_release_exists_without_token_does_not_pass_stdin_or_header() {
 }
 
 #[test]
-fn ensure_gitlab_project_exists_passes_remote_name_to_ls_remote() {
+fn mirror_probe_command_passes_remote_name_to_ls_remote() {
     let dir = std::path::Path::new("/test/project");
-    let cmd = crate::gitlab_project_create::ls_remote_probe(dir, "my-gitlab-remote");
+    let secret_url = "https://oauth2:SECRET_TOKEN_VALUE@gitlab.com/group/my-project.git";
+
+    assert!(
+        crate::gitlab_project_create::mirror_probe_command(
+            dir,
+            "github-remote",
+            "https://github.com/group/my-project.git"
+        )
+        .is_none(),
+        "mirror_probe_command must return None for non-GitLab URLs"
+    );
+
+    let cmd =
+        crate::gitlab_project_create::mirror_probe_command(dir, "my-gitlab-remote", secret_url)
+            .expect("mirror_probe_command must return Command for GitLab URL");
+
     let args: Vec<&str> = cmd.get_args().map(|a| a.to_str().unwrap()).collect();
     assert_eq!(
         args,
@@ -148,6 +163,14 @@ fn ensure_gitlab_project_exists_passes_remote_name_to_ls_remote() {
             "--heads",
             "my-gitlab-remote"
         ],
-        "ls_remote_probe must pass remote name, not URL"
+        "mirror_probe_command must pass remote name, not URL"
+    );
+    assert!(
+        !args.iter().any(|a| a.contains("SECRET")),
+        "probe command must not contain secrets in argv: {args:?}"
+    );
+    assert!(
+        !args.iter().any(|a| a.contains("gitlab.com")),
+        "probe command must pass remote name instead of URL: {args:?}"
     );
 }

@@ -349,6 +349,16 @@ pub(crate) fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
     cmd
 }
 
+/// Construct the `git ls-remote` probe command for a GitLab project existence check.
+/// Returns None for non-GitLab URLs.
+// trace:BUG-2004 | ai:antigravity
+pub(crate) fn mirror_probe_command(dir: &Path, remote_name: &str, url: &str) -> Option<Command> {
+    if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
+        return None;
+    }
+    Some(ls_remote_probe(dir, remote_name))
+}
+
 /// `aida remote mirror --url`: probe a GitLab URL with `git ls-remote`; when
 /// the project is missing (the refusal text), create it. Returns true when a
 /// project was created. Non-GitLab URLs and non-refusal probe errors are left
@@ -361,12 +371,10 @@ pub(crate) fn ensure_gitlab_project_exists(
     url: &str,
     public: bool,
 ) -> Result<bool> {
-    if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
+    let Some(mut cmd) = mirror_probe_command(dir, remote_name, url) else {
         return Ok(false);
-    }
-    let out = ls_remote_probe(dir, remote_name)
-        .output()
-        .context("could not launch `git ls-remote`")?;
+    };
+    let out = cmd.output().context("could not launch `git ls-remote`")?;
     if out.status.success() {
         return Ok(false);
     }
