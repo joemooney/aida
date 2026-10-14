@@ -21,11 +21,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:39.207274461Z
-modified_at: 2026-10-14T01:57:31.774001518Z
+modified_at: 2026-10-14T13:27:43.857609374Z
 req_type: Bug
 tags:
 - agent-new
 - batch:drain-20261013
+- batch:shift-20261014-1326
 - codex
 - cross-vendor
 - roles
