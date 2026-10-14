@@ -16,10 +16,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T01:33:55.104261554Z
+modified_at: 2026-10-14T01:57:34.812759270Z
 req_type: Bug
 tags:
 - agent-new
+- batch:drain-20261013
 - cross-vendor
 - leases
 - ps
