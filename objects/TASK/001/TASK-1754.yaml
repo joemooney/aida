@@ -10,12 +10,12 @@ description: |-
   4. fake_git_path_probe_child returns early and reports 'ok' in every default run when AIDA_TEST_PATH_PROBE_ROOT is unset. It is a helper, not a vacuous assertion, but it inflates pass counts. Consider marking it #[ignore], since the parent passes --exact, or documenting it as child-only.
   5. The guardrail scan covers aida-cli-lib/src and aida-cli-lib/tests but not aida-cli/tests. The author deferred this; it needs its own rule for the fully locked separate binary.
   HOME mutation is tracked separately in TASK-1748.
-status: Draft
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T09:22:05.220513737Z
-modified_at: 2026-10-14T18:00:05.837775247Z
+modified_at: 2026-10-14T18:57:20.898670171Z
 req_type: Task
 tags:
 - review-follow-up
@@ -43,6 +43,19 @@ comments:
   created_at: 2026-10-14T18:00:05.837775247Z
   modified_at: 2026-10-14T18:00:05.837775247Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13bc6-b602-7b20-aa4d-3d6cd795d85d
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (b6d97f1) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:57:20.898669234Z
+  modified_at: 2026-10-14T18:57:20.898669234Z
+history:
+- id: 01a13bc6-b602-7b20-aa4d-3d5d0b738fc0
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:57:20.898667869Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 237e401b07e057129a1a4fe09bb5bd372b5ac0eb
   dirty: false
