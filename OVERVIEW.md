@@ -1,6 +1,8 @@
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
+Covered spec metadata and execution mode are re-read before clearance and
+again before releasing labels and the marker.
 See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:STORY-1687 | ai:codex -->
 

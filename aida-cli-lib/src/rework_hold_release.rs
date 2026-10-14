@@ -353,26 +353,28 @@ fn auto_release_with(
     io: AutoReleaseIo<'_>,
 ) -> Result<bool> {
     let head = open_change_head((io.live_head)()?)?;
-    let (ids, store) = (io.covered_specs)()?;
-    let specs: Vec<_> = ids
-        .iter()
-        .map(|id| {
-            store.requirements.iter().find(|r| {
-                r.spec_id
-                    .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                    || r.agreed_id
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
-            })
-        })
-        .collect();
     let key = &hold
         .verdict_ref
         .as_ref()
         .context("hold has no arming verdict reference")?
         .key;
-    let check = |body: &Value| -> Result<mh::VerdictRef> {
+    let check = |body: &Value,
+                 ids: &[String],
+                 store: &aida_core::RequirementsStore|
+     -> Result<mh::VerdictRef> {
+        let specs: Vec<_> = ids
+            .iter()
+            .map(|id| {
+                store.requirements.iter().find(|r| {
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || r.agreed_id
+                            .as_deref()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                })
+            })
+            .collect();
         let att = body
             .get("release_grant")
             .context("approval lacks record-time grant provenance")?;
@@ -386,7 +388,8 @@ fn auto_release_with(
             .context("approval lacks reviewer subject")?;
         eligible(hold, body, &head, &specs, &(io.grant_check)(id, subject))
     };
-    let verdict = check(&(io.read_body)(key)?)?;
+    let (ids, store) = (io.covered_specs)()?;
+    let verdict = check(&(io.read_body)(key)?, &ids, &store)?;
     release_with(
         root,
         hold,
@@ -397,8 +400,12 @@ fn auto_release_with(
                 (io.read_hold)().as_ref() == Some(hold),
                 "hold changed before release"
             );
+            // Metadata and execution mode can tighten after initial eligibility.
+            // Re-resolve every covered spec on both release-time validation passes.
+            // trace:STORY-1687 | ai:codex
+            let (ids, store) = (io.covered_specs)()?;
             ensure!(
-                check(&(io.read_body)(key)?)? == verdict,
+                check(&(io.read_body)(key)?, &ids, &store)? == verdict,
                 "approval changed before release"
             );
             let bodies = (io.read_corpus)(&ids)?;

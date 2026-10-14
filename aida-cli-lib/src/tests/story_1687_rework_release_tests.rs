@@ -434,12 +434,47 @@ struct ReleaseChange {
     forge_state: Option<mh::ChangeState>,
     missing_change: bool,
     missing_head: bool,
+    absorbed_kind: Option<HoldReasonKind>,
+    before_eligibility: bool,
+    approval_field: Option<&'static str>,
+    grant_field: Option<&'static str>,
+    spec_field: Option<&'static str>,
+    hold_field: Option<&'static str>,
 }
 
 fn auto_release_fixture(change: ReleaseChange) {
     let mut f = Fixture::new();
     f.req.spec_id = Some("TASK-37".into());
+    if change.spec_field == Some("agreed_id") {
+        f.req.spec_id = None;
+        f.req.agreed_id = Some("TASK-37".into());
+    }
     let root = tempfile::tempdir().unwrap();
+    if change
+        .hold_field
+        .is_some_and(|field| field.starts_with("/absorbed/"))
+    {
+        f.hold.absorbed.push(absorbed(HoldReasonKind::Rework));
+    }
+    if change
+        .hold_field
+        .is_some_and(|field| field.starts_with("/recused_principals/"))
+    {
+        f.hold
+            .recused_principals
+            .push(mh::PrincipalIdentity::human("old"));
+    }
+    if change
+        .hold_field
+        .is_some_and(|field| field.starts_with("/routed_to/"))
+    {
+        f.hold.routed_to.push(mh::PrincipalIdentity::human("old"));
+    }
+    if change.before_eligibility {
+        f.hold
+            .absorbed
+            .push(absorbed(change.absorbed_kind.unwrap()));
+    }
     mh::write_typed_hold(root.path(), &f.hold).unwrap();
     let verdict_path = rv::verdict_path(root.path(), "TASK-37");
     std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
@@ -454,6 +489,7 @@ fn auto_release_fixture(change: ReleaseChange) {
     let corpus_reads = Cell::new(0);
     let body_reads = Cell::new(0);
     let grant_reads = Cell::new(0);
+    let spec_reads = Cell::new(0);
     let comments = std::cell::RefCell::new(Vec::new());
     let original_labels = vec![
         "aida:merge-hold".to_string(),
@@ -467,6 +503,20 @@ fn auto_release_fixture(change: ReleaseChange) {
     }
     if change.changed_rework {
         expected_hold.detail = "new Rework authorization required".into();
+    }
+    if !change.before_eligibility {
+        if let Some(kind) = change.absorbed_kind {
+            expected_hold.absorbed.push(absorbed(kind));
+        }
+    }
+    if let Some(field) = change.hold_field {
+        let mut value = serde_json::to_value(&expected_hold).unwrap();
+        if field.starts_with('/') {
+            *value.pointer_mut(field).unwrap() = changed_nested_hold_value(field);
+        } else {
+            value[field] = changed_hold_value(field);
+        }
+        expected_hold = serde_json::from_value(value).unwrap();
     }
     // A refusal on another covered spec must participate alongside the arming key.
     if let Some(key) = change.corpus_key {
@@ -491,7 +541,12 @@ fn auto_release_fixture(change: ReleaseChange) {
     let ids: Vec<String> = store
         .requirements
         .iter()
-        .map(|req| req.spec_id.clone().unwrap())
+        .map(|req| {
+            req.spec_id
+                .clone()
+                .or_else(|| req.agreed_id.clone())
+                .unwrap()
+        })
         .collect();
     let result = auto_release_with(
         root.path(),
@@ -502,9 +557,22 @@ fn auto_release_fixture(change: ReleaseChange) {
                 if head_reads.get() >= change_at && change.failed_read == Some("head") {
                     bail!("live head unavailable");
                 }
-                if head_reads.get() == change_at && (change.stricter_hold || change.changed_rework)
+                if head_reads.get() == change_at
+                    && (change.stricter_hold
+                        || change.changed_rework
+                        || (!change.before_eligibility && change.absorbed_kind.is_some())
+                        || change.hold_field.is_some())
                 {
-                    mh::write_typed_hold(root.path(), &expected_hold)?;
+                    if change.absorbed_kind.is_some() || change.hold_field.is_some() {
+                        // Model an atomic marker replacement, without promoting the
+                        // primary kind: the entire absorbed record must be compared.
+                        aida_core::fs_atomic::write_atomic(
+                            &mh::hold_path(root.path(), 37),
+                            &serde_json::to_vec_pretty(&expected_hold)?,
+                        )?;
+                    } else {
+                        mh::write_typed_hold(root.path(), &expected_hold)?;
+                    }
                     *expected_marker.borrow_mut() = std::fs::read(mh::hold_path(root.path(), 37))?;
                 }
                 let changing = head_reads.get() >= change_at;
@@ -536,9 +604,66 @@ fn auto_release_fixture(change: ReleaseChange) {
                 if change.failed_read == Some("hold") {
                     return None;
                 }
-                mh::read_hold_record(root.path(), 37)
+                if change.hold_field.is_some() {
+                    // Exercise each exact-comparison field independently. The
+                    // real reader separately normalizes unsupported schema/PR
+                    // records to Unknown; that would mask a dropped field here.
+                    serde_json::from_slice(&std::fs::read(mh::hold_path(root.path(), 37)).unwrap())
+                        .ok()
+                } else {
+                    mh::read_hold_record(root.path(), 37)
+                }
             },
-            covered_specs: &|| Ok((ids.clone(), store.clone())),
+            covered_specs: &|| {
+                spec_reads.set(spec_reads.get() + 1);
+                if spec_reads.get() >= change_at && change.failed_read == Some("specs") {
+                    bail!("covered specs unavailable");
+                }
+                let mut current = store.clone();
+                let mut current_ids = ids.clone();
+                if spec_reads.get() >= change_at {
+                    match change.spec_field {
+                        Some("tag") => {
+                            current.requirements[0]
+                                .tags
+                                .insert("adr-75:authority".into());
+                        }
+                        Some("title") => {
+                            current.requirements[0].title = "Credential storage".into()
+                        }
+                        Some("guided") => {
+                            current.requirements[0].execution_mode =
+                                Some(aida_core::ExecutionMode::Guided)
+                        }
+                        Some("operator") => {
+                            current.requirements[0].execution_mode =
+                                Some(aida_core::ExecutionMode::Operator)
+                        }
+                        Some("type") => {
+                            current.requirements[0].req_type = aida_core::RequirementType::Epic
+                        }
+                        Some("keystone") => {
+                            current.requirements[0].tags.insert("keystone".into());
+                        }
+                        Some("spec_id") => current.requirements[0].spec_id = Some("TASK-39".into()),
+                        Some("agreed_id") => {
+                            current.requirements[0].agreed_id = Some("TASK-39".into())
+                        }
+                        Some("missing") => current.requirements.clear(),
+                        Some("empty") => current_ids.clear(),
+                        Some("new-sensitive") => {
+                            let mut other = f.req.clone();
+                            other.spec_id = Some("TASK-38".into());
+                            other.tags.insert("adr-75:authority".into());
+                            current.requirements.push(other);
+                            current_ids.push("TASK-38".into());
+                        }
+                        None => (),
+                        Some(field) => panic!("unknown spec field {field}"),
+                    }
+                }
+                Ok((current_ids, current))
+            },
             read_body: &|key| {
                 assert_eq!(key, "TASK-37");
                 body_reads.set(body_reads.get() + 1);
@@ -547,6 +672,52 @@ fn auto_release_fixture(change: ReleaseChange) {
                 }
                 let mut body: Value = serde_json::from_slice(&std::fs::read(&verdict_path)?)?;
                 if body_reads.get() >= change_at {
+                    if let Some(field) = change.approval_field {
+                        match field {
+                            "reviewed_sha" => {
+                                body[field] =
+                                    Value::String("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into())
+                            }
+                            "id" | "subject" | "session_id" | "recorded_by" => {
+                                body["release_grant"][field] = Value::String("changed".into())
+                            }
+                            "recorded_at" => {
+                                body[field] = Value::String("2026-10-14T01:00:00Z".into())
+                            }
+                            "rounds" => {
+                                body[field][0]["recorded_at"] =
+                                    Value::String("2026-10-14T01:00:03Z".into())
+                            }
+                            "round_verdict" => body["rounds"]
+                                .as_array_mut()
+                                .unwrap()
+                                .push(serde_json::json!({"verdict":"unknown"})),
+                            "missing_round_verdict" => body["rounds"]
+                                .as_array_mut()
+                                .unwrap()
+                                .push(serde_json::json!({"recorded_at":"2026-10-14T01:00:01Z"})),
+                            "unarmed" => {
+                                body["rounds"][0]["verdict"] = Value::String("approved".into())
+                            }
+                            "missing_rounds" => {
+                                body.as_object_mut().unwrap().remove("rounds");
+                            }
+                            "missing_timestamp" => {
+                                body.as_object_mut().unwrap().remove("recorded_at");
+                            }
+                            "invalid_timestamp" => {
+                                body["recorded_at"] = Value::String("invalid".into())
+                            }
+                            "invalid_round_timestamp" => {
+                                body["rounds"][0]["recorded_at"] = Value::String("invalid".into())
+                            }
+                            "empty_recorder" => body["recorded_by"] = Value::String("".into()),
+                            "missing_attestation" => {
+                                body.as_object_mut().unwrap().remove("release_grant");
+                            }
+                            _ => panic!("unknown approval field {field}"),
+                        }
+                    }
                     if change.rewritten_approval {
                         body["verdict"] = Value::String("request-changes".into());
                     }
@@ -575,8 +746,9 @@ fn auto_release_fixture(change: ReleaseChange) {
                 mh::corpus_gate_bodies(&[root.path()], 37, ids).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| {
-                assert_eq!(id, f.grant.id);
-                assert_eq!(subject, f.grant.subject);
+                // A changed artifact id/subject must be rejected by the shared
+                // eligibility checks, not by an assertion in the injected reader.
+                let _ = (id, subject);
                 grant_reads.set(grant_reads.get() + 1);
                 if change.rejected_grant && grant_reads.get() >= change_at {
                     sa::GrantCheck::Rejected {
@@ -585,7 +757,19 @@ fn auto_release_fixture(change: ReleaseChange) {
                         reason: sa::GrantRejection::Revoked { at: Utc::now() },
                     }
                 } else {
-                    sa::GrantCheck::Valid(f.grant.clone())
+                    let mut grant = f.grant.clone();
+                    if grant_reads.get() >= change_at {
+                        match change.grant_field {
+                            Some("seat") => grant.seat = "implementer".into(),
+                            Some("session_id") => grant.session_id = "other-session".into(),
+                            Some("id") => grant.id = "other-id".into(),
+                            Some("subject") => grant.subject = "other-subject".into(),
+                            Some("absent") => return sa::GrantCheck::Absent,
+                            None => (),
+                            Some(field) => panic!("unknown grant field {field}"),
+                        }
+                    }
+                    sa::GrantCheck::Valid(grant)
                 }
             },
             comment: &|body| {
@@ -604,6 +788,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             "hold" => "hold changed",
             "approval" => "approval unavailable",
             "corpus" => "corpus unavailable",
+            "specs" => "covered specs unavailable",
             _ => panic!("unknown read"),
         })
     } else if change.missing_change {
@@ -614,7 +799,13 @@ fn auto_release_fixture(change: ReleaseChange) {
         Some("current head could not be read")
     } else if change.move_head {
         Some("head moved")
-    } else if change.stricter_hold || change.changed_rework {
+    } else if change.before_eligibility {
+        Some("Rework-only")
+    } else if change.stricter_hold
+        || change.changed_rework
+        || change.absorbed_kind.is_some()
+        || change.hold_field.is_some()
+    {
         Some("hold changed")
     } else if change.rejected_grant {
         Some("reviewer grant rejected")
@@ -622,6 +813,35 @@ fn auto_release_fixture(change: ReleaseChange) {
         Some("verdict is not APPROVED")
     } else if change.changed_recorder {
         Some("approval changed before release")
+    } else if let Some(field) = change.approval_field {
+        Some(match field {
+            "reviewed_sha" => "stale",
+            "id" | "subject" | "session_id" | "recorded_by" => "identity",
+            "recorded_at" | "rounds" => "strictly newer",
+            "round_verdict" | "missing_round_verdict" => "ambiguous",
+            "unarmed" => "no earlier",
+            "missing_rounds" => "missing arming",
+            "missing_timestamp" => "missing approval timestamp",
+            "invalid_timestamp" => "invalid approval timestamp",
+            "invalid_round_timestamp" => "invalid arming refusal timestamp",
+            "empty_recorder" => "no recording identity",
+            "missing_attestation" => "provenance",
+            _ => panic!(),
+        })
+    } else if let Some(field) = change.grant_field {
+        Some(match field {
+            "seat" => "implementer",
+            "absent" => "no validated reviewer grant",
+            _ => "identity",
+        })
+    } else if let Some(field) = change.spec_field {
+        Some(match field {
+            "guided" | "operator" => "guided/operator",
+            "type" | "keystone" => "keystone",
+            "empty" => "covered specs are missing",
+            "missing" | "spec_id" | "agreed_id" => "covered spec is missing",
+            _ => "sensitive",
+        })
     } else if change.corpus_key.is_some() {
         Some("verdict corpus still refuses this head")
     } else {
@@ -630,11 +850,11 @@ fn auto_release_fixture(change: ReleaseChange) {
     if let Some(refusal) = refusal {
         let error = result.unwrap_err().to_string();
         assert!(error.contains(refusal), "{error}");
-        if change.move_head || change.stricter_hold {
-            assert_eq!(head_reads.get(), change_at);
-            assert_eq!(hold_reads.get(), change_at - 1);
-        }
-        let retained_hold = mh::read_hold_record(root.path(), 37).unwrap();
+        let retained_hold: mh::MergeHoldRecord = if change.hold_field.is_some() {
+            serde_json::from_slice(&std::fs::read(mh::hold_path(root.path(), 37)).unwrap()).unwrap()
+        } else {
+            mh::read_hold_record(root.path(), 37).unwrap()
+        };
         assert_eq!(retained_hold.reason_kind, expected_hold.reason_kind);
         if change.stricter_hold {
             assert_eq!(retained_hold.absorbed.len(), 1);
@@ -662,15 +882,21 @@ fn auto_release_fixture(change: ReleaseChange) {
             assert!(comments.borrow().is_empty());
         }
         assert_eq!(*labels.borrow(), original_labels);
+        // Behavioural release assertions above always precede read counters.
+        if change.move_head || change.stricter_hold {
+            assert_eq!(head_reads.get(), change_at);
+            assert_eq!(hold_reads.get(), change_at - 1);
+        }
     } else {
         assert!(result.unwrap());
-        assert_eq!(head_reads.get(), 3);
-        assert_eq!(hold_reads.get(), 2);
-        assert_eq!(corpus_reads.get(), 2);
         assert!(!mh::hold_path(root.path(), 37).exists());
         assert!(mh::clearance_path(root.path(), 37).is_file());
         assert_eq!(comments.borrow().len(), 1);
         assert!(labels.borrow().is_empty());
+        assert_eq!(head_reads.get(), 3);
+        assert_eq!(hold_reads.get(), 2);
+        assert_eq!(corpus_reads.get(), 2);
+        assert_eq!(spec_reads.get(), 3);
     }
 }
 
@@ -805,7 +1031,7 @@ fn auto_release_after_audit_rechecks_every_condition_before_mirroring_release() 
 
 #[test]
 fn auto_release_failed_release_time_reads_preserve_every_release_effect() {
-    for read in ["head", "hold", "approval", "corpus"] {
+    for read in ["head", "hold", "approval", "corpus", "specs"] {
         auto_release_fixture(ReleaseChange {
             failed_read: Some(read),
             ..Default::default()
@@ -845,3 +1071,314 @@ fn auto_release_missing_forge_head_preserves_every_release_effect() {
         ..Default::default()
     });
 }
+
+// trace:STORY-1687 | ai:codex
+fn absorbed(kind: HoldReasonKind) -> AbsorbedHold {
+    AbsorbedHold {
+        reason_kind: kind,
+        detail: "absorbed authorization".into(),
+        recused_principals: vec![mh::PrincipalIdentity::human("old")],
+        target_head_sha: Some(HEAD.into()),
+        spec: Some("TASK-37".into()),
+        placed_by: Some("old reviewer".into()),
+        verdict_ref: Some(mh::VerdictRef::new(
+            "TASK-37",
+            Some(37),
+            Some(HEAD.into()),
+            Some("old reviewer".into()),
+        )),
+    }
+}
+
+fn changed_hold_value(field: &str) -> Value {
+    match field {
+        "schema_version" => serde_json::json!(99),
+        "pr" => serde_json::json!(38),
+        "reason_kind" => serde_json::json!("decision"),
+        "detail" => serde_json::json!("changed detail"),
+        "recused_principals" | "routed_to" => {
+            serde_json::to_value(vec![mh::PrincipalIdentity::human("operator")]).unwrap()
+        }
+        "routing_state" => serde_json::json!("routed"),
+        "target_head_sha" => serde_json::json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        "label_state" => serde_json::json!("pending"),
+        "legacy" => serde_json::json!(true),
+        "verdict_ref" => serde_json::to_value(mh::VerdictRef::new(
+            "TASK-38",
+            Some(38),
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into()),
+            Some("other reviewer".into()),
+        ))
+        .unwrap(),
+        "release_condition" => serde_json::json!("human only"),
+        "spec" => serde_json::json!("TASK-38"),
+        "placed_by" => serde_json::json!("other reviewer"),
+        "absorbed" => serde_json::to_value(vec![absorbed(HoldReasonKind::Rework)]).unwrap(),
+        _ => panic!("unknown hold field {field}"),
+    }
+}
+
+#[test]
+fn auto_release_non_rework_absorption_at_each_phase_preserves_release_effects() {
+    for kind in [
+        HoldReasonKind::Supervision,
+        HoldReasonKind::Decision,
+        HoldReasonKind::Recusal,
+        HoldReasonKind::Unknown,
+    ] {
+        for (before_eligibility, after_audit) in [(true, false), (false, false), (false, true)] {
+            auto_release_fixture(ReleaseChange {
+                absorbed_kind: Some(kind),
+                before_eligibility,
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+#[test]
+fn auto_release_every_hold_record_field_change_preserves_release_effects() {
+    for field in [
+        "schema_version",
+        "pr",
+        "reason_kind",
+        "detail",
+        "recused_principals",
+        "routed_to",
+        "routing_state",
+        "target_head_sha",
+        "label_state",
+        "legacy",
+        "verdict_ref",
+        "release_condition",
+        "spec",
+        "placed_by",
+        "absorbed",
+    ] {
+        for after_audit in [false, true] {
+            auto_release_fixture(ReleaseChange {
+                hold_field: Some(field),
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+macro_rules! approval_field_test {
+    ($name:ident, $field:literal) => {
+        #[test]
+        fn $name() {
+            for after_audit in [false, true] {
+                auto_release_fixture(ReleaseChange {
+                    approval_field: Some($field),
+                    after_audit,
+                    ..Default::default()
+                });
+            }
+        }
+    };
+}
+approval_field_test!(auto_release_changed_reviewed_sha_stays_held, "reviewed_sha");
+approval_field_test!(auto_release_changed_release_grant_id_stays_held, "id");
+approval_field_test!(
+    auto_release_changed_release_grant_subject_stays_held,
+    "subject"
+);
+approval_field_test!(
+    auto_release_changed_release_grant_session_stays_held,
+    "session_id"
+);
+approval_field_test!(
+    auto_release_changed_release_grant_recorder_stays_held,
+    "recorded_by"
+);
+approval_field_test!(auto_release_changed_recorded_at_stays_held, "recorded_at");
+approval_field_test!(auto_release_changed_rounds_stays_held, "rounds");
+
+#[test]
+fn auto_release_changed_approval_provenance_stays_held() {
+    for field in [
+        "round_verdict",
+        "unarmed",
+        "missing_rounds",
+        "missing_timestamp",
+        "invalid_timestamp",
+        "invalid_round_timestamp",
+        "empty_recorder",
+        "missing_attestation",
+    ] {
+        for after_audit in [false, true] {
+            auto_release_fixture(ReleaseChange {
+                approval_field: Some(field),
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+macro_rules! grant_field_test {
+    ($name:ident, $field:literal) => {
+        #[test]
+        fn $name() {
+            for after_audit in [false, true] {
+                auto_release_fixture(ReleaseChange {
+                    grant_field: Some($field),
+                    after_audit,
+                    ..Default::default()
+                });
+            }
+        }
+    };
+}
+grant_field_test!(auto_release_changed_fresh_grant_seat_stays_held, "seat");
+grant_field_test!(
+    auto_release_changed_fresh_grant_session_stays_held,
+    "session_id"
+);
+grant_field_test!(auto_release_changed_fresh_grant_id_stays_held, "id");
+grant_field_test!(
+    auto_release_changed_fresh_grant_subject_stays_held,
+    "subject"
+);
+grant_field_test!(auto_release_absent_fresh_grant_stays_held, "absent");
+
+#[test]
+fn auto_release_rereads_spec_metadata_and_execution_mode_at_each_release_phase() {
+    for field in [
+        "tag",
+        "title",
+        "guided",
+        "operator",
+        "type",
+        "keystone",
+        "missing",
+        "empty",
+        "new-sensitive",
+        "spec_id",
+        "agreed_id",
+    ] {
+        for after_audit in [false, true] {
+            auto_release_fixture(ReleaseChange {
+                spec_field: Some(field),
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+// Exact identity recursively includes the fields of retained holds, verdict refs
+// and principal identities. Change only one leaf at a time.
+// trace:STORY-1687 | ai:codex
+fn changed_nested_hold_value(path: &str) -> Value {
+    match path.rsplit('/').next().unwrap() {
+        "reason_kind" => serde_json::json!("supervision"),
+        "detail" => serde_json::json!("changed absorbed detail"),
+        "recused_principals" => {
+            serde_json::to_value(vec![mh::PrincipalIdentity::human("new")]).unwrap()
+        }
+        "target_head_sha" | "reviewed_sha" => {
+            serde_json::json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        }
+        "spec" | "key" => serde_json::json!("TASK-38"),
+        "placed_by" | "recorded_by" | "principal_id" => serde_json::json!("new reviewer"),
+        "verdict_ref" => serde_json::to_value(mh::VerdictRef::new(
+            "TASK-38",
+            Some(38),
+            Some(HEAD.into()),
+            Some("new reviewer".into()),
+        ))
+        .unwrap(),
+        "pr" => serde_json::json!(38),
+        "principal_kind" => serde_json::json!("operator"),
+        "identity_status" => serde_json::json!("unresolved"),
+        _ => panic!("unknown path {path}"),
+    }
+}
+
+#[test]
+fn auto_release_every_nested_hold_field_change_preserves_release_effects() {
+    for path in [
+        "/absorbed/0/reason_kind",
+        "/absorbed/0/detail",
+        "/absorbed/0/recused_principals",
+        "/absorbed/0/target_head_sha",
+        "/absorbed/0/spec",
+        "/absorbed/0/placed_by",
+        "/absorbed/0/verdict_ref",
+        "/absorbed/0/recused_principals/0/principal_kind",
+        "/absorbed/0/recused_principals/0/principal_id",
+        "/absorbed/0/recused_principals/0/identity_status",
+        "/absorbed/0/verdict_ref/key",
+        "/absorbed/0/verdict_ref/pr",
+        "/absorbed/0/verdict_ref/reviewed_sha",
+        "/absorbed/0/verdict_ref/recorded_by",
+        "/verdict_ref/key",
+        "/verdict_ref/pr",
+        "/verdict_ref/reviewed_sha",
+        "/verdict_ref/recorded_by",
+        "/recused_principals/0/principal_kind",
+        "/recused_principals/0/principal_id",
+        "/recused_principals/0/identity_status",
+        "/routed_to/0/principal_kind",
+        "/routed_to/0/principal_id",
+        "/routed_to/0/identity_status",
+    ] {
+        for after_audit in [false, true] {
+            auto_release_fixture(ReleaseChange {
+                hold_field: Some(path),
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+// trace:STORY-1687 | ai:codex
+#[test]
+fn malformed_matching_heads_cannot_authorize_release() {
+    for head in [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "gggggggggggggggggggggggggggggggggggggggg",
+    ] {
+        let mut f = Fixture::new();
+        f.body["reviewed_sha"] = Value::String(head.into());
+        let error = eligible(
+            &f.hold,
+            &f.body,
+            head,
+            &[Some(&f.req)],
+            &sa::GrantCheck::Valid(f.grant.clone()),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unverifiable head"));
+    }
+}
+
+// Even a matching stamp cannot authorize a blank recording principal.
+// trace:STORY-1687 | ai:codex
+#[test]
+fn matching_blank_recording_identity_cannot_authorize_release() {
+    for identity in ["", "   "] {
+        let mut f = Fixture::new();
+        f.body["recorded_by"] = Value::String(identity.into());
+        f.body["release_grant"]["recorded_by"] = Value::String(identity.into());
+        f.refused("no recording identity");
+    }
+}
+
+// Structural provenance refusals have individual behavioural witnesses too.
+// trace:STORY-1687 | ai:codex
+approval_field_test!(
+    auto_release_missing_release_grant_stays_held,
+    "missing_attestation"
+);
+approval_field_test!(auto_release_missing_rounds_stays_held, "missing_rounds");
+
+approval_field_test!(
+    auto_release_missing_round_verdict_stays_held,
+    "missing_round_verdict"
+);
