@@ -1,0 +1,23 @@
+id: 01a1380e-c9c6-7cb1-9d3d-df702c4a9540
+spec_id: TASK-1747
+agreed_id: TASK-1747
+title: 'Pre-commit provenance wrap detector: fence/table tracking, word-anchored abbreviations, removal-side tests'
+description: 'Follow-up from #2605 (BUG-2008) round-2 review at b6775ca812. Non-blocking, fail-open-ish edges in doc_has_prose()/wrap detection in aida-core/templates/hooks/aida-pre-commit.sh: (1) no in-fence tracking: ''/// ```'' + code line + bare ID passes; table rows count as prose. (2) abbreviation guard /(e\.g|i\.e|etc|vs)\.$/ is not word-anchored (''devs.'' passes); unicode sentence enders (…, 。) unrecognised. (3) untested paths, mutations survive: removal-side prose context (:562-570), add-side leak-branch reset (:600-601), abbreviation guard.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T01:37:35.686188416Z
+modified_at: 2026-10-14T01:37:35.686188416Z
+req_type: Task
+tags:
+- hooks
+- provenance
+filed_at:
+  code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
