@@ -1,0 +1,19 @@
+{
+  "id": "bd4902cd-6e57-45ac-8c8e-527d2c3befaf",
+  "thread_id": "bd4902cd-6e57-45ac-8c8e-527d2c3befaf",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792018198656,
+  "body": "PR #2639 (STORY-1664, history list views opened/completed/rejected/approved/closed). Risk STANDARD. check-ci-fast green, clippy clean, 10 new tests, smoke-tested on live store. CI pending; will mail if it goes red.\n",
+  "subject": "READY #2639 STORY-1664",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
