@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T12:37:57.605181911Z
+modified_at: 2026-10-14T12:38:05.335718504Z
 req_type: Bug
 tags:
 - agent-new
@@ -37,6 +37,15 @@ comments:
   created_at: 2026-10-13T18:10:15.772131541Z
   modified_at: 2026-10-13T18:10:15.772131541Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13a6b-7d17-7d51-ba84-28957cde9409
+  author: joe
+  content: |-
+    FACTORY PLAN (antigravity):
+    1. In session_start.rs / agent_registry.rs: attribute leases created inside an aida agent new session (AIDA_AGENT_NAME set or nearest ancestor registered agent) to that agent's live PID, updating active_pid and creator_pid.
+    2. In ps_integrate.rs / driver_view.rs: overlay live registered agents in aida ps running work and suppress contradictory 'stale lease — process dead' rows in Orphaned In-Progress specs.
+    3. Add unit test covering live factory lane with non-matching/dead lease PID, asserting row is not reported stale and excluded from orphans.
+  created_at: 2026-10-14T12:38:05.335718504Z
+  modified_at: 2026-10-14T12:38:05.335718504Z
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
