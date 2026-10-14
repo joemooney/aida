@@ -429,6 +429,7 @@ struct ReleaseChange {
     rewritten_approval: bool,
     changed_recorder: bool,
     corpus_key: Option<&'static str>,
+    fresh_corpus_id: bool,
     after_audit: bool,
     failed_read: Option<&'static str>,
     forge_state: Option<mh::ChangeState>,
@@ -471,9 +472,9 @@ fn auto_release_fixture(change: ReleaseChange) {
         f.hold.routed_to.push(mh::PrincipalIdentity::human("old"));
     }
     if change.before_eligibility {
-        f.hold
-            .absorbed
-            .push(absorbed(change.absorbed_kind.unwrap()));
+        if let Some(kind) = change.absorbed_kind {
+            f.hold.absorbed.push(absorbed(kind));
+        }
     }
     mh::write_typed_hold(root.path(), &f.hold).unwrap();
     let verdict_path = rv::verdict_path(root.path(), "TASK-37");
@@ -485,7 +486,13 @@ fn auto_release_fixture(change: ReleaseChange) {
     store.requirements.push(f.req.clone());
     let head_reads = Cell::new(0);
     let hold_reads = Cell::new(0);
-    let change_at = if change.after_audit { 3 } else { 2 };
+    let change_at = if change.before_eligibility {
+        1
+    } else if change.after_audit {
+        3
+    } else {
+        2
+    };
     let corpus_reads = Cell::new(0);
     let body_reads = Cell::new(0);
     let grant_reads = Cell::new(0);
@@ -537,6 +544,18 @@ fn auto_release_fixture(change: ReleaseChange) {
             )
             .unwrap();
         }
+    }
+    if change.fresh_corpus_id {
+        // Present at the current head, but outside the initially covered IDs.
+        std::fs::write(
+            rv::verdict_path(root.path(), "TASK-40"),
+            serde_json::to_vec(&serde_json::json!({
+                "verdict": "request-changes", "reviewed_sha": HEAD,
+                "recorded_at": "2026-10-14T01:00:03Z", "recorded_by": "another reviewer"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     }
     let ids: Vec<String> = store
         .requirements
@@ -622,6 +641,12 @@ fn auto_release_fixture(change: ReleaseChange) {
                 let mut current = store.clone();
                 let mut current_ids = ids.clone();
                 if spec_reads.get() >= change_at {
+                    if change.fresh_corpus_id {
+                        let mut other = f.req.clone();
+                        other.spec_id = Some("TASK-40".into());
+                        current.requirements.push(other);
+                        current_ids.push("TASK-40".into());
+                    }
                     match change.spec_field {
                         Some("tag") => {
                             current.requirements[0]
@@ -648,6 +673,25 @@ fn auto_release_fixture(change: ReleaseChange) {
                         Some("spec_id") => current.requirements[0].spec_id = Some("TASK-39".into()),
                         Some("agreed_id") => {
                             current.requirements[0].agreed_id = Some("TASK-39".into())
+                        }
+                        Some("collision-spec" | "collision-agreed" | "collision-mixed") => {
+                            let mut other = aida_core::Requirement::new(
+                                "Credential rotation".into(),
+                                "collision fixture".into(),
+                            );
+                            other.execution_mode = Some(aida_core::ExecutionMode::Operator);
+                            match change.spec_field {
+                                Some("collision-spec") => other.spec_id = Some("task-37".into()),
+                                Some("collision-agreed") => {
+                                    current.requirements[0].spec_id = None;
+                                    current.requirements[0].agreed_id = Some("TASK-37".into());
+                                    other.agreed_id = Some("task-37".into());
+                                }
+                                Some("collision-mixed") => other.agreed_id = Some("task-37".into()),
+                                _ => unreachable!(),
+                            }
+                            // Drive member stays first: first-match resolution would release.
+                            current.requirements.push(other);
                         }
                         Some("missing") => current.requirements.clear(),
                         Some("empty") => current_ids.clear(),
@@ -799,7 +843,7 @@ fn auto_release_fixture(change: ReleaseChange) {
         Some("current head could not be read")
     } else if change.move_head {
         Some("head moved")
-    } else if change.before_eligibility {
+    } else if change.before_eligibility && change.absorbed_kind.is_some() {
         Some("Rework-only")
     } else if change.stricter_hold
         || change.changed_rework
@@ -836,13 +880,18 @@ fn auto_release_fixture(change: ReleaseChange) {
         })
     } else if let Some(field) = change.spec_field {
         Some(match field {
+            "collision-spec" | "collision-agreed" | "collision-mixed" => {
+                "TASK-37 resolves to 2 requirements; exactly one required"
+            }
             "guided" | "operator" => "guided/operator",
             "type" | "keystone" => "keystone",
             "empty" => "covered specs are missing",
-            "missing" | "spec_id" | "agreed_id" => "covered spec is missing",
+            "missing" | "spec_id" | "agreed_id" => {
+                "TASK-37 resolves to 0 requirements; exactly one required"
+            }
             _ => "sensitive",
         })
-    } else if change.corpus_key.is_some() {
+    } else if change.corpus_key.is_some() || change.fresh_corpus_id {
         Some("verdict corpus still refuses this head")
     } else {
         None
@@ -1382,3 +1431,35 @@ approval_field_test!(
     auto_release_missing_round_verdict_stays_held,
     "missing_round_verdict"
 );
+
+// trace:STORY-1687 | ai:codex
+#[test]
+fn auto_release_exactly_one_requirement_per_id_at_each_phase() {
+    for field in [
+        "collision-spec",
+        "collision-agreed",
+        "collision-mixed",
+        "missing",
+    ] {
+        for (before_eligibility, after_audit) in [(true, false), (false, false), (false, true)] {
+            auto_release_fixture(ReleaseChange {
+                spec_field: Some(field),
+                before_eligibility,
+                after_audit,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+// trace:STORY-1687 | ai:codex
+#[test]
+fn auto_release_fresh_covered_id_corpus_refusal_at_each_release_phase() {
+    for after_audit in [false, true] {
+        auto_release_fixture(ReleaseChange {
+            fresh_corpus_id: true,
+            after_audit,
+            ..Default::default()
+        });
+    }
+}

@@ -137,6 +137,8 @@ not a read counter.
 | M103: Approval and refusal instants must not be equal, including equivalent timezone offsets | Replace `>` with `>=` | `approval_must_be_strictly_newer_than_every_arming_refusal` | KILLED (101) |
 | M104: Sensitive terms are matched anywhere in title/tag text | Replace substring matching with prefix matching | `each_sensitive_metadata_trigger_requires_human` | KILLED (101) |
 | M105: Each retained round has a parseable string `verdict` | Default a missing round verdict to Approved | `auto_release_missing_round_verdict_stays_held` | KILLED (101) |
+| M106: Every covered ID resolves to exactly one canonical requirement at eligibility and both release-time reads | Replace unique-match resolution with the old first-match `find` | `auto_release_exactly_one_requirement_per_id_at_each_phase` | KILLED (101) |
+| M107: Corpus read uses the freshly re-read covered IDs before clearance and after audit | Pass initial covered IDs to `read_corpus` | `auto_release_fresh_covered_id_corpus_refusal_at_each_release_phase` | KILLED (101) |
 
 The VerdictRef equality row explicitly includes all four fields. `key` and
 `pr` are derived from the same immutable pinned hold; `reviewed_sha` is derived
