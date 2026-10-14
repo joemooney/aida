@@ -477,6 +477,11 @@ jobs:
           python3 scripts/check-template-commands.py
           python3 -m unittest tests/test_check_template_commands.py
 
+      # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
+      # trace:BUG-2014 | ai:codex
+      - name: Grant expiry hook protocol
+        run: python3 tests/test_grant_expiry_notice_hook.py
+
       # BUG-1950: docs/cli/12-glossary.md is GENERATED from `aida docs
       # glossary` (ADR-5), but nothing compared the committed page with the
       # generator, so it drifted for a month. Re-render it with the binary just

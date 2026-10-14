@@ -2413,6 +2413,11 @@ pub enum RoleCommand {
         refuse_within: Option<String>,
     },
 
+    /// Emit a deduplicated informational tool-hook expiry notice.
+    // trace:BUG-2014 | ai:codex
+    #[clap(hide = true)]
+    ExpiryNotice,
+
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
     End,
