@@ -4235,5 +4235,95 @@ mod bug_1923 {
             );
             assert_eq!(history_cache::classify_miss(&st_orphaned), IndexMiss::Stuck);
         }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn behind_or_elsewhere_with_a_stalled_index_gets_no_rebuild_advice() {
+            for (behind, elsewhere) in [(true, false), (false, true)] {
+                let st = HistoryCacheStatus {
+                    exists: true,
+                    head: Some("1111111".into()),
+                    tip: Some("2222222".into()),
+                    head_behind_tip: behind,
+                    tip_live_elsewhere: elsewhere,
+                    catch_up_stalled: true,
+                    complete: true,
+                    ..Default::default()
+                };
+                let label = format!("behind={behind} elsewhere={elsewhere}");
+                let lines = crate::cache_cmd::history_status_lines(&st);
+                let status_line = lines
+                    .iter()
+                    .find(|l| l.contains("History status:"))
+                    .expect("must have History status line");
+                assert!(
+                    status_line.contains("another checkout moved the shared index on"),
+                    "{label}: {status_line}"
+                );
+                assert!(!status_line.contains("rebuild"), "{label}: {status_line}");
+                assert!(!status_line.contains("stalled"), "{label}: {status_line}");
+
+                let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+                assert!(
+                    doc.contains("another checkout moved the shared index on"),
+                    "{label}: {doc}"
+                );
+                assert!(!doc.contains("rebuild"), "{label}: {doc}");
+                assert!(!doc.contains("not catching up"), "{label}: {doc}");
+
+                assert_eq!(
+                    history_cache::classify_miss(&st),
+                    IndexMiss::CheckoutBehind,
+                    "{label}"
+                );
+            }
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn replaced_root_with_a_branch_on_the_old_tip_stays_stuck() {
+            // The task_1507 root-change setup: a branch keeps the old tip
+            // and the store is soft-reset onto a squashed root. The next
+            // query resets the index, so status must not call it live
+            // elsewhere.
+            let mut fx = Fixture::new();
+            build_linear(&mut fx);
+            assert_parity(&fx, &opts(), "initial");
+            fx.git(&["branch", "keep-old", "HEAD"]);
+            let squashed = fx
+                .git(&["commit-tree", "HEAD^{tree}", "-m", "squashed"])
+                .trim()
+                .to_string();
+            fx.git(&["reset", "-q", "--soft", &squashed]);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert_ne!(st.head, st.tip);
+            assert!(!st.head_behind_tip);
+            assert!(
+                !st.tip_live_elsewhere,
+                "a replaced root is not live elsewhere"
+            );
+            let miss = history_cache::classify_miss(&st);
+            assert_eq!(miss, IndexMiss::Stuck);
+            let note = crate::history_flow::fallback_note(miss);
+            assert!(note.contains("aida cache rebuild --history"), "{note}");
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                !lines.contains("another checkout moved"),
+                "cache status must not blame another checkout:\n{lines}"
+            );
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                !doc.contains("another checkout moved"),
+                "doctor must not blame another checkout:\n{doc}"
+            );
+
+            // The query really does reset, as ensure_fresh always did.
+            assert_parity(&fx, &opts(), "after compact");
+            assert!(test_support::meta(&fx.db, "last_reset_reason")
+                .unwrap()
+                .contains("root commit changed"));
+        }
     }
 }

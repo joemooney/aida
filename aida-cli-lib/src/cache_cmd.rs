@@ -335,17 +335,19 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
              older queries read git directly until it finishes",
             "FILLING".yellow()
         )
+    } else if st.head_behind_tip || st.tip_live_elsewhere {
+        // trace:BUG-1998 | ai:antigravity
+        // trace:BUG-1998 | ai:claude
+        // Before the stall flag: behind or elsewhere gets no rebuild advice.
+        format!(
+            "History status:   {} — another checkout moved the shared index on",
+            "BEHIND".yellow()
+        )
     } else if st.catch_up_stalled {
         format!(
             "History status:   {} — catching up stalled; `aida history` reads git \
              directly until the next retry succeeds or `aida cache rebuild --history` \
              brings it up to date",
-            "BEHIND".yellow()
-        )
-    } else if st.head_behind_tip || st.tip_live_elsewhere {
-        // trace:BUG-1998 | ai:antigravity
-        format!(
-            "History status:   {} — another checkout moved the shared index on",
             "BEHIND".yellow()
         )
     } else {

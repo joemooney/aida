@@ -1324,12 +1324,7 @@ impl HistoryCache {
             Some(tip) if tip == head => {}
             Some(tip) => {
                 let recorded = self.meta("store_root_sha")?.unwrap_or_default();
-                let replaced = || {
-                    aida_core::git_ops::root_commits(store, head)
-                        .map(|r| r.join(","))
-                        .unwrap_or_default()
-                        != recorded
-                };
+                let replaced = || store_root_replaced(store, head, &recorded);
                 if aida_core::git_ops::is_ancestor(store, &tip, head)? {
                     self.catch_up_guarded(store, &tip, head, budget)?;
                 } else if aida_core::git_ops::is_ancestor(store, head, &tip)? {
@@ -2380,6 +2375,17 @@ fn prune_other_versions(db_path: &Path) -> Vec<PathBuf> {
     pruned
 }
 
+/// True when HEAD's root commits differ from the root recorded in the
+/// index (`store_root_sha`): the store history was replaced, so the next
+/// query resets the index whatever other checkouts still hold.
+// trace:BUG-1998 | ai:claude
+fn store_root_replaced(store: &Path, head: &str, recorded: &str) -> bool {
+    aida_core::git_ops::root_commits(store, head)
+        .map(|r| r.join(","))
+        .unwrap_or_default()
+        != recorded
+}
+
 /// Diagnostics for `aida cache status`. Never creates the index.
 // trace:TASK-1507 | ai:claude
 pub(crate) fn status(store: &Path) -> HistoryCacheStatus {
@@ -2425,8 +2431,14 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
                 st.head_behind_tip =
                     aida_core::git_ops::is_ancestor(store, head, tip).unwrap_or(false);
                 // trace:BUG-1998 | ai:antigravity
+                // trace:BUG-1998 | ai:claude
+                // Same order as ensure_fresh: a replaced root is checked
+                // before liveness, because the next query resets the index
+                // even when another branch still holds the old tip.
                 if !st.head_behind_tip {
-                    st.tip_live_elsewhere = tip_is_live_elsewhere(store, tip, head);
+                    let recorded = cache.meta("store_root_sha")?.unwrap_or_default();
+                    st.tip_live_elsewhere = !store_root_replaced(store, head, &recorded)
+                        && tip_is_live_elsewhere(store, tip, head);
                 }
             }
         }
