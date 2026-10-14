@@ -105,6 +105,13 @@ fn pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash() {
     // trace:TASK-1742 | ai:codex
     let shells = wrapper_shells();
     if !shells.contains(&"zsh") {
+        // trace:TASK-1363 | ai:claude
+        // CI installs zsh and sets AIDA_REQUIRE_ZSH=1, so the leak proof can
+        // never silently degrade to a bash-only pass there.
+        assert!(
+            std::env::var("AIDA_REQUIRE_ZSH").as_deref() != Ok("1"),
+            "AIDA_REQUIRE_ZSH=1 but zsh is unavailable; the pre-fix zsh leak proof cannot run"
+        );
         eprintln!("SKIP: pre-fix fixture zsh leak proof (zsh unavailable); bash still checked");
     }
 
