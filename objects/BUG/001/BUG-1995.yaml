@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - Each converts to the BUG-1967 pattern: the soft budget logs BUDGET-MISSED with loadavg; locks are held for the whole call; retry delays are stretched so a regression trips a hard ceiling (~60 s).
   - A mutation check shows each still catches the regression it guards.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T18:22:10.488159011Z
-modified_at: 2026-10-14T04:15:32.164795411Z
+modified_at: 2026-10-14T16:09:12.579762369Z
 req_type: Bug
 tags:
 - review-follow-up
@@ -96,6 +96,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13b2c-c680-7c40-952b-48137526203d
+  author: aida-auto-bump
+  timestamp: 2026-10-14T16:09:12.576367657Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13b2c-c683-7751-a286-80370e8a8a91
+  timestamp: 2026-10-14T16:09:12.579754983Z
+  agent: aida
+  commit_sha: 0f8894fa34813bd0dff9518cc4825a231bafd150
+  summary: Carried approval from 3fe10217a2 (fresh STANDARD reviewer); base-only update to bff275bbd7 verified by advisor.
+  review_verdict: approved
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
@@ -104,11 +118,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: bug_1956 bound genuinely pinned (orig BUG-1956 shape fails at 60s ceiling; READ_LADDER_CAP const test load-bearing), but bug_1594 lost coverage of a bounded-but-too-long forge timeout with no const pin, and the bug_1956 Fixture Drop SIGKILLs unverified sidecar PIDs while the real orphaned worker (bug_1674) is not reaped
-  recovery_hint: address the review findings, move BUG-1995 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-14T04:13:03.587499420Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T16:09:12.576362968Z
+  completion_sha: 0f8894fa34813bd0dff9518cc4825a231bafd150
