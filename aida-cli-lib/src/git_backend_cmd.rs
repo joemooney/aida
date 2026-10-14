@@ -5030,16 +5030,8 @@ pub(crate) fn handle_git_backend_command(
                                 &linkage.files,
                                 &linkage.commits,
                             );
-                            // trace:BUG-1594 | ai:claude
-                            let mut incomplete = Vec::new();
-                            if let Some((scanned, total)) = linkage.branch_scan_truncated {
-                                incomplete
-                                    .push(crate::format_branch_scan_truncated_note(scanned, total));
-                            }
-                            if linkage.files_scan_incomplete {
-                                incomplete
-                                    .push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
-                            }
+                            // trace:BUG-1594 trace:BUG-1993 | ai:claude
+                            let incomplete = linkage.incomplete_notes();
                             Some(GitLinkageJson {
                                 complete: incomplete.is_empty(),
                                 incomplete,

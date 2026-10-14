@@ -433,6 +433,16 @@ pub(crate) struct GitLinkage {
     /// be missing entries. Rendered as an explicit note (PRIN-5).
     // trace:BUG-1594 | ai:claude
     pub(crate) files_scan_incomplete: bool,
+    /// BUG-1993: the referencing-commit `git log --all` hit its time budget,
+    /// so `commits` is empty and the shipped state is unknown. Rendered as an
+    /// explicit note (PRIN-5), never as "no commits" or "not shipped".
+    // trace:BUG-1993 | ai:claude
+    pub(crate) commits_scan_incomplete: bool,
+    /// BUG-1993: the shipped state is unknown — the commit scan or the
+    /// `merge-base --is-ancestor` check did not finish in budget. `shipped`
+    /// is `false` then, but renderers must read it as "unknown".
+    // trace:BUG-1993 | ai:claude
+    pub(crate) shipped_unknown: bool,
     /// Worktree path checked out at `branch`, if any.
     pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
@@ -443,6 +453,44 @@ pub(crate) struct GitLinkage {
     // trace:STORY-634 | ai:claude
     pub(crate) repo: Option<String>,
 }
+
+impl GitLinkage {
+    /// PRIN-5: one note per bounded scan that stopped early, in render
+    /// order. Empty when every scan finished, so `is_empty()` is the
+    /// "linkage is complete" test the JSON and Markdown surfaces share.
+    // trace:BUG-1993 | ai:claude
+    pub(crate) fn incomplete_notes(&self) -> Vec<String> {
+        let mut notes = Vec::new();
+        if self.commits_scan_incomplete {
+            notes.push(LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE.to_string());
+        } else if self.shipped_unknown {
+            notes.push(LINKAGE_SHIPPED_UNKNOWN_NOTE.to_string());
+        }
+        if let Some((scanned, total)) = self.branch_scan_truncated {
+            notes.push(format_branch_scan_truncated_note(scanned, total));
+        }
+        if self.files_scan_incomplete {
+            notes.push(LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
+        }
+        notes
+    }
+}
+
+/// BUG-1993: the budget for the referencing-commit `git log --all --grep`.
+/// Measured on this repo (73k commits, 5k refs, idle host, 2026-10-14):
+/// 0.6-1.1 s. The headroom is for a loaded host; past it the commit list is
+/// reported incomplete and the shipped state unknown, never "not shipped".
+/// (#2620 set budgets below the measured cost and showed shipped specs as
+/// unshipped.)
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_COMMIT_LOG_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(3);
+
+/// BUG-1993: the budget for the `merge-base --is-ancestor` shipped check.
+/// Measured on this repo: ~22 ms. Past it the shipped state is unknown.
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_SHIPPED_CHECK_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(1);
 
 /// BUG-1594: the most referencing commits the in-flight branch search walks
 /// (newest first) before it stops and reports itself partial.
@@ -662,14 +710,19 @@ pub(crate) fn collect_git_linkage_opts(
     // cannot leak `fatal: Not a valid object name <X>` to the user's
     // terminal — belt-and-braces alongside `resolve_default_branch_ref`,
     // which already filters `target` to a ref that exists.
-    let is_ancestor = |sha: &str, target: &str| -> bool {
-        PCmd::new("git")
-            .arg("-C")
+    // BUG-1993: bounded; `None` means the check did not finish in budget,
+    // so the shipped state is unknown rather than false.
+    // trace:BUG-1993 | ai:claude
+    let is_ancestor = |sha: &str, target: &str| -> Option<bool> {
+        let mut cmd = PCmd::new("git");
+        cmd.arg("-C")
             .arg(project_root)
-            .args(["merge-base", "--is-ancestor", sha, target])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .args(["merge-base", "--is-ancestor", sha, target]);
+        match command_output_with_timeout_detail(cmd, LINKAGE_SHIPPED_CHECK_TIMEOUT) {
+            BoundedCommandOutput::Completed(o) => Some(o.status.success()),
+            BoundedCommandOutput::SpawnFailed => Some(false),
+            BoundedCommandOutput::TimedOut => None,
+        }
     };
 
     // ---- Commits referencing the spec (across all refs) ----
@@ -696,7 +749,21 @@ pub(crate) fn collect_git_linkage_opts(
         args.push("--grep");
         args.push(id.as_str());
     }
-    let log = git(&args).unwrap_or_default();
+    // BUG-1993: the `--all` walk is the costliest linkage call (0.6-1.1 s
+    // idle on this repo), so it is bounded. A timeout yields no commits and
+    // marks the scan incomplete; a spawn failure or git error stays the old
+    // silent empty result. trace:BUG-1993 | ai:claude
+    let mut log_cmd = PCmd::new("git");
+    log_cmd.arg("-C").arg(project_root).args(&args);
+    let (log, commits_scan_incomplete) =
+        match command_output_with_timeout_detail(log_cmd, LINKAGE_COMMIT_LOG_TIMEOUT) {
+            BoundedCommandOutput::Completed(o) if o.status.success() => (
+                String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
+                false,
+            ),
+            BoundedCommandOutput::TimedOut => (String::new(), true),
+            _ => (String::new(), false),
+        };
     let commits: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
@@ -756,15 +823,22 @@ pub(crate) fn collect_git_linkage_opts(
     let mut branch_scan_truncated: Option<(usize, usize)> = None;
     let mut worktree: Option<String> = None;
     let mut shipped_pr: Option<u64> = None;
+    let mut shipped_unknown = commits_scan_incomplete;
     if let Some((full, _, _)) = commits.first() {
         // BUG-380: resolve a ref that exists rather than passing a
         // literal "main"; on master-default repos the literal leaks
         // `fatal: Not a valid object name 'main'` from git through
         // is_ancestor's inherited stderr.
-        shipped = resolve_default_branch_ref(project_root)
+        let verdict = resolve_default_branch_ref(project_root)
             .map(|main_ref| is_ancestor(full, &main_ref))
-            .unwrap_or(false);
-        if shipped {
+            .unwrap_or(Some(false));
+        shipped = verdict == Some(true);
+        // trace:BUG-1993 | ai:claude
+        shipped_unknown = verdict.is_none();
+        if shipped_unknown {
+            // BUG-1993: unknown is neither shipped nor in flight; skip the
+            // in-flight branch walk rather than present a guessed branch.
+        } else if shipped {
             // A squash-merge subject ends with `(#NN)` — the cheapest,
             // most reliable PR pointer for shipped work.
             shipped_pr = commits
@@ -908,6 +982,8 @@ pub(crate) fn collect_git_linkage_opts(
         other_branches,
         branch_scan_truncated,
         files_scan_incomplete,
+        commits_scan_incomplete,
+        shipped_unknown,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
@@ -942,11 +1018,27 @@ pub(crate) fn print_git_linkage(
         other_branches,
         branch_scan_truncated,
         files_scan_incomplete,
+        commits_scan_incomplete,
+        shipped_unknown,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude
         repo,
     } = collect_git_linkage(project_root, ids);
+
+    if commits.is_empty() && files.is_empty() && commits_scan_incomplete {
+        // BUG-1993 (PRIN-5): the commit scan timed out — the linkage is
+        // unknown, not absent. trace:BUG-1993 | ai:claude
+        println!(
+            "\n{}: {}",
+            "Git linkage".green().bold(),
+            LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE.yellow()
+        );
+        if files_scan_incomplete {
+            println!("  {}", LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.yellow());
+        }
+        return;
+    }
 
     if commits.is_empty() && files.is_empty() && files_scan_incomplete {
         // BUG-1594 (PRIN-5): an empty result from a scan that did not finish
@@ -1025,7 +1117,14 @@ pub(crate) fn print_git_linkage(
             }
         };
 
-        if shipped {
+        if shipped_unknown {
+            // trace:BUG-1993 | ai:claude
+            println!(
+                "  {}     {}",
+                "Branch".bold(),
+                LINKAGE_SHIPPED_UNKNOWN_NOTE.yellow()
+            );
+        } else if shipped {
             let mut lines =
                 format_change_linkage(forge, &ChangeLinkageState::Shipped { number: shipped_pr });
             // STORY-634 (ADR-12 D5): in a multi-repo workspace a bare change
@@ -1165,6 +1264,11 @@ pub(crate) fn print_git_linkage(
     if files_scan_incomplete {
         println!("  {}", LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.yellow());
     }
+    // BUG-1993: traced files rendered, but the commit scan timed out.
+    // trace:BUG-1993 | ai:claude
+    if commits_scan_incomplete {
+        println!("  {}", LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE.yellow());
+    }
     // TASK-1475 (CR-8 acceptance 6 follow-up): a one-line filing-drift
     // signal — how much of the traced surface has moved since the code
     // state this spec was filed against. Silent when there's nothing to
@@ -1180,6 +1284,18 @@ pub(crate) fn print_git_linkage(
 // trace:BUG-1594 | ai:claude
 pub(crate) const LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE: &str =
     "trace-comment scan incomplete (time budget) — more files may reference this spec";
+
+/// BUG-1993: the note rendered when the referencing-commit scan stopped at
+/// its time budget.
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE: &str =
+    "commit scan incomplete (time budget) — referencing commits and shipped state unknown";
+
+/// BUG-1993: the note rendered when the shipped check stopped at its time
+/// budget.
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_SHIPPED_UNKNOWN_NOTE: &str =
+    "shipped state unknown (merge check did not finish in time budget)";
 
 /// Why a trailer reference fails the validity gate. trace:STORY-498 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
