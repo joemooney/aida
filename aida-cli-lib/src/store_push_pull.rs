@@ -2435,6 +2435,13 @@ pub(crate) fn handle_pull_command(
 ) -> Result<()> {
     use aida_core::git_ops;
 
+    // Validate before the remote probe: a refused host profile is never a
+    // successful no-origin skip, even when the store has nothing to fetch.
+    // trace:BUG-1929 | ai:codex
+    if !code_only && git_ops::is_store_tree(store_path) {
+        git_ops::ensure_store_hooks_supported(store_path)?;
+    }
+
     let project_root = store_path
         .parent()
         .map(|p| p.to_path_buf())
