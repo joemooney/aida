@@ -1,0 +1,27 @@
+id: 01a1395c-3969-7ef3-9d6f-895a7a4abccd
+spec_id: TASK-1753
+agreed_id: TASK-1753
+title: 'Review follow-ups for PR #2601 (STORY-1661)'
+description: |-
+  Non-blocking follow-ups from the round-2 merge review of PR #2601 (STORY-1661) at 5abf3f943e. None of these block the merge.
+  1. `cache refresh --history --if-behind`: the --if-behind flag has no effect, because --history alone dispatches the same handle_tick (cache_cmd.rs early_refresh). Round 1 raised this and it is still open. Either give the flag a meaning (for example, interactive --history reports NotBuilt/Busy/Skipped/UpToDate and --if-behind stays silent) or document that it is only a marker.
+  2. An interactive `aida cache refresh --history` prints nothing for NotBuilt, Busy, Skipped or UpToDate, ignores --json, and resolves the project from cwd only (history_indexer.rs handle_tick).
+  3. Doc staleness: docs/cli/10-storage.md, AGENTS.md and OVERVIEW.md list the no-op cases as missing/disabled/current/busy. They omit the new Skipped case (this checkout is behind the shared index, or the tip is live on another checkout). They also do not say that a replaced root or rewritten history exits non-zero with rebuild advice.
+  4. Test gap: deleting the HeadBehind branch in HistoryCache::classify_tip is not caught by the history_indexer tests. tick_skips_when_checkout_is_behind_shared_index creates a 'keep' branch, so the state falls through to LiveElsewhere and still skips. Only task_1507_reader_behind_with_no_live_ref_does_not_reset catches it. Add a tick test where HEAD is behind and no other ref holds the tip.
+  5. The 30 s tick budget is checked only between chunks. This is documented in the doc comment, and the scheduler's kill is the backstop. No action is needed beyond keeping it documented.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T07:41:47.753625178Z
+modified_at: 2026-10-14T07:41:47.753625178Z
+req_type: Task
+tags:
+- review-follow-up
+filed_at:
+  code_sha: 5abf3f943efe14d86469f4629e749989da0b49ce
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
