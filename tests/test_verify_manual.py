@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import importlib.util
+import contextlib
+import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+from types import SimpleNamespace
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -16,6 +20,61 @@ def load_verify_manual():
     sys.modules["verify_manual"] = module
     spec.loader.exec_module(module)
     return module
+
+
+class VerifyManualCompletenessTest(unittest.TestCase):
+    # trace:BUG-2121 | ai:codex
+    HELP_ALL = """Requirements
+  add            Add a new requirement
+  import         Import from external sources
+  help           Print help
+  help-all       Full inventory grouped by topic
+
+External commands
+  gui                 external /home/joe/.cargo/bin/aida-gui
+  host-bench          external /home/joe/.local/bin/aida-host-bench
+"""
+
+    def setUp(self):
+        self.vm = load_verify_manual()
+
+    def test_help_all_excludes_extensions_preserves_builtins(self):
+        with patch.object(
+            self.vm.subprocess, "run", return_value=SimpleNamespace(stdout=self.HELP_ALL)
+        ) as run:
+            self.assertEqual(self.vm.help_all_commands(), ["add", "import"])
+        run.assert_called_once_with(["aida", "help-all"], capture_output=True, text=True)
+
+    def test_completeness_ignores_extensions_but_rejects_missing_builtin(self):
+        for undocumented, expected_exit in [(False, 0), (True, 1)]:
+            with self.subTest(undocumented=undocumented), tempfile.TemporaryDirectory() as td:
+                chapter = Path(td) / "01-fixture.md"
+                chapter.write_text("### `aida add`\n### `aida import`\n")
+                output = io.StringIO()
+                help_all = self.HELP_ALL
+                if undocumented:
+                    help_all += "\nRequirements\n  missing        Undocumented built-in\n"
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(patch.object(sys, "argv", [str(SCRIPT)]))
+                    stack.enter_context(patch.object(self.vm, "CLI_DIR", td))
+                    stack.enter_context(patch.object(
+                        self.vm.subprocess, "run", return_value=SimpleNamespace(stdout=help_all)
+                    ))
+                    stack.enter_context(patch.object(self.vm, "all_surface_changing_specs", return_value=({}, True)))
+                    stack.enter_context(patch.object(self.vm, "subcommand_misses", return_value=[]))
+                    stack.enter_context(patch.object(self.vm, "help_command_paths", return_value=set()))
+                    stack.enter_context(patch.object(self.vm, "flag_accuracy_misses", return_value=[]))
+                    stack.enter_context(contextlib.redirect_stdout(output))
+                    with self.assertRaises(SystemExit) as exit_result:
+                        self.vm.main()
+                self.assertEqual(exit_result.exception.code, expected_exit)
+                self.assertNotIn("aida gui", output.getvalue())
+                self.assertNotIn("aida host-bench", output.getvalue())
+                if undocumented:
+                    self.assertIn("FAIL completeness — 1 command(s)", output.getvalue())
+                    self.assertIn("aida missing", output.getvalue())
+                else:
+                    self.assertIn("OK completeness — all 2 help-all commands documented", output.getvalue())
 
 
 class VerifyManualFlagsTest(unittest.TestCase):
