@@ -161,3 +161,20 @@ fn corrupt_unreadable_and_unwritable_ledgers_emit_nothing() {
     std::fs::write(&blocked, "blocked").unwrap();
     assert!(claim(&blocked, "fixture", "epoch", 1).is_err());
 }
+
+// Exact boundary assertions kill <= to < mutations at each crossing.
+// trace:BUG-2014 | ai:codex
+#[test]
+fn threshold_boundaries_are_inclusive() {
+    for (left, expected) in [
+        (Duration::hours(2) + Duration::milliseconds(1), 0),
+        (Duration::hours(2), 1),
+        (Duration::minutes(30) + Duration::milliseconds(1), 1),
+        (Duration::minutes(30), 2),
+        (Duration::milliseconds(1), 2),
+        (Duration::zero(), 3),
+        (Duration::milliseconds(-1), 3),
+    ] {
+        assert_eq!(threshold(left), expected, "remaining: {left}");
+    }
+}
