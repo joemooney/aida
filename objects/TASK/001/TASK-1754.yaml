@@ -1,0 +1,28 @@
+id: 01a139b8-0b24-7a22-aa2f-96f3576cb658
+spec_id: TASK-1754
+agreed_id: TASK-1754
+title: 'Review follow-ups for PR #2597 (BUG-1994)'
+description: |-
+  Non-blocking findings from round-2 review of PR #2597 at 237e401b07.
+  1. Stale comment: .github/workflows/ci.yml:30-32 still says each stress round has its own two-minute watchdog. Round deadlines were removed in 76de0466d5. Rewrite it to say the explicit stress step (30m) and the job (45m) are the bounds.
+  2. CI budget: the explicit 'PATH and history concurrency stress' step took 17m46s in Build run 38506239319, and the whole Build took 38m27s against the 45-minute job cap. Recent main Builds take 16-22 min, so a full-CI Build would have only about 5-11 min of headroom before the job timeout. Consider running the stress on a schedule, behind a path filter, or with fewer rounds per PR, or re-budget the job timeout so runner variance cannot turn into red CI.
+  3. The ignored stress test still uses bounded_output with a fixed 120s cap for the '--list' discovery call (bug_1994_path_isolation_tests.rs). Listing is fast, but this is the last fixed deadline left; drop it for consistency.
+  4. fake_git_path_probe_child returns early and reports 'ok' in every default run when AIDA_TEST_PATH_PROBE_ROOT is unset. It is a helper, not a vacuous assertion, but it inflates pass counts. Consider marking it #[ignore], since the parent passes --exact, or documenting it as child-only.
+  5. The guardrail scan covers aida-cli-lib/src and aida-cli-lib/tests but not aida-cli/tests. The author deferred this; it needs its own rule for the fully locked separate binary.
+  HOME mutation is tracked separately in TASK-1748.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T09:22:05.220513737Z
+modified_at: 2026-10-14T09:22:05.220513737Z
+req_type: Task
+tags:
+- review-follow-up
+filed_at:
+  code_sha: 237e401b07e057129a1a4fe09bb5bd372b5ac0eb
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
