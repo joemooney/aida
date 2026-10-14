@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T12:19:11.552567824Z
-modified_at: 2026-10-14T21:46:46.806043243Z
+modified_at: 2026-10-14T22:40:35.317844190Z
 req_type: Task
 tags:
 - carried-from:BUG-1930
@@ -27,6 +27,12 @@ comments:
   content: 'FIRE: recommendation — narrow the reclassification to write-capable tools (Edit, Write, MultiEdit, NotebookEdit, plus Bash). permission_denied_failure''s message claims ''its writes were refused ... environment problem, not the spec'', and a PermissionDenied stop feeds the environment-blocked batch halt, so a denial of a read/network tool (WebFetch, WebSearch, an MCP tool) on a stop that actually failed for spec reasons would wrongly halt the whole batch and blame the environment. Keep the denied-tool list in the failure detail regardless (it is useful context), but only flip the kind to PermissionDenied when at least one denied tool is in the write set; otherwise keep the original kind. Small change in auto_complete.rs where headless_log_permission_denied_tools feeds permission_denied_failure, plus one test with a WebFetch-only denial. Needs operator sign-off before coding.'
   created_at: 2026-10-14T21:46:46.806043243Z
   modified_at: 2026-10-14T21:46:46.806043243Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13c93-17f5-7792-a11c-972fe1d471c9
+  author: joe
+  content: 'ADVISOR RULING (fire mode): accept the fixer''s recommendation. Reclassify a failed stop as permission-denied only when a denied tool can write (Edit, Write, MultiEdit, NotebookEdit, Bash). A read-only denial such as WebFetch stays a normal spec failure, so it cannot halt the batch. Implement on that basis; no further operator input needed.'
+  created_at: 2026-10-14T22:40:35.317844190Z
+  modified_at: 2026-10-14T22:40:35.317844190Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: abbb2552c52b6f7c7e0cd9aba059f58f1ffc86fc
