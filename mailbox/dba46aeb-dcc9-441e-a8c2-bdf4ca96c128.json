@@ -1,0 +1,19 @@
+{
+  "id": "dba46aeb-dcc9-441e-a8c2-bdf4ca96c128",
+  "thread_id": "dba46aeb-dcc9-441e-a8c2-bdf4ca96c128",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792001877622,
+  "body": "#2626 batch C (7 tasks): fresh STANDARD review APPROVE at 747e6e5222, with mutation-checked hook and leases tests. It touches the aida-pre-commit.sh provenance gate, but only adds refusals; flagging it in case you want STRICT. #2624 batch B was merged by the operator mid-review; the post-merge APPROVE is on the PR, and TASK-1361/1362 need closing by hand. #2625 batch D: Build red, left with its author. All verdicts are UNRECORDED (expired grant). Main moved with #2624, so the HOLD READY PRs (#2600, #2602, #2606) and #2611/#2617 are 1 behind and need update-branch before merge.",
+  "subject": "#2626 batch C r1 APPROVE at 747e6e5222; #2625 Build red",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
