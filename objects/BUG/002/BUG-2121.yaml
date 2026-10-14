@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T03:38:33.676159841Z
-modified_at: 2026-10-14T03:39:33.276903633Z
+modified_at: 2026-10-14T03:52:34.479537572Z
 req_type: Bug
 comments:
 - id: 01a1387e-721c-73b3-a970-d90ceb0f9fbc
@@ -16,6 +16,11 @@ comments:
   content: 'FACTORY PLAN (codex): In docs/cli/verify-manual.py help_all_commands(), skip rows whose description begins with the external marker emitted by help-all. Add fixture-based unittest coverage in tests/test_verify_manual.py proving external gui/host-bench rows are excluded, ordinary built-ins and meta-command filtering are preserved, and main() still fails completeness for an undocumented built-in. No PATH or environment mutation; mock subprocess output. Acceptance is checked through parser and actual completeness exit/output assertions. Risk: overbroad filtering; retain built-in descriptions containing the word external. Run the Python test target and make check-ci-fast before push.'
   created_at: 2026-10-14T03:39:33.276903633Z
   modified_at: 2026-10-14T03:39:33.276903633Z
+- id: 01a1388a-5daf-7a00-b1fb-05d289f15ef1
+  author: joe
+  content: 'FACTORY DRAFT: PR #2616 at 9affa60422483c89323bc7fd359597e891f52db9'
+  created_at: 2026-10-14T03:52:34.479537572Z
+  modified_at: 2026-10-14T03:52:34.479537572Z
 history:
 - id: 01a1387e-287b-7e70-a9f9-0237b4d6c89d
   author: aida-session-start
