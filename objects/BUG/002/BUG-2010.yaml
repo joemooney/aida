@@ -11,12 +11,12 @@ description: |
   - A lease taken from inside an `aida agent new` session (AIDA_AGENT_NAME set) is attributed to that agent's process (the registered agent pid, or the nearest ancestor that is a registered agent), not the transient CLI pid.
   - `aida ps` shows such a lane as live while the agent process lives, for Codex and Antigravity as well as Claude.
   - "Orphaned In-Progress" excludes specs whose lease belongs to a live registered agent.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T01:57:34.812759270Z
+modified_at: 2026-10-14T12:37:57.605181911Z
 req_type: Bug
 tags:
 - agent-new
@@ -45,6 +45,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13a6b-5ee5-7932-8533-8ed4f1dbe6d1
+  author: aida-session-start
+  timestamp: 2026-10-14T12:37:57.605180875Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
