@@ -22,12 +22,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:30.122948646Z
-modified_at: 2026-10-14T04:11:30.122948646Z
+modified_at: 2026-10-14T04:11:39.940821992Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
 - tech-debt
+execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
   branch: main
