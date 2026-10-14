@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1997",
+  "publishes": [
+    {
+      "at": "2026-10-14T22:28:58.280997215Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:09:49.247736020Z",
+      "spec": "BUG-1997",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T00:10:07.376515740Z",
+      "spec": "BUG-1997",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1997",
+        "branch": "bug-1997-work",
+        "first_seen": "2026-10-14T00:10:07.376488454+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T04:38:24.816038013Z",
+      "spec": "BUG-1997",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2606,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bd9ee454dcb43a318793474b7b1504b4d4d1f8d8"
+      }
+    },
+    {
+      "ts": "2026-10-14T04:38:25.434819286Z",
+      "spec": "BUG-1997",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "The code fix is correct: an explicit squash subject is now passed whenever IDs are withheld, and dropping the inert hold closure matches the BUG-1957 note. ADR-76 strict tier (pr-ship gate): one blocker, a new test that mutates the process-wide PATH.",
+        "recovery_hint": "address the review findings, move BUG-1997 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-14T17:32:23.329342537Z",
+      "spec": "BUG-1997",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "1005e4c7577cc972ad07b9a49c4aee3abf626b1d"
+      }
+    },
+    {
+      "ts": "2026-10-14T22:28:40.960757812Z",
+      "spec": "BUG-1997",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T22:28:51.379411500Z",
+      "spec": "BUG-1997",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2606
+      }
+    },
+    {
+      "ts": "2026-10-14T22:28:58.266880764Z",
+      "spec": "BUG-1997",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f6c89a47e4746722aad2ba6400da624eeda62ab0",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
