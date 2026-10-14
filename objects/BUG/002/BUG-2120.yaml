@@ -14,13 +14,21 @@ description: |
   2. A live session with an active model-side mail poll still trips. This is a regression test for the BUG-1589 intent.
   3. A replay test with a fixture shaped like the 6fd5497b transcript (CronCreate, then silence).
   4. Once fixed, `aida shift status` no longer fails `watchdog-quiet` on a dead session's leftovers.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:23.530993833Z
-modified_at: 2026-10-14T01:36:57.786820070Z
+modified_at: 2026-10-14T01:37:33.732583655Z
 req_type: Bug
+history:
+- id: 01a1380e-c224-7633-aae2-ccc714ccde6a
+  author: aida-session-start
+  timestamp: 2026-10-14T01:37:33.732582601Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
