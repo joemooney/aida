@@ -9,12 +9,12 @@ description: |-
 
   PR: #2590
   Reviewed sha: 464e1a54a17a478c453c8da24ac451cc76ac3c3b
-status: Draft
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T12:20:02.223156571Z
-modified_at: 2026-10-13T18:10:51.858143743Z
+modified_at: 2026-10-14T22:38:40.667997988Z
 req_type: Task
 tags:
 - carried-from:TASK-1727
@@ -28,6 +28,19 @@ comments:
   created_at: 2026-10-13T18:10:51.858143743Z
   modified_at: 2026-10-13T18:10:51.858143743Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13c91-581b-7bb0-a48a-ab149afc7263
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (fe7e09f) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T22:38:40.667997038Z
+  modified_at: 2026-10-14T22:38:40.667997038Z
+history:
+- id: 01a13c91-581b-7bb0-a48a-ab050545438d
+  author: aida-auto-bump
+  timestamp: 2026-10-14T22:38:40.667995140Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: cca407e2a44acac7053e619e474ab00f15544ff4
   branch: main
