@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T05:38:33.646357333Z
+modified_at: 2026-10-14T05:39:24.202397754Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -147,6 +147,34 @@ comments:
   content: 'FACTORY READY: PR #2614 green at 4f757e049ceadc4876ba2afe9dec79a57d321175. Completed Build https://github.com/joemooney/aida/actions/runs/38501604211. All signed slice-1 R1-R8 work is committed and pushed; CLI audit omission from round one fixed, complete round-two Build green. PR is still draft with a Decision hold requiring advisor signoff and human clearance. No review verdict, ready transition, hold clear, merge or Completed status was performed.'
   created_at: 2026-10-14T02:56:34.128494364Z
   modified_at: 2026-10-14T02:56:34.128494364Z
+- id: 01a138ec-2baa-7330-8877-75ebeba24f6a
+  author: joe
+  content: |-
+    MERGE REVIEW: **REQUEST CHANGES** at 4f757e049c (STORY-1687, round 1, a strict ADR-75 (b) review by a fresh independent reviewer; verdict recorded).
+
+    R1, R2, R3, R5 and R7 pass. R4 and R6 are partial. In the gate workflow diffs (GitHub and GitLab), only comments and error text change; the gate logic is untouched and the fixtures pass, 7 label states × 2 gates. 16 of 18 mutations were caught.
+
+    **Blocking (strict tier: a surviving mutation in authority code):**
+    1. `aida-cli-lib/src/rework_hold_release.rs:324-344`: nothing tests the production re-check run just before release. Two mutations leave all 17 tests green:
+       - `live_head()?` → `head.clone()`, which skips re-reading the head from the forge;
+       - the hold-unchanged re-check → `true`.
+
+       `moved_head_before_release_preserves_marker_and_labels` passes its own callback to `release_with`, so it never exercises production's re-fetch.
+
+       **Fix:** make the forge, hold and corpus reads injectable in `auto_release`, then test:
+       - (a) the forge returns the approved head first and a different head second; marker, labels and comment must stay untouched;
+       - (b) the hold is replaced by a stricter kind between the reads.
+
+    **Non-blocking (should go into a follow-up):**
+    2. The `release_grant` stamp binds the grant, subject, session and recorder, but not the SHA, verdict or timestamp. It belongs to the same trust class as the BUG-1693 same-user limit (documented), but the comment at `lib_part5.rs:3119` ("direct artifact writers do not grant release") overstates the protection.
+    3. "Covered specs" leaves out specs named only in absorbed holds or the PR title. Composing Rework holds replaces the older verdict reference (`merge_hold.rs:553`). So an approval on spec B can release a hold whose refusal on spec A was never answered.
+    4. A stale line in the template: `aida-core/templates/.aida/discipline/git-sync-and-review.md:116`.
+    5. A pre-existing flake (about 1 run in 20, also on main): `seat_authority::tests::env_role_alone_confers_no_seat_and_grants_fail_closed`.
+
+    Because this is ADR-75 sensitive (approval authority), it is **not** eligible for merge-seat FIX-FORWARD. The advisor routes the rework.
+  created_at: 2026-10-14T05:39:24.202397754Z
+  modified_at: 2026-10-14T05:39:24.202397754Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a137b5-cce3-72e2-8548-0abd8462d4d8
   author: joe
