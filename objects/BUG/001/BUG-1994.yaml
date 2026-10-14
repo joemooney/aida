@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-14T02:19:37.340395817Z
+modified_at: 2026-10-14T03:11:56.849948025Z
 req_type: Bug
 tags:
 - plan:night
@@ -119,6 +119,11 @@ comments:
   created_at: 2026-10-14T02:19:37.340395817Z
   modified_at: 2026-10-14T02:19:37.340395817Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13865-2bb1-7d20-b50e-fbf134eaad23
+  author: joe
+  content: 'FACTORY REWORK round1: head76de0466d5. Rebased onto main preserving both AGENTS paragraphs. B1: ignored stress in default suite; explicit same-Build CI step runs all15 rounds/16threads with step30m/job45m bound, no per-round deadline. New integration guard pins ignore, exact CI invocation, timeout and failure propagation. Optional: strict current_exe in both launchers; OsStr/OsString keys detected including macro args; scan expanded to library integration tests. aida-cli/tests scan deferred because existing fully locked separate binary needs its own rule; HOME remains reviewer follow-up. Full make check-ci-fast27/27 passed. Six-item self-review in PR body; awaiting CI.'
+  created_at: 2026-10-14T03:11:56.849948025Z
+  modified_at: 2026-10-14T03:11:56.849948025Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
