@@ -325,3 +325,50 @@ fn rebuild_waits_for_and_respects_the_refresh_lock() {
     let stdout = ok(&aida(&fx, &["cache", "rebuild"]));
     assert!(stdout.contains("moved it aside to"), "{stdout}");
 }
+
+/// Page-level damage that neither ordinary reads nor a row rewrite touch (the
+/// 2026-10-14 file also had "Page 7916: never used"): grow the file by one page
+/// and the header's page count with it, leaving a page no b-tree or freelist
+/// owns. Every query still works; only an integrity check sees it.
+fn leak_an_unused_page(fx: &Fixture) {
+    let path = cache_path(fx);
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let page_size: i64 = conn
+        .query_row("PRAGMA page_size", [], |r| r.get(0))
+        .unwrap();
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+        .unwrap();
+    drop(conn);
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+    let mut bytes = std::fs::read(&path).unwrap();
+    let pages = u32::from_be_bytes(bytes[28..32].try_into().unwrap()) + 1;
+    bytes[28..32].copy_from_slice(&pages.to_be_bytes());
+    bytes.extend(std::iter::repeat(0u8).take(page_size as usize));
+    std::fs::write(&path, bytes).unwrap();
+}
+
+fn integrity(fx: &Fixture) -> String {
+    let conn = rusqlite::Connection::open(cache_path(fx)).unwrap();
+    conn.query_row("PRAGMA integrity_check(1)", [], |r| r.get(0))
+        .unwrap()
+}
+
+// Regression (2026-10-14): on a cache with page-level damage, `aida cache
+// rebuild` either refused ("is corrupt. Fix: aida cache rebuild") or rewrote
+// rows inside the damaged file and left it damaged. It must move the file
+// aside and rebuild into a fresh, intact one. trace:BUG-1940 | ai:claude
+#[test]
+fn rebuild_replaces_a_cache_with_page_level_damage() {
+    let fx = fixture();
+    leak_an_unused_page(&fx);
+    assert_ne!(integrity(&fx), "ok", "the fixture really is damaged");
+
+    let stdout = ok(&aida(&fx, &["cache", "rebuild"]));
+    assert!(stdout.contains("Cache rebuilt"), "{stdout}");
+    assert!(stdout.contains("moved it aside to"), "{stdout}");
+    assert_eq!(integrity(&fx), "ok", "the rebuilt cache is intact");
+    let found = ok(&aida(&fx, &["search", "widget"]));
+    assert!(found.contains("searchable widget"), "{found}");
+}
