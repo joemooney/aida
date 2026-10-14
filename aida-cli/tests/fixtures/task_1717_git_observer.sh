@@ -30,7 +30,9 @@ case "$command_name" in
     commit) callback pre-commit || exit $?;;
     push)
         sha=$("$T1717_REAL_GIT" rev-parse HEAD) || exit $?
-        printf 'refs/heads/aida-store %s refs/heads/aida-store %040d\n' "$sha" 0 | callback pre-push || exit $?;;
+        # A pipeline would run callback in a subshell and shift PPID, corrupting
+        # the lock-owner observation. Feed stdin without an extra shell parent.
+        callback pre-push <<< "$(printf 'refs/heads/aida-store %s refs/heads/aida-store %040d' "$sha" 0)" || exit $?;;
     rebase)
         case " $* " in *' --abort '*) callback reference-transaction prepared || exit $?;; esac;;
     gc) callback pre-auto-gc || exit $?;;

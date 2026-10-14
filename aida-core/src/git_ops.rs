@@ -8093,7 +8093,6 @@ mod tests {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    #[path = "store_hook_tests.rs"]
     mod store_hook_tests;
 
     /// Only space and tab are blanks around a commit-config line: the

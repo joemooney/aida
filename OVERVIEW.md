@@ -273,7 +273,7 @@ Store git removes relative/empty PATH entries
 and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` on Git
 2.40 or newer. The store-only hook marker keeps detached and override stores
 away from project-local executable probes without bypassing code-commit gates.
-Regression and mutation evidence: `aida-core/src/git_ops/store_hook_tests.rs`
+Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.rs`
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
