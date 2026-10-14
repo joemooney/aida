@@ -3,12 +3,12 @@ spec_id: BUG-1962
 agreed_id: BUG-1962
 title: runaway-seats lists sessions that have ended or gone idle as still_active compaction findings
 description: 'Seen 2026-10-11 01:10 local while clearing the watchdog-route seat job. ''aida doctor check runaway-seats'' reported runaway_seats_still_active = compactions:fe2e54bf, compactions:d28185fc and compactions:acdb011f, verdict tripped. fe2e54bf was the product relay''s session; it had finished (TASK_COMPLETE) and its claude process had exited at 00:33. d28185fc''s transcript was last written at 21:07, four hours earlier. Only acdb011f (the factory relay''s session 1, compacted once) was alive. A finding labelled still_active should mean the session is live now; including ended or idle sessions sends the watchdog-route seat on false alarms. Acceptance: still_active only includes sessions whose transcript advanced within the window AND whose process or harness is alive (or a lease or driver says live); ended sessions are reported separately as historical; a test with an ended session''s transcript asserts it is not still_active.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-13T18:58:05.388873838Z
+modified_at: 2026-10-14T01:27:04.134661720Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -80,6 +80,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13805-26c6-71d2-999a-7345089b800a
+  author: aida-orchestrator
+  timestamp: 2026-10-14T01:27:04.134687267Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
@@ -88,3 +95,11 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Rename + age label correct and compatible, but the new last_written_at field is unpinned: deleting its recording or using min instead of max passes every test'
+  recovery_hint: address the review findings, move BUG-1962 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-14T01:27:04.134661720Z
