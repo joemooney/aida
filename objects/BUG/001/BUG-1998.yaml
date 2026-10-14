@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T23:04:49.082266695Z
-modified_at: 2026-10-14T04:02:13.698120307Z
+modified_at: 2026-10-14T04:03:01.422987444Z
 req_type: Bug
 tags:
 - follow-up:review
@@ -78,6 +78,28 @@ comments:
   content: 'FACTORY READY: PR #2602 green at 17329359ee3b9dcfdf017efb88621495d3077866'
   created_at: 2026-10-13T21:50:52.406663281Z
   modified_at: 2026-10-13T21:50:52.406663281Z
+- id: 01a13893-eeaf-7b32-b692-3cfe290fc929
+  author: joe
+  content: |-
+    REQUEST CHANGES (round 1): #2602 (BUG-1998) at 17329359ee3b9dcfdf017efb88621495d3077866. Fresh strict reviewer; the verdict is recorded. The 4 new tests pass, all 8 mutations are caught, and the suites ran 3 times with no flakes. Two blockers:
+
+    **B1. A replaced store root is misreported as "another checkout moved on".** `status_at` (history_cache.rs:2427-2430) computes `tip_live_elsewhere` without first running the replaced-root check that `ensure_fresh` (~1336-1352) runs.
+    - Scenario: a branch still points at the old tip and the store is soft-reset onto a squashed root. This is the `task_1507_root_change_resets_even_when_a_branch_keeps_the_old_tip` setup.
+    - Result: classify_miss gives CheckoutBehind, and cache status and doctor say "another checkout moved the shared index on" with no rebuild advice. The next query resets the index anyway, so the note describes something that doesn't happen.
+    - Before this PR, the same scenario gave Stuck with rebuild advice.
+    - Required fix: run the replaced-root check (`root_commits(store, head)` vs the `store_root_sha` meta) in `status_at` before the liveness check. Ideally, extract one classifier that both ensure_fresh and status_at call.
+    - Required test: that scenario gives Stuck, and the note, cache status line and doctor line keep the rebuild advice.
+
+    **B2. Behind with a stalled index still gets rebuild advice.** `cache_cmd.rs:339` and `doctor_cmd.rs:13137` check `catch_up_stalled` before `head_behind_tip || tip_live_elsewhere`. That breaks acceptance 1 and disagrees with classify_miss.
+    - Required fix: check behind / live-elsewhere before the stall flag in both formatters.
+    - Required test: catch_up_stalled=true together with head_behind_tip=true, and again with tip_live_elsewhere=true. Neither formatter may mention rebuild.
+
+    Non-blocking: the doctor and cache status wording says "behind" when the index is actually AHEAD of this checkout. Consider "this checkout is behind the shared history index".
+
+    FIX-FORWARD: merge seat takes this. Under the advisor's 20:49 ruling (small, localized, non-ADR-75 blockers), a separate [AI:claude] implementer applies exactly B1 and B2 on this branch, then a NEW fresh reviewer reviews the new head. Antigravity: please do not push to this branch. No action is needed from you.
+  created_at: 2026-10-14T04:03:01.422987444Z
+  modified_at: 2026-10-14T04:03:01.422987444Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13674-db4b-72f1-a3ed-13bc3fc38e01
   author: joe
