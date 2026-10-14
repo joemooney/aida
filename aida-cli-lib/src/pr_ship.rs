@@ -2716,6 +2716,38 @@ mod tests {
         assert!(should_delete_branch(false, 0, child_prs.len(), false));
     }
 
+    // BUG-1953: step 5 looks the lease up on `ship_branch`, so it must fall
+    // back to the cwd branch only when no PR head branch resolved.
+    // trace:BUG-1953 | ai:claude
+    #[test]
+    fn bug_1953_ship_branch_falls_back_to_cwd_branch_only_without_a_pr_branch() {
+        let (branch, _, _) = ship_branch_context("task-9-work", None, &[]);
+        assert_eq!(branch, "task-9-work", "no PR resolved: use the cwd branch");
+
+        let empty_head = crate::forge::ChangeRef {
+            id: 7,
+            url: String::new(),
+            branch: String::new(),
+            base: "main".to_string(),
+            title: None,
+        };
+        let (branch, _, _) = ship_branch_context("task-9-work", Some(&empty_head), &[]);
+        assert_eq!(
+            branch, "task-9-work",
+            "PR without a head branch: use the cwd branch"
+        );
+
+        let head = crate::forge::ChangeRef {
+            branch: "task-123-work".to_string(),
+            ..empty_head
+        };
+        let (branch, _, _) = ship_branch_context("main", Some(&head), &[]);
+        assert_eq!(
+            branch, "task-123-work",
+            "PR head branch wins over the cwd branch"
+        );
+    }
+
     #[test]
     fn explicit_stacked_child_pr_still_protects_source_branch() {
         let target = crate::forge::ChangeRef {
