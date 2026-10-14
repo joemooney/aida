@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:50:54.373553135Z
-modified_at: 2026-10-14T17:16:00.359591823Z
+modified_at: 2026-10-14T17:23:08.407812424Z
 req_type: Bug
 comments:
 - id: 01a13b69-ede7-7c90-a698-e78d10015fb5
@@ -16,6 +16,12 @@ comments:
   content: 'Recurred 2026-10-14 17:09Z on #2621 (TASK-1750 slice 1, liveness only, no cache code touched), run 38602382071: panic at cached_git_backend.rs:4874 with {"write_attempt": 1, "incremental": 1}. Reran the failed job.'
   created_at: 2026-10-14T17:16:00.359591823Z
   modified_at: 2026-10-14T17:16:00.359591823Z
+  session_id: b77eee45-d6a7-4d3a-98db-de1a7440f66f
+- id: 01a13b70-75f7-7653-8ccf-27f02354398f
+  author: joe
+  content: 'Root cause found and fixed in PR #2623 (c99bf55f39). is_ancestor_with_timeout polled try_wait before checking the deadline, so a parent descheduled after the spawn found the child finished and returned Ok(true) for a 1 ns budget. Deadline is now checked first. A deterministic test with a post-spawn delay seam fails on the old order.'
+  created_at: 2026-10-14T17:23:08.407812424Z
+  modified_at: 2026-10-14T17:23:08.407812424Z
   session_id: b77eee45-d6a7-4d3a-98db-de1a7440f66f
 filed_at:
   code_sha: 278ff0b09857793951b477ef891e07212a53f833
