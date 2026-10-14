@@ -151,6 +151,17 @@ jobs:
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast < /dev/null
 
+      # Keep the expensive stress out of default workspace runs. The step/job
+      # timeout bounds it without assuming a loaded machine finishes a round in 120s.
+      # trace:BUG-1994 | ai:codex
+      - name: PATH and history concurrency stress
+        if: steps.changes.outputs.full_ci == 'true'
+        timeout-minutes: 30
+        run: >-
+          cargo test -p aida-cli-lib --lib
+          test_env::bug_1994_path_isolation_tests::history_and_path_mutators_pass_15_rounds_at_16_threads
+          -- --ignored --exact --nocapture < /dev/null
+
       # Keep the live-smoke workflow's perimeter-auth contract testable without
       # exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex
       - name: GitLab live-smoke workflow guard

@@ -20,6 +20,21 @@ impl Guard {
                 .path
                 .get_ident()
                 .is_some_and(|i| self.path_names.contains(&i.to_string())),
+            // Common AsRef<OsStr> constructors must not hide a PATH key.
+            syn::Expr::Call(call) => {
+                let syn::Expr::Path(path) = call.func.as_ref() else {
+                    return false;
+                };
+                let names: Vec<_> = path
+                    .path
+                    .segments
+                    .iter()
+                    .map(|s| s.ident.to_string())
+                    .collect();
+                let constructor = names.ends_with(&["OsStr".into(), "new".into()])
+                    || names.ends_with(&["OsString".into(), "from".into()]);
+                constructor && call.args.len() == 1 && self.is_path(&call.args[0])
+            }
             syn::Expr::Reference(r) => self.is_path(&r.expr),
             syn::Expr::Paren(p) => self.is_path(&p.expr),
             _ => false,
@@ -56,17 +71,10 @@ impl Guard {
                 if (name == "set_var" || self.setter_aliases.contains(&name.to_string()))
                     && args.delimiter() == proc_macro2::Delimiter::Parenthesis
                 {
-                    let first = args.stream().into_iter().next();
-                    let path = match first {
-                        Some(proc_macro2::TokenTree::Literal(lit)) => {
-                            syn::parse_str::<syn::LitStr>(&lit.to_string())
-                                .is_ok_and(|lit| lit.value() == "PATH")
-                        }
-                        Some(proc_macro2::TokenTree::Ident(i)) => {
-                            self.path_names.contains(&i.to_string())
-                        }
-                        _ => false,
-                    };
+                    let parser =
+                        syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
+                    let path = syn::parse::Parser::parse2(parser, args.stream())
+                        .is_ok_and(|args| args.first().is_some_and(|arg| self.is_path(arg)));
                     if path && !self.scope_checked {
                         self.offenders += 1;
                     }
@@ -172,16 +180,21 @@ fn scan(dir: &Path, offenders: &mut Vec<String>) {
 #[test]
 fn raw_path_setters_require_process_isolation() {
     let mut offenders = Vec::new();
-    scan(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
-        &mut offenders,
-    );
+    for directory in ["src", "tests"] {
+        scan(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join(directory),
+            &mut offenders,
+        );
+    }
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
 }
 
 #[test]
 fn guard_rejects_direct_aliased_and_macro_path_setters() {
     for src in [
+        r#"fn t() { std::env::set_var(std::ffi::OsStr::new("PATH"), "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::set_var(std::ffi::OsString::from("PATH"), "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { wrapper!(std::env::set_var(std::ffi::OsStr::new("PATH"), "fake")); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { unsafe { std::env::set_var("PATH", "fake"); } }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"use std::env::set_var as change; fn t() { change("PATH", "fake"); }"#,
         r#"const KEY: &str = "PATH"; fn t() { std::env::set_var(KEY, "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
@@ -201,5 +214,54 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
     assert_eq!(
         count(r#"fn t() { std::process::Command::new("git").env("PATH", "fake"); }"#),
         0
+    );
+}
+
+// trace:BUG-1994 | ai:codex
+#[test]
+fn stress_runs_only_in_its_bounded_explicit_ci_step() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let name = "history_and_path_mutators_pass_15_rounds_at_16_threads";
+    let source = std::fs::read_to_string(
+        root.join("aida-cli-lib/src/tests/bug_1994_path_isolation_tests.rs"),
+    )
+    .unwrap();
+    let file = syn::parse_file(&source).unwrap();
+    let test = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Fn(f) if f.sig.ident == name => Some(f),
+            _ => None,
+        })
+        .expect("stress test exists");
+    assert!(
+        test.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
+        "default suite must skip the expensive stress loop"
+    );
+    let workflow: serde_yaml::Value = serde_yaml::from_str(
+        &std::fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap(),
+    )
+    .unwrap();
+    let steps = workflow["jobs"]["build"]["steps"].as_sequence().unwrap();
+    let step = steps
+        .iter()
+        .find(|step| step["name"].as_str() == Some("PATH and history concurrency stress"))
+        .expect("stress has a dedicated CI step");
+    let run = step["run"].as_str().unwrap();
+    assert!(run.contains(&format!("test_env::bug_1994_path_isolation_tests::{name}")));
+    for argument in ["cargo test -p aida-cli-lib --lib", "--ignored", "--exact"] {
+        assert!(run.contains(argument), "missing {argument}");
+    }
+    assert_eq!(
+        step["if"].as_str(),
+        Some("steps.changes.outputs.full_ci == 'true'")
+    );
+    assert!(step["timeout-minutes"]
+        .as_u64()
+        .is_some_and(|n| n > 0 && n <= 30));
+    assert!(
+        step.get("continue-on-error").is_none(),
+        "stress failures must fail Build"
     );
 }

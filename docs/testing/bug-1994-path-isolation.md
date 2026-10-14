@@ -29,8 +29,11 @@ setter does not authorize another function.
 `history_and_path_mutators_pass_15_rounds_at_16_threads` runs the history-cache
 suite alongside every migrated PATH-changing test in one 16-thread harness per
 round. It lists members first, checks that every writer is included, and checks
-completed pass counts for all 15 rounds. The normal GitHub workspace test step
-runs this stress test; no separate compile is needed.
+completed pass counts for all 15 rounds. The stress test is ignored by default and runs in the explicit **PATH and
+history concurrency stress** CI step, after the normal workspace suite. It
+retains all 15 rounds and 16 threads, with a 30-minute step timeout and the
+45-minute Build timeout as bounds. Rounds have no load-sensitive deadline;
+any assertion failure still fails Build. No separate compile is needed.
 
 The earlier BUG-1955 investigation retracted the alleged foreign-shim strace
 proof: those exec entries were ENOENT search probes. The original Git

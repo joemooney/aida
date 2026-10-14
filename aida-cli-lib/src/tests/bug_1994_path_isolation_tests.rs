@@ -89,7 +89,8 @@ fn child_command(home: &std::path::Path) -> Command {
         "[user]\nname = AIDA Test\nemail = test@example.invalid\n[init]\ndefaultBranch = main\n",
     )
     .unwrap();
-    let mut command = Command::new(crate::aida_bin::running_executable_fallback());
+    let mut command =
+        Command::new(std::env::current_exe().expect("resolve current test executable"));
     command
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
@@ -195,6 +196,7 @@ fn unisolated_path_mutation_is_refused_before_setting_environment() {
 // trace:BUG-1994 | ai:codex
 #[test]
 #[cfg(unix)]
+#[ignore = "15-round stress runs in its explicit CI step"]
 fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
     let root = tempfile::tempdir().unwrap();
     let mut list = child_command(&root.path().join("home"));
@@ -229,7 +231,8 @@ fn history_and_path_mutators_pass_15_rounds_at_16_threads() {
                 "task_1507_history_cache_tests",
             ])
             .args(PATH_TESTS);
-        let output = bounded_output(&mut command, std::time::Duration::from_secs(120));
+        // CI step/job timeout bounds all rounds without a load-sensitive round cap.
+        let output = command.output().expect("run stress round");
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             output.status.success(),
