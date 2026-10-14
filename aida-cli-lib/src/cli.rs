@@ -201,6 +201,13 @@ pub enum InternalCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Release eligible Rework-only holds using a fresh recorded approval.
+    /// Sensitive or composed holds still require a human clear.
+    // trace:STORY-1687 | ai:codex
+    AutoRelease {
+        /// PR to inspect; omit to inspect all local hold markers.
+        pr: Option<u64>,
+    },
     /// Inspect or provision the three repository-level merge-hold label definitions.
     // trace:BUG-1747 | ai:codex
     Labels {

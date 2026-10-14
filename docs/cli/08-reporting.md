@@ -37,6 +37,28 @@ means the PR was held previously; the check passes after release only when
 `aida:merge-hold-cleared` is also present. `aida merge-hold clear <pr>` keeps
 the existing human-at-an-interactive-terminal floor, writes the local JSON
 clearance record, removes the active label, and adds the clearance label.
+`aida merge-hold auto-release [<pr>]` is the narrow automatic exception. It
+runs after a verified APPROVED `aida review record` write and can also be
+retried by any seat. It requires nonlegacy Rework as the primary and every
+absorbed kind, a current-head approval under a revalidated non-implementer
+reviewer grant, and strictly earlier retained refusal rounds. Missing or
+ambiguous evidence refuses with a reason. It has no override flag.
+
+Every covered spec is read from canonical storage. Sensitive title/tag terms
+(sandbox, contained, confinement, security, authority, grant, identity,
+credential, secret), guided/operator mode and keystone class keep the human
+clear. Missing/unreadable specs do too. This slice uses metadata, not a diff
+classifier. The clearance principal is `auto-released:verdict`; its verdict
+reference names the reviewer, file and full approved SHA. An audit comment is
+posted before label release. Failed steps retain the local marker; a retry
+skips a previously confirmed audit comment. Reads such as `list` never release.
+The shared record-time check currently excludes implementer seats; durable
+identity/author overlap is pending. Same-user artifact forgery remains outside
+this gate's enforcement boundary. Atomic marker writes have no shared hold
+lock; concurrent re-arm serialization is deferred, with live head/marker and
+verdict rechecks immediately before release.
+<!-- trace:STORY-1687 | ai:codex -->
+
 Removing the active label alone, or deleting the local marker alone, cannot
 make this check pass. The same rule is in the GitLab template.
 Run `aida merge-hold labels` to see which definitions exist and

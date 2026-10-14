@@ -1,3 +1,9 @@
+Rework-only merge holds can release through a current-head, granted reviewer
+approval after older refusal rounds. Sensitive spec metadata, guided/operator
+mode, keystone class and any non-Rework composition retain human clear.
+See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:STORY-1687 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only

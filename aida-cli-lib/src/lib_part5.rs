@@ -2994,7 +2994,9 @@ pub(crate) fn handle_review_record_at(
             ));
         }
     }
-    if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
+    if !crate::rework_hold_release::record_seat_allowed(
+        crate::seat_authority::current_seat(&project_root).as_deref(),
+    ) {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
     }
 
@@ -3094,6 +3096,8 @@ pub(crate) fn handle_review_record_at(
         &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
+    // trace:STORY-1687 | ai:codex
+    crate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
     review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
@@ -3112,6 +3116,15 @@ pub(crate) fn handle_review_record_at(
     // this spec) so merge surfaces now read the verdict instead.
     // trace:STORY-1405 | ai:claude
     clear_review_markers_for_verdict(&project_root, spec, pr);
+    // A verified record is required; direct artifact writers do not grant release.
+    // trace:STORY-1687 | ai:codex
+    if kind == review_verdict::VerdictKind::Approved {
+        if let Some(pr) = pr {
+            if let Err(error) = crate::rework_hold_release::auto_release(&project_root, pr) {
+                eprintln!("  merge-hold remains armed: {error:#}");
+            }
+        }
+    }
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after

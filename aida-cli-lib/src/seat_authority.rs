@@ -262,12 +262,18 @@ pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
     else {
         return GrantCheck::Absent;
     };
+    grant_check_for(project_root, &id, &crate::current_user_id(None))
+}
+
+/// Revalidate a recorded reviewer through the same grant verdict as record time.
+// trace:STORY-1687 | ai:codex
+pub(crate) fn grant_check_for(project_root: &Path, id: &str, caller: &str) -> GrantCheck {
     let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
-        id: id.clone(),
+        id: id.to_string(),
         seat,
         reason,
     };
-    let grant = match read_grant_checked(&id) {
+    let grant = match read_grant_checked(id) {
         Ok(grant) => grant,
         Err(reason) => return rejected(None, reason),
     };
@@ -275,14 +281,13 @@ pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
     // subject, roster; then the parent's revoked, expired, principal,
     // roster, delegable.
     let now = Utc::now();
-    let caller = crate::current_user_id(None);
     let own = check_lifetime(&grant, now).and_then(|()| {
         if grant.subject == caller {
             check_roster(project_root, &grant)
         } else {
             Err(GrantRejection::SubjectMismatch {
                 grant_subject: grant.subject.clone(),
-                caller,
+                caller: caller.to_string(),
             })
         }
     });

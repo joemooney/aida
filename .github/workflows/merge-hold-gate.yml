@@ -19,7 +19,8 @@ name: merge-hold-gate
 #
 # BUG-1693: label state alone cannot release a previously held PR. `aida
 # merge-hold clear` keeps the persistent `aida:merge-hold-recorded` label and
-# adds `aida:merge-hold-cleared` after writing its local clearance record, so
+# or eligible Rework auto-release adds `aida:merge-hold-cleared` after writing
+# its local clearance record and audit comment, so
 # dropping `aida:merge-hold` by hand leaves history without clearance and this
 # check still fails. This is a forge-side integrity check, not protection from
 # an admin token running as the same user; see docs/cli/08-reporting.md.
@@ -50,7 +51,7 @@ jobs:
             printf '%s' "$LABELS" | tr ',' '\n' | grep -Fqx "$1"
           }
           if has_label aida:merge-hold; then
-            echo "::error::This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Only the human-gated \`aida merge-hold clear <pr>\` path can release it."
+            echo "::error::This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated \`aida merge-hold clear <pr>\` path or an eligible recorded Rework approval through \`aida merge-hold auto-release <pr>\`."
             exit 1
           fi
           if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then

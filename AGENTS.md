@@ -1,3 +1,9 @@
+Rework-only merge holds can release through a current-head, granted reviewer
+approval after older refusal rounds. Sensitive spec metadata, guided/operator
+mode, keystone class and any non-Rework composition retain human clear.
+See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:STORY-1687 | ai:codex -->
+
 `role expiry --refuse-within` validates through the shared `grant_check` verdict,
 including subject, roster and parent delegation. Expiry is the earlier of the
 validated grant and parent. The statusline's expired-record timestamp reader is
