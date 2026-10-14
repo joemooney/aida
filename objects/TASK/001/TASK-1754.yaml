@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T09:22:05.220513737Z
-modified_at: 2026-10-14T17:35:22.501814707Z
+modified_at: 2026-10-14T18:00:05.837775247Z
 req_type: Task
 tags:
 - review-follow-up
@@ -36,6 +36,12 @@ comments:
   content: 'FIRE: batch D covers item 3 (the 120s bounded_output on --list was dropped, along with the now-unused helper and its self-test), item 4 (the probe child is #[ignore]d and the parent passes --ignored), (a) (the guardrail asserts there is no ''if:'' on the stress step or job) and (b) (the ci.yml absence check also rejects the module name and the test suffix). Items 1 and 2 are already resolved on main, since the stress moved to weekly-linux.yml. Item 5 (guardrail for aida-cli/tests) and (c) (watching the first scheduled run) are left open.'
   created_at: 2026-10-14T17:35:22.501814707Z
   modified_at: 2026-10-14T17:35:22.501814707Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13b92-4bcd-7a63-ad9b-2b8cc3b4763a
+  author: joe
+  content: 'FIRE correction: item 4 is now resolved by documenting the probe as child-only, not by #[ignore]. is_path_isolated_process() pins the child''s exact argv, so --ignored broke the probe (CI run 38609221271).'
+  created_at: 2026-10-14T18:00:05.837775247Z
+  modified_at: 2026-10-14T18:00:05.837775247Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: 237e401b07e057129a1a4fe09bb5bd372b5ac0eb
