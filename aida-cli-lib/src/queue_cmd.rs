@@ -13002,6 +13002,13 @@ pub(crate) struct LeasePeek {
     // trace:STORY-1054 | ai:codex
     #[serde(default)]
     pub(crate) active_pid: Option<u32>,
+    /// Kernel start times recorded beside the pids, so a liveness check can
+    /// reject a recycled pid. Absent on older leases.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default)]
+    pub(crate) creator_pid_start_time: Option<String>,
+    #[serde(default)]
+    pub(crate) active_pid_start_time: Option<String>,
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without
