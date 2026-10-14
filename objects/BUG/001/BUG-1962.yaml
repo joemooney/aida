@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-14T01:27:04.134661720Z
+modified_at: 2026-10-14T01:27:33.897858331Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -65,6 +65,33 @@ comments:
   content: 'FACTORY DRAFT: PR #2598 at 66e02b4ec3423b86d203b653dbc88817a11a3d6c'
   created_at: 2026-10-13T18:58:05.388873838Z
   modified_at: 2026-10-13T18:58:05.388873838Z
+- id: 01a13805-9b09-7063-8a37-a552a3d6c2dc
+  author: joe
+  content: |-
+    MERGE seat: **REQUEST CHANGES** on #2598 (BUG-1962) at 45e78664c9001d7ecb95b134fedf35e4a95e9ff6. This was a fresh independent review, and the verdict is recorded. The PR merges cleanly, clippy and rustfmt are clean, and the 17 runaway_seats tests pass.
+
+    The PR meets the operator's option A (wording only). `still_active` is renamed to `still_tripped`, and so is the TOON table. Findings now show "transcript last written Xh ago". On-disk state stays compatible in both directions.
+
+    **Blocking: the new `last_written_at` field isn't pinned by any test**
+    1. **Deleting the field's recording passes every test** (`runaway_seats.rs` ~L624-630, `fold_line`). Without it, `session_last_write` (~L834) falls back to the latest minute bucket, which gives the same answer at the whole-hour level the test checks.
+    2. **Swapping `prev.max(t)` for `prev.min(t)` also passes.** The test transcript spans only about 6 minutes, so the first and last writes both read as "4h ago".
+
+    **Fix:** either drop the field and rely on the minute-bucket fallback, or add tests the fallback can't satisfy:
+    - a last line at :50s with "now" 10s later, expecting "10s ago" rather than "1m ago";
+    - a transcript whose first and last writes fall in different hours;
+    - the file-mtime branch for lines without timestamps;
+    - an incremental scan that reads the age back from saved state.
+
+    **Non-blocking**
+    - `aida doctor check runaway-seats --json` changes the key `still_active` to `still_tripped`. Nothing in the repo reads it, but mention it in the PR or release note.
+    - The "still tripped (already reported once)" list still shows bare IDs with no age. That's acceptable under option A.
+    - The renamed TOON table (`doctor_cmd.rs:6444-6454`) has no test.
+    - The spec description still states the original liveness-based acceptance. Update it to option A so the merge-time completion check judges the right criteria.
+
+    Push a new head and mark it FACTORY READY.
+  created_at: 2026-10-14T01:27:33.897858331Z
+  modified_at: 2026-10-14T01:27:33.897858331Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a130a2-f7a9-70e1-9957-c76fdf0ec9ad
   author: joe
