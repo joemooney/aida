@@ -1,0 +1,38 @@
+id: 01a1389b-b1ca-7fa1-9692-dd6340719238
+spec_id: TASK-1752
+agreed_id: TASK-1752
+title: 'Arch: every grant read goes through seat_authority::grant_check (9 modules read AIDA_SESSION_GRANT directly)'
+description: |-
+  ## Problem
+  BUG-2011 existed because two functions validated grants differently. The grant env var is still read directly in 9 modules, so a third validator can appear at any time.
+
+  ## Evidence
+  38 references to GRANT_ENV/AIDA_SESSION_GRANT outside tests, across session.rs, burndown_run.rs, team.rs, questions.rs, advisor_code_gate.rs, agent_launch.rs, autopilot_intake.rs and test_env.rs, besides seat_authority.rs. Readers in seat_authority.rs: grant_check:258, current_grant:328, session_grant_lookup:420, display_grant_lookup:457, session_grant_expiry:499.
+
+  ## Proposed improvement
+  Make the env var private to seat_authority.rs. Other modules either forward the handle to a child (through the LaunchContext of the one-launcher task) or ask grant_check. Add a guard test that bans the literal outside seat_authority.rs and the launcher.
+
+  ## Risk
+  Authority code: strict tier, needs ADR-75 (b) signoff.
+
+  ## Effort
+  Small-medium; it follows the one-launcher task's LaunchContext.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T04:11:30.122948646Z
+modified_at: 2026-10-14T04:11:30.122948646Z
+req_type: Task
+tags:
+- arch-review-2026-10-13
+- architecture
+- tech-debt
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
