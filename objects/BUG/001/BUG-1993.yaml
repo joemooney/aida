@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T19:22:16.855820414Z
+modified_at: 2026-10-14T19:22:18.360202119Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -116,6 +116,12 @@ comments:
   created_at: 2026-10-14T17:40:09.348896397Z
   modified_at: 2026-10-14T17:40:09.348896397Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13bdd-8f78-72d0-b211-687a822bf8bd
+  author: joe
+  content: 'Slice 1 (per-phase timings in show telemetry) in progress by implementer-claude on branch bug-1993-show-phase-timings. Non-completing slice: slices 2-4 (measured budgets, timeout renders as partial/unknown, slow git/gh shim test) remain.'
+  created_at: 2026-10-14T19:22:18.360202119Z
+  modified_at: 2026-10-14T19:22:18.360202119Z
+  session_id: 52ab74c4-4301-4085-9115-943b6744129b
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
