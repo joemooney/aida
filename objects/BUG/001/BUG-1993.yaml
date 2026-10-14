@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T13:38:38.896386229Z
+modified_at: 2026-10-14T13:48:14.963401085Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -95,6 +95,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2620 at 5e34eb82fdbf29e8f43c83d4fc049d90b17d297c'
   created_at: 2026-10-14T13:20:55.262060655Z
   modified_at: 2026-10-14T13:20:55.262060655Z
+- id: 01a13aab-b8f3-7f00-9086-575ba47d6753
+  author: joe
+  content: 'FACTORY UPDATE: PR #2620 amended at 08fc62363e2cc29949cb3c3c739ad8ef1ca6cb9d (bounded linkage sub-budgets to 800ms/1000ms/1500ms to stay within 5000ms ceiling, added deterministic lock assertions)'
+  created_at: 2026-10-14T13:48:14.963401085Z
+  modified_at: 2026-10-14T13:48:14.963401085Z
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
