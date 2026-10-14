@@ -263,8 +263,10 @@ pub(crate) fn registry_attribution(project_root: &Path) -> HashMap<String, SeatI
 }
 
 /// A resumed session keeps its id, so dead entries sit beside the live one.
-/// Rank an un-ended live-PID entry first, then the most recently active, so
-/// `read_dir` order never lets a dead entry hide a live holder.
+/// Rank any live-PID entry first, then the most recently active, so neither
+/// `read_dir` order nor a newer dead entry hides a live holder. `ended_at` is
+/// ignored: a reused `claude-<pid>.toml` keeps a stale one, and only a dead
+/// PID proves the holder gone.
 // trace:BUG-2120 | ai:claude
 fn attribute_entries(
     entries: impl IntoIterator<Item = crate::agent_registry::AgentRegistryEntry>,
@@ -272,7 +274,7 @@ fn attribute_entries(
 ) -> HashMap<String, SeatInfo> {
     let mut best: HashMap<String, ((bool, DateTime<Utc>), SeatInfo)> = HashMap::new();
     for e in entries {
-        let rank = (e.ended_at.is_none() && alive(e.pid), e.last_active_at);
+        let rank = (alive(e.pid), e.last_active_at); // trace:BUG-2120 | ai:claude
         let seat = e
             .role
             .clone()
@@ -970,11 +972,14 @@ fn judge(
         // known dead holder must clear it, even without a CronDelete. Old
         // caches lack last_activity_minute, so use their latest bucket.
         // Unregistered sessions retain recent transcript evidence as fallback.
+        // Future-stamped activity counts as recent (fail closed): the value is
+        // a running max, so one skewed line must not hide a live poll.
         // trace:BUG-2120 | ai:codex
+        // trace:BUG-2120 | ai:claude
         let recent = s
             .last_activity_minute
             .or_else(|| s.minutes.last_key_value().map(|(minute, _)| *minute))
-            .is_some_and(|minute| minute >= window_start && minute <= now_minute);
+            .is_some_and(|minute| minute >= window_start);
         let holder_alive = seats
             .get(sid)
             .and_then(|info| info.pid)
@@ -1593,6 +1598,94 @@ mod tests {
         };
         let findings = judge("aida", &sessions, &p, now, &HashMap::new());
         assert_eq!(rules(&findings, "legacy"), vec!["mail-poll-setup"]);
+    }
+
+    /// An ended entry whose PID is still live (a reused `claude-<pid>.toml`
+    /// keeps its stale `ended_at`) beats a newer dead un-ended entry: only a
+    /// dead PID proves the holder gone.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn ended_entry_with_live_pid_beats_newer_dead_entry_in_any_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        write(
+            &tmp.path().join("claude"),
+            "reused.jsonl",
+            &poll_setup("reused", "CronCreate"),
+        );
+        let mut ended_live = registry_entry(
+            "ended-live",
+            "reused",
+            std::process::id(),
+            "2026-09-21T09:00:00Z",
+        );
+        ended_live.ended_at = Some(t0() - Duration::hours(1));
+        let newer_dead = registry_entry("newer-dead", "reused", 0, "2026-09-21T09:59:00Z");
+        let forward = [ended_live.clone(), newer_dead.clone()];
+        let backward = [newer_dead, ended_live];
+        for order in [forward, backward] {
+            let seats = attribute_entries(order, aida_core::liveness::pid_is_alive);
+            assert_eq!(seats["reused"].pid, Some(std::process::id()));
+            let (findings, _) = scan("aida", &src, &WatchdogPolicy::default(), t0(), &seats);
+            assert_eq!(rules(&findings, "reused"), vec!["mail-poll-setup"]);
+        }
+    }
+
+    /// Last activity is a running max across files: a transcript that sorts
+    /// later (e.g. a subagent's) but holds older lines for the same session
+    /// must not make a live session look idle.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn later_sorted_transcript_with_older_lines_keeps_recent_poll_active() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        let dir = tmp.path().join("claude");
+        let recent = serde_json::json!({"type":"assistant","timestamp":ts(7200),"sessionId":"multi",
+            "message":{"id":"setup","stop_reason":"tool_use","content":[
+                {"type":"tool_use","name":"CronCreate","input":{
+                    "cron":"7,27,47 * * * *","prompt":TICK}}]}});
+        let older = serde_json::json!({"type":"assistant","timestamp":ts(0),"sessionId":"multi",
+            "message":{"content":[{"type":"tool_use","name":"Bash"}]}});
+        let first = write(&dir, "a-main.jsonl", &format!("{recent}\n"));
+        let second = write(&dir, "b-subagent.jsonl", &format!("{older}\n"));
+        // Pin the fold order the scan uses: the older file is folded last.
+        let mut files = Vec::new();
+        walk_jsonl(&dir, &mut files);
+        files.sort();
+        assert_eq!(files, vec![first, second]);
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let now = t0() + Duration::hours(2);
+        let (findings, _) = scan("aida", &src, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "multi"), vec!["mail-poll-setup"]);
+    }
+
+    /// A future-stamped activity minute (clock skew) counts as recent, so a
+    /// live poll fails closed instead of clearing.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn future_last_activity_still_counts_as_recent() {
+        let now = t0();
+        let now_minute = minute_of(now);
+        let agg: SessionAgg = serde_json::from_value(serde_json::json!({
+            "timed": true,
+            "last_activity_minute": now_minute + 10,
+            "minutes": { now_minute.to_string(): {"polls": 1} }
+        }))
+        .unwrap();
+        let sessions = BTreeMap::from([("skewed".to_string(), agg)]);
+        let findings = judge(
+            "aida",
+            &sessions,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!(rules(&findings, "skewed"), vec!["mail-poll-setup"]);
     }
 
     /// Acceptance 2: replaying the storm shape for both BUG-1589 sessions
