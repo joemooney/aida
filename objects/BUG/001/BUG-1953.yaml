@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T02:36:56.039245239Z
+modified_at: 2026-10-14T03:38:45.455314930Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -127,7 +127,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-execution_mode: drain
+execution_mode: guided
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
   branch: main
