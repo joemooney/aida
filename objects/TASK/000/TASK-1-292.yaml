@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T23:50:47.581885678Z
-modified_at: 2026-10-13T23:50:47.581885678Z
+modified_at: 2026-10-14T17:33:58.084707153Z
 req_type: Task
 tags:
 - carried-from:BUG-2005
 - finding-hash:fe0dd28e
 - from-review:PR-2592
 - kind:carried-forward
+comments:
+- id: 01a13b7a-5fc4-7741-a874-fa175842cee1
+  author: joe
+  content: 'FIRE: already resolved on main by TASK-1742 — bug_2005_wrapper_staleness_tests.rs now names 3618fe739b^ (4e11f0296c) as the source commit and pre_fix_leaking_wrapper_matches_pinned_sha256 asserts the fixture sha256. Recommend closing as done.'
+  created_at: 2026-10-14T17:33:58.084707153Z
+  modified_at: 2026-10-14T17:33:58.084707153Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: 1287c25b64d6447aedcb576bfaddb531da433999
   branch: main
