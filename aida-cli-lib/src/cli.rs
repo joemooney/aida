@@ -1759,11 +1759,12 @@ pub enum SessionCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
-        /// Include stale leases in the listing. Default hides leases
-        /// whose worktree no longer exists OR which have no live
-        /// claude AND are >24h old. With --all, every lease renders
-        /// with a state column (live ● / dormant ◐ / stale ⚠).
+        /// Include stale harness leases in the listing. Every view has a
+        /// state column (live ● / dormant ◐ / stale ⚠). The default view
+        /// keeps every spec-scoped lease, even a stale one, because it
+        /// still blocks dispatch; it hides only stale harness leases.
         // trace:TASK-55 | ai:claude
+        // trace:TASK-1743 | ai:claude
         #[clap(long)]
         all: bool,
         /// Emit the lease list as JSON for machine consumers. Each lease
