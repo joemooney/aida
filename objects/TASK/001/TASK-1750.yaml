@@ -1,0 +1,40 @@
+id: 01a1389b-8b5c-7821-96fe-16d30f4b0814
+spec_id: TASK-1750
+agreed_id: TASK-1750
+title: 'Arch: one process-liveness primitive (pid + start time) instead of 5 helpers and 24 raw kill(pid,0)//proc checks'
+description: |-
+  ## Problem
+  Liveness is decided in many places with different semantics (bare pid, zombie handling, pid reuse). So leases, registries and watchdogs disagree about whether a session is alive.
+
+  ## Evidence
+  - Separate helpers: aida-core/src/worktree_pool.rs:272 pid_is_alive, aida-cli-lib/src/merge_lock.rs:120 pid_alive, vendor_activity.rs:133 lease_pid_alive, advisor.rs:450 is_alive, alongside the canonical aida-core/src/liveness.rs:672/699 (process_identity_is_alive checks the start time against pid reuse).
+  - 24 raw `kill(pid,0)` or `/proc/<pid>` checks outside liveness.rs.
+  - Today's symptoms: BUG-2010 (aida ps reports live Codex/agy lanes as dead: the lease recorded a transient pid), #2613/BUG-2120 r1 (several registry entries per session id, one picked arbitrarily, fail-open), BUG-1285 (dead-pid lease reclaim).
+
+  ## Proposed improvement
+  Route every liveness question through aida_core::liveness (pid plus recorded start time). Records that store a pid must store its start time. Add a guard test banning raw kill(pid,0)//proc checks outside liveness.rs.
+
+  ## Risk
+  Lease and lock reclaim behaviour changes; this is strict-tier (gate) code under ADR-76.
+
+  ## Effort
+  Medium.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T04:11:20.284960861Z
+modified_at: 2026-10-14T04:11:20.284960861Z
+req_type: Task
+tags:
+- arch-review-2026-10-13
+- architecture
+- tech-debt
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
