@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1991",
+  "publishes": [
+    {
+      "at": "2026-10-14T23:25:19.600307989Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:09:47.374297981Z",
+      "spec": "BUG-1991",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:00.827905222Z",
+      "spec": "BUG-1991",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-14T18:39:39.606428785Z",
+      "spec": "BUG-1991",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-14T23:25:00.829756395Z",
+      "spec": "BUG-1991",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T23:25:12.324167477Z",
+      "spec": "BUG-1991",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2631
+      }
+    },
+    {
+      "ts": "2026-10-14T23:25:19.583521698Z",
+      "spec": "BUG-1991",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7ffe0e4625bd9c9830a3b7112886998f8f221329",
+        "pr": 2631,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
