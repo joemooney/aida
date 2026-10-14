@@ -9,16 +9,30 @@ description: |
   3. L782: the scan_file mtime wiring (passing None) survives. Add a scan-level test with the file mtime pinned via File::set_modified.
   4. L812-831: the format_age branches are unpinned. Add a unit test at -1s, 59s, 60s, 59m59s, 1h, 23h59m and 24h.
   5. L877: the resolved-seat summary label is unpinned. Add a test asserting "pid N, transcript last written ...".
-status: Draft
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T11:14:23.073373949Z
-modified_at: 2026-10-14T11:14:23.073373949Z
+modified_at: 2026-10-14T18:57:22.382463557Z
 req_type: Task
 tags:
 - follow-up
 - watchdog
+comments:
+- id: 01a13bc6-bbce-7133-90a4-9dfa88b46def
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (b6d97f1) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:57:22.382462323Z
+  modified_at: 2026-10-14T18:57:22.382462323Z
+history:
+- id: 01a13bc6-bbce-7133-90a4-9dea48926ce0
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:57:22.382461043Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
