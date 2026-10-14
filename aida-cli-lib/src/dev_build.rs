@@ -753,7 +753,17 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
 /// two binary swaps leaves a mixed pair the same way, and its `.promoted`
 /// records follow `aida`. Running `aida dev rollback` again only swaps that
 /// mixed pair with the equally mixed `prev/`; `aida dev build` is the fix.
+/// If an old-format rollback crashed after the first binary swap while live had no
+/// record, there is no `.rollback/.promoted`, so prev's record stays beside
+/// the wrong pair.
 pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
+    recover_live_dir_with_steps(layout, &mut |_| Ok(()))
+}
+
+pub(crate) fn recover_live_dir_with_steps(
+    layout: &DevLayout,
+    step: &mut dyn FnMut(&'static str) -> Result<()>,
+) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
     let prev_old = live.join(".prev-old");
@@ -772,10 +782,30 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     if swap.exists() {
         // trace:STORY-1646 | ai:claude
         // trace:BUG-1959 | ai:claude
+        // trace:BUG-1999 | ai:antigravity
+        // In STORY-1646 an older binary parked the live record directly at
+        // `.rollback/.promoted` without writing `.swapping` or parking prev's
+        // record. Normalize it into the current layout: write the marker first,
+        // park prev's record when live has none, and move `.rollback/.promoted` last.
+        let old_promoted = swap.join(PROMOTED_FILE);
+        let had_old_promoted = old_promoted.is_file();
+        if had_old_promoted {
+            std::fs::File::create(swap.join(ROLLBACK_MARKER))?;
+            step("marker")?;
+            if !layout.live_dir.join(PROMOTED_FILE).exists() {
+                move_record(
+                    &layout.prev_dir().join(PROMOTED_FILE),
+                    &swap.join(PARKED_PREV_RECORD),
+                )?;
+                step("parked_prev")?;
+            }
+            move_record(&old_promoted, &swap.join(PARKED_LIVE_RECORD))?;
+            step("parked_live")?;
+        }
         // A binary counts as swapped once its prev slot has moved live, or,
-        // after parking finished (the marker), once its parked copy has moved
-        // on into `prev/`. Without the marker a parked binary missing from
-        // `.rollback/` only means parking had not finished: nothing swapped.
+        // after parking finished, once its parked copy has moved on into
+        // `prev/`. The `.swapping` marker notes that parking completed before
+        // any binary swaps began (or was normalized from an older format above).
         // Both `.promoted` records were parked before the marker, so settling
         // them (forward when swapped, back otherwise) only ever moves files
         // out of `.rollback/` and is a no-op once done.

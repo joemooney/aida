@@ -4789,6 +4789,10 @@ mod pr_ship_environment_tests {
 
     #[test]
     fn recover_open_change_uses_github_origin_even_with_stale_pure_git_config() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");

@@ -3591,3 +3591,398 @@ fn terminate_reports_survivors_and_live_pids_tracks_real_processes() {
     // lets `agent stop` distinguish "already gone" from "stopped it".
     assert!(terminate_pids_with_grace(&[u32::MAX], 0).is_empty());
 }
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn is_contained_args_and_is_contained_launch_detection() {
+    // Claude
+    assert!(is_contained_args(
+        "claude",
+        &["--settings".to_string(), "{}".to_string()]
+    ));
+    assert!(!is_contained_args(
+        "claude",
+        &[
+            "--settings".to_string(),
+            "{}".to_string(),
+            "--permission-mode".to_string(),
+            "dontAsk".to_string()
+        ]
+    ));
+    assert!(!is_contained_args(
+        "claude",
+        &[
+            "--permission-mode".to_string(),
+            "bypassPermissions".to_string()
+        ]
+    ));
+    assert!(!is_contained_args("claude", &[]));
+
+    // Codex
+    assert!(is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "workspace-write".to_string()]
+    ));
+    assert!(!is_contained_args(
+        "codex",
+        &[
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--dangerously-bypass-approvals-and-sandbox".to_string()
+        ]
+    ));
+    assert!(is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "read-only".to_string()]
+    ));
+    assert!(!is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "danger-full-access".to_string()]
+    ));
+    assert!(!is_contained_args("codex", &[]));
+
+    // Other
+    assert!(!is_contained_args(
+        "antigravity",
+        &["--settings".to_string()]
+    ));
+
+    // is_contained_launch
+    let contained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--sandbox".into(), "workspace-write".into()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    assert!(is_contained_launch(&contained_config));
+
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--dangerously-bypass-approvals-and-sandbox".into()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    assert!(!is_contained_launch(&uncontained_config));
+
+    // agent_launch_env_inputs
+    let plan = AgentLaunchPlan {
+        project_root: std::env::temp_dir(),
+        launch_cwd: std::env::temp_dir(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let contained_env = agent_launch_env_inputs(&contained_config, &plan, None);
+    assert!(contained_env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_CONTAINED" && v == "1"));
+
+    let uncontained_env = agent_launch_env_inputs(&uncontained_config, &plan, None);
+    assert!(!uncontained_env.iter().any(|(k, _)| *k == "AIDA_CONTAINED"));
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["implementer"],
+    );
+    let fake_agent = tmp.path().join("agent");
+    let env_out = tmp.path().join("env.txt");
+    crate::test_exec::write_executable(
+        &fake_agent,
+        format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display(),),
+    );
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt_opts = AgentPromptOptions::new(None, false);
+
+    // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ("AIDA_CONTAINED", Some("1")),
+        ]);
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
+        run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        assert!(
+            !env_contents
+                .lines()
+                .any(|l| l.starts_with("AIDA_CONTAINED=")),
+            "uncontained run_tracked_agent must strip AIDA_CONTAINED: {env_contents}"
+        );
+    }
+
+    // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ("AIDA_CONTAINED", None),
+        ]);
+        let config = AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "codex",
+            default_args: vec!["--sandbox".to_string(), "workspace-write".to_string()],
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
+        run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        assert!(
+            env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+            "contained run_tracked_agent must export AIDA_CONTAINED=1: {env_contents}"
+        );
+    }
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn agent_launch_env_inputs_contained_and_uncontained() {
+    let plan = AgentLaunchPlan {
+        project_root: std::path::PathBuf::from("/repo"),
+        launch_cwd: std::path::PathBuf::from("/repo"),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let inputs = agent_launch_env_inputs(&uncontained_config, &plan, None);
+    assert!(
+        !inputs.iter().any(|(k, _)| *k == "AIDA_CONTAINED"),
+        "uncontained launch inputs must not include AIDA_CONTAINED"
+    );
+
+    let contained_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec!["--sandbox".to_string(), "workspace-write".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let inputs = agent_launch_env_inputs(&contained_config, &plan, None);
+    assert!(
+        inputs
+            .iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && v == "1"),
+        "contained launch inputs must include AIDA_CONTAINED=1"
+    );
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn is_contained_args_handles_settings_sandbox_and_bypasses() {
+    // Claude with --settings <path>
+    assert!(is_contained_args(
+        "claude",
+        &["--settings".to_string(), "path.json".to_string()]
+    ));
+    // Claude with --settings=<path>
+    assert!(is_contained_args(
+        "claude",
+        &["--settings=path.json".to_string()]
+    ));
+    // Claude with -s <path>
+    assert!(is_contained_args(
+        "claude",
+        &["-s".to_string(), "path.json".to_string()]
+    ));
+    // Claude with settings but also --permission-mode -> uncontained
+    assert!(!is_contained_args(
+        "claude",
+        &[
+            "--settings".to_string(),
+            "path.json".to_string(),
+            "--permission-mode".to_string(),
+            "acceptEdits".to_string(),
+        ]
+    ));
+    // Claude with settings but also --permission-mode=bypass -> uncontained
+    assert!(!is_contained_args(
+        "claude",
+        &[
+            "--settings=path.json".to_string(),
+            "--permission-mode=bypass".to_string(),
+        ]
+    ));
+    // Claude with settings but also --dangerously-skip-permissions -> uncontained
+    assert!(!is_contained_args(
+        "claude",
+        &[
+            "--settings".to_string(),
+            "path.json".to_string(),
+            "--dangerously-skip-permissions".to_string(),
+        ]
+    ));
+
+    // Codex with --sandbox workspace-write
+    assert!(is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "workspace-write".to_string()]
+    ));
+    // Codex with --sandbox=workspace-write
+    assert!(is_contained_args(
+        "codex",
+        &["--sandbox=workspace-write".to_string()]
+    ));
+    // Codex with --sandbox read-only
+    assert!(is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "read-only".to_string()]
+    ));
+    // Codex with sandbox but --dangerously-bypass-approvals-and-sandbox -> uncontained
+    assert!(!is_contained_args(
+        "codex",
+        &[
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--dangerously-bypass-approvals-and-sandbox".to_string(),
+        ]
+    ));
+    // Codex with sandbox but --full-auto -> uncontained
+    assert!(!is_contained_args(
+        "codex",
+        &[
+            "--sandbox=workspace-write".to_string(),
+            "--full-auto".to_string(),
+        ]
+    ));
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-bg-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+
+    let fake_binary = std::path::Path::new("/bin/echo");
+
+    // Contained Claude config
+    let contained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec!["--settings=test.json".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let cmd_contained =
+        build_agent_new_bg_command(fake_binary, &contained_config, &plan, &[], None).unwrap();
+    let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+        cmd_contained.get_envs().collect();
+    assert!(
+        envs.iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+        "contained build_agent_new_bg_command must export AIDA_CONTAINED=1: {envs:?}"
+    );
+
+    // Uncontained Claude config (with --permission-mode bypass)
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![
+            "--settings=test.json".to_string(),
+            "--permission-mode=bypass".to_string(),
+        ],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let cmd_uncontained =
+        build_agent_new_bg_command(fake_binary, &uncontained_config, &plan, &[], None).unwrap();
+    let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+        cmd_uncontained.get_envs().collect();
+    assert!(
+        envs_uncontained
+            .iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+        "uncontained build_agent_new_bg_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
+    );
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn apply_queue_work_contained_env_sets_and_removes() {
+    let _guard = crate::test_env::EnvVarsGuard::snapshot(&["AIDA_CONTAINED"]);
+
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert_eq!(
+        std::env::var("AIDA_CONTAINED").as_deref(),
+        Ok("1"),
+        "apply_queue_work_contained_env(true) must set AIDA_CONTAINED=1"
+    );
+
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+    assert!(
+        std::env::var("AIDA_CONTAINED").is_err(),
+        "apply_queue_work_contained_env(false) must remove AIDA_CONTAINED"
+    );
+}
