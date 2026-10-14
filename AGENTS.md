@@ -4,11 +4,25 @@ mode, keystone class and any non-Rework composition retain human clear.
 See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:STORY-1687 | ai:codex -->
 
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
 `role expiry --refuse-within` validates through the shared `grant_check` verdict,
 including subject, roster and parent delegation. Expiry is the earlier of the
 validated grant and parent. The statusline's expired-record timestamp reader is
 informational and grants no authority.
 <!-- trace:BUG-2011 | ai:codex -->
+
+PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
+fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
+the guards require an exact one-test child. The ignored 15-round PATH/history
+stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
+per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+<!-- trace:BUG-1994 | ai:codex -->
 
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including

@@ -755,6 +755,10 @@ exit 2
     // trace:BUG-1265 | ai:codex
     #[test]
     fn drain_finish_ci_completes_for_hold_gate_only_red() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fixture = Fixture::new();
         assert!(
             merge_hold::read_hold(&fixture.root, 1265).is_some(),
@@ -778,6 +782,10 @@ exit 2
     // trace:BUG-1265 | ai:codex
     #[test]
     fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fixture = Fixture::new();
         let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("real");
         assert_eq!(
@@ -813,6 +821,10 @@ exit 2
     // trace:BUG-1265 | ai:codex
     #[test]
     fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fixture = Fixture::new();
         let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("unavailable");
         assert_eq!(finish_ci_calls, 1, "row retries belong inside finish_ci");
