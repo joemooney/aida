@@ -3671,12 +3671,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None, None);
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
-        let status = std::process::Command::new(&program)
-            .current_dir(&worktree)
-            .args(fix_args)
-            .env("AIDA_HEADLESS", "1")
-            // TASK-1169 / ADR-22: bounded, launcher-set background-wait ceiling.
-            .env(ceiling_key, ceiling_value)
+        let mut child_cmd = build_phase_driver_ci_fix_command(
+            &worktree,
+            &program,
+            &fix_args,
+            &ceiling_key,
+            &ceiling_value,
+            vendor,
+        );
+        let status = child_cmd
             .stdout(std::process::Stdio::from(log))
             .status_retrying_etxtbsy();
         tee.stop();
@@ -3785,6 +3788,28 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
     }
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_phase_driver_ci_fix_command(
+    worktree: &std::path::Path,
+    program: &str,
+    fix_args: &[String],
+    ceiling_key: &str,
+    ceiling_value: &str,
+    vendor: session::HeadlessVendor,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.current_dir(worktree)
+        .args(fix_args)
+        .env("AIDA_HEADLESS", "1")
+        .env(ceiling_key, ceiling_value);
+    if session::containment_applied(vendor, false) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
 }
 
 /// BUG-1930: the failure for a headless implementer that opened no PR and

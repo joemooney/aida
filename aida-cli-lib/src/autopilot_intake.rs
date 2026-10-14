@@ -961,30 +961,18 @@ pub(crate) fn handle_intake_command(
     // env-passed payload). trace:STORY-560
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let mut command = std::process::Command::new("claude");
-    command
-        .arg("-p")
-        .arg(&prompt)
-        .arg("--permission-mode")
-        .arg(mode)
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(seat_authority::GRANT_ENV, child_grant.id)
-        .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
-        .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
-        .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))
-        .env(
-            "AIDA_INTAKE_DISPOSITION_BIAS",
-            cfg.disposition_bias.as_str(),
-        )
-        .env(
-            "AIDA_INTAKE_DO_NOT_APPROVE_CLASSES",
-            cfg.do_not_approve_classes.join(","),
-        )
-        .env("AIDA_INTAKE_ON_APPLY", effective_on_apply.as_str())
-        .env("AIDA_INTAKE_RISK", max_risk.token());
-    if let Some(n) = max_approvals {
-        command.env("AIDA_INTAKE_MAX_APPROVALS", n.to_string());
-    }
+    let mut command = build_autopilot_intake_command(
+        &prompt,
+        mode,
+        &child_grant.id,
+        apply,
+        &eligible,
+        &trivial_proposals,
+        &cfg,
+        effective_on_apply.as_str(),
+        max_risk,
+        max_approvals,
+    );
 
     let status_code = command.status().map_err(|e| {
         anyhow::anyhow!(
@@ -999,4 +987,50 @@ pub(crate) fn handle_intake_command(
         let code = status_code.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_autopilot_intake_command(
+    prompt: &str,
+    mode: &str,
+    child_grant_id: &str,
+    apply: bool,
+    eligible: &[String],
+    trivial_proposals: &[String],
+    cfg: &intake::IntakeConfig,
+    effective_on_apply: &str,
+    max_risk: backlog::RiskLevel,
+    max_approvals: Option<usize>,
+) -> std::process::Command {
+    let mut command = std::process::Command::new("claude");
+    command
+        .arg("-p")
+        .arg(prompt)
+        .arg("--permission-mode")
+        .arg(mode)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env(seat_authority::GRANT_ENV, child_grant_id)
+        .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
+        .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
+        .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))
+        .env(
+            "AIDA_INTAKE_DISPOSITION_BIAS",
+            cfg.disposition_bias.as_str(),
+        )
+        .env(
+            "AIDA_INTAKE_DO_NOT_APPROVE_CLASSES",
+            cfg.do_not_approve_classes.join(","),
+        )
+        .env("AIDA_INTAKE_ON_APPLY", effective_on_apply)
+        .env("AIDA_INTAKE_RISK", max_risk.token());
+    if let Some(n) = max_approvals {
+        command.env("AIDA_INTAKE_MAX_APPROVALS", n.to_string());
+    }
+    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
+    command
 }

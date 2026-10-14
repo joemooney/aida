@@ -2142,18 +2142,17 @@ impl RealPhaseDriver {
         );
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
-        let status = std::process::Command::new(&program)
-            .current_dir(&self.project_root)
-            .args(advisor_args)
-            .env("AIDA_HEADLESS", "1")
-            .env(punt::REQUEST_FILE_ENV, request_path)
-            .env(punt::RESPONSE_FILE_ENV, response_path)
-            // TASK-586: the advisor tier runs as the advisor role.
-            .env("AIDA_SESSION_ROLE", "advisor")
-            // TASK-1169 / ADR-22: bounded, launcher-set background-wait ceiling
-            // — every headless child, not just the burndown ones.
-            // trace:TASK-1169 | ai:claude
-            .env(ceiling_key, ceiling_value)
+        let mut child_cmd = build_phase_driver_advisor_command(
+            &self.project_root,
+            &program,
+            &advisor_args,
+            request_path,
+            response_path,
+            &ceiling_key,
+            &ceiling_value,
+            vendor,
+        );
+        let status = child_cmd
             .stdout(std::process::Stdio::from(log))
             .status_retrying_etxtbsy()
             .map_err(|e| {
@@ -2230,6 +2229,34 @@ pub(crate) fn missing_implementer_worktree_push_gate(
         )));
     }
     Ok(())
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_phase_driver_advisor_command(
+    project_root: &std::path::Path,
+    program: &str,
+    advisor_args: &[String],
+    request_path: &std::path::Path,
+    response_path: &std::path::Path,
+    ceiling_key: &str,
+    ceiling_value: &str,
+    vendor: session::HeadlessVendor,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.current_dir(project_root)
+        .args(advisor_args)
+        .env("AIDA_HEADLESS", "1")
+        .env(punt::REQUEST_FILE_ENV, request_path)
+        .env(punt::RESPONSE_FILE_ENV, response_path)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env(ceiling_key, ceiling_value);
+    if session::containment_applied(vendor, false) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
 }
 
 impl RealPhaseDriver {

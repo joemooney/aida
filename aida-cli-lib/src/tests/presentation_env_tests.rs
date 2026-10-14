@@ -323,6 +323,7 @@ fn noexec_preview_shows_none_set_when_no_presentation_vars_are_present() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = isolated_agent_launch_plan(&project, "claude-preview");
     let prompt = AgentPromptOptions::new(None, false);
@@ -375,6 +376,7 @@ fn noexec_preview_reports_stripped_and_kept_presentation_vars() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = isolated_agent_launch_plan(&project, "claude-preview");
     let prompt = AgentPromptOptions::new(None, false);
@@ -422,6 +424,7 @@ fn show_context_body_surfaces_kept_presentation_vars() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = isolated_agent_launch_plan(&project, "claude-context");
     let body = render_agent_launch_context(&config, &plan, "test-token").unwrap();
