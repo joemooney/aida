@@ -1,0 +1,31 @@
+id: 01a13b1b-411f-73b3-9993-58e1978e7c0e
+spec_id: STORY-1691
+agreed_id: STORY-1691
+title: A seat grant held by a live relay renews itself up to an operator-set ceiling, so expiry never silently stalls a lane
+description: |
+  Problem: on 2026-10-13/14, the merge seat ran for hours on a grant that had expired. After BUG-2011 began enforcing expiry, the seat could review but could not record verdicts, and the lane stopped until the operator came back to a terminal. TASK-1736 and BUG-2014 only warn about expiry; they don't stop the stall. Grant expiry is now one of the main reasons a PR waits 4-20h to merge.
+
+  Proposal: when the operator enters a seat, they set a ceiling (e.g. `--max-lifetime 24h`, with a configurable default). Within that ceiling, a grant held by a live relay (or a live seat session) is renewed on a heartbeat, so the short per-grant TTL keeps protecting against stale or abandoned sessions. Once the ceiling is reached the grant expires as it does today, and the operator gets one early notice (desktop/mail) about an hour before.
+
+  Acceptance:
+  1. A seat grant entered with a ceiling renews while its holder process is alive and has a heartbeat, and stops renewing when the holder dies (the identity is verified by pid plus start time).
+  2. No renewal ever extends a grant past the ceiling; a test pins this.
+  3. Renewal never widens authority: the seat, delegations, and project stay the same, and a revoked grant is never renewed.
+  4. Before the ceiling is reached, the operator gets a single notice naming the seat and the command to extend it.
+
+  This changes the authority model, so it needs a sketch and advisor signoff before implementation. Related: TASK-1736, BUG-2014, BUG-2011, BUG-2126.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T15:50:04.319403829Z
+modified_at: 2026-10-14T15:50:04.319403829Z
+req_type: Story
+filed_at:
+  code_sha: 278ff0b09857793951b477ef891e07212a53f833
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f8b0ad8c1c
+  vendor: claude
+  session: b9a9ec1a-4cee-4560-b175-c2116f2456c4
