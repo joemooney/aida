@@ -1,0 +1,38 @@
+id: 01a13a49-46c5-7f70-8d8b-10e5ad7beba5
+spec_id: STORY-1690
+agreed_id: STORY-1690
+title: Stop semantically conflicting PRs from both merging green (require up-to-date base or a merge queue)
+description: |
+  On 2026-10-14, PR #2599 (BUG-2004) and PR #2597 (BUG-1994) each passed CI on their own base and merged 3 minutes apart. #2597 added a guard requiring PATH-mutating tests to run under run_path_isolated_test(). #2599 had just added two PATH-mutating tests the old way. main went red at 71d04b3609 (run 38557210178). Neither PR's CI could have caught it: each was green against a main without the other.
+
+  This class (semantic merge conflicts between PRs that are each green) grows with tonight's merge rate (5+ merges/hour).
+
+  Options to decide (advisor sketch needed; this is gate/merge-policy work):
+  (a) GitHub branch protection "require branches to be up to date before merging", with the merge seat updating each branch from main before a pinned merge. Simple, but it serializes CI per merge (~20 min each on one runner).
+  (b) A GitHub merge queue: batches PRs and tests each against main plus the PRs ahead of it. Best throughput; needs a merge_group CI trigger, and the pinned --match-head-commit flow must adapt.
+  (c) A merge-seat discipline only: before merging, if main moved since the PR's last green CI, merge main into the branch and wait for green. No platform change; relies on the seat.
+  GitLab parity: merged results pipelines / merge trains.
+
+  Acceptance:
+  - the chosen mechanism is documented in two-seat-protocol.md and git-sync-and-review.md (template masters);
+  - the merge-seat brief and `aida pr ship` honour it;
+  - a regression scenario (two PRs, each green, conflicting semantically) is demonstrated to be blocked before main goes red.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T12:00:43.205703912Z
+modified_at: 2026-10-14T12:00:43.205703912Z
+req_type: Story
+tags:
+- ci
+- merge-policy
+- throughput
+filed_at:
+  code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
