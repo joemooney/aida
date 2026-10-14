@@ -19,8 +19,9 @@
 //! overlapping scopes dispose in parallel safely.
 //!
 //! Reaping reuses the same PID-liveness primitive the session-lease reaper
-//! uses (`process_probe::pid_is_alive`): a stale lease whose holder process is
-//! dead is treated as free, so a crashed advisor cannot lock triage forever.
+//! uses (`process_probe::process_identity_is_alive`, pid plus recorded start
+//! time): a stale lease whose holder process is dead (or whose pid the OS
+//! recycled) is treated as free, so a crashed advisor cannot lock triage forever.
 //!
 //! trace:TASK-661 | ai:claude
 
@@ -49,6 +50,12 @@ pub struct DispositionLease {
     /// PID of the process that acquired the lease. Used by the reaper:
     /// a dead PID means the holder crashed and the lease is free.
     pub pid: u32,
+    /// Kernel start time of `pid` at acquisition, so a recycled pid does not
+    /// keep a crashed advisor's lease alive. `None` on leases written by older
+    /// binaries; the reaper then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_start_time: Option<String>,
     /// Hostname where the lease was acquired (informational on refusal).
     pub hostname: String,
     /// ISO-8601 UTC acquisition time (informational on refusal).
@@ -167,17 +174,18 @@ pub fn list_all(project_root: &Path) -> Vec<DispositionLease> {
 }
 
 /// Read all leases, reaping (deleting) any whose holder PID is no longer
-/// alive, and return only the live set. A crashed advisor's lease is freed so
+/// alive (or was recycled, TASK-1750), and return only the live set. A crashed advisor's lease is freed so
 /// triage isn't locked forever. The liveness probe is injected so the core
-/// is testable; production callers pass `process_probe::pid_is_alive`.
+/// is testable; production callers pass
+/// `process_probe::process_identity_is_alive`.
 /// trace:TASK-661 | ai:claude
 pub fn live_leases_reaping(
     project_root: &Path,
-    is_alive: impl Fn(u32) -> bool,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> Vec<DispositionLease> {
     let mut live = Vec::new();
     for lease in list_all(project_root) {
-        if is_alive(lease.pid) {
+        if is_alive(lease.pid, lease.pid_start_time.as_deref()) {
             live.push(lease);
         } else {
             // Best-effort reap; ignore failure (another reaper may have won).
@@ -226,6 +234,7 @@ mod tests {
             scope: scope.to_string(),
             owner: owner.to_string(),
             pid,
+            pid_start_time: None,
             hostname: "testhost".to_string(),
             started_at: chrono::Utc::now(),
         }
@@ -325,7 +334,7 @@ mod tests {
         write_lease(root, &lease("cli", "bob", 200)).unwrap();
 
         // pid 100 dead, pid 200 alive.
-        let live = live_leases_reaping(root, |pid| pid == 200);
+        let live = live_leases_reaping(root, |pid, _| pid == 200);
         assert_eq!(live.len(), 1);
         assert_eq!(live[0].scope, "cli");
 
@@ -333,6 +342,30 @@ mod tests {
         let on_disk = list_all(root);
         assert_eq!(on_disk.len(), 1);
         assert_eq!(on_disk[0].scope, "cli");
+    }
+
+    /// TASK-1750: the reaper hands the recorded start time to the probe, so a
+    /// live pid with a mismatched start time (recycled) is reaped; a legacy
+    /// lease without one still parses.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn reaper_passes_start_time_and_reaps_a_recycled_pid() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut held = lease("project", "alice", 100);
+        held.pid_start_time = Some("2026-10-14T16:00:00+00:00".to_string());
+        write_lease(root, &held).unwrap();
+        let live = live_leases_reaping(root, |pid, start| {
+            assert_eq!(pid, 100);
+            start == Some("2026-10-14T16:00:01+00:00")
+        });
+        assert!(live.is_empty(), "a recycled pid must not keep the lease");
+        assert!(list_all(root).is_empty());
+
+        let legacy = lease("cli", "bob", 200);
+        write_lease(root, &legacy).unwrap();
+        let live = live_leases_reaping(root, |_, start| start.is_none());
+        assert_eq!(live, vec![legacy]);
     }
 
     #[test]
@@ -343,7 +376,7 @@ mod tests {
         let root = tmp.path();
         write_lease(root, &lease("project", "crashed", 100)).unwrap();
 
-        let live = live_leases_reaping(root, |_| false); // everyone dead
+        let live = live_leases_reaping(root, |_, _| false); // everyone dead
         let new = lease("project", "fresh", 200);
         assert_eq!(
             decide_acquire(new.clone(), &live),

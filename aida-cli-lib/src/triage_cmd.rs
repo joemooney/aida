@@ -27,8 +27,10 @@ pub(crate) fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
             identity_guard::enforce(&current_user_id(None), &owner, "lease acquire")?;
             // Reap dead holders first so a crashed advisor's lease doesn't
             // wrongly block a fresh acquire. trace:TASK-661 | ai:claude
-            let live =
-                triage_lease::live_leases_reaping(&project_root, process_probe::pid_is_alive);
+            let live = triage_lease::live_leases_reaping(
+                &project_root,
+                process_probe::process_identity_is_alive,
+            );
             // Record the disposing advisor's SHELL pid, not this short-lived
             // `aida` process — the `aida` wrapper is a shell function so our
             // parent IS the interactive shell / Claude session that's doing
@@ -42,6 +44,8 @@ pub(crate) fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
                 scope: slug.clone(),
                 owner: owner.clone(),
                 pid: holder_pid,
+                // trace:TASK-1750 | ai:claude
+                pid_start_time: process_probe::process_start_identity(holder_pid),
                 hostname: hostname(),
                 started_at: chrono::Utc::now(),
             };
@@ -118,8 +122,10 @@ pub(crate) fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
             Ok(())
         }
         TriageCommand::Status { json } => {
-            let live =
-                triage_lease::live_leases_reaping(&project_root, process_probe::pid_is_alive);
+            let live = triage_lease::live_leases_reaping(
+                &project_root,
+                process_probe::process_identity_is_alive,
+            );
             if *json {
                 #[derive(serde::Serialize)]
                 struct Row<'a> {
