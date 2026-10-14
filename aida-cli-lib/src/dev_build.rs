@@ -760,6 +760,11 @@ pub(crate) fn recover_live_dir(layout: &DevLayout) -> Result<Vec<String>> {
     recover_live_dir_with_steps(layout, &mut |_| Ok(()))
 }
 
+/// [`recover_live_dir`] with a crash-injection hook: `step` is called with a
+/// name after each durable normalization move (`"marker"`, `"parked_prev"`,
+/// `"parked_live"`), and an `Err` from it aborts recovery right there, as a
+/// crash would. Tests use it to prove a second recovery converges.
+// trace:TASK-1364 | ai:claude
 pub(crate) fn recover_live_dir_with_steps(
     layout: &DevLayout,
     step: &mut dyn FnMut(&'static str) -> Result<()>,
