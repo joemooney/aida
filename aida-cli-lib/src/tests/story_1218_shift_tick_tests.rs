@@ -741,6 +741,49 @@ fn shift_refuses_when_budget_evidence_missing_or_stale() {
     assert!(committed.allow_uncovered_vendors.is_empty());
 }
 
+/// A silent cron owner stops generating failed watchdog ticks; after the
+/// existing two-hour quiet window, shift status can admit work again.
+// trace:BUG-2120 | ai:codex
+#[test]
+fn shift_watchdog_quiet_recovers_after_silent_cron_owner() {
+    use crate::runaway_seats::{scan, Sources, WatchdogPolicy};
+    use std::{collections::HashMap, fs};
+    let tmp = tempfile::tempdir().unwrap();
+    let transcript = tmp.path().join("claude");
+    fs::create_dir_all(&transcript).unwrap();
+    let setup_at = now() - Duration::hours(10);
+    let body = serde_json::json!({"type":"assistant","timestamp":setup_at.to_rfc3339(),
+        "sessionId":"6fd5497b-0c27-4e83-9725-0bf46198f394",
+        "message":{"content":[{"type":"tool_use","name":"CronCreate","input":{
+            "cron":"7,27,47 * * * *","prompt":"Advisor mailbox tick"}}]}});
+    fs::write(transcript.join("advisor.jsonl"), format!("{body}\n")).unwrap();
+    let src = Sources {
+        transcript_dirs: vec![transcript],
+        state_path: Some(tmp.path().join("state.json")),
+        ..Default::default()
+    };
+    let policy = WatchdogPolicy::default();
+    let mut failed_at = Vec::new();
+    for minutes in (0..=600).step_by(15) {
+        let at = setup_at + Duration::minutes(minutes);
+        let (findings, coverage) = scan("aida", &src, &policy, at, &HashMap::new());
+        // Same new + still-active failure criterion as the doctor gate.
+        if !findings.is_empty() || !coverage.still_active.is_empty() {
+            failed_at.push(at);
+        }
+    }
+    assert!(!failed_at.is_empty(), "the initial live setup must trip");
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.watchdog_failures = failed_at
+        .iter()
+        .filter(|at| **at >= now() - Duration::hours(WATCHDOG_QUIET_HOURS))
+        .count();
+    p.budget = crate::runaway_seats::budget_evidence(src.state_path.as_deref().unwrap(), now());
+    let (r, _) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(guard(&r, "watchdog-quiet").pass);
+    assert!(guard(&r, "budget-evidence").pass);
+}
+
 #[test]
 fn shift_refuses_after_runaway_watchdog_trip() {
     let mut p = probes(vec![drain("TASK-1")]);

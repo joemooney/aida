@@ -309,7 +309,9 @@ pub(crate) fn running_executable_fallback() -> PathBuf {
 }
 
 // trace:TASK-1499 | ai:codex
-fn current_executable_path() -> Option<PathBuf> {
+// Also used by exact-test re-exec: callers may require this path without
+// falling back to the production CLI. trace:BUG-1994 | ai:codex
+pub(crate) fn current_executable_path() -> Option<PathBuf> {
     std::env::current_exe().ok()
 }
 
