@@ -9,12 +9,12 @@ description: |
   - Every launch path that runs an agent contained exports `AIDA_CONTAINED=1` to it, and none that runs it uncontained does.
   - A test per launch path asserts the variable in the child's environment.
   - Line numbers are from the review; re-verify at main.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:13.679762298Z
-modified_at: 2026-10-14T05:30:48.083721490Z
+modified_at: 2026-10-14T11:30:36.586946890Z
 req_type: Bug
 tags:
 - contained
@@ -89,6 +89,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13a2d-b5a7-7ac0-b15e-34ea85486750
+  author: aida-auto-bump
+  timestamp: 2026-10-14T11:30:36.583158026Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13a2d-b5aa-7da2-96a3-dfd23a52497d
+  timestamp: 2026-10-14T11:30:36.586941394Z
+  agent: aida
+  commit_sha: a957927eb8ae282c9e0f9645fbd9cb60b0ba877d
+  summary: 'Strict containment review: all 5 round-1 blockers resolved; containment_applied() drives argv+env; every launch path sets/strips AIDA_CONTAINED with a child-env test; 4/4 mutations killed; 5x flake rerun clean. Non-blocking: argv-inferred is_contained_args, post-round-2 commits are test-only churn.'
+  review_verdict: approved
 filed_at:
   code_sha: e9003b21bf2393c6da7896e6c00313f8b4283a19
   branch: main
@@ -97,11 +111,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Strict security review: fail-open =1 on codex/agy contained launches (flag decoupled from applied sandbox), missed codex interactive path, 5 of 10 paths untested (mutations survive), racy reviewer test.'
-  recovery_hint: address the review findings, move BUG-2006 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-14T00:58:12.888042416Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T11:30:36.583151012Z
+  completion_sha: a957927eb8ae282c9e0f9645fbd9cb60b0ba877d
