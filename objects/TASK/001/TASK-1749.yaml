@@ -1,0 +1,41 @@
+id: 01a1389b-7827-7513-bca7-4218d6d08ba8
+spec_id: TASK-1749
+agreed_id: TASK-1749
+title: 'Arch: one agent launcher. Build a LaunchContext (seat, grant, contained, worktree, session) once and route every agent spawn through it'
+description: |-
+  ## Problem
+  Agent launch decisions are re-implemented at every spawn site, so a fix lands in some paths and misses others. That is the most common shape of today's fail-open and incomplete-fix rejections.
+
+  ## Evidence (main @ 014a28d3f7)
+  - 12 sites set the child's seat by hand with `.env("AIDA_SESSION_ROLE", ...)`: burndown_run.rs:2003, orchestrator_leases.rs:1285, questions.rs:1625, zen_drive_root.rs:390, phase_driver.rs:1354/2152, session.rs:1229/1520/3215, autopilot_intake.rs:970, agent_launch.rs:2589/4494.
+  - At least 10 direct agent spawns: session.rs:948/1005/1375/1423/4559, agent_launch.rs:2563, burndown_run.rs:570/1997, autopilot_intake.rs:964, questions.rs:1623.
+  - AIDA_CONTAINED is exported in exactly ONE place, and with process-global `std::env::set_var` on the PARENT (queue_cmd.rs:11132). Every other launch path never sets it. That is BUG-2006/#2610: rejected for missing exec_codex_session and 6 untested paths.
+  - Seat/role context leaking into the wrong child is BUG-2007 (Codex got the advisor role and stopped all night).
+
+  ## Proposed improvement
+  A typed `LaunchContext` resolved once (seat, validated grant, contained posture, worktree, session id, vendor) and one `spawn_agent(ctx, vendor, argv)` that sets the child env explicitly (`env_clear` + allowlist), never through set_var. Convert the spawn sites one by one; a guard test fails if `Command::new` for an agent binary, or `.env("AIDA_SESSION_ROLE"` appears outside the launcher.
+
+  ## Risk
+  Launch posture regressions (permissions, sandbox). Needs a sketch plus advisor signoff; slice by vendor.
+
+  ## Effort
+  Large (3-4 slices). Payoff: removes the class behind BUG-2006, BUG-2007 and future contained/seat fail-opens.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T04:11:15.367292037Z
+modified_at: 2026-10-14T04:11:15.367292037Z
+req_type: Task
+tags:
+- arch-review-2026-10-13
+- architecture
+- tech-debt
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
