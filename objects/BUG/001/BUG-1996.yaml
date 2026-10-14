@@ -9,12 +9,12 @@ description: |
 
   1. When `aida queue done` moves a code spec into Completed, it calls `shipped_linkage::warn_if_completed_without_shipped_commit`. The warning goes to stderr and never refuses.
   2. A binary test shows the warning for a spec with no shipped commit, and no warning for a spec tagged `doctor:no-code` or one with a shipped commit.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-14T00:15:46.339490326Z
+modified_at: 2026-10-14T00:27:30.080092011Z
 req_type: Bug
 comments:
 - id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
@@ -207,6 +207,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a137ce-9d9c-75e2-9d55-f5deff5118f6
+  author: aida-auto-bump
+  timestamp: 2026-10-14T00:27:30.076318719Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a137ce-9da0-7833-a8e4-177717f1ce48
+  timestamp: 2026-10-14T00:27:30.080081676Z
+  agent: implementer
+  commit_sha: 1d541afa2972746315ccc55e380bd95fc550db8e
+  summary: 'Final round: env bypass removed; ruling (a) holds (B1/B2 reverted, close-path warning pinned by 3 dispatch tests, queue_done_does_not_warn kept); mutations M1,M2,M5b,M6,M7,M8 caught; M5 alone is an equivalent mutant headlessly (TTY gate still refuses)'
+  review_verdict: approved
 filed_at:
   code_sha: 84ff1cf0ab862f01bda489a38068fce1625837f9
   branch: main
@@ -215,11 +229,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 01a131ce77b4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'B1/B2 reverted and warning pinned, but the dispatch tests depend on a new runtime AIDA_TEST_AUTO_CLOSE env var that skips the operator confirmation for Close in the shipped binary: a new close special case the ruling forbids'
-  recovery_hint: address the review findings, move BUG-1996 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-13T22:13:52.423629561Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T00:27:30.076313906Z
+  completion_sha: 1d541afa2972746315ccc55e380bd95fc550db8e
