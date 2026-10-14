@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - The mutation 'render_for_terminal_with always passes GlyphProfile::Unicode' fails at least one test.
   - No test sets AIDA_GLYPHS process-wide without the shared env lock.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:55:32.825289932Z
-modified_at: 2026-10-13T22:28:30.183200885Z
+modified_at: 2026-10-14T06:20:11.041271282Z
 req_type: Bug
 comments:
 - id: 01a13675-1bfc-7aa2-88b3-af25fe4d880e
@@ -51,6 +51,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13911-8173-7b71-a8de-82e994f847a7
+  author: aida-auto-bump
+  timestamp: 2026-10-14T06:20:10.995670301Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13911-81a1-72e2-bfdd-20a5802c8a2f
+  timestamp: 2026-10-14T06:20:11.041257765Z
+  agent: aida
+  commit_sha: 6badc492f95cfefce6fb5c7c6b74278f15af5c62
+  summary: 'ADR-76 standard tier. The AIDA_GLYPHS read moves to the entry point and the computed profile is passed down; the new test fails if the profile is ignored. Recorded just after the merge: the first record attempt failed on missing agent identity.'
+  review_verdict: approved
 filed_at:
   code_sha: ed5c5b7efd3561f55071f5860ecf64aa3fac9b47
   branch: main
@@ -59,3 +73,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T06:20:10.995665661Z
+  completion_sha: 6badc492f95cfefce6fb5c7c6b74278f15af5c62
