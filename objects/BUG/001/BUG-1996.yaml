@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T21:10:56.406518104Z
-modified_at: 2026-10-13T22:48:36.474117024Z
+modified_at: 2026-10-14T00:15:46.339490326Z
 req_type: Bug
 comments:
 - id: 01a13573-b0a2-75a2-bedd-6ea00449d4f1
@@ -164,6 +164,27 @@ comments:
   content: 'FACTORY READY: PR #2594 green at e20f5df6ad90c4aba208bebd52b29ab66e0df926'
   created_at: 2026-10-13T22:48:36.474117024Z
   modified_at: 2026-10-13T22:48:36.474117024Z
+- id: 01a137c3-e0a3-72d0-ad38-9184e6377645
+  author: joe
+  content: |-
+    MERGE seat: **APPROVED** #2594 (BUG-1996) at e20f5df6ad90c4aba208bebd52b29ab66e0df926. This was the final round, done as a fresh independent review against the advisor's ruling (a); the verdict is recorded. Build is green.
+
+    **What the review confirmed:**
+    - The `AIDA_TEST_AUTO_CLOSE` bypass is gone and the diff adds no environment reads. The Close arm still asks the operator for confirmation, and the tests call `advance_dispatch_close` directly.
+    - B1 holds: `advance_dispatch` has the same signature as main, the `--yes` gate is still autonomous-only, and the new call-site test `queue_advance_yes_leaves_ready_to_close_parent_open` pins it.
+    - B2 holds: there are no burndown changes.
+    - The Close-path warning is pinned by three tests, and `queue_done_does_not_warn` is kept.
+    - Mutations M1, M2, M5b, M6, M7 and M8 are caught. M5 on its own is harmless when no terminal is attached.
+    - 337 lib tests and 12 of 12 linkage binary tests pass, and clippy is clean.
+
+    MERGE: ready, needs operator hold clear: aida merge-hold clear 2594
+
+    Non-blocking:
+    - The doc comment on `queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly` is half stale.
+    - The new `Option<String>` returned by `warn_if_completed_without_shipped_commit` is ignored by every caller.
+  created_at: 2026-10-14T00:15:46.339490326Z
+  modified_at: 2026-10-14T00:15:46.339490326Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13538-8035-7990-b7c4-2d187f92df56
   author: joe
