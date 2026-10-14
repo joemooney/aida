@@ -1255,6 +1255,42 @@ pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
     )
 }
 
+/// TASK-1350: built-in tools whose denial means the agent's *writes* were
+/// refused. Only a denial of one of these (or of a tool treated as
+/// write-capable by [`is_write_capable_tool`]) reclassifies a stop as
+/// [`FailureKind::PermissionDenied`], which feeds the environment-blocked
+/// batch halt. A denial of a read/network tool (Read, Grep, WebFetch,
+/// WebSearch, ...) on a stop that failed for spec reasons must not halt the
+/// batch or blame the environment.
+// trace:TASK-1350 | ai:claude
+pub(crate) const WRITE_CAPABLE_TOOLS: &[&str] =
+    &["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+
+/// TASK-1350: can a denial of `tool` mean the agent's writes were refused?
+///
+/// Deliberate handling of tools outside [`WRITE_CAPABLE_TOOLS`]:
+/// - MCP tools (`mcp__<server>__<tool>`) are unknown to AIDA — any of them
+///   may write (a database, a ticket, a file) — so they are treated
+///   conservatively as write-capable.
+/// - A denial with no tool name (`"an unknown tool"`, as
+///   [`crate::questions::headless_log_permission_denied_tools`] records it)
+///   is likewise treated as write-capable: nothing proves it was a read.
+/// - Every other named built-in tool (Read, Glob, Grep, WebFetch, WebSearch,
+///   Task, ...) is read-only for this purpose, per the advisor ruling that
+///   only the explicit write set reclassifies the stop.
+// trace:TASK-1350 | ai:claude
+pub(crate) fn is_write_capable_tool(tool: &str) -> bool {
+    WRITE_CAPABLE_TOOLS.contains(&tool) || tool.starts_with("mcp__") || tool == "an unknown tool"
+}
+
+/// TASK-1350: should these denied tools reclassify a failed stop as
+/// [`FailureKind::PermissionDenied`]? True only when at least one denied
+/// tool is write-capable; an empty or read-only list keeps the original kind.
+// trace:TASK-1350 | ai:claude
+pub(crate) fn denials_reclassify_as_permission_denied(tools: &[String]) -> bool {
+    tools.iter().any(|t| is_write_capable_tool(t))
+}
+
 /// BUG-1930: the failure for a phase that stopped on permission denials
 /// (`tools`, as [`crate::questions::headless_log_permission_denied_tools`]
 /// lists them) without producing a commit or PR.
@@ -10463,6 +10499,40 @@ mod tests {
             driver.reconcile_failure(Phase::Implementer, &PhaseFailure::new("x")),
             PhaseReconcile::GenuineFailure
         );
+    }
+
+    /// TASK-1350: only write-capable denials reclassify a stop as
+    /// PermissionDenied — read-only only, write only, both, and empty.
+    // trace:TASK-1350 | ai:claude
+    #[test]
+    fn only_write_capable_denials_reclassify_as_permission_denied() {
+        let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // Explicit write set.
+        for tool in ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"] {
+            assert!(is_write_capable_tool(tool), "{tool}");
+        }
+        // Named read-only built-ins.
+        for tool in ["Read", "Glob", "Grep", "WebFetch", "WebSearch"] {
+            assert!(!is_write_capable_tool(tool), "{tool}");
+        }
+        // Unknown MCP tools and unnamed denials are conservatively write-capable.
+        assert!(is_write_capable_tool("mcp__github__get_issue"));
+        assert!(is_write_capable_tool("an unknown tool"));
+
+        // Only a read denial: keeps the original kind.
+        assert!(!denials_reclassify_as_permission_denied(&v(&["WebFetch"])));
+        assert!(!denials_reclassify_as_permission_denied(&v(&[
+            "Read",
+            "WebSearch"
+        ])));
+        // Only a write denial.
+        assert!(denials_reclassify_as_permission_denied(&v(&["Edit"])));
+        // Both.
+        assert!(denials_reclassify_as_permission_denied(&v(&[
+            "WebFetch", "Write"
+        ])));
+        // Empty.
+        assert!(!denials_reclassify_as_permission_denied(&[]));
     }
 
     /// BUG-1930: a synthetic headless stream whose implementer stopped on
