@@ -1,0 +1,31 @@
+id: 01a1380d-afea-7d53-a209-823436f6adab
+spec_id: BUG-2120
+agreed_id: BUG-2120
+title: Runaway-seat watchdog reports a dead session's never-deleted cron as an active mail poll forever, so the night shift's watchdog-quiet guard refuses every wave
+description: |
+  ## Observed (2026-10-13 18:35)
+  `aida doctor check runaway-seats` reports `mail-poll-setup` as **still active** for session 6fd5497b-0c27-4e83-9725-0bf46198f394. That is an advisor session whose transcript was last written at 08:40, 10 hours earlier, and it has no live process. It created a CronCreate advisor-watch tick ("7,27,47 * * * *") and never ran CronDelete, because the session simply ended. The finding never clears. Every 15-minute `watchdog` run therefore fails, and the night shift's `watchdog-quiet` guard ("1 runaway-seat watchdog failure(s) in 2h") refuses every wave, with no end. Nothing has drained unattended since.
+
+  ## Expected
+  A poll setup belongs to its session. When the session is dead (no live harness process, transcript idle beyond the policy window), its never-deleted cron or loop is not "still active". Report it once as historical, or not at all. It must not trip the watchdog.
+
+  ## Acceptance
+  1. A session that ended with an undeleted CronCreate or ScheduleWakeup is not reported in `still_active` once its transcript is idle past the window, or once no live process holds it.
+  2. A live session with an active model-side mail poll still trips. This is a regression test for the BUG-1589 intent.
+  3. A replay test with a fixture shaped like the 6fd5497b transcript (CronCreate, then silence).
+  4. Once fixed, `aida shift status` no longer fails `watchdog-quiet` on a dead session's leftovers.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T01:36:23.530993833Z
+modified_at: 2026-10-14T01:36:23.530993833Z
+req_type: Bug
+filed_at:
+  code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
