@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-14T03:11:56.849948025Z
+modified_at: 2026-10-14T03:26:13.196413270Z
 req_type: Bug
 tags:
 - plan:night
@@ -124,6 +124,11 @@ comments:
   content: 'FACTORY REWORK round1: head76de0466d5. Rebased onto main preserving both AGENTS paragraphs. B1: ignored stress in default suite; explicit same-Build CI step runs all15 rounds/16threads with step30m/job45m bound, no per-round deadline. New integration guard pins ignore, exact CI invocation, timeout and failure propagation. Optional: strict current_exe in both launchers; OsStr/OsString keys detected including macro args; scan expanded to library integration tests. aida-cli/tests scan deferred because existing fully locked separate binary needs its own rule; HOME remains reviewer follow-up. Full make check-ci-fast27/27 passed. Six-item self-review in PR body; awaiting CI.'
   created_at: 2026-10-14T03:11:56.849948025Z
   modified_at: 2026-10-14T03:11:56.849948025Z
+- id: 01a13872-3ccc-73b2-8024-66bc13118b0d
+  author: joe
+  content: 'FACTORY CI r1 read: all three path_isolation_guardrail tests passed and default stress was ignored as intended. One deterministic failure: raw current_exe guard rejected direct calls in test helpers. Corrected by requiring existing aida_bin::current_executable_path() result with no CLI fallback; single raw lookup remains in resolver, unchanged guard statically verified. Full fast gate27/27 passed again before push at237e401b07. Awaiting CI; no flake rerun.'
+  created_at: 2026-10-14T03:26:13.196413270Z
+  modified_at: 2026-10-14T03:26:13.196413270Z
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
