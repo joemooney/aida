@@ -7,15 +7,29 @@ description: |-
   (1) recovery_with_old_format_crash_during_normalization_preserves_records skips with 'if first.is_ok() { continue; }' and never asserts that each named step crashed at least once. Removing a step() call in production silently shrinks the matrix (mutation M11 survives). Record which steps fired and assert full coverage.
   (2) dev_build.rs:788: say only that the marker must come before .rollback/.promoted moves.
   (3) Add a doc comment to recover_live_dir_with_steps (dev_build.rs:763).
-status: Draft
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:08:30.506576968Z
-modified_at: 2026-10-13T23:08:30.506576968Z
+modified_at: 2026-10-14T18:41:46.703186192Z
 req_type: Task
 tags:
 - review-follow-up
+comments:
+- id: 01a13bb8-74cf-7122-9ed3-33f157112d76
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (9d46102) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:41:46.703184875Z
+  modified_at: 2026-10-14T18:41:46.703184875Z
+history:
+- id: 01a13bb8-74cf-7122-9ed3-33e2e3500c3c
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:41:46.703183265Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
