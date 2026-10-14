@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T01:34:17.462556514Z
+modified_at: 2026-10-14T01:49:49.972950918Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -52,6 +52,31 @@ comments:
   created_at: 2026-10-14T00:00:25.183719891Z
   modified_at: 2026-10-14T00:00:25.183719891Z
   session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
+- id: 01a13819-fe14-74d3-bb5b-93983c1ea768
+  author: joe
+  content: |
+    SKETCH: Rework-only verdict release (Codex implementer; awaiting advisor sketch signoff)
+
+    AC1 — release location and scope. Add a focused rework_hold_release module and call it AFTER the durable, verified APPROVED write in handle_review_record_at (aida review record), using the main-worktree hold root and a freshly forge-pinned PR head, not caller --sha or launch-envelope provenance as the live-head answer. The GitHub merge-hold-gate remains a label/recorded-clearance consumer, not a second release writer. Reconcile the full verdict corpus before releasing, so a conflicting or outstanding refusal still holds. Read/list remain informational; no release from premise_stale. No release from an unvalidated direct artifact write. Keep the explicit merge-hold clear TTY floor unchanged. Success mirrors aida:merge-hold-cleared with the persistent recorded label and removes the active label, causing the existing required check to rerun and pass.
+
+    AC2 — authority, independence, and time. Require a Valid grant (absence, expiry, revocation, bad subject, roster or parent delegation refuse auto-release). Use exactly the shared record-time identity/author-overlap rule: anchored recording session/harness/grant/lease identity must be separate from every durable author, including launcher/child authorship, and the grant may not be implementer. Do not use recorded_by prose as authority. IMPORTANT prerequisite: origin/main at 014a28d3f7 has grant_check and an implementer-seat refusal, but does NOT yet have the BUG-1918 review_authority ledger gate; PR #2485 is pending. I propose this story depends on that shared gate landing, then rebase and call its record-time authority predicate/attestation seam, rather than copying its pending implementation or treating the current weak check as sufficient. Verify the newly persisted approval covers the full current head SHA. Resolve the arming REQUEST CHANGES/rejected round from the hold's verdict_ref plus retained/archive rounds, compare parsed RFC3339 timestamps, and require approval strictly newer than every relevant arming refusal. Missing/ambiguous provenance, equal timestamps, unreadable corpus or unknown head fail closed with typed, named refusal reasons. Preserve arming provenance across retries/re-recordings rather than reading only the overwritten top-level verdict.
+
+    AC3 — composition and ADR-75 detection. Eligibility is nonlegacy Rework primary AND every absorbed kind Rework. Reject Supervision, Recusal, Decision and Unknown anywhere; do NOT infer safety from strictness rank (Rework currently outranks Supervision and Unknown). Read every covered owning spec from the canonical store, with fail-closed errors and no missing-spec exemption. Detect explicit advisor/operator-signoff requirements from canonical spec metadata/acceptance, and the narrowed ADR-75 set with a focused category classifier: confinement/sandbox (bwrap/OS-wrap, contained write roots and host-exec), approval authority/grants/identity (including review/ship/status/hold authority), credentials/secrets (argv/env/URLs/logging). Use conservative canonical tags/explicit signoff clauses plus an inventoried sensitive production-path check against the pinned PR base..head diff; inspect changed content in mixed-purpose modules rather than declaring whole generic lib_part files safe. Unknown classification stays held. Architecture alone, execution_mode=guided alone and generic security-adjacent hardening outside those three categories are not sensitive flags. Any positive sensitive flag retains human clear even with an advisor signoff already present. This PR itself changes hold-release authority and therefore requires the human clear. Because main has no existing ADR-75 classifier, advisor signoff must bless this detection contract and its initial path/content inventory; no branch-local config or author-controlled negative tag can grant exemption.
+
+    AC4 — durable release and visible audit. Write HoldClearance with the EXACT principal auto-released:verdict (a typed auto-release principal, not an unresolved or spoofed human identity), released_by_verdict containing file key/path, reviewer and full approved SHA, and target_head_sha bound to the approved head. Include arming round provenance and validated recording identity/grant reference in release evidence. Publish a pinned-repo PR audit comment naming approval file, reviewer seat, SHA and clearance principal before exposing a released label/marker. If clearance or comment publication fails, leave active marker/label armed; retry idempotently with the same evidence. Recheck live head, hold composition and authority immediately before label/marker release; mutation/concurrent re-arm must not be cleared by an old release attempt. Serialize hold placement/release at the shared hold write seam, re-read under the lock, and document crash states. A failure during forge mirroring must remain visibly held and retryable, never announce release. Show clearance history rows in merge-hold list (JSON and human) after the active marker is gone. Preserve BUG-1693's same-user/admin-token limitation and marker/label tampering tests.
+
+    AC5 / test plan (CI compilation only per factory rules). Focused injected tests, no process-global PATH/HOME changes or test-only production bypass:
+    1. rework_only_current_independent_approval_releases: drive record-time seam, clearance, comment, labels and marker; execute the shipped merge-hold-gate fixture on the resulting labels.
+    2. stale_head_does_not_release, author_identity_does_not_release (including a relabelled recorder), expired_revoked_rejected_missing_grant_does_not_release, approval_not_newer_than_arming_round_does_not_release; assert named reasons and unchanged marker/labels. Include unreadable/ambiguous provenance and a later conflicting refusal.
+    3. composed_supervision/recusal/decision/unknown_stays_human_only (each as primary and absorbed where applicable); legacy_stays_held; each ADR-75 category and explicit signoff flag stays held; nonsensitive architecture/security-adjacent cases remain eligible.
+    4. clearance_principal_and_pr_comment_are_recorded; list_history_shows_verdict_reviewer_sha; failed_clearance/comment/label_write_stays_held; head_move/concurrent_stricter_rearm_stays_held; idempotent_retry_after_crash. Keep existing BUG-1693 raw marker deletion/label deletion fixtures passing.
+    5. Mutation witnesses individually kill removal of current-head equality, identity/valid-grant independence, and strict post-arming timestamp comparison, plus removal of absorbed-kind/sensitive exclusions. Each negative fixture otherwise satisfies every condition so the intended mutation is decisive.
+
+    Update floor documentation in docs/agents/aida-repository-guide.md and docs/cli/08-reporting.md, relevant workflow wording/template masters (sync generated mirrors), and short AGENTS/OVERVIEW orientation in the same PR. After signoff: isolated owned worktree, trace comments, draft factory PR only, make check-ci-fast before every push, factory self-review and green-Build CI loop. No review recording, manual hold clear, ready transition or merge by this implementer.
+
+    Requested binding advisor ruling: approve/amend the BUG-1918 shared-gate dependency and ADR-75 detection inventory contract above. No code will be written before ADVISOR SKETCH SIGNOFF.
+  created_at: 2026-10-14T01:49:49.972950918Z
+  modified_at: 2026-10-14T01:49:49.972950918Z
 history:
 - id: 01a137b5-cce3-72e2-8548-0abd8462d4d8
   author: joe
