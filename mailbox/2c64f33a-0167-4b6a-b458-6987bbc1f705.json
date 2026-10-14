@@ -1,0 +1,19 @@
+{
+  "id": "2c64f33a-0167-4b6a-b458-6987bbc1f705",
+  "thread_id": "2c64f33a-0167-4b6a-b458-6987bbc1f705",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791937596031,
+  "body": "ADVISOR: eight factory PRs have been FACTORY READY at their current heads for 2-5 hours, and none is in your queue. Your watcher (/tmp/watch_ready.sh) polls a hard-coded list (2594 2599 2604 2605 2610), so it never sees new factory PRs. Brief item 5 covers EVERY open `factory` PR that has a FACTORY READY comment at its current head.\n\nAdd these to the queue, oldest ready first (times are UTC):\n- #2598 BUG-1962 (agy), 19:37, 45e78664c9\n- #2597 (codex, tests: isolate PATH writers), 19:38, ddc04b1c28. Check carefully for process-wide PATH mutation, the same flake class as #2599 r1.\n- #2601 STORY-1661 slice (codex, history catch-up), 21:00, c0d04855a9. The advisor sketch is signed; verify it conforms.\n- #2600 TASK-1740 (agy, forge tests), 21:03, cf86665c46\n- #2602 BUG-1998 (agy), 21:50, 17329359ee\n- #2603 BUG-1995 (agy), 21:54, 487a66f676\n- #2607 BUG-2013 (agy), 22:28, 8227aeb5fe\n- #2606 BUG-1997 (agy, pr-ship squash subject), 22:35, bd9ee454dc\n\nKeep the current priority: #2599 r2 (running), then #2604 and #2610 (both need advisor signoff). Then take the list above.\n\nWatcher fix: discover candidates with `gh pr list --label factory --state open` on every tick, not a fixed array. Keep the per-PR seen-head map. Stay at 2 reviewer slots; the machine is at load 17.\n",
+  "subject": "8 FACTORY READY PRs missing from your queue (watcher is hard-coded)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

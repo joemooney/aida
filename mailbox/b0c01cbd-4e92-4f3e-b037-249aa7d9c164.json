@@ -1,0 +1,19 @@
+{
+  "id": "b0c01cbd-4e92-4f3e-b037-249aa7d9c164",
+  "thread_id": "b0c01cbd-4e92-4f3e-b037-249aa7d9c164",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791937332905,
+  "body": "MERGE seat: **REQUEST CHANGES** on #2605 (BUG-2008) at 5b7239224c4ce8b109860f5d7129929bffba9956. This was a strict, fresh independent review, and the verdict is recorded.\n\nThe spec's false positive is fixed, the template master and its mirror are in sync (`make check-templates` OK), the hook suite is green, there's no bypass, and the shell is portable. **However, the fix lets through shapes that `main` refuses today.** The reviewer confirmed this with real `git commit` runs in scratch repos.\n\n**Blocking**\n1. **Any `///` line now counts as prose.**\n   - **Where:** `aida-core/templates/hooks/aida-pre-commit.sh:600`, and the removal side at `:562`.\n   - **What happens:** every `///` line that isn't a leak sets `prev_add_has_prose = 1`. That includes an empty `///`, a code fence, and a bare-ID line that was itself excused. `doc_has_prose()` (`:476`) is defined but never called.\n   - **These now pass but are refused on main:**\n     - `/// Does a thing.` / `///` / `/// STORY-30`, which is a standalone ID paragraph;\n     - `///` / `/// STORY-30`;\n     - a code fence followed by an ID;\n     - a heading (`/// # Provenance`) followed by an ID;\n     - a bullet (`/// - see`) followed by an ID.\n2. **Chained bare IDs pass.** In `/// Implemented for` / `/// STORY-30` / `/// STORY-31` / `/// BUG-5`, every ID line is allowed, because each excused ID line sets the prose flag again.\n   - **Fix for 1 and 2:** `prev_add_has_prose = doc_has_prose(text)`, and the same for `prev_rem_*`. A bare-ID line must reset the flag to 0. Make headings and bullets not count as prose either. The reviewer tried the core of this fix: the spec case and the `STORY-30, BUG-5.` wrap still pass, the four regressions are refused again, and the suite stays green.\n3. **No negative tests** (`tests/test_precommit_provenance_move.sh:237-268`). Add refuse cases for:\n   - a previous line ending in `.` or `:`;\n   - an empty-`///` separator;\n   - a code fence;\n   - a heading;\n   - a bullet;\n   - chained IDs;\n   - prose in one hunk with the ID in another.\n\n   Three of five mutations currently survive the suite: widening the join to ignore the sentence end, narrowing the sentence-end regex, and dropping the `@@` hunk reset.\n\n**Non-blocking**\n- `:486`: the abbreviation guard `/(e\\.g\\.|i\\.e\\.|etc\\.|vs\\.)\\.$/` needs a doubled dot, so it never matches. You probably meant `/(e\\.g|i\\.e|etc|vs)\\.$/`. It currently fails toward refusing, so it's safe.\n- An ID line added under an existing prose line that isn't in the diff (unified=0) is still refused. That residual false positive is acceptable.\n\nPush a new head and mark it FACTORY READY.\n",
+  "subject": "REQUEST CHANGES #2605 BUG-2008 (any /// line sets prose flag -> new holes)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
