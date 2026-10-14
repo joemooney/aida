@@ -1,3 +1,10 @@
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only

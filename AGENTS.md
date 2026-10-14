@@ -5,11 +5,25 @@ produce no context and leave SessionStart/statusline as fallback. See
 [expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
 `role expiry --refuse-within` validates through the shared `grant_check` verdict,
 including subject, roster and parent delegation. Expiry is the earlier of the
 validated grant and parent. The statusline's expired-record timestamp reader is
 informational and grants no authority.
 <!-- trace:BUG-2011 | ai:codex -->
+
+PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
+fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
+the guards require an exact one-test child. The ignored 15-round PATH/history
+stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
+per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+<!-- trace:BUG-1994 | ai:codex -->
 
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including

@@ -208,7 +208,13 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
 /// message on stderr (set `AIDA_DEBUG` to see it). Glyphs follow the active
 /// glyph profile; a configured `[ui] theme` contributes its base profile.
 pub(crate) fn render_markdown_for_terminal(src: &str, width: usize) -> String {
-    render_for_terminal_with(src, width, &colored::control::SHOULD_COLORIZE)
+    let env = std::env::var("AIDA_GLYPHS").ok();
+    render_for_terminal_with(
+        src,
+        width,
+        &colored::control::SHOULD_COLORIZE,
+        env.as_deref(),
+    )
 }
 
 /// [`render_markdown_for_terminal`] with styling decided by `colour`, the
@@ -216,17 +222,18 @@ pub(crate) fn render_markdown_for_terminal(src: &str, width: usize) -> String {
 /// renderer honours `NO_COLOR`, `CLICOLOR_FORCE` and any in-process override
 /// (including [`apply_no_color_policy`]) exactly like the rest of the output.
 // trace:BUG-1979 | ai:claude
+// trace:BUG-2013 | ai:antigravity
 fn render_for_terminal_with(
     src: &str,
     width: usize,
     colour: &colored::control::ShouldColorize,
+    glyphs_env: Option<&str>,
 ) -> String {
     let styled = colour.should_colorize();
     // trace:BUG-1979 | ai:claude
     let root = crate::find_project_root().ok();
-    let env = std::env::var("AIDA_GLYPHS").ok();
     let profile = markdown_profile(
-        env.as_deref(),
+        glyphs_env,
         crate::glyphs::active_theme(root.as_deref()).map(|theme| theme.base),
         crate::glyphs::active_profile(root.as_deref()),
     );
