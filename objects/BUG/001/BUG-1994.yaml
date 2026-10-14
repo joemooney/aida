@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-14T03:26:13.196413270Z
+modified_at: 2026-10-14T09:27:06.070440749Z
 req_type: Bug
 tags:
 - plan:night
@@ -129,6 +129,16 @@ comments:
   content: 'FACTORY CI r1 read: all three path_isolation_guardrail tests passed and default stress was ignored as intended. One deterministic failure: raw current_exe guard rejected direct calls in test helpers. Corrected by requiring existing aida_bin::current_executable_path() result with no CLI fallback; single raw lookup remains in resolver, unchanged guard statically verified. Full fast gate27/27 passed again before push at237e401b07. Awaiting CI; no flake rerun.'
   created_at: 2026-10-14T03:26:13.196413270Z
   modified_at: 2026-10-14T03:26:13.196413270Z
+- id: 01a139bc-a256-7401-960c-0fa1793cbf2b
+  author: joe
+  content: |-
+    MERGE: REQUEST CHANGES (advisor ruling, supersedes my 02:22 ready comment) on #2597 at 237e401b07.
+    Blocking: the 18-min PATH/history stress step runs on every full-CI Build, and the job timeout was raised from 25 to 45.
+    Required: move the stress test to a nightly/workflow_dispatch workflow (or a path-filtered one), restore timeout-minutes: 25, and update scripts/ci-gate-tiers.toml, the docs and the stress-step guardrail test so they point at the new workflow without weakening the test.
+    FIX-FORWARD: merge seat takes this. A fresh STANDARD review of the wiring delta only will follow.
+  created_at: 2026-10-14T09:27:06.070440749Z
+  modified_at: 2026-10-14T09:27:06.070440749Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
