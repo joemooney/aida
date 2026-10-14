@@ -1637,6 +1637,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "mirror-hook-drift",
     ),
+    // BUG-2009: an AIDA git hook without an executable bit is skipped by
+    // git without a word. Report-only. trace:BUG-2009 | ai:claude
+    (
+        &["git-hooks", "hook-mode", "non-executable-hooks"],
+        "git-hooks",
+    ),
     // TASK-1330: identity hygiene — when `[identity] allowed_emails` is
     // configured, report a git identity outside the allowlist and a pre-push
     // hook that does not run the fail-closed identity gate. Report-only.

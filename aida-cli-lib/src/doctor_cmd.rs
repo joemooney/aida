@@ -717,6 +717,13 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-2009: an AIDA git hook that is not executable never runs.
+    // trace:BUG-2009 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "git-hooks")? {
+        findings.extend(scan_non_executable_aida_hooks(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1330: identity hygiene. 2026-10-05: an employer-identifying email
     // reached public history because a work machine's git config used it and
     // nothing refused it. When `[identity] allowed_emails` is configured,
@@ -1769,6 +1776,35 @@ fn scan_mirror_hook_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> 
         .collect()
 }
 
+/// Report each AIDA git hook that is not executable: git skips it without
+/// a word, so commit-format checks and the bypass detector silently stop.
+/// Uses the hook refresh's own dry run, so doctor flags exactly the hooks
+/// `aida scaffold upgrade --only git-hooks` would fix. Report-only, like
+/// the other hook scans: the fix writes into `.git/hooks/`.
+// trace:BUG-2009 | ai:claude
+fn scan_non_executable_aida_hooks(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let Ok(report) = aida_core::git_ops::refresh_stale_aida_hooks(project_root, true) else {
+        return Vec::new();
+    };
+    report
+        .made_executable
+        .into_iter()
+        .map(|hook| DoctorFinding {
+            category: "git-hooks".to_string(),
+            id: format!("hook-not-executable-{}", hook.name),
+            summary: format!(
+                "the AIDA `{}` git hook ({}) is not executable, so git skips it on every \
+                 commit",
+                hook.name,
+                hook.path.display()
+            ),
+            action: "run `aida scaffold upgrade --only git-hooks` to make it executable"
+                .to_string(),
+            safe_heal: false,
+        })
+        .collect()
+}
+
 /// The tempdir-testable core of the `mirror-hook-drift` scan.
 ///
 /// Recognition: the generated banner line (`MIRROR_HOOK_HEADER`), not
@@ -2051,6 +2087,41 @@ mod bug_1738_mirror_hook_drift_tests {
     fn absent_hook_is_clean() {
         let dir = hooks_dir_with(None);
         assert!(mirror_hook_drift_finding(dir.path()).is_none());
+    }
+
+    /// BUG-2009: doctor reports a current AIDA hook git skips because it is
+    /// not executable, and is silent once it is executable.
+    // trace:BUG-2009 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn non_executable_aida_hook_is_reported() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        let git = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .status()
+            .unwrap();
+        assert!(git.success());
+        let hook = repo.join(".git/hooks/post-commit");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(
+            &hook,
+            aida_core::scaffolding::wrap_with_aida_header(
+                std::path::Path::new(".git/hooks/post-commit"),
+                aida_core::templates::EMBEDDED_TEMPLATES["hooks/aida-post-commit.sh"],
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let findings = scan_non_executable_aida_hooks(repo);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].category, "git-hooks");
+        assert_eq!(findings[0].id, "hook-not-executable-post-commit");
+        assert!(findings[0].action.contains("--only git-hooks"));
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(scan_non_executable_aida_hooks(repo).is_empty());
     }
 
     #[test]

@@ -582,6 +582,27 @@ fn generate_aida_header_shell(content: &str) -> String {
 ///   header at the top.
 ///
 /// trace:BUG-1-034 | ai:claude
+/// Make a just-written git hook or Claude Code hook executable (0755).
+/// `artifact` is the scaffold-relative path that decides whether the file
+/// is a hook; `on_disk` is where it was written. Every scaffold writer
+/// calls this after writing, so a hook never depends on the umask or the
+/// mode of the file it replaced: git silently skips a non-executable hook.
+/// Other artifacts are left alone.
+// trace:BUG-2009 | ai:claude
+pub fn set_hook_artifact_mode(artifact: &Path, on_disk: &Path) -> std::io::Result<()> {
+    if !(artifact.starts_with(".git/hooks/") || artifact.starts_with(".claude/hooks/")) {
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(on_disk, fs::Permissions::from_mode(0o755))?;
+    }
+    #[cfg(not(unix))]
+    let _ = on_disk;
+    Ok(())
+}
+
 pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> String {
     // Recognize shell scripts by .sh extension, by living under
     // .git/hooks/ or .claude/hooks/ (extensionless hook files), or by
@@ -2808,24 +2829,12 @@ aida show <SPEC-ID>
                 message: e.to_string(),
             })?;
 
-            // Make git hooks and Claude Code hooks executable on Unix
-            #[cfg(unix)]
-            if artifact.path.starts_with(".git/hooks/")
-                || artifact.path.starts_with(".claude/hooks/")
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&full_path)
-                    .map_err(|e| ScaffoldError::IoError {
-                        path: full_path.clone(),
-                        message: e.to_string(),
-                    })?
-                    .permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&full_path, perms).map_err(|e| ScaffoldError::IoError {
+            set_hook_artifact_mode(&artifact.path, &full_path).map_err(|e| {
+                ScaffoldError::IoError {
                     path: full_path.clone(),
                     message: e.to_string(),
-                })?;
-            }
+                }
+            })?;
 
             written_files.push(artifact.path.clone());
         }
@@ -3473,6 +3482,29 @@ routing decision when you don't know which substrate a rule belongs in.
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-2009: a hook written by any scaffold writer ends up 0755
+    /// whatever the umask gave it; other artifacts keep their mode.
+    // trace:BUG-2009 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn hook_artifacts_are_made_executable_and_others_are_not() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        for (artifact, executable) in [
+            (".git/hooks/post-commit", true),
+            (".claude/hooks/aida-guard.sh", true),
+            ("CLAUDE.md", false),
+        ] {
+            let on_disk = dir.path().join(artifact.replace('/', "_"));
+            fs::write(&on_disk, "#!/bin/sh\n").unwrap();
+            fs::set_permissions(&on_disk, fs::Permissions::from_mode(0o644)).unwrap();
+            set_hook_artifact_mode(Path::new(artifact), &on_disk).unwrap();
+            let want = if executable { 0o755 } else { 0o644 };
+            assert_eq!(mode(&on_disk), want, "{artifact}");
+        }
+    }
 
     #[test]
     fn generated_text_comparison_erases_only_platform_newlines() {

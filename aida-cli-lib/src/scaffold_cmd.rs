@@ -335,6 +335,9 @@ pub(crate) fn handle_scaffold_command(
                             full_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    aida_core::scaffolding::set_hook_artifact_mode(&artifact.path, &full_path)
+                        .with_context(|| format!("making {} executable", full_path.display()))?;
                 }
 
                 let action = if exists { "updated" } else { "created" };
@@ -879,9 +882,26 @@ pub(crate) fn run_scaffold_upgrade_git_hooks(
     dry_run: bool,
 ) -> Result<()> {
     let report = aida_core::git_ops::refresh_stale_aida_hooks(project_root, dry_run)?;
-    if report.refreshed.is_empty() && report.manual.is_empty() {
-        println!("No stale AIDA git hooks: every AIDA-generated hook matches this build.");
+    if report.refreshed.is_empty() && report.manual.is_empty() && report.made_executable.is_empty()
+    {
+        println!(
+            "No stale AIDA git hooks: every AIDA-generated hook matches this build and is \
+             executable."
+        );
         return Ok(());
+    }
+    // trace:BUG-2009 | ai:claude
+    for hook in &report.made_executable {
+        println!(
+            "{} the `{}` hook ({}): it was not executable, so git skipped it",
+            if dry_run {
+                "Would make executable"
+            } else {
+                "Made executable"
+            },
+            hook.name,
+            hook.path.display()
+        );
     }
     let verb = if dry_run { "Would replace" } else { "Replaced" };
     for hook in &report.refreshed {
@@ -1100,6 +1120,9 @@ pub(crate) fn run_scaffold_upgrade(
                             on_disk_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    aida_core::scaffolding::set_hook_artifact_mode(&artifact.path, &on_disk_path)
+                        .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
                 stats.created.push(artifact.path.clone());
             }
@@ -1121,6 +1144,9 @@ pub(crate) fn run_scaffold_upgrade(
                             on_disk_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    aida_core::scaffolding::set_hook_artifact_mode(&artifact.path, &on_disk_path)
+                        .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }

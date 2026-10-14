@@ -4026,11 +4026,25 @@ pub struct StaleHookManual {
     pub reason: String,
 }
 
+/// An AIDA hook whose content is current but which git skipped because it
+/// was not executable, made executable by [`refresh_stale_aida_hooks`].
+// trace:BUG-2009 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleHookExecutable {
+    /// Git hook name.
+    pub name: String,
+    /// The hook file that was (or, in a dry run, would be) made executable.
+    pub path: PathBuf,
+}
+
 /// What [`refresh_stale_aida_hooks`] did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StaleHookReport {
     /// Hooks replaced (or, in a dry run, to be replaced).
     pub refreshed: Vec<StaleHookRefresh>,
+    /// Current hooks that were not executable, made executable (or, in a
+    /// dry run, to be made executable).
+    pub made_executable: Vec<StaleHookExecutable>,
     /// Hooks the store-write check refuses that need manual action.
     pub manual: Vec<StaleHookManual>,
 }
@@ -4039,9 +4053,12 @@ pub struct StaleHookReport {
 /// shipped hook (the ones [`ensure_store_hooks_supported`] refuses) with
 /// this build's hook, as `aida init` writes it. Each stale hook is first
 /// copied beside itself as `<name>.aida-stale-<unix-seconds>[-N]` (never
-/// over an existing file). Shipped hooks, custom hooks (no generated
-/// header) and non-executable hooks are left alone, and no file outside
-/// the hooks directory is touched. A refused hook this cannot replace (a
+/// over an existing file). An AIDA hook that is not executable is stale
+/// too, whatever its content: git skips it silently. One with current
+/// content is only made executable; one with other content is replaced,
+/// executable. Current executable hooks and custom hooks (no generated
+/// header) are left alone, and no file outside the hooks directory is
+/// touched. A refused hook this cannot replace (a
 /// symlink, which is never written through, or a name AIDA ships no hook
 /// for) is reported in [`StaleHookReport::manual`] instead.
 // trace:BUG-1977 | ai:claude
@@ -4063,12 +4080,17 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
                     .with_context(|| format!("inspecting the `{name}` hook {}", path.display()))
             }
         };
-        if !meta.is_file() || !is_executable(&meta) {
+        if !meta.is_file() {
             continue;
         }
         let body = crate::read_atomic(&path)
             .with_context(|| format!("reading the `{name}` hook {}", path.display()))?;
-        if classify_hook(name, &body) != HookKind::OtherAidaGenerated {
+        // BUG-2009: a non-executable AIDA hook never runs, so it is stale
+        // even when its content is current.
+        let kind = classify_hook(name, &body);
+        let stale_body = kind == HookKind::OtherAidaGenerated;
+        let stale_mode = kind != HookKind::Custom && !is_executable(&meta);
+        if !stale_body && !stale_mode {
             continue;
         }
         let manual = |reason: String| StaleHookManual {
@@ -4083,6 +4105,17 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
                  build's hook",
                 target.display()
             )));
+            continue;
+        }
+        if !stale_body {
+            if !dry_run {
+                make_hook_executable(&path)
+                    .with_context(|| format!("making the `{name}` hook executable"))?;
+            }
+            report.made_executable.push(StaleHookExecutable {
+                name: (*name).to_string(),
+                path,
+            });
             continue;
         }
         let Some(template) = SHIPPED_HOOKS
@@ -4115,7 +4148,7 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
             } else {
                 format!(" (already replaced: {done})")
             };
-            backup_and_replace_hook(&dir, name, &path, &backup, template, &meta, stamp)
+            backup_and_replace_hook(&dir, name, &path, &backup, template, stamp)
                 .with_context(|| format!("refreshing the `{name}` hook{already}"))?;
         }
         report.refreshed.push(StaleHookRefresh {
@@ -4129,14 +4162,13 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
 
 /// Copy `path` to `backup` (refusing to overwrite one), then write this
 /// build's hook beside it and rename it over `path`: git never sees a
-/// partial hook, and the hook keeps its permissions.
+/// partial hook, and the new hook is executable (0755).
 fn backup_and_replace_hook(
     dir: &Path,
     name: &str,
     path: &Path,
     backup: &Path,
     template: &str,
-    meta: &std::fs::Metadata,
     stamp: u64,
 ) -> Result<()> {
     let original = std::fs::read(path)?;
@@ -4170,7 +4202,7 @@ fn backup_and_replace_hook(
         use std::io::Write;
         file.write_all(fresh.as_bytes())?;
         drop(file);
-        std::fs::set_permissions(&tmp, meta.permissions())?;
+        make_hook_executable(&tmp)?;
         std::fs::rename(&tmp, path)
     })();
     staged
@@ -4179,6 +4211,19 @@ fn backup_and_replace_hook(
             e
         })
         .with_context(|| format!("replacing {}", path.display()))
+}
+
+/// Set a hook's mode to 0755: git skips a hook without an executable bit.
+// trace:BUG-2009 | ai:claude
+fn make_hook_executable(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -7396,6 +7441,100 @@ mod tests {
         // hook (metadata follows the link and reports NotFound).
         std::fs::remove_file(&template_copy).unwrap();
         ensure_store_hooks_supported(&repo).expect("dangling symlink hooks are skipped");
+    }
+
+    /// BUG-2009: an AIDA hook without an executable bit is stale even with
+    /// current content. The dry run lists it, the refresh makes it 0755 and
+    /// leaves its content alone; a non-executable hook with old content is
+    /// replaced executable; a non-executable custom hook is not AIDA's.
+    // trace:BUG-2009 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2009_non_executable_aida_hooks_are_stale() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let write = |name: &str, body: &str, mode: u32| {
+            let path = hooks.join(name);
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        let mode = |name: &str| {
+            std::fs::metadata(hooks.join(name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        let wrapped = |name: &str, key: &str| {
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                crate::templates::EMBEDDED_TEMPLATES[key],
+            )
+        };
+        let current = wrapped("post-commit", "hooks/aida-post-commit.sh");
+        write("post-commit", &current, 0o644);
+        let old = format!(
+            "{}\necho old\n",
+            wrapped("pre-commit", "hooks/aida-pre-commit.sh").trim_end()
+        );
+        write("pre-commit", &old, 0o644);
+        let custom = "#!/bin/sh\necho custom\n";
+        write("commit-msg", custom, 0o644);
+        // A current, executable hook is not stale.
+        write(
+            "prepare-commit-msg",
+            &wrapped("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+            0o755,
+        );
+
+        let planned = refresh_stale_aida_hooks(&repo, true).unwrap();
+        let names = |v: Vec<String>| v.join(",");
+        assert_eq!(
+            names(
+                planned
+                    .made_executable
+                    .iter()
+                    .map(|h| h.name.clone())
+                    .collect()
+            ),
+            "post-commit"
+        );
+        assert_eq!(
+            names(planned.refreshed.iter().map(|h| h.name.clone()).collect()),
+            "pre-commit"
+        );
+        assert!(planned.manual.is_empty(), "{planned:?}");
+        assert_eq!(mode("post-commit"), 0o644, "a dry run writes nothing");
+        assert_eq!(mode("pre-commit"), 0o644, "a dry run writes nothing");
+
+        let done = refresh_stale_aida_hooks(&repo, false).unwrap();
+        assert_eq!(done.made_executable, planned.made_executable);
+        assert_eq!(mode("post-commit"), 0o755);
+        assert_eq!(
+            std::fs::read_to_string(hooks.join("post-commit")).unwrap(),
+            current,
+            "only the mode changes"
+        );
+        assert_eq!(mode("pre-commit"), 0o755, "a replaced hook is executable");
+        assert_eq!(
+            classify_hook(
+                "pre-commit",
+                &std::fs::read_to_string(hooks.join("pre-commit")).unwrap()
+            ),
+            HookKind::Shipped
+        );
+        assert_eq!(mode("commit-msg"), 0o644, "a custom hook is left alone");
+        assert_eq!(mode("prepare-commit-msg"), 0o755);
+
+        assert_eq!(
+            refresh_stale_aida_hooks(&repo, true).unwrap(),
+            StaleHookReport::default(),
+            "nothing is stale after the refresh"
+        );
     }
 
     /// BUG-1977: two stale generated hooks are refused together, naming the
