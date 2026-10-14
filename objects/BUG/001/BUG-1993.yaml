@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-13T18:09:54.416822503Z
+modified_at: 2026-10-14T01:33:50.333926457Z
 req_type: Bug
 tags:
 - performance
@@ -35,6 +35,7 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+execution_mode: drain
 filed_at:
   code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
   branch: main
