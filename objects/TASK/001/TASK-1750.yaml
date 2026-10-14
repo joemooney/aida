@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:20.284960861Z
-modified_at: 2026-10-14T18:23:01.679304476Z
+modified_at: 2026-10-14T18:37:16.204762970Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -66,6 +66,25 @@ comments:
   content: 'Slice 4: PR #2628 (non-completing). The drain orchestrator_pid_start and agent_registry pid_start are recorded, and liveness goes through process_identity_is_alive. Still open: the post-#2621 guard items (a,c,d), RunMarker.pid, advisor.rs is_alive, agent_registry_root, and cache_lock format consolidation.'
   created_at: 2026-10-14T18:23:01.679304476Z
   modified_at: 2026-10-14T18:23:01.679304476Z
+  session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
+- id: 01a13bb4-542c-7480-8b46-9a790355ffaa
+  author: joe
+  content: |-
+    SKETCH for the cache_lock identity consolidation; needs advisor signoff before anyone implements it.
+
+    Today there are two formats:
+    - liveness::process_start_identity = rfc3339 via sysinfo, seconds resolution, no scheme prefix. Recorded by drain_lock, merge_lock, worktree_pool, solo, triage, review_marker, the drain orchestrator, agent_registry and advisor.
+    - cache_lock::live_start_identity = 'linux-starttime:<ticks>' from /proc/<pid>/stat (exact), or 'sysinfo-start:<rfc3339>' elsewhere. It fails closed (Unknown) on a scheme mismatch.
+
+    Hazard: switching the canonical format makes every record already on disk compare unequal. process_identity_is_alive treats unequal as dead, so a new binary would reclaim LIVE drain/merge locks right after an upgrade.
+
+    Proposal:
+    (1) Move live_start_identity and parse_proc_stat_starttime into liveness.rs as process_start_identity_exact (scheme-prefixed). cache_lock re-exports it. No format change.
+    (2) Teach process_identity_is_alive to compare by scheme. A recorded value with a 'linux-starttime:'/'sysinfo-start:' prefix compares against the exact identity; a bare rfc3339 value compares against process_start_identity (legacy). No record is misread.
+    (3) Optionally switch writers to the exact format later. Old records stay readable via (2).
+    Steps 1 and 2 are behaviour-neutral for existing records. Under ADR-76 this is strict-tier.
+  created_at: 2026-10-14T18:37:16.204762970Z
+  modified_at: 2026-10-14T18:37:16.204762970Z
   session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
 execution_mode: drive
 filed_at:
