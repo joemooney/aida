@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2002",
+  "publishes": [
+    {
+      "at": "2026-10-13T23:53:01.317423615Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T03:31:41.303095815Z",
+      "spec": "BUG-2002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T03:32:30.790191594Z",
+      "spec": "BUG-2002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T13:57:52.322723179Z",
+      "spec": "BUG-2002",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T14:17:11.387901272Z",
+      "spec": "BUG-2002",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2002",
+        "branch": "bug-2002-work",
+        "first_seen": "2026-10-13T14:17:11.387832835+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-13T23:53:01.300307580Z",
+      "spec": "BUG-2002",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ccf36c0f4c33257f37d3f44da246bf388dfed114",
+        "pr": 2596,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
