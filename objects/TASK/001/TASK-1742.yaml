@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T20:05:54.787516554Z
-modified_at: 2026-10-14T00:34:43.482868999Z
+modified_at: 2026-10-14T00:43:22.159634651Z
 req_type: Task
 comments:
 - id: 01a137d5-3a9a-7a73-b97a-6da5cdbc2f2f
@@ -16,6 +16,11 @@ comments:
   content: 'FACTORY PLAN (codex): tests-only follow-up on current origin/main 1d541afa2972746315ccc55e380bd95fc550db8e after dependency #2592 merged at1287c25b64d6447aedcb576bfaddb531da433999. In aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs fix the provenance comment to real3618fe739b^=4e11f0296c00e5688fe84b753b2a2ea7a4c8b005; add pre_fix_leaking_wrapper_matches_pinned_sha256 using existing sha2 dependency and literal5344afd309d4fda467d230f44f150f2327916968d42bc3771fac56be1e841109. Hash include_str bytes without git calls, so shallow clones work. Explicitly report unavailable zsh in the leak test while retaining bash coverage. Verify fixture byte count/digest, a one-byte mutation mismatches the pin, runtime provenance locally, fmt/diff/full make check-ci-fast, then Rust tests only on GitHub CI. No fixture or production behavior changes; no new dependency. Low risk: fixed bytes are deliberate regression evidence.'
   created_at: 2026-10-14T00:34:43.482868999Z
   modified_at: 2026-10-14T00:34:43.482868999Z
+- id: 01a137dd-24af-74e1-8e72-c8dcf364ddd7
+  author: ai:codex:joe
+  content: 'FACTORY DRAFT: PR #2612 https://github.com/joemooney/aida/pull/2612 at a52015f6d7d5c6274132595e319163b37addcf7c. Tests only from current origin/main after #2592 merge. Pinned SHA256 assertion, corrected source provenance, explicit zsh unavailable skip retaining bash. Full make check-ci-fast all27 gates PASS; fmt/diff PASS. Local21143-byte digest and one-byte mutation evidence pass; actual historical bash no-leak pass, zsh unavailable. Author-controlled self-check no blocking findings, no approval authority. Rust tests await GitHub Build.'
+  created_at: 2026-10-14T00:43:22.159634651Z
+  modified_at: 2026-10-14T00:43:22.159634651Z
 history:
 - id: 01a136e1-2832-7f61-aa00-83af4adc04b2
   author: joe
