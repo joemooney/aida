@@ -893,3 +893,48 @@ fn task_1338_reopened_merge_is_not_an_auto_bump_missed_hint() {
     assert!(buckets.stuck.is_empty());
     assert_eq!(buckets.reopened, ["TASK-1338"]);
 }
+
+// BUG-1993: linkage worst-case execution under lock contention / subprocess hang
+// must be strictly bounded below the 5000ms ceiling.
+// trace:BUG-1993 | ai:antigravity
+#[test]
+fn bug_1993_linkage_sub_budgets_sum_under_ceiling() {
+    let worst_case_linkage = LINKAGE_GIT_LOG_TIMEOUT
+        + LINKAGE_TRACE_SCAN_BUDGET
+        + LINKAGE_ANCESTOR_TIMEOUT
+        + LINKAGE_BRANCH_SCAN_BUDGET
+        + LINKAGE_WORKTREE_TIMEOUT
+        + SHOW_FORGE_LOOKUP_BUDGET
+        + DRIFT_HINT_GIT_TIMEOUT * 2;
+    assert!(
+        worst_case_linkage < std::time::Duration::from_millis(5000),
+        "worst case linkage budget {worst_case_linkage:?} exceeds 5000ms ceiling"
+    );
+}
+
+// BUG-1993: collect_git_linkage populates in-flight branch, commit and traced files.
+// trace:BUG-1993 | ai:antigravity
+#[test]
+fn bug_1993_collect_git_linkage_populates_branch_commits_and_files() {
+    let (_tmp, root) = init_repo();
+    git(&root, &["checkout", "-q", "-b", "task-1993-work"]);
+    std::fs::write(
+        root.join("worker.rs"),
+        "// trace:TASK-1993 | ai:antigravity\nfn work() {}\n",
+    )
+    .unwrap();
+    commit(
+        &root,
+        "worker.rs",
+        "// trace:TASK-1993 | ai:antigravity\nfn work() {}\n",
+        "feat: implement worker (TASK-1993)",
+    );
+    let l = collect_git_linkage(&root, &["TASK-1993".to_string()]);
+    assert_eq!(l.branch.as_deref(), Some("task-1993-work"));
+    assert_eq!(l.commits.len(), 1);
+    assert_eq!(l.commits[0].2, "feat: implement worker (TASK-1993)");
+    assert_eq!(l.files.len(), 1);
+    assert_eq!(l.files[0].0, "worker.rs");
+    assert!(!l.shipped);
+    assert!(l.branch_scan_truncated.is_none());
+}

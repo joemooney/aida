@@ -449,27 +449,54 @@ pub(crate) struct GitLinkage {
 // trace:BUG-1594 | ai:claude
 pub(crate) const LINKAGE_BRANCH_SCAN_MAX_COMMITS: usize = 20;
 
-/// BUG-1594: the wall-clock budget for the in-flight branch search.
-// trace:BUG-1594 | ai:claude
+/// BUG-1993: timeout for the initial `git log --all --grep` referencing-commits scan.
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_GIT_LOG_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
+/// BUG-1993: timeout for each `git merge-base --is-ancestor` check.
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_ANCESTOR_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(250);
+
+/// BUG-1993: timeout for `git worktree list --porcelain`.
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_WORKTREE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(250);
+
+/// BUG-1993: per-call timeout cap for `git branch --all --contains`.
+/// In addition to this cap, each call is bounded by the remaining
+/// [`LINKAGE_BRANCH_SCAN_BUDGET`].
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_BRANCH_CONTAINS_CALL_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(250);
+
+/// BUG-1594 / BUG-1993: the wall-clock budget for the in-flight branch search.
+/// Bounded so the sum of linkage sub-budgets stays well under the 5000ms ceiling.
+// trace:BUG-1594 trace:BUG-1993 | ai:antigravity
 pub(crate) const LINKAGE_BRANCH_SCAN_BUDGET: std::time::Duration =
-    std::time::Duration::from_secs(2);
+    std::time::Duration::from_millis(800);
 
-/// BUG-1594: the wall-clock budget for the trace-comment source walk.
-// trace:BUG-1594 | ai:claude
-pub(crate) const LINKAGE_TRACE_SCAN_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
+/// BUG-1594 / BUG-1993: the wall-clock budget for the trace-comment source walk.
+// trace:BUG-1594 trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_TRACE_SCAN_BUDGET: std::time::Duration =
+    std::time::Duration::from_millis(800);
 
-/// BUG-1594: the total wall-clock budget `aida show` spends on forge
+/// BUG-1594 / BUG-1993: the total wall-clock budget `aida show` spends on forge
 /// (PR/MR) lookups across the primary branch and any sibling branches; each
-/// single call is additionally capped at [`FORGE_CLI_CALL_TIMEOUT`].
-// trace:BUG-1594 | ai:claude
-pub(crate) const SHOW_FORGE_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(4);
+/// single call is dynamically bounded by the remaining budget and capped at
+/// [`FORGE_CLI_CALL_TIMEOUT`].
+// trace:BUG-1594 trace:BUG-1993 | ai:antigravity
+pub(crate) const SHOW_FORGE_LOOKUP_BUDGET: std::time::Duration =
+    std::time::Duration::from_millis(1000);
 
-/// TASK-1475: wall-clock ceiling for EACH bounded git call the filing-drift
+/// TASK-1475 / BUG-1993: wall-clock ceiling for EACH bounded git call the filing-drift
 /// hint makes (at most two: the linked-commits file-touch lookup, and the
 /// `code_sha..HEAD` log walk). Local git only, no network — this is a
 /// safety net against a pathological huge history, not the expected cost.
-// trace:TASK-1475 | ai:claude
-pub(crate) const DRIFT_HINT_GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+// trace:TASK-1475 trace:BUG-1993 | ai:antigravity
+pub(crate) const DRIFT_HINT_GIT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(250);
 
 /// TASK-1475 (follow-up to CR-8 acceptance 6): a cheap filing-provenance
 /// staleness signal — how many commits since `filed_at.code_sha` touched a
@@ -648,26 +675,15 @@ pub(crate) fn collect_git_linkage_opts(
     // (e.g. the `aida human` reviews sweep). trace:BUG-568 | ai:claude
     warn_multi_repo_scan_limited(project_root, "git-linkage scan");
 
-    let git = |args: &[&str]| -> Option<String> {
-        PCmd::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(args)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
-    };
-    // BUG-380: capture stderr via output() so an invalid `target` ref
-    // cannot leak `fatal: Not a valid object name <X>` to the user's
-    // terminal — belt-and-braces alongside `resolve_default_branch_ref`,
-    // which already filters `target` to a ref that exists.
+    // BUG-380 / BUG-1993: capture stderr via output() and bound subprocess timeout so an
+    // invalid `target` ref cannot leak `fatal: Not a valid object name <X>` or hang.
+    // trace:BUG-380 trace:BUG-1993 | ai:antigravity
     let is_ancestor = |sha: &str, target: &str| -> bool {
-        PCmd::new("git")
-            .arg("-C")
+        let mut cmd = PCmd::new("git");
+        cmd.arg("-C")
             .arg(project_root)
-            .args(["merge-base", "--is-ancestor", sha, target])
-            .output()
+            .args(["merge-base", "--is-ancestor", sha, target]);
+        command_output_with_timeout(cmd, LINKAGE_ANCESTOR_TIMEOUT)
             .map(|o| o.status.success())
             .unwrap_or(false)
     };
@@ -696,7 +712,12 @@ pub(crate) fn collect_git_linkage_opts(
         args.push("--grep");
         args.push(id.as_str());
     }
-    let log = git(&args).unwrap_or_default();
+    let mut log_cmd = PCmd::new("git");
+    log_cmd.arg("-C").arg(project_root).args(&args);
+    let log = command_output_with_timeout(log_cmd, LINKAGE_GIT_LOG_TIMEOUT)
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+        .unwrap_or_default();
     let commits: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
@@ -788,31 +809,39 @@ pub(crate) fn collect_git_linkage_opts(
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
             let mut candidates: Vec<String> = Vec::new();
             let mut local_candidates: Vec<String> = Vec::new();
-            // BUG-1594: `git branch --contains` is one subprocess per
+            // BUG-1594 / BUG-1993: `git branch --contains` is one subprocess per
             // referencing commit, and a spec with a long commit trail (or
             // commits old enough that every agent branch contains them) made
             // this loop dominate `aida show`. Walk newest-first under a
-            // commit cap AND a wall-clock budget; if either stops the walk,
-            // record it so the renderer says the branch search is partial.
-            // trace:BUG-1594 | ai:claude
+            // commit cap AND a wall-clock budget. Each individual call is
+            // dynamically bounded by the remaining budget and capped at
+            // LINKAGE_BRANCH_CONTAINS_CALL_TIMEOUT, so the loop can never
+            // overrun the budget even under lock contention.
+            // trace:BUG-1594 trace:BUG-1993 | ai:antigravity
             let scan_started = std::time::Instant::now();
             let mut scanned = 0usize;
             for (commit_full, _, _) in &commits {
-                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS
-                    || scan_started.elapsed() >= LINKAGE_BRANCH_SCAN_BUDGET
-                {
+                let remaining = LINKAGE_BRANCH_SCAN_BUDGET.saturating_sub(scan_started.elapsed());
+                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS || remaining.is_zero() {
                     break;
                 }
                 scanned += 1;
-                let Some(contains) = git(&[
+                let call_timeout = remaining.min(LINKAGE_BRANCH_CONTAINS_CALL_TIMEOUT);
+                let mut cmd = PCmd::new("git");
+                cmd.arg("-C").arg(project_root).args([
                     "branch",
                     "--all",
                     "--contains",
                     commit_full,
                     "--format=%(refname:short)",
-                ]) else {
+                ]);
+                let Some(out) = command_output_with_timeout(cmd, call_timeout) else {
                     continue;
                 };
+                if !out.status.success() {
+                    continue;
+                }
+                let contains = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
                 // BUG-553: a commit can be reachable from MULTIPLE branches when a
                 // later spec's branch was stacked on this one's unmerged commit
                 // (the BUG-554 anti-pattern). Picking the first arbitrarily then
@@ -883,16 +912,24 @@ pub(crate) fn collect_git_linkage_opts(
                 branch = Some(id_matches.remove(0));
                 other_branches = id_matches;
             }
-            if let (Some(b), Some(wt)) =
-                (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
-            {
-                let mut cur_path: Option<String> = None;
-                for line in wt.lines() {
-                    if let Some(p) = line.strip_prefix("worktree ") {
-                        cur_path = Some(p.to_string());
-                    } else if let Some(r) = line.strip_prefix("branch ") {
-                        if r.trim_start_matches("refs/heads/") == b {
-                            worktree = cur_path.clone();
+            if let Some(b) = branch.as_deref() {
+                let mut wt_cmd = PCmd::new("git");
+                wt_cmd
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["worktree", "list", "--porcelain"]);
+                if let Some(out) = command_output_with_timeout(wt_cmd, LINKAGE_WORKTREE_TIMEOUT) {
+                    if out.status.success() {
+                        let wt = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+                        let mut cur_path: Option<String> = None;
+                        for line in wt.lines() {
+                            if let Some(p) = line.strip_prefix("worktree ") {
+                                cur_path = Some(p.to_string());
+                            } else if let Some(r) = line.strip_prefix("branch ") {
+                                if r.trim_start_matches("refs/heads/") == b {
+                                    worktree = cur_path.clone();
+                                }
+                            }
                         }
                     }
                 }
@@ -922,17 +959,6 @@ pub(crate) fn print_git_linkage(
     filed_at: Option<&aida_core::FilingProvenance>,
 ) {
     use std::process::Command as PCmd;
-
-    let git = |args: &[&str]| -> Option<String> {
-        PCmd::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(args)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
-    };
 
     let GitLinkage {
         commits,
@@ -1064,19 +1090,22 @@ pub(crate) fn print_git_linkage(
                     );
                     // STORY-516: forge-routed lookup → STORY-511 forge-aware
                     // rendering. trace:STORY-516 trace:STORY-511 | ai:claude
-                    // BUG-1594: every lookup is capped per call and the whole
-                    // set shares one budget; a lookup the budget no longer
-                    // covers is rendered as skipped, never as "no PR".
-                    // trace:BUG-1594 | ai:claude
+                    // BUG-1594 / BUG-1993: every lookup is capped per call and the whole
+                    // set shares one budget; each call is dynamically bounded by the
+                    // remaining budget so the phase can never breach SHOW_FORGE_LOOKUP_BUDGET.
+                    // A lookup the budget no longer covers is rendered as skipped, never as "no PR".
+                    // trace:BUG-1594 trace:BUG-1993 | ai:antigravity
                     let forge_started = std::time::Instant::now();
                     let bounded_lookup = |branch_name: &str| {
-                        if forge_started.elapsed() >= SHOW_FORGE_LOOKUP_BUDGET {
+                        let remaining =
+                            SHOW_FORGE_LOOKUP_BUDGET.saturating_sub(forge_started.elapsed());
+                        if remaining.is_zero() {
                             return (ChangeLinkageState::LookupSkipped, None);
                         }
-                        change_linkage_state_for(with_forge_lookup_timeout(
-                            FORGE_CLI_CALL_TIMEOUT,
-                            || change_lookup_for_branch(project_root, branch_name),
-                        ))
+                        let call_timeout = remaining.min(FORGE_CLI_CALL_TIMEOUT);
+                        change_linkage_state_for(with_forge_lookup_timeout(call_timeout, || {
+                            change_lookup_for_branch(project_root, branch_name)
+                        }))
                     };
                     let (state, url) = bounded_lookup(b);
                     render(format_change_linkage(forge, &state), url.as_deref());
@@ -1133,11 +1162,23 @@ pub(crate) fn print_git_linkage(
         for (full, short, subject) in commits.iter().take(cap) {
             println!("    {} {}", short.yellow(), subject);
             if verbose {
-                if let Some(stat) =
-                    git(&["show", "--shortstat", "--format=", full]).filter(|s| !s.is_empty())
+                let mut show_cmd = PCmd::new("git");
+                show_cmd.arg("-C").arg(project_root).args([
+                    "show",
+                    "--shortstat",
+                    "--format=",
+                    full,
+                ]);
+                if let Some(out) =
+                    command_output_with_timeout(show_cmd, std::time::Duration::from_millis(200))
                 {
-                    if let Some(last) = stat.lines().last() {
-                        println!("      {}", last.trim().dimmed());
+                    if out.status.success() {
+                        let stat = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+                        if !stat.is_empty() {
+                            if let Some(last) = stat.lines().last() {
+                                println!("      {}", last.trim().dimmed());
+                            }
+                        }
                     }
                 }
             }

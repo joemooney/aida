@@ -22,6 +22,7 @@ import time
 
 def run(args, root, env, timeout=30):
     return subprocess.run([str(a) for a in args], cwd=root, env=env,
+                          stdin=subprocess.DEVNULL,
                           text=True, capture_output=True, timeout=timeout)
 
 

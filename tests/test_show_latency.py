@@ -3,7 +3,7 @@
 
 Run: python3 tests/test_show_latency.py --aida /path/to/aida
 Uses only isolated store/cache/home fixtures; no production lock or cache edits.
-trace:BUG-1801 | ai:codex
+trace:BUG-1801 trace:BUG-1993 | ai:antigravity
 """
 import argparse
 import fcntl
@@ -78,6 +78,19 @@ def check_in(binary, temp):
     obj.write_text(obj.read_text().replace("original title", "canonical title"))
     require(run(["git", "add", "objects"], store, env))
     require(run(["git", "commit", "-qm", "external title"], store, env))
+
+    # Populate root repo with an initial commit, a feature branch with a referencing
+    # commit, and a trace comment in source, so git linkage actually exercises
+    # commits, trace scan, branch search (--contains), and forge lookups.
+    (root / "README.md").write_text("initial repo\n")
+    require(run(["git", "add", "README.md"], root, env))
+    require(run(["git", "commit", "-qm", "initial commit"], root, env))
+    branch_name = f"feat-{spec.lower()}-work"
+    require(run(["git", "checkout", "-qb", branch_name], root, env))
+    (root / "feature.rs").write_text(f"// trace:{spec} | ai:test\nfn feature_impl() {{}}\n")
+    require(run(["git", "add", "feature.rs"], root, env))
+    require(run(["git", "commit", "-qm", f"feat: implement feature ({spec})"], root, env))
+
     # A live foreign refresher forces the default 1500ms wait in the old
     # binary, even for a one-object store. Show reads the canonical object
     # while labeling the old cache used for its derived graph context.
@@ -103,6 +116,36 @@ def check_in(binary, temp):
             print(f"show {flags or handle}, held refresh lock: {elapsed * 1000:.0f}ms", flush=True)
             assert elapsed < 1, (handle, flags, elapsed)
             assert "canonical title" in result.stdout
+        # BUG-1993: show with default git linkage must not wait on the held refresh lock.
+        # Deterministic check: the test holds fcntl.flock on .refresh.lock throughout.
+        # Completing while lock is held proves show does not block or wait on the refresh lock.
+        # Git linkage exercises commits, trace scan, branch search, and forge lookups.
+        # In JSON format, verify stale label, worker_running state, and populated git linkage.
+        # trace:BUG-1993 | ai:antigravity
+        for fmt in ("toon", "json", "human"):
+            start = time.monotonic()
+            runner = run_tty if fmt == "human" else run
+            result = require(runner([binary, "show", spec, "--format", fmt], root, env))
+            elapsed = time.monotonic() - start
+            print(f"show {fmt} (with git linkage), held refresh lock: {elapsed * 1000:.0f}ms", flush=True)
+            # Hang guard: 2s bound prevents runner-load flakiness while guarding against hangs.
+            assert elapsed < 2, (fmt, elapsed, result.stderr)
+            assert "canonical title" in result.stdout
+            if fmt == "human":
+                assert branch_name in result.stdout, result.stdout
+                assert "Files traced" in result.stdout, result.stdout
+                assert "feature.rs" in result.stdout, result.stdout
+                assert f"feat: implement feature ({spec})" in result.stdout, result.stdout
+            elif fmt == "json":
+                parsed = json.loads(result.stdout)
+                metadata = parsed["cache"]
+                assert metadata["stale"] is True
+                assert metadata["refreshing"] == "worker_running"
+                linkage = parsed["git_linkage"]
+                assert linkage["branch"] == branch_name, linkage
+                assert len(linkage["commits"]) == 1, linkage
+                assert linkage["commits"][0]["subject"] == f"feat: implement feature ({spec})"
+                assert any(f["file"] == "feature.rs" for f in linkage["files"])
     # A TTY winner with an unusable freshness stamp delegates a full
     # rebuild. Hold only this fixture's SQLite writer so the worker cannot
     # finish before we observe the stale result; release it before strict
