@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2120",
+  "publishes": [
+    {
+      "at": "2026-10-14T11:42:36.529478249Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T01:36:58.451733387Z",
+      "spec": "BUG-2120",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:37:37.549243812Z",
+      "spec": "BUG-2120",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T10:38:07.067719082Z",
+      "spec": "BUG-2120",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2120",
+        "branch": "bug-2120-work",
+        "first_seen": "2026-10-14T10:38:07.067668061+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T11:42:36.514637960Z",
+      "spec": "BUG-2120",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ce5f5404808ba9f0f5589b21511dc8534d606edd",
+        "pr": 2613,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
