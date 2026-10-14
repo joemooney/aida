@@ -30,6 +30,11 @@ const PATH_TESTS: &[&str] = &[
     "mirror_rerun_creates_the_project_when_the_remote_already_exists",
     "mirror_non_refusal_probe_error_wires_without_creating",
     "gitlab_only_init_publishes_to_origin_with_upstream",
+    "mirror_rerun_with_same_host_different_path_never_probes_existing_remote",
+    "create_gitlab_project_prints_notice_when_using_env_token",
+    "mirror_rerun_redacts_credentials_in_already_points_at_warning",
+    "run_remote_mirror_redacts_credentials_in_added_remote_notice",
+    "push_fallback_redacts_credentials_in_still_failed_error",
 ];
 
 fn child_command(home: &std::path::Path) -> Command {
