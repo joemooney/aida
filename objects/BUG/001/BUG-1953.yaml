@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T03:38:45.455314930Z
+modified_at: 2026-10-14T03:38:47.252844591Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -105,6 +105,12 @@ comments:
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-14T02:36:56.039237767Z
   modified_at: 2026-10-14T02:36:56.039237767Z
+- id: 01a1387d-be54-7c92-9e4c-d3336e4a5406
+  author: joe
+  content: 'ADVISOR 2026-10-13 20:45: put into drain mode by mistake (the advisor missed the BUG-1918/#2485 sequencing gate); now back to guided. Its branch work is preserved at eeeaad573a (PR #2615 was auto-closed by a guard false positive, filed as BUG-2121). Resume after #2485 merges.'
+  created_at: 2026-10-14T03:38:47.252844591Z
+  modified_at: 2026-10-14T03:38:47.252844591Z
+  session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
   author: joe
