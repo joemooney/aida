@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-12T14:56:44.175849042Z
+modified_at: 2026-10-14T18:58:34.233292474Z
 req_type: Bug
 tags:
 - groom:close-done
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-10-12T14:56:44.175849042Z
   modified_at: 2026-10-12T14:56:44.175849042Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a13bc7-d479-7d53-ad2d-589df15262db
+  author: joe
+  content: 'Soak recorded on fire-e: task_1507_inconsistent_index passed 50/50 runs at --test-threads=16, and 50/50 more under a concurrent history_cache suite as load (no concurrent workspace build because the host CPU is shared). Root-cause fix is #2549 (BUG-1974). Ready to close as done.'
+  created_at: 2026-10-14T18:58:34.233292474Z
+  modified_at: 2026-10-14T18:58:34.233292474Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
   branch: main
