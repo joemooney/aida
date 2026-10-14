@@ -790,8 +790,11 @@ pub(crate) fn recover_live_dir_with_steps(
         // trace:BUG-1999 | ai:antigravity
         // In STORY-1646 an older binary parked the live record directly at
         // `.rollback/.promoted` without writing `.swapping` or parking prev's
-        // record. Normalize it into the current layout: write the marker first,
-        // park prev's record when live has none, and move `.rollback/.promoted` last.
+        // record. Normalize it into the current layout: write the marker, park
+        // prev's record when live has none, and move `.rollback/.promoted` last.
+        // The load-bearing order is only that the marker exists before
+        // `.rollback/.promoted` moves; parking prev's record may come before
+        // or after the marker. trace:TASK-1366 | ai:claude
         let old_promoted = swap.join(PROMOTED_FILE);
         let had_old_promoted = old_promoted.is_file();
         if had_old_promoted {
