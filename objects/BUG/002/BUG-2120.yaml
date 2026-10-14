@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:23.530993833Z
-modified_at: 2026-10-14T01:37:53.877851197Z
+modified_at: 2026-10-14T01:44:54.023339241Z
 req_type: Bug
 comments:
 - id: 01a1380f-10d5-79b1-b05f-5558c567aaaf
@@ -27,6 +27,11 @@ comments:
   content: 'FACTORY PLAN (codex): Gate mail-poll-setup in runaway_seats.rs on session activity within watchdog.window_minutes and reject a known dead registry PID; keep unresolved sessions observable by recent transcript evidence. Track last parsed transcript activity independently of usage buckets so active sessions with older poll setups still trip. Add replay tests for the 6fd5497b CronCreate-then-silence shape, ScheduleWakeup leftovers, a live holder retaining its old setup, and a known dead holder with recent evidence. Verify persisted still_active and last_verdict clear, which restores clean evidence for shift watchdog-quiet. Risk: unregistered sessions have no authoritative PID; recent transcript evidence remains the fallback. Run the full required check-ci-fast gate before each push and use Build CI for Rust test execution under the factory local-compilation ban.'
   created_at: 2026-10-14T01:37:53.877851197Z
   modified_at: 2026-10-14T01:37:53.877851197Z
+- id: 01a13815-7a07-7f12-9f35-9adc4c593970
+  author: joe
+  content: 'FACTORY DRAFT: PR #2613 at 8d5b60d146d52f1bb33213f407b14e1208d9efb9. All 27 check-ci-fast gates passed before push. Draft factory PR: https://github.com/joemooney/aida/pull/2613'
+  created_at: 2026-10-14T01:44:54.023339241Z
+  modified_at: 2026-10-14T01:44:54.023339241Z
 history:
 - id: 01a1380e-c224-7633-aae2-ccc714ccde6a
   author: aida-session-start
