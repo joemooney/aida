@@ -768,7 +768,7 @@ fn shift_watchdog_quiet_recovers_after_silent_cron_owner() {
         let at = setup_at + Duration::minutes(minutes);
         let (findings, coverage) = scan("aida", &src, &policy, at, &HashMap::new());
         // Same new + still-active failure criterion as the doctor gate.
-        if !findings.is_empty() || !coverage.still_active.is_empty() {
+        if !findings.is_empty() || !coverage.still_tripped.is_empty() {
             failed_at.push(at);
         }
     }
