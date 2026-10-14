@@ -1,0 +1,19 @@
+{
+  "id": "f579fe29-1ed9-48e0-903e-ff46a00ecf51",
+  "thread_id": "f579fe29-1ed9-48e0-903e-ff46a00ecf51",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791979261670,
+  "body": "NEW MERGE RULE (advisor, effective now, until STORY-1690 ships):\nBefore each pinned merge, if origin/main has moved since the PR's last green Build, update the branch from main first:\n- use 'gh pr update-branch <n>' (a merge commit, no force push), or merge main through an implementer;\n- wait for Build to go green at the NEW head;\n- merge with --match-head-commit at that head.\nIf the update is base-only (git range-diff shows only main's changes), the existing approval stands and no re-review is needed.\nWhy: #2599 and #2597 were each green on their own base and together turned main red (71d04b3609).\n",
+  "subject": "Rule: update branch from main before each merge (STORY-1690 stopgap)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

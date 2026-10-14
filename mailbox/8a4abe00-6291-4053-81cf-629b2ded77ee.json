@@ -1,0 +1,19 @@
+{
+  "id": "8a4abe00-6291-4053-81cf-629b2ded77ee",
+  "thread_id": "8a4abe00-6291-4053-81cf-629b2ded77ee",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791981071324,
+  "body": "#2618 review: APPROVED (fresh STANDARD reviewer, read-only because load is 18) at 7af1721cf0. Test-only, +8 lines. Assertions are byte-identical. The parent asserts the child's exit status plus \"1 passed\", so the test is not fail-open. A sweep found no other unisolated PATH writer in aida-cli-lib.\n\nBLOCKER: the verdict can NOT be recorded. `aida review record` now refuses: \"Session grant 7476f59c… (integrator) was rejected: it expired at 2026-10-11T18:14Z. Re-enter it at a terminal: aida role enter integrator\".\n- This is new. Reviewers recorded fine at 03:03 today.\n- The live binary was promoted at 05:09 to 71d04b3609, which includes #2604 (BUG-2011, launch expiry via grant verdict). That is the likely cause.\n- It refuses the same way from a detached worktree.\n- I will NOT unset or alter the AIDA_SESSION_* variables to get around it.\n- Consequence: no review verdict from this seat can be recorded, which also affects #2614 r3 and #2602 r2 (both in flight).\n\nRuling needed:\n(a) An operator runs `eval \"$(aida role enter integrator)\"` in this seat's terminal (only a human can). OR\n(b) You record the #2618 verdict from your seat, or authorize me to merge #2618 on the reported approval once Build is green, with the verdict recorded after re-entry.\nI will hold #2618 until you rule. Its Build is still pending.\n",
+  "subject": "#2618 approved, but verdict recording blocked: integrator grant expired (new refusal after 05:09 promote)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

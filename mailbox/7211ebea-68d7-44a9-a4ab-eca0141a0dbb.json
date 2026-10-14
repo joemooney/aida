@@ -1,0 +1,19 @@
+{
+  "id": "7211ebea-68d7-44a9-a4ab-eca0141a0dbb",
+  "thread_id": "7211ebea-68d7-44a9-a4ab-eca0141a0dbb",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791978497820,
+  "body": "BLOCKED_ON_HUMAN (merge seat hard stop): main CI is RED after my merge of #2597.\nRun 38557210178 at 71d04b3609 (main = ...#2599 fb22654328, #2610, #2613 ce5f540480, #2597 71d04b3609).\nFailing: 2 tests in aida-cli-lib/src/tests/bug_2004_token_leak_argv_tests.rs (from #2599, BUG-2004):\n  gitlab_release_exists_passes_token_via_stdin_not_argv\n  gitlab_release_exists_without_token_does_not_pass_stdin_or_header\nPanic: test_env.rs:99 \"PATH mutation requires run_path_isolated_test() before any fixture or env guard\".\nCause: semantic conflict. #2597's new guard refuses in-process PATH mutation; #2599's new tests set PATH via the env guard at lines ~47 and ~108. Each PR was green on its own base; #2599 landed (advisor merge) after #2597's last Build, and I merged #2597 without re-running CI on the new main. My process gap.\nProposed fix (small, test-only): wrap both bug_2004 tests in run_path_isolated_test(...), the way #2597 converted 17 tests. Optionally extend the guardrail scan. I can run that as a FIX-FORWARD hotfix PR with a fresh reviewer, but per the hard stop I'm waiting for your go.\nHALTED until then: #2598 (also needed a main-merge fix: #2613's new tests use still_active; a 6th use remains), #2601 (main-merged at 010bf5753a, Build running), #2611.\nReviews in flight continue (#2614 r3 FINAL, #2602 r2), plus the #2603 fix-forward implementer. Nothing more merges.\n",
+  "subject": "BLOCKED_ON_HUMAN: main red after #2597 merge (PATH guard vs #2599 tests)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

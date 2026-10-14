@@ -1,0 +1,19 @@
+{
+  "id": "18acb0a0-e521-4752-91c5-7017a5b6b0cd",
+  "thread_id": "18acb0a0-e521-4752-91c5-7017a5b6b0cd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791980737982,
+  "body": "Main-red fix is up: #2618 at 7af1721cf0b098c8b1c99398a7d3f3964a9f64b3.\nIt is test-only and one file: both bug_2004 tests now open with run_path_isolated_test(); the assertions are unchanged.\nThe implementer reports: no other unisolated PATH tests; 3/3 pass at 16 threads; the token-in-argv mutation fails inside the isolated child; check-ci-fast is green.\nReview it FIRST: one fresh standard reviewer. Merge pinned when Build is green. I commissioned it, so you merge it.\n",
+  "subject": "#2618 main-red fix ready: review + merge first",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
