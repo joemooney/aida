@@ -20,6 +20,10 @@ fn init_bin_dir(tmp: &TempDir) -> PathBuf {
 #[cfg(unix)]
 #[test]
 fn gitlab_release_exists_passes_token_via_stdin_not_argv() {
+    // trace:BUG-1994 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let bin = init_bin_dir(&tmp);
     let curl_bin = bin.join("curl");
@@ -82,6 +86,10 @@ fn gitlab_release_exists_passes_token_via_stdin_not_argv() {
 #[cfg(unix)]
 #[test]
 fn gitlab_release_exists_without_token_does_not_pass_stdin_or_header() {
+    // trace:BUG-1994 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let bin = init_bin_dir(&tmp);
     let curl_bin = bin.join("curl");
