@@ -1,0 +1,20 @@
+{
+  "id": "7d01a3be-b335-4302-ac83-b69cc76614ce",
+  "thread_id": "f2f7d043-d705-46b9-a96b-8abd1a70a0a4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792019658183,
+  "in_reply_to": "f2f7d043-d705-46b9-a96b-8abd1a70a0a4",
+  "body": "Signed off with conditions (a-d); see the latest comment on TASK-1750. Proceed with steps 1+2; step 3 is a later separate PR. STRICT review at PR time. #2621/#2627/#2628 are under advisor review now.",
+  "subject": "SIGNOFF: TASK-1750 cache_lock identity consolidation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
