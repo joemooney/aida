@@ -89,12 +89,13 @@ fn macro_engine_references(tokens: proc_macro2::TokenStream) -> usize {
         .sum()
 }
 
-/// This former test-only whole-file exception must have zero production calls.
-/// Parse module boundaries rather than hiding everything after the first test
-/// attribute; production items can follow a test module. Comments and string
-/// literals containing braces or the engine's name cannot affect the count.
+/// Count production calls of the engine in any source file. Parse module
+/// boundaries rather than hiding everything after the first test attribute;
+/// production items can follow a test module. Comments and string literals
+/// containing braces or the engine's name cannot affect the count.
 // trace:TASK-1724 | ai:codex
-fn upgrade_release_production_calls(src: &str) -> usize {
+// trace:TASK-1356 | ai:claude
+fn precise_production_calls(src: &str) -> usize {
     struct Calls(usize);
     impl<'ast> Visit<'ast> for Calls {
         fn visit_item_mod(&mut self, module: &'ast syn::ItemMod) {
@@ -135,13 +136,30 @@ fn upgrade_release_production_calls(src: &str) -> usize {
 
 // trace:TASK-1724 | ai:codex
 fn offending_calls(rel: &str, src: &str) -> usize {
-    if ENGINE_CALLER_ALLOWLIST.contains(&rel) {
+    // trace:TASK-1356 | ai:claude
+    // The precise scanner applies to every file (not just the former
+    // upgrade_release.rs exception), so a future file with test-only engine
+    // calls needs no special case. Files that never name the engine skip the
+    // parse entirely.
+    if ENGINE_CALLER_ALLOWLIST.contains(&rel) || !src.contains("orchestrate_with_resume") {
         0
-    } else if rel == "src/upgrade_release.rs" {
-        upgrade_release_production_calls(src)
     } else {
-        production_engine_calls(src)
+        precise_production_calls(src)
     }
+}
+
+// trace:TASK-1356 | ai:claude
+#[test]
+fn any_file_with_test_only_engine_calls_is_not_an_offender() {
+    let src = r#"
+        //! Mentions `orchestrate_with_resume(` in prose only.
+        const NOTE: &str = "orchestrate_with_resume(";
+        #[cfg(test)]
+        mod tests { fn harness() { auto_complete::orchestrate_with_resume(); } }
+    "#;
+    assert_eq!(offending_calls("src/some_future_file.rs", src), 0);
+    let src = "fn run() { auto_complete::orchestrate_with_resume(); }";
+    assert_eq!(offending_calls("src/some_future_file.rs", src), 1);
 }
 
 #[test]

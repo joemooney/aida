@@ -18,17 +18,27 @@ from test_cache_refresh_outputs import require, run, run_tty
 
 
 def fixture_processes(temp):
-    """Live processes whose cwd is inside the fixture, as (pid, cmdline)."""
-    temp = os.path.realpath(temp)
+    """Live processes whose cwd, or any argv path (the worker carries
+    --store/--cache under the fixture), is inside the fixture, as (pid, cmdline).
+    Matching argv too keeps the wait effective if the worker cwd policy ever
+    moves the cwd outside the fixture. trace:TASK-1357 | ai:claude"""
+    roots = {os.path.realpath(temp), os.path.abspath(temp)}
+
+    def inside(path):
+        return any(path == r or path.startswith(r + os.sep) for r in roots)
+
     found = []
     for pid in filter(str.isdigit, os.listdir("/proc")):
         try:
             cwd = os.readlink(f"/proc/{pid}/cwd")
-            cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            raw = Path(f"/proc/{pid}/cmdline").read_bytes()
         except OSError:
             continue
-        if int(pid) != os.getpid() and (cwd == temp or cwd.startswith(temp + os.sep)):
-            found.append((int(pid), cmd.strip()))
+        args = [a.decode(errors="replace") for a in raw.split(b"\0") if a]
+        # An argv path may also be the value half of `--flag=/path`.
+        paths = [a.split("=", 1)[-1] for a in args]
+        if int(pid) != os.getpid() and (inside(cwd) or any(inside(a) for a in paths)):
+            found.append((int(pid), " ".join(args)))
     return found
 
 
