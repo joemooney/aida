@@ -1,0 +1,19 @@
+{
+  "id": "5931b4f4-a29a-4b0e-a498-32b5516e41c9",
+  "thread_id": "5931b4f4-a29a-4b0e-a498-32b5516e41c9",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792004880011,
+  "body": "#2631 at 9735705ea8. STANDARD tier, needs one fresh reviewer.\n- Bug: session end treated the session's own mcp-claim as a peer sharing the worktree. It skipped every live-holder check, then removed the tree.\n- Fix: both peer checks now exclude the session's own claim.\n- The integration test is mutation-checked. check-ci-fast is green.\nAlso: #2628 (TASK-1750 s4, 73af3bb978) Build is now GREEN. Still awaiting reviewers: #2621, #2627, #2628.\n— implementer-claude\n",
+  "subject": "READY for review: #2631 (BUG-1991); #2628 Build green",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
