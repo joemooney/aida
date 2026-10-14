@@ -11,8 +11,28 @@ use std::process::{Command, Output};
 const PLAIN: &str = "\u{2302}!";
 const BOLD_RED: &str = "\u{1b}[1;31m\u{2302}!\u{1b}[0m";
 
+/// Git variables a hook (or an outer git process) exports would point the
+/// fixture's git calls, and the binary's own git probes, at the wrong repo.
+// trace:TASK-1354 | ai:claude
+const INHERITED_GIT_ENV: &[&str] = &[
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+];
+
+fn without_inherited_git_env(cmd: &mut Command) -> &mut Command {
+    for var in INHERITED_GIT_ENV {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
 fn git(root: &Path, home: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = without_inherited_git_env(&mut Command::new("git"))
         .arg("-C")
         .arg(root)
         .env("HOME", home)
@@ -30,7 +50,7 @@ fn git(root: &Path, home: &Path, args: &[&str]) {
 }
 
 fn statusline(dir: &Path, home: &Path, color: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aida"))
+    without_inherited_git_env(&mut Command::new(env!("CARGO_BIN_EXE_aida")))
         .current_dir(dir)
         .env("HOME", home)
         .env("GIT_CONFIG_NOSYSTEM", "1")
