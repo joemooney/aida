@@ -430,17 +430,32 @@ pub(crate) fn format_completion_linkage_warning(
     text
 }
 
+#[cfg(test)]
+thread_local! {
+    static LAST_WARNING: std::cell::RefCell<Option<Option<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_last_warning() -> Option<Option<String>> {
+    LAST_WARNING.with(|w| w.borrow_mut().take())
+}
+
 /// Print [`completion_linkage_warning`] to stderr, if any. Shared by the
-/// canonical and legacy `aida edit` paths and `aida done` (BUG-1958) so all
-/// say the same thing.
+/// canonical and legacy `aida edit` paths, `aida done` (BUG-1958), and
+/// `aida queue advance` closing a parent (BUG-1996) so all say the same thing.
 // trace:STORY-1649 | ai:claude
+// trace:BUG-1996 | ai:antigravity
 pub(crate) fn warn_if_completed_without_shipped_commit(
     project_root: &std::path::Path,
     req: &aida_core::Requirement,
-) {
-    if let Some(text) = completion_linkage_warning(project_root, req) {
+) -> Option<String> {
+    let warning = completion_linkage_warning(project_root, req);
+    #[cfg(test)]
+    LAST_WARNING.with(|w| *w.borrow_mut() = Some(warning.clone()));
+    if let Some(ref text) = warning {
         eprintln!("{} {text}", "Warning:".yellow().bold());
     }
+    warning
 }
 
 #[cfg(test)]

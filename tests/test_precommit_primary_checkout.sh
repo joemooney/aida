@@ -128,6 +128,88 @@ fi
 rc=$(commit_in "$R" "feat: intermediate bypass" AIDA_ALLOW_INTERMEDIATE=1)
 assert_exit "refused_on_main_primary: AIDA_ALLOW_INTERMEDIATE does not bypass it" 1 "$rc"
 
+# --- amend_refused_on_main_primary -------------------------------------------
+# trace:TASK-1348 | ai:codex
+A="$SCRATCH/amend-primary"
+new_repo "$A" yes
+stage_change "$A" seed.txt
+amend_head=$(git -C "$A" rev-parse HEAD)
+amend_tree=$(git -C "$A" rev-parse 'HEAD^{tree}')
+set +e
+(cd "$A" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" \
+    git -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
+    >"$STDOUT_LOG" 2>"$STDERR_LOG")
+rc=$?
+set -e
+assert_exit "amend_refused_on_main_primary: actual --amend is refused" 1 "$rc"
+assert_stderr_contains "amend_refused_on_main_primary: hook refused it" "refusing commit in the primary checkout on main"
+if [ "$(git -C "$A" rev-parse HEAD)" = "$amend_head" ] \
+    && [ "$(git -C "$A" rev-parse 'HEAD^{tree}')" = "$amend_tree" ] \
+    && ! git -C "$A" diff --cached --quiet; then
+    echo "ok   - amend_refused_on_main_primary: HEAD/tree unchanged and amendment still staged"
+else
+    echo "FAIL - amend_refused_on_main_primary: refused amendment changed HEAD/tree or lost staged changes"
+    fail=1
+fi
+# Same actual amendment with the operator override must succeed; this also
+# proves the refusal wasn't caused by an invalid amend fixture.
+set +e
+(cd "$A" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" AIDA_ALLOW_PRIMARY_COMMIT=1 \
+    git -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
+    >"$STDOUT_LOG" 2>"$STDERR_LOG")
+rc=$?
+set -e
+assert_exit "amend_refused_on_main_primary: override permits the amendment" 0 "$rc"
+assert_stderr_contains "amend_refused_on_main_primary: override reached hook" "allowed by AIDA_ALLOW_PRIMARY_COMMIT=1"
+if [ "$(git -C "$A" rev-parse 'HEAD^{tree}')" != "$amend_tree" ] \
+    && [ "$(git -C "$A" rev-list --count HEAD)" = "1" ]; then
+    echo "ok   - amend_refused_on_main_primary: override replaced the original commit/tree"
+else
+    echo "FAIL - amend_refused_on_main_primary: override did not amend the original commit"
+    fail=1
+fi
+
+# --- squash_commit_refused_on_main_primary -----------------------------------
+# trace:TASK-1348 | ai:codex
+S="$SCRATCH/squash-primary"
+new_repo "$S" yes
+git -C "$S" checkout -q -b squash-side
+stage_change "$S" squashed.txt
+rc=$(commit_in "$S" "feat: work to squash")
+assert_exit "squash_commit_refused_on_main_primary: side fixture commit succeeds" 0 "$rc"
+git -C "$S" checkout -q main
+squash_head=$(git -C "$S" rev-parse HEAD)
+git -C "$S" merge --squash --no-commit -q squash-side >"$STDOUT_LOG" 2>"$STDERR_LOG"
+if ! git -C "$S" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+    && [ -f "$S/.git/SQUASH_MSG" ] \
+    && ! git -C "$S" diff --cached --quiet; then
+    echo "ok   - squash_commit_refused_on_main_primary: actual squash stages changes without MERGE_HEAD"
+else
+    echo "FAIL - squash_commit_refused_on_main_primary: fixture is not a pending squash commit"
+    fail=1
+fi
+rc=$(commit_in "$S" "feat: squashed work")
+assert_exit "squash_commit_refused_on_main_primary: actual squash commit is refused" 1 "$rc"
+assert_stderr_contains "squash_commit_refused_on_main_primary: hook refused it" "refusing commit in the primary checkout on main"
+if [ "$(git -C "$S" rev-parse HEAD)" = "$squash_head" ] \
+    && ! git -C "$S" diff --cached --quiet; then
+    echo "ok   - squash_commit_refused_on_main_primary: HEAD unchanged and squash still staged"
+else
+    echo "FAIL - squash_commit_refused_on_main_primary: refused squash changed HEAD or lost staged changes"
+    fail=1
+fi
+rc=$(commit_in "$S" "feat: operator squashed work" AIDA_ALLOW_PRIMARY_COMMIT=1)
+assert_exit "squash_commit_refused_on_main_primary: override permits squash commit" 0 "$rc"
+assert_stderr_contains "squash_commit_refused_on_main_primary: override reached hook" "allowed by AIDA_ALLOW_PRIMARY_COMMIT=1"
+if [ "$(git -C "$S" rev-parse HEAD)" != "$squash_head" ] \
+    && [ "$(git -C "$S" rev-list --count HEAD)" = "2" ] \
+    && git -C "$S" cat-file -e HEAD:squashed.txt; then
+    echo "ok   - squash_commit_refused_on_main_primary: override creates the squashed commit"
+else
+    echo "FAIL - squash_commit_refused_on_main_primary: override did not commit the squash"
+    fail=1
+fi
+
 # --- override_allows_and_writes_sentinel -------------------------------------
 rm -f "$R/.git/aida-precommit-sentinel"
 rc=$(commit_in "$R" "chore: operator commit" AIDA_ALLOW_PRIMARY_COMMIT=1)

@@ -3577,6 +3577,10 @@ printf '[]'
     )]
     #[test]
     fn one_expensive_candidate_cannot_starve_the_scan() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_repo(root);

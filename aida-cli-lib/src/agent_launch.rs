@@ -2209,6 +2209,10 @@ pub(crate) fn agent_new_with_config(
         );
     }
 
+    // Check ownership before any bypass/resume prompt; previews above remain pure.
+    // trace:BUG-2002 | ai:codex
+    preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+
     // Validate before any real agent launch even when --verbose is absent;
     // preview mode validates in its renderer above. Resolve the binary BEFORE
     // the consent gate so an unresolvable build fails fast rather than after a
@@ -2264,7 +2268,8 @@ pub(crate) fn agent_new_with_config(
             &project_root,
         )?;
     }
-    let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    let plan =
+        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2453,6 +2458,10 @@ pub(crate) fn agent_new_bg_dispatch(
         );
     }
 
+    // Check ownership before any bypass/resume prompt; previews above remain pure.
+    // trace:BUG-2002 | ai:codex
+    preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+
     // Validate before the detached/background launch too, and before the
     // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
@@ -2495,7 +2504,8 @@ pub(crate) fn agent_new_bg_dispatch(
             &project_root,
         )?;
     }
-    let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    let plan =
+        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2550,53 +2560,13 @@ pub(crate) fn agent_new_bg_dispatch(
         );
     }
 
-    let mut command = std::process::Command::new(&binary);
-    command
-        .current_dir(&plan.launch_cwd)
-        .args(&config.default_args)
-        .args(&prompt_args)
-        .env("AIDA_AGENT_TYPE", config.agent_type)
-        .env("AIDA_AGENT_NAME", &plan.name)
-        // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
-        // it from AIDA_USER → USER) must be the agent's OWN stable name, not the
-        // launching human's shell USER — otherwise the agent reads the human's
-        // inbox and a coordinator's `--to <agent>` is invisible. Export
-        // AIDA_USER = the stable name so mailbox + queue agree with the
-        // registry/brief identity. trace:BUG-558 | ai:claude
-        .env("AIDA_USER", &plan.name)
-        .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove("AIDA_SESSION_GRANT")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
-            &plan.project_root,
-            &canonical_role_name(role),
-            &plan.name,
-        )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
-    } else {
-        command.env_remove("AIDA_SESSION_ROLE");
-    }
-    if let Some(spec) = &plan.current_spec {
-        command.env("AIDA_SESSION_SCOPE", spec);
-    }
-    if let Some(ctx) = &launch_context {
-        command
-            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
-            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
-    }
-    // TASK-1482: same default strip as the foreground path — a `--bg`
-    // dispatch must not silently hand its detached child the operator's
-    // local output-format/agent-mode/glyph/quiet preferences either.
-    // trace:TASK-1482 | ai:claude
-    apply_presentation_env_policy(
-        &mut command,
-        &resolve_presentation_env_policy(&plan.project_root)?,
-    );
+    let mut command = build_agent_new_bg_command(
+        &binary,
+        &config,
+        &plan,
+        &prompt_args,
+        launch_context.as_ref(),
+    )?;
 
     let output = command
         .output_retrying_etxtbsy()
@@ -2935,12 +2905,116 @@ pub(crate) fn dispatch_lease_brief_conflict<'a>(
     }
 }
 
+/// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
+/// Both launch paths call this before prompts, and plan creation checks it again.
+// trace:BUG-2002 | ai:codex
+fn preflight_agent_launch_lease(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    spec: Option<&str>,
+    explicit_cwd: Option<&std::path::Path>,
+) -> Result<Option<SessionLease>> {
+    if role.is_some_and(queue_cmd::role_is_stakeholder_only) {
+        return Ok(None);
+    }
+    let Some(spec) = spec else { return Ok(None) };
+    let leases = list_leases_strict(project_root, &[spec]).map_err(anyhow::Error::msg)?;
+    let mut matching = leases.into_iter().filter(|lease| {
+        lease_blocks_agent_dispatch(lease) && lease.scope.eq_ignore_ascii_case(spec)
+    });
+    let Some(lease) = matching.next() else {
+        return Ok(None);
+    };
+    if matching.next().is_some() {
+        anyhow::bail!("multiple sessions own this work; inspect `aida session leases --all` before dispatching");
+    }
+    let same_cwd = explicit_cwd
+        .and_then(|path| path.canonicalize().ok())
+        .zip(lease.worktree_path.canonicalize().ok())
+        .is_some_and(|(cwd, owned)| cwd == owned && owned.is_dir());
+    let same_role = role.is_none_or(|role| lease.role.as_deref() == Some(role));
+    let live = process_probe::probe_live_claude_sessions();
+    let active = agent_launch_lease_is_active(project_root, &lease, &live);
+    if !same_cwd || !same_role || active {
+        anyhow::bail!(
+            "this work is already owned by session {} ({}, worktree: {}).\n  \
+             Abort this dispatch, or re-enter the owning worktree after its agent exits: \
+             use `--cwd '{}'` with the owning role and `--no-resume`.\n  \
+             Inspect every blocking lease with `aida session leases --all`; \
+             do not end the session merely to redispatch it.",
+            lease.id,
+            lease.role.as_deref().unwrap_or("unset role"),
+            lease.worktree_path.display(),
+            sh_single_quote(&lease.worktree_path.display().to_string()),
+        );
+    }
+    defer_cmd::enforce_reasoned_operator_hold(project_root, spec)?;
+    let branch = std::process::Command::new("git")
+        .current_dir(&lease.worktree_path)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .context("could not verify the owning worktree branch")?;
+    if !branch.status.success() || String::from_utf8_lossy(&branch.stdout).trim() != lease.branch {
+        anyhow::bail!(
+            "the owning worktree no longer matches its recorded branch; inspect `aida session leases --all` before redispatching"
+        );
+    }
+    Ok(Some(lease))
+}
+
+// A child gets its own lease identity, or sheds the launcher's unrelated one.
+// trace:BUG-2002 | ai:codex
+fn apply_agent_lease_identity(command: &mut std::process::Command, lease_id: Option<&str>) {
+    if let Some(id) = lease_id {
+        command.env("AIDA_SESSION_ID", id);
+    } else {
+        command.env_remove("AIDA_SESSION_ID");
+    }
+}
+
+// trace:BUG-2002 | ai:codex
+fn agent_launch_lease_is_active(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    live: &[process_probe::LiveSession],
+) -> bool {
+    live.iter().any(|session| {
+        // A lease may record a symlink while /proc reports the real cwd.
+        // Preserve the recorded path if it cannot be resolved.
+        // trace:BUG-2002 | ai:codex
+        let owned = lease
+            .worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| lease.worktree_path.clone());
+        let cwd = session
+            .cwd
+            .canonicalize()
+            .unwrap_or_else(|_| session.cwd.clone());
+        !session.stale_cwd && (cwd == owned || cwd.starts_with(&owned))
+    }) || matches!(
+        lease_state_for(lease, live, chrono::Utc::now()),
+        LeaseState::Live
+    ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
+}
+
 pub(crate) fn prepare_agent_launch(
     project_root: &std::path::Path,
     role: Option<String>,
     spec: Option<String>,
     agent_type: &str,
     custom_name: Option<String>,
+) -> Result<AgentLaunchPlan> {
+    prepare_agent_launch_with_cwd(project_root, role, spec, agent_type, custom_name, None)
+}
+
+// trace:BUG-2002 | ai:codex
+fn prepare_agent_launch_with_cwd(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+    explicit_cwd: Option<&std::path::Path>,
 ) -> Result<AgentLaunchPlan> {
     // Persona launches never turn an optional `--spec` into ownership. They
     // stay in the project checkout and carry no lease/worktree.
@@ -2970,22 +3044,6 @@ pub(crate) fn prepare_agent_launch(
     }
     match spec {
         Some(spec) => {
-            if let Some(existing) = list_leases(project_root)
-                .into_iter()
-                .find(|lease| lease.scope.eq_ignore_ascii_case(&spec))
-            {
-                anyhow::bail!(
-                    "scope `{}` is already owned by session {} ({}, worktree: {}).\n  \
-                     Run `aida session leases` to inspect active work, then \
-                     `aida session end {}` when that session is ready to close.",
-                    spec,
-                    existing.id,
-                    existing.role.as_deref().unwrap_or("(unset role)"),
-                    existing.worktree_path.display(),
-                    existing.id
-                );
-            }
-
             // BUG-1510: refuse to mint a lease whose scope disagrees with the
             // one pending brief this agent is about to act on. Observed
             // end-to-end 2026-09-20 — a session's lease named one spec, its
@@ -3009,6 +3067,35 @@ pub(crate) fn prepare_agent_launch(
                     conflict.spec_id,
                     conflict.path.display()
                 );
+            }
+
+            // Recheck after prompts too: a lease may have appeared since preflight.
+            // trace:BUG-2002 | ai:codex
+            if let Some(lease) = preflight_agent_launch_lease(
+                project_root,
+                role.as_deref(),
+                Some(&spec),
+                explicit_cwd,
+            )? {
+                let plan_role = lease.role.clone().or(role);
+                let name = agent_registry::generate_or_validate_name(
+                    project_root,
+                    agent_type,
+                    plan_role.as_deref(),
+                    custom_name.as_deref(),
+                )?;
+                ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
+                return Ok(AgentLaunchPlan {
+                    project_root: project_root.to_path_buf(),
+                    launch_cwd: lease.worktree_path,
+                    role: plan_role,
+                    role_instance: RoleInstanceKind::Driver,
+                    current_spec: Some(spec),
+                    name,
+                    lease_id: Some(lease.id),
+                    native_session_id: agent_native_session_id_for_new(agent_type),
+                    resumed_from: None,
+                });
             }
 
             let previous_cwd = std::env::current_dir()?;
@@ -4211,6 +4298,101 @@ pub(crate) fn render_agent_show_prompt(
     out
 }
 
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_agent_new_bg_command(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt_args: &[String],
+    launch_context: Option<&AgentLaunchContext>,
+) -> Result<std::process::Command> {
+    let mut command = std::process::Command::new(binary);
+    command
+        .current_dir(&plan.launch_cwd)
+        .args(&config.default_args)
+        .args(prompt_args)
+        .env("AIDA_AGENT_TYPE", config.agent_type)
+        .env("AIDA_AGENT_NAME", &plan.name)
+        // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
+        // it from AIDA_USER → USER) must be the agent's OWN stable name, not the
+        // launching human's shell USER — otherwise the agent reads the human's
+        // inbox and a coordinator's `--to <agent>` is invisible. Export
+        // AIDA_USER = the stable name so mailbox + queue agree with the
+        // registry/brief identity. trace:BUG-558 | ai:claude
+        .env("AIDA_USER", &plan.name)
+        .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .env_remove("AIDA_SESSION_GRANT")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(role) = &plan.role {
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
+    }
+    if let Some(spec) = &plan.current_spec {
+        command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    if let Some(ctx) = launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
+    }
+    // TASK-1482: same default strip as the foreground path — a `--bg`
+    // dispatch must not silently hand its detached child the operator's
+    // local output-format/agent-mode/glyph/quiet preferences either.
+    // trace:TASK-1482 | ai:claude
+    apply_presentation_env_policy(
+        &mut command,
+        &resolve_presentation_env_policy(&plan.project_root)?,
+    );
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
+    Ok(command)
+}
+
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn is_contained_args(agent_type: &str, args: &[String]) -> bool {
+    match agent_type {
+        "claude" => {
+            let has_settings = resolved_flag_value(args, "--settings").is_some()
+                || resolved_flag_value(args, "-s").is_some();
+            let has_bypass = resolved_flag_value(args, "--permission-mode").is_some()
+                || args
+                    .iter()
+                    .any(|arg| arg == "--dangerously-skip-permissions");
+            has_settings && !has_bypass
+        }
+        "codex" => {
+            let sandbox = resolved_flag_value(args, "--sandbox");
+            let is_contained_sandbox =
+                sandbox == Some("workspace-write") || sandbox == Some("read-only");
+            let has_bypass = args.iter().any(|arg| {
+                arg == "--dangerously-bypass-approvals-and-sandbox" || arg == "--full-auto"
+            });
+            is_contained_sandbox && !has_bypass
+        }
+        _ => false,
+    }
+}
+
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
+    is_contained_args(config.agent_type, &config.default_args)
+}
+
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
 /// the spawned child, mirrored here read-only for the `--no-exec` preview.
 /// Keep in sync with `run_tracked_agent`'s `.env(...)` calls.
@@ -4229,6 +4411,10 @@ pub(crate) fn agent_launch_env_inputs(
             plan.role_instance.as_str().to_string(),
         ),
     ];
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        out.push(("AIDA_CONTAINED", "1".to_string()));
+    }
     if let Some(role) = &plan.role {
         out.push(("AIDA_SESSION_ROLE", role.clone()));
     }
@@ -4372,6 +4558,7 @@ pub(crate) fn run_tracked_agent(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
+    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
@@ -4389,6 +4576,12 @@ pub(crate) fn run_tracked_agent(
         &mut command,
         &resolve_presentation_env_policy(&plan.project_root)?,
     );
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
 
     let mut child = command
         .spawn_retrying_etxtbsy()
@@ -4498,3 +4691,8 @@ pub(crate) fn run_tracked_agent(
     }
     Ok(())
 }
+
+// trace:BUG-2002 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2002_launch_lease_tests.rs"]
+mod bug_2002_launch_lease_tests;

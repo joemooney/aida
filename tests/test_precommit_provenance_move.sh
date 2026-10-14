@@ -234,6 +234,155 @@ git add -A
 assert_exit "bare /// DOC id is still refused" 1 "$(commit "feat: bare doc id")"
 git reset -q --hard
 
+# 8b. BUG-2008: A wrapped prose sentence whose bare id lands alone on the next line
+#     continues the prose sentence from the previous /// line and is ALLOWED.
+#     trace:BUG-2008 | ai:antigravity
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// STORY-30.
+pub fn wrapped_prose() {}
+EOF
+git add -A
+assert_exit "wrapped prose sentence ending with bare id on next line is allowed" 0 "$(commit "docs: wrapped prose id")"
+git reset -q --hard
+
+# But a standalone one-line /// STORY-30 is still refused.
+cat >>src/prose.rs <<'EOF'
+/// STORY-30
+pub fn bare_story() {}
+EOF
+git add -A
+assert_exit "standalone bare /// STORY-30 is still refused" 1 "$(commit "feat: standalone bare story")"
+assert_stderr_contains "refusal names the bare id line" "STORY-30"
+git reset -q --hard
+
+# And a /// trace:... line following a prose line is still refused.
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// trace:STORY-30 | ai:claude
+pub fn wrapped_trace() {}
+EOF
+git add -A
+assert_exit "wrapped /// trace marker is still refused" 1 "$(commit "feat: wrapped trace on doc")"
+assert_stderr_contains "refusal names the wrapped trace line" "trace:STORY-30"
+git reset -q --hard
+
+# Refuse case 1: previous line ends in period
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log.
+/// STORY-30.
+pub fn sentence_ended_dot() {}
+EOF
+git add -A
+assert_exit "refuses bare id when previous line ends in period" 1 "$(commit "feat: period ended")"
+assert_stderr_contains "refusal names the bare id line after period" "STORY-30"
+git reset -q --hard
+
+# Refuse case 2: previous line ends in colon
+cat >>src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by:
+/// STORY-30.
+pub fn sentence_ended_colon() {}
+EOF
+git add -A
+assert_exit "refuses bare id when previous line ends in colon" 1 "$(commit "feat: colon ended")"
+assert_stderr_contains "refusal names the bare id line after colon" "STORY-30"
+git reset -q --hard
+
+# Refuse case 3: empty-/// separator (standalone ID paragraph)
+cat >>src/prose.rs <<'EOF'
+/// Does a thing.
+///
+/// STORY-30
+pub fn empty_doc_separator() {}
+EOF
+git add -A
+assert_exit "refuses bare id separated by empty doc comment line" 1 "$(commit "feat: empty doc separator")"
+assert_stderr_contains "refusal names the bare id line after empty line" "STORY-30"
+git reset -q --hard
+
+# Refuse case 4: code fence preceding
+cat >>src/prose.rs <<'EOF'
+/// ```rust
+/// STORY-30
+pub fn code_fence_preceding() {}
+EOF
+git add -A
+assert_exit "refuses bare id following code fence" 1 "$(commit "feat: code fence preceding")"
+assert_stderr_contains "refusal names the bare id line after code fence" "STORY-30"
+git reset -q --hard
+
+# Refuse case 5: heading preceding
+cat >>src/prose.rs <<'EOF'
+/// # Provenance
+/// STORY-30
+pub fn heading_preceding() {}
+EOF
+git add -A
+assert_exit "refuses bare id following heading" 1 "$(commit "feat: heading preceding")"
+assert_stderr_contains "refusal names the bare id line after heading" "STORY-30"
+git reset -q --hard
+
+# Refuse case 6: bullet preceding
+cat >>src/prose.rs <<'EOF'
+/// - see
+/// STORY-30
+pub fn bullet_preceding() {}
+EOF
+git add -A
+assert_exit "refuses bare id following bullet" 1 "$(commit "feat: bullet preceding")"
+assert_stderr_contains "refusal names the bare id line after bullet" "STORY-30"
+git reset -q --hard
+
+# Refuse case 7: chained bare IDs
+cat >>src/prose.rs <<'EOF'
+/// Implemented for
+/// STORY-30
+/// STORY-31
+pub fn chained_bare_ids() {}
+EOF
+git add -A
+assert_exit "refuses chained bare ids" 1 "$(commit "feat: chained bare ids")"
+assert_stderr_contains "refusal names second bare id line" "STORY-31"
+git reset -q --hard
+
+# Refuse case 8: prose in one hunk with bare ID in another hunk
+cat >src/prose.rs <<'EOF'
+/// existing line 1
+/// existing line 2
+/// existing line 3
+/// existing line 4
+/// existing line 5
+/// existing line 6
+/// existing line 7
+/// existing line 8
+/// existing line 9
+/// existing line 10
+pub fn multi_hunk() {}
+EOF
+git add src/prose.rs
+commit "feat: base for multi hunk" >/dev/null
+
+cat >src/prose.rs <<'EOF'
+/// Reuses the usage log introduced by
+/// existing line 1
+/// existing line 2
+/// existing line 3
+/// existing line 4
+/// existing line 5
+/// existing line 6
+/// existing line 7
+/// existing line 8
+/// existing line 9
+/// existing line 10
+/// STORY-30
+pub fn multi_hunk() {}
+EOF
+git add src/prose.rs
+assert_exit "refuses bare id when prose is in earlier hunk" 1 "$(commit "feat: separate hunks")"
+assert_stderr_contains "refusal names bare id in separate hunk" "STORY-30"
+git reset -q --hard HEAD~1
+
 # 9. `////` is a PLAIN comment to rustc (four or more slashes are never
 #    rustdoc, so never `--help` text). Provenance on such a line is fine and
 #    must not be refused; the three-slash form right next to it still is.

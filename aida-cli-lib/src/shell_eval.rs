@@ -84,6 +84,12 @@ pub(crate) const INIT_CD_CAP: &str = "init-cd";
 // trace:BUG-0445 | ai:claude
 pub(crate) const INIT_CD_FILE_CAP: &str = "init-cd-file";
 
+/// The capability token a wrapper advertises in `AIDA_SHELL_WRAPPER` when its
+/// option scoping is safe for zsh (`setopt localoptions` rather than the
+/// leaking bare `local -`).
+// trace:BUG-2005 | ai:antigravity
+pub(crate) const ZSH_LOCALOPTS_CAP: &str = "zsh-localopts";
+
 /// Environment variable the wrapper sets on the `aida init` child, naming the
 /// private file that receives the marker-delimited `cd` block. Set per
 /// invocation (never exported into the shell), so the child's stdout stays its
@@ -149,6 +155,12 @@ pub(crate) fn marker_has_cap(marker: Option<&str>, cap: &str) -> bool {
 // trace:TASK-1171 | ai:claude
 pub(crate) fn marker_speaks_eval_block(marker: Option<&str>) -> bool {
     marker_has_cap(marker, EVAL_BLOCK_CAP)
+}
+
+/// Pure decision for whether the caller's wrapper advertises `zsh-localopts`.
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn marker_speaks_zsh_localopts(marker: Option<&str>) -> bool {
+    marker_has_cap(marker, ZSH_LOCALOPTS_CAP)
 }
 
 /// Does the wrapper in the CALLER's shell speak the dedicated-channel protocol?

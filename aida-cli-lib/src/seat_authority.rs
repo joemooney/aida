@@ -406,17 +406,55 @@ pub(crate) enum GrantLookup {
     /// A grant for a seat the baseline confers anyway: its expiry costs nothing.
     Baseline,
     /// The handle is set but names no usable record (missing, malformed,
-    /// mismatched, or revoked, or its parent is). A launcher must not treat
+    /// expired, revoked, subject/roster rejected, or its parent is invalid).
+    /// A launcher must not treat
     /// this as "nothing to worry about".
     Unresolved(String),
     /// A live record and when it stops conferring its seat.
     Expiry(GrantExpiry),
 }
 
-/// Classify the grant named by `AIDA_SESSION_GRANT`, reading the raw record
-/// rather than the validated grant so an already-expired grant still reports.
+/// Classify the exported grant through the same verdict as authority gates.
+/// Informational expired-record display is kept in `session_grant_expiry`.
 // trace:TASK-1736 | ai:claude
 pub(crate) fn session_grant_lookup() -> GrantLookup {
+    // Use the same root resolver and verdict as the authority gates. A missing
+    // project fails closed through the roster check, while Absent stays silent.
+    // trace:BUG-2011 | ai:codex
+    let root = crate::find_project_root().unwrap_or_else(|_| PathBuf::from("."));
+    match grant_check(&root) {
+        GrantCheck::Absent => GrantLookup::NoGrant,
+        GrantCheck::Rejected { reason, .. } => {
+            // Keep the existing informational revocation wording; the decision
+            // and all other reasons come from the shared typed verdict.
+            let reason = match reason {
+                GrantRejection::Revoked { .. } => "session grant was revoked".to_string(),
+                other @ GrantRejection::Unreadable => {
+                    format!("{other} (grant record missing)")
+                }
+                other => other.to_string(),
+            };
+            GrantLookup::Unresolved(reason)
+        }
+        GrantCheck::Valid(grant) => {
+            let seat = crate::canonical_role_name(&grant.seat);
+            let mut expires_at = grant.expires_at;
+            if let Some(parent_id) = grant.parent_grant_id.as_deref() {
+                match read_grant(parent_id) {
+                    Ok(parent) => expires_at = expires_at.min(parent.expires_at),
+                    Err(error) => return GrantLookup::Unresolved(error.to_string()),
+                }
+            }
+            GrantLookup::Expiry(GrantExpiry { seat, expires_at })
+        }
+    }
+}
+
+// Informational statusline metadata deliberately includes expired records.
+// It conveys no authority and is never consumed by the launch-refusal gate.
+// Keeping it separate preserves the existing expired-record warning contract.
+// trace:BUG-2011 | ai:codex
+fn display_grant_lookup() -> GrantLookup {
     let Some(id) = std::env::var(GRANT_ENV)
         .ok()
         .map(|id| id.trim().to_string())
@@ -459,7 +497,7 @@ pub(crate) fn session_grant_lookup() -> GrantLookup {
 /// baseline confers anyway (its expiry costs nothing).
 // trace:TASK-1736 | ai:claude
 pub(crate) fn session_grant_expiry() -> Option<GrantExpiry> {
-    match session_grant_lookup() {
+    match display_grant_lookup() {
         GrantLookup::Expiry(expiry) => Some(expiry),
         _ => None,
     }
@@ -1148,3 +1186,8 @@ mod tests {
         }
     }
 }
+
+// trace:BUG-2011 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2011_grant_expiry_verdict_tests.rs"]
+mod bug_2011_grant_expiry_verdict_tests;

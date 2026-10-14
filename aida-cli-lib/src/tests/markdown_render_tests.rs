@@ -405,22 +405,38 @@ fn renderer_and_colored_make_one_colour_decision_under_empty_no_color() {
     apply_no_color_policy_to(&colour, true);
     assert!(colour.should_colorize());
     // ...and the renderer follows the very same decision.
-    let out = render_for_terminal_with("**bold**", 80, &colour);
+    let out = render_for_terminal_with("**bold**", 80, &colour, None);
     assert!(out.contains('\x1b'), "{out:?}");
     // Piped, the policy keeps colour off, and again the renderer agrees.
     let piped = local_colour(None);
     apply_no_color_policy_to(&piped, false);
     assert!(!piped.should_colorize());
-    assert!(!render_for_terminal_with("**bold**", 80, &piped).contains('\x1b'));
+    assert!(!render_for_terminal_with("**bold**", 80, &piped, None).contains('\x1b'));
 }
 
 #[test]
 fn set_override_false_suppresses_renderer_styling() {
     let src = "# Heading\n\n**bold**";
-    let on = render_for_terminal_with(src, 80, &local_colour(Some(true)));
-    let off = render_for_terminal_with(src, 80, &local_colour(Some(false)));
+    let on = render_for_terminal_with(src, 80, &local_colour(Some(true)), None);
+    let off = render_for_terminal_with(src, 80, &local_colour(Some(false)), None);
     assert!(on.contains('\x1b'), "{on:?}");
     assert!(!off.contains('\x1b'), "{off:?}");
+}
+
+/// BUG-2013: render_for_terminal_with passes the computed glyph profile to the
+/// renderer rather than ignoring it or forcing GlyphProfile::Unicode. Passing
+/// Some("ascii") draws ASCII table borders ('+-') and no Unicode box-drawing ('┌').
+// trace:BUG-2013 | ai:antigravity
+#[test]
+fn bug_2013_render_for_terminal_with_passes_computed_profile() {
+    let out = render_for_terminal_with(
+        WIDE_TABLE,
+        80,
+        &colored::control::SHOULD_COLORIZE,
+        Some("ascii"),
+    );
+    assert_all_ascii(&out);
+    assert!(out.contains("+-") && !out.contains('┌'), "{out}");
 }
 
 #[test]

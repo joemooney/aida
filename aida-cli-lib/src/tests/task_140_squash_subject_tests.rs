@@ -57,6 +57,10 @@ fn branch_head_commit_message_reads_branch_not_cwd_head() {
 // trace:BUG-1957 | ai:claude
 #[test]
 fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     git(root, &["init", "-q", "-b", "main"]);
