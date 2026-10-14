@@ -1,0 +1,35 @@
+id: 01a1380d-53d6-7f21-bf9b-f485fc697a45
+spec_id: ADR-75
+agreed_id: ADR-75
+title: Narrow ADR-73 merge-time signoff to sandbox, authority/identity and credential changes; architecture is signed at sketch time
+description: |
+  ## Decision (operator, 2026-10-13 18:32)
+  This amends ADR-73 condition 5 (merge-time signoff) to cut gate latency. Conditions 1-4 and 6 are unchanged.
+
+  A merge-time advisor or operator SIGNOFF is required ONLY when the PR changes one of:
+  - (a) **contained-sandbox / confinement**: bwrap/OS-wrap, contained write roots, host-exec paths from contained sessions;
+  - (b) **approval authority, seat grants or identity**: who may approve, merge, edit status or clear holds;
+  - (c) **credential or secret handling**: tokens, credentials in argv/env/URLs/logs.
+
+  Every other change merges on the merge seat's fresh, independent APPROVE at the pinned green head. That includes generic "security-adjacent" hardening outside (a)-(c), and architecture work that conforms to a signoff the advisor already gave at sketch time. For architecture, the merge reviewer verifies conformance to the signed sketch, and a deviation from the sketch needs a new advisor ruling. This drops the second, merge-time architecture signoff.
+
+  ## Why
+  On 2026-10-13, approved PRs waited on gate presence rather than defects: operator hold-clears waited up to 3h45m, and an advisor signoff waited 1h because the advisor seat was not awake. Sketch signoff already gates architecture at design time, so a second merge-time signoff mostly adds latency.
+
+  ## Related
+  ADR-73 (amended), STORY-1687 (Rework hold auto-release), TASK-1511 (headless cold-boot of seat jobs).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T01:35:59.958387541Z
+modified_at: 2026-10-14T01:35:59.958387541Z
+req_type: Decision
+filed_at:
+  code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
