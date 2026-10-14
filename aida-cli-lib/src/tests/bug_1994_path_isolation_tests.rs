@@ -89,8 +89,9 @@ fn child_command(home: &std::path::Path) -> Command {
         "[user]\nname = AIDA Test\nemail = test@example.invalid\n[init]\ndefaultBranch = main\n",
     )
     .unwrap();
-    let mut command =
-        Command::new(std::env::current_exe().expect("resolve current test executable"));
+    let mut command = Command::new(
+        crate::aida_bin::current_executable_path().expect("resolve current test executable"),
+    );
     command
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())

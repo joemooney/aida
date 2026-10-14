@@ -50,7 +50,7 @@ pub(crate) fn run_path_isolated_test() -> bool {
     )
     .unwrap();
     let mut command = std::process::Command::new(
-        std::env::current_exe().expect("resolve current test executable"),
+        crate::aida_bin::current_executable_path().expect("resolve current test executable"),
     );
     command
         .env_clear()
