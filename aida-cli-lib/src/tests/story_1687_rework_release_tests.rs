@@ -420,7 +420,23 @@ fn happy_fixture_also_passes_existing_corpus_gate() {
 // Drive auto_release's actual eligibility and release-time validation closure,
 // rather than supplying a test validation callback to release_with.
 // trace:STORY-1687 | ai:codex
-fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
+#[derive(Clone, Copy, Default)]
+struct ReleaseChange {
+    move_head: bool,
+    stricter_hold: bool,
+    changed_rework: bool,
+    rejected_grant: bool,
+    rewritten_approval: bool,
+    changed_recorder: bool,
+    corpus_key: Option<&'static str>,
+    after_audit: bool,
+    failed_read: Option<&'static str>,
+    forge_state: Option<mh::ChangeState>,
+    missing_change: bool,
+    missing_head: bool,
+}
+
+fn auto_release_fixture(change: ReleaseChange) {
     let mut f = Fixture::new();
     f.req.spec_id = Some("TASK-37".into());
     let root = tempfile::tempdir().unwrap();
@@ -432,10 +448,12 @@ fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
     let expected_marker = std::cell::RefCell::new(original_marker);
     let mut store = aida_core::RequirementsStore::default();
     store.requirements.push(f.req.clone());
-    let ids = vec!["TASK-37".into()];
     let head_reads = Cell::new(0);
     let hold_reads = Cell::new(0);
+    let change_at = if change.after_audit { 3 } else { 2 };
     let corpus_reads = Cell::new(0);
+    let body_reads = Cell::new(0);
+    let grant_reads = Cell::new(0);
     let comments = std::cell::RefCell::new(Vec::new());
     let original_labels = vec![
         "aida:merge-hold".to_string(),
@@ -443,43 +461,132 @@ fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
     ];
     let labels = std::cell::RefCell::new(original_labels.clone());
     let mut expected_hold = f.hold.clone();
-    if stricter_hold {
+    if change.stricter_hold {
         expected_hold.reason_kind = HoldReasonKind::Decision;
         expected_hold.detail = "human decision required".into();
     }
+    if change.changed_rework {
+        expected_hold.detail = "new Rework authorization required".into();
+    }
+    // A refusal on another covered spec must participate alongside the arming key.
+    if let Some(key) = change.corpus_key {
+        if key != "PR-37" {
+            let mut other = f.req.clone();
+            other.spec_id = Some(key.into());
+            store.requirements.push(other);
+        }
+        let path = rv::verdict_path(root.path(), key);
+        if !change.after_audit {
+            std::fs::write(
+                path,
+                serde_json::to_vec(&serde_json::json!({
+                    "verdict": "request-changes", "reviewed_sha": HEAD,
+                    "recorded_at": "2026-10-14T01:00:03Z", "recorded_by": "another reviewer"
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+    }
+    let ids: Vec<String> = store
+        .requirements
+        .iter()
+        .map(|req| req.spec_id.clone().unwrap())
+        .collect();
     let result = auto_release_with(
         root.path(),
         &f.hold,
         AutoReleaseIo {
             live_head: &|| {
                 head_reads.set(head_reads.get() + 1);
-                if head_reads.get() == 2 && stricter_hold {
+                if head_reads.get() >= change_at && change.failed_read == Some("head") {
+                    bail!("live head unavailable");
+                }
+                if head_reads.get() == change_at && (change.stricter_hold || change.changed_rework)
+                {
                     mh::write_typed_hold(root.path(), &expected_hold)?;
                     *expected_marker.borrow_mut() = std::fs::read(mh::hold_path(root.path(), 37))?;
                 }
-                Ok(if head_reads.get() >= 2 && move_head {
-                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into()
+                let changing = head_reads.get() >= change_at;
+                if changing && change.missing_change {
+                    return Ok(None);
+                }
+                let state = if changing {
+                    change.forge_state.unwrap_or(mh::ChangeState::Open)
                 } else {
-                    HEAD.into()
-                })
+                    mh::ChangeState::Open
+                };
+                Ok(Some(mh::PinnedChange {
+                    merged: state == mh::ChangeState::Merged,
+                    state,
+                    head_sha: if changing && change.missing_head {
+                        None
+                    } else {
+                        Some(if changing && change.move_head {
+                            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into()
+                        } else {
+                            HEAD.into()
+                        })
+                    },
+                    hold_label: true,
+                }))
             },
             read_hold: &|| {
                 hold_reads.set(hold_reads.get() + 1);
+                if change.failed_read == Some("hold") {
+                    return None;
+                }
                 mh::read_hold_record(root.path(), 37)
             },
             covered_specs: &|| Ok((ids.clone(), store.clone())),
             read_body: &|key| {
                 assert_eq!(key, "TASK-37");
-                Ok(serde_json::from_slice(&std::fs::read(&verdict_path)?)?)
+                body_reads.set(body_reads.get() + 1);
+                if body_reads.get() >= change_at && change.failed_read == Some("approval") {
+                    bail!("approval unavailable");
+                }
+                let mut body: Value = serde_json::from_slice(&std::fs::read(&verdict_path)?)?;
+                if body_reads.get() >= change_at {
+                    if change.rewritten_approval {
+                        body["verdict"] = Value::String("request-changes".into());
+                    }
+                    if change.changed_recorder {
+                        body["recorded_by"] = Value::String("different reviewer".into());
+                        body["release_grant"]["recorded_by"] = body["recorded_by"].clone();
+                    }
+                }
+                Ok(body)
             },
             read_corpus: &|ids| {
                 corpus_reads.set(corpus_reads.get() + 1);
+                if change.failed_read == Some("corpus") {
+                    bail!("corpus unavailable");
+                }
+                if change.after_audit && corpus_reads.get() == 2 {
+                    if let Some(key) = change.corpus_key {
+                        std::fs::write(
+                            rv::verdict_path(root.path(), key),
+                            serde_json::to_vec(&serde_json::json!({
+                                "verdict": "request-changes", "reviewed_sha": HEAD
+                            }))?,
+                        )?;
+                    }
+                }
                 mh::corpus_gate_bodies(&[root.path()], 37, ids).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| {
                 assert_eq!(id, f.grant.id);
                 assert_eq!(subject, f.grant.subject);
-                sa::GrantCheck::Valid(f.grant.clone())
+                grant_reads.set(grant_reads.get() + 1);
+                if change.rejected_grant && grant_reads.get() >= change_at {
+                    sa::GrantCheck::Rejected {
+                        id: f.grant.id.clone(),
+                        seat: Some(f.grant.seat.clone()),
+                        reason: sa::GrantRejection::Revoked { at: Utc::now() },
+                    }
+                } else {
+                    sa::GrantCheck::Valid(f.grant.clone())
+                }
             },
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
@@ -491,21 +598,45 @@ fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
             },
         },
     );
-    if move_head || stricter_hold {
+    let refusal = if let Some(read) = change.failed_read {
+        Some(match read {
+            "head" => "live head unavailable",
+            "hold" => "hold changed",
+            "approval" => "approval unavailable",
+            "corpus" => "corpus unavailable",
+            _ => panic!("unknown read"),
+        })
+    } else if change.missing_change {
+        Some("no forge change")
+    } else if change.forge_state.is_some() {
+        Some("change is not open")
+    } else if change.missing_head {
+        Some("current head could not be read")
+    } else if change.move_head {
+        Some("head moved")
+    } else if change.stricter_hold || change.changed_rework {
+        Some("hold changed")
+    } else if change.rejected_grant {
+        Some("reviewer grant rejected")
+    } else if change.rewritten_approval {
+        Some("verdict is not APPROVED")
+    } else if change.changed_recorder {
+        Some("approval changed before release")
+    } else if change.corpus_key.is_some() {
+        Some("verdict corpus still refuses this head")
+    } else {
+        None
+    };
+    if let Some(refusal) = refusal {
         let error = result.unwrap_err().to_string();
-        assert!(
-            error.contains(if move_head {
-                "head moved"
-            } else {
-                "hold changed"
-            }),
-            "{error}"
-        );
-        assert_eq!(head_reads.get(), 2);
-        assert_eq!(hold_reads.get(), 1);
+        assert!(error.contains(refusal), "{error}");
+        if change.move_head || change.stricter_hold {
+            assert_eq!(head_reads.get(), change_at);
+            assert_eq!(hold_reads.get(), change_at - 1);
+        }
         let retained_hold = mh::read_hold_record(root.path(), 37).unwrap();
         assert_eq!(retained_hold.reason_kind, expected_hold.reason_kind);
-        if stricter_hold {
+        if change.stricter_hold {
             assert_eq!(retained_hold.absorbed.len(), 1);
             assert_eq!(
                 retained_hold.absorbed[0].reason_kind,
@@ -518,8 +649,18 @@ fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
             std::fs::read(mh::hold_path(root.path(), 37)).unwrap(),
             *expected_marker.borrow()
         );
-        assert!(!mh::clearance_path(root.path(), 37).exists());
-        assert!(comments.borrow().is_empty());
+        if change.after_audit {
+            // A real re-arm invalidates the prior clearance itself. Other races
+            // retain the already-written authorization; none mirror the release.
+            assert_eq!(
+                mh::clearance_path(root.path(), 37).is_file(),
+                !(change.stricter_hold || change.changed_rework)
+            );
+            assert_eq!(comments.borrow().len(), 1);
+        } else {
+            assert!(!mh::clearance_path(root.path(), 37).exists());
+            assert!(comments.borrow().is_empty());
+        }
         assert_eq!(*labels.borrow(), original_labels);
     } else {
         assert!(result.unwrap());
@@ -535,15 +676,172 @@ fn auto_release_fixture(move_head: bool, stricter_hold: bool) {
 
 #[test]
 fn auto_release_current_head_and_unchanged_hold_releases() {
-    auto_release_fixture(false, false);
+    auto_release_fixture(ReleaseChange::default());
 }
 
 #[test]
 fn auto_release_refetches_moved_forge_head_before_any_release_effect() {
-    auto_release_fixture(true, false);
+    auto_release_fixture(ReleaseChange {
+        move_head: true,
+        ..Default::default()
+    });
 }
 
 #[test]
 fn auto_release_rereads_stricter_hold_before_any_release_effect() {
-    auto_release_fixture(false, true);
+    auto_release_fixture(ReleaseChange {
+        stricter_hold: true,
+        ..Default::default()
+    });
+}
+
+// Every negative enters the same production validator before any release effect.
+// trace:STORY-1687 | ai:codex
+#[test]
+fn auto_release_rereads_changed_rework_before_any_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        changed_rework: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_rechecks_revoked_grant_before_any_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        rejected_grant: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_rereads_rewritten_approval_before_any_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        rewritten_approval: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_rechecks_changed_approval_identity_before_any_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        changed_recorder: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_pr_corpus_refusal_preserves_every_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        corpus_key: Some("PR-37"),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_other_covered_spec_corpus_refusal_preserves_every_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        corpus_key: Some("TASK-38"),
+        ..Default::default()
+    });
+}
+
+// The second production validation must also stop before labels/marker removal,
+// even though clearance and its audit were already recorded by release_with.
+// trace:STORY-1687 | ai:codex
+#[test]
+fn auto_release_after_audit_rechecks_every_condition_before_mirroring_release() {
+    for change in [
+        ReleaseChange {
+            forge_state: Some(mh::ChangeState::ClosedUnmerged),
+            ..Default::default()
+        },
+        ReleaseChange {
+            missing_change: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            missing_head: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            move_head: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            stricter_hold: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            changed_rework: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            rejected_grant: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            rewritten_approval: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            changed_recorder: true,
+            ..Default::default()
+        },
+        ReleaseChange {
+            corpus_key: Some("PR-37"),
+            ..Default::default()
+        },
+        ReleaseChange {
+            corpus_key: Some("TASK-38"),
+            ..Default::default()
+        },
+    ] {
+        auto_release_fixture(ReleaseChange {
+            after_audit: true,
+            ..change
+        });
+    }
+}
+
+#[test]
+fn auto_release_failed_release_time_reads_preserve_every_release_effect() {
+    for read in ["head", "hold", "approval", "corpus"] {
+        auto_release_fixture(ReleaseChange {
+            failed_read: Some(read),
+            ..Default::default()
+        });
+    }
+}
+
+// The forge may close/merge the change, stop recognizing it, or omit its head
+// after eligibility. These checks run inside the production validator.
+// trace:STORY-1687 | ai:codex
+#[test]
+fn auto_release_nonopen_forge_change_preserves_every_release_effect() {
+    for state in [
+        mh::ChangeState::ClosedUnmerged,
+        mh::ChangeState::Merged,
+        mh::ChangeState::Unknown,
+    ] {
+        auto_release_fixture(ReleaseChange {
+            forge_state: Some(state),
+            ..Default::default()
+        });
+    }
+}
+
+#[test]
+fn auto_release_missing_forge_change_preserves_every_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        missing_change: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn auto_release_missing_forge_head_preserves_every_release_effect() {
+    auto_release_fixture(ReleaseChange {
+        missing_head: true,
+        ..Default::default()
+    });
 }

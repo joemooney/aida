@@ -18,9 +18,9 @@ name: merge-hold-gate
 # this and lets the merge proceed.
 #
 # BUG-1693: label state alone cannot release a previously held PR. `aida
-# merge-hold clear` keeps the persistent `aida:merge-hold-recorded` label and
-# or eligible Rework auto-release adds `aida:merge-hold-cleared` after writing
-# its local clearance record and audit comment, so
+# merge-hold clear` and eligible Rework auto-release both keep the persistent
+# `aida:merge-hold-recorded` label and add `aida:merge-hold-cleared` after
+# writing the local clearance record and audit comment, so
 # dropping `aida:merge-hold` by hand leaves history without clearance and this
 # check still fails. This is a forge-side integrity check, not protection from
 # an admin token running as the same user; see docs/cli/08-reporting.md.

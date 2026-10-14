@@ -238,7 +238,7 @@ fn release_with(
 // stay in the same path used by production. No test-only authority bypass.
 // trace:STORY-1687 | ai:codex
 struct AutoReleaseIo<'a> {
-    live_head: &'a dyn Fn() -> Result<String>,
+    live_head: &'a dyn Fn() -> Result<Option<mh::PinnedChange>>,
     read_hold: &'a dyn Fn() -> Option<mh::MergeHoldRecord>,
     covered_specs: &'a dyn Fn() -> Result<(Vec<String>, aida_core::RequirementsStore)>,
     read_body: &'a dyn Fn(&str) -> Result<Value>,
@@ -257,13 +257,7 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
     let pin = mh::resolve_pinned_repo(&root, kind)
         .map_err(anyhow::Error::msg)?
         .context("no forge repository for auto-release")?;
-    let live_head = || -> Result<String> {
-        let change = mh::fetch_pinned_change(&root, kind, pr)
-            .map_err(anyhow::Error::msg)?
-            .context("no forge change for auto-release")?;
-        ensure!(change.state == mh::ChangeState::Open, "change is not open");
-        change.head_sha.context("current head could not be read")
-    };
+    let live_head = || mh::fetch_pinned_change(&root, kind, pr).map_err(anyhow::Error::msg);
     let verdict_root = std::cell::Cell::new(None::<&Path>);
     auto_release_with(
         &root,
@@ -345,12 +339,20 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
     )
 }
 
+// Keep forge-response validation inside the shared production/test path too.
+// trace:STORY-1687 | ai:codex
+fn open_change_head(change: Option<mh::PinnedChange>) -> Result<String> {
+    let change = change.context("no forge change for auto-release")?;
+    ensure!(change.state == mh::ChangeState::Open, "change is not open");
+    change.head_sha.context("current head could not be read")
+}
+
 fn auto_release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,
     io: AutoReleaseIo<'_>,
 ) -> Result<bool> {
-    let head = (io.live_head)()?;
+    let head = open_change_head((io.live_head)()?)?;
     let (ids, store) = (io.covered_specs)()?;
     let specs: Vec<_> = ids
         .iter()
@@ -390,7 +392,7 @@ fn auto_release_with(
         hold,
         &verdict,
         || {
-            let current_head = (io.live_head)()?;
+            let current_head = open_change_head((io.live_head)()?)?;
             ensure!(
                 (io.read_hold)().as_ref() == Some(hold),
                 "hold changed before release"
