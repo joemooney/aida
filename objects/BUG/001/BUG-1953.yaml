@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T17:31:44.883474903Z
+modified_at: 2026-10-14T23:35:38.217983542Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -117,6 +117,12 @@ comments:
   created_at: 2026-10-14T17:31:44.883474903Z
   modified_at: 2026-10-14T17:31:44.883474903Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13cc5-7de9-7e61-b176-da8bb88940f8
+  author: joe
+  content: 'ADVISOR: lifting the ''wait for #2485 (BUG-1918)'' ordering gate. A trial merge-tree of #2643 with #2485 is clean, and the hunks are disjoint (step 5 at pr_cmd.rs ~2974-3060 vs #2485 at ~1566-2734). #2485 rebases on top. #2643 is approved: the step-5 lease lookup now uses ship_branch (the PR head, falling back to cwd), with tests for both. The mirror-push ''not confirmed on origin'' skip during the push needs checking; if it recurs, file it.'
+  created_at: 2026-10-14T23:35:38.217983542Z
+  modified_at: 2026-10-14T23:35:38.217983542Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a12b8a-9ddb-7590-a28d-0439b4a696ff
   author: joe
