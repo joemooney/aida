@@ -27,7 +27,9 @@ jobs:
     # BUG-611: a flaky hang in the test step used to run to GitHub's 6h default,
     # blocking the single runner (and every PR queued behind it) for hours. Fail
     # fast instead — a normal run is ~7 min. trace:BUG-611 | ai:claude
-    timeout-minutes: 25
+    # 2026-10-14: green runs now take 17-25 min, so a 25-min cap was cancelling
+    # healthy builds (e.g. #2541 at 25m18s). 40 keeps the hang guard with headroom.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
