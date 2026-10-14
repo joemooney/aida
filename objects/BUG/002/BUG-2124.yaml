@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:14:56.022070526Z
-modified_at: 2026-10-14T22:47:21.762084731Z
+modified_at: 2026-10-14T23:01:09.853820307Z
 req_type: Bug
 tags:
 - contained
@@ -41,6 +41,11 @@ comments:
     - Ensure no production launchers regress or change arguments. Builders construct identical Command with explicit env strip.
   created_at: 2026-10-14T22:47:21.762084731Z
   modified_at: 2026-10-14T22:47:21.762084731Z
+- id: 01a13ca5-ee5d-7170-8706-f6ea3ad992d8
+  author: joe
+  content: 'FACTORY DRAFT: PR #2640 at 9fedd8a810487152fbcb984636c676b25ed4029b'
+  created_at: 2026-10-14T23:01:09.853820307Z
+  modified_at: 2026-10-14T23:01:09.853820307Z
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
