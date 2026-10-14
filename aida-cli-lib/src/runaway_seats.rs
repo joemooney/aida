@@ -254,8 +254,25 @@ pub(crate) struct SeatInfo {
 /// Map Claude / native session ids to the registry's seat label and pid.
 // trace:STORY-1462 | ai:claude
 pub(crate) fn registry_attribution(project_root: &Path) -> HashMap<String, SeatInfo> {
-    let mut out = HashMap::new();
-    for (_, e) in crate::agent_registry::load_entries(project_root) {
+    attribute_entries(
+        crate::agent_registry::load_entries(project_root)
+            .into_iter()
+            .map(|(_, e)| e),
+        aida_core::liveness::pid_is_alive,
+    )
+}
+
+/// A resumed session keeps its id, so dead entries sit beside the live one.
+/// Rank an un-ended live-PID entry first, then the most recently active, so
+/// `read_dir` order never lets a dead entry hide a live holder.
+// trace:BUG-2120 | ai:claude
+fn attribute_entries(
+    entries: impl IntoIterator<Item = crate::agent_registry::AgentRegistryEntry>,
+    alive: impl Fn(u32) -> bool,
+) -> HashMap<String, SeatInfo> {
+    let mut best: HashMap<String, ((bool, DateTime<Utc>), SeatInfo)> = HashMap::new();
+    for e in entries {
+        let rank = (e.ended_at.is_none() && alive(e.pid), e.last_active_at);
         let seat = e
             .role
             .clone()
@@ -265,16 +282,18 @@ pub(crate) fn registry_attribution(project_root: &Path) -> HashMap<String, SeatI
             .into_iter()
             .flatten()
         {
-            out.insert(
-                sid.clone(),
-                SeatInfo {
+            if best.get(sid).is_none_or(|(held, _)| rank > *held) {
+                let info = SeatInfo {
                     seat: seat.clone(),
                     pid: Some(e.pid),
-                },
-            );
+                };
+                best.insert(sid.clone(), (rank, info));
+            }
         }
     }
-    out
+    best.into_iter()
+        .map(|(sid, (_, info))| (sid, info))
+        .collect()
 }
 
 /// One evidence source's state. `unavailable` and `not-read` are never read
@@ -1473,6 +1492,107 @@ mod tests {
         assert!(findings.is_empty());
         assert!(cov.still_active.is_empty());
         assert_eq!(cov.verdict, "ok");
+    }
+
+    // trace:BUG-2120 | ai:claude
+    fn registry_entry(
+        id: &str,
+        sid: &str,
+        pid: u32,
+        last_active: &str,
+    ) -> crate::agent_registry::AgentRegistryEntry {
+        toml::from_str(&format!(
+            "id = \"{id}\"\nagent_type = \"claude\"\npid = {pid}\n\
+             started_at = \"2026-09-21T08:00:00Z\"\nlast_active_at = \"{last_active}\"\n\
+             role = \"advisor\"\nworktree_path = \"wt\"\nsource = \"test\"\n\
+             claude_session_id = \"{sid}\"\n"
+        ))
+        .unwrap()
+    }
+
+    /// A resumed session leaves dead-PID entries beside its live one: the
+    /// holder is live whichever entry `read_dir` happens to return last,
+    /// and even when a dead entry is the most recently active.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn live_registry_entry_beats_dead_entries_for_the_same_session_in_any_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = sources(tmp.path());
+        write(
+            &tmp.path().join("claude"),
+            "resumed.jsonl",
+            &poll_setup("resumed", "CronCreate"),
+        );
+        let live = registry_entry(
+            "live",
+            "resumed",
+            std::process::id(),
+            "2026-09-21T09:00:00Z",
+        );
+        let dead = [
+            registry_entry("dead-a", "resumed", 0, "2026-09-21T09:30:00Z"),
+            registry_entry("dead-b", "resumed", 0, "2026-09-21T09:59:00Z"),
+        ];
+        let forward = [dead[0].clone(), dead[1].clone(), live.clone()];
+        let backward = [live, dead[1].clone(), dead[0].clone()];
+        for order in [forward, backward] {
+            let seats = attribute_entries(order, aida_core::liveness::pid_is_alive);
+            assert_eq!(seats["resumed"].pid, Some(std::process::id()));
+            let mut stateless = src.clone();
+            stateless.state_path = None;
+            let (findings, _) = scan("aida", &stateless, &WatchdogPolicy::default(), t0(), &seats);
+            assert_eq!(rules(&findings, "resumed"), vec!["mail-poll-setup"]);
+        }
+        // Every entry dead: the holder is known dead and the setup clears.
+        let seats = attribute_entries(dead, aida_core::liveness::pid_is_alive);
+        let (findings, _) = scan("aida", &src, &WatchdogPolicy::default(), t0(), &seats);
+        assert!(rules(&findings, "resumed").is_empty());
+    }
+
+    /// The window is inclusive: activity `window_minutes - 1` old is inside it.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn poll_setup_stays_active_at_the_window_start_minute() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        write(
+            &tmp.path().join("claude"),
+            "edge.jsonl",
+            &poll_setup("edge", "CronCreate"),
+        );
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let now = t0() + Duration::minutes(p.window_minutes - 1);
+        let (findings, _) = scan("aida", &src, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "edge"), vec!["mail-poll-setup"]);
+    }
+
+    /// A cache persisted before `last_activity_minute` existed falls back to
+    /// its LATEST bucket, not its first.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn legacy_aggregate_without_last_activity_uses_its_latest_bucket() {
+        let now = t0() + Duration::hours(2);
+        let (old, recent) = (minute_of(t0()), minute_of(now));
+        let agg: SessionAgg = serde_json::from_value(serde_json::json!({
+            "timed": true,
+            "minutes": {
+                old.to_string(): {"polls": 1},
+                recent.to_string(): {"calls": 1, "tokens": 10}
+            }
+        }))
+        .unwrap();
+        assert_eq!(agg.last_activity_minute, None);
+        let sessions = BTreeMap::from([("legacy".to_string(), agg)]);
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let findings = judge("aida", &sessions, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "legacy"), vec!["mail-poll-setup"]);
     }
 
     /// Acceptance 2: replaying the storm shape for both BUG-1589 sessions
