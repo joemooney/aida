@@ -1683,10 +1683,13 @@ mod tests {
         }
     }
 
-    /// Last activity is a running max across files: a transcript that sorts
-    /// later (e.g. a subagent's) but holds older lines for the same session
-    /// must not make a live session look idle.
+    /// Last activity is a running max across files: whichever transcript is
+    /// folded last, if it holds only older lines for the same session it must
+    /// not make a live session look idle. (In real layouts a subagent's
+    /// `<sid>/subagents/x.jsonl` sorts BEFORE `<sid>.jsonl`; this test just
+    /// pins a fold order where the older file comes last.)
     // trace:BUG-2120 | ai:claude
+    // trace:TASK-1755 | ai:claude
     #[test]
     fn later_sorted_transcript_with_older_lines_keeps_recent_poll_active() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2764,6 +2767,66 @@ mod tests {
                 .contains("(seat implementer, pid 4242, transcript last written 2h ago)"),
             "{}",
             finding.summary
+        );
+    }
+
+    /// TASK-1755 (3): an untimed line never moves `last_activity_minute`
+    /// (it lands on the file's mtime minute, which is not activity
+    /// evidence), while a timed line does.
+    // trace:TASK-1755 | ai:claude
+    #[test]
+    fn task_1755_untimed_lines_do_not_count_as_last_activity() {
+        let sid = "session-untimed-activity";
+        let mut sessions = BTreeMap::new();
+        let untimed = Line {
+            kind: Some("assistant".to_string()),
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let untimed_minute = minute_of(t0()) + 90;
+        fold_line(
+            &untimed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        assert_eq!(sessions[sid].last_activity_minute, None);
+        let timed = Line {
+            timestamp: Some(ts(600)),
+            ..Line {
+                kind: Some("assistant".to_string()),
+                session_id: Some(sid.to_string()),
+                ..Line::default()
+            }
+        };
+        fold_line(
+            &timed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        fold_line(
+            &untimed,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            untimed_minute,
+            None,
+            &mut sessions,
+        );
+        assert_eq!(
+            sessions[sid].last_activity_minute,
+            Some(minute_of(t0()) + 10),
+            "a later untimed minute must not advance last activity"
         );
     }
 }
