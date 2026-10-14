@@ -1692,14 +1692,8 @@ pub(crate) fn run() -> Result<()> {
     // paths and runs from a neutral cwd (never a removable session worktree),
     // so it is dispatched before any cwd-based project discovery, which
     // would find no project there and fail. trace:BUG-1947 | ai:claude
-    if let Command::Cache(CacheCommand::Refresh {
-        worker: true,
-        store: Some(store),
-        cache: Some(cache),
-        ..
-    }) = &cli.command
-    {
-        return cache_cmd::run_explicit_refresh_worker(store, cache);
+    if let Some(result) = cache_cmd::early_refresh(&cli.command) {
+        return result;
     }
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {

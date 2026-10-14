@@ -109,11 +109,31 @@ pub(crate) fn handle_cache_command(
             if_requested,
             store,
             cache,
+            ..
         } => {
             return handle_cache_refresh(backend, *worker, *if_requested, store, cache);
         }
     }
     Ok(())
+}
+
+/// Dispatch cache modes that must avoid requirements-cache initialization.
+// trace:STORY-1661 | ai:codex
+pub(crate) fn early_refresh(command: &crate::Command) -> Option<Result<()>> {
+    match command {
+        crate::Command::Cache(CacheCommand::Refresh {
+            history: true,
+            store,
+            ..
+        }) => Some(crate::history_indexer::handle_tick(store.as_deref())),
+        crate::Command::Cache(CacheCommand::Refresh {
+            worker: true,
+            store: Some(store),
+            cache: Some(cache),
+            ..
+        }) => Some(run_explicit_refresh_worker(store, cache)),
+        _ => None,
+    }
 }
 
 /// `aida cache refresh`: plain form refreshes strictly inline; `--worker` is
