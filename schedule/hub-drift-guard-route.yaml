@@ -8,6 +8,6 @@ result: done
 due_since: 2026-10-12T21:16:56.243616015Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-10-13T21:44:16.743816113Z
+  trip_id: hub-drift-guard@2026-10-14T03:53:26.807433575Z
   job: hub-drift-guard
   error: 'exit 1: '
