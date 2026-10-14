@@ -1,0 +1,27 @@
+id: 01a13943-a196-7682-ab42-25acba4c0584
+spec_id: BUG-2124
+agreed_id: BUG-2124
+title: Uncontained launchers (phase_driver, burndown, autopilot intake, questions, compete) do not strip inherited AIDA_CONTAINED
+description: |
+  From the strict review of PR #2610 (BUG-2006) at 07a62df938, non-blocking: several launchers that start uncontained sessions still do not strip an inherited AIDA_CONTAINED=1 from their child's environment: phase_driver, burndown_run, autopilot_intake, questions and compete. A contained parent that runs one of them hands its children a false containment claim. Today that only makes queue work stricter, so it is not exploitable, but it is contract drift.
+
+  Expected: every launch path routes through `containment_applied(vendor, contained)` (session.rs:1676), which sets or strips the variable. Acceptance: one production-builder test per launcher asserting that the uncontained child has no AIDA_CONTAINED.
+  Also from that review: `is_contained_args` (agent_launch.rs:4366) infers containment from argv (`--settings x.json` from agents.toml reads as contained). Replace it with the launch's real containment decision.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T07:14:56.022070526Z
+modified_at: 2026-10-14T07:14:56.022070526Z
+req_type: Bug
+tags:
+- contained
+- follow-up
+filed_at:
+  code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
