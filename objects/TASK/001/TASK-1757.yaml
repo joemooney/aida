@@ -1,0 +1,29 @@
+id: 01a13b02-eaad-7253-b24d-800c7a8aac4e
+spec_id: TASK-1757
+agreed_id: TASK-1757
+title: 'Auto-release follow-ups: hold-lock across second pass, docs, stale clearance cleanup, production-read wiring test'
+description: |
+  Non-blocking follow-ups from the round-4 strict review of PR #2614 (STORY-1687) at 7eeea2e04e:
+  1. The re-arm race between the validator's second pass and marker removal (deferred under R6). Fold it into the hold-lock follow-up: take the hold lock across the second pass and the release write.
+  2. Document that the auto-release label/marker order differs from the human `aida merge-hold clear` path, and why.
+  3. When the second pass refuses, a stale clearance file and authorization comment remain. Clean them up, or mark them superseded.
+  4. Add a thin wiring test proving `auto_release` uses the production read functions (forge head, hold, corpus, requirement lookup), not only the injected fixtures.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T15:23:29.325881889Z
+modified_at: 2026-10-14T15:23:29.325881889Z
+req_type: Task
+tags:
+- authority
+- follow-up
+- merge-hold
+filed_at:
+  code_sha: f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f8b0ad8c1c
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
