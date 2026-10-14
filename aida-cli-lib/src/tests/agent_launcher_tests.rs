@@ -3994,7 +3994,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         advisor_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "phase_driver advisor command must strip AIDA_CONTAINED"
     );
 
@@ -4010,7 +4010,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         ci_fix_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "phase_driver ci fix command must strip AIDA_CONTAINED"
     );
 
@@ -4020,7 +4020,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         burndown_quiet_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown quiet command must strip AIDA_CONTAINED"
     );
 
@@ -4035,7 +4035,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         burndown_verbose_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown verbose command must strip AIDA_CONTAINED"
     );
 
@@ -4056,7 +4056,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         intake_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "autopilot intake command must strip AIDA_CONTAINED"
     );
 
@@ -4065,7 +4065,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         clarify_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "questions clarify command must strip AIDA_CONTAINED"
     );
 
@@ -4079,7 +4079,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         judge_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "compete judge command must strip AIDA_CONTAINED"
     );
 
@@ -4088,7 +4088,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     assert!(
         arm_cmd
             .get_envs()
-            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "compete arm command must strip AIDA_CONTAINED"
     );
 }
