@@ -10,12 +10,12 @@ description: |-
   Advisor decision: NOT a budget change. Treat as a possible regression to triage: (1) re-measure show on current main (>= d57f76a277, includes BUG-1956) under comparable load; (2) if still >10%, bisect between 97453570d6 and 95f15a20d4 (candidate: STORY-1652 markdown rendering at a terminal, or cache refresh contention).
   ## Acceptance
   - A measurement on current main, with load noted, either shows show within budget (close as fixed by BUG-1956) or identifies the regressing commit with a fix.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T02:37:07.443227406Z
+modified_at: 2026-10-14T02:48:41.295556923Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -43,6 +43,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1384f-e04f-7342-a5bc-5407ad0a0fd1
+  author: aida-orchestrator
+  timestamp: 2026-10-14T02:48:41.295564595Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
@@ -52,3 +59,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: launch-refused
+  detail: 'phase 1 child session 01a1384f exited with code 1 after 2009ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup.. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance BUG-1993 — the store reports BUG-1993 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1993`.'
+  shelved_by: integrator
+  shelved_at: 2026-10-14T02:48:41.295556923Z
