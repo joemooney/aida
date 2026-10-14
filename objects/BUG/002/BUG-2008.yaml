@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:44:49.915842880Z
-modified_at: 2026-10-14T01:44:41.459195701Z
+modified_at: 2026-10-14T01:45:38.159179276Z
 req_type: Bug
 tags:
 - cross-repo
@@ -112,6 +112,15 @@ comments:
     Non-blocking follow-ups filed as TASK-1747 (fence/table lines count as prose, the abbreviation guard isn't word-anchored, untested removal-side context).
   created_at: 2026-10-14T01:37:47.222805482Z
   modified_at: 2026-10-14T01:37:47.222805482Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13816-266f-7d62-ae6c-4ccd6f089e4c
+  author: joe
+  content: |-
+    MERGE AUDIT: #2605 (BUG-2008) squash-merged as 014a28d3f7, pinned with --match-head-commit b6775ca8120b89266547818f3a2775db5802319c, after the operator cleared the hold.
+    - Fresh reviewer verdict APPROVE at b6775ca812 (round 2); Build green; merge state CLEAN.
+    - `aida pull`: BUG-2008 is Completed (shipped_pr=2605). Non-blocking follow-ups are in TASK-1747. Main CI is being watched.
+  created_at: 2026-10-14T01:45:38.159179276Z
+  modified_at: 2026-10-14T01:45:38.159179276Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13675-0903-7f62-b1d1-00a3671129af
