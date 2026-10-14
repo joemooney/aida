@@ -1,0 +1,20 @@
+id: 01a13b1c-04a5-7113-a611-79acbab491f9
+spec_id: BUG-2127
+agreed_id: BUG-2127
+title: 'Flake: cached_git_backend reader_ancestor_check_timeout_is_counted_and_never_writes fails on CI'
+description: 'CI run 38590162114 (PR #2600, head bdd646e004, 2026-10-14 15:45 UTC) failed at aida-core/src/db/cached_git_backend.rs:4874 in tests::reader_ancestor_check_timeout_is_counted_and_never_writes (1398 passed, 1 failed). The PR touches only story_1656_multi_forge_init_tests.rs, so this is unrelated and looks timing-dependent (a timeout-counting assertion under CI load). Acceptance: the test''s outcome does not depend on wall-clock load, e.g. it injects the timeout via a seam rather than racing a real subprocess; 50 consecutive runs at full parallelism pass. Related: BUG-1809.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T15:50:54.373553135Z
+modified_at: 2026-10-14T15:50:54.373553135Z
+req_type: Bug
+filed_at:
+  code_sha: 278ff0b09857793951b477ef891e07212a53f833
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f8b0ad8c1c
+  vendor: claude
+  session: b9a9ec1a-4cee-4560-b175-c2116f2456c4
