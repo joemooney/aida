@@ -1603,6 +1603,14 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
     is_ancestor_with_timeout(repo, ancestor, descendant, std::time::Duration::ZERO)
 }
 
+// Test seam: models a parent descheduled between spawning the check and
+// polling it, the BUG-2127 race.
+#[cfg(test)]
+thread_local! {
+    static ANCESTOR_CHECK_SPAWN_DELAY: std::cell::Cell<std::time::Duration> =
+        const { std::cell::Cell::new(std::time::Duration::ZERO) };
+}
+
 /// Like `is_ancestor`, but aborts if the operation takes longer than `timeout`.
 /// A zero timeout means wait indefinitely.
 pub fn is_ancestor_with_timeout(
@@ -1633,16 +1641,22 @@ pub fn is_ancestor_with_timeout(
         .stderr(std::process::Stdio::null())
         .spawn()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
+    #[cfg(test)]
+    std::thread::sleep(ANCESTOR_CHECK_SPAWN_DELAY.with(std::cell::Cell::get));
 
+    // The deadline is checked before each poll, so a budget the spawn alone
+    // used up is a timeout. Polling first let a parent descheduled on a
+    // loaded host find a finished child and report a 1 ns budget as met.
+    // trace:BUG-2127 | ai:claude
     let start = std::time::Instant::now();
     loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(status.success());
-        }
         if start.elapsed() >= timeout {
             let _ = child.kill();
             let _ = child.wait();
             return Err(anyhow::anyhow!("git merge-base --is-ancestor timed out"));
+        }
+        if let Some(status) = child.try_wait()? {
+            return Ok(status.success());
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
@@ -5031,6 +5045,32 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    /// BUG-2127: a budget the spawn alone used up is a timeout, even when the
+    /// child finished before the first poll; a budget that allows the delay
+    /// still returns the real answer.
+    // trace:BUG-2127 | ai:claude
+    #[test]
+    fn is_ancestor_with_timeout_honours_a_budget_spent_before_the_first_poll() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        run_git(repo, &["init", "-q", "-b", "main"]);
+        run_git(repo, &["config", "user.email", "aida@example.invalid"]);
+        run_git(repo, &["config", "user.name", "AIDA Test"]);
+        run_git(repo, &["commit", "-q", "--allow-empty", "-m", "a"]);
+        let head = run_git(repo, &["rev-parse", "HEAD"]);
+        ANCESTOR_CHECK_SPAWN_DELAY.with(|d| d.set(std::time::Duration::from_millis(300)));
+        let spent =
+            is_ancestor_with_timeout(repo, &head, &head, std::time::Duration::from_nanos(1));
+        let ample =
+            is_ancestor_with_timeout(repo, &head, &head, std::time::Duration::from_secs(30));
+        ANCESTOR_CHECK_SPAWN_DELAY.with(|d| d.set(std::time::Duration::ZERO));
+        assert!(
+            spent.is_err(),
+            "a 1 ns budget was reported as met: {spent:?}"
+        );
+        assert!(ample.unwrap(), "HEAD is its own ancestor");
     }
 
     // trace:BUG-1677 | ai:claude — an exclude file that exists but cannot be

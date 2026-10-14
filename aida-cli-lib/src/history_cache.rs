@@ -397,7 +397,7 @@ impl IndexLock {
     }
 
     /// `Ok(None)` when another process holds the lock.
-    fn try_acquire(db_path: &Path) -> Result<Option<IndexLock>> {
+    pub(crate) fn try_acquire(db_path: &Path) -> Result<Option<IndexLock>> {
         let file = Self::open_file(db_path)?;
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(IndexLock { _file: file })),
@@ -970,6 +970,21 @@ fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
+/// How an indexed tip relates to this checkout's HEAD; see `classify_tip`.
+// trace:STORY-1661 | ai:claude
+enum TipRelation {
+    /// The tip is an ancestor of HEAD: catch up.
+    Ancestor,
+    /// HEAD is behind the shared index another checkout advanced.
+    HeadBehind,
+    /// The store's root commit changed.
+    RootReplaced,
+    /// HEAD diverged, but the tip is still live on another branch or checkout.
+    LiveElsewhere,
+    /// Nothing has the tip any more.
+    Rewritten,
+}
+
 /// Whether a local branch, or some other checkout of the store (a git
 /// worktree whose HEAD is not `head`), still contains the indexed `tip`. That
 /// separates a reader on an older, diverged or switched checkout, which
@@ -1314,44 +1329,56 @@ impl HistoryCache {
             None => self.reset(store, head, None)?,
             Some(_) if !versions_ok => self.reset(store, head, Some("index format changed"))?,
             Some(tip) if tip == head => {}
-            Some(tip) => {
-                let recorded = self.meta("store_root_sha")?.unwrap_or_default();
-                let replaced = || {
-                    aida_core::git_ops::root_commits(store, head)
-                        .map(|r| r.join(","))
-                        .unwrap_or_default()
-                        != recorded
-                };
-                if aida_core::git_ops::is_ancestor(store, &tip, head)? {
-                    self.catch_up_guarded(store, &tip, head, budget)?;
-                } else if aida_core::git_ops::is_ancestor(store, head, &tip)? {
-                    // trace:TASK-1507 | ai:claude
-                    // A reader behind the shared index: fall back, no reset.
-                } else if replaced() {
-                    // trace:TASK-1507 | ai:claude
-                    // Checked before liveness: `store compact` keeps the old
-                    // tip on a backup branch, but the history was replaced.
-                    self.reset(
-                        store,
-                        head,
-                        Some("the store history was replaced (its root commit changed)"),
-                    )?;
-                } else if tip_is_live_elsewhere(store, &tip, head) {
-                    // trace:TASK-1507 | ai:claude
-                    // This reader is on an older or diverged checkout (a
-                    // store worktree behind the shared index, or an undo)
-                    // while the indexed tip is still what another checkout
-                    // has. The index stays as it is; this query falls back
-                    // to the git walk because the tip is not its HEAD.
-                } else {
+            Some(tip) => match self.classify_tip(store, &tip, head)? {
+                TipRelation::Ancestor => self.catch_up_guarded(store, &tip, head, budget)?,
+                // trace:TASK-1507 | ai:claude
+                // A reader behind the shared index, or on an older or
+                // diverged checkout (a store worktree behind the shared
+                // index, or an undo) while the indexed tip is still what
+                // another checkout has. The index stays as it is; this query
+                // falls back to the git walk because the tip is not its HEAD.
+                TipRelation::HeadBehind | TipRelation::LiveElsewhere => {}
+                TipRelation::RootReplaced => self.reset(
+                    store,
+                    head,
+                    Some("the store history was replaced (its root commit changed)"),
+                )?,
+                TipRelation::Rewritten => {
                     self.reset(store, head, Some("store history was rewritten"))?;
                 }
-            }
+            },
         }
         if self.meta("complete")?.as_deref() != Some("1") && !budget.expired() {
             self.backfill(store, budget)?;
         }
         Ok(())
+    }
+
+    /// How an indexed `tip` (not equal to `head`) relates to this checkout.
+    /// Shared by the foreground refresh and the background tick so both treat
+    /// the same states as no-ops. Git-only: takes no lock of its own.
+    // trace:TASK-1507 | ai:claude
+    // trace:STORY-1661 | ai:claude
+    fn classify_tip(&self, store: &Path, tip: &str, head: &str) -> Result<TipRelation> {
+        if aida_core::git_ops::is_ancestor(store, tip, head)? {
+            return Ok(TipRelation::Ancestor);
+        }
+        if aida_core::git_ops::is_ancestor(store, head, tip)? {
+            return Ok(TipRelation::HeadBehind);
+        }
+        // Checked before liveness: `store compact` keeps the old tip on a
+        // backup branch, but the history was replaced.
+        let recorded = self.meta("store_root_sha")?.unwrap_or_default();
+        let roots = aida_core::git_ops::root_commits(store, head)
+            .map(|r| r.join(","))
+            .unwrap_or_default();
+        Ok(if roots != recorded {
+            TipRelation::RootReplaced
+        } else if tip_is_live_elsewhere(store, tip, head) {
+            TipRelation::LiveElsewhere
+        } else {
+            TipRelation::Rewritten
+        })
     }
 
     /// Inline catch-up with a stall guard. Each budgeted attempt is counted
@@ -2195,6 +2222,64 @@ fn flow_catch_up(store: &Path, db_path: &Path, st: &HistoryCacheStatus) -> Resul
     cache.catch_up_guarded(store, tip, head, Budget::for_duration(budget))?;
     cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
     Ok(())
+}
+
+/// Advance an existing index under the caller-held IndexLock. This path never
+/// builds/resets an index and never counts a foreground catch-up failure.
+/// Retained chunks use finish_append, which clears the foreground stall counter.
+/// Returns `None` (no write) when this checkout is behind the index or the tip
+/// is live on another checkout. The budget is checked between chunks, so a
+/// run can overshoot it by up to one chunk; the scheduler's kill is the backstop.
+// trace:STORY-1661 | ai:codex
+pub(crate) fn catch_up_background_at(
+    store: &Path,
+    db_path: &Path,
+    budget: Budget,
+) -> Result<Option<(usize, usize)>> {
+    let mut cache = HistoryCache::open_existing(db_path)?;
+    if cache.meta("schema_version")?.as_deref() != Some(&HISTORY_SCHEMA_VERSION.to_string())
+        || cache.meta("decoder_version")?.as_deref() != Some(&HISTORY_DECODER_VERSION.to_string())
+    {
+        anyhow::bail!("history index format changed; run `aida cache rebuild --history`");
+    }
+    cache.conn.pragma_update(None, "synchronous", "NORMAL")?;
+    let head = aida_core::git_ops::head_sha(store)?;
+    let mut tip = cache
+        .meta("tip_sha")?
+        .filter(|tip| !tip.is_empty())
+        .context("history index is not initialized; run `aida cache rebuild --history`")?;
+    // trace:STORY-1661 | ai:claude
+    // A checkout behind the shared index, or diverged while the tip is live
+    // elsewhere, is a skip (as in the foreground refresh), not a failure.
+    if tip != head {
+        match cache.classify_tip(store, &tip, &head)? {
+            TipRelation::Ancestor => {}
+            TipRelation::HeadBehind | TipRelation::LiveElsewhere => return Ok(None),
+            TipRelation::RootReplaced | TipRelation::Rewritten => anyhow::bail!(
+                "history index no longer matches this store; run `aida cache rebuild --history`"
+            ),
+        }
+    }
+    let before = cache.count("commits")?;
+    while tip != head && !budget.expired() {
+        // Bypass catch_up_guarded: a background deadline must not stall reads.
+        cache.catch_up(store, &tip, &head, budget)?;
+        let next = cache
+            .meta("tip_sha")?
+            .context("history index lost its tip")?;
+        if next == tip {
+            break;
+        }
+        tip = next;
+    }
+    let appended = usize::try_from(cache.count("commits")? - before)?;
+    let lag = if tip == head {
+        0
+    } else {
+        aida_core::git_ops::rev_list_count(store, &format!("{tip}..{head}"))?
+    };
+    cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
+    Ok(Some((appended, lag)))
 }
 
 /// [`serve`] against an explicit index path and budget.

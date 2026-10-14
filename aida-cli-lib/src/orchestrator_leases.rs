@@ -395,18 +395,49 @@ pub(crate) fn find_orchestrated_lease(
     project_root: &std::path::Path,
     claude_session_id: &str,
 ) -> Option<(String, String, std::path::PathBuf, Option<u32>)> {
-    let manifest = session_manifest::list_all(project_root)
-        .into_iter()
-        .find(|m| m.claude_session_id.as_deref() == Some(claude_session_id))?;
-    let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
-    let body = std::fs::read_to_string(&lease_path).ok()?;
-    let peek: LeasePeek = toml::from_str(&body).ok()?;
+    let peek = peek_orchestrated_lease(project_root, claude_session_id)?;
     Some((
         peek.id,
         peek.branch,
         peek.worktree_path,
         peek.active_pid.or(peek.creator_pid),
     ))
+}
+
+fn peek_orchestrated_lease(
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> Option<LeasePeek> {
+    let manifest = session_manifest::list_all(project_root)
+        .into_iter()
+        .find(|m| m.claude_session_id.as_deref() == Some(claude_session_id))?;
+    let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
+    let body = std::fs::read_to_string(&lease_path).ok()?;
+    toml::from_str(&body).ok()
+}
+
+/// Is the orchestrated lease's owner process (the hosted agent child, else
+/// the creator) still running? Checks the pid against the start time the
+/// lease recorded beside it, so a recycled pid reads dead; a lease without
+/// a start time degrades to the bare pid probe. `false` when no lease is
+/// found or it names no pid.
+// trace:TASK-1750 | ai:claude
+pub(crate) fn orchestrated_lease_owner_alive(
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> bool {
+    let Some(peek) = peek_orchestrated_lease(project_root, claude_session_id) else {
+        return false;
+    };
+    let owner = match peek.active_pid {
+        Some(pid) => Some((pid, peek.active_pid_start_time)),
+        None => peek
+            .creator_pid
+            .map(|pid| (pid, peek.creator_pid_start_time)),
+    };
+    owner.is_some_and(|(pid, start)| {
+        aida_core::liveness::process_identity_is_alive(pid, start.as_deref())
+    })
 }
 
 /// BUG-1285: when [`RealPhaseDriver::discover_orchestrated_lease`] comes up
@@ -668,6 +699,10 @@ pub(crate) fn export_coordinating_bin_env() {
     let Some(dir) = exe.parent().map(std::path::Path::to_path_buf) else {
         return;
     };
+    // Production startup is single-threaded; a unit test must use its own child.
+    // trace:BUG-1994 | ai:codex
+    #[cfg(test)]
+    crate::test_env::require_path_mutation_scope("PATH");
     let path = std::env::var_os("PATH").unwrap_or_default();
     let updated = prepend_dir_to_path(&dir, &path);
     // `set_var` is wrapped in `unsafe` for Edition-2024 forward-compat

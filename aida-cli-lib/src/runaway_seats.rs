@@ -254,8 +254,27 @@ pub(crate) struct SeatInfo {
 /// Map Claude / native session ids to the registry's seat label and pid.
 // trace:STORY-1462 | ai:claude
 pub(crate) fn registry_attribution(project_root: &Path) -> HashMap<String, SeatInfo> {
-    let mut out = HashMap::new();
-    for (_, e) in crate::agent_registry::load_entries(project_root) {
+    attribute_entries(
+        crate::agent_registry::load_entries(project_root)
+            .into_iter()
+            .map(|(_, e)| e),
+        aida_core::liveness::pid_is_alive,
+    )
+}
+
+/// A resumed session keeps its id, so dead entries sit beside the live one.
+/// Rank any live-PID entry first, then the most recently active, so neither
+/// `read_dir` order nor a newer dead entry hides a live holder. `ended_at` is
+/// ignored: a reused `claude-<pid>.toml` keeps a stale one, and only a dead
+/// PID proves the holder gone.
+// trace:BUG-2120 | ai:claude
+fn attribute_entries(
+    entries: impl IntoIterator<Item = crate::agent_registry::AgentRegistryEntry>,
+    alive: impl Fn(u32) -> bool,
+) -> HashMap<String, SeatInfo> {
+    let mut best: HashMap<String, ((bool, DateTime<Utc>), SeatInfo)> = HashMap::new();
+    for e in entries {
+        let rank = (alive(e.pid), e.last_active_at); // trace:BUG-2120 | ai:claude
         let seat = e
             .role
             .clone()
@@ -265,16 +284,18 @@ pub(crate) fn registry_attribution(project_root: &Path) -> HashMap<String, SeatI
             .into_iter()
             .flatten()
         {
-            out.insert(
-                sid.clone(),
-                SeatInfo {
+            if best.get(sid).is_none_or(|(held, _)| rank > *held) {
+                let info = SeatInfo {
                     seat: seat.clone(),
                     pid: Some(e.pid),
-                },
-            );
+                };
+                best.insert(sid.clone(), (rank, info));
+            }
         }
     }
-    out
+    best.into_iter()
+        .map(|(sid, (_, info))| (sid, info))
+        .collect()
 }
 
 /// One evidence source's state. `unavailable` and `not-read` are never read
@@ -303,7 +324,8 @@ pub(crate) struct Coverage {
     pub(crate) elapsed_ms: u64,
     /// Rules still tripped from an earlier run: already reported once, not
     /// reported again until they clear.
-    pub(crate) still_active: Vec<String>,
+    // trace:BUG-1962 | ai:antigravity
+    pub(crate) still_tripped: Vec<String>,
     /// `ok` (evidence read, nothing tripped), `tripped`, `degraded` (the run
     /// was budget-cut; judged on what was read) or `unknown` (no evidence
     /// source was readable). Neither `degraded` nor `unknown` is itself a
@@ -349,6 +371,10 @@ fn is_zero64(n: &u64) -> bool {
 struct SessionAgg {
     #[serde(default)]
     timed: bool,
+    /// Latest parsed activity, including messages without usage or rate evidence.
+    // trace:BUG-2120 | ai:codex
+    #[serde(default)]
+    last_activity_minute: Option<i64>,
     /// Last usage-bearing message id: Claude writes one line per content
     /// block, all carrying the same usage, consecutively.
     #[serde(default)]
@@ -361,6 +387,10 @@ struct SessionAgg {
     /// Prompt hash -> declared cron interval in minutes.
     #[serde(default)]
     declared: BTreeMap<String, u64>,
+    /// When the transcript was last written.
+    // trace:BUG-1962 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_written_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -599,6 +629,7 @@ fn fold_line(
     policy: &WatchdogPolicy,
     day_start: DateTime<Utc>,
     untimed_minute: i64,
+    file_mtime: Option<DateTime<Utc>>,
     sessions: &mut BTreeMap<String, SessionAgg>,
 ) {
     let ts = line
@@ -615,10 +646,17 @@ fn fold_line(
         .or_else(|| line.session_id.clone())
         .unwrap_or_else(|| fallback_session.to_string());
     let s = sessions.entry(sid).or_default();
-    if ts.is_some() {
+    // trace:BUG-1962 | ai:antigravity
+    if let Some(t) = ts {
         s.timed = true;
+        s.last_written_at = Some(s.last_written_at.map_or(t, |prev| prev.max(t)));
+    } else if let Some(mtime) = file_mtime {
+        s.last_written_at = Some(s.last_written_at.map_or(mtime, |prev| prev.max(mtime)));
     }
     let minute = ts.map(minute_of).unwrap_or(untimed_minute);
+    if ts.is_some() {
+        s.last_activity_minute = Some(s.last_activity_minute.unwrap_or(minute).max(minute));
+    }
     match line.kind.as_deref() {
         Some("assistant") => {
             let Some(msg) = &line.message else { return };
@@ -744,7 +782,8 @@ fn scan_file(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let untimed_minute = file_mtime(path).map(minute_of).unwrap_or(0);
+    let mtime = file_mtime(path);
+    let untimed_minute = mtime.map(minute_of).unwrap_or(0);
     loop {
         if budget.exhausted(policy) {
             break;
@@ -768,6 +807,7 @@ fn scan_file(
                 policy,
                 day_start,
                 untimed_minute,
+                mtime,
                 sessions,
             );
         }
@@ -794,6 +834,38 @@ fn prune(sessions: &mut BTreeMap<String, SessionAgg>, day_start_minute: i64) {
         s.prompts.retain(|_, m| !m.is_empty());
     }
     sessions.retain(|_, s| !s.minutes.is_empty() || !s.prompts.is_empty());
+}
+
+// trace:BUG-1962 | ai:antigravity
+fn format_age(from: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let delta = now.signed_duration_since(from);
+    let secs = delta.num_seconds();
+    if secs < 0 {
+        return "just now".to_string();
+    }
+    if secs < 60 {
+        return format!("{}s ago", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m ago", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+    let days = hours / 24;
+    format!("{}d ago", days)
+}
+
+// trace:BUG-1962 | ai:antigravity
+fn session_last_write(s: &SessionAgg) -> Option<DateTime<Utc>> {
+    s.last_written_at.or_else(|| {
+        s.minutes
+            .keys()
+            .next_back()
+            .and_then(|m| Utc.timestamp_opt(m * 60, 0).single())
+    })
 }
 
 /// Every rule currently tripped, as (id, summary, action).
@@ -823,13 +895,18 @@ fn judge(
         if !s.timed {
             continue;
         }
+        // trace:BUG-1962 | ai:antigravity
+        let last_write_label = match session_last_write(s) {
+            Some(t) => format!(", transcript last written {}", format_age(t, now)),
+            None => String::new(),
+        };
         let who = match seats.get(sid) {
             Some(info) => format!(
-                "session {sid} (seat {}{}) in {project_label}",
+                "session {sid} (seat {}{}{last_write_label}) in {project_label}",
                 info.seat,
                 info.pid.map(|p| format!(", pid {p}")).unwrap_or_default()
             ),
-            None => format!("session {sid} (seat unresolved) in {project_label}"),
+            None => format!("session {sid} (seat unresolved{last_write_label}) in {project_label}"),
         };
         let mut push = |rule: &str, summary: String, action: &str| {
             findings.push(DoctorFinding {
@@ -940,11 +1017,28 @@ fn judge(
                 "run /aida-handoff in that seat, then start a fresh session",
             );
         }
+        // A setup is session-scoped: silence past the policy window or a
+        // known dead holder must clear it, even without a CronDelete. Old
+        // caches lack last_activity_minute, so use their latest bucket.
+        // Unregistered sessions retain recent transcript evidence as fallback.
+        // Future-stamped activity counts as recent (fail closed): the value is
+        // a running max, so one skewed line must not hide a live poll.
+        // trace:BUG-2120 | ai:codex
+        // trace:BUG-2120 | ai:claude
+        let recent = s
+            .last_activity_minute
+            .or_else(|| s.minutes.last_key_value().map(|(minute, _)| *minute))
+            .is_some_and(|minute| minute >= window_start);
+        let holder_alive = seats
+            .get(sid)
+            .and_then(|info| info.pid)
+            .is_none_or(aida_core::liveness::pid_is_alive);
         if let Some((minute, _)) = s
             .minutes
             .range(day_start..=now_minute)
             .rev()
             .find(|(_, b)| b.polls > 0)
+            .filter(|_| recent && holder_alive)
         {
             let at = Utc
                 .timestamp_opt(minute * 60, 0)
@@ -953,7 +1047,7 @@ fn judge(
                 .unwrap_or_default();
             push(
                 "mail-poll-setup",
-                format!("a model-side mailbox poll was active at {at} (forbidden since BUG-1589)"),
+                format!("a model-side mailbox poll was active at {at}"),
                 "delete the cron/loop in that seat; unread mail reaches a seat through the prompt hook",
             );
         }
@@ -1135,7 +1229,8 @@ pub(crate) fn scan(
         }
     }
 
-    coverage.still_active = tripped_ids.intersection(&state.active).cloned().collect();
+    // trace:BUG-1962 | ai:antigravity
+    coverage.still_tripped = tripped_ids.intersection(&state.active).cloned().collect();
     // A budget-cut run judged incomplete aggregates: never let it clear a
     // rule (that would re-alert on the next complete run).
     state.active = if budget.partial {
@@ -1201,10 +1296,11 @@ pub(crate) fn render_coverage(c: &Coverage) -> String {
     if c.partial {
         out.push_str("  DEGRADED: the run stopped at its byte/time budget; unread bytes resume on the next run (raise `[watchdog] max_total_bytes` / `time_budget_ms` to finish sooner)\n");
     }
-    if !c.still_active.is_empty() {
+    // trace:BUG-1962 | ai:antigravity
+    if !c.still_tripped.is_empty() {
         out.push_str(&format!(
             "  still tripped (already reported once): {}\n",
-            c.still_active.join(", ")
+            c.still_tripped.join(", ")
         ));
     }
     for s in &c.sources {
@@ -1336,6 +1432,313 @@ mod tests {
         r
     }
 
+    // trace:BUG-2120 | ai:codex
+    fn poll_setup(sid: &str, tool: &str) -> String {
+        format!(
+            "{}\n",
+            serde_json::json!({"type":"assistant","timestamp":ts(0),"sessionId":sid,
+                "message":{"id":"setup","stop_reason":"tool_use","content":[
+                    {"type":"tool_use","name":tool,"input":{
+                        "cron":"7,27,47 * * * *","prompt":TICK}}]}})
+        )
+    }
+
+    /// Replay the advisor's CronCreate followed by silence, retaining state
+    /// across ticks. The same lifetime rule covers ScheduleWakeup.
+    // trace:BUG-2120 | ai:codex
+    #[test]
+    fn silent_poll_setup_clears_persisted_watchdog_failure() {
+        for tool in ["CronCreate", "ScheduleWakeup"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let src = sources(tmp.path());
+            let sid = "6fd5497b-0c27-4e83-9725-0bf46198f394";
+            write(
+                &tmp.path().join("claude"),
+                "advisor.jsonl",
+                &poll_setup(sid, tool),
+            );
+            let p = WatchdogPolicy {
+                window_minutes: 30,
+                ..WatchdogPolicy::default()
+            };
+            let seats = HashMap::new();
+            let (first, _) = scan("aida", &src, &p, t0(), &seats);
+            assert_eq!(rules(&first, sid), vec!["mail-poll-setup"]);
+            let (_, active) = scan("aida", &src, &p, t0(), &seats);
+            assert_eq!(active.still_tripped, vec![format!("mail-poll-setup:{sid}")]);
+            // Beyond the configured window, not merely beyond the default.
+            let now = t0() + Duration::minutes(p.window_minutes);
+            let (findings, quiet) = scan("aida", &src, &p, now, &seats);
+            assert!(findings.is_empty());
+            assert!(quiet.still_tripped.is_empty());
+            assert_eq!(quiet.verdict, "ok");
+            assert!(load_state(src.state_path.as_deref()).active.is_empty());
+            let (findings, quiet) = scan("aida", &src, &p, t0() + Duration::hours(10), &seats);
+            assert!(findings.is_empty());
+            assert!(quiet.still_tripped.is_empty());
+            assert_eq!(quiet.verdict, "ok");
+            // Shift consumes this persisted evidence; quiet ticks no longer
+            // create failed watchdog jobs (old failures age out after 2h).
+            let evidence = budget_evidence(
+                src.state_path.as_deref().unwrap(),
+                t0() + Duration::hours(10),
+            )
+            .unwrap();
+            assert_eq!(evidence.last_verdict.as_deref(), Some("ok"));
+        }
+    }
+
+    // trace:BUG-2120 | ai:codex
+    #[test]
+    fn live_session_keeps_old_poll_setup_active_with_recent_usage_free_activity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = sources(tmp.path());
+        let path = write(
+            &tmp.path().join("claude"),
+            "live.jsonl",
+            &poll_setup("live", "CronCreate"),
+        );
+        let p = WatchdogPolicy::default();
+        let seats = HashMap::from([(
+            "live".into(),
+            SeatInfo {
+                seat: "advisor".into(),
+                pid: Some(std::process::id()),
+            },
+        )]);
+        let (first, _) = scan("aida", &src, &p, t0(), &seats);
+        assert_eq!(rules(&first, "live"), vec!["mail-poll-setup"]);
+        // An ordinary tool turn proves activity even without usage fields.
+        append(
+            &path,
+            &format!(
+                "{}\n",
+                serde_json::json!({
+            "type":"assistant","timestamp":ts(7200),"sessionId":"live",
+            "message":{"content":[{"type":"tool_use","name":"Bash"}]}})
+            ),
+        );
+        let (findings, cov) = scan("aida", &src, &p, t0() + Duration::hours(2), &seats);
+        assert!(findings.is_empty(), "already reported, but still tripped");
+        assert_eq!(cov.still_tripped, vec!["mail-poll-setup:live"]);
+        assert_eq!(cov.verdict, "tripped");
+    }
+
+    // trace:BUG-2120 | ai:codex
+    #[test]
+    fn dead_holder_clears_poll_setup_even_with_recent_transcript() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = sources(tmp.path());
+        write(
+            &tmp.path().join("claude"),
+            "dead.jsonl",
+            &poll_setup("dead", "ScheduleWakeup"),
+        );
+        let p = WatchdogPolicy::default();
+        let (first, _) = scan("aida", &src, &p, t0(), &HashMap::new());
+        assert_eq!(rules(&first, "dead"), vec!["mail-poll-setup"]);
+        let seats = HashMap::from([(
+            "dead".into(),
+            SeatInfo {
+                seat: "advisor".into(),
+                pid: Some(0),
+            },
+        )]);
+        let (findings, cov) = scan("aida", &src, &p, t0(), &seats);
+        assert!(findings.is_empty());
+        assert!(cov.still_tripped.is_empty());
+        assert_eq!(cov.verdict, "ok");
+    }
+
+    // trace:BUG-2120 | ai:claude
+    fn registry_entry(
+        id: &str,
+        sid: &str,
+        pid: u32,
+        last_active: &str,
+    ) -> crate::agent_registry::AgentRegistryEntry {
+        toml::from_str(&format!(
+            "id = \"{id}\"\nagent_type = \"claude\"\npid = {pid}\n\
+             started_at = \"2026-09-21T08:00:00Z\"\nlast_active_at = \"{last_active}\"\n\
+             role = \"advisor\"\nworktree_path = \"wt\"\nsource = \"test\"\n\
+             claude_session_id = \"{sid}\"\n"
+        ))
+        .unwrap()
+    }
+
+    /// A resumed session leaves dead-PID entries beside its live one: the
+    /// holder is live whichever entry `read_dir` happens to return last,
+    /// and even when a dead entry is the most recently active.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn live_registry_entry_beats_dead_entries_for_the_same_session_in_any_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = sources(tmp.path());
+        write(
+            &tmp.path().join("claude"),
+            "resumed.jsonl",
+            &poll_setup("resumed", "CronCreate"),
+        );
+        let live = registry_entry(
+            "live",
+            "resumed",
+            std::process::id(),
+            "2026-09-21T09:00:00Z",
+        );
+        let dead = [
+            registry_entry("dead-a", "resumed", 0, "2026-09-21T09:30:00Z"),
+            registry_entry("dead-b", "resumed", 0, "2026-09-21T09:59:00Z"),
+        ];
+        let forward = [dead[0].clone(), dead[1].clone(), live.clone()];
+        let backward = [live, dead[1].clone(), dead[0].clone()];
+        for order in [forward, backward] {
+            let seats = attribute_entries(order, aida_core::liveness::pid_is_alive);
+            assert_eq!(seats["resumed"].pid, Some(std::process::id()));
+            let mut stateless = src.clone();
+            stateless.state_path = None;
+            let (findings, _) = scan("aida", &stateless, &WatchdogPolicy::default(), t0(), &seats);
+            assert_eq!(rules(&findings, "resumed"), vec!["mail-poll-setup"]);
+        }
+        // Every entry dead: the holder is known dead and the setup clears.
+        let seats = attribute_entries(dead, aida_core::liveness::pid_is_alive);
+        let (findings, _) = scan("aida", &src, &WatchdogPolicy::default(), t0(), &seats);
+        assert!(rules(&findings, "resumed").is_empty());
+    }
+
+    /// The window is inclusive: activity `window_minutes - 1` old is inside it.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn poll_setup_stays_active_at_the_window_start_minute() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        write(
+            &tmp.path().join("claude"),
+            "edge.jsonl",
+            &poll_setup("edge", "CronCreate"),
+        );
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let now = t0() + Duration::minutes(p.window_minutes - 1);
+        let (findings, _) = scan("aida", &src, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "edge"), vec!["mail-poll-setup"]);
+    }
+
+    /// A cache persisted before `last_activity_minute` existed falls back to
+    /// its LATEST bucket, not its first.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn legacy_aggregate_without_last_activity_uses_its_latest_bucket() {
+        let now = t0() + Duration::hours(2);
+        let (old, recent) = (minute_of(t0()), minute_of(now));
+        let agg: SessionAgg = serde_json::from_value(serde_json::json!({
+            "timed": true,
+            "minutes": {
+                old.to_string(): {"polls": 1},
+                recent.to_string(): {"calls": 1, "tokens": 10}
+            }
+        }))
+        .unwrap();
+        assert_eq!(agg.last_activity_minute, None);
+        let sessions = BTreeMap::from([("legacy".to_string(), agg)]);
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let findings = judge("aida", &sessions, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "legacy"), vec!["mail-poll-setup"]);
+    }
+
+    /// An ended entry whose PID is still live (a reused `claude-<pid>.toml`
+    /// keeps its stale `ended_at`) beats a newer dead un-ended entry: only a
+    /// dead PID proves the holder gone.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn ended_entry_with_live_pid_beats_newer_dead_entry_in_any_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        write(
+            &tmp.path().join("claude"),
+            "reused.jsonl",
+            &poll_setup("reused", "CronCreate"),
+        );
+        let mut ended_live = registry_entry(
+            "ended-live",
+            "reused",
+            std::process::id(),
+            "2026-09-21T09:00:00Z",
+        );
+        ended_live.ended_at = Some(t0() - Duration::hours(1));
+        let newer_dead = registry_entry("newer-dead", "reused", 0, "2026-09-21T09:59:00Z");
+        let forward = [ended_live.clone(), newer_dead.clone()];
+        let backward = [newer_dead, ended_live];
+        for order in [forward, backward] {
+            let seats = attribute_entries(order, aida_core::liveness::pid_is_alive);
+            assert_eq!(seats["reused"].pid, Some(std::process::id()));
+            let (findings, _) = scan("aida", &src, &WatchdogPolicy::default(), t0(), &seats);
+            assert_eq!(rules(&findings, "reused"), vec!["mail-poll-setup"]);
+        }
+    }
+
+    /// Last activity is a running max across files: a transcript that sorts
+    /// later (e.g. a subagent's) but holds older lines for the same session
+    /// must not make a live session look idle.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn later_sorted_transcript_with_older_lines_keeps_recent_poll_active() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut src = sources(tmp.path());
+        src.state_path = None;
+        let dir = tmp.path().join("claude");
+        let recent = serde_json::json!({"type":"assistant","timestamp":ts(7200),"sessionId":"multi",
+            "message":{"id":"setup","stop_reason":"tool_use","content":[
+                {"type":"tool_use","name":"CronCreate","input":{
+                    "cron":"7,27,47 * * * *","prompt":TICK}}]}});
+        let older = serde_json::json!({"type":"assistant","timestamp":ts(0),"sessionId":"multi",
+            "message":{"content":[{"type":"tool_use","name":"Bash"}]}});
+        let first = write(&dir, "a-main.jsonl", &format!("{recent}\n"));
+        let second = write(&dir, "b-subagent.jsonl", &format!("{older}\n"));
+        // Pin the fold order the scan uses: the older file is folded last.
+        let mut files = Vec::new();
+        walk_jsonl(&dir, &mut files);
+        files.sort();
+        assert_eq!(files, vec![first, second]);
+        let p = WatchdogPolicy {
+            window_minutes: 30,
+            ..WatchdogPolicy::default()
+        };
+        let now = t0() + Duration::hours(2);
+        let (findings, _) = scan("aida", &src, &p, now, &HashMap::new());
+        assert_eq!(rules(&findings, "multi"), vec!["mail-poll-setup"]);
+    }
+
+    /// A future-stamped activity minute (clock skew) counts as recent, so a
+    /// live poll fails closed instead of clearing.
+    // trace:BUG-2120 | ai:claude
+    #[test]
+    fn future_last_activity_still_counts_as_recent() {
+        let now = t0();
+        let now_minute = minute_of(now);
+        let agg: SessionAgg = serde_json::from_value(serde_json::json!({
+            "timed": true,
+            "last_activity_minute": now_minute + 10,
+            "minutes": { now_minute.to_string(): {"polls": 1} }
+        }))
+        .unwrap();
+        let sessions = BTreeMap::from([("skewed".to_string(), agg)]);
+        let findings = judge(
+            "aida",
+            &sessions,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!(rules(&findings, "skewed"), vec!["mail-poll-setup"]);
+    }
+
     /// Acceptance 2: replaying the storm shape for both BUG-1589 sessions
     /// trips wake-rate, token-rate, repeated-prompt and idle-ratio on each
     /// within the first simulated hour, under the calibrated defaults.
@@ -1360,7 +1763,7 @@ mod tests {
             b.to_string(),
             SeatInfo {
                 seat: "advisor".into(),
-                pid: Some(4242),
+                pid: Some(std::process::id()),
             },
         );
         let now = t0() + Duration::minutes(60);
@@ -1396,7 +1799,8 @@ mod tests {
             .find(|f| f.id == format!("wake-rate:{b}"))
             .unwrap();
         assert!(
-            wake.summary.contains("seat advisor, pid 4242"),
+            wake.summary
+                .contains(&format!("seat advisor, pid {}", std::process::id())),
             "{}",
             wake.summary
         );
@@ -1514,14 +1918,14 @@ mod tests {
         assert!(first.iter().any(|f| f.id == "wake-rate:s"));
         let (second, cov) = scan("aida", &src, &policy, now, &HashMap::new());
         assert!(second.is_empty(), "{second:?}");
-        assert!(cov.still_active.contains(&"wake-rate:s".to_string()));
+        assert!(cov.still_tripped.contains(&"wake-rate:s".to_string()));
         assert_eq!(cov.verdict, "tripped");
         // Two quiet hours later the hourly rules have cleared.
         let quiet = t0() + Duration::minutes(180);
         let (third, cov) = scan("aida", &src, &policy, quiet, &HashMap::new());
         assert!(third.is_empty());
         assert!(!cov
-            .still_active
+            .still_tripped
             .iter()
             .any(|id| id.starts_with("wake-rate")));
         // A fresh storm is a new crossing.
@@ -1564,7 +1968,7 @@ mod tests {
             &HashMap::new(),
         );
         assert_eq!(second.bytes_read, 0);
-        assert!(second.still_active.contains(&"wake-rate:s".to_string()));
+        assert!(second.still_tripped.contains(&"wake-rate:s".to_string()));
         let extra = storm_transcript("s", 1800, 5);
         append(&path, &extra);
         let (_, third) = scan(
@@ -1832,7 +2236,7 @@ mod tests {
         assert_eq!(coverage.verdict, "unknown");
         assert!(findings.iter().all(|f| f.id != "watchdog-blind"));
         assert!(coverage
-            .still_active
+            .still_tripped
             .contains(&"watchdog-blind".to_string()));
 
         // A run that reads evidence cleanly resets the streak and clears it.
@@ -1847,7 +2251,7 @@ mod tests {
         );
         assert_eq!(healthy.verdict, "ok");
         assert!(findings.is_empty());
-        assert!(healthy.still_active.is_empty());
+        assert!(healthy.still_tripped.is_empty());
     }
 
     /// `blind_alert_after = 0` turns the self-blind check off entirely, even
@@ -1906,5 +2310,300 @@ mod tests {
         // Two days later the same aggregates fall out of the trailing day.
         let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
         assert_eq!(later.spent_24h, 0);
+    }
+
+    /// BUG-1962: an ended or idle session with trailing compactions reports
+    /// its transcript last-write age in the finding summary, and on subsequent
+    /// runs is recorded in `still_tripped` (not `still_active`).
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn ended_or_idle_session_reports_transcript_last_write_age_and_still_tripped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000001";
+        // Create a transcript with 4 compactions over the first 10 minutes.
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for i in 0..4 {
+            let at = i * 120;
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(at + 1),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Run scan 4 hours after the transcript ended (last event at 361s).
+        let now = t0() + Duration::seconds(361) + Duration::hours(4);
+        let (findings, cov) = scan("aida", &src, &policy, now, &HashMap::new());
+        assert_eq!(cov.verdict, "tripped");
+        assert!(
+            cov.still_tripped.is_empty(),
+            "first run has no previously tripped rules"
+        );
+        let compaction_finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            compaction_finding
+                .summary
+                .contains("transcript last written 4h ago"),
+            "finding summary should contain transcript age: {}",
+            compaction_finding.summary
+        );
+        assert!(
+            compaction_finding
+                .summary
+                .contains("4 auto-compactions in the last 24h"),
+            "{}",
+            compaction_finding.summary
+        );
+
+        // Second run at the same time: finding is deduped, and rule is in still_tripped.
+        let (second_findings, second_cov) = scan("aida", &src, &policy, now, &HashMap::new());
+        assert!(second_findings.is_empty(), "rule already reported once");
+        assert!(
+            second_cov
+                .still_tripped
+                .contains(&format!("compactions:{sid}")),
+            "rule should be in still_tripped"
+        );
+        assert_eq!(second_cov.verdict, "tripped");
+    }
+
+    /// BUG-1962: sub-minute precision pins that `last_written_at` records the
+    /// exact second of the event, failing if dropped or if the minute-bucket
+    /// fallback is used.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_subminute_precision_pins_exact_timestamp() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000002";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for (i, at) in [0, 20, 50].iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at 60s (exactly 10s after last event at 50s).
+        // With exact last_written_at (50s), age is 10s ("10s ago").
+        // Dropping last_written_at falls back to minute 0 (0s), which gives 60s ("1m ago").
+        let now = t0() + Duration::seconds(60);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 10s ago"),
+            "finding summary must contain exact sub-minute age '10s ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("1m ago"),
+            "minute bucket fallback must not override sub-minute precision: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: verifies that `last_written_at` updates via `prev.max(t)`,
+    /// catching any regression to `prev.min(t)`.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_pins_max_over_min_across_hours() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000003";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        let times = [0, 3600, 7200];
+        for (i, at) in times.iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at t0 + 3 hours (10800s).
+        // With max(t), last write is at 7201s (2h in), so age is 1h ("1h ago").
+        // With min(t), last write would stay at 0s, giving age 3h ("3h ago").
+        let now = t0() + Duration::hours(3);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 1h ago"),
+            "finding summary must use max(t) to report '1h ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("3h ago"),
+            "swapping prev.max for prev.min must not pass: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: `file_mtime` records `last_written_at` when lines lack timestamps.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_records_file_mtime_for_untimed_lines() {
+        let mut sessions = BTreeMap::new();
+        let sid = "session-mtime";
+        let line = Line {
+            kind: Some("assistant".to_string()),
+            timestamp: None,
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let mtime = t0() + Duration::minutes(45);
+        fold_line(
+            &line,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            0,
+            Some(mtime),
+            &mut sessions,
+        );
+        let s = sessions.get(sid).expect("session aggregate recorded");
+        assert_eq!(
+            s.last_written_at,
+            Some(mtime),
+            "file_mtime branch must record last_written_at when timestamp is absent"
+        );
+    }
+
+    /// BUG-1962: `last_written_at` is serialized in state.json and preserved
+    /// across incremental scans where no new bytes are read.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_persisted_and_retained_across_incremental_scans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000004";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for i in 0..3 {
+            let at = i * 60;
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(at + 1),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        let now1 = t0() + Duration::seconds(121) + Duration::hours(1);
+        let (findings1, cov1) = scan("aida", &src, &policy, now1, &HashMap::new());
+        assert_eq!(cov1.verdict, "tripped");
+        assert_eq!(findings1.len(), 1);
+        assert!(findings1[0]
+            .summary
+            .contains("transcript last written 1h ago"));
+
+        let state_path = src.state_path.as_ref().unwrap();
+        let state_json = std::fs::read_to_string(state_path).unwrap();
+        assert!(
+            state_json.contains("last_written_at"),
+            "state.json must serialize last_written_at: {state_json}"
+        );
+
+        let now2 = now1 + Duration::hours(2);
+        let (findings2, cov2) = scan("aida", &src, &policy, now2, &HashMap::new());
+        assert!(findings2.is_empty(), "already reported finding is deduped");
+        assert!(
+            cov2.still_tripped.contains(&format!("compactions:{sid}")),
+            "rule is retained in still_tripped: {:?}",
+            cov2.still_tripped
+        );
     }
 }

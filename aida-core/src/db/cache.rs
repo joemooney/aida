@@ -6451,6 +6451,17 @@ mod tests {
         assert_eq!(ladder_delay(&full, 0), Some(full[0]));
     }
 
+    // trace:BUG-1995 | ai:antigravity
+    #[test]
+    fn read_ladder_cap_stays_well_under_five_second_budget() {
+        assert!(
+            READ_LADDER_CAP <= Duration::from_secs(3),
+            "READ_LADDER_CAP ({:?}) must stay well under ADR-53's 5 s budget",
+            READ_LADDER_CAP
+        );
+        assert!(READ_LADDER_CAP > Duration::ZERO);
+    }
+
     #[test]
     fn cache_retry_exhaustion_keeps_lock_holder_hint() {
         let _env = crate::test_env::EnvVarsGuard::set(&[

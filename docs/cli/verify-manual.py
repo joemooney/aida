@@ -98,6 +98,10 @@ def help_all_commands():
     out = subprocess.run(["aida", "help-all"], capture_output=True, text=True).stdout
     cmds = []
     for line in out.splitlines():
+        # PATH extensions are machine-local, outside the built-in manual.
+        # trace:BUG-2121 | ai:codex
+        if re.match(r"^  [a-z][a-z0-9-]+\s+external\s", line):
+            continue
         m = re.match(r"^  ([a-z][a-z0-9-]+)\s", line)
         if m:
             cmds.append(m.group(1))

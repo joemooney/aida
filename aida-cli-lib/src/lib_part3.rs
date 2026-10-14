@@ -888,16 +888,10 @@ mod resolve_gh_binary_tests {
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
-    // Serialize PATH-mutating tests against each other. Prepending (vs
-    // replacing) PATH means other parallel tests keep finding `git` and
-    // friends, but two concurrent PATH mutators still need to serialize
-    // so they don't restore the wrong predecessor value. BUG-697: use the ONE
-    // shared env lock so a PATH swap can't race any other env read. trace:BUG-79
-
-    /// Acquire the PATH lock and prepend `dir` to PATH for the test's
-    /// duration. Returns an RAII guard that restores PATH on drop.
-    /// Prepending (instead of overwriting) keeps system `git` reachable
-    /// from any parallel test that spawns subprocesses.
+    // These tests run in exact single-test children. A shared writer mutex
+    // alone cannot protect other tests' unlocked executable lookups.
+    /// Prepend a directory only inside the isolated test child.
+    // trace:BUG-1994 | ai:codex
     // trace:TASK-1532 | ai:agy
     fn scoped_prepend_path(dir: &std::path::Path) -> impl Drop {
         crate::test_env::EnvVarGuard::prepend_path(dir)
@@ -918,6 +912,10 @@ mod resolve_gh_binary_tests {
     /// Critical regression guard for BUG-74. trace:BUG-74 | ai:claude
     #[test]
     fn finds_gh_via_path() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_executable(&gh);
@@ -932,6 +930,10 @@ mod resolve_gh_binary_tests {
     /// PATH walk ignores non-executable files named gh. trace:BUG-74
     #[test]
     fn rejects_non_executable() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_non_executable(&gh);
@@ -975,6 +977,10 @@ mod resolve_gh_binary_tests {
     /// next candidate or return None. trace:BUG-79 | ai:claude
     #[test]
     fn rejects_is_executable_but_spawn_fails() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let bad = tmp.path().join("gh");
         // Shebang points at a non-existent interpreter, so spawn errors
@@ -1001,6 +1007,10 @@ mod resolve_gh_binary_tests {
     /// the working one wins. trace:BUG-79 | ai:claude
     #[test]
     fn falls_back_past_broken_to_working() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let broken_dir = TempDir::new().unwrap();
         let good_dir = TempDir::new().unwrap();
 

@@ -10713,6 +10713,15 @@ pub(crate) fn preflight_queue_work_branch(
     Ok(())
 }
 
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn apply_queue_work_contained_env(contained: bool) {
+    if contained {
+        std::env::set_var("AIDA_CONTAINED", "1");
+    } else {
+        std::env::remove_var("AIDA_CONTAINED");
+    }
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -11128,9 +11137,7 @@ pub(crate) fn handle_queue_work(
     if contained && bypass_knob {
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
-    if contained {
-        std::env::set_var("AIDA_CONTAINED", "1");
-    }
+    apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;
     let (mut permission_mode, permission_mode_origin) = if contained {
@@ -12995,6 +13002,13 @@ pub(crate) struct LeasePeek {
     // trace:STORY-1054 | ai:codex
     #[serde(default)]
     pub(crate) active_pid: Option<u32>,
+    /// Kernel start times recorded beside the pids, so a liveness check can
+    /// reject a recycled pid. Absent on older leases.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default)]
+    pub(crate) creator_pid_start_time: Option<String>,
+    #[serde(default)]
+    pub(crate) active_pid_start_time: Option<String>,
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without

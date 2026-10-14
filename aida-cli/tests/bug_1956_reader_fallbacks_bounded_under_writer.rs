@@ -9,16 +9,33 @@
 //! refresh workers had already failed, so readers took the inline fallback
 //! (spawning suppressed) and parked in the ladder. Each test here holds
 //! `BEGIN IMMEDIATE` on cache.db from a separate connection, as BUG-1674's
-//! tests do, and leaves `AIDA_CACHE_RETRY_*` unset so the production ladder
-//! is what a regression would wait out.
+//! tests do. The measured reads keep the production retry count but stretch
+//! each ladder step (`AIDA_CACHE_RETRY_MS`), so a regression that rides the
+//! uncapped ladder runs into the hard ceiling.
 // trace:BUG-1956 | ai:claude
+// trace:BUG-1995 | ai:antigravity
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-/// ADR-53's interaction ceiling, the acceptance bound for every run here.
-const CEILING: Duration = Duration::from_secs(5);
+/// ADR-53's interaction ceiling. It is a performance budget, reported on
+/// stderr when missed, never fatal: no in-test signal can prove the host was
+/// quiet while the call ran (see `aida-cli-lib/src/test_timing.rs`).
+// trace:BUG-1995 | ai:antigravity
+const BUDGET: Duration = Duration::from_secs(5);
+
+/// The fatal bound. A correct reader fallback stays far below it even when the
+/// host is oversubscribed; a command that waits for a held lock or rides the
+/// stretched ladder cannot finish before it.
+// trace:BUG-1995 | ai:antigravity
+const HARD_CEILING: Duration = Duration::from_secs(60);
+
+/// Each step of the SQLite retry ladder during the measured call. It is twice
+/// [`HARD_CEILING`], so a single uncapped ladder sleep (the ~25.5 s shape
+/// BUG-1956 fixed) cannot finish before the ceiling.
+// trace:BUG-1995 | ai:antigravity
+const STRETCHED_LADDER_STEP_MS: u64 = 120_000;
 
 struct Fixture {
     _tmp: tempfile::TempDir,
@@ -154,22 +171,100 @@ fn hold_writer(fixture: &Fixture) -> rusqlite::Connection {
     conn
 }
 
-/// Run a read, asserting the ceiling, exit 0, and the writer-busy stale note.
+/// The 1-minute load average, for the budget report only. The item-level
+/// cfg is what the portability ratchet keys on, so it stays.
+// trace:BUG-1995 | ai:antigravity
+#[cfg(target_os = "linux")]
+fn load_average() -> String {
+    std::fs::read_to_string("/proc/loadavg")
+        .ok()
+        .and_then(|s| s.split_whitespace().next().map(str::to_owned))
+        .unwrap_or_else(|| "unknown".to_owned())
+}
+
+/// Run `aida` with the retry ladder stretched, killing it at [`HARD_CEILING`].
+/// Returns the output and the wall-clock it took.
+// trace:BUG-1995 | ai:antigravity
+fn timed_aida(
+    fixture: &Fixture,
+    args: &[&str],
+    envs: &[(&str, &str)],
+    context: &str,
+) -> (Output, Duration) {
+    let out_path = fixture.home.join("aida.stdout");
+    let err_path = fixture.home.join("aida.stderr");
+    let start = Instant::now();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+    cmd.current_dir(&fixture.repo)
+        .env("HOME", &fixture.home)
+        .env("AIDA_TELEMETRY", "0")
+        .env_remove("AIDA_CACHE_RETRY_COUNT")
+        .env_remove("AIDA_CACHE_NO_DETACH")
+        .env_remove("AIDA_CACHE_FAST_FAIL")
+        .env_remove("AIDA_CACHE_READ_WAIT_MS")
+        .env("AIDA_CACHE_RETRY_MS", STRETCHED_LADDER_STEP_MS.to_string())
+        .args(args);
+    for (key, value) in envs {
+        cmd.env(key, value);
+    }
+    let mut child = cmd
+        .stdout(std::process::Stdio::from(
+            std::fs::File::create(&out_path).unwrap(),
+        ))
+        .stderr(std::process::Stdio::from(
+            std::fs::File::create(&err_path).unwrap(),
+        ))
+        .spawn()
+        .expect("spawn aida");
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("poll aida") {
+            break status;
+        }
+        if start.elapsed() >= HARD_CEILING {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "{context}: {args:?} was still running after the {HARD_CEILING:?} hard \
+                 ceiling (1-minute load {}). It waited for a held lock or rode the \
+                 uncapped retry ladder; no host load explains this.\nstdout={}\nstderr={}",
+                load_average(),
+                std::fs::read_to_string(&out_path).unwrap_or_default(),
+                std::fs::read_to_string(&err_path).unwrap_or_default()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let elapsed = start.elapsed();
+    let output = Output {
+        status,
+        stdout: std::fs::read(&out_path).unwrap(),
+        stderr: std::fs::read(&err_path).unwrap(),
+    };
+    (output, elapsed)
+}
+
+/// Run a read, asserting the hard ceiling, exit 0, and the writer-busy stale note;
+/// report a missed [`BUDGET`]. Returns stdout.
+// trace:BUG-1995 | ai:antigravity
 fn read_bounded_and_labelled(
     fixture: &Fixture,
     args: &[&str],
     envs: &[(&str, &str)],
     context: &str,
 ) -> String {
-    let start = Instant::now();
-    let out = aida_env(fixture, args, envs);
-    let elapsed = start.elapsed();
+    let (out, elapsed) = timed_aida(fixture, args, envs, context);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-    assert!(
-        elapsed < CEILING,
-        "{context}: {args:?} took {elapsed:?}, past the 5 s ceiling\nstdout={stdout}\nstderr={stderr}"
-    );
+    // trace:BUG-1995 | ai:antigravity
+    if elapsed >= BUDGET {
+        eprintln!(
+            "BUDGET-MISSED {context}: {args:?} took {elapsed:?}, over its {BUDGET:?} budget \
+             but inside the {HARD_CEILING:?} ceiling (1-minute load {}). Reported, not \
+             failed: a busy host explains this; a lock wait would have hit the ceiling. \
+             trace:BUG-1995",
+            load_average()
+        );
+    }
     assert!(
         out.status.success(),
         "{context}: {args:?} failed\nstdout={stdout}\nstderr={stderr}"

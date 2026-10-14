@@ -10,17 +10,30 @@ use crate::dev_cmd::{
 use crate::shell_eval::{EVAL_BLOCK_CAP, ZSH_LOCALOPTS_CAP};
 use crate::shell_wrapper_harness::{shell_args, wrapper_shells};
 use crate::test_exec::write_executable;
+use sha2::{Digest, Sha256};
 
 /// Real pre-fix leaking wrapper built from `3618fe739b^` (the commit immediately
 /// preceding BUG-2000 / PR #2584), containing header + `SHELL_HELPERS` + `WORKER_FUNCTION`.
 ///
 /// Provenance:
-/// - Source commit: `3618fe739b^` (`fba16d9b9c9f7a8342416bc28ca1e8ba846a84eb`)
+/// - Source commit: `3618fe739b^` (`4e11f0296c00e5688fe84b753b2a2ea7a4c8b005`)
 /// - Assembled components: file header comment + `SHELL_HELPERS` + `WORKER_FUNCTION` (21,143 bytes)
 /// - SHA256: `5344afd309d4fda467d230f44f150f2327916968d42bc3771fac56be1e841109`
 /// - Regeneration: extract header comments, `SHELL_HELPERS`, and `WORKER_FUNCTION` from
 ///   `3618fe739b^:aida-cli-lib/src/dev_cmd.rs` and concatenate them.
 const PRE_FIX_LEAKING_WRAPPER: &str = include_str!("fixtures/bug_2005_leaking_wrapper.sh");
+
+// trace:TASK-1742 | ai:codex
+#[test]
+fn pre_fix_leaking_wrapper_matches_pinned_sha256() {
+    // Hash the compiled-in bytes, without depending on git history being available.
+    let digest = Sha256::digest(PRE_FIX_LEAKING_WRAPPER.as_bytes());
+    assert_eq!(
+        format!("{digest:x}"),
+        "5344afd309d4fda467d230f44f150f2327916968d42bc3771fac56be1e841109",
+        "pre-fix leaking wrapper fixture must retain its historical bytes"
+    );
+}
 
 #[test]
 fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
@@ -89,7 +102,20 @@ fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
 fn pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash() {
     const SECRET: &str = "bug2005-leaked-secret-token-xyz789";
 
-    for &shell in wrapper_shells() {
+    // trace:TASK-1742 | ai:codex
+    let shells = wrapper_shells();
+    if !shells.contains(&"zsh") {
+        // trace:TASK-1363 | ai:claude
+        // CI installs zsh and sets AIDA_REQUIRE_ZSH=1, so the leak proof can
+        // never silently degrade to a bash-only pass there.
+        assert!(
+            std::env::var("AIDA_REQUIRE_ZSH").as_deref() != Ok("1"),
+            "AIDA_REQUIRE_ZSH=1 but zsh is unavailable; the pre-fix zsh leak proof cannot run"
+        );
+        eprintln!("SKIP: pre-fix fixture zsh leak proof (zsh unavailable); bash still checked");
+    }
+
+    for &shell in shells {
         let dir = tempfile::tempdir().expect("create tempdir");
         let home = dir.path().join("home");
         std::fs::create_dir(&home).unwrap();
