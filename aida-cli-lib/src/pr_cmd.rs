@@ -2974,9 +2974,13 @@ pub(crate) fn pr_ship_handler(
             &StepOutcome::Skipped("--no-cleanup".into()),
         );
     } else {
+        // BUG-1953: match the PR head branch, not the cwd branch — shipping
+        // by number from `main` must still end the shipped branch's lease.
+        // `ship_branch` already falls back to `branch` when no PR branch
+        // resolved. trace:BUG-1953 | ai:claude
         let lease_for_branch = list_leases(&main_worktree)
             .into_iter()
-            .find(|l| l.branch == branch);
+            .find(|l| l.branch == ship_branch);
         match lease_for_branch {
             Some(lease) => {
                 // If our cwd is inside the worktree we're about to
@@ -3049,15 +3053,13 @@ pub(crate) fn pr_ship_handler(
                 }
             }
             None => {
-                eprintln!(
-                    "  step 5: no AIDA lease for branch {} — nothing to clean up",
-                    branch
-                );
+                let (line, detail) = pr_ship::step5_no_lease_messages(&ship_branch);
+                eprintln!("{line}");
                 log_ship_activity(
                     &main_worktree,
                     Some(pr_number),
                     &ShipStep::EndLease,
-                    &StepOutcome::Skipped(format!("no lease for branch {}", branch)),
+                    &StepOutcome::Skipped(detail),
                 );
             }
         }
