@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:37:34.380337028Z
-modified_at: 2026-10-14T12:19:46.030221537Z
+modified_at: 2026-10-14T12:27:30.391797425Z
 req_type: Task
 tags:
 - batch:drain-20261013
@@ -23,6 +23,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2617 at 090e58033e4b59bf41db09e5102088d0519f9996'
   created_at: 2026-10-14T12:19:46.030221537Z
   modified_at: 2026-10-14T12:19:46.030221537Z
+- id: 01a13a61-ccd7-7231-99cb-18e92a10ea72
+  author: joe
+  content: 'FACTORY READY: PR #2617 green at 090e58033e4b59bf41db09e5102088d0519f9996'
+  created_at: 2026-10-14T12:27:30.391797425Z
+  modified_at: 2026-10-14T12:27:30.391797425Z
 history:
 - id: 01a13a46-2a27-7eb3-9546-3194b371fee5
   author: aida-session-start
