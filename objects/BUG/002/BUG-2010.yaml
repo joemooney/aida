@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T12:38:05.335718504Z
+modified_at: 2026-10-14T12:47:58.760231514Z
 req_type: Bug
 tags:
 - agent-new
@@ -46,6 +46,11 @@ comments:
     3. Add unit test covering live factory lane with non-matching/dead lease PID, asserting row is not reported stale and excluded from orphans.
   created_at: 2026-10-14T12:38:05.335718504Z
   modified_at: 2026-10-14T12:38:05.335718504Z
+- id: 01a13a74-8b28-7e41-8447-84b0e0ee0bcd
+  author: joe
+  content: 'FACTORY DRAFT: PR #2619 at 47d2b7a1c92357262b9eaaf2f72c0c6c78b0e7da'
+  created_at: 2026-10-14T12:47:58.760231514Z
+  modified_at: 2026-10-14T12:47:58.760231514Z
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
