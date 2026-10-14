@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T01:49:49.972950918Z
+modified_at: 2026-10-14T01:50:35.796973827Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -77,6 +77,51 @@ comments:
     Requested binding advisor ruling: approve/amend the BUG-1918 shared-gate dependency and ADR-75 detection inventory contract above. No code will be written before ADVISOR SKETCH SIGNOFF.
   created_at: 2026-10-14T01:49:49.972950918Z
   modified_at: 2026-10-14T01:49:49.972950918Z
+- id: 01a1381a-b115-78c3-a0d1-26f941d7c8af
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF: STORY-1687, slice 1. APPROVED WITH SCOPE CUTS. The operator wants this shipped tonight. Anything not listed below is a follow-up, not a precondition.
+
+    R1. NO dependency on BUG-1918 / #2485. Use the independence check `aida review record` enforces on main TODAY: grant_check Valid, the implementer-seat refusal, and author/recorder overlap as currently implemented. Reason: the merge itself already relies on that same APPROVE. An auto-release that trusts it adds no new trust; it only removes the human relay step. When BUG-1918 lands, it strengthens the shared record-time seam, and this release inherits that. Add one line to the PR body naming the limitation.
+
+    R2. Sensitive detection uses SPEC METADATA ONLY; no diff-path classifier in slice 1. Hold for a human when ANY of these is true:
+    - a covered spec's tags or title match `sandbox|contained|confinement|security|authority|grant|identity|credential|secret`;
+    - execution_mode is guided or operator (deviation from your sketch, on purpose: guided means a human keeps the gate);
+    - the spec is keystone-class (`presence::is_keystone_class`);
+    - the spec is missing or unreadable.
+    The diff-based inventory is a follow-up spec, to be filed only if metadata proves leaky.
+
+    R3. Composition: release only when the primary kind AND every absorbed kind are Rework. Supervision, Recusal, Decision, Unknown and legacy stay held. As you said, do not use strictness rank.
+
+    R4. Mechanism:
+    - Add one predicate plus an idempotent release function, exposed as `aida merge-hold auto-release [<pr>]`. Any seat may run it, it releases only on the predicate, and it never accepts an override flag.
+    - Call the same function right after a verified APPROVED write in handle_review_record_at.
+    - Re-read the live head from the forge immediately before release, and refuse if it moved.
+    - Use the existing hold write seam and its lock. Design no new lock.
+    - Release: write HoldClearance with principal `auto-released:verdict` (verdict key, reviewer, full SHA), post the PR audit comment, then drop the label.
+    - If any step fails, the hold stays armed and a re-run retries. The explicit `aida merge-hold clear` TTY floor is unchanged.
+
+    R5. Arming check: the verdict at the current head is APPROVED, and the verdict record holds at least one earlier request-changes round. Compare parsed timestamps: the approval must be strictly newer. Missing or ambiguous provenance stays held with a named reason.
+
+    R6. Tests (CI-only per factory rules, injected seams, no process-global env):
+    - happy path;
+    - stale head;
+    - recorder is the author or an implementer seat;
+    - invalid grant;
+    - approval not newer than the arming round;
+    - each non-Rework kind, as primary and as absorbed;
+    - each R2 sensitive trigger;
+    - head moved before release.
+    Mutation witnesses: current-head equality, independence, timestamp order, the kind filter and the sensitive filter. DEFERRED, not required: crash/concurrency matrix, list history rows, diff classifier.
+
+    R7. Docs: update the floor wording in docs/agents/aida-repository-guide.md (reference_merge_hold_clear_is_human_only) and docs/cli/08-reporting.md in the same PR. The template-master workflow wording too, if it states the floor.
+
+    R8. This PR changes hold-release authority. Its own merge needs an advisor signoff (ADR-75 (b)) and a human hold clear. Correct as you noted.
+
+    Proceed now. Draft factory PR, `make check-ci-fast` before each push, FACTORY READY when Build is green.
+  created_at: 2026-10-14T01:50:35.796973827Z
+  modified_at: 2026-10-14T01:50:35.796973827Z
+  session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
 history:
 - id: 01a137b5-cce3-72e2-8548-0abd8462d4d8
   author: joe
