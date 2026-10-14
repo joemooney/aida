@@ -3093,8 +3093,12 @@ hosts:
     /// The env tokens are only a fallback: with no glab login for the host,
     /// `AIDA_GITLAB_TOKEN` beats `GITLAB_TOKEN` and the source says Env.
     // trace:BUG-1972 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn gitlab_token_falls_back_to_env_without_a_glab_login_for_the_host() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let (_tmp, _env) = glab_login_fixture(
             &[("gitlab.com", "glab-gitlab-com")],
             &[
@@ -3122,8 +3126,12 @@ hosts:
     /// BUG-1972: with an env token AND a glab login for a different host
     /// present, each host gets its own glab token, never the env one.
     // trace:BUG-1972 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn gitlab_token_prefers_the_host_scoped_glab_login_over_env() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let (_tmp, _env) = glab_login_fixture(
             &[
                 ("gitlab.com", "glab-gitlab-com"),

@@ -650,8 +650,12 @@ max_source_size_mb = 50
         assert!(plan.is_none(), "fork_mode=never must never plan a fork");
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_returns_none_when_unregistered() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         // With no registration, no env var, no mtime fallback, discovery
         // returns None — the orchestrator's signal to cold-boot.
         // Sandbox HOME so we don't accidentally read the developer's real
@@ -664,8 +668,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_picks_registered_session_when_alive() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-spec-worktree";
         let uuid = "019e0000-0000-7000-8000-000000000abc";
@@ -697,8 +705,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_falls_through_when_registered_jsonl_missing() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let reg = AdvisorRegistration {
             uuid: "019e0000-0000-7000-8000-000000000def".to_string(),
@@ -715,8 +727,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_treats_stale_jsonl_as_dead() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-stale";
         let uuid = "019e0000-0000-7000-8000-0000000staaa";
@@ -753,8 +769,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn plan_fork_destination_uses_spec_worktree_slug_not_source_slug() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let source_slug = "-home-joe-ai-aida"; // the live advisor's project
         let spec_worktree = PathBuf::from("/home/joe/ai/aida-story-360");
@@ -796,8 +816,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn plan_fork_respects_size_ceiling() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-too-big";
         let uuid = "019e0000-0000-7000-8000-0000000bigggg";
@@ -830,8 +854,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn registration_roundtrip() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let reg = AdvisorRegistration {
             uuid: "019e1111-1111-7111-8111-111111111111".to_string(),

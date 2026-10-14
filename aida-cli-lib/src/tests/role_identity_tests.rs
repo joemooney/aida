@@ -179,8 +179,12 @@ fn product_default_guidance_is_available_without_role_file() {
     assert!(guidance.contains("advisor"), "{guidance}");
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn roleless_recovery_uses_last_used_role_and_copyable_command() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     let root = tmp.path();
@@ -223,8 +227,12 @@ fn roleless_recovery_uses_last_used_role_and_copyable_command() {
     assert!(line.contains("`aida role enter advisor`"), "{line}");
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn roleless_recovery_ties_last_active_at_by_role_name() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     let root = tmp.path();
@@ -307,8 +315,12 @@ fn role_restore_prompt_marker_name_is_filesystem_safe() {
     assert!(!name.contains('/'));
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn starter_scaffold_adds_product_and_preserves_existing_product_role() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let project = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     let roles_dir = home.path().join(".aida/roles");

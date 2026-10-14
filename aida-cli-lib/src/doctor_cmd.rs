@@ -2585,8 +2585,12 @@ mod bug_1744_trust_breadth_tests {
     }
 
     // trace:BUG-1744 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn the_trust_scan_never_writes_the_claude_config() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fake_home = tempfile::tempdir().unwrap();
         let project_root = tempfile::tempdir().unwrap();
         let trusted_parent = project_root.path().parent().unwrap();

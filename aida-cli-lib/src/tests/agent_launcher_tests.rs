@@ -1590,8 +1590,12 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
     assert!(claude.default_args.is_empty());
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     // STORY-1471: keep a user's `~/.aida/roles/` launch-prompt override out.
     let home = TempDir::new().unwrap();
@@ -1817,8 +1821,12 @@ fn role_file_launch_prompts_override_the_embedded_defaults() {
 // STORY-1471: --show-prompt prints exactly the generated text that the
 // launch injects, for a no-spec launch too.
 // trace:STORY-1471 | ai:claude
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn show_prompt_prints_the_exact_injected_role_prompt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     // Point the global role dir at an empty tempdir so a user's
     // `~/.aida/roles/product.toml` override cannot shadow the embedded prompt.

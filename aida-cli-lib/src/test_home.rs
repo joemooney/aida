@@ -445,8 +445,12 @@ mod tests {
     /// The redirect is in effect before any test body runs: the process
     /// `HOME` is the temp home, not any real one, and the operator's
     /// overrides are gone.
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn redirect_is_installed_before_tests_run() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let _env = crate::test_env::EnvVarsGuard::snapshot(&["HOME"]);
         let r = installed();
         assert!(r.test_home.join(".gitconfig").is_file());

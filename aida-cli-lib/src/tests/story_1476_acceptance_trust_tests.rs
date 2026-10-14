@@ -263,8 +263,12 @@ fn story_1476_notrun_not_sent_to_evaluator() {
 
 /// Fake HOME config enabled with `touch` allowlisted: the command runs.
 #[cfg(unix)]
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_enabled_allowlisted_command_runs() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     let _env = fake_home_with_config(
         home.path(),
@@ -385,8 +389,12 @@ fn git(root: &Path, args: &[&str]) {
 
 /// A repo-level opt-in (committed to main AND pushed to origin/main) is
 /// ignored: no marker, and the summary names the ignored opt-in.
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_repo_config_optin_ignored() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let origin = tmp.path().join("origin.git");
     let work = tmp.path().join("work");
@@ -455,8 +463,12 @@ fn story_1476_repo_without_optin_has_no_notice() {
 }
 
 /// Truncated TOML in the fake HOME fails closed to the default policy.
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_malformed_global_config_fails_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     let _env = fake_home_with_config(
         home.path(),
@@ -468,8 +480,12 @@ fn story_1476_malformed_global_config_fails_closed() {
 }
 
 /// Enabled without an allowlist denies.
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_enabled_but_empty_allow_denies() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     let _env = fake_home_with_config(
         home.path(),
@@ -490,8 +506,12 @@ fn story_1476_enabled_but_empty_allow_denies() {
 }
 
 /// No file in the fake HOME: denied (the common default install).
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_missing_global_config_denies() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     let _env = fake_home_with_config(home.path(), None);
     assert_eq!(
@@ -501,8 +521,12 @@ fn story_1476_missing_global_config_denies() {
 }
 
 /// Table-driven pure parse cases.
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_policy_from_toml_pure() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let parse = |body: &str| acceptance_command_policy_from_toml(&toml::from_str(body).unwrap());
 
     // Well-formed opt-ins.
