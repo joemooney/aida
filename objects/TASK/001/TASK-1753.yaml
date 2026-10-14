@@ -9,12 +9,12 @@ description: |-
   3. Doc staleness: docs/cli/10-storage.md, AGENTS.md and OVERVIEW.md list the no-op cases as missing/disabled/current/busy. They omit the new Skipped case (this checkout is behind the shared index, or the tip is live on another checkout). They also do not say that a replaced root or rewritten history exits non-zero with rebuild advice.
   4. Test gap: deleting the HeadBehind branch in HistoryCache::classify_tip is not caught by the history_indexer tests. tick_skips_when_checkout_is_behind_shared_index creates a 'keep' branch, so the state falls through to LiveElsewhere and still skips. Only task_1507_reader_behind_with_no_live_ref_does_not_reset catches it. Add a tick test where HEAD is behind and no other ref holds the tip.
   5. The 30 s tick budget is checked only between chunks. This is documented in the doc comment, and the scheduler's kill is the backstop. No action is needed beyond keeping it documented.
-status: Draft
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:41:47.753625178Z
-modified_at: 2026-10-14T17:34:24.163823303Z
+modified_at: 2026-10-14T18:57:19.956017632Z
 req_type: Task
 tags:
 - review-follow-up
@@ -25,6 +25,19 @@ comments:
   created_at: 2026-10-14T17:34:24.163823303Z
   modified_at: 2026-10-14T17:34:24.163823303Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a13bc6-b254-7422-b000-28f3bfc9dc2b
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (b6d97f1) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:57:19.956016676Z
+  modified_at: 2026-10-14T18:57:19.956016676Z
+history:
+- id: 01a13bc6-b254-7422-b000-28e3175edc8c
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:57:19.956015207Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 5abf3f943efe14d86469f4629e749989da0b49ce
   dirty: false
