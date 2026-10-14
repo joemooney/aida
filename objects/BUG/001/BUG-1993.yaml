@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T03:38:49.433003553Z
+modified_at: 2026-10-14T12:55:07.519606270Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -84,6 +84,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a1384f exited with code 1 after 2009ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup.. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance BUG-1993 — the store reports BUG-1993 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
   created_at: 2026-10-14T03:38:49.432993341Z
   modified_at: 2026-10-14T03:38:49.432993341Z
+- id: 01a13a7b-15ff-7471-a9ef-d7527d8d082b
+  author: joe
+  content: 'FACTORY PLAN (antigravity): Re-measure aida show latency across format/card/tree modes on current main under load. If show is within budget on current main, add budget regression test coverage asserting latency stays under 1000ms threshold without cache lock contention, document measurements in commit and PR, and close acceptance loop.'
+  created_at: 2026-10-14T12:55:07.519606270Z
+  modified_at: 2026-10-14T12:55:07.519606270Z
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
