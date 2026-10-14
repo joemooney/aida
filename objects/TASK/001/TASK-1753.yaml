@@ -14,10 +14,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:41:47.753625178Z
-modified_at: 2026-10-14T07:41:47.753625178Z
+modified_at: 2026-10-14T17:34:24.163823303Z
 req_type: Task
 tags:
 - review-follow-up
+comments:
+- id: 01a13b7a-c5a3-7d30-a2ba-7d4764f95f72
+  author: joe
+  content: 'FIRE: batch D fixes item 1 by documenting --if-behind as a marker for the scheduled job (option b), item 3 (docs now list the Skipped case and the non-zero exit with rebuild advice), and item 4 (new tick test: HEAD behind, no other ref holds the tip). Item 5 needed no action. Item 2 (interactive output and --json for NotBuilt/Busy/Skipped/UpToDate) is a UX change and is left open.'
+  created_at: 2026-10-14T17:34:24.163823303Z
+  modified_at: 2026-10-14T17:34:24.163823303Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 filed_at:
   code_sha: 5abf3f943efe14d86469f4629e749989da0b49ce
   dirty: false
