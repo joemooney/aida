@@ -1,0 +1,26 @@
+id: 01a13908-6922-7a83-9d37-6354d40d5816
+spec_id: BUG-2122
+agreed_id: BUG-2122
+title: cargo ps --capacity reports 'slots busy' when CPU pressure is the real denial reason
+description: |
+  `cargo ps --capacity` (~/ai/aida-host/bin/cargo-log, capacity()) admits a workload only if `busy < slots and cpu < cpu_max`. When the slot condition holds but CPU PSI is >= cpu_max (40), it falls through to the else branch and reports `admit 0: slots busy`. On 2026-10-13 at 21:58 this read `admit 0: slots busy   slots 1/2 busy ... cpu 73%`. relay.sh surfaced it as "waiting on: host busy: slots busy", which sent the operator looking at slots when CPU pressure was the real gate.
+
+  Expected: separate reasons. "cpu pressure" when busy < slots but cpu >= cpu_max; "slots busy" only when busy >= slots. The JSON output carries the same reason.
+  Acceptance: a test with the PSI seam (AIDA_CARGO_PSI_DIR) at cpu 73 and 1/2 slots prints "cpu pressure"; at 2/2 slots and low cpu it prints "slots busy".
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T06:10:14.946833188Z
+modified_at: 2026-10-14T06:10:14.946833188Z
+req_type: Bug
+tags:
+- host-capacity
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
