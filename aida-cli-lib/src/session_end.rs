@@ -1222,8 +1222,18 @@ pub(crate) fn session_end(
     // warns and proceeds. It is re-run after the confirmation and again
     // immediately before the tree is removed or reset (BUG-1986).
     // trace:BUG-1947 | ai:claude
+    // BUG-1991: the session's own `mcp-claim.<scope>.toml` parses as a lease
+    // with the same worktree, so it must not count as a peer here; otherwise
+    // every holder check below is skipped and, once the claim is reaped, the
+    // tree is torn down unchecked. trace:BUG-1991 | ai:claude
+    let own_claim_id = own_mcp_claim_id(&project_root, &target.scope);
     let tears_down_worktree = has_worktree
-        && peer_lease_sharing_worktree(&leases, &target.id, &target.worktree_path).is_none();
+        && peer_lease_sharing_worktree(
+            &without_own_claim(&leases, own_claim_id.as_deref()),
+            &target.id,
+            &target.worktree_path,
+        )
+        .is_none();
     // BUG-1988: one scan for all three checks below, so an unverified scan
     // (e.g. a separate pid namespace) warns once per session end, not three
     // times. trace:BUG-1988 | ai:claude
@@ -1602,7 +1612,8 @@ pub(crate) fn session_end(
     // the removal entirely (leaving a worktree is recoverable; deleting a
     // shared one is not). We still ended THIS lease/registry entry above.
     // trace:BUG-483 | ai:claude
-    let remaining_leases = list_leases(&project_root);
+    // BUG-1991: a claim the reap above could not remove is still ours.
+    let remaining_leases = without_own_claim(&list_leases(&project_root), own_claim_id.as_deref());
     use std::io::Write;
     // BUG-734: two worktree-less leases share the same empty path — don't let
     // them count as worktree peers. trace:BUG-734 | ai:claude
@@ -2117,6 +2128,28 @@ pub(crate) fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -
         ),
         format!("      cd '{}'", escaped),
     ]
+}
+
+/// The lease id inside the ending session's own MCP claim
+/// (`mcp-claim.<scope>.toml`), if one exists and parses.
+// trace:BUG-1991 | ai:claude
+pub(crate) fn own_mcp_claim_id(project_root: &std::path::Path, scope: &str) -> Option<String> {
+    let path = mcp::mcp_claim_path(&leases_dir(project_root), scope);
+    let body = std::fs::read_to_string(path).ok()?;
+    toml::from_str::<SessionLease>(&body).ok().map(|l| l.id)
+}
+
+/// `leases` minus the ending session's own MCP claim, for the peer checks.
+// trace:BUG-1991 | ai:claude
+pub(crate) fn without_own_claim(
+    leases: &[SessionLease],
+    own_claim_id: Option<&str>,
+) -> Vec<SessionLease> {
+    leases
+        .iter()
+        .filter(|l| Some(l.id.as_str()) != own_claim_id)
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
