@@ -339,6 +339,9 @@ fn bug_1929_host_path_and_attribute_source() {
         std::env::split_paths(&safe).collect::<Vec<_>>(),
         vec![PathBuf::from("/usr/bin"), PathBuf::from("/bin")]
     );
+    let empty = crate::store_hooks::safe_path(&store, std::ffi::OsStr::new(":.:bin::"));
+    assert_eq!(empty, std::ffi::OsStr::new("/usr/bin:/bin"));
+    assert!(std::env::split_paths(&empty).all(|p| p.is_absolute()));
     let command = host_git_command(&store);
     let path = command
         .get_envs()

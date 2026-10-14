@@ -1247,6 +1247,13 @@ pub(crate) fn handle_push_command(
 ) -> Result<()> {
     use aida_core::git_ops;
 
+    // A refused hook profile must not become "no origin" through the boolean
+    // remote probe, nor a successful skipped store leg. Validate before probes.
+    // trace:BUG-1929 | ai:codex
+    if !code_only && git_ops::is_store_tree(store_path) {
+        git_ops::ensure_store_hooks_supported(store_path)?;
+    }
+
     let project_root = store_path
         .parent()
         .map(|p| p.to_path_buf())

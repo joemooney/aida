@@ -15,10 +15,18 @@ const HOOKS: &[(&str, &str)] = &[
 /// Strip cwd-dependent executable lookup, including absolute paths into the store.
 pub(crate) fn safe_path(store: &Path, path: &std::ffi::OsStr) -> std::ffi::OsString {
     let store = std::fs::canonicalize(store).unwrap_or_else(|_| store.to_path_buf());
-    std::env::join_paths(std::env::split_paths(path).filter(|p| {
+    let safe = std::env::join_paths(std::env::split_paths(path).filter(|p| {
         p.is_absolute() && std::fs::canonicalize(p).is_ok_and(|real| !real.starts_with(&store))
     }))
-    .unwrap_or_default()
+    .unwrap_or_default();
+    // Empty PATH is itself a cwd search on Unix. Never hand it to git or its
+    // shell hooks when all caller entries were discarded. Linux-only system
+    // directories are outside the writable store and provide a fixed fallback.
+    if safe.is_empty() {
+        std::ffi::OsString::from("/usr/bin:/bin")
+    } else {
+        safe
+    }
 }
 
 /// Never repair a suspicious existing profile. Versioned directories let a new
