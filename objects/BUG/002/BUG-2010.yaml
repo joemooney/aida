@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T12:47:58.760231514Z
+modified_at: 2026-10-14T12:54:45.947595341Z
 req_type: Bug
 tags:
 - agent-new
@@ -51,6 +51,11 @@ comments:
   content: 'FACTORY DRAFT: PR #2619 at 47d2b7a1c92357262b9eaaf2f72c0c6c78b0e7da'
   created_at: 2026-10-14T12:47:58.760231514Z
   modified_at: 2026-10-14T12:47:58.760231514Z
+- id: 01a13a7a-c1bb-72f1-a9d5-283456c620fc
+  author: joe
+  content: 'FACTORY UPDATE: PR #2619 amended at 87d654ba663d20dad6b66a73ce8f06a819b8c5e0 (fixed unit variant and env guard in tests)'
+  created_at: 2026-10-14T12:54:45.947595341Z
+  modified_at: 2026-10-14T12:54:45.947595341Z
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
