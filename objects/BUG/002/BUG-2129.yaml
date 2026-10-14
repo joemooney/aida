@@ -1,0 +1,29 @@
+id: 01a13bdd-55c5-7143-bf07-593d0984dabf
+spec_id: BUG-2129
+agreed_id: BUG-2129
+title: usage telemetry logs any command invoked with a leading global flag (aida --format toon show X) as <root>, hiding it from per-command latency budgets
+description: |
+  Found while writing BUG-1993's phase-timing test. `usage::derive_cmd_shape` (aida-cli-lib/src/usage.rs) stops at the first token starting with `-`. So any invocation that puts a global flag BEFORE the subcommand, such as `aida --format toon show BUG-1`, is logged with cmd `<root>` instead of `show`.
+
+  Impact: those calls disappear from the per-command latency and error stats, including `aida doctor check performance` show budget, which reads `usage.jsonl` by cmd. Observed: `{"cmd":"<root>","args_count":4,...}` for `aida --format toon show BUG-1`.
+
+  Fix sketch: skip known global flags, and their value when the flag takes one (`--format <v>`, and any other `global = true` options in cli.rs), before capturing the subcommand path. Keep it cheap, because the statusline logs on a hot path. Add a unit test for `--format toon show X` resolving to `show`.
+
+  ## Acceptance
+  - `derive_cmd_shape(["aida","--format","toon","show","BUG-1"])` returns `show`, and the same holds for every other value-taking global flag.
+  - A bare `aida --version` / `aida` still returns `<root>`.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T19:22:03.589371187Z
+modified_at: 2026-10-14T19:22:03.589371187Z
+req_type: Bug
+filed_at:
+  code_sha: 84a49427860777b88d91ea6fc95c52122da6134b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0f8894fa34
+  vendor: claude
+  session: 52ab74c4-4301-4085-9115-943b6744129b
