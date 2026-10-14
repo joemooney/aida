@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1741",
+  "publishes": [
+    {
+      "at": "2026-10-14T06:20:14.135788424Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T15:46:08.528511341Z",
+      "spec": "TASK-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T22:02:45.013486162Z",
+      "spec": "TASK-1741",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T22:07:37.220758758Z",
+      "spec": "TASK-1741",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1741",
+        "branch": "task-1741-work",
+        "first_seen": "2026-10-13T22:07:37.220701109+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T04:37:32.633294773Z",
+      "spec": "TASK-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2608,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1b7d17d432538f7ff72e268d09795318e5dae5c1"
+      }
+    },
+    {
+      "ts": "2026-10-14T06:20:14.114464644Z",
+      "spec": "TASK-1741",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b13020e019f68e59f74dd98d142517510dc7a8e9",
+        "pr": 2608,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

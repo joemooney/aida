@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2013",
+  "publishes": [
+    {
+      "at": "2026-10-14T06:20:14.014442168Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:10:08.434663350Z",
+      "spec": "BUG-2013",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T00:10:07.412730Z",
+      "spec": "BUG-2013",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2013",
+        "branch": "bug-2013-work",
+        "first_seen": "2026-10-14T00:10:07.412674231+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T04:37:22.265852135Z",
+      "spec": "BUG-2013",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2607,
+        "verdict": "APPROVED",
+        "reviewed_sha": "8227aeb5fe6ffbe7f9caf9d201c86df5809ff88c"
+      }
+    },
+    {
+      "ts": "2026-10-14T06:20:13.996837024Z",
+      "spec": "BUG-2013",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6badc492f95cfefce6fb5c7c6b74278f15af5c62",
+        "pr": 2607,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

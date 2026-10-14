@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2121",
+  "publishes": [
+    {
+      "at": "2026-10-14T06:20:14.071651163Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T03:39:17.549852983Z",
+      "spec": "BUG-2121",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T03:43:11.853537034Z",
+      "spec": "BUG-2121",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2121",
+        "branch": "bug-2121-work",
+        "first_seen": "2026-10-14T03:43:11.853485383+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T06:19:18.390350954Z",
+      "spec": "BUG-2121",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2616,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9affa60422483c89323bc7fd359597e891f52db9"
+      }
+    },
+    {
+      "ts": "2026-10-14T06:20:14.052579742Z",
+      "spec": "BUG-2121",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4d8a1d9cd679e6210ad49ac600394038ba45f45e",
+        "pr": 2616,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

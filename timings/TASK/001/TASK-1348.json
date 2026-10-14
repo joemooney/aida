@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1348",
+  "publishes": [
+    {
+      "at": "2026-10-14T06:20:14.103365706Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T22:28:33.506378966Z",
+      "spec": "TASK-1348",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T00:10:07.398969221Z",
+      "spec": "TASK-1348",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1348",
+        "branch": "task-1348-work",
+        "first_seen": "2026-10-14T00:10:07.398909149+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T04:37:42.961713390Z",
+      "spec": "TASK-1348",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2609,
+        "verdict": "APPROVED",
+        "reviewed_sha": "90d9a9354b36a5bee2f8ba6d4a6d6828aac4f98d"
+      }
+    },
+    {
+      "ts": "2026-10-14T06:20:14.083277426Z",
+      "spec": "TASK-1348",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ea5362335b3916af768719841b8c14cc3a66bcc0",
+        "pr": 2609,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

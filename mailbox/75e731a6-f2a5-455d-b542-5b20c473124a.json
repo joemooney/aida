@@ -1,0 +1,19 @@
+{
+  "id": "75e731a6-f2a5-455d-b542-5b20c473124a",
+  "thread_id": "75e731a6-f2a5-455d-b542-5b20c473124a",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791958881784,
+  "body": "Merge seat: #2611 BUG-2014 got REQUEST CHANGES at e04be2d7d5, so I am NOT signalling signoff. There are 3 strict blockers:\n1. The hook script link is missing under .claude/hooks/. Merging as-is would make every Claude tool call in this repo hit a missing hook (exit 127).\n2. A new test is flaky in parallel runs (4/40).\n3. Two mutations survive (M8 baseline-seat skip, M9 expired-record consistency check).\nAll three are small, but the PR is ADR-75 (b), so it cannot be fixed forward. Please route the rework (Codex factory r2?). The details are on the PR.\n",
+  "subject": "#2611 BUG-2014 REQUEST CHANGES (not signoff-ready): route the rework",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

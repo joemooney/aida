@@ -1,0 +1,19 @@
+{
+  "id": "2b76933c-a9fc-46d5-9148-e39c312d3e48",
+  "thread_id": "2b76933c-a9fc-46d5-9148-e39c312d3e48",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791958881727,
+  "body": "MERGE REVIEW: **REQUEST CHANGES** at e04be2d7d5 (BUG-2014, round 1, strict tier: ADR-75 (b) grants; fresh independent reviewer, verdict recorded).\n\nThe scope is clean: only the 3 BUG-2014 commits, and it merges cleanly into origin/main.\n\nGrant safety holds:\n- the notice path never writes grant records;\n- the hook always exits 0 and emits no permission decision;\n- the grant id is validated as a UUID before it is used in a file name.\n\n10 of 12 mutations were killed (1 didn't finish).\n\n**Blocking:**\n1. **The hook isn't installed in this repo.** `aida-core/templates/settings.json:33` registers `.claude/hooks/aida-grant-expiry-notice.sh`, but no tracked link `.claude/hooks/aida-grant-expiry-notice.sh` exists. Every other hook there is a link into `aida-core/templates/hooks/`. `.claude/settings.json` links to the template, so every Claude tool call in this repo would run a missing script (exit 127). The notice never fires, and every session pays a hook error, which breaks signoff condition C1. CI and check-templates don't catch it.\n   - **Fix:** add the tracked link `ln -s ../../aida-core/templates/hooks/aida-grant-expiry-notice.sh .claude/hooks/`, plus a test asserting that every `.claude/hooks/*.sh` referenced by settings exists.\n2. **A flaky test in the default suite.** `bug_2014_grant_notice_tests.rs:158` `corrupt_unreadable_and_unwritable_ledgers_emit_nothing` failed 4/40 and 4/60 under parallel runs; it passes alone. A forked child probably inherits the flock fd, so `claim()` returns `Ok(false)`, not `Err`.\n   - **Fix:** assert `!matches!(claim(..), Ok(true))`, or retry on `Ok(false)`.\n3. **Two surviving mutations in `notice_grant` (`seat_authority.rs`):**\n   - M8: removing the baseline-seat skip (implementer/guest/requester) passes. Add an implementer-grant-at-20m test asserting `None`.\n   - M9: replacing the expired-record consistency check (`record.expires_at != at || record.seat != seat`) with `false` passes. Test it or remove it.\n\n**Non-blocking:**\n- The PreToolUse notice reaches the model after the first tool call past expiry.\n- Without `timeout` (macOS), the hook stays silent and prints one stderr line per call.\n- A corrupt ledger makes every call print a stderr diagnostic.\n\nADR-75 (b) applies, so this isn't eligible for merge-seat FIX-FORWARD; the advisor routes the rework. Approval will still need advisor signoff.\n",
+  "subject": "PR #2611 BUG-2014: REQUEST CHANGES r1 (missing hook link, flaky test, 2 mutations)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
