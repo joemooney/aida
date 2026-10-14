@@ -1100,6 +1100,10 @@ where
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_with_same_host_different_path_never_probes_existing_remote() {
+    // trace:TASK-1740 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let existing = "git@gitlab.example.test:ai/proj.git";
     git(&forges.project, &["remote", "add", "gitlab", existing]);
@@ -1128,6 +1132,10 @@ fn mirror_rerun_with_same_host_different_path_never_probes_existing_remote() {
 #[cfg(unix)]
 #[test]
 fn create_gitlab_project_prints_notice_when_using_env_token() {
+    // trace:TASK-1740 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let bin_path = forges.bin.display().to_string();
     let glab_path = forges.bin.join("glab").display().to_string();
@@ -1163,6 +1171,10 @@ fn create_gitlab_project_prints_notice_when_using_env_token() {
 #[cfg(unix)]
 #[test]
 fn mirror_rerun_redacts_credentials_in_already_points_at_warning() {
+    // trace:TASK-1740 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let secret = "glpat-supersecret-existing-token";
     let existing = format!("https://oauth2:{secret}@gitlab.example.test/ai/proj.git");
@@ -1198,6 +1210,10 @@ fn mirror_rerun_redacts_credentials_in_already_points_at_warning() {
 #[cfg(unix)]
 #[test]
 fn run_remote_mirror_redacts_credentials_in_added_remote_notice() {
+    // trace:TASK-1740 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let secret = "glpat-supersecret-add-token";
     let url = format!("https://oauth2:{secret}@gitlab.example.test/ai/newproj.git");
@@ -1232,6 +1248,10 @@ fn run_remote_mirror_redacts_credentials_in_added_remote_notice() {
 #[cfg(unix)]
 #[test]
 fn push_fallback_redacts_credentials_in_still_failed_error() {
+    // trace:TASK-1740 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let forges = FakeForges::new();
     let url = "git@gitlab.example.test:ai/proj.git";
     git(&forges.project, &["remote", "add", "gitlab", url]);
