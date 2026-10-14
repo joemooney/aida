@@ -4377,7 +4377,8 @@ pub(crate) fn is_contained_args(agent_type: &str, args: &[String]) -> bool {
         }
         "codex" => {
             let sandbox = resolved_flag_value(args, "--sandbox");
-            let is_contained_sandbox = sandbox == Some("workspace-write");
+            let is_contained_sandbox =
+                sandbox == Some("workspace-write") || sandbox == Some("read-only");
             let has_bypass = args.iter().any(|arg| {
                 arg == "--dangerously-bypass-approvals-and-sandbox" || arg == "--full-auto"
             });

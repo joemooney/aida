@@ -3631,9 +3631,13 @@ fn is_contained_args_and_is_contained_launch_detection() {
             "--dangerously-bypass-approvals-and-sandbox".to_string()
         ]
     ));
-    assert!(!is_contained_args(
+    assert!(is_contained_args(
         "codex",
         &["--sandbox".to_string(), "read-only".to_string()]
+    ));
+    assert!(!is_contained_args(
+        "codex",
+        &["--sandbox".to_string(), "danger-full-access".to_string()]
     ));
     assert!(!is_contained_args("codex", &[]));
 
