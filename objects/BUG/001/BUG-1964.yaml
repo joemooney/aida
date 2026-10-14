@@ -12,12 +12,12 @@ description: |
   - Root cause confirmed or refuted with evidence (for example, a test-only counter or log showing whether `try_acquire` returned `None` on the failing run).
   - History-cache tests that assert a catch-up ran (this test, the bug_1923/bug_1942 catch-up and cool-down tests, story_1650_stalled_catch_up_falls_back_without_trying_again) cannot silently pass through a contended lock: either the test fixture waits for or asserts lock acquisition, or the production path makes the skip observable to the test. The production behaviour (a contended reader falls back without blocking) is unchanged.
   - The test passes 50 consecutive runs of `cargo test -p aida-cli-lib task_1507 -- --test-threads=16` while a second `cargo test --workspace` runs in parallel.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T15:05:28.796633389Z
-modified_at: 2026-10-14T18:58:34.233292474Z
+modified_at: 2026-10-14T19:18:08.889545393Z
 req_type: Bug
 tags:
 - groom:close-done
@@ -48,6 +48,14 @@ comments:
   created_at: 2026-10-14T18:58:34.233292474Z
   modified_at: 2026-10-14T18:58:34.233292474Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+history:
+- id: 01a13bd9-c0f9-7fc3-a402-77fc945e8e82
+  author: joe
+  timestamp: 2026-10-14T19:18:08.889539741Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: e15fb4a989fe2ac8dbcb2336b3841881c3560f40
   branch: main
@@ -56,3 +64,6 @@ filed_at:
   aida_build_sha: 4cced67be8
   vendor: antigravity
   session: a5d61a95-66db-4aaa-ad94-640f1aaab16c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T19:18:08.889521014Z
