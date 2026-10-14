@@ -373,3 +373,70 @@ fn bug_1929_host_path_and_attribute_source() {
         );
     }
 }
+
+// Group-write is safe only on a user-owned directory whose group is the user's
+// own primary group (the user-private-group default: 0775 user:user). World-write
+// and group-write by any other group still refuse. trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1929_only_owner_may_write_matrix() {
+    use crate::store_hooks::only_owner_may_write as ok;
+    let (me, my_group, other) = (1000, 1000, 2000);
+    assert!(ok(me, my_group, 0o755, me, my_group));
+    assert!(
+        ok(me, my_group, 0o775, me, my_group),
+        "user-private group 0775 is owner-only"
+    );
+    assert!(
+        !ok(me, other, 0o775, me, my_group),
+        "a shared group could swap hooks"
+    );
+    assert!(
+        !ok(other, my_group, 0o775, me, my_group),
+        "another owner's group-write"
+    );
+    assert!(!ok(me, my_group, 0o777, me, my_group), "world-writable");
+    assert!(
+        !ok(me, my_group, 0o757, me, my_group),
+        "world-writable without group-write"
+    );
+    assert!(
+        ok(me, other, 0o755, me, my_group),
+        "no group-write: the group does not matter"
+    );
+}
+
+// Reproduces the r8 blocker: on a host whose checkout and .git are 0775
+// user:user, store writes must keep working; making .git world-writable must
+// still refuse. trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1929_user_private_group_0775_checkout_allows_store_writes() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    let set = |p: &std::path::Path, mode: u32| {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode)).unwrap()
+    };
+    for p in [dir.path(), main.as_path(), main.join(".git").as_path()] {
+        set(p, 0o775);
+    }
+    let hooks = resolve_store_hooks_dir(&store).unwrap().unwrap();
+    assert!(hooks.starts_with(main.join(".git")));
+    crate::db::with_store_write_lock(&store, || {
+        std::fs::write(store.join("notes.txt"), "0775\n")?;
+        add(&store, &["notes.txt"])?;
+        commit_paths(
+            &store,
+            "chore: store write on 0775 checkout",
+            &["notes.txt"],
+        )
+    })
+    .expect("a 0775 user:user checkout must not block store writes");
+    set(&main.join(".git"), 0o777);
+    assert!(
+        resolve_store_hooks_dir(&store).is_err(),
+        "a world-writable .git must still refuse"
+    );
+    set(&main.join(".git"), 0o775);
+}

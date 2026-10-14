@@ -29,6 +29,17 @@ pub(crate) fn safe_path(store: &Path, path: &std::ffi::OsStr) -> std::ffi::OsStr
     }
 }
 
+/// True when no one but the owner (and root) can write a directory. World-write
+/// always fails. Group-write passes only for a directory this user owns whose
+/// group is this user's own primary group: the user-private-group default
+/// (umask 002, dirs 0775 user:user) grants nobody else write. Refusing that
+/// layout blocked every store write on such hosts.
+// trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+pub(crate) fn only_owner_may_write(owner: u32, group: u32, mode: u32, uid: u32, gid: u32) -> bool {
+    mode & 0o002 == 0 && (mode & 0o020 == 0 || (owner == uid && group == gid))
+}
+
 /// Never repair a suspicious existing profile. Versioned directories let a new
 /// binary install its own template masters without overwriting another build.
 #[cfg(unix)]
@@ -42,8 +53,8 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
     )
     };
     let result = (|| -> Result<PathBuf> {
-        // SAFETY: geteuid has no arguments or memory-safety preconditions.
-        let uid = unsafe { libc::geteuid() };
+        // SAFETY: geteuid/getegid have no arguments or memory-safety preconditions.
+        let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
         // A writable ancestor could replace even a read-only hooks directory.
         // Root-owned sticky temporary roots protect each user-owned child.
         for ancestor in common.ancestors() {
@@ -52,14 +63,23 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
                 meta.is_dir()
                     && !meta.file_type().is_symlink()
                     && (meta.uid() == uid || meta.uid() == 0)
-                    && (meta.mode() & 0o022 == 0 || (meta.uid() == 0 && meta.mode() & 0o1000 != 0)),
+                    && (only_owner_may_write(meta.uid(), meta.gid(), meta.mode(), uid, gid)
+                        || (meta.uid() == 0 && meta.mode() & 0o1000 != 0)),
                 "unsafe hooks authority ancestor {}",
                 ancestor.display()
             );
         }
         let common_meta = std::fs::symlink_metadata(common)?;
         anyhow::ensure!(
-            common_meta.is_dir() && common_meta.uid() == uid && common_meta.mode() & 0o022 == 0,
+            common_meta.is_dir()
+                && common_meta.uid() == uid
+                && only_owner_may_write(
+                    common_meta.uid(),
+                    common_meta.gid(),
+                    common_meta.mode(),
+                    uid,
+                    gid
+                ),
             "git common directory is not owned exclusively by this user"
         );
         let store_real = std::fs::canonicalize(store)?;
