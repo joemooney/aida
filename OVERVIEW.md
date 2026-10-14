@@ -514,7 +514,9 @@ no executable, command, or credential selection.
 
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index
-lock and a 30-second chunk budget, skips disabled/missing/busy indexes, and
-preserves foreground stall behavior. The scaffold runs it every 15 minutes.
+lock and a 30-second chunk budget, skips disabled/missing/current/busy indexes
+and a checkout that is behind the shared index (or whose indexed tip is live on
+another checkout), and preserves foreground stall behavior. A replaced root or
+rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
