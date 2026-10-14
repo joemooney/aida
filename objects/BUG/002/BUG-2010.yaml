@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-14T15:58:26.363641629Z
+modified_at: 2026-10-14T17:40:14.646586045Z
 req_type: Bug
 tags:
 - agent-new
@@ -66,6 +66,12 @@ comments:
   content: 'FACTORY READY: PR #2619 green at 0ac3a1df94f84e4a11f0c0bf0016bd8b34e8fa0e (rework round 2 addressing B1-B4)'
   created_at: 2026-10-14T15:58:26.363641629Z
   modified_at: 2026-10-14T15:58:26.363641629Z
+- id: 01a13b80-1eb6-7100-ad91-d6c42fa19a9e
+  author: joe
+  content: 'ADVISOR 2026-10-14: PR #2619 closed at the two-round cap (false-live via recycled lane names; dead-code registry update; the test bypassed session_leases). Next attempt builds on TASK-1750''s pid plus start-time liveness (#2621) and mints the lease through session_start in tests.'
+  created_at: 2026-10-14T17:40:14.646586045Z
+  modified_at: 2026-10-14T17:40:14.646586045Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
