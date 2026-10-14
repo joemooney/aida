@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-14T02:18:48.327842735Z
+modified_at: 2026-10-14T02:19:37.340395817Z
 req_type: Bug
 tags:
 - plan:night
@@ -94,6 +94,31 @@ comments:
   content: 'FACTORY READY: PR #2597 green at ddc04b1c28126054645a04bf070d16fd6d1ac41e. Completed full Build https://github.com/joemooney/aida/actions/runs/38452585111 . All 15 stress rounds passed in normal workspace tests. C3 update: retained every selected member, added two-minute per-round watchdog diagnostics and a 45-minute Build cap after the old 25-minute cap was exhausted; all 27 fast gates passed before push. C2 remains explicitly unsatisfied by PATH isolation and split into BUG-2118. Draft retained; independent review and merge remain with relay.'
   created_at: 2026-10-13T19:38:06.257674768Z
   modified_at: 2026-10-13T19:38:06.257674768Z
+- id: 01a13835-43fc-7e73-80d0-2c6bbbc2887c
+  author: joe
+  content: |-
+    REQUEST CHANGES (round 1): #2597 (BUG-1994) at ddc04b1c28126054645a04bf070d16fd6d1ac41e. Fresh strict reviewer; the verdict is recorded.
+
+    The isolation itself is correct and fixes the race. Every PATH writer runs in an exact single-test child process or in a fully locked separate binary.
+    - Stress run (98 tests, 16 threads, 10 rounds): 8 of 10 rounds failed at the merge-base, showing the BUG-1994 signatures (git exit 127, "events differ"). At the PR head, 0 of 10 failed.
+    - Mutations: a raw PATH set_var and a dropped `run_path_isolated_test` call are both caught.
+
+    **B1. The stress test has a fixed time limit and runs in the default suite, so it fails on a loaded machine.**
+    - Where: `aida-cli-lib/src/tests/bug_1994_path_isolation_tests.rs:219-270` (watchdog at :227/:253), `history_and_path_mutators_pass_15_rounds_at_16_threads`.
+    - It runs in every default `cargo test --workspace` with a 120 s per-round limit. On a 6-core machine at load 18 it failed in round 2 with "stress child exceeded 120s", and no assertion failed. The standalone rounds took 78-134 s.
+    - It also adds about 20 minutes to every CI Build (now 28 m), and the job timeout was raised from 25 to 45 minutes to fit it.
+
+    Required fix: run the stress test as its own explicit step instead. One option is `#[ignore]` plus a dedicated `cargo test ... -- --ignored --exact <name>` step in the CI job, which still meets signoff C3. The other is to remove the fixed per-round time limit and let the job timeout be the bound. Either way, the default `cargo test --workspace` must not contain a time-limited 15-round stress loop.
+
+    Non-blocking (fix if cheap, otherwise say so in the response):
+    - The guardrail source scan (`tests/path_isolation_guardrail.rs:474-485`) misses a non-literal key such as `set_var(std::ffi::OsStr::new("PATH"), ..)`. It also only scans `aida-cli-lib/src`, not `aida-cli-lib/tests` or `aida-cli/tests`.
+    - `run_path_isolated_test` falls back to running `aida` when `current_exe` is missing. Calling `current_exe()` and failing would be stricter.
+    - HOME is still mutated process-wide in several unlocked places. This is the same class of hazard but out of scope, so I'm filing it as a follow-up.
+
+    Post FACTORY READY at the new head when done.
+  created_at: 2026-10-14T02:19:37.340395817Z
+  modified_at: 2026-10-14T02:19:37.340395817Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
