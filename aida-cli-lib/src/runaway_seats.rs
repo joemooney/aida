@@ -2038,4 +2038,219 @@ mod tests {
         );
         assert_eq!(second_cov.verdict, "tripped");
     }
+
+    /// BUG-1962: sub-minute precision pins that `last_written_at` records the
+    /// exact second of the event, failing if dropped or if the minute-bucket
+    /// fallback is used.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_subminute_precision_pins_exact_timestamp() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000002";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for (i, at) in [0, 20, 50].iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at 60s (exactly 10s after last event at 50s).
+        // With exact last_written_at (50s), age is 10s ("10s ago").
+        // Dropping last_written_at falls back to minute 0 (0s), which gives 60s ("1m ago").
+        let now = t0() + Duration::seconds(60);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 10s ago"),
+            "finding summary must contain exact sub-minute age '10s ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("1m ago"),
+            "minute bucket fallback must not override sub-minute precision: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: verifies that `last_written_at` updates via `prev.max(t)`,
+    /// catching any regression to `prev.min(t)`.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_pins_max_over_min_across_hours() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000003";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        let times = [0, 3600, 7200];
+        for (i, at) in times.iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at t0 + 3 hours (10800s).
+        // With max(t), last write is at 7201s (2h in), so age is 1h ("1h ago").
+        // With min(t), last write would stay at 0s, giving age 3h ("3h ago").
+        let now = t0() + Duration::hours(3);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 1h ago"),
+            "finding summary must use max(t) to report '1h ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("3h ago"),
+            "swapping prev.max for prev.min must not pass: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: `file_mtime` records `last_written_at` when lines lack timestamps.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_records_file_mtime_for_untimed_lines() {
+        let mut sessions = BTreeMap::new();
+        let sid = "session-mtime";
+        let line = Line {
+            kind: Some("assistant".to_string()),
+            timestamp: None,
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let mtime = t0() + Duration::minutes(45);
+        fold_line(
+            &line,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            0,
+            Some(mtime),
+            &mut sessions,
+        );
+        let s = sessions.get(sid).expect("session aggregate recorded");
+        assert_eq!(
+            s.last_written_at,
+            Some(mtime),
+            "file_mtime branch must record last_written_at when timestamp is absent"
+        );
+    }
+
+    /// BUG-1962: `last_written_at` is serialized in state.json and preserved
+    /// across incremental scans where no new bytes are read.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_persisted_and_retained_across_incremental_scans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000004";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for i in 0..3 {
+            let at = i * 60;
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(at + 1),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        let now1 = t0() + Duration::seconds(121) + Duration::hours(1);
+        let (findings1, cov1) = scan("aida", &src, &policy, now1, &HashMap::new());
+        assert_eq!(cov1.verdict, "tripped");
+        assert_eq!(findings1.len(), 1);
+        assert!(findings1[0]
+            .summary
+            .contains("transcript last written 1h ago"));
+
+        let state_path = src.state_path.as_ref().unwrap();
+        let state_json = std::fs::read_to_string(state_path).unwrap();
+        assert!(
+            state_json.contains("last_written_at"),
+            "state.json must serialize last_written_at: {state_json}"
+        );
+
+        let now2 = now1 + Duration::hours(2);
+        let (findings2, cov2) = scan("aida", &src, &policy, now2, &HashMap::new());
+        assert!(findings2.is_empty(), "already reported finding is deduped");
+        assert!(
+            cov2.still_tripped.contains(&format!("compactions:{sid}")),
+            "rule is retained in still_tripped: {:?}",
+            cov2.still_tripped
+        );
+    }
 }

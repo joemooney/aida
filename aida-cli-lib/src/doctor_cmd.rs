@@ -13886,4 +13886,24 @@ mod bug_1505_review_verdict_doctor_tests {
             "review-verdicts"
         );
     }
+
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn render_doctor_report_toon_includes_runaway_seats_still_tripped_table() {
+        let mut report = DoctorReport::default();
+        report.runaway_seats = Some(crate::runaway_seats::Coverage {
+            verdict: "tripped".to_string(),
+            still_tripped: vec!["compactions:sess-1".to_string()],
+            ..Default::default()
+        });
+        let rendered = render_doctor_report_toon(&report);
+        assert!(
+            rendered.contains("runaway_seats_still_tripped"),
+            "TOON output must include runaway_seats_still_tripped table: {rendered}"
+        );
+        assert!(
+            rendered.contains("compactions:sess-1"),
+            "TOON output must list still tripped finding: {rendered}"
+        );
+    }
 }
