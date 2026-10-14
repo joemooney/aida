@@ -367,6 +367,7 @@ mod history;
 mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
+mod history_indexer;
 // trace:STORY-1650 | ai:claude — bare `aida history`: the status flow.
 mod history_flow;
 // trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
