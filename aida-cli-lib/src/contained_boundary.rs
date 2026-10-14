@@ -154,19 +154,33 @@ pub(crate) fn sandbox_allow_write_entries(paths: &[PathBuf]) -> Vec<String> {
     entries
 }
 
-/// The store pointer files inside the write set that a contained session must
-/// NOT write: `<store>/.git` for every `.aida-store` entry in
-/// `store_write_paths`. The pointer names the store's git directory; a session
-/// that repoints it at a directory it controls (`core.fsmonitor=<cmd>`) runs
-/// `<cmd>` outside the sandbox on the next host-side store commit. Nothing
-/// under `<main>/.git` is added here (BUG-1982).
-// trace:BUG-1929 | ai:claude
+/// Git authority paths that must remain read-only even when a contained
+/// session's code root is the primary checkout. The store pointer/own git
+/// subtree, main git directory, and the verified hook profile's actual common
+/// directory are denied recursively. No host-executed profile is writable.
+// trace:BUG-1929 | ai:codex
 pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) -> Vec<PathBuf> {
-    store_write_paths
+    let mut denied = Vec::new();
+    for store in store_write_paths
         .iter()
         .filter(|p| p.file_name().is_some_and(|n| n == ".aida-store"))
-        .map(|p| p.join(".git"))
-        .collect()
+    {
+        let mut paths = vec![store.join(".git")];
+        if let Some(main) = store.parent() {
+            paths.push(main.join(".git"));
+        }
+        if let Ok(Some(hooks)) = aida_core::git_ops::resolve_store_hooks_dir(store) {
+            if let Some(common) = hooks.parent() {
+                paths.push(common.to_path_buf());
+            }
+        }
+        for path in paths {
+            if !denied.contains(&path) {
+                denied.push(path);
+            }
+        }
+    }
+    denied
 }
 
 /// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from
@@ -180,7 +194,9 @@ pub(crate) fn sandbox_filesystem(store_write_paths: &[PathBuf]) -> Option<serde_
         .iter()
         .filter(|p| {
             p.file_name().is_none_or(|n| n != ".aida-store")
-                || root_rule_path(&p.join(".git")).is_some()
+                || contained_store_deny_write_paths(std::slice::from_ref(*p))
+                    .iter()
+                    .all(|deny| root_rule_path(deny).is_some())
         })
         .cloned()
         .collect();

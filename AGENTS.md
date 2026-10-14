@@ -4,13 +4,6 @@ validated grant and parent. The statusline's expired-record timestamp reader is
 informational and grants no authority.
 <!-- trace:BUG-2011 | ai:codex -->
 
-Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
-profile under the git common directory. Project hook managers never run there.
-Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse
-store writes. Contained launch primes this profile before sandboxing; the store
-and cache write set is unchanged. See OVERVIEW.md.
-<!-- trace:BUG-1929 | ai:codex -->
-
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures
@@ -194,6 +187,14 @@ refresh flock holder (including an inline refresher). `aida cache rebuild` and
 mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
+
+Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
+profile under the git common directory. Project hook managers never run there.
+Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse
+store writes. Contained launch primes this profile before sandboxing and denies host git
+authority writes in both sandbox and tool rules; the writable store/cache set
+is unchanged. See OVERVIEW.md.
+<!-- trace:BUG-1929 | ai:codex -->
 
 The spec graph is git-canonical. The orphan `aida-store` branch stores
 one YAML object per requirement; `.aida-store/` is the live worktree for

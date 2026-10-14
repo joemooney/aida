@@ -3,7 +3,7 @@
 //! Which test is which:
 //! - Unit: the generated `sandbox.filesystem.allowWrite` is exactly the store
 //!   directory and the cache files, nothing else in the main checkout, and
-//!   `denyWrite` is exactly the store's `.git` pointer.
+//!   `denyWrite` protects the store pointer and host-owned git authority.
 //! - Harness (always runs): a small model of how Claude Code's Linux sandbox
 //!   applies `allowWrite` and `denyWrite` (each existing entry bound as is, no
 //!   glob expansion, deny over allow), checked over real tempdir paths.
@@ -133,8 +133,11 @@ fn settings_allow_write_is_exactly_store_and_cache() {
     assert_eq!(allow_write(&settings), expected);
     assert_eq!(
         deny_write(&settings),
-        vec![format!("/{}", main.join(".aida-store/.git").display())],
-        "the store's .git pointer is denied, nothing under <main>/.git is named"
+        vec![
+            format!("/{}", main.join(".aida-store/.git").display()),
+            format!("/{}", main.join(".git").display())
+        ],
+        "the store's pointer and host-owned git directory are denied"
     );
     for entry in allow_write(&settings) {
         assert!(entry.starts_with("//"), "absolute anchor: {entry}");
@@ -212,12 +215,17 @@ fn symlinked_main_lists_both_spellings_of_the_same_files() {
     let denied = contained_store_deny_write_paths(&paths);
     assert_eq!(
         denied,
-        vec![link.join(".aida-store/.git"), main.join(".aida-store/.git")],
+        vec![
+            link.join(".aida-store/.git"),
+            link.join(".git"),
+            main.join(".aida-store/.git"),
+            main.join(".git")
+        ],
         "each spelling of the store gets its .git pointer denied"
     );
     let settings = crate::session::contained_settings_json_with_store(&[], false, &[], &paths);
     let settings: serde_json::Value = serde_json::from_str(&settings).unwrap();
-    assert_eq!(deny_write(&settings).len(), 2, "{settings}");
+    assert_eq!(deny_write(&settings).len(), 4, "{settings}");
 }
 
 // Fail closed: the store directory is never allowed without its `.git` deny,
@@ -332,13 +340,16 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     assert_eq!(allow_write(&settings), expected, "{json}");
     assert_eq!(
         deny_write(&settings),
-        vec![format!("/{}", main.join(".aida-store/.git").display())],
+        vec![
+            format!("/{}", main.join(".aida-store/.git").display()),
+            format!("/{}", main.join(".git").display())
+        ],
         "{json}"
     );
     assert_eq!(
         json.matches(".aida-store").count(),
-        2,
-        "only this main's store and its .git pointer: {json}"
+        2 + 2 * WRITE_TOOLS.len(),
+        "only this main's store and the sandbox/tool denies for its .git pointer: {json}"
     );
 }
 
@@ -1088,4 +1099,43 @@ fn bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack() {
         .to_string();
     assert!(err.contains("embedded git repository"), "{err}");
     assert!(!marker.exists());
+}
+
+// The primary checkout can itself be the code write root. Its verified host
+// hooks remain read-only for sandboxed Bash AND direct file-writing tools.
+// trace:BUG-1929 | ai:codex
+#[test]
+fn bug_1929_primary_root_never_grants_host_hook_writes() {
+    let (_tmp, main) = main_fixture();
+    let hooks = main.join(".git/aida-store-hooks-test");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join("commit-msg");
+    std::fs::write(&hook, "trusted hook").unwrap();
+    let settings = settings_with_store(&main, &main);
+    assert!(!sandbox_may_write(&settings, &hook), "{settings}");
+    assert!(
+        bound_covers(&deny_write(&settings), &hook),
+        "explicit host authority deny is required: {settings}"
+    );
+    let denies = settings["permissions"]["deny"].as_array().unwrap();
+    for tool in WRITE_TOOLS {
+        assert!(
+            denies.contains(&serde_json::json!(format!(
+                "{tool}(/{}/**)",
+                main.join(".git").display()
+            ))),
+            "{settings}"
+        );
+        assert!(
+            denies.contains(&serde_json::json!(format!(
+                "{tool}(/{})",
+                main.join(".aida-store/.git").display()
+            ))),
+            "pointer must be protected: {settings}"
+        );
+    }
+    assert_eq!(
+        allow_write(&settings),
+        sandbox_allow_write_entries(&contained_store_write_paths(&main))
+    );
 }

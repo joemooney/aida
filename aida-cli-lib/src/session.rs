@@ -2469,10 +2469,25 @@ pub(crate) fn contained_settings_json_with_store(
     if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
         sandbox["filesystem"] = filesystem;
     }
+    // Tool writes do not pass through Bash's OS sandbox, so deny the host
+    // git authority paths in both layers (including exact pointer files).
+    // trace:BUG-1929 | ai:codex
+    let mut deny: Vec<String> = destructive_command_deny_rules()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths) {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
+            for tool in crate::contained_boundary::WRITE_TOOLS {
+                deny.push(format!("{tool}(/{abs})"));
+                deny.push(format!("{tool}(/{abs}/**)"));
+            }
+        }
+    }
     serde_json::json!({
         "permissions": {
             "allow": crate::contained_boundary::write_allow_rules(write_roots),
-            "deny": destructive_command_deny_rules()
+            "deny": deny
         },
         "sandbox": sandbox
     })
