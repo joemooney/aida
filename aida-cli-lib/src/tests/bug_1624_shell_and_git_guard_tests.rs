@@ -372,6 +372,10 @@ fn bug_1624_session_env_allowlists_names_and_ignores_file_aida_bin() {
 /// process before exec: the same allowlist holds there.
 #[test]
 fn bug_1624_apply_session_env_to_process_ignores_non_allowlisted_names() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     const VAR: &str = "AIDA_TEST_BUG_1624_NOT_ALLOWLISTED";
     // Restore every name the hostile body carries even if the allowlist
     // regresses and this test fails, so a leak can't poison later tests.

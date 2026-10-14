@@ -668,6 +668,10 @@ pub(crate) fn export_coordinating_bin_env() {
     let Some(dir) = exe.parent().map(std::path::Path::to_path_buf) else {
         return;
     };
+    // Production startup is single-threaded; a unit test must use its own child.
+    // trace:BUG-1994 | ai:codex
+    #[cfg(test)]
+    crate::test_env::require_path_mutation_scope("PATH");
     let path = std::env::var_os("PATH").unwrap_or_default();
     let updated = prepend_dir_to_path(&dir, &path);
     // `set_var` is wrapped in `unsafe` for Edition-2024 forward-compat

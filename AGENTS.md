@@ -11,6 +11,13 @@ validated grant and parent. The statusline's expired-record timestamp reader is
 informational and grants no authority.
 <!-- trace:BUG-2011 | ai:codex -->
 
+PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
+fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
+the guards require an exact one-test child. The ignored 15-round PATH/history
+stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
+per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+<!-- trace:BUG-1994 | ai:codex -->
+
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures
