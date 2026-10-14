@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-14T02:39:12.613573506Z
+modified_at: 2026-10-14T03:05:34.469594917Z
 req_type: Bug
 tags:
 - authority
@@ -95,6 +95,11 @@ comments:
   content: 'FACTORY REWORK: rebased bug-2014-work directly onto origin/main 014a28d3f7, dropping both pre-squash BUG-2011 commits. Only BUG-2014 commits remain; both AGENTS.md paragraphs preserved. Head f06e37e5b9b73ea303ae18a24d2aa8ebb019b466 pushed using exact prior-head lease. Full make check-ci-fast: 28/28 passed; Python hook suite: 6/6 passed. PR body base statement and six-item self-review updated. Awaiting new-head Build before FACTORY READY.'
   created_at: 2026-10-14T02:39:12.613573506Z
   modified_at: 2026-10-14T02:39:12.613573506Z
+- id: 01a1385f-5605-7883-a59b-d0cf76619be8
+  author: joe
+  content: 'FACTORY READY: PR #2611 green at e04be2d7d5af83dbfda12b6eef7d4c605239d2ce. Completed SUCCESS Build38502568106. Direct main base, dependency commits removed, both paragraphs retained; 28 fast gates passed and all5 notice tests passed including exact threshold boundaries. PR body updated. Separate merge seat owns review/shipping.'
+  created_at: 2026-10-14T03:05:34.469594917Z
+  modified_at: 2026-10-14T03:05:34.469594917Z
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
   author: joe
