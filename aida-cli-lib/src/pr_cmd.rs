@@ -3642,6 +3642,19 @@ pub(crate) fn derive_pr_ship_squash_subject(
     // base because the branch head may itself be a merge commit.
     // trace:TASK-140 TASK-142 | ai:codex
     let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    derive_pr_ship_squash_subject_from(project_root, &pr, branch, no_complete)
+}
+
+/// The derivation behind [`derive_pr_ship_squash_subject`], given the PR's
+/// title and body already fetched, so tests drive it without a fake `gh` on
+/// the process-wide PATH.
+// trace:BUG-1997 | ai:claude
+pub(crate) fn derive_pr_ship_squash_subject_from(
+    project_root: &std::path::Path,
+    pr: &PrShipMetadata,
+    branch: &str,
+    no_complete: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
     let commit_msg = branch_head_commit_message(project_root, branch).ok_or_else(|| {
         anyhow::anyhow!(
             "could not read the head commit of branch `{branch}` (tried local and origin/) \
