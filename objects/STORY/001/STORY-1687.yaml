@@ -38,12 +38,12 @@ description: |
   ## Notes
 
   This deliberately narrows the human-only integrity floor recorded in reference_merge_hold_clear_is_human_only (docs/agents/aida-repository-guide.md) and BUG-1693. It changes the architecture and policy of an integrity floor, so it needs a sketch on this spec and advisor signoff before implementation, and the floor docs must be updated in the same PR. The operator approved the direction on 2026-10-13 16:59.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T01:50:35.796973827Z
+modified_at: 2026-10-14T01:55:46.503611112Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -130,6 +130,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1381f-6ec7-72b2-baa4-d0493b8e07ac
+  author: aida-session-start
+  timestamp: 2026-10-14T01:55:46.503610539Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: ccf36c0f4c33257f37d3f44da246bf388dfed114
