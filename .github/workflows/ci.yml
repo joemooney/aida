@@ -146,6 +146,10 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
+        # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
+        # must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude
+        env:
+          AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
         run: cargo test --workspace --no-fail-fast < /dev/null
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
