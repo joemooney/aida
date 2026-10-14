@@ -3023,9 +3023,9 @@ pub(crate) fn handle_review_record_at(
     // A refusal is a protection event, not merely metadata. Arm the local
     // merge chokepoint before publishing the verdict; mirroring the label also
     // protects raw forge/UI merges when branch policy consumes it. The hold is
-    // intentionally not cleared by a later approval: `merge-hold clear` is the
-    // explicit human/advisor release action.
-    // trace:BUG-1452 | ai:codex
+    // later approval can release only an eligible Rework-only hold through
+    // the recorded release seam below; all other kinds keep human clear.
+    // trace:BUG-1452 trace:STORY-1687 | ai:codex
     if kind.blocks_done() {
         let n = pr.ok_or_else(|| {
             anyhow::anyhow!(
