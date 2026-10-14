@@ -1,0 +1,37 @@
+id: 01a13b14-fc22-70d0-b7dc-202946fce86c
+spec_id: BUG-2126
+agreed_id: BUG-2126
+title: Relay capacity gate trusts kernel IO PSI blindly; a leaked iowait counter blocks every relay indefinitely
+description: |
+  Observed 2026-10-14 08:30-08:45 MST on the dev host (kernel 7.0.0-38). `cargo ps --capacity` answered `admit 0: io pressure ... io-full 82%`, and the merge-seat relay sat in `relay: queued ... waiting on: host busy: io pressure` for over 10 minutes while the host was idle.
+
+  Evidence the pressure was phantom:
+  - /proc/stat procs_blocked = 12 and vmstat b = 12-14, but `ps -eLo stat` shows no D-state thread anywhere (one transient kworker only).
+  - iostat: all disks near 0% util, about 0 kB/s read.
+  - /proc/pressure/io some avg300 = 95%, full = 76-85%, steady for many minutes; per-cgroup PSI attributes ~99% full stall to a terminal scope whose 83 threads are all in S state.
+  - dmesg: no hung-task or block-layer errors.
+  So the kernel's nr_iowait/PSI accounting leaked; it will not clear until reboot.
+
+  Impact: every relay (merge seat, implementers) is denied while the host has free capacity. During an emergency this silently stalls the merge lane.
+
+  Acceptance:
+  1. The gate cross-checks PSI IO pressure against real IO activity (e.g. disk busy time in /proc/diskstats or the count of actual D-state tasks). It treats sustained high PSI with idle disks and no D-state tasks as a phantom and admits, naming the condition in its reason text.
+  2. A relay that has been denied for the same reason for N minutes says so and prints the override (`AIDA_RELAY_CAPACITY_CMD=off`), rather than only "still queued".
+  3. A test feeds the gate fixture /proc/pressure/io, /proc/diskstats, and process-state inputs that cover a phantom (admit) and a real stall (deny).
+
+  Workaround: launch the relay with AIDA_RELAY_CAPACITY_CMD=off. Related: BUG-2122 (the gate's misleading denial reason).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T15:43:13.442282163Z
+modified_at: 2026-10-14T15:43:13.442282163Z
+req_type: Bug
+filed_at:
+  code_sha: 278ff0b09857793951b477ef891e07212a53f833
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f8b0ad8c1c
+  vendor: claude
+  session: b9a9ec1a-4cee-4560-b175-c2116f2456c4
