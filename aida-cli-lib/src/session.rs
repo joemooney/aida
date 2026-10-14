@@ -2298,6 +2298,16 @@ fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
         Some(worktree) => {
             let main = crate::main_worktree_root_from(worktree);
             aida_core::db::prime_cache_sidecars(&main.join(".aida").join("cache.db"));
+            // Host-owned hooks must exist before the sandbox makes the common
+            // git directory read-only. Every later store write re-verifies them
+            // and refuses on failure; the write boundary is never widened.
+            // trace:BUG-1929 | ai:codex
+            let store = main.join(".aida-store");
+            if store.is_dir() {
+                if let Err(error) = aida_core::git_ops::resolve_store_hooks_dir(&store) {
+                    eprintln!("{error:#}");
+                }
+            }
             crate::contained_boundary::contained_store_write_paths(&main)
         }
         None => Vec::new(),

@@ -79,7 +79,8 @@ impl Fx {
     fn cmd(&self, cwd: &Path, args: &[&str], observed: bool) -> Command {
         let mut cmd = Command::new(bin());
         let path = format!(
-            "{}:{}",
+            "{}:{}:{}",
+            self.base.join("git-observer").display(),
             bin().parent().unwrap().display(),
             std::env::var("PATH").unwrap_or_default()
         );
@@ -97,6 +98,8 @@ impl Fx {
             .env("AIDA_OUTPUT_FORMAT", "human")
             .env("AIDA_STORE_LOCK_TIMEOUT_SECS", "60")
             .env("T1717_LOCK", lock_path(&self.store))
+            .env("T1717_REAL_GIT", "/usr/bin/git")
+            .env("T1717_CALLBACKS", &self.hooks)
             .stdin(Stdio::null())
             .args(args);
         if let Some(grant) = &self.grant {
@@ -554,6 +557,17 @@ fn fixture_with(scaffolded: bool) -> Fx {
     let _ = git_try(&fx.store, &["add", "-A"]);
     let _ = git_try(&fx.store, &["commit", "-qm", "chore: fixture roster"]);
     git(&fx.store, &["push", "-q", "origin", "aida-store"]);
+    // Lock/failure instrumentation belongs to the host-owned test executable,
+    // never to core.hooksPath. The proxy forwards the production pin unchanged.
+    // trace:BUG-1929 | ai:codex
+    if !scaffolded {
+        let observer = fx.base.join("git-observer");
+        std::fs::create_dir_all(&observer).unwrap();
+        install(
+            &observer.join("git"),
+            include_str!("fixtures/task_1717_git_observer.sh"),
+        );
+    }
     assert_eq!(git(&fx.store, &["status", "--porcelain"]), "");
     fx
 }
@@ -1392,6 +1406,32 @@ fn template_hook_profile_completes_with_healthy_effects() {
     assert!(edit.status.success(), "{}", text(&edit));
 }
 
+// Exercise the detector directly under the same external store lock. The
+// production profile always contains pre-commit, so a missing-hook setup is
+// intentionally a standalone hook test, not a corrupted host profile.
+// trace:BUG-1929 | ai:codex
+fn detector_under_lock(fx: &Fx) {
+    let mut command = Command::new("flock");
+    git_env(&mut command);
+    command
+        .current_dir(&fx.store)
+        .arg(lock_path(&fx.store))
+        .arg(fx.hooks.join("post-commit"))
+        .env("HOME", &fx.home)
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                bin().parent().unwrap().display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .env("AIDA_TELEMETRY", "1")
+        .env("AIDA_FIELD_STUDY", "1");
+    let out = command.output().unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+}
+
 /// Missing-sentinel path: post-commit without the pre-commit hook invokes
 /// `aida internal record-no-verify-bypass` while the parent holds the store
 /// lock. It finishes (no hook/cache/lock cycle) and its observation lands.
@@ -1423,6 +1463,12 @@ fn post_commit_bypass_detector_runs_under_the_held_lock() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", text(&out));
+    std::fs::write(
+        common.join("aida-precommit-sentinel"),
+        "0000000000000000000000000000000000000000\n",
+    )
+    .unwrap();
+    detector_under_lock(&fx);
     assert!(started.elapsed() < Duration::from_secs(30));
     assert_eq!(fx.subjects("HEAD")[0], "chore: sync pending changes");
     assert!(
@@ -1495,8 +1541,17 @@ fn installed_hook_profile_completes() {
 #[test]
 fn reentrant_writer_hook_is_refused_before_any_change() {
     let fx = fixture();
+    let host_hooks = aida_core::git_ops::resolve_store_hooks_dir(&fx.store)
+        .unwrap()
+        .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(
+        host_hooks.join("pre-commit"),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
     install(
-        &fx.hooks.join("pre-commit"),
+        &host_hooks.join("pre-commit"),
         "#!/bin/sh\naida edit TASK-1 --title reentered || exit 1\n",
     );
     fx.write_store_file("notes/pending.txt", "pending\n");
@@ -1516,7 +1571,10 @@ fn reentrant_writer_hook_is_refused_before_any_change() {
             "{args:?} waited: {t}"
         );
         assert!(!out.status.success(), "{args:?}: {t}");
-        assert!(t.contains("is not a shipped AIDA hook"), "{args:?}: {t}");
+        assert!(
+            t.contains("verified host-owned AIDA hooks"),
+            "{args:?}: {t}"
+        );
         assert_eq!(fx.head(), before, "{args:?}");
         assert_eq!(
             git(&fx.store, &["diff", "--cached", "--name-only"]),
@@ -1529,7 +1587,7 @@ fn reentrant_writer_hook_is_refused_before_any_change() {
     let gate = fx.run(&["db", "merge-gate"]);
     assert!(!gate.status.success(), "{}", text(&gate));
     assert!(
-        text(&gate).contains("is not a shipped AIDA hook"),
+        text(&gate).contains("verified host-owned AIDA hooks"),
         "{}",
         text(&gate)
     );
@@ -1960,6 +2018,7 @@ fn missing_and_matching_sentinel_paths() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", text(&out));
+    detector_under_lock(&fx);
     let log = fx.home.join(".aida/rule-violations.jsonl");
     assert!(std::fs::read_to_string(&log)
         .unwrap()
@@ -1978,6 +2037,12 @@ fn missing_and_matching_sentinel_paths() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", text(&out));
+    std::fs::write(
+        common.join("aida-precommit-sentinel"),
+        git(&fx.store, &["rev-parse", "HEAD^{tree}"]),
+    )
+    .unwrap();
+    detector_under_lock(&fx);
     assert!(!log.exists(), "matching sentinel records nothing");
 }
 
@@ -2186,50 +2251,33 @@ fn scaffolded_hook_profile_runs_every_route() {
 /// upgrade path; an older header over the shipped body is accepted.
 #[test]
 fn drifted_generated_hook_is_refused_with_upgrade_guidance() {
+    use std::os::unix::fs::PermissionsExt;
     let fx = fixture_with(true);
-    let hook = fx.repo.join(".git/hooks/pre-commit");
+    let host_hooks = aida_core::git_ops::resolve_store_hooks_dir(&fx.store)
+        .unwrap()
+        .unwrap();
+    let hook = host_hooks.join("pre-commit");
     let original = std::fs::read_to_string(&hook).unwrap();
-    let older = original.replacen("# AIDA Generated: v", "# AIDA Generated: v0.0.1-", 1);
-    std::fs::write(&hook, &older).unwrap();
-    fx.write_store_file("notes/pending.txt", "pending\n");
-    let ok = fx.run(&["db", "sync"]);
-    assert!(
-        ok.status.success(),
-        "older header, shipped body: {}",
-        text(&ok)
-    );
-
-    std::fs::write(&hook, format!("{}\necho drifted\n", older.trim_end())).unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::write(&hook, format!("{original}\necho drifted\n")).unwrap();
     fx.write_store_file("notes/second.txt", "second\n");
     let before = snapshot(&fx);
     let out = fx.run(&["db", "sync"]);
     assert!(!out.status.success(), "{}", text(&out));
-    assert!(text(&out).contains("Nothing was changed"), "{}", text(&out));
-    assert_eq!(snapshot(&fx), before, "nothing changed");
-
-    // BUG-1977: the refusal's own hook-only command repairs it, and only it.
-    // trace:BUG-1977 | ai:claude
-    let msg = text(&out);
-    let named = msg
-        .split("Run `")
-        .nth(1)
-        .and_then(|rest| rest.split('`').next())
-        .unwrap_or_else(|| panic!("no command named: {msg}"));
     assert!(
-        named.starts_with("aida scaffold upgrade --only git-hooks"),
-        "{msg}"
+        text(&out).contains("verified host-owned AIDA hooks"),
+        "{}",
+        text(&out)
     );
-    assert!(!msg.contains("scaffold apply"), "{msg}");
-    let args: Vec<&str> = named.split_whitespace().skip(1).collect();
-    // Run from outside the project: the named --project-root is enough.
-    let fixed = fx
-        .cmd(fx.repo.parent().unwrap(), &args, false)
-        .output()
-        .expect("run aida");
-    assert!(fixed.status.success(), "{}", text(&fixed));
-    assert!(text(&fixed).contains("`pre-commit`"), "{}", text(&fixed));
-    let refreshed = std::fs::read_to_string(&hook).unwrap();
-    assert!(!refreshed.contains("echo drifted"), "{refreshed}");
+    assert_eq!(snapshot(&fx), before, "nothing changed");
+    assert!(
+        std::fs::read_to_string(&hook)
+            .unwrap()
+            .contains("echo drifted"),
+        "never silently repair a suspect profile"
+    );
+    std::fs::write(&hook, original).unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o500)).unwrap();
     fx.run_ok(&["db", "sync"]);
 }
 

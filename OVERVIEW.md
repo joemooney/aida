@@ -1,4 +1,23 @@
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+
+Store commits run only AIDA's shipped pre-commit, commit-msg, prepare-commit-msg,
+and post-commit hooks. Host git pins a versioned directory under its common git
+directory; project `core.hooksPath` (including husky, pre-commit and lefthook)
+applies to code commits. The host profile is installed atomically from embedded
+template masters and checked before use: exact entries and bytes, regular files
+with one link, current-user ownership, no symlinks, executable hooks, and no
+write permission for other users. Unsafe parent directories also refuse writes;
+root-owned sticky temporary roots are allowed. Existing suspect profiles are
+never silently repaired. Own-repository stores use only their sandbox-denied
+`.git` subtree; an authority path elsewhere inside the writable store refuses.
+Contained launch prepares the profile on the host before the sandbox starts,
+without adding writable paths. Store git removes relative/empty PATH entries
+and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` on Git
+2.40 or newer. The store-only hook marker keeps detached and override stores
+away from project-local executable probes without bypassing code-commit gates.
+Regression and mutation evidence: `aida-core/src/git_ops/store_hook_tests.rs`
+and `tests/test_bug_1929_hook_templates.py`.
+<!-- trace:BUG-1929 | ai:codex -->
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only
 when idle, clean, unlocked, and unleased. Setup failures retain a manual
