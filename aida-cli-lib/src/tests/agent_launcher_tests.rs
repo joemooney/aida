@@ -1871,7 +1871,7 @@ fn agent_resume_adapter_args_are_vendor_specific() {
     );
     assert_eq!(
         agent_resume_args("codex", "sid-1", "read context").unwrap(),
-        vec!["resume", "sid-1", "read context"]
+        vec!["resume", "sid-1", "--no-daemon", "read context"]
     );
     assert_eq!(
         agent_resume_args("antigravity", "sid-1", "read context").unwrap(),

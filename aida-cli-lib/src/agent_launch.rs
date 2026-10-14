@@ -2021,7 +2021,12 @@ pub(crate) fn agent_new_codex(
             return Ok(());
         }
     };
-    let mut default_args = Vec::new();
+    // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
+    // hooks (and tools) with the daemon's environment, i.e. whichever shell
+    // first started the daemon, so the child got another session's role and
+    // grant. Run it standalone so its own AIDA_SESSION_ROLE/grant apply.
+    // trace:BUG-2007 | ai:claude
+    let mut default_args = vec![CODEX_NO_DAEMON_FLAG.to_string()];
     if bypass_sandbox {
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
@@ -2688,6 +2693,9 @@ pub(crate) fn agent_seed_session_args(
     }
 }
 
+/// Keeps an interactive codex off the shared app-server daemon (BUG-2007).
+pub(crate) const CODEX_NO_DAEMON_FLAG: &str = "--no-daemon";
+
 // trace:STORY-790 | ai:codex
 pub(crate) fn agent_resume_args(
     agent_type: &str,
@@ -2696,7 +2704,12 @@ pub(crate) fn agent_resume_args(
 ) -> Result<Vec<String>> {
     let mut args = match agent_type {
         "claude" => vec!["--resume".to_string(), native_session_id.to_string()],
-        "codex" => vec!["resume".to_string(), native_session_id.to_string()],
+        // trace:BUG-2007 | ai:claude
+        "codex" => vec![
+            "resume".to_string(),
+            native_session_id.to_string(),
+            CODEX_NO_DAEMON_FLAG.to_string(),
+        ],
         "antigravity" => vec![
             "--conversation".to_string(),
             native_session_id.to_string(),

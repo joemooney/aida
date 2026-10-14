@@ -69,6 +69,45 @@ else
     esac
 fi
 
+# BUG-2007: a Codex session attached to the shared app-server daemon runs its
+# hooks with the DAEMON's environment, i.e. the role and grant of whichever
+# shell first started the daemon, not this session's. Detect that ancestry
+# (Linux /proc; elsewhere this is a no-op) so the role is reported as
+# unresolved instead of borrowed. trace:BUG-2007 | ai:claude
+under_shared_codex_daemon() {
+    # Builtins only (no subshell per ancestor): this runs on every session start.
+    local pid="$PPID" depth=0 a0 a1 a2 stat rest
+    while [ "$depth" -lt 16 ] && [ "${pid:-0}" -gt 1 ] 2>/dev/null; do
+        a0="" a1="" a2=""
+        {
+            IFS= read -r -d '' a0
+            IFS= read -r -d '' a1
+            IFS= read -r -d '' a2
+        } <"/proc/$pid/cmdline" 2>/dev/null
+        # The daemon is `codex app-server ...`; an interpreter-run stand-in
+        # shifts it one slot (`bash .../codex app-server`).
+        case "${a0##*/} $a1 ${a1##*/} $a2" in
+            "codex app-server "* | *" codex app-server") return 0 ;;
+        esac
+        IFS= read -r stat <"/proc/$pid/stat" 2>/dev/null || return 1
+        # Field 4 is the ppid; skip past "(comm) " since comm may hold spaces.
+        rest=${stat##*) }
+        # shellcheck disable=SC2086
+        set -- $rest
+        pid="${2:-0}"
+        depth=$((depth + 1))
+    done
+    return 1
+}
+# shellcheck disable=SC2016 # backticks are literal prose
+DAEMON_NOTE='this session runs under the shared Codex app-server daemon, whose environment (role and grant) belongs to the shell that started it, not to this session. Relaunch with `codex --no-daemon` (`aida agent new codex` does this) to get this session'"'"'s own role.'
+codex_daemon=""
+if under_shared_codex_daemon; then
+    role="unresolved"
+    ungranted=""
+    codex_daemon=1
+fi
+
 # In-flight count: dependency-free line count of in-progress spec ids.
 in_flight=$(aida list --status in-progress --format ids 2>/dev/null | grep -c .)
 case "$in_flight" in '' | *[!0-9]*) in_flight=0 ;; esac
@@ -115,6 +154,9 @@ case "$queue_depth" in '' | *[!0-9]*) queue_depth=0 ;; esac
 
 # Emit the compact digest to STDOUT.
 printf 'AIDA · role: %s · queue: %s · in-flight: %s\n' "$role" "$queue_depth" "$in_flight"
+if [ -n "$codex_daemon" ]; then
+    printf 'role unresolved: %s\n' "$DAEMON_NOTE"
+fi
 if [ -n "$ungranted" ]; then
     printf 'role %s is a label only: this shell holds no valid grant for it, so commands gated on that role will refuse. A human enters it at a terminal with: eval "$(aida role enter %s)"\n' "$ungranted" "$ungranted"
 fi
@@ -122,7 +164,7 @@ fi
 # and the renew command, so it never surfaces first as a refusal mid-run.
 # Silent when there is no grant or it has more than 2h left; best-effort.
 # trace:TASK-1736 | ai:claude
-if [ -n "${AIDA_SESSION_GRANT:-}" ]; then
+if [ -z "$codex_daemon" ] && [ -n "${AIDA_SESSION_GRANT:-}" ]; then
     if command -v timeout >/dev/null 2>&1; then
         expiry_note=$(timeout 2 aida role expiry --warn-within 2h 2>/dev/null)
     else
