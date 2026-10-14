@@ -7,12 +7,12 @@ description: |-
   (1) session_leases is not tested directly; mutations M3b and M8 survive at leases.rs:2549/2593. Add direct unit tests.
   (2) docs/cli/06-roles-sessions.md:110: make the state-column wording precise.
   (3) test_env::tests::hermetic_guard_defeats_a_leased_advisor_roster fails intermittently in the lease-filter run because AIDA_USER leaks from the environment. Reproduces on main. Make the test clear AIDA_USER hermetically.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T22:16:03.363236907Z
-modified_at: 2026-10-14T18:29:47.179586669Z
+modified_at: 2026-10-14T18:41:46.392692447Z
 req_type: Task
 comments:
 - id: 01a13bad-7a2b-7f42-bd79-35a9342f882f
@@ -21,6 +21,19 @@ comments:
   created_at: 2026-10-14T18:29:47.179586669Z
   modified_at: 2026-10-14T18:29:47.179586669Z
   session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
+- id: 01a13bb8-7398-7261-af8d-2b1e999629c5
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (9d46102) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:41:46.392691457Z
+  modified_at: 2026-10-14T18:41:46.392691457Z
+history:
+- id: 01a13bb8-7398-7261-af8d-2b0808151357
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:41:46.392690080Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
