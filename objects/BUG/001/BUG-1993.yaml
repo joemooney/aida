@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T19:29:54.838428103Z
+modified_at: 2026-10-14T20:00:40.622035844Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -128,6 +128,12 @@ comments:
   created_at: 2026-10-14T19:29:54.838428103Z
   modified_at: 2026-10-14T19:29:54.838428103Z
   session_id: 52ab74c4-4301-4085-9115-943b6744129b
+- id: 01a13c00-b0ae-7982-a1e0-0de59ee8e380
+  author: joe
+  content: 'Slices 2-4 PR #2634 at f36b1419a8 (non-completing): git log --all capped 3s (measured 0.6-1.1s), merge-base --is-ancestor 1s (~22ms); timeouts render unknown on human/card/json/MCP; git-shim test, mutation-checked. Remaining: resolve_default_branch_ref / worktree list / toon shipped_linkage git calls unbounded; in-flight worst-case sum still > 5s ceiling — re-check with #2633 live telemetry.'
+  created_at: 2026-10-14T20:00:40.622035844Z
+  modified_at: 2026-10-14T20:00:40.622035844Z
+  session_id: bf89205c-934c-4d25-9540-c55d7da46b72
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
