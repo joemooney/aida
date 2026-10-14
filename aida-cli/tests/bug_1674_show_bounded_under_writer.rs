@@ -55,8 +55,138 @@ const STRETCHED_LADDER_STEP_MS: u64 = 120_000;
 
 struct Fixture {
     _tmp: tempfile::TempDir,
+    /// The canonical temp dir: every path this fixture's processes see.
+    base: PathBuf,
     repo: PathBuf,
     home: PathBuf,
+}
+
+/// The measured `show` runs with [`STRETCHED_LADDER_STEP_MS`], and a refresh
+/// worker it detaches inherits that, so the worker can sleep ~120 s after the
+/// test is done. Reap only workers that name this fixture's own temp dir in
+/// their command line (found by scanning `/proc`, never by a PID read from a
+/// file, so a reused PID cannot be hit), then confirm they are gone.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let workers = fixture_workers(&self.base);
+        if workers.is_empty() {
+            return;
+        }
+        signal(&workers, "-TERM");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut alive = still_fixture_workers(&workers, &self.base);
+        while !alive.is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+            alive = still_fixture_workers(&workers, &self.base);
+        }
+        if !alive.is_empty() {
+            signal(&alive, "-KILL");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !alive.is_empty() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+                alive = still_fixture_workers(&workers, &self.base);
+            }
+        }
+        if !alive.is_empty() && !std::thread::panicking() {
+            panic!("refresh workers {alive:?} for this fixture survived SIGKILL");
+        }
+    }
+}
+
+/// `/proc/<pid>/cmdline` split on NUL, or `None` once the process is gone.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn cmdline(pid: u32) -> Option<Vec<String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    Some(
+        raw.split(|b| *b == 0)
+            .filter(|arg| !arg.is_empty())
+            .map(|arg| String::from_utf8_lossy(arg).into_owned())
+            .collect(),
+    )
+}
+
+/// The process state letter from `/proc/<pid>/stat` and its parent PID.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn stat(pid: u32) -> Option<(char, u32)> {
+    let raw = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The comm field may contain spaces or parens; the rest follows the last ')'.
+    let mut rest = raw[raw.rfind(')')? + 1..].split_whitespace();
+    let state = rest.next()?.chars().next()?;
+    let ppid = rest.next()?.parse().ok()?;
+    Some((state, ppid))
+}
+
+/// This process and every ancestor: never signalled.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn self_and_ancestors() -> Vec<u32> {
+    let mut chain = vec![std::process::id()];
+    let mut pid = std::process::id();
+    while let Some((_, ppid)) = stat(pid) {
+        if ppid <= 1 || chain.contains(&ppid) {
+            break;
+        }
+        chain.push(ppid);
+        pid = ppid;
+    }
+    chain
+}
+
+/// A live (not zombie) `cache refresh --worker` naming `base` in its args.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn is_fixture_worker(pid: u32, base: &str) -> bool {
+    if matches!(stat(pid), None | Some(('Z' | 'X', _))) {
+        return false;
+    }
+    cmdline(pid).is_some_and(|args| {
+        args.iter().any(|a| a == "refresh")
+            && args.iter().any(|a| a == "--worker")
+            && args.iter().any(|a| a.contains(base))
+    })
+}
+
+/// Every refresh worker of this fixture, by `/proc` scan.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn fixture_workers(base: &Path) -> Vec<u32> {
+    let base = base.to_string_lossy();
+    let protected = self_and_ancestors();
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|e| e.ok()?.file_name().to_str()?.parse::<u32>().ok())
+        .filter(|pid| *pid > 1 && !protected.contains(pid))
+        .filter(|pid| is_fixture_worker(*pid, &base))
+        .collect()
+}
+
+/// Of `pids`, those that are still this fixture's live workers.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn still_fixture_workers(pids: &[u32], base: &Path) -> Vec<u32> {
+    let base = base.to_string_lossy();
+    pids.iter()
+        .copied()
+        .filter(|pid| is_fixture_worker(*pid, &base))
+        .collect()
+}
+
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn signal(pids: &[u32], sig: &str) {
+    for pid in pids {
+        let _ = Command::new("kill")
+            .arg(sig)
+            .arg(pid.to_string())
+            .stderr(Stdio::null())
+            .status();
+    }
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
@@ -96,6 +226,7 @@ fn init_fixture() -> Fixture {
         .success());
     let fixture = Fixture {
         _tmp: tmp,
+        base,
         repo,
         home,
     };

@@ -9,8 +9,9 @@
 //! refresh workers had already failed, so readers took the inline fallback
 //! (spawning suppressed) and parked in the ladder. Each test here holds
 //! `BEGIN IMMEDIATE` on cache.db from a separate connection, as BUG-1674's
-//! tests do, and leaves `AIDA_CACHE_RETRY_*` unset so the production ladder
-//! is what a regression would wait out.
+//! tests do. The measured reads keep the production retry count but stretch
+//! each ladder step (`AIDA_CACHE_RETRY_MS`), so a regression that rides the
+//! uncapped ladder runs into the hard ceiling.
 // trace:BUG-1956 | ai:claude
 // trace:BUG-1995 | ai:antigravity
 
@@ -40,29 +41,6 @@ struct Fixture {
     _tmp: tempfile::TempDir,
     repo: PathBuf,
     home: PathBuf,
-}
-
-// trace:BUG-1995 | ai:antigravity
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let my_pid = std::process::id();
-        if let Ok(Some(info)) = aida_core::db::read_cache_lock_info(&cache_path(self)) {
-            if info.pid > 1 && info.pid != my_pid {
-                let _ = Command::new("kill")
-                    .args(["-9", &info.pid.to_string()])
-                    .status();
-            }
-        }
-        if let Some(req) = aida_core::db::refresh_request::load(&cache_path(self)) {
-            for attempt in &req.attempts {
-                if attempt.pid > 1 && attempt.pid != my_pid {
-                    let _ = Command::new("kill")
-                        .args(["-9", &attempt.pid.to_string()])
-                        .status();
-                }
-            }
-        }
-    }
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
@@ -193,7 +171,8 @@ fn hold_writer(fixture: &Fixture) -> rusqlite::Connection {
     conn
 }
 
-/// The 1-minute load average, for the budget report only.
+/// The 1-minute load average, for the budget report only. The item-level
+/// cfg is what the portability ratchet keys on, so it stays.
 // trace:BUG-1995 | ai:antigravity
 #[cfg(target_os = "linux")]
 fn load_average() -> String {
