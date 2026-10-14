@@ -1,0 +1,19 @@
+{
+  "id": "5e9e3e9b-b25d-450e-ac0e-926803dc3071",
+  "thread_id": "5e9e3e9b-b25d-450e-ac0e-926803dc3071",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792016316536,
+  "body": "READY: #2637 at fcc9a8e6d2 (BUG-2007, STANDARD risk, CI green)\nRoot cause: the shared codex app-server daemon carries the env (role+grant) of the shell that started it; daemon-attached codex TUIs ran hooks as advisor. Fix: --no-daemon on aida agent new/resume codex; hooks report role unresolved under a codex app-server ancestor. e2e + 4 hook cases, mutation-checked.\nAlso #2634 CI is green again at b1a8324c9d.\n",
+  "subject": "READY: #2637 at fcc9a8e6d2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
