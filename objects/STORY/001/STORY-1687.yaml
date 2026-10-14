@@ -38,12 +38,12 @@ description: |
   ## Notes
 
   This deliberately narrows the human-only integrity floor recorded in reference_merge_hold_clear_is_human_only (docs/agents/aida-repository-guide.md) and BUG-1693. It changes the architecture and policy of an integrity floor, so it needs a sketch on this spec and advisor signoff before implementation, and the floor docs must be updated in the same PR. The operator approved the direction on 2026-10-13 16:59.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T02:56:34.128494364Z
+modified_at: 2026-10-14T05:38:33.646357333Z
 req_type: Story
 comments:
 - id: 01a137b5-d25f-74e2-b29b-70907598ea1d
@@ -162,6 +162,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a138eb-662e-75e0-b486-f3ca862e311b
+  author: aida-orchestrator
+  timestamp: 2026-10-14T05:38:33.646393026Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: ccf36c0f4c33257f37d3f44da246bf388dfed114
@@ -171,3 +178,11 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'R1-R3, R5, R7 hold and the gate is unchanged in logic, but the required forge-head re-read mutation survives: the production revalidation seam in auto_release is untested'
+  recovery_hint: address the review findings, move STORY-1687 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-14T05:38:33.646357333Z
