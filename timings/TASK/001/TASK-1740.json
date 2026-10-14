@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1740",
+  "publishes": [
+    {
+      "at": "2026-10-14T22:27:00.091224697Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T15:46:09.631728244Z",
+      "spec": "TASK-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T19:55:43.035786435Z",
+      "spec": "TASK-1740",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T20:04:47.133498800Z",
+      "spec": "TASK-1740",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1740",
+        "branch": "task-1740-work",
+        "first_seen": "2026-10-13T20:04:47.133446529+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T17:32:13.569925761Z",
+      "spec": "TASK-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "3707ff31cbdcf9c59a053dfcf9c9b8cb96c5f647"
+      }
+    },
+    {
+      "ts": "2026-10-14T22:26:43.431668273Z",
+      "spec": "TASK-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T22:26:53.679190294Z",
+      "spec": "TASK-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2600
+      }
+    },
+    {
+      "ts": "2026-10-14T22:27:00.076703356Z",
+      "spec": "TASK-1740",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d388d5d83b7d8f3c8bf2fbf08ba07ade460edd1a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
