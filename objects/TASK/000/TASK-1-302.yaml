@@ -1,0 +1,30 @@
+id: 01a13815-5fe6-7150-989b-ab8333caa94b
+spec_id: TASK-1-302
+title: 'Non-blocking: untested paths - removal-side context logic (:562-570; mutating p…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: untested paths - removal-side context logic (:562-570; mutating prev_rem_has_prose to 0 or 1 survives), add-side leak-branch reset (:600-601; deleting survives, only observable with a move-credited leak), abbreviation guard (deleting survives).
+
+  PR: #2605
+  Reviewed sha: b6775ca8120b89266547818f3a2775db5802319c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-14T01:44:47.334132653Z
+modified_at: 2026-10-14T01:44:47.334132653Z
+req_type: Task
+tags:
+- carried-from:BUG-2008
+- finding-hash:757c5891
+- from-review:PR-2605
+- kind:carried-forward
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
