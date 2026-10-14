@@ -48,9 +48,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:45:09.320682147Z
-modified_at: 2026-10-14T01:33:57.350840455Z
+modified_at: 2026-10-14T01:57:43.092181801Z
 req_type: Story
 tags:
+- batch:drain-20261013
 - cli
 - history
 - plan:night
