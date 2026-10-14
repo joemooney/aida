@@ -1,3 +1,10 @@
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
 `role expiry --refuse-within` validates through the shared `grant_check` verdict,
 including subject, roster and parent delegation. Expiry is the earlier of the
 validated grant and parent. The statusline's expired-record timestamp reader is
