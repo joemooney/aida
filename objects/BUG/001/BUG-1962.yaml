@@ -10,12 +10,12 @@ description: |-
   - Rename still_active to still_tripped across JSON, TOON, and Coverage models.
   - Session findings report the transcript last-write age (e.g. 'transcript last written 4h ago') relative to scan time.
   - Tests pin last_written_at accuracy, sub-minute precision, file-mtime fallback, and verify ended or idle sessions report transcript last-write age and populate still_tripped.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:27:19.173776676Z
-modified_at: 2026-10-14T11:13:02.790132072Z
+modified_at: 2026-10-14T15:26:12.375631065Z
 req_type: Bug
 tags:
 - found:night-2026-10-10
@@ -147,6 +147,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13b05-675b-7721-a296-53a2e9ab2f75
+  author: aida-auto-bump
+  timestamp: 2026-10-14T15:26:12.315096211Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a13b05-6797-7ef2-ab52-12cfa577b9a8
+  timestamp: 2026-10-14T15:26:12.375611978Z
+  agent: implementer
+  commit_sha: a24e2e19cc8c5eae0b004e7e8dcf250a29f9d38f
+  summary: 'Advisor tier ruling 04:14: STANDARD (display-only age; JSON rename has one in-PR consumer). The r2 test-pinning gaps (5 mutation groups) move to TASK-1756; no blocking defect.'
+  review_verdict: approved
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
@@ -155,11 +169,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 M1/M2 now killed, but under STRICT tier 8 mutations on new last_written_at/format_age code survive; the age is still never read back from saved state
-  recovery_hint: address the review findings, move BUG-1962 back to In Progress, and clear the PR hold only after approval
-  shelved_by: integrator
-  shelved_at: 2026-10-14T11:12:14.565724812Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T15:26:12.315081829Z
+  completion_sha: a24e2e19cc8c5eae0b004e7e8dcf250a29f9d38f
