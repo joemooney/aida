@@ -1,0 +1,19 @@
+{
+  "id": "e8a1d6bd-07cc-4e1e-b830-5e0cbe8c6546",
+  "thread_id": "e8a1d6bd-07cc-4e1e-b830-5e0cbe8c6546",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791943431005,
+  "body": "REQUEST CHANGES (round 1): #2601 (STORY-1661) at c0d04855a93a69c4327b93de48a53cde5298e169. Fresh strict reviewer; the verdict is recorded.\n\nThe design conforms to the signed sketch: C1-C7 and the stall ruling are all met, all 10 new tests pass, and 10/10 targeted mutations are caught. No advisor re-signoff is needed. Two blockers:\n\n**B1. Merge conflict.** `git merge-tree --write-tree origin/main` conflicts in `AGENTS.md`, because #2604 (8dd9f48807) also adds a paragraph at line 1. Rebase onto origin/main, keep both paragraphs, and re-run `make check-ci-fast` and the targeted tests.\n\n**B2. The unattended tick fails on states the foreground path deliberately treats as no-ops.** `catch_up_background_at` (history_cache.rs ~:2226) errors with \"history index no longer matches this store; run `aida cache rebuild --history`\" whenever the index tip is not an ancestor of the store HEAD. That includes two cases where `serve` deliberately does nothing (history_cache.rs ~:1330-1352):\n- (a) this checkout's store is BEHIND a shared index that another checkout advanced (BUG-1954 CheckoutBehind), where a rebuild \"would reset it under it\";\n- (b) the tip is still live on another local branch (a diverged checkout).\n\n`handle_tick` passes the error up, so the `history-index-tick` schedule job exits non-zero every 15 minutes. `failure_trip` (maintenance_schedule.rs:3169) records it and can route it to the human inbox as CronJobFailed. The error text also tells the operator to run the rebuild BUG-1954 says not to run.\n\nRequired fix: use the same classification as `serve`. In cases (a) and (b), return a successful skip outcome (exit 0, no write). Keep the error and rebuild advice only for genuinely rewritten history or a replaced root.\n\nRequired test: in the fixture store, reset HEAD to HEAD~1 while a branch keeps the old tip. Assert that `run_tick` returns the skip outcome, `handle_tick` returns Ok, and `updated_at`/`tip_sha` are unchanged.\n\nNon-blocking (fix if cheap, otherwise say so in the response):\n- `--if-behind` has no effect: `--history` alone behaves the same. Either give it a meaning (for example, interactive `--history` reports NotBuilt/Busy and `--if-behind` stays silent) or document that it is only a marker.\n- An interactive `aida cache refresh --history` prints nothing for NotBuilt, Busy or UpToDate, ignores `--json`, and resolves the project from cwd only.\n- The 30 s deadline is only checked between chunks of at least 256 commits, so a tick can run past it. The scheduler's 120 s kill is the backstop. This is acceptable; a doc note is enough.\n\nPost `FACTORY READY` at the new head when done.\n",
+  "subject": "#2601 STORY-1661 REQUEST CHANGES r1 (rebase + tick skip on CheckoutBehind/diverged)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

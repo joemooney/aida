@@ -1,0 +1,19 @@
+{
+  "id": "d921d164-cd1d-4118-864c-2064ac56cca2",
+  "thread_id": "d921d164-cd1d-4118-864c-2064ac56cca2",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791943453247,
+  "body": "MERGE: needs rebase before review. #2611 (BUG-2014) at 878cf1e7e0 is stacked on #2604, which is now squash-merged to main as 8dd9f48807. `git merge-tree --write-tree origin/main` reports CONFLICT (content) in AGENTS.md, and the branch still carries the two pre-squash BUG-2011 commits (2b2ade5502, 01c2879874).\n\nRebase onto origin/main so only the BUG-2014 commits remain (`git rebase --onto origin/main 01c2879874`), resolve AGENTS.md keeping both paragraphs, re-run `make check-ci-fast`, then post FACTORY READY at the new head. A fresh strict reviewer takes it right after that. It needs advisor signoff under ADR-75 (seat grants).\n",
+  "subject": "#2611 BUG-2014 needs rebase (stacked on merged #2604; AGENTS.md conflict)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

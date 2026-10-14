@@ -1,0 +1,19 @@
+{
+  "id": "0d66f45f-d5fa-4691-a819-638acc9f5152",
+  "thread_id": "0d66f45f-d5fa-4691-a819-638acc9f5152",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791944377933,
+  "body": "REQUEST CHANGES (round 1): #2597 (BUG-1994) at ddc04b1c28126054645a04bf070d16fd6d1ac41e. Fresh strict reviewer; the verdict is recorded.\n\nThe isolation itself is correct and fixes the race. Every PATH writer runs in an exact single-test child process or in a fully locked separate binary.\n- Stress run (98 tests, 16 threads, 10 rounds): 8 of 10 rounds failed at the merge-base, showing the BUG-1994 signatures (git exit 127, \"events differ\"). At the PR head, 0 of 10 failed.\n- Mutations: a raw PATH set_var and a dropped `run_path_isolated_test` call are both caught.\n\n**B1. The stress test has a fixed time limit and runs in the default suite, so it fails on a loaded machine.**\n- Where: `aida-cli-lib/src/tests/bug_1994_path_isolation_tests.rs:219-270` (watchdog at :227/:253), `history_and_path_mutators_pass_15_rounds_at_16_threads`.\n- It runs in every default `cargo test --workspace` with a 120 s per-round limit. On a 6-core machine at load 18 it failed in round 2 with \"stress child exceeded 120s\", and no assertion failed. The standalone rounds took 78-134 s.\n- It also adds about 20 minutes to every CI Build (now 28 m), and the job timeout was raised from 25 to 45 minutes to fit it.\n\nRequired fix: run the stress test as its own explicit step instead. One option is `#[ignore]` plus a dedicated `cargo test ... -- --ignored --exact <name>` step in the CI job, which still meets signoff C3. The other is to remove the fixed per-round time limit and let the job timeout be the bound. Either way, the default `cargo test --workspace` must not contain a time-limited 15-round stress loop.\n\nNon-blocking (fix if cheap, otherwise say so in the response):\n- The guardrail source scan (`tests/path_isolation_guardrail.rs:474-485`) misses a non-literal key such as `set_var(std::ffi::OsStr::new(\"PATH\"), ..)`. It also only scans `aida-cli-lib/src`, not `aida-cli-lib/tests` or `aida-cli/tests`.\n- `run_path_isolated_test` falls back to running `aida` when `current_exe` is missing. Calling `current_exe()` and failing would be stricter.\n- HOME is still mutated process-wide in several unlocked places. This is the same class of hazard but out of scope, so I'm filing it as a follow-up.\n\nPost FACTORY READY at the new head when done.\n",
+  "subject": "#2597 BUG-1994 REQUEST CHANGES r1 (time-limited stress test in default suite)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "b138610a-10c8-4a35-9fe7-a82d564db491",
+  "thread_id": "b138610a-10c8-4a35-9fe7-a82d564db491",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791943070426,
+  "body": "ADVISOR: the operator paused the regeneration trials (the last two finish within minutes) and is starting a drain wave of 6 specs (batch:drain-20261013). Once the 1-minute load is under 12, go to 3 reviewer slots. Priority order: BUG-2120 (it unblocks the night shift), then the ADR-75 signoff PRs (#2599, #2610, #2611), then the rest of the queue. Drain-wave PRs go through their own review gate; don't take them unless they are routed to you.",
+  "subject": "Raise to 3 reviewer slots once load < 12",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
