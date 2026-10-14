@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T12:55:07.519606270Z
+modified_at: 2026-10-14T13:20:55.262060655Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -89,6 +89,11 @@ comments:
   content: 'FACTORY PLAN (antigravity): Re-measure aida show latency across format/card/tree modes on current main under load. If show is within budget on current main, add budget regression test coverage asserting latency stays under 1000ms threshold without cache lock contention, document measurements in commit and PR, and close acceptance loop.'
   created_at: 2026-10-14T12:55:07.519606270Z
   modified_at: 2026-10-14T12:55:07.519606270Z
+- id: 01a13a92-b3de-74d2-9d3a-8a905132b0f8
+  author: joe
+  content: 'FACTORY DRAFT: PR #2620 at 5e34eb82fdbf29e8f43c83d4fc049d90b17d297c'
+  created_at: 2026-10-14T13:20:55.262060655Z
+  modified_at: 2026-10-14T13:20:55.262060655Z
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
