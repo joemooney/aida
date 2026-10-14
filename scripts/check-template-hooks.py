@@ -3,6 +3,7 @@
 # trace:BUG-2014 | ai:codex
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -39,8 +40,15 @@ def main():
             print(f'Linked: {path}')
         elif not target.is_file() or path not in tracked:
             errors.append(f'MISSING or UNTRACKED: {path}')
+        # trace:BUG-2014 | ai:codex
+        elif not target.is_symlink():
+            errors.append(f'NOT A SYMLINK: {path}')
+        elif target.resolve() != master.resolve():
+            errors.append(f'WRONG MASTER: {path}')
+        elif not os.access(target, os.X_OK):
+            errors.append(f'NOT EXECUTABLE: {path}')
         else:
-            print(f'OK: {path} (tracked hook)')
+            print(f'OK: {path} (tracked link to executable master)')
     for error in errors:
         print(error)
     return bool(errors)
