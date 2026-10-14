@@ -25,9 +25,9 @@ its consequences instead of guessing.
 ## Advisor merge authority
 
 <!-- trace:TASK-1725 | ai:claude -->
-In the aida repository, ADR-73 (`aida show ADR-73`) lets the advisor seat
-merge an approved PR, whichever vendor runs the seat, only when all six of
-these conditions hold:
+In the aida repository, ADR-73 (`aida show ADR-73`, amended by ADR-75) lets the
+advisor seat merge an approved PR, whichever vendor runs the seat, only when all
+six of these conditions hold:
 
 1. **No recorded authorship.** The advisor's session, harness, seat grant and
    leases are absent from the PR's authorship ledger. Launching the implementer
@@ -40,9 +40,19 @@ these conditions hold:
    SHA, and the merge pins it (`--match-head-commit <full sha>` or `aida pr ship`).
 4. **No holds (holds are absolute).** No operator hold, merge-hold label or
    unresolved REQUEST CHANGES.
-5. **Signoff for sensitive changes.** Architecture, security, approval-authority
-   and identity changes need an advisor or operator signoff recorded on the
-   owning spec before merge.
+5. **Signoff for sensitive changes.** An advisor or operator signoff recorded on
+   the owning spec before merge is required ONLY when the PR changes:
+   - (a) contained-sandbox / confinement: bwrap/OS-wrap, contained write roots,
+     host-exec paths from contained sessions;
+   - (b) approval authority, seat grants or identity: who may approve, merge,
+     edit status or clear holds;
+   - (c) credential or secret handling: tokens, credentials in
+     argv/env/URLs/logs.
+   Every other change merges on the merge seat's fresh, independent APPROVE at
+   the pinned green head. Architecture is signed at sketch time; the merge
+   reviewer verifies conformance to the signed sketch, and a deviation needs a
+   new advisor ruling (dropping the second, merge-time architecture signoff).
+   <!-- trace:TASK-1746 | ai:antigravity -->
 6. **Audit comment.** After merging, comment on the PR or spec with who
    approved which head, the merged SHA and the CI run.
 
