@@ -3,15 +3,23 @@ spec_id: TASK-1746
 agreed_id: TASK-1746
 title: 'Discipline docs: reflect ADR-75''s narrowed merge-time signoff in two-seat-protocol.md (template master + make sync-templates)'
 description: 'ADR-75 amends ADR-73 cond. 5. Update aida-core/templates/.aida/discipline/two-seat-protocol.md (and any discipline page that restates cond. 5) so every vendor''s advisor and merge seat load the narrowed list: (a) sandbox/confinement, (b) authority/grants/identity, (c) credentials. Architecture is signed at sketch time, and the merge reviewer checks conformance. Run make sync-templates and make check-templates. Docs only.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:37:34.380337028Z
-modified_at: 2026-10-14T01:57:37.958592543Z
+modified_at: 2026-10-14T11:57:19.271652566Z
 req_type: Task
 tags:
 - batch:drain-20261013
+history:
+- id: 01a13a46-2a27-7eb3-9546-3194b371fee5
+  author: aida-session-start
+  timestamp: 2026-10-14T11:57:19.271650662Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
