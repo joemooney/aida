@@ -1,0 +1,20 @@
+id: 01a13b59-5b5c-7612-bc67-ee1a9458f008
+spec_id: BUG-2128
+agreed_id: BUG-2128
+title: A relay launched for a seat whose handoff was archived waits silently forever for latest.md; no status, mail, or escalation says the lane is idle
+description: '2026-10-14: the merge relay (run 20261014-084344) was launched with --handoff-seat merge and no --prompt-file. latest.md had been archived to archive-2026-10-14-0815-prev.md at 08:14, so the relay printed ''Waiting for latest.md (polling every 60s)'' for 73 minutes. Meanwhile ''relay.sh --status'' reported state=running session=1, and nothing reached the advisor or the operator. The lane was dead while every surface said it was running. Acceptance: (1) --status reports ''awaiting handoff (no latest.md) since <t>'', not ''running''; (2) at launch, when latest.md is missing but the seat has a recent archive or handoff, the relay names it and offers to restore it (or --resume-latest-archive does that); (3) after N minutes waiting, the relay mails the seat''s advisor or operator once. Related: BUG-2126 (the other silent relay stall the same morning).'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T16:57:54.268512020Z
+modified_at: 2026-10-14T16:57:54.268512020Z
+req_type: Bug
+filed_at:
+  code_sha: 0f8894fa34813bd0dff9518cc4825a231bafd150
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0f8894fa34
+  vendor: claude
+  session: b9a9ec1a-4cee-4560-b175-c2116f2456c4
