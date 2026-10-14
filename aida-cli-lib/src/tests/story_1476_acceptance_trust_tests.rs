@@ -521,12 +521,8 @@ fn story_1476_missing_global_config_denies() {
 }
 
 /// Table-driven pure parse cases.
-// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_policy_from_toml_pure() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
     let parse = |body: &str| acceptance_command_policy_from_toml(&toml::from_str(body).unwrap());
 
     // Well-formed opt-ins.
@@ -567,8 +563,12 @@ fn story_1476_policy_from_toml_pure() {
 /// TASK-1545 acceptance 1: a refused character is checked on the RAW entry.
 /// Trimming first would normalise a malformed entry such as `*\r` to `*` and
 /// accept it as full trust.
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn story_1476_allow_entry_refused_char_checked_before_trim() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let parse = |body: &str| acceptance_command_policy_from_toml(&toml::from_str(body).unwrap());
 
     for entry in [
