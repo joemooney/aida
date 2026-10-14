@@ -2560,60 +2560,13 @@ pub(crate) fn agent_new_bg_dispatch(
         );
     }
 
-    let mut command = std::process::Command::new(&binary);
-    command
-        .current_dir(&plan.launch_cwd)
-        .args(&config.default_args)
-        .args(&prompt_args)
-        .env("AIDA_AGENT_TYPE", config.agent_type)
-        .env("AIDA_AGENT_NAME", &plan.name)
-        // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
-        // it from AIDA_USER → USER) must be the agent's OWN stable name, not the
-        // launching human's shell USER — otherwise the agent reads the human's
-        // inbox and a coordinator's `--to <agent>` is invisible. Export
-        // AIDA_USER = the stable name so mailbox + queue agree with the
-        // registry/brief identity. trace:BUG-558 | ai:claude
-        .env("AIDA_USER", &plan.name)
-        .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove("AIDA_SESSION_GRANT")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
-            &plan.project_root,
-            &canonical_role_name(role),
-            &plan.name,
-        )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
-    } else {
-        command.env_remove("AIDA_SESSION_ROLE");
-    }
-    if let Some(spec) = &plan.current_spec {
-        command.env("AIDA_SESSION_SCOPE", spec);
-    }
-    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
-    if let Some(ctx) = &launch_context {
-        command
-            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
-            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
-    }
-    // TASK-1482: same default strip as the foreground path — a `--bg`
-    // dispatch must not silently hand its detached child the operator's
-    // local output-format/agent-mode/glyph/quiet preferences either.
-    // trace:TASK-1482 | ai:claude
-    apply_presentation_env_policy(
-        &mut command,
-        &resolve_presentation_env_policy(&plan.project_root)?,
-    );
-    // trace:BUG-2006 | ai:antigravity
-    if is_contained_launch(&config) {
-        command.env("AIDA_CONTAINED", "1");
-    } else {
-        command.env_remove("AIDA_CONTAINED");
-    }
+    let mut command = build_agent_new_bg_command(
+        &binary,
+        &config,
+        &plan,
+        &prompt_args,
+        launch_context.as_ref(),
+    )?;
 
     let output = command
         .output_retrying_etxtbsy()
@@ -4346,18 +4299,90 @@ pub(crate) fn render_agent_show_prompt(
 }
 
 // trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_agent_new_bg_command(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt_args: &[String],
+    launch_context: Option<&AgentLaunchContext>,
+) -> Result<std::process::Command> {
+    let mut command = std::process::Command::new(binary);
+    command
+        .current_dir(&plan.launch_cwd)
+        .args(&config.default_args)
+        .args(prompt_args)
+        .env("AIDA_AGENT_TYPE", config.agent_type)
+        .env("AIDA_AGENT_NAME", &plan.name)
+        // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
+        // it from AIDA_USER → USER) must be the agent's OWN stable name, not the
+        // launching human's shell USER — otherwise the agent reads the human's
+        // inbox and a coordinator's `--to <agent>` is invisible. Export
+        // AIDA_USER = the stable name so mailbox + queue agree with the
+        // registry/brief identity. trace:BUG-558 | ai:claude
+        .env("AIDA_USER", &plan.name)
+        .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .env_remove("AIDA_SESSION_GRANT")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(role) = &plan.role {
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
+    }
+    if let Some(spec) = &plan.current_spec {
+        command.env("AIDA_SESSION_SCOPE", spec);
+    }
+    apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    if let Some(ctx) = launch_context {
+        command
+            .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
+            .env("AIDA_AGENT_REGISTRY_TOKEN", &ctx.token);
+    }
+    // TASK-1482: same default strip as the foreground path — a `--bg`
+    // dispatch must not silently hand its detached child the operator's
+    // local output-format/agent-mode/glyph/quiet preferences either.
+    // trace:TASK-1482 | ai:claude
+    apply_presentation_env_policy(
+        &mut command,
+        &resolve_presentation_env_policy(&plan.project_root)?,
+    );
+    // trace:BUG-2006 | ai:antigravity
+    if is_contained_launch(config) {
+        command.env("AIDA_CONTAINED", "1");
+    } else {
+        command.env_remove("AIDA_CONTAINED");
+    }
+    Ok(command)
+}
+
+// trace:BUG-2006 | ai:antigravity
 pub(crate) fn is_contained_args(agent_type: &str, args: &[String]) -> bool {
     match agent_type {
         "claude" => {
-            args.iter().any(|arg| arg == "--settings")
-                && !args.iter().any(|arg| arg == "--permission-mode")
+            let has_settings = resolved_flag_value(args, "--settings").is_some()
+                || resolved_flag_value(args, "-s").is_some();
+            let has_bypass = resolved_flag_value(args, "--permission-mode").is_some()
+                || args
+                    .iter()
+                    .any(|arg| arg == "--dangerously-skip-permissions");
+            has_settings && !has_bypass
         }
         "codex" => {
-            args.windows(2)
-                .any(|w| w[0] == "--sandbox" && w[1] == "workspace-write")
-                && !args
-                    .iter()
-                    .any(|arg| arg == "--dangerously-bypass-approvals-and-sandbox")
+            let sandbox = resolved_flag_value(args, "--sandbox");
+            let is_contained_sandbox =
+                sandbox == Some("workspace-write") || sandbox == Some("read-only");
+            let has_bypass = args.iter().any(|arg| {
+                arg == "--dangerously-bypass-approvals-and-sandbox" || arg == "--full-auto"
+            });
+            is_contained_sandbox && !has_bypass
         }
         _ => false,
     }
