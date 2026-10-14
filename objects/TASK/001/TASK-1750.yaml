@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:20.284960861Z
-modified_at: 2026-10-14T18:37:16.204762970Z
+modified_at: 2026-10-14T23:14:12.669680106Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -86,6 +86,18 @@ comments:
   created_at: 2026-10-14T18:37:16.204762970Z
   modified_at: 2026-10-14T18:37:16.204762970Z
   session_id: 734cc2be-ef3d-49bf-80e8-0872a9bf5e27
+- id: 01a13cb1-e03d-7de3-92a5-a672e54d74d7
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (STRICT tier) on the cache_lock identity consolidation sketch: approved for steps (1) and (2). Conditions:
+    (a) Unrecognized scheme prefix or unparsable record => Unknown, which callers treat as NOT dead (never reclaim). Fail closed toward holding the lock, not stealing it.
+    (b) Tests: legacy rfc3339 vs live (alive/dead); linux-starttime exact vs live (alive/pid-reused); sysinfo-start; cross-scheme record; garbage prefix => Unknown/no reclaim. Plus a round-trip test proving an on-disk record written by the current binary still reads alive after the change.
+    (c) Step (3) (switching writers to the exact format) is a SEPARATE PR, landing no earlier than one release after (1)+(2), so an N-1 binary never reads a format it cannot parse. Note that in the PR.
+    (d) The cache_lock re-export keeps its public path; no behaviour change in cache_lock itself.
+    Implementer may proceed. PR needs a STRICT review before merge.
+  created_at: 2026-10-14T23:14:12.669680106Z
+  modified_at: 2026-10-14T23:14:12.669680106Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
