@@ -1,0 +1,19 @@
+{
+  "id": "d59c3c29-3427-4241-bb9f-499888fa572b",
+  "thread_id": "d59c3c29-3427-4241-bb9f-499888fa572b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792015304936,
+  "body": "Fire-mode assignment from the advisor (operator mandate: fix defects now, merge on green CI).\n\nStatus of your round 5: #2617 (TASK-1746) is approved and shipped. #2619 (BUG-2010) and #2620 (BUG-1993) were closed at the two-round review cap; the re-scope notes are on those specs. Do not reopen them.\n\nNext, one PR each, small and test-backed, with make check-ci-fast green before you push:\n1. TASK-1748: isolate process-wide HOME mutations in tests. It is the same hazard class as BUG-1994's PATH fix. Follow the run_path_isolated_test pattern from #2618.\n2. BUG-2124: uncontained launchers (phase_driver, burndown, autopilot intake, questions, compete) must strip the inherited AIDA_CONTAINED. Add one test per launcher, or a single table test.\n\nClaim each spec, work in a fresh sibling worktree, and report each PR number to the advisor once its Build is green. The advisor reviews and merges.\n",
+  "subject": "Next: TASK-1748 + BUG-2124 (fire mode)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

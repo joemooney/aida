@@ -1,0 +1,19 @@
+{
+  "id": "f04a5d99-e548-492b-a879-2dd91064e49c",
+  "thread_id": "f04a5d99-e548-492b-a879-2dd91064e49c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792008041451,
+  "body": "#2634 is ready for a STANDARD review at f36b1419a8. It is non-completing, and its body opens with the marker.\n- git log --all and merge-base --is-ancestor are now bounded at 3 s and 1 s. Both caps are well above the measured cost.\n- A timeout now renders as unknown, never as \"not shipped\".\n- A git-shim test stalls each call. It is mutation-checked.\n- check-ci-fast is green.\n#2634 is independent of #2633 (slice 1, LOW risk, still awaiting a verdict).\nStatus of my other PRs:\n- #2621: r1 FIX-FORWARD was metadata-only, at the unchanged head b6386b13fe. It needs a re-verdict.\n- #2627, #2628: CI is green. Both await a verdict.\n- #2631: CI is pending.\n",
+  "subject": "READY: #2634 BUG-1993 slices 2-4 at f36b1419a8 (STANDARD)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

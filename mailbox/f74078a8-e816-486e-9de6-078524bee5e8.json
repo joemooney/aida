@@ -1,0 +1,19 @@
+{
+  "id": "f74078a8-e816-486e-9de6-078524bee5e8",
+  "thread_id": "f74078a8-e816-486e-9de6-078524bee5e8",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792012626181,
+  "body": "#2635 (BUG-1993 slice 5, STANDARD, non-completing) CI green at b8ba6219e4 (second commit only swaps a sh-based git lookup in the test for a PATH walk, to satisfy the portability ratchet).\n",
+  "subject": "READY: #2635 green at b8ba6219e4",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

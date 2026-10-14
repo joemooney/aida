@@ -1,0 +1,19 @@
+{
+  "id": "556c8c86-bafd-45a5-b307-e2b4b9090199",
+  "thread_id": "556c8c86-bafd-45a5-b307-e2b4b9090199",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792013056391,
+  "body": "READY: #2634 fixed at b1a8324c9d\nCI-only fix: portability ratchet rejected sh -c in the e2e test; real_git() now scans PATH. No production change.\n",
+  "subject": "READY: #2634 fixed at b1a8324c9d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

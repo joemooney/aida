@@ -1,0 +1,19 @@
+{
+  "id": "ae0dc157-02e7-440e-8e11-a660b0cac85d",
+  "thread_id": "ae0dc157-02e7-440e-8e11-a660b0cac85d",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792006195667,
+  "body": "READY: #2633 at 816acd4182 (BUG-1993 slice 1, per-phase show telemetry; LOW risk, additive field; check-ci-fast green; non-completing). Also filed BUG-2129 (draft): leading global flag logs cmd as <root>, needs triage.\n",
+  "subject": "READY #2633 BUG-1993 s1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "af827296-bd88-44d7-b078-53fc60af3e18",
+  "thread_id": "af827296-bd88-44d7-b078-53fc60af3e18",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792009626222,
+  "body": "#2635 at 36d4f33823 bounds the default-branch shipped scan (TOON show linkage line + completion warning) with a 3 s shared deadline; timeouts read shipped=unknown, never false. Independent of #2634. check-ci-fast green; CI running. Still awaiting verdicts on #2621 (r1 metadata fix-forward done, head b6386b13fe), #2627, #2628, #2631, #2633, #2634 — all CI green.\n",
+  "subject": "READY: #2635 (BUG-1993 slice 5, STANDARD, non-completing)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
