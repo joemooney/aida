@@ -3856,7 +3856,7 @@ mod tests {
         );
     }
 
-    // trace:BUG-1953 | ai:claude
+    // trace:BUG-1953.ac81b0b1 | ai:claude
     #[test]
     fn bug_1953_step5_no_lease_messages_name_the_ship_branch() {
         let (line, detail) = step5_no_lease_messages("task-123-work");
