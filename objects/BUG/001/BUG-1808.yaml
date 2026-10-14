@@ -14,12 +14,12 @@ description: |
   It must not depend on the publication, CommittedDispatch, store-CAS, launch transport or pane/containment architecture. All of that moved to EPIC-76 (with TASK-1612), along with the parked groundwork branch `bug-1808-delegation-publication`. Do not build on that branch.
   Authority-class still applies: write a short NEW sketch for the narrow fix (one page: where the check runs, which inputs it reads, how "no mutation" is proved), get independent advisor signoff, implement in the guided lane, and the operator merges.
   Comments before 2026-10-10 describe the architecture now owned by EPIC-76. They are history for this bug, not its acceptance.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-11T15:21:13.422160456Z
+modified_at: 2026-10-14T23:26:02.572129876Z
 req_type: Bug
 tags:
 - atomicity
@@ -4168,6 +4168,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a13cbc-b54c-74d2-b189-10bd3e08ce17
+  author: aida-session-start
+  timestamp: 2026-10-14T23:26:02.572129145Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
