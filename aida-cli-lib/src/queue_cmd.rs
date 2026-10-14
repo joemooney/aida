@@ -504,58 +504,71 @@ pub(crate) fn advance_dispatch(
                 );
                 return Ok(());
             }
-            let backend = advance_backend(store_path)?;
-            let mut req = backend
-                .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
-                .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
-            // Completing is an advisor-authority act (same gate as approve/
-            // reject); an interactive operator clears it via the TTY branch of
-            // `has_advisor_authority`. trace:BUG-543
-            if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
-                && !has_advisor_authority()
-            {
-                println!(
-                    "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display.bold(),
-                    roleless_recovery_sentence()
-                );
-                return Ok(());
-            }
-            // BUG-1286 F1: the queue's completion path reaches Completed without
-            // going through auto-bump or reconcile, so it must emit the ship
-            // record itself. STORY-1418: stamp + persist + emit via the seam.
-            // trace:BUG-1286 trace:STORY-1418 | ai:claude
-            crate::completion::transition_to_completed(
-                &mut req,
-                store_path.parent(),
-                display,
-                "",
-                "queue-done",
-                |req, prior| {
-                    // BUG-1637: through the one shared history helper, under
-                    // the caller. trace:BUG-1637 | ai:claude
-                    aida_core::conflict::record_status_transition(
-                        req,
-                        &current_user_id(None),
-                        prior,
-                    );
-                    req.modified_at = chrono::Utc::now();
-                    backend.update_requirement(req)?;
-                    Ok(())
-                },
-            )?;
-            println!(
-                "  {} closed {} — all children were completed.",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                display.bold()
-            );
+            advance_dispatch_close(display, store_path)?;
         }
         AdvanceAction::None => {
             println!(
                 "  {} nothing to do — it resolves through normal flow.",
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
+        }
+    }
+    Ok(())
+}
+
+/// BUG-1996: execute the Close action for `display` in `store_path`, transitioning
+/// it to Completed and printing the completion-linkage warning if no commit was shipped.
+// trace:BUG-1996 | ai:antigravity
+pub(crate) fn advance_dispatch_close(display: &str, store_path: &std::path::Path) -> Result<()> {
+    let backend = advance_backend(store_path)?;
+    let mut req = backend
+        .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
+        .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
+    // Completing is an advisor-authority act (same gate as approve/
+    // reject); an interactive operator clears it via the TTY branch of
+    // `has_advisor_authority`. trace:BUG-543
+    if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
+        && !has_advisor_authority()
+    {
+        println!(
+            "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            display.bold(),
+            roleless_recovery_sentence()
+        );
+        return Ok(());
+    }
+    // BUG-1286 F1: the queue's completion path reaches Completed without
+    // going through auto-bump or reconcile, so it must emit the ship
+    // record itself. STORY-1418: stamp + persist + emit via the seam.
+    // trace:BUG-1286 trace:STORY-1418 | ai:claude
+    let into_completed = crate::completion::transition_to_completed(
+        &mut req,
+        store_path.parent(),
+        display,
+        "",
+        "queue-done",
+        |req, prior| {
+            // BUG-1637: through the one shared history helper, under
+            // the caller. trace:BUG-1637 | ai:claude
+            aida_core::conflict::record_status_transition(req, &current_user_id(None), prior);
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(req)?;
+            Ok(())
+        },
+    )?;
+    println!(
+        "  {} closed {} — all children were completed.",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        display.bold()
+    );
+    // BUG-1996: warn if completed without a shipped commit on the
+    // default branch (same check as `aida edit --status completed` and
+    // `aida done`).
+    // trace:BUG-1996 | ai:antigravity
+    if into_completed {
+        if let Some(root) = store_path.parent() {
+            crate::shipped_linkage::warn_if_completed_without_shipped_commit(root, &req);
         }
     }
     Ok(())

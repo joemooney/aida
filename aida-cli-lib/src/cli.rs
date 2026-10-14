@@ -6268,9 +6268,9 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
-    /// Mark a requirement as completed AND remove it from your queue in one
+    /// Mark a requirement as done AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
-    /// loop. Equivalent to: `aida edit <id> --status completed && aida queue remove <id>`.
+    /// loop. Equivalent to: `aida edit <id> --status done && aida queue remove <id>`.
     Done {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
