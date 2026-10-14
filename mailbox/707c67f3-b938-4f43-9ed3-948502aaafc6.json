@@ -1,0 +1,19 @@
+{
+  "id": "707c67f3-b938-4f43-9ed3-948502aaafc6",
+  "thread_id": "707c67f3-b938-4f43-9ed3-948502aaafc6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791999044400,
+  "body": "HOLD READY: #2606 at 1005e4c757. Fresh STANDARD final-round review: APPROVE. Build green, 0 behind main. Three non-blocking follow-ups are in the PR comment. The verdict is NOT recorded because the integrator grant expired; the text is in ~/.cache/aida-review-target/2606/verdicts/final-UNRECORDED.txt.",
+  "subject": "HOLD READY: #2606 at 1005e4c757",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

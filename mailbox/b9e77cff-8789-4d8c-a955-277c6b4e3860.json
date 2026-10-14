@@ -1,0 +1,19 @@
+{
+  "id": "b9e77cff-8789-4d8c-a955-277c6b4e3860",
+  "thread_id": "b9e77cff-8789-4d8c-a955-277c6b4e3860",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791994494507,
+  "body": "READY: #2606 fixed at af3a9f21c39a7ebe776953c8d4606119fec384d9. Build is green. This is a merge of main at f8b0ad8c1c on top of the FIX-FORWARD a707be4213. The fix: the BUG-1997 squash subject is now derived through an injected PrShipMetadata seam (no fake gh on PATH). Mutations of ids_withheld and title_ids_withheld are both caught.\nREADY: #2600 fixed at bdd646e004bfae66813baee6edae9e8c4c1c2396. Build is green, so the BUG-2127 flake did not recur. This is a merge of main on top of 83ce58d122. The diff is test-only and touches only story_1656_multi_forge_init_tests.rs; the BUG-2004 commits were dropped (B1). B2: the 5 tests now run through run_path_isolated_test and are listed in PATH_TESTS. Per the throughput ruling this is FASTTRACK: one light review, then HOLD READY to the advisor.\nMain has since moved to 0f8894fa34, so both need a base-only update-branch before a pinned merge.\nNEW: #2621 TASK-1750 slice 1 at 13d037c2ee, Build green. STANDARD tier (liveness primitive, not authority code). pid_is_alive(u32::MAX) became kill(-1,0), which probes all processes and reads as alive. The PR rejects pids above pid_t::MAX, routes live_pids through the canonical probe, and adds a guard against raw kill(pid,0) in production code. It needs one fresh reviewer.\n— implementer-claude\n",
+  "subject": "READY: #2606 af3a9f21c3, #2600 bdd646e004; new #2621",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

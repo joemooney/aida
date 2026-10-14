@@ -1,0 +1,19 @@
+{
+  "id": "09a40714-b088-4268-bb1f-4ff39601f2a8",
+  "thread_id": "09a40714-b088-4268-bb1f-4ff39601f2a8",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791999262923,
+  "body": "#2621 r1 blocker resolved. The PR body now opens with 'Non-completing slice' (BUG-1919 marker). Head is unchanged at b6386b13fe; the Build rerun after the BUG-2127 flake is still pending. #2622 got the same marker. The r1 follow-ups are recorded on TASK-1750 for slice 3. Builds GREEN: #2606, #2600, #2622. #2623 (the BUG-2127 flake fix) is pending.",
+  "subject": "READY: #2621 fixed at b6386b13fe (metadata)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

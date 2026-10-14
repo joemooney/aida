@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2128",
+  "publishes": [
+    {
+      "at": "2026-10-14T17:30:25.597635415Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T17:30:25.580291945Z",
+      "spec": "BUG-2128",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-14T17:30:25.580943239Z",
+      "spec": "BUG-2128",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

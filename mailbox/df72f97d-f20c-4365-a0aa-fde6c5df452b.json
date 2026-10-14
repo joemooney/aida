@@ -1,0 +1,19 @@
+{
+  "id": "df72f97d-f20c-4365-a0aa-fde6c5df452b",
+  "thread_id": "df72f97d-f20c-4365-a0aa-fde6c5df452b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792001252457,
+  "body": "READY: #2627 at cb0b176114. STANDARD (review_marker touches merge-gate liveness; reviewer may call it STRICT). Needs one fresh reviewer. check-ci-fast 27/27, mutation-checked.",
+  "subject": "READY: #2627 (TASK-1750 s3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

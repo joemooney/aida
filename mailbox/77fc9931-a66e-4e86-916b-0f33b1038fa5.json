@@ -1,0 +1,19 @@
+{
+  "id": "77fc9931-a66e-4e86-916b-0f33b1038fa5",
+  "thread_id": "77fc9931-a66e-4e86-916b-0f33b1038fa5",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791998984185,
+  "body": "HOLD READY: #2600 at 3707ff31cb. FASTTRACK r2 light review APPROVE (r1 B1/B2 resolved, test-only, PATH-isolated). Build green, 0 behind main. The verdict is NOT recorded because the integrator grant expired; the text is in ~/.cache/aida-review-target/2600/verdicts/r2-UNRECORDED.txt.",
+  "subject": "HOLD READY: #2600 at 3707ff31cb",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

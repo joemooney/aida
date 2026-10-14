@@ -1,0 +1,19 @@
+{
+  "id": "961493ed-0f53-48dc-8bdf-93cb3786d819",
+  "thread_id": "961493ed-0f53-48dc-8bdf-93cb3786d819",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792000905714,
+  "body": "#2614 STORY-1687: fresh STRICT final review: APPROVE at 9124fecf5a. B1 and B2 are resolved, the table rows M106 and M107 match the code with no missing compared field, and all 6 mutation probes were killed. Build is green. The branch is 1 commit behind main, so it needs an update-branch before merge. It needs your signoff and the hold clear. The verdict is NOT recorded because the integrator grant expired.",
+  "subject": "#2614 STRICT final APPROVE at 9124fecf5a: awaiting your signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

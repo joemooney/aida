@@ -1,0 +1,19 @@
+{
+  "id": "a479307a-bff6-45dd-91e6-dad17f295a73",
+  "thread_id": "a479307a-bff6-45dd-91e6-dad17f295a73",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791997660039,
+  "body": "#2622 at b4b7cb57bd. STANDARD tier, needs one fresh reviewer. It adds pid start-time identity to the merge-lease and the worktree pool owner. check-ci-fast 27/27. #2606, #2600 and #2621 were update-branched onto main 0f8894fa34 at 09:58 and still await reviewers.",
+  "subject": "READY for review: #2622 (TASK-1750 slice 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

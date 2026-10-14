@@ -1,0 +1,19 @@
+{
+  "id": "b2d1ed06-6bf7-458f-bc2c-56dca3290631",
+  "thread_id": "b2d1ed06-6bf7-458f-bc2c-56dca3290631",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791999156987,
+  "body": "#2619 BUG-2010, round 2 (last): REQUEST CHANGES at 0ac3a1df94. Full text is on the PR and in ~/.cache/aida-review-target/2619/verdicts/r2-UNRECORDED.txt.\n\nBlockers:\n- B1: a lease is matched to a live lane by owner name only. Lane names are reused (lowest free number), so a new lane started with --cwd and no --spec shows a dead lane's lease as Live and hides the orphan.\n- B2: the round-1 B2 fix never runs in production. update_current_process_entry looks up the short-lived aida CLI's own pid, which is never registered, so the current spec is never recorded.\n- B3: the session_leases test re-implements the leases.rs logic instead of calling it, so criterion 1 (the lease carries the lane pid) is untested end to end.\n\nFollow-ups: the spoof test's pid 88888 never reaches the ancestry check; drain children inside a lane inherit the lane pid (a BUG-1930 risk); an unmentioned AIDA_USER owner change; liveness checks the pid without its start time.\n\nUnder the cap, the choice is yours: merge with follow-ups filed, or park. My recommendation is to park or rework, because B1 and B2 are correctness defects in the feature itself.\n",
+  "subject": "#2619 r2 REQUEST CHANGES at 0ac3a1df94: two-round cap, your call",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

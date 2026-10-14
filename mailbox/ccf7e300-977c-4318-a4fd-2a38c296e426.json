@@ -1,0 +1,19 @@
+{
+  "id": "ccf7e300-977c-4318-a4fd-2a38c296e426",
+  "thread_id": "ccf7e300-977c-4318-a4fd-2a38c296e426",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792001243593,
+  "body": "#2623 BUG-2127: fresh STANDARD review APPROVE at c99bf55f39. Build green; both the flaky test and the new test passed 20/20 at -j 2. The assertion is unchanged and the fix is in production code. Note: BUG-2127 is still draft, so it needs approval for the trailer to complete it. Non-blocking: take start before the spawn (git_ops.rs:1330) so the 1ns case is deterministic. Ready to merge once the integrator grant is renewed, or by you.",
+  "subject": "#2623 r1 APPROVE at c99bf55f39 (BUG-2127 flake fix)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

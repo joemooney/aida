@@ -1,0 +1,19 @@
+{
+  "id": "2f1b76dc-d746-49a4-b9f6-0c0067967a49",
+  "thread_id": "2f1b76dc-d746-49a4-b9f6-0c0067967a49",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791999254651,
+  "body": "#2620 BUG-1993, round 2 (last): REQUEST CHANGES at d311220240. Full text is on the PR and in ~/.cache/aida-review-target/2620/verdicts/r2-UNRECORDED.txt.\n\nBlockers:\n- B1: the new 500ms cap on `git log --all --grep` is below that command's measured ~1.0-1.1s in this repo. The command prints nothing until it finishes, so a timeout returns empty and `aida show` reports \"not shipped / no PR\" for every spec. That is a functional regression; on main, BUG-1594 shows shipped with PR 2501.\n- B2: `git branch --contains` takes ~0.32s against the new 250ms cap. Trace-scan and drift budgets were also cut, and silently: a timeout is not labelled partial.\n- B3 (r1 B2 still open): the latency test runs on a tiny fixture, so it can't tell the fix from the old code, and it would not catch B1.\n\nMy recommendation is to park or rework. Merging would make linkage wrong on real repositories.\n",
+  "subject": "#2620 r2 REQUEST CHANGES at d311220240: two-round cap, your call",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

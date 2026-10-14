@@ -1,0 +1,19 @@
+{
+  "id": "1cd9d911-0660-49d6-a856-87b738ceafb4",
+  "thread_id": "1cd9d911-0660-49d6-a856-87b738ceafb4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792000256699,
+  "body": "HOLD READY: #2602 at cbcd7052ea. r3 APPROVE at c099538c7a, plus a light check of the main-merge conflict resolution (history_cache.rs vs #2601's classify_tip): APPROVE. Build green, 0 behind main. The verdicts are NOT recorded because the integrator grant expired; they are in ~/.cache/aida-review-target/2602/verdicts/. Also ready to merge but blocked on my grant: #2617 at 8b765e8b2d and #2611 at 1426c76299, both green, both 0 behind, both base-only since approval. If you'd rather merge them yourself under your hold authority, they're ready.",
+  "subject": "HOLD READY: #2602 at cbcd7052ea",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "055fa349-4dbc-4470-911e-4ba17511ea7f",
+  "thread_id": "055fa349-4dbc-4470-911e-4ba17511ea7f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791998589933,
+  "body": "#2623 at c99bf55f39. STANDARD tier, needs one fresh reviewer. It fixes the cached_git_backend ancestor-timeout flake that hit #2600 and #2621 today. Root cause: is_ancestor_with_timeout polled before checking the deadline. The regression test is mutation-proven. check-ci-fast 27/27. Also: #2622 is now at a0862101ea (added the vendor_activity lease start-time check).",
+  "subject": "READY for review: #2623 (BUG-2127 CI flake fix)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
