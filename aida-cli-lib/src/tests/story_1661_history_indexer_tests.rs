@@ -334,3 +334,94 @@ fn background_failure_does_not_increment_foreground_stall_counter() {
         Some("2")
     );
 }
+
+/// Index one more commit, keep its tip on `keep` (if given), then reset this
+/// checkout's store HEAD to the commit before it.
+// trace:STORY-1661 | ai:claude
+fn move_head_behind_index(fx: &Fixture, keep: Option<&str>) {
+    fx.append(1);
+    assert_eq!(
+        run_tick(&fx.store).unwrap(),
+        TickOutcome::Advanced {
+            appended: 1,
+            lag: 0
+        }
+    );
+    if let Some(branch) = keep {
+        fx.git(&["branch", branch]);
+    }
+    fx.git(&["reset", "-q", "--hard", "HEAD~1"]);
+}
+
+// trace:STORY-1661 | ai:claude
+fn assert_skip_without_write(fx: &Fixture) {
+    let tip = test_support::meta(&fx.db, "tip_sha");
+    let stamp = test_support::meta(&fx.db, "updated_at");
+    assert!(tip.is_some() && stamp.is_some());
+    assert_eq!(run_tick(&fx.store).unwrap(), TickOutcome::Skipped);
+    handle_tick(Some(&fx.store)).unwrap();
+    assert_eq!(test_support::meta(&fx.db, "tip_sha"), tip);
+    assert_eq!(test_support::meta(&fx.db, "updated_at"), stamp);
+}
+
+// trace:STORY-1661 | ai:claude
+#[test]
+fn tick_skips_when_checkout_is_behind_shared_index() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    move_head_behind_index(&fx, Some("keep"));
+    assert_skip_without_write(&fx);
+}
+
+// trace:STORY-1661 | ai:claude
+#[test]
+fn tick_skips_when_diverged_but_tip_is_live_elsewhere() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    move_head_behind_index(&fx, Some("keep"));
+    fx.append(2);
+    assert_skip_without_write(&fx);
+}
+
+// trace:STORY-1661 | ai:claude
+#[test]
+fn tick_still_errors_on_rewritten_history() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    move_head_behind_index(&fx, None);
+    fx.append(2);
+    let stamp = test_support::meta(&fx.db, "updated_at");
+    let err = run_tick(&fx.store).unwrap_err().to_string();
+    assert!(err.contains("aida cache rebuild --history"), "{err}");
+    assert!(handle_tick(Some(&fx.store)).is_err());
+    assert_eq!(test_support::meta(&fx.db, "updated_at"), stamp);
+}
+
+// trace:STORY-1661 | ai:claude
+#[test]
+fn tick_errors_on_replaced_root_even_when_a_branch_keeps_the_old_tip() {
+    // The root check runs before liveness, as in the foreground refresh: a
+    // branch still holds the pre-compact tip, but the history was replaced.
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+    let fx = Fixture::new();
+    fx.git(&["branch", "keep-old", "HEAD"]);
+    let out = std::process::Command::new("/usr/bin/git")
+        .current_dir(&fx.store)
+        .args(["commit-tree", "HEAD^{tree}", "-m", "squashed"])
+        .env("GIT_AUTHOR_NAME", "Fixture")
+        .env("GIT_AUTHOR_EMAIL", "fixture@example.invalid")
+        .env("GIT_COMMITTER_NAME", "Fixture")
+        .env("GIT_COMMITTER_EMAIL", "fixture@example.invalid")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let squashed = String::from_utf8(out.stdout).unwrap().trim().to_string();
+    fx.git(&["reset", "-q", "--soft", &squashed]);
+    let tip = test_support::meta(&fx.db, "tip_sha");
+    let err = run_tick(&fx.store).unwrap_err().to_string();
+    assert!(err.contains("aida cache rebuild --history"), "{err}");
+    assert!(handle_tick(Some(&fx.store)).is_err());
+    assert_eq!(test_support::meta(&fx.db, "tip_sha"), tip);
+}

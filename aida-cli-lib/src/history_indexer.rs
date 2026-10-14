@@ -18,8 +18,15 @@ pub(crate) enum TickOutcome {
     Disabled,
     NotBuilt,
     Busy,
+    /// This checkout is behind the shared index, or diverged while the tip is
+    /// live on another checkout: nothing to do here, and nothing written.
+    // trace:STORY-1661 | ai:claude
+    Skipped,
     UpToDate,
-    Advanced { appended: usize, lag: usize },
+    Advanced {
+        appended: usize,
+        lag: usize,
+    },
 }
 
 // trace:STORY-1661 | ai:codex
@@ -41,7 +48,9 @@ fn run_tick_at(store: &Path, db: &Path, cap: Duration) -> Result<TickOutcome> {
     let Some(_lock) = IndexLock::try_acquire(db)? else {
         return Ok(TickOutcome::Busy);
     };
-    let (appended, lag) = history_cache::catch_up_background_at(store, db, budget)?;
+    let Some((appended, lag)) = history_cache::catch_up_background_at(store, db, budget)? else {
+        return Ok(TickOutcome::Skipped); // trace:STORY-1661 | ai:claude
+    };
     if appended == 0 && lag == 0 {
         Ok(TickOutcome::UpToDate)
     } else {
@@ -71,6 +80,7 @@ pub(crate) fn handle_tick(explicit_store: Option<&Path>) -> Result<()> {
         TickOutcome::Disabled
         | TickOutcome::NotBuilt
         | TickOutcome::Busy
+        | TickOutcome::Skipped
         | TickOutcome::UpToDate => {}
     }
     Ok(())
