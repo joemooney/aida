@@ -2232,6 +2232,7 @@ pub(crate) fn missing_implementer_worktree_push_gate(
 }
 
 // trace:BUG-2124 | ai:antigravity
+// Builds advisor command for advisor_tier_program_and_args argv.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_phase_driver_advisor_command(
     project_root: &std::path::Path,

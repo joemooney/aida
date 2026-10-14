@@ -3791,6 +3791,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 }
 
 // trace:BUG-2124 | ai:antigravity
+// Builds CI fix command for headless_vendor_args argv.
 pub(crate) fn build_phase_driver_ci_fix_command(
     worktree: &std::path::Path,
     program: &str,
