@@ -108,18 +108,39 @@ fn precise_production_calls(src: &str) -> usize {
             visit::visit_item_mod(self, module);
         }
 
-        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
-            if let syn::Expr::Path(path) = call.func.as_ref() {
-                if path
-                    .path
-                    .segments
-                    .last()
-                    .is_some_and(|segment| segment.ident == "orchestrate_with_resume")
-                {
-                    self.0 += 1;
-                }
+        // trace:TASK-1355 | ai:claude
+        // Any path naming the engine counts: a direct call's callee, but also
+        // a function-pointer reference (`let go = orchestrate_with_resume;`).
+        fn visit_expr_path(&mut self, path: &'ast syn::ExprPath) {
+            if path
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "orchestrate_with_resume")
+            {
+                self.0 += 1;
             }
-            visit::visit_expr_call(self, call);
+            visit::visit_expr_path(self, path);
+        }
+
+        // trace:TASK-1355 | ai:claude
+        // The method-call form `x.orchestrate_with_resume(..)`.
+        fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+            if call.method == "orchestrate_with_resume" {
+                self.0 += 1;
+            }
+            visit::visit_expr_method_call(self, call);
+        }
+
+        // trace:TASK-1355 | ai:claude
+        // An aliased import (`use ..::orchestrate_with_resume as go;`) hides
+        // every later `go(..)` call from the path check, so the alias itself
+        // counts.
+        fn visit_use_rename(&mut self, rename: &'ast syn::UseRename) {
+            if rename.ident == "orchestrate_with_resume" {
+                self.0 += 1;
+            }
+            visit::visit_use_rename(self, rename);
         }
 
         fn visit_macro(&mut self, mac: &'ast syn::Macro) {
@@ -244,6 +265,31 @@ fn allowlisted_test_only_file_production_call_is_an_offender() {
     let src = "fn run() { wrapper!(auto_complete::orchestrate_with_resume()); }";
     assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
     let src = r#"fn run() { println!("orchestrate_with_resume("); }"#;
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 0);
+}
+
+/// The AST scan must not be dodged by a method-call form, an aliased import,
+/// or a function-pointer reference in production code.
+// trace:TASK-1355 | ai:claude
+#[test]
+fn upgrade_release_method_alias_and_pointer_forms_are_offenders() {
+    let src = "fn run(x: X) { x.orchestrate_with_resume(); }";
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
+    let src = r#"
+        use crate::auto_complete::orchestrate_with_resume as go;
+        fn run() { go(); }
+    "#;
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
+    let src = "fn run() { let go = auto_complete::orchestrate_with_resume; go(); }";
+    assert_eq!(offending_calls("src/upgrade_release.rs", src), 1);
+    // The same forms inside a test-only module still do not count.
+    let src = r#"
+        #[cfg(test)]
+        mod tests {
+            use crate::auto_complete::orchestrate_with_resume as go;
+            fn harness(x: X) { x.orchestrate_with_resume(); go(); }
+        }
+    "#;
     assert_eq!(offending_calls("src/upgrade_release.rs", src), 0);
 }
 

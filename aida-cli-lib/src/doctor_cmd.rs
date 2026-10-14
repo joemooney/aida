@@ -3299,6 +3299,7 @@ mod story_1422_performance_gate_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -3772,6 +3773,7 @@ mod bug_1572_binary_lineage_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -13139,6 +13141,15 @@ pub(crate) fn history_index_doctor_line(
             .lag
             .map(|n| format!(" by {n} commit(s)"))
             .unwrap_or_default();
+        if st.head_behind_tip || st.tip_live_elsewhere {
+            // trace:BUG-1998 | ai:antigravity
+            // trace:BUG-1998 | ai:claude
+            // Before the stall flag: behind or elsewhere gets no rebuild advice.
+            return format!(
+                "history index behind the store{by}{running} — another checkout moved \
+                 the shared index on."
+            );
+        }
         if st.catch_up_stalled {
             return format!(
                 "history index behind the store{by}{running} and not catching up — \

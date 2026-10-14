@@ -1209,6 +1209,10 @@ pub(crate) struct HistoryCacheStatus {
     /// store is behind a shared index that another checkout moved on.
     // trace:BUG-1954 | ai:claude
     pub(crate) head_behind_tip: bool,
+    /// True when the indexed tip is not an ancestor or descendant of HEAD,
+    /// but is still live in another checkout.
+    // trace:BUG-1998 | ai:antigravity
+    pub(crate) tip_live_elsewhere: bool,
     /// True when inline catch-up has paused after repeated attempts that
     /// kept nothing; queries read git until a rebuild or the next retry.
     pub(crate) catch_up_stalled: bool,
@@ -1373,10 +1377,8 @@ impl HistoryCache {
         // Checked before liveness: `store compact` keeps the old tip on a
         // backup branch, but the history was replaced.
         let recorded = self.meta("store_root_sha")?.unwrap_or_default();
-        let roots = aida_core::git_ops::root_commits(store, head)
-            .map(|r| r.join(","))
-            .unwrap_or_default();
-        Ok(if roots != recorded {
+        // trace:BUG-1998 | ai:claude
+        Ok(if store_root_replaced(store, head, &recorded) {
             TipRelation::RootReplaced
         } else if tip_is_live_elsewhere(store, tip, head) {
             TipRelation::LiveElsewhere
@@ -2126,8 +2128,9 @@ pub(crate) fn classify_miss(st: &HistoryCacheStatus) -> IndexMiss {
         IndexMiss::Busy
     } else if st.tip != st.head {
         // trace:STORY-1650 | ai:claude
-        if st.head_behind_tip {
+        if st.head_behind_tip || st.tip_live_elsewhere {
             // trace:BUG-1954 | ai:claude
+            // trace:BUG-1998 | ai:antigravity
             IndexMiss::CheckoutBehind
         } else if st.catch_up_stalled || st.lag.is_none() {
             IndexMiss::Stuck
@@ -2460,6 +2463,17 @@ fn prune_other_versions(db_path: &Path) -> Vec<PathBuf> {
     pruned
 }
 
+/// True when HEAD's root commits differ from the root recorded in the
+/// index (`store_root_sha`): the store history was replaced, so the next
+/// query resets the index whatever other checkouts still hold.
+// trace:BUG-1998 | ai:claude
+fn store_root_replaced(store: &Path, head: &str, recorded: &str) -> bool {
+    aida_core::git_ops::root_commits(store, head)
+        .map(|r| r.join(","))
+        .unwrap_or_default()
+        != recorded
+}
+
 /// Diagnostics for `aida cache status`. Never creates the index.
 // trace:TASK-1507 | ai:claude
 pub(crate) fn status(store: &Path) -> HistoryCacheStatus {
@@ -2504,6 +2518,16 @@ pub(crate) fn status_at(store: &Path, db_path: &Path) -> HistoryCacheStatus {
                 // trace:BUG-1954 | ai:claude
                 st.head_behind_tip =
                     aida_core::git_ops::is_ancestor(store, head, tip).unwrap_or(false);
+                // trace:BUG-1998 | ai:antigravity
+                // trace:BUG-1998 | ai:claude
+                // Same order as ensure_fresh: a replaced root is checked
+                // before liveness, because the next query resets the index
+                // even when another branch still holds the old tip.
+                if !st.head_behind_tip {
+                    let recorded = cache.meta("store_root_sha")?.unwrap_or_default();
+                    st.tip_live_elsewhere = !store_root_replaced(store, head, &recorded)
+                        && tip_is_live_elsewhere(store, tip, head);
+                }
             }
         }
         st.floor_commit_at = cache

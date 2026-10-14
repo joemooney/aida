@@ -105,20 +105,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
-        // Loaded only if the hold check actually runs.
-        // trace:BUG-1957 | ai:claude
-        let store = std::cell::OnceCell::new();
         if !queue_cmd::rework_pr_head_matches_spec(
             &self.spec,
             &change.branch,
             change.title.as_deref().unwrap_or_default(),
             &body,
-            |id| {
-                store
-                    .get_or_init(|| load_store_for_lookup(&self.project_root))
-                    .as_ref()
-                    .and_then(|s| crate::pr_ship::spec_completion_hold_reason(s, id))
-            },
         ) {
             return;
         }

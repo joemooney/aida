@@ -25,7 +25,8 @@
 //! reads the lock and, if a live pid is found, SIGTERMs it (best-effort) in
 //! addition to clearing the flag, so stop works even mid-step.
 //!
-//! Liveness is the [`process_probe::pid_is_alive`] probe the drain lock uses; the
+//! Liveness is the [`process_probe::process_identity_is_alive`] probe (pid plus
+//! recorded start time, TASK-1750) the drain lock uses; the
 //! pure decision (`decide` / `classify`) is split out so the paths are
 //! unit-testable without spawning real processes. trace:STORY-627 | ai:claude
 
@@ -53,6 +54,12 @@ pub(crate) fn solo_lock_path(project_root: &Path) -> PathBuf {
 pub(crate) struct SoloLock {
     /// PID of the solo-loop process holding the lock.
     pub(crate) pid: u32,
+    /// Kernel start time of `pid`, so a recycled pid does not read as the
+    /// live loop. Missing only on locks written by older binaries; liveness
+    /// then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_start_time: Option<String>,
     /// RFC3339 UTC timestamp of when the lock was taken.
     pub(crate) started_at_utc: String,
     /// Host the loop runs on — informational, for cross-machine shared clones.
@@ -73,18 +80,19 @@ pub(crate) enum LockDecision {
 }
 
 /// Decide ACQUIRE vs REFUSE. An absent / unparseable on-disk lock is ACQUIRE. A
-/// present lock is reclaimable (→ ACQUIRE) when its pid is dead; otherwise
+/// present lock is reclaimable (→ ACQUIRE) when its pid is dead or recycled
+/// (start time no longer matches, TASK-1750); otherwise
 /// REFUSE. Unlike the drain lock there is no age backstop — the solo loop is
 /// expected to run for hours (up to its TTL), so age says nothing about
 /// staleness; only pid-liveness does. trace:STORY-627 | ai:claude
 pub(crate) fn decide_lock(
     existing: Option<SoloLock>,
-    is_alive: impl Fn(u32) -> bool,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> LockDecision {
     match existing {
         None => LockDecision::Acquire,
         Some(lock) => {
-            if is_alive(lock.pid) {
+            if is_alive(lock.pid, lock.pid_start_time.as_deref()) {
                 LockDecision::Refuse(lock)
             } else {
                 LockDecision::Acquire
@@ -160,7 +168,7 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
         Err(e) => anyhow::bail!("{e}"),
     };
 
-    match decide_lock(existing.clone(), process_probe::pid_is_alive) {
+    match decide_lock(existing.clone(), process_probe::process_identity_is_alive) {
         LockDecision::Refuse(holder) => {
             anyhow::bail!(
                 "a solo loop is already running (pid {}, started {}{}).\n  \
@@ -195,6 +203,7 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
             }
             let record = SoloLock {
                 pid: std::process::id(),
+                pid_start_time: process_probe::process_start_identity(std::process::id()),
                 started_at_utc: chrono::Utc::now().to_rfc3339(),
                 host: hostname(),
             };
@@ -236,18 +245,21 @@ pub(crate) enum LockStatus {
 pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     classify_lock(
         read_lock(&solo_lock_path(project_root)),
-        process_probe::pid_is_alive,
+        process_probe::process_identity_is_alive,
     )
 }
 
 /// Pure classifier: split from [`probe_lock`] so the three paths
 /// (none / running / stale) are unit-testable without a real lock or pid.
 /// trace:STORY-627 | ai:claude
-fn classify_lock(existing: Option<SoloLock>, is_alive: impl Fn(u32) -> bool) -> LockStatus {
+fn classify_lock(
+    existing: Option<SoloLock>,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> LockStatus {
     match existing {
         None => LockStatus::None,
         Some(lock) => {
-            if is_alive(lock.pid) {
+            if is_alive(lock.pid, lock.pid_start_time.as_deref()) {
                 LockStatus::Running(lock)
             } else {
                 LockStatus::Stale(lock)
@@ -334,6 +346,7 @@ mod tests {
     fn lock(pid: u32, started_at_utc: &str) -> SoloLock {
         SoloLock {
             pid,
+            pid_start_time: Some("1970-01-01T00:00:01+00:00".to_string()),
             started_at_utc: started_at_utc.to_string(),
             host: "testhost".to_string(),
         }
@@ -343,14 +356,14 @@ mod tests {
 
     #[test]
     fn no_existing_lock_acquires() {
-        assert_eq!(decide_lock(None, |_| true), LockDecision::Acquire);
+        assert_eq!(decide_lock(None, |_, _| true), LockDecision::Acquire);
     }
 
     #[test]
     fn live_lock_refuses() {
         let l = lock(4242, "2026-06-15T11:59:00Z");
         assert_eq!(
-            decide_lock(Some(l.clone()), |_| true),
+            decide_lock(Some(l.clone()), |_, _| true),
             LockDecision::Refuse(l)
         );
     }
@@ -358,21 +371,74 @@ mod tests {
     #[test]
     fn dead_pid_lock_reclaims() {
         let l = lock(4242, "2026-06-15T11:59:00Z");
-        assert_eq!(decide_lock(Some(l), |_| false), LockDecision::Acquire);
+        assert_eq!(decide_lock(Some(l), |_, _| false), LockDecision::Acquire);
+    }
+
+    /// TASK-1750: the recorded start time reaches the liveness predicate, so a
+    /// live pid whose start time no longer matches (recycled) is reclaimed.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_pid_lock_reclaims_and_status_reads_stale() {
+        let l = lock(4242, "2026-06-15T11:59:00Z");
+        let recycled = |pid: u32, start: Option<&str>| {
+            assert_eq!(pid, 4242);
+            start != l.pid_start_time.as_deref()
+        };
+        assert_eq!(
+            decide_lock(Some(l.clone()), recycled),
+            LockDecision::Acquire
+        );
+        assert_eq!(
+            classify_lock(Some(l.clone()), recycled),
+            LockStatus::Stale(l.clone())
+        );
+    }
+
+    #[test]
+    fn acquire_reclaims_a_live_pid_with_a_mismatched_start_time() {
+        // trace:TASK-1750 | ai:claude
+        if process_probe::process_start_identity(std::process::id()).is_none() {
+            return; // platform cannot report start times; nothing to distinguish
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = solo_lock_path(root);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let recycled = SoloLock {
+            pid: std::process::id(),
+            pid_start_time: Some("2000-01-01T00:00:00+00:00".to_string()),
+            started_at_utc: chrono::Utc::now().to_rfc3339(),
+            host: "h".to_string(),
+        };
+        std::fs::write(&path, serde_json::to_string(&recycled).unwrap()).unwrap();
+        let _guard = acquire_solo_lock(root).expect("a recycled pid must not hold the solo lock");
+        let on_disk = read_lock(&path).unwrap();
+        assert_eq!(
+            on_disk.pid_start_time,
+            process_probe::process_start_identity(std::process::id())
+        );
+    }
+
+    #[test]
+    fn legacy_lock_without_start_time_parses() {
+        // trace:TASK-1750 | ai:claude
+        let l: SoloLock =
+            serde_json::from_str(r#"{"pid":7,"started_at_utc":"x","host":"h"}"#).unwrap();
+        assert_eq!(l.pid_start_time, None);
     }
 
     // ── classify_lock (read-side) ──
 
     #[test]
     fn classify_lock_none_when_no_file() {
-        assert_eq!(classify_lock(None, |_| true), LockStatus::None);
+        assert_eq!(classify_lock(None, |_, _| true), LockStatus::None);
     }
 
     #[test]
     fn classify_lock_running_when_pid_alive() {
         let l = lock(4242, "2026-06-15T11:59:00Z");
         assert_eq!(
-            classify_lock(Some(l.clone()), |_| true),
+            classify_lock(Some(l.clone()), |_, _| true),
             LockStatus::Running(l)
         );
     }
@@ -381,7 +447,7 @@ mod tests {
     fn classify_lock_stale_when_pid_dead() {
         let l = lock(4242, "2026-06-15T11:59:00Z");
         assert_eq!(
-            classify_lock(Some(l.clone()), |_| false),
+            classify_lock(Some(l.clone()), |_, _| false),
             LockStatus::Stale(l)
         );
     }
@@ -429,6 +495,7 @@ mod tests {
         let path = solo_lock_path(root);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let dead = SoloLock {
+            pid_start_time: None,
             pid: 999_999_999,
             started_at_utc: chrono::Utc::now().to_rfc3339(),
             host: "ghost".to_string(),
@@ -445,6 +512,7 @@ mod tests {
         let path = solo_lock_path(root);
         let guard = acquire_solo_lock(root).unwrap();
         let successor = SoloLock {
+            pid_start_time: None,
             pid: std::process::id().wrapping_add(1),
             started_at_utc: chrono::Utc::now().to_rfc3339(),
             host: "h".to_string(),

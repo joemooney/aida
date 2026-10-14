@@ -142,8 +142,43 @@ mod tests {
         )
         .expect("codex-hooks.json parses");
 
-        let sh = settings.get("hooks").and_then(|h| h.as_object()).unwrap();
+        let mut sh = settings
+            .get("hooks")
+            .and_then(|h| h.as_object())
+            .unwrap()
+            .clone();
         let ch = codex.get("hooks").and_then(|h| h.as_object()).unwrap();
+
+        // Signed Claude-only delivery: pin the ONE exact additional entry,
+        // assert it has no Codex wiring/handler, then retain full parity for
+        // every shared entry below. An arbitrary divergent hook still fails.
+        // trace:BUG-2014 | ai:codex
+        let claude_only = sh
+            .get_mut("PreToolUse")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(
+            claude_only,
+            serde_json::json!({"hooks": [{
+                "type": "command",
+                "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-grant-expiry-notice.sh",
+                "timeout": 2
+            }]})
+        );
+        assert!(!codex.to_string().contains("aida-grant-expiry-notice.sh"));
+        assert!(!handler_names()
+            .iter()
+            .any(|name| name == "aida-grant-expiry-notice.sh"));
+        let tmp = tempfile::tempdir().unwrap();
+        scaffold_codex_hooks(tmp.path(), true).unwrap();
+        assert!(!tmp
+            .path()
+            .join(HOOKS_DIR_REL)
+            .join("aida-grant-expiry-notice.sh")
+            .exists());
 
         // Every Claude event Codex supports must be present.
         const CODEX_EVENTS: &[&str] = &[

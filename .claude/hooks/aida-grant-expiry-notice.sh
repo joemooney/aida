@@ -1,0 +1,1 @@
+../../aida-core/templates/hooks/aida-grant-expiry-notice.sh

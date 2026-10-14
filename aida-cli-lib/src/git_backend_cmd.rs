@@ -1330,6 +1330,13 @@ pub(crate) fn handle_git_backend_command(
         eprintln!();
     }
 
+    // BUG-1993: `show` records per-phase timings into its usage event, so a
+    // latency regression can be attributed to cache open, lookup, or git
+    // linkage instead of only the total. trace:BUG-1993 | ai:claude
+    if matches!(command, Command::Show { .. }) {
+        crate::usage::arm_phases();
+    }
+    let open_phase = crate::usage::phase("open");
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
@@ -1345,7 +1352,15 @@ pub(crate) fn handle_git_backend_command(
     if notice_fast_fail {
         aida_core::db::set_fast_fail_cache(true);
     }
-    let backend_result = if notice_fast_fail {
+    // `aida cache rebuild` must not depend on the old cache being readable: the
+    // ordinary open refreshes a stale cache first, and page-level damage fails
+    // that refresh before the rebuild's own quarantine can run (2026-10-14).
+    // Open the bare snapshot; the rebuild replaces it. trace:BUG-1940 | ai:claude
+    let cache_rebuild = matches!(
+        command,
+        Command::Cache(CacheCommand::Rebuild { history: false })
+    );
+    let backend_result = if notice_fast_fail || cache_rebuild {
         // BUG-1569: even a non-contended normal open may refresh a stale cache
         // by scanning every canonical object before dispatch reaches the
         // targeted notice lookup. The advisory path instead consumes the last
@@ -1363,10 +1378,14 @@ pub(crate) fn handle_git_backend_command(
         }
         Err(e) => return Err(e),
     };
+    drop(open_phase);
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
-    if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
+    if !notice_fast_fail
+        && !cache_rebuild
+        && !matches!(command, Command::Report { recheck: true, .. })
+    {
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
@@ -4862,6 +4881,7 @@ pub(crate) fn handle_git_backend_command(
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
             // Read-only: the tolerant resolver keeps `show` off the cache
             // write lock. trace:BUG-1670 | ai:claude
+            let lookup_phase = crate::usage::phase("lookup");
             let lookup = backend
                 .get_requirement_unambiguous_for_read(id)
                 .map_err(|e| {
@@ -4877,6 +4897,7 @@ pub(crate) fn handle_git_backend_command(
                         aida_core::object_store::parse_failure_hint(None),
                     )
                 });
+            drop(lookup_phase);
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -4901,9 +4922,11 @@ pub(crate) fn handle_git_backend_command(
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
+                    let context_phase = crate::usage::phase("context");
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
                     let (cached_epic_status, serialize_cluster_command) =
                         show_cached_context(&backend, &req);
+                    drop(context_phase);
                     // BUG-626: the cache projects an EPIC's read-only child
                     // rollup. Using that projection avoids loading every YAML
                     // object merely to render one spec. trace:BUG-626
@@ -5020,7 +5043,10 @@ pub(crate) fn handle_git_backend_command(
                                     ids.push(origin.to_string());
                                 }
                             }
-                            let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            let linkage = {
+                                let _phase = crate::usage::phase("linkage");
+                                crate::collect_git_linkage(&project_root, &ids)
+                            };
                             // TASK-1475: compute before `linkage.{files,commits}`
                             // are moved into the JSON payload below.
                             // trace:TASK-1475 | ai:claude
@@ -5342,6 +5368,7 @@ pub(crate) fn handle_git_backend_command(
                         if !*no_git {
                             if let Some(root) = store_path.parent() {
                                 let ids = crate::shipped_linkage::spec_lookup_ids(&req);
+                                let _phase = crate::usage::phase("linkage");
                                 lines.push(crate::shipped_linkage::toon_show_linkage_line(
                                     root, &ids,
                                 ));
@@ -5994,6 +6021,7 @@ pub(crate) fn handle_git_backend_command(
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let _phase = crate::usage::phase("linkage");
                         print_git_linkage(&project_root, &ids, *verbose, req.filed_at.as_ref());
                     }
                     // TASK-269: `aida show` output runs 50-150 lines, so the

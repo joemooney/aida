@@ -268,3 +268,21 @@ You now own the seat model and the coordination substrates: who's wearing which 
 - **[Chapter 8 — Reporting](08-reporting.md)**: `aida status` — the unified "what's going on here?" view that the advisor dashboard complements.
 - [`docs/review-process.md`](../review-process.md) — **who reviews by mode**, and the precise reviewer-vs-advisor-tier distinction (the reviewer gates code in every mode; the cold-boot advisor tier fires only on a punt). The authoritative source for the seat/review lore in this chapter.
 - The autonomy + escalation architecture in full — the three-mode ladder, the implementer→advisor→human cascade, the file-based handshake substrate — is [`docs/architecture/autonomy-and-escalation.md`](../architecture/autonomy-and-escalation.md).
+
+### Mid-session expiry notices in Claude Code
+
+The Claude Code template installs an informational `PreToolUse` hook covering
+every tool. It emits context once when a seat grant crosses 2h, 30m and expiry,
+including the terminal renewal command. It never prompts or decides tool
+permissions. New grants or renewal timestamps reset the notice epoch. Child
+expiry uses the earlier of child and parent expiry. Baseline seats stay silent.
+
+Without `AIDA_SESSION_GRANT`, the shell exits without launching the CLI. With
+a grant it caps the notice command below 2 seconds. The notice path initializes
+no requirements graph or cache; valid grants use the shared validator, including
+the local team roster lookup. Runtime notice ledgers live beside grant records
+and use permanent lock sidecars plus atomic replacement. Unreadable, corrupt or
+unwritable ledgers yield no context, one stderr diagnostic and exit 0. Existing
+SessionStart and statusline warnings remain available. Codex and Antigravity
+delivery is a separate follow-up. See [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->

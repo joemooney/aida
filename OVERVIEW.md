@@ -1,3 +1,11 @@
+Rework-only merge holds can release through a current-head, granted reviewer
+approval after older refusal rounds. Sensitive spec metadata, guided/operator
+mode, keystone class and any non-Rework composition retain human clear.
+Covered spec metadata and execution mode are re-read before clearance and
+again before releasing labels and the marker.
+See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:STORY-1687 | ai:codex -->
+
 Model-side mail poll findings clear after a session is silent beyond
 `watchdog.window_minutes`, or no registry PID for the session is alive. Recent
 activity keeps an older setup observable for live or unregistered sessions.
@@ -511,6 +519,15 @@ configured but unavailable canonical storage. Its mode policy and existing
 store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
+
+Claude Code tool hooks deliver informational seat-grant expiry notices once at
+the 2h, 30m and expired crossings, without requiring a user prompt. A local
+grant-id ledger uses a permanent flock sidecar and atomic replacement. No
+requirements graph or cache is initialized; the shared authority validator
+retains its local roster lookup. Failed ledger access emits no context and
+leaves SessionStart/statusline warnings as fallback. See
+[verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
 
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index

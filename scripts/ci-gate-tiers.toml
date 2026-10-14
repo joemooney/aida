@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:BUG-2014 | ai:codex
+"Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
 # Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
 "Check aida-cli without default features" = "fast"

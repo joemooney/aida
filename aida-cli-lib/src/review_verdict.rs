@@ -1193,6 +1193,9 @@ pub(crate) fn build_verdict_object(
     // BUG-1529 review fix: a close belongs to the round it closed. A new
     // round of review must not inherit it, or a fresh refusal reads as
     // resolved. trace:BUG-1529 | ai:claude
+    // A new round must not inherit a previous recorder's release authority.
+    // trace:STORY-1687 | ai:codex
+    obj.remove("release_grant");
     obj.remove("closed_by_merge");
     obj.remove("closed_at");
     // BUG-1505: every writer persists the canonical spelling, produced by the
