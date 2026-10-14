@@ -56,12 +56,15 @@ fn child_command(home: &std::path::Path) -> Command {
 // This child installs and actually executes the shim, then holds it live until
 // the parent finishes an unlocked Git lookup. Its fixture stays alive through
 // the parent's wait, so passing cannot be attributed to an expired shim.
-// Child-only: ignored in the default suite (it would return early and count
-// as a vacuous pass); the parent runs it with `--ignored --exact`.
+// Child-only helper, not a check: in a default run (no
+// AIDA_TEST_PATH_PROBE_ROOT) it returns at once and counts as a pass. It is
+// not #[ignore]d because is_path_isolated_process() pins the child's exact
+// argv, which `--ignored` would change; the real assertions run in the child
+// that fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected
+// spawns.
 // trace:BUG-1994 | ai:codex
 // trace:TASK-1754 | ai:claude
 #[test]
-#[ignore = "child-only probe; run by fake_git_is_scoped_to_one_child_and_real_git_reader_is_unaffected"]
 fn fake_git_path_probe_child() {
     let Some(root) = std::env::var_os("AIDA_TEST_PATH_PROBE_ROOT") else {
         return;
