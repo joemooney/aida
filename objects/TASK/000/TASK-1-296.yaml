@@ -9,18 +9,32 @@ description: |-
 
   PR: #2595
   Reviewed sha: c7f2afcc1453b573a84066c46225ba484107730e
-status: Draft
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T23:51:59.851815064Z
-modified_at: 2026-10-13T23:51:59.851815064Z
+modified_at: 2026-10-14T18:08:24.523223678Z
 req_type: Task
 tags:
 - carried-from:BUG-1999
 - finding-hash:4840dbc4
 - from-review:PR-2595
 - kind:carried-forward
+comments:
+- id: 01a13b99-e7cb-7ab0-9f88-b8859cc6b32c
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (a805234) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:08:24.523222622Z
+  modified_at: 2026-10-14T18:08:24.523222622Z
+history:
+- id: 01a13b99-e7cb-7ab0-9f88-b87600b937c9
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:08:24.523221273Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 7230cf3f4921d842c101b110218bbef2098758be
   branch: main
