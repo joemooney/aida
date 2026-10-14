@@ -3,12 +3,12 @@ spec_id: TASK-1740
 agreed_id: TASK-1740
 title: 'BUG-1972 test gaps: same-host different-path mirror re-run, env-token-used notice, and redaction at each call site'
 description: 'Follow-up from the round-2 advisor review of #2582 (APPROVE at e241935dc0). All low; the code is correct today. (1) Pin a same-host, different-path re-run (e.g. ai/proj vs team/elsewhere): replacing same_remote with a host-only comparison currently survives every test and would bring back the round-1 bug on one host. (2) Assert the spec-required notice when the env token is used (gitlab_project_create.rs ~211-218); a mutation suppressing it survived. (3) Capture output at the redaction call sites (''already points at'', ''added remote'', push ''still failed''). Today only the helper is tested, and dropping redaction at any call site survived.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:53:44.348492787Z
-modified_at: 2026-10-13T21:03:30.797772610Z
+modified_at: 2026-10-14T02:53:17.820091519Z
 req_type: Task
 tags:
 - forge
@@ -77,6 +77,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13854-187c-7a60-9125-e777369e8a90
+  author: aida-orchestrator
+  timestamp: 2026-10-14T02:53:17.820125485Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
   branch: main
@@ -85,3 +92,11 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-1740 tests are sound (all 5 mutations caught, 0/20 flakes in isolation), but the PR is not tests-only: it stacks #2599''s rejected BUG-2004 round-1 commits, including credential-handling production code and a PATH-mutating test that flakes this module (4/20 at 32 threads).'
+  recovery_hint: address the review findings, move TASK-1740 back to In Progress, and clear the PR hold only after approval
+  shelved_by: integrator
+  shelved_at: 2026-10-14T02:53:17.820091519Z
