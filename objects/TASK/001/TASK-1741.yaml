@@ -12,12 +12,12 @@ description: |-
   ## Acceptance
   - The table has a valid-advisor row covering both surfaces and fails if grant_check wrongly rejects a valid grant.
   - The D2 deviation is recorded on BUG-1983 or in the code.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:45:47.396313407Z
-modified_at: 2026-10-13T22:28:00.358485178Z
+modified_at: 2026-10-14T06:20:12.656251236Z
 req_type: Task
 tags:
 - review-follow-up
@@ -60,6 +60,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13911-87ec-7e00-ac48-6b72e2b23bac
+  author: aida-auto-bump
+  timestamp: 2026-10-14T06:20:12.652601188Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13911-87f0-7f61-a0b5-79b20f8634b0
+  timestamp: 2026-10-14T06:20:12.656246105Z
+  agent: implementer
+  commit_sha: b13020e019f68e59f74dd98d142517510dc7a8e9
+  summary: 'Test-only. Adds the valid-advisor row to the BUG-1983 rejection table: it drives the real edit gate (Draft->Approved persists) and the real review record handler (attribution is the advisor seat) under the hermetic AmbientGuard env lock, with TTY inputs asserted false. Closes non-blocking item 1 from #2587. CI green.'
+  review_verdict: approved
 filed_at:
   code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
   branch: main
@@ -68,3 +82,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: de277165-066b-453d-b88f-f2ec1f31d61d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-14T06:20:12.652595956Z
+  completion_sha: b13020e019f68e59f74dd98d142517510dc7a8e9
