@@ -9,6 +9,6 @@ note: 'Advisor triage 2026-10-11 15:45. Four of the five findings are carry-over
 due_since: 2026-10-12T23:32:31.389443854Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-10-14T00:21:06.759760127Z
+  trip_id: watchdog@2026-10-14T09:19:16.738506877Z
   job: watchdog
   error: 'exit 1: '
