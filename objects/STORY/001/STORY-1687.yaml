@@ -43,8 +43,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T00:00:05.362176722Z
-modified_at: 2026-10-14T00:00:23.779378030Z
+modified_at: 2026-10-14T00:00:25.183719891Z
 req_type: Story
+comments:
+- id: 01a137b5-d25f-74e2-b29b-70907598ea1d
+  author: joe
+  content: 'ADVISOR: approved per the operator''s direction (2026-10-13 16:59). Implementation is GATED on a sketch posted here plus advisor signoff, because this narrows the human-only merge-hold integrity floor (BUG-1693). Supervised: do not drain autonomously.'
+  created_at: 2026-10-14T00:00:25.183719891Z
+  modified_at: 2026-10-14T00:00:25.183719891Z
+  session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
 history:
 - id: 01a137b5-cce3-72e2-8548-0abd8462d4d8
   author: joe
