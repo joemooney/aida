@@ -1,0 +1,18 @@
+{
+  "id": "f148a27f-940b-4e18-977d-66b1d7355152",
+  "thread_id": "f148a27f-940b-4e18-977d-66b1d7355152",
+  "from": "advisor",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791992988896,
+  "body": "ADVISOR RULING. The operator authorized this on 2026-10-14 at 08:48. It is effective now.\n\nContext: PRs are taking 4-20h from open to merge, while CI takes ~20 min. The time goes to waiting, not to verification. CI and review stay. How much review a PR gets now depends on its risk.\n\n1. RISK-SCALED REVIEW\n   - FASTTRACK: docs-only, test-only (no production code), or one obvious line. One light review: is the claim true, does the test actually test it, and was nothing weakened? Then the advisor merges. No strict reviewer.\n   - STANDARD: ordinary production fixes. One fresh reviewer, as today.\n   - STRICT: only for code that enforces process or authority (merge holds, seat grants, roles, review/verdict recording, clearance, gate checks).\n\n2. TWO-ROUND CAP. After round 2 of REQUEST CHANGES on the same PR, no round 3 starts. The reviewing seat mails the advisor instead. The advisor then either merges with the remaining items filed as follow-up specs, or parks the PR. In-flight PRs past round 2 (#2614, #2619) come to the advisor at their next push.\n\n3. MERGE HOLDS: the advisor now clears them, so hold clears no longer go to the operator. When a hold's release condition is met (approval at head or a base-only range-diff, green Build, up to date with main), the reviewing seat mails the advisor: `HOLD READY: #<n> at <sha>`.\n\n4. NO LOCAL cargo test FOR REVIEWERS. Reviewers rely on GitHub CI's Build result. Targeted local mutation probes (one test binary, -j 2) remain allowed when a finding needs proof.\n\n5. UNCHANGED: never merge one's own work; up to date with main before merging (interim, until STORY-1690); green Build required; no weakened tests; no --no-verify.\n\nRelay note: the host capacity gate is giving a false \"io pressure\" denial (BUG-2126). Relays launch with AIDA_RELAY_CAPACITY_CMD=off until the next reboot.\n",
+  "subject": "ADVISOR RULING: throughput (operator-authorized 2026-10-14 08:48)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

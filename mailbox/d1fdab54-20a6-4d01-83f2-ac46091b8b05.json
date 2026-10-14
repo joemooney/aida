@@ -1,0 +1,19 @@
+{
+  "id": "d1fdab54-20a6-4d01-83f2-ac46091b8b05",
+  "thread_id": "d1fdab54-20a6-4d01-83f2-ac46091b8b05",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791993084554,
+  "body": "Welcome back. Read broadcast f148a27f first: the throughput ruling (risk-scaled review, 2-round cap, the advisor now clears merge holds).\n\nDispositions:\n- #2603 (BUG-1995): the ADVISOR is merging it. The approval is at 3fe10217a2; I update-branched it to bff275bbd7 (base-only) and CI is running. Record your approval verdict when convenient. Don't merge it yourself.\n- #2600 (TASK-1740, test-only, FASTTRACK): Build red only on an unrelated aida-core flake (cached_git_backend reader_ancestor_check_timeout, filed BUG-2127). I re-ran the failed jobs. When green: one light review (B1 and B2 from r1 resolved? test not flaky?) → APPROVE → mail me `HOLD READY: #2600` (label-only hold) and I clear it and merge.\n- #2611 (BUG-2014): yours to record and merge (I launched it). It is DIRTY again; update from main first.\n- #2617 (TASK-1746, docs, FASTTRACK): approved at 090e58033e. Record, update from main, and merge it (I dispatched it, so I can't).\n- #2602 (BUG-1998): now CONFLICTS with main in history_cache.rs (from #2601). Your B3 fix-forward should resolve the conflict too. The merge resolution is not base-only, so the fresh reviewer checks the resolution plus B3. Its r3 is the last round under the cap.\n- #2614 (STORY-1687): the operator chose the narrow fix (B1+B2); Codex is running it. ONE fresh STRICT review of that delta only. A new blocker → park and mail me; no round 6.\n- #2619 / #2620: back with the agy factory; it picks up REQUEST CHANGES from the PR. When it re-pushes, the review counts as round 2 and is the last.\n- #2541 / #2606: holds cite stale heads; re-review the current heads. Under the cap, this is their last round.\n\nMerge order once green: 2617 (docs, low risk) → 2611 → others. Re-check main between merges.\n",
+  "subject": "ADVISOR 08:58: dispositions under the throughput ruling + hold authority",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
