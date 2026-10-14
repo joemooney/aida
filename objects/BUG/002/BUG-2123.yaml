@@ -1,0 +1,28 @@
+id: 01a13908-8312-7773-895d-9fed8c5bc0d0
+spec_id: BUG-2123
+agreed_id: BUG-2123
+title: Auto-release of composed Rework holds can drop an unanswered refusal on another spec
+description: |
+  From the strict review of PR #2614 (STORY-1687) at 4f757e049c, non-blocking item 3: "covered specs" for auto-release leaves out specs named only in absorbed holds or in the PR title. Composing Rework holds replaces the older verdict reference (`merge_hold.rs:553`), so an approval on spec B can release a hold whose refusal on spec A was never answered.
+
+  Expected: composing Rework holds keeps every refused (spec, sha) reference. Auto-release requires an approval covering each refused spec.
+  Acceptance: a test with holds composed from refusals on A and B where only B is approved: the hold is NOT released.
+  This is authority code (ADR-75 strict tier).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T06:10:21.586484551Z
+modified_at: 2026-10-14T06:10:21.586484551Z
+req_type: Bug
+tags:
+- authority
+- merge-hold
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 3d8fc102-1166-4ecc-afbc-275650aca76e
