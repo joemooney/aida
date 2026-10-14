@@ -372,6 +372,8 @@ mod history_indexer;
 mod history_flow;
 // trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
 mod history_timeline;
+// trace:STORY-1664 | ai:claude — opened/completed/rejected/approved/closed list views.
+mod history_views;
 // trace:STORY-1479 | ai:claude — aggregate cycle-time breakdown over completed specs.
 mod human_audit;
 mod human_cmd;
