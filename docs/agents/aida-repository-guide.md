@@ -816,12 +816,29 @@ Joe sends AIDA bug reports from his work machine to his home Gmail (joe.mooney@g
 
 ### reference_merge_hold_clear_is_human_only
 
-Observed 2026-10-02 (PR #2339/BUG-1771): `aida merge-hold clear <pr>` refuses from any agent seat — "clearing a merge-hold requires a human at an interactive terminal; dispatch or advisor authority cannot override this integrity floor." This is by design (the hold is armed by a request-changes verdict via the BUG-1773/1774 verdict-corpus machinery) and is NOT lifted by operator proxy mode or --dangerously-skip-permissions.
+`aida merge-hold clear <pr>` still requires a human at an interactive terminal.
+There is one recorded exception: `aida merge-hold auto-release [<pr>]` releases
+nonlegacy Rework-only holds when the current head has a supported APPROVED
+record, a valid non-implementer reviewer grant, and retained refusal rounds
+strictly older than the approval. The review-record handler tries the same
+release after its verified APPROVED write. Any seat may invoke a retry; there
+is no override flag. Today's record-time seat check is shared; the pending
+identity/authorship ledger will strengthen that check when it lands.
 
-**How to apply:**
-- When a held PR's rework is approved, the closing paste for the operator is THREE steps, not two: `aida merge-hold clear <pr>` → `gh run rerun <failed merge-hold-gate run id>` (the gate check stays red from the pre-clear run; GitHub needs it green) → `gh pr merge <pr> --squash && aida pull`.
-- Fetch the failed gate run id beforehand (`gh run list --branch <branch>`) so the paste is exact.
-- Do not attempt PTY tricks or label edits to satisfy the gate — removing the label by hand does not release the hold (the gate reads recorded clearance), and forging the terminal check is exactly the BUG-1669-class shape the substrate exists to refuse.
+Supervision, Recusal, Decision, Unknown, legacy or absorbed non-Rework holds
+still need a human. Covered specs with sensitive title/tag metadata, guided or
+operator mode, keystone class, or missing/unreadable metadata also keep the
+human floor. Sensitive metadata includes sandbox, contained, confinement,
+security, authority, grant, identity, credential and secret. Clearance names
+`auto-released:verdict`, the reviewer, verdict file and approved head, and the
+PR receives an audit comment before the active label is dropped. Failed audit
+or mirror operations retain the local marker for retry.
+
+Do not use PTY tricks or label edits to satisfy the gate. Marker removal or
+active-label removal alone is not recorded clearance. For human-only holds,
+clear the hold at a terminal and confirm the required gate is green before
+shipping. Automatic release does not merge a PR or bypass any ship gate.
+<!-- trace:STORY-1687 | ai:codex -->
 
 Pairs with [[feedback_recording_a_verdict_blocks_your_own_merge]] and [[feedback_proxy_reviewer_with_independence_rule]].
 

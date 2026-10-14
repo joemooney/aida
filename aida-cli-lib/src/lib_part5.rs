@@ -2994,7 +2994,9 @@ pub(crate) fn handle_review_record_at(
             ));
         }
     }
-    if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
+    if !crate::rework_hold_release::record_seat_allowed(
+        crate::seat_authority::current_seat(&project_root).as_deref(),
+    ) {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
     }
 
@@ -3021,9 +3023,9 @@ pub(crate) fn handle_review_record_at(
     // A refusal is a protection event, not merely metadata. Arm the local
     // merge chokepoint before publishing the verdict; mirroring the label also
     // protects raw forge/UI merges when branch policy consumes it. The hold is
-    // intentionally not cleared by a later approval: `merge-hold clear` is the
-    // explicit human/advisor release action.
-    // trace:BUG-1452 | ai:codex
+    // later approval can release only an eligible Rework-only hold through
+    // the recorded release seam below; all other kinds keep human clear.
+    // trace:BUG-1452 trace:STORY-1687 | ai:codex
     if kind.blocks_done() {
         let n = pr.ok_or_else(|| {
             anyhow::anyhow!(
@@ -3094,6 +3096,8 @@ pub(crate) fn handle_review_record_at(
         &recorded_by,
     )
     .with_context(|| "could not write the review verdict")?;
+    // trace:STORY-1687 | ai:codex
+    crate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
     review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
@@ -3112,6 +3116,16 @@ pub(crate) fn handle_review_record_at(
     // this spec) so merge surfaces now read the verdict instead.
     // trace:STORY-1405 | ai:claude
     clear_review_markers_for_verdict(&project_root, spec, pr);
+    // The record-time stamp binds grant, subject, session and recorder; it does
+    // not bind the SHA, verdict or timestamp (the same-user trust limit remains).
+    // trace:STORY-1687 | ai:codex
+    if kind == review_verdict::VerdictKind::Approved {
+        if let Some(pr) = pr {
+            if let Err(error) = crate::rework_hold_release::auto_release(&project_root, pr) {
+                eprintln!("  merge-hold remains armed: {error:#}");
+            }
+        }
+    }
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after
