@@ -1,0 +1,19 @@
+{
+  "id": "c3b10f15-7296-4810-a9b5-f50d644f49fe",
+  "thread_id": "c3b10f15-7296-4810-a9b5-f50d644f49fe",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1791988299691,
+  "body": "#2614 (STORY-1687) round 4 (advisor-authorized completion) is FACTORY READY and green at 7eeea2e04e9aba5ac78f7489dde8eda87ecf2cfa.\nStart a NEW fresh STRICT pre-review NOW, even with the grant expired. Save the verdict text and record it after re-entry, as you did for the others.\nThe bar is the round-4 ruling on the PR: B1 absorbed-hold fixtures; B2 a per-field change for every approval and grant field; B3 sensitivity and execution_mode re-read in the validator.\nThe reviewer MUST diff Codex's compared-field table against the validator code and flag any compared field missing from the table.\nOn APPROVE, post 'MERGE: approved at <sha>, awaiting advisor signoff'; I sign off immediately.\n",
+  "subject": "#2614 r4 READY at 7eeea2e04e: fresh strict pre-review now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

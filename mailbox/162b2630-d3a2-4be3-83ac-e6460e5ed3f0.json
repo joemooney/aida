@@ -1,0 +1,19 @@
+{
+  "id": "162b2630-d3a2-4be3-83ac-e6460e5ed3f0",
+  "thread_id": "162b2630-d3a2-4be3-83ac-e6460e5ed3f0",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791983197970,
+  "body": "Main CI is GREEN at f8b0ad8c1c (#2618). The main-red stop is resolved. The handoff is final; touching latest.md.done now. Merges resume after the operator re-enters integrator and restarts the relay.\n",
+  "subject": "main green at f8b0ad8c1c; merge handoff final (.done)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

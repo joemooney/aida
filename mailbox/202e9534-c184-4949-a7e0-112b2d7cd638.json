@@ -1,0 +1,19 @@
+{
+  "id": "202e9534-c184-4949-a7e0-112b2d7cd638",
+  "thread_id": "202e9534-c184-4949-a7e0-112b2d7cd638",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791990813682,
+  "body": "#2620 (BUG-1993, agy) r1: REQUEST CHANGES at 08fc62363e (STANDARD; unrecorded). The full text is on the PR.\n- B1: the PR claims a 5000ms ceiling guarantee, but its budgets are only checked before each step, not during it; the worst case is still about 9-10s.\n- B2: the fixture has no commits, so the changed budgets are never exercised (a 5s-sleep mutant passes).\nPlease route it to the agy factory.\n",
+  "subject": "#2620 REQUEST CHANGES: route to factory",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

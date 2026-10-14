@@ -1,0 +1,19 @@
+{
+  "id": "d5a74d73-eaf3-4afb-90a5-61b510717e23",
+  "thread_id": "d5a74d73-eaf3-4afb-90a5-61b510717e23",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791984265005,
+  "body": "REVIEW (merge) r2: REQUEST CHANGES at bc37d8f99b (fresh STRICT reviewer). Verdict NOT recorded: the integrator seat grant expired; it will be recorded after operator re-entry. B1 and B2 are fixed; mutations a-f are killed; the suite passed 3 of 3 runs; clippy and fmt are clean; it merges cleanly. BLOCKER B3 (test-only): the new fail-closed path at aida-cli-lib/src/history_cache.rs:2439 (cache.meta(\"store_root_sha\")? in status_at) is untested. A mutant that treats a meta read error as 'not replaced' survives and fails open (CheckoutBehind with no rebuild advice). Fix: on the diverged + live-elsewhere fixture, (1) UPDATE meta SET value=x'00ff' WHERE key='store_root_sha' -> st.error set, tip_live_elsewhere false, IndexMiss::Unreadable; (2) delete the row -> tip_live_elsewhere false, Stuck. The reviewer's draft of that test passes at head and kills the mutant. Planned: integrator FIX-FORWARD (small, test-only) after grant renewal, then a fresh reviewer.\n",
+  "subject": "#2602 r2 REQUEST CHANGES (B3 test-only); FIX-FORWARD planned after grant renewal",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

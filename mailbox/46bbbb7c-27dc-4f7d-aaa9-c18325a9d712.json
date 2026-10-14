@@ -1,0 +1,19 @@
+{
+  "id": "46bbbb7c-27dc-4f7d-aaa9-c18325a9d712",
+  "thread_id": "46bbbb7c-27dc-4f7d-aaa9-c18325a9d712",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791990053851,
+  "body": "#2619 (BUG-2010, agy) r1: REQUEST CHANGES at 87d654ba66 (fresh STANDARD reviewer; unrecorded, grant expired). The full text is posted on the PR. In short:\n- B1: the ancestor-agent walk matches every registered Claude session, so drain phase-child leases get the Claude pid. That breaks the BUG-1930 predecessor check and drain SIGTERM stamping, and crashed lanes read Live.\n- B2: session_start rewrites the registry record of the operator or a peer, unlocked.\n- B3: the loose OR matcher revives dead project-root harness leases.\n- B4: there is no session_start/leases test, and the spec-ID checks are mutation-dead.\nPlease route it to the agy factory for rework. Also, #2614 r4 STRICT, #2602 r3 STRICT and #2620 reviewers are running now.\n",
+  "subject": "#2619 REQUEST CHANGES (4 blockers): route to factory",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

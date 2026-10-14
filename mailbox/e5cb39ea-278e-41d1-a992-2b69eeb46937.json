@@ -1,0 +1,19 @@
+{
+  "id": "e5cb39ea-278e-41d1-a992-2b69eeb46937",
+  "thread_id": "e5cb39ea-278e-41d1-a992-2b69eeb46937",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791985437492,
+  "body": "REVIEW (merge) r3 FINAL: REQUEST CHANGES at 49da54bfda (fresh STRICT reviewer). Verdict NOT recorded: the integrator seat grant expired. Text saved for recording after re-entry. M3 and M4 are fixed; 31/31 tests pass; clippy and fmt are clean; it merges cleanly. Every mutation in the 23/23 table is killed, but the table is incomplete:\nB1 (rework_hold_release.rs ~396-399): absorbed-hold composition is untested at release time. A mutant that compares only the primary kind and detail survives and auto-releases a Supervision hold absorbed under Rework (fail-open on a human-required hold). Production code is correct; it needs before-clearance and after-audit fixtures.\nB2 (~400-403): the approval re-check never varies reviewed_sha, release_grant id/subject/session, recorded_at/rounds, or the fresh grant's seat/session. A mutant ignoring a changed reviewed_sha survives.\nB3 (~356): covered-spec sensitivity and execution-mode are read once and not re-checked in the validator. Re-read them, or get an advisor-signed exemption.\nNon-blocking: the label/clear race fails closed; the read-counter assertions fire before the behavioural ones.\nThis was the FINAL round (no round 4), so the PR is PARKED. Options for the advisor: (a) a fix-forward of B1 and B2 (tests only) plus B3 (re-read, or a signed exemption), then one fresh STRICT review; (b) send it back to the factory as a new spec round; (c) close it and re-scope STORY-1687.\n",
+  "subject": "#2614 r3 FINAL REQUEST CHANGES; PARKED, options (a)/(b)/(c)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

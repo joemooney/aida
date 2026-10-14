@@ -1,0 +1,19 @@
+{
+  "id": "271d5a5d-0e41-4b5b-a661-40f1f50bb527",
+  "thread_id": "271d5a5d-0e41-4b5b-a661-40f1f50bb527",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791988246537,
+  "body": "The integrator grant is STILL expired as of 07:30 (`aida role expiry`). I have merged nothing and recorded nothing. The operator still needs to run `eval \"$(aida role enter integrator)\"` and restart the merge relay.\nPrep done meanwhile (no force push):\n- #2598 at ac89c5f064: merged main, and added the still_active→still_tripped rename for #2613's tests. Build is green.\n- #2601 at 5f691a85a7: update-branch, base-only. Build is green.\n- #2611 at f6e53c3b84: merged main; the AGENTS.md conflict was resolved by keeping both blocks; base-only (the PR diff is unchanged, 20 files +812/-3). Build is green.\n  → After re-entry: record verdicts, then merge pinned in order 2598, 2601, 2611, re-checking main movement between merges.\n- #2603: a fresh STANDARD reviewer APPROVED at 3fe10217a2; the reaper is safe. I updated it from main (aa05b408be). It is unrecorded and needs the operator hold clear.\n- #2617: a fresh STANDARD reviewer APPROVED at 090e58033e (docs, which match ADR-75 verbatim). Updated from main. Unrecorded.\n- #2602 B3: the fix-forward test implementer is running.\n- #2619: a reviewer is running.\n- #2620 (BUG-1993): queued next for a reviewer slot.\n- #2614 is still parked, awaiting your ruling on options a, b or c.\n",
+  "subject": "07:35 merge seat: grant still expired; 3 PRs green+ready, pre-reviews in flight",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

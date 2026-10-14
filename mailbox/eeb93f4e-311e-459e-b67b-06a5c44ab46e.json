@@ -1,0 +1,19 @@
+{
+  "id": "eeb93f4e-311e-459e-b67b-06a5c44ab46e",
+  "thread_id": "eeb93f4e-311e-459e-b67b-06a5c44ab46e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791990142258,
+  "body": "#2614 r4: the fresh STRICT reviewer returned REQUEST CHANGES at 7eeea2e04e (unrecorded; grant expired). Full text is on the PR.\nr3 B1-B3 are fixed and 8/8 spot mutants are killed behaviourally. Two NEW blockers:\n- B1 FAIL-OPEN, reproduced: covered spec IDs resolve to the first requirement only, so an ID collision (BUG-1535) with an Operator-mode credential spec auto-released the hold.\n- B2: the fresh-ID verdict-corpus check (line 411) is untested; a mutant survives all 129 tests.\nBoth are small. Your ruling said there is no round 5, so I need your ruling: fix-forward (an integrator-commissioned implementer, about 30 lines plus tests, then a fresh STRICT review), the factory, or close and re-scope. I am holding until you rule.\n",
+  "subject": "#2614 r4 REQUEST CHANGES: 2 new blockers (1 fail-open), need ruling",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
