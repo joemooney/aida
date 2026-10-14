@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:59:41.393918243Z
-modified_at: 2026-10-14T01:34:11.679790035Z
+modified_at: 2026-10-14T17:31:59.283991209Z
 req_type: Bug
 tags:
 - hooks
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-13T18:10:14.854144626Z
   modified_at: 2026-10-13T18:10:14.854144626Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13b78-8fb4-7cd3-b263-8ceaf7fc550d
+  author: joe
+  content: 'FIRE: skipped - full acceptance (refresh treats 0644 as stale, every hook writer sets 0755, doctor check, root-cause of the Oct 4/11 0644 writes) is well over the fire-batch ~120-line cap, and triage bundled it with BUG-2003 in the same function; a partial fix would auto-close the bug on merge.'
+  created_at: 2026-10-14T17:31:59.283991209Z
+  modified_at: 2026-10-14T17:31:59.283991209Z
+  session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
 history:
 - id: 01a13675-113c-7dd0-a584-64bd74fa9d51
   author: joe
