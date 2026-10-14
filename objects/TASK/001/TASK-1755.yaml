@@ -1,0 +1,27 @@
+id: 01a139de-8c3d-7423-9b33-fc5696e9a74b
+spec_id: TASK-1755
+agreed_id: TASK-1755
+title: BUG-2120 review follow-ups (#2613 r3)
+description: |-
+  Non-blocking from the strict r3 review of #2613 at 29ae7b674d:
+  1) The doc comment on later_sorted_transcript_with_older_lines_keeps_recent_poll_active says a subagent transcript 'sorts later'; in real layouts <sid>/subagents/x.jsonl sorts BEFORE <sid>.jsonl. Reword it.
+  2) agent_registry.rs:569 touch_session_start_agent records its own short-lived PID when the claude parent isn't found, so a live session could read as dead and its poll finding clear. Pre-existing; consider recording no PID instead.
+  3) Pin how untimed transcript lines affect last_activity_minute (mutant M13 survives, but only makes the check stricter), or make them count on purpose.
+  4) Mutants M8/M9 (rank tiebreak) are equivalent for trip/clear; only the seat label can differ. Optionally pin the label.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T10:04:08.637526333Z
+modified_at: 2026-10-14T10:04:08.637526333Z
+req_type: Task
+tags:
+- review-follow-up
+filed_at:
+  code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
