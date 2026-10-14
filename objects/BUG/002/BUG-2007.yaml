@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:15:39.207274461Z
-modified_at: 2026-10-14T13:38:39.553265636Z
+modified_at: 2026-10-14T21:53:42.135069130Z
 req_type: Bug
 tags:
 - agent-new
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-10-13T18:09:59.197617236Z
   modified_at: 2026-10-13T18:09:59.197617236Z
   session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13c68-2af7-7c32-bd13-fbc6a960bcb6
+  author: joe
+  content: 'Root cause (verified): the shared codex app-server daemon (pid 2135413, started 2026-10-09 from an advisor shell) carries AIDA_SESSION_ROLE=advisor plus an advisor grant; a codex TUI attached to it runs SessionStart hooks with the daemon''s env. Fix in PR #2637: aida agent new/resume codex pass --no-daemon; session/role-context hooks detect a codex app-server ancestor via /proc and report role unresolved. Follow-up worth considering: daemon-attached hand-launched sessions may also run shell tools with the daemon''s grant (authority leak, BUG-1934-adjacent).'
+  created_at: 2026-10-14T21:53:42.135069130Z
+  modified_at: 2026-10-14T21:53:42.135069130Z
+  session_id: b376496c-c9a9-4343-8707-38936bf039a1
 history:
 - id: 01a13675-0174-7ad0-943c-ee7f54037168
   author: joe
