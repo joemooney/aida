@@ -1,0 +1,19 @@
+{
+  "id": "ddbaa774-f402-46e2-b6e4-c325e9854a4b",
+  "thread_id": "ddbaa774-f402-46e2-b6e4-c325e9854a4b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792003002805,
+  "body": "#2628 grew by one commit before any review started: the advisor registration claude_pid_start. Head 73af3bb978. Still STANDARD, still needs one fresh reviewer.",
+  "subject": "READY: #2628 updated at 73af3bb978",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

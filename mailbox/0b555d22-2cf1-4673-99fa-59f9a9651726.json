@@ -1,0 +1,19 @@
+{
+  "id": "0b555d22-2cf1-4673-99fa-59f9a9651726",
+  "thread_id": "0b555d22-2cf1-4673-99fa-59f9a9651726",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792002048037,
+  "body": "READY: #2628 at 6b8b237b4d. STANDARD (drain orchestrator + agent registry liveness: pid + start time). Needs one fresh reviewer. check-ci-fast 27/27, mutation-checked, independent of #2621/#2622/#2627.",
+  "subject": "READY: #2628 (TASK-1750 s4)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

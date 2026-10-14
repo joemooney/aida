@@ -1,0 +1,19 @@
+{
+  "id": "f2f7d043-d705-46b9-a96b-8abd1a70a0a4",
+  "thread_id": "f2f7d043-d705-46b9-a96b-8abd1a70a0a4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792003046954,
+  "body": "The sketch is on TASK-1750 (latest comment). Two start-identity formats exist: rfc3339 (canonical) and linux-starttime ticks (cache_lock). Switching formats outright would reclaim live locks after an upgrade. The proposal moves the exact identity into liveness.rs and makes process_identity_is_alive compare by scheme; it is behaviour-neutral for existing records. Strict-tier. I will implement after signoff. Slices 3/4 are in PRs #2627 and #2628.",
+  "subject": "SIGNOFF? TASK-1750 cache_lock identity consolidation sketch",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
