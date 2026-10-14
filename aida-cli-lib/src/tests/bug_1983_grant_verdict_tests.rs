@@ -559,7 +559,7 @@ fn the_edit_gate_names_an_expired_grant_not_no_active_role() {
 fn one_rejection_table_drives_the_edit_gate_and_review_record() {
     type Setup = fn(&Path) -> String;
     // (case, AIDA_SESSION_ROLE label, grant fixture, reason phrase; `None`
-    // marks the valid-other-seat row).
+    // marks the valid rows).
     let cases: Vec<(&str, &str, Setup, Option<&str>)> = vec![
         (
             "unknown grant id",
@@ -617,6 +617,13 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
             },
             Some("no longer delegates this seat"),
         ),
+        // trace:TASK-1741 | ai:codex
+        (
+            "valid advisor grant",
+            "advisor",
+            |root| mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]),
+            None,
+        ),
         (
             "valid grant for another seat",
             "reviewer",
@@ -627,6 +634,48 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
     for (case, label, setup, phrase) in cases {
         let (tmp, store) = draft_project();
         let root = tmp.path();
+        // The valid-advisor guard mints the fixture and pins agent attribution
+        // under the same env lock, with both TTY inputs false.
+        // trace:TASK-1741 | ai:codex
+        if phrase.is_none() && label == "advisor" {
+            let _ambient = AmbientGuard::hermetic_with_seat_and(
+                root,
+                "advisor",
+                &[],
+                &[
+                    ("AIDA_AGENT_NAME", Some("valid-advisor-fixture")),
+                    ("AIDA_AGENT_TYPE", Some("codex")),
+                ],
+            );
+            assert!(!crate::authority_stdin_is_terminal());
+            assert!(!crate::authority_stdout_is_terminal());
+            assert!(
+                matches!(grant_check(root), GrantCheck::Valid(ref g) if g.seat == "advisor"),
+                "{case}: healthy advisor must stay Valid"
+            );
+            use clap::Parser;
+            let cli =
+                crate::Cli::try_parse_from(["aida", "edit", SPEC, "--status", "approved"]).unwrap();
+            crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command)
+                .unwrap_or_else(|e| panic!("{case}: Draft->Approved must succeed: {e:#}"));
+            assert_eq!(
+                spec_status(&store),
+                aida_core::models::RequirementStatus::Approved,
+                "{case}: the real edit must persist the approval"
+            );
+            review_record(root)
+                .unwrap_or_else(|e| panic!("{case}: advisor must record its verdict: {e:#}"));
+            let recorded = crate::review_verdict::read_recorded_verdict(root, SPEC)
+                .expect("the real review handler must persist a verdict");
+            assert_eq!(recorded.kind, crate::review_verdict::VerdictKind::Approved);
+            assert_eq!(recorded.reviewed_sha.as_deref(), Some(SHA));
+            assert_eq!(
+                recorded.recorded_by.as_deref(),
+                Some("valid-advisor-fixture (codex advisor seat)"),
+                "{case}: persisted attribution must use the advisor seat"
+            );
+            continue;
+        }
         let id = setup(root);
         let _ambient = AmbientGuard::hermetic_with_grant(root, Some(label), &id);
         let edit_message = edit_gate_refusal(&store);
