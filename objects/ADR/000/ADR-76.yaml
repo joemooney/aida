@@ -1,0 +1,47 @@
+id: 01a1389a-3d46-7812-ba78-9cf437b078f5
+spec_id: ADR-76
+agreed_id: ADR-76
+title: 'Tiered merge-review bar: mutation-kill and untested-path block only in sensitive and gate code; elsewhere they become drain follow-ups'
+description: |
+  ## Decision (operator, 2026-10-13 21:09)
+  Merge-review findings are tiered by where the change lands.
+
+  **Strict tier: every finding below blocks, as today.** Applies to:
+  - ADR-75 sensitive areas: sandbox/confinement, authority/grants/identity, credentials;
+  - gate and guard code: merge-hold, review-verdict, pr-ship gates, hooks that refuse commits, the runaway-seat watchdog, night-shift guards, lease/claim safety.
+
+  Here a surviving mutation, an untested path, a fail-open, a race or an incomplete fix each BLOCK.
+
+  **Standard tier: everything else.** Only these block:
+  - a correctness defect reproduced or demonstrated by the reviewer;
+  - any fail-open or data-loss path;
+  - a race that can corrupt state;
+  - an incomplete fix (the spec's acceptance not met);
+  - contract drift (CLI/help/docs inconsistent with behaviour);
+  - red CI, or a flaky or load-sensitive test added to the default suite.
+
+  The following do NOT block. The reviewer files them as ONE follow-up task per PR, tagged `review-follow-up`, approved, in drain mode:
+  - a surviving mutation, or an untested path, in non-gate code where the behaviour is correct;
+  - style, naming or doc-comment staleness;
+  - scope suggestions.
+
+  ## Why
+  On 2026-10-13: 33 verdicts, 14 REQUEST CHANGES. "untested-path" (a surviving mutation) was the most common reason (10). Each rejection costs a 1-2 hour round trip, and nothing merged for 2+ hours. Mutation-kill is the right bar where a missed path is a fail-open; elsewhere it should be backlog, not a gate.
+
+  ## Related
+  ADR-73, ADR-75, the FIX-FORWARD default (advisor ruling 2026-10-13 20:50: small blockers are fixed by the merge seat through a separate implementer, then a fresh reviewer).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-14T04:09:54.758581100Z
+modified_at: 2026-10-14T04:09:54.758581100Z
+req_type: Decision
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
