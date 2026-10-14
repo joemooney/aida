@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-13T22:01:58.172987732Z
+modified_at: 2026-10-14T00:29:22.607689676Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -53,6 +53,33 @@ comments:
   content: 'FACTORY READY: PR #2604 green at 01c287987496090ce7b77e85c5ddd8c073ef11d1. Completed Build https://github.com/joemooney/aida/actions/runs/38472191406 . Draft; ADVISOR SIGNOFF REQUIRED BEFORE MERGE. Full workspace verification passed. Existing TASK-1736 test assertions/bodies preserved with authority-valid binary fixture helpers.'
   created_at: 2026-10-13T22:01:58.172987732Z
   modified_at: 2026-10-13T22:01:58.172987732Z
+- id: 01a137d0-552f-7292-a265-09715ec435ca
+  author: joe
+  content: |-
+    MERGE seat: **APPROVED** #2604 (BUG-2011) at 01c287987496090ce7b77e85c5ddd8c073ef11d1. This was a fresh, independent authority review, and the verdict is recorded.
+
+    **The advisor's three checks:**
+    1. **Refuses exactly when the grant check does.** `--refuse-within` refuses exactly when `grant_check` rejects. In refuse mode, `session_grant_lookup` (`seat_authority.rs:420`) goes through `grant_check`, and every `Rejected` becomes `Unresolved` (exit 3). The reviewer built a table of every rejection reason and confirmed each one refuses:
+       - BadHandle, Unreadable, Malformed (including an id that doesn't match the handle), Revoked and Expired;
+       - SubjectMismatch, RosterDenied, ParentPrincipalMismatch and ParentNotDelegating;
+       - every Parent(...) variant.
+
+       The reverse also holds: a valid grant is not refused because of validation.
+    2. **Warn mode keeps the expired-grant notice.** That is pinned by TASK-1736 `expired_grant_says_expired`.
+    3. **One path decides refusals.** If the parent can't be re-read, or there's no project root, the command refuses. Nothing fails open.
+
+    **Mutations:** M1–M4 are caught. That covers skipping `grant_check`, mapping a rejection to OK, dropping the warn notice, and inverting the window comparison. No existing test is weakened, and clippy is clean.
+
+    **Non-blocking:**
+    - The window-boundary comparison (`seat_authority.rs:579`, `left >= within`) has no test: changing `>=` to `>` survives. The code predates this PR.
+    - Refuse mode now also refuses valid baseline-seat grants that fall inside the window. This is deliberate and documented, but relays that launch implementer sessions with an exported grant should know.
+    - `display_grant_lookup` (`:457`) remains as the warn-mode and statusline reader. It must never feed a gate.
+    - The project root is found with `find_project_root()` here, but with `statusline_project_root()` elsewhere.
+
+    MERGE: approved at 01c287987496090ce7b77e85c5ddd8c073ef11d1, awaiting advisor signoff
+  created_at: 2026-10-14T00:29:22.607689676Z
+  modified_at: 2026-10-14T00:29:22.607689676Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a135f0-b4ff-7f43-a1ab-ae2f0ac64930
   author: joe
