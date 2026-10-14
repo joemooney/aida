@@ -736,8 +736,13 @@ mod tests {
         // it through a validated advisor grant (ADR-66: the roster is only
         // the grant's ceiling — a roster row alone seats nobody).
         // trace:STORY-1473 | ai:claude
+        // TASK-1743: pin the identity under ENV_LOCK instead of reading the
+        // process-wide AIDA_USER unlocked; a concurrent hermetic test could
+        // otherwise set it to the hermetic id mid-read and flake this test.
+        // trace:TASK-1743 | ai:claude
+        const AMBIENT_ADVISOR: &str = "task-1743-ambient-advisor";
         let ambient_user = {
-            let user = crate::current_user_id(None);
+            let user = AMBIENT_ADVISOR.to_string();
             assert_ne!(
                 user, HERMETIC_TEST_USER,
                 "ambient identity is the hermetic id"
@@ -749,6 +754,7 @@ mod tests {
                 &[],
             );
             let _env = EnvVarsGuard::apply(&[
+                ("AIDA_USER", Some(AMBIENT_ADVISOR)),
                 ("AIDA_SESSION_ROLE", None),
                 (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
                 ("AIDA_ROLE_INSTANCE", None),
