@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:46:32.284314663Z
-modified_at: 2026-10-14T06:20:38.282816762Z
+modified_at: 2026-10-14T06:21:20.930874528Z
 req_type: Bug
 tags:
 - authority
@@ -100,6 +100,38 @@ comments:
   content: 'FACTORY READY: PR #2611 green at e04be2d7d5af83dbfda12b6eef7d4c605239d2ce. Completed SUCCESS Build38502568106. Direct main base, dependency commits removed, both paragraphs retained; 28 fast gates passed and all5 notice tests passed including exact threshold boundaries. PR body updated. Separate merge seat owns review/shipping.'
   created_at: 2026-10-14T03:05:34.469594917Z
   modified_at: 2026-10-14T03:05:34.469594917Z
+- id: 01a13912-92a2-7a70-9d9a-bc58940eaba8
+  author: joe
+  content: |-
+    MERGE REVIEW: **REQUEST CHANGES** at e04be2d7d5 (BUG-2014, round 1, strict tier: ADR-75 (b) grants; fresh independent reviewer, verdict recorded).
+
+    The scope is clean: only the 3 BUG-2014 commits, and it merges cleanly into origin/main.
+
+    Grant safety holds:
+    - the notice path never writes grant records;
+    - the hook always exits 0 and emits no permission decision;
+    - the grant id is validated as a UUID before it is used in a file name.
+
+    10 of 12 mutations were killed (1 didn't finish).
+
+    **Blocking:**
+    1. **The hook isn't installed in this repo.** `aida-core/templates/settings.json:33` registers `.claude/hooks/aida-grant-expiry-notice.sh`, but no tracked link `.claude/hooks/aida-grant-expiry-notice.sh` exists. Every other hook there is a link into `aida-core/templates/hooks/`. `.claude/settings.json` links to the template, so every Claude tool call in this repo would run a missing script (exit 127). The notice never fires, and every session pays a hook error, which breaks signoff condition C1. CI and check-templates don't catch it.
+       - **Fix:** add the tracked link `ln -s ../../aida-core/templates/hooks/aida-grant-expiry-notice.sh .claude/hooks/`, plus a test asserting that every `.claude/hooks/*.sh` referenced by settings exists.
+    2. **A flaky test in the default suite.** `bug_2014_grant_notice_tests.rs:158` `corrupt_unreadable_and_unwritable_ledgers_emit_nothing` failed 4/40 and 4/60 under parallel runs; it passes alone. A forked child probably inherits the flock fd, so `claim()` returns `Ok(false)`, not `Err`.
+       - **Fix:** assert `!matches!(claim(..), Ok(true))`, or retry on `Ok(false)`.
+    3. **Two surviving mutations in `notice_grant` (`seat_authority.rs`):**
+       - M8: removing the baseline-seat skip (implementer/guest/requester) passes. Add an implementer-grant-at-20m test asserting `None`.
+       - M9: replacing the expired-record consistency check (`record.expires_at != at || record.seat != seat`) with `false` passes. Test it or remove it.
+
+    **Non-blocking:**
+    - The PreToolUse notice reaches the model after the first tool call past expiry.
+    - Without `timeout` (macOS), the hook stays silent and prints one stderr line per call.
+    - A corrupt ledger makes every call print a stderr diagnostic.
+
+    ADR-75 (b) applies, so this isn't eligible for merge-seat FIX-FORWARD; the advisor routes the rework. Approval will still need advisor signoff.
+  created_at: 2026-10-14T06:21:20.930874528Z
+  modified_at: 2026-10-14T06:21:20.930874528Z
+  session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
 history:
 - id: 01a135f1-d33c-70c3-8d28-f1199a2020bd
   author: joe
