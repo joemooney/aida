@@ -67,7 +67,7 @@ fn bug_1929_unverified_host_hooks_refuse_store_writes() {
             }
             "extra" => {
                 std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o700)).unwrap();
-                std::fs::write(hooks.join("pre-push"), "#!/bin/sh\nexit 0\n").unwrap();
+                std::fs::write(hooks.join("pre-rebase"), "#!/bin/sh\nexit 0\n").unwrap();
             }
             "directory-mode" => {
                 std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o777)).unwrap()

@@ -9,6 +9,7 @@ const HOOKS: &[(&str, &str)] = &[
     ("commit-msg", "hooks/aida-commit-msg"),
     ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
     ("post-commit", "hooks/aida-post-commit.sh"),
+    ("pre-push", "hooks/aida-store-pre-push.sh"),
 ];
 
 /// Strip cwd-dependent executable lookup, including absolute paths into the store.

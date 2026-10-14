@@ -257,7 +257,7 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
 Store commits run only AIDA's shipped pre-commit, commit-msg, prepare-commit-msg,
-and post-commit hooks. Host git pins a versioned directory under its common git
+and post-commit hooks, plus a shipped pre-push identity gate. Host git pins a versioned directory under its common git
 directory; project `core.hooksPath` (including husky, pre-commit and lefthook)
 applies to code commits. The host profile is installed atomically from embedded
 template masters and checked before use: exact entries and bytes, regular files

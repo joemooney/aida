@@ -385,9 +385,19 @@ pub fn refuse_embedded_repos_for_push(store: &Path, rev: &str) -> Result<()> {
 
 /// Check if a directory is a git repository.
 pub fn is_git_repo(path: &Path) -> bool {
-    git(path, &["rev-parse", "--git-dir"])
-        .map(|r| r.success)
-        .unwrap_or(false)
+    // A hook refusal must never be misclassified as "not a repository".
+    // raw-git-ok(BUG-1929): rev-parse is a read-only identity probe, with fsmonitor off.
+    let mut command = Command::new("git");
+    command
+        .current_dir(path)
+        .args(["-c", "core.fsmonitor=false", "rev-parse", "--git-dir"]);
+    if is_store_tree(path) {
+        command.env(
+            "PATH",
+            crate::store_hooks::safe_path(path, &std::env::var_os("PATH").unwrap_or_default()),
+        );
+    }
+    command.output().is_ok_and(|out| out.status.success())
 }
 
 /// Append AIDA's per-worktree runtime paths to the worktree-local git exclude.
@@ -4526,6 +4536,7 @@ fn is_executable(_meta: &std::fs::Metadata) -> bool {
 const SHIPPED_HOOKS: &[(&str, &str)] = &[
     ("pre-commit", "hooks/aida-pre-commit.sh"),
     ("post-commit", "hooks/aida-post-commit.sh"),
+    ("pre-push", "hooks/aida-store-pre-push.sh"),
     ("commit-msg", "hooks/aida-commit-msg"),
     ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
     ("post-rewrite", "hooks/aida-sync-agent-skills.sh"),
