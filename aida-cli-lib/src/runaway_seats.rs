@@ -324,7 +324,8 @@ pub(crate) struct Coverage {
     pub(crate) elapsed_ms: u64,
     /// Rules still tripped from an earlier run: already reported once, not
     /// reported again until they clear.
-    pub(crate) still_active: Vec<String>,
+    // trace:BUG-1962 | ai:antigravity
+    pub(crate) still_tripped: Vec<String>,
     /// `ok` (evidence read, nothing tripped), `tripped`, `degraded` (the run
     /// was budget-cut; judged on what was read) or `unknown` (no evidence
     /// source was readable). Neither `degraded` nor `unknown` is itself a
@@ -386,6 +387,10 @@ struct SessionAgg {
     /// Prompt hash -> declared cron interval in minutes.
     #[serde(default)]
     declared: BTreeMap<String, u64>,
+    /// When the transcript was last written.
+    // trace:BUG-1962 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_written_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -624,6 +629,7 @@ fn fold_line(
     policy: &WatchdogPolicy,
     day_start: DateTime<Utc>,
     untimed_minute: i64,
+    file_mtime: Option<DateTime<Utc>>,
     sessions: &mut BTreeMap<String, SessionAgg>,
 ) {
     let ts = line
@@ -640,8 +646,12 @@ fn fold_line(
         .or_else(|| line.session_id.clone())
         .unwrap_or_else(|| fallback_session.to_string());
     let s = sessions.entry(sid).or_default();
-    if ts.is_some() {
+    // trace:BUG-1962 | ai:antigravity
+    if let Some(t) = ts {
         s.timed = true;
+        s.last_written_at = Some(s.last_written_at.map_or(t, |prev| prev.max(t)));
+    } else if let Some(mtime) = file_mtime {
+        s.last_written_at = Some(s.last_written_at.map_or(mtime, |prev| prev.max(mtime)));
     }
     let minute = ts.map(minute_of).unwrap_or(untimed_minute);
     if ts.is_some() {
@@ -772,7 +782,8 @@ fn scan_file(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let untimed_minute = file_mtime(path).map(minute_of).unwrap_or(0);
+    let mtime = file_mtime(path);
+    let untimed_minute = mtime.map(minute_of).unwrap_or(0);
     loop {
         if budget.exhausted(policy) {
             break;
@@ -796,6 +807,7 @@ fn scan_file(
                 policy,
                 day_start,
                 untimed_minute,
+                mtime,
                 sessions,
             );
         }
@@ -822,6 +834,38 @@ fn prune(sessions: &mut BTreeMap<String, SessionAgg>, day_start_minute: i64) {
         s.prompts.retain(|_, m| !m.is_empty());
     }
     sessions.retain(|_, s| !s.minutes.is_empty() || !s.prompts.is_empty());
+}
+
+// trace:BUG-1962 | ai:antigravity
+fn format_age(from: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let delta = now.signed_duration_since(from);
+    let secs = delta.num_seconds();
+    if secs < 0 {
+        return "just now".to_string();
+    }
+    if secs < 60 {
+        return format!("{}s ago", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m ago", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+    let days = hours / 24;
+    format!("{}d ago", days)
+}
+
+// trace:BUG-1962 | ai:antigravity
+fn session_last_write(s: &SessionAgg) -> Option<DateTime<Utc>> {
+    s.last_written_at.or_else(|| {
+        s.minutes
+            .keys()
+            .next_back()
+            .and_then(|m| Utc.timestamp_opt(m * 60, 0).single())
+    })
 }
 
 /// Every rule currently tripped, as (id, summary, action).
@@ -851,13 +895,18 @@ fn judge(
         if !s.timed {
             continue;
         }
+        // trace:BUG-1962 | ai:antigravity
+        let last_write_label = match session_last_write(s) {
+            Some(t) => format!(", transcript last written {}", format_age(t, now)),
+            None => String::new(),
+        };
         let who = match seats.get(sid) {
             Some(info) => format!(
-                "session {sid} (seat {}{}) in {project_label}",
+                "session {sid} (seat {}{}{last_write_label}) in {project_label}",
                 info.seat,
                 info.pid.map(|p| format!(", pid {p}")).unwrap_or_default()
             ),
-            None => format!("session {sid} (seat unresolved) in {project_label}"),
+            None => format!("session {sid} (seat unresolved{last_write_label}) in {project_label}"),
         };
         let mut push = |rule: &str, summary: String, action: &str| {
             findings.push(DoctorFinding {
@@ -1180,7 +1229,8 @@ pub(crate) fn scan(
         }
     }
 
-    coverage.still_active = tripped_ids.intersection(&state.active).cloned().collect();
+    // trace:BUG-1962 | ai:antigravity
+    coverage.still_tripped = tripped_ids.intersection(&state.active).cloned().collect();
     // A budget-cut run judged incomplete aggregates: never let it clear a
     // rule (that would re-alert on the next complete run).
     state.active = if budget.partial {
@@ -1246,10 +1296,11 @@ pub(crate) fn render_coverage(c: &Coverage) -> String {
     if c.partial {
         out.push_str("  DEGRADED: the run stopped at its byte/time budget; unread bytes resume on the next run (raise `[watchdog] max_total_bytes` / `time_budget_ms` to finish sooner)\n");
     }
-    if !c.still_active.is_empty() {
+    // trace:BUG-1962 | ai:antigravity
+    if !c.still_tripped.is_empty() {
         out.push_str(&format!(
             "  still tripped (already reported once): {}\n",
-            c.still_active.join(", ")
+            c.still_tripped.join(", ")
         ));
     }
     for s in &c.sources {
@@ -1414,17 +1465,17 @@ mod tests {
             let (first, _) = scan("aida", &src, &p, t0(), &seats);
             assert_eq!(rules(&first, sid), vec!["mail-poll-setup"]);
             let (_, active) = scan("aida", &src, &p, t0(), &seats);
-            assert_eq!(active.still_active, vec![format!("mail-poll-setup:{sid}")]);
+            assert_eq!(active.still_tripped, vec![format!("mail-poll-setup:{sid}")]);
             // Beyond the configured window, not merely beyond the default.
             let now = t0() + Duration::minutes(p.window_minutes);
             let (findings, quiet) = scan("aida", &src, &p, now, &seats);
             assert!(findings.is_empty());
-            assert!(quiet.still_active.is_empty());
+            assert!(quiet.still_tripped.is_empty());
             assert_eq!(quiet.verdict, "ok");
             assert!(load_state(src.state_path.as_deref()).active.is_empty());
             let (findings, quiet) = scan("aida", &src, &p, t0() + Duration::hours(10), &seats);
             assert!(findings.is_empty());
-            assert!(quiet.still_active.is_empty());
+            assert!(quiet.still_tripped.is_empty());
             assert_eq!(quiet.verdict, "ok");
             // Shift consumes this persisted evidence; quiet ticks no longer
             // create failed watchdog jobs (old failures age out after 2h).
@@ -1469,7 +1520,7 @@ mod tests {
         );
         let (findings, cov) = scan("aida", &src, &p, t0() + Duration::hours(2), &seats);
         assert!(findings.is_empty(), "already reported, but still tripped");
-        assert_eq!(cov.still_active, vec!["mail-poll-setup:live"]);
+        assert_eq!(cov.still_tripped, vec!["mail-poll-setup:live"]);
         assert_eq!(cov.verdict, "tripped");
     }
 
@@ -1495,7 +1546,7 @@ mod tests {
         )]);
         let (findings, cov) = scan("aida", &src, &p, t0(), &seats);
         assert!(findings.is_empty());
-        assert!(cov.still_active.is_empty());
+        assert!(cov.still_tripped.is_empty());
         assert_eq!(cov.verdict, "ok");
     }
 
@@ -1867,14 +1918,14 @@ mod tests {
         assert!(first.iter().any(|f| f.id == "wake-rate:s"));
         let (second, cov) = scan("aida", &src, &policy, now, &HashMap::new());
         assert!(second.is_empty(), "{second:?}");
-        assert!(cov.still_active.contains(&"wake-rate:s".to_string()));
+        assert!(cov.still_tripped.contains(&"wake-rate:s".to_string()));
         assert_eq!(cov.verdict, "tripped");
         // Two quiet hours later the hourly rules have cleared.
         let quiet = t0() + Duration::minutes(180);
         let (third, cov) = scan("aida", &src, &policy, quiet, &HashMap::new());
         assert!(third.is_empty());
         assert!(!cov
-            .still_active
+            .still_tripped
             .iter()
             .any(|id| id.starts_with("wake-rate")));
         // A fresh storm is a new crossing.
@@ -1917,7 +1968,7 @@ mod tests {
             &HashMap::new(),
         );
         assert_eq!(second.bytes_read, 0);
-        assert!(second.still_active.contains(&"wake-rate:s".to_string()));
+        assert!(second.still_tripped.contains(&"wake-rate:s".to_string()));
         let extra = storm_transcript("s", 1800, 5);
         append(&path, &extra);
         let (_, third) = scan(
@@ -2185,7 +2236,7 @@ mod tests {
         assert_eq!(coverage.verdict, "unknown");
         assert!(findings.iter().all(|f| f.id != "watchdog-blind"));
         assert!(coverage
-            .still_active
+            .still_tripped
             .contains(&"watchdog-blind".to_string()));
 
         // A run that reads evidence cleanly resets the streak and clears it.
@@ -2200,7 +2251,7 @@ mod tests {
         );
         assert_eq!(healthy.verdict, "ok");
         assert!(findings.is_empty());
-        assert!(healthy.still_active.is_empty());
+        assert!(healthy.still_tripped.is_empty());
     }
 
     /// `blind_alert_after = 0` turns the self-blind check off entirely, even
@@ -2259,5 +2310,300 @@ mod tests {
         // Two days later the same aggregates fall out of the trailing day.
         let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
         assert_eq!(later.spent_24h, 0);
+    }
+
+    /// BUG-1962: an ended or idle session with trailing compactions reports
+    /// its transcript last-write age in the finding summary, and on subsequent
+    /// runs is recorded in `still_tripped` (not `still_active`).
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn ended_or_idle_session_reports_transcript_last_write_age_and_still_tripped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000001";
+        // Create a transcript with 4 compactions over the first 10 minutes.
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for i in 0..4 {
+            let at = i * 120;
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(at + 1),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Run scan 4 hours after the transcript ended (last event at 361s).
+        let now = t0() + Duration::seconds(361) + Duration::hours(4);
+        let (findings, cov) = scan("aida", &src, &policy, now, &HashMap::new());
+        assert_eq!(cov.verdict, "tripped");
+        assert!(
+            cov.still_tripped.is_empty(),
+            "first run has no previously tripped rules"
+        );
+        let compaction_finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            compaction_finding
+                .summary
+                .contains("transcript last written 4h ago"),
+            "finding summary should contain transcript age: {}",
+            compaction_finding.summary
+        );
+        assert!(
+            compaction_finding
+                .summary
+                .contains("4 auto-compactions in the last 24h"),
+            "{}",
+            compaction_finding.summary
+        );
+
+        // Second run at the same time: finding is deduped, and rule is in still_tripped.
+        let (second_findings, second_cov) = scan("aida", &src, &policy, now, &HashMap::new());
+        assert!(second_findings.is_empty(), "rule already reported once");
+        assert!(
+            second_cov
+                .still_tripped
+                .contains(&format!("compactions:{sid}")),
+            "rule should be in still_tripped"
+        );
+        assert_eq!(second_cov.verdict, "tripped");
+    }
+
+    /// BUG-1962: sub-minute precision pins that `last_written_at` records the
+    /// exact second of the event, failing if dropped or if the minute-bucket
+    /// fallback is used.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_subminute_precision_pins_exact_timestamp() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000002";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for (i, at) in [0, 20, 50].iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at 60s (exactly 10s after last event at 50s).
+        // With exact last_written_at (50s), age is 10s ("10s ago").
+        // Dropping last_written_at falls back to minute 0 (0s), which gives 60s ("1m ago").
+        let now = t0() + Duration::seconds(60);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 10s ago"),
+            "finding summary must contain exact sub-minute age '10s ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("1m ago"),
+            "minute bucket fallback must not override sub-minute precision: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: verifies that `last_written_at` updates via `prev.max(t)`,
+    /// catching any regression to `prev.min(t)`.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_pins_max_over_min_across_hours() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000003";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        let times = [0, 3600, 7200];
+        for (i, at) in times.iter().enumerate() {
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(*at),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        // Scan at t0 + 3 hours (10800s).
+        // With max(t), last write is at 7201s (2h in), so age is 1h ("1h ago").
+        // With min(t), last write would stay at 0s, giving age 3h ("3h ago").
+        let now = t0() + Duration::hours(3);
+        let (findings, _) = scan("aida", &src, &policy, now, &HashMap::new());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == format!("compactions:{sid}"))
+            .expect("compactions rule should trip");
+        assert!(
+            finding.summary.contains("transcript last written 1h ago"),
+            "finding summary must use max(t) to report '1h ago': {}",
+            finding.summary
+        );
+        assert!(
+            !finding.summary.contains("3h ago"),
+            "swapping prev.max for prev.min must not pass: {}",
+            finding.summary
+        );
+    }
+
+    /// BUG-1962: `file_mtime` records `last_written_at` when lines lack timestamps.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_records_file_mtime_for_untimed_lines() {
+        let mut sessions = BTreeMap::new();
+        let sid = "session-mtime";
+        let line = Line {
+            kind: Some("assistant".to_string()),
+            timestamp: None,
+            session_id: Some(sid.to_string()),
+            ..Line::default()
+        };
+        let mtime = t0() + Duration::minutes(45);
+        fold_line(
+            &line,
+            b"{}",
+            sid,
+            &WatchdogPolicy::default(),
+            t0(),
+            0,
+            Some(mtime),
+            &mut sessions,
+        );
+        let s = sessions.get(sid).expect("session aggregate recorded");
+        assert_eq!(
+            s.last_written_at,
+            Some(mtime),
+            "file_mtime branch must record last_written_at when timestamp is absent"
+        );
+    }
+
+    /// BUG-1962: `last_written_at` is serialized in state.json and preserved
+    /// across incremental scans where no new bytes are read.
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn last_written_at_persisted_and_retained_across_incremental_scans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sid = "01a12b25-0000-7000-8000-000000000004";
+        let mut transcript = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        for i in 0..3 {
+            let at = i * 60;
+            transcript.push_str(&line(serde_json::json!({
+                "type": "system",
+                "subtype": "compact_boundary",
+                "timestamp": ts(at),
+                "sessionId": sid,
+            })));
+            transcript.push_str(&line(serde_json::json!({
+                "type": "assistant",
+                "timestamp": ts(at + 1),
+                "sessionId": sid,
+                "message": {
+                    "id": format!("{sid}-{i}"),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "compaction done"}]
+                }
+            })));
+        }
+        write(
+            &tmp.path().join("claude"),
+            &format!("{sid}.jsonl"),
+            &transcript,
+        );
+        let src = sources(tmp.path());
+        let policy = WatchdogPolicy {
+            max_compactions_per_day: 2,
+            ..WatchdogPolicy::default()
+        };
+        let now1 = t0() + Duration::seconds(121) + Duration::hours(1);
+        let (findings1, cov1) = scan("aida", &src, &policy, now1, &HashMap::new());
+        assert_eq!(cov1.verdict, "tripped");
+        assert_eq!(findings1.len(), 1);
+        assert!(findings1[0]
+            .summary
+            .contains("transcript last written 1h ago"));
+
+        let state_path = src.state_path.as_ref().unwrap();
+        let state_json = std::fs::read_to_string(state_path).unwrap();
+        assert!(
+            state_json.contains("last_written_at"),
+            "state.json must serialize last_written_at: {state_json}"
+        );
+
+        let now2 = now1 + Duration::hours(2);
+        let (findings2, cov2) = scan("aida", &src, &policy, now2, &HashMap::new());
+        assert!(findings2.is_empty(), "already reported finding is deduped");
+        assert!(
+            cov2.still_tripped.contains(&format!("compactions:{sid}")),
+            "rule is retained in still_tripped: {:?}",
+            cov2.still_tripped
+        );
     }
 }

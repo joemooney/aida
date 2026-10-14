@@ -520,3 +520,10 @@ retains its local roster lookup. Failed ledger access emits no context and
 leaves SessionStart/statusline warnings as fallback. See
 [verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+
+Existing history indexes also catch up through the inline `history-index-tick`
+maintenance job (`cache refresh --history --if-behind`). It uses only the index
+lock and a 30-second chunk budget, skips disabled/missing/busy indexes, and
+preserves foreground stall behavior. The scaffold runs it every 15 minutes.
+See [cache commands](docs/cli/10-storage.md).
+<!-- trace:STORY-1661 | ai:codex -->
