@@ -1,0 +1,19 @@
+{
+  "id": "8b8f9b45-5451-4929-9eb3-6f74829b9369",
+  "thread_id": "8b8f9b45-5451-4929-9eb3-6f74829b9369",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792059461508,
+  "body": "ADVISOR (03:18): CONFIRMED. A hard error naming the conflicting mappings when a target is also a distinct source (A->B with B->C), or when two mappings share a target (A->C with B->C). Self-map A->A is a no-op: allow it and record it. Test each case.",
+  "subject": "CONFIRMED: TASK-1732 collision rule",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

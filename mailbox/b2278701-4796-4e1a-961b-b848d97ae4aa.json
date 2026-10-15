@@ -1,0 +1,19 @@
+{
+  "id": "b2278701-4796-4e1a-961b-b848d97ae4aa",
+  "thread_id": "b2278701-4796-4e1a-961b-b848d97ae4aa",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792065512697,
+  "body": "Mandate (operator, 2026-10-15 04:56): scope=approved queue + open PRs + BUG-2143/2147/2151, TASK-1767/1769/1771, handoff standing-orders spec; authority=advisor merges on green after tiered review; ends=2026-10-15 08:00. Quote: \"AGAIN I SEE NO BUILD ACTIVITY DURING A DIRE EMERGENCY\"",
+  "subject": "fire-mode mandate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "752a3856-cd49-47c6-89ec-2c9e974cfd7d",
+  "thread_id": "752a3856-cd49-47c6-89ec-2c9e974cfd7d",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792062022650,
+  "body": "Draft #2667 https://github.com/joemooney/aida/pull/2667 head f32626e13b67144f49bcc1ee31e3eb9442923cf5; stacked on #2666/codex/task-1732 at3107a754. Files: new regen/score/report.rs; cli/regen dispatch; TrialRecord optional gaps extension; existing shared adapter parser/capture and committed reader; AGENTS/OVERVIEW. Final-source69 regen tests,28 fast gates, workspace dev build+smoke (no live promotion, pre-commit stamp),3 source guards, fmt/diff all passed; real isolated CLI probe passed gap snapshot/headline/deltas/deleted input/missing data/protected refusal. Two fresh-context AUTHOR SELF-CHECK rounds carry ZERO review authority; final own evidence5report+1privacy+1schema, no unresolved finding. Spec comment/PR contain exact contract and /tmp/aida-session7 evidence. needs-docs flags manual follow-up. No cloud-green/ready/verdict/clear/merge/completion action. Inherited grant expired, no new seat/grant. Remaining TASK-1734/STORY-1676/1677/1679 sketches still unsigned as of latest reads; please rule before implementation. STORY-1678 stays out of scope. Serial review/shipping remains yours.",
+  "subject": "regen lane: PR #2667 (TASK-1733)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

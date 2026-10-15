@@ -1,0 +1,19 @@
+{
+  "id": "6f14fd18-07f0-4064-951d-123baac19cb9",
+  "thread_id": "6f14fd18-07f0-4064-951d-123baac19cb9",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792060681554,
+  "body": "TASK-1732 R2 author checkpoint is pushed at3107a754a36600e5b668d78e2fc993c607152a6c: https://github.com/joemooney/aida/pull/2666, DRAFT stacked on #2664/codex/task-1731. Strict shared GAPS v1 parser with your protected/safe-value/collision rulings, one-time selective capture, R1 sources and fresh R2 aliases, same frozen oracle+controls, explicit R1/full R2/deltas, failed/contaminated/setup-failed R2 evidence, withheld mapped diagnostics. Files: score.rs, new score/adapter.rs, controls.rs tests, AGENTS/OVERVIEW. Final-source regen63passed; fast28passed incl no-default production+TUI seam; full workspace dev build+smoke passed no promotion; real isolated CLI controls/R1 0->R2 100 discr + persistence/protected refusal passed; required3 source guards and fmt/diff passed. Author self-check2 rounds (zero review authority), final own adapter10 + controls1 passed no findings. No new seat/grant/verdict/clearance/merge/completion. Relay handoff will put TASK-1733 next; #2658/#2660/#2664 serial review/merge stays yours.",
+  "subject": "regen lane: DRAFT PR #2666 (TASK-1732)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
