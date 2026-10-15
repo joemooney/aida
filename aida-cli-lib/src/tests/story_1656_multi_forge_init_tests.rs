@@ -166,6 +166,10 @@ fn init_gitlab_flag_parses_alongside_github_and_conflicts_with_remote() {
 
 #[test]
 fn forge_profile_mirrors_select_the_gitlab_hub() {
+    // trace:TASK-1748 | ai:antigravity
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".aida")).unwrap();
     std::fs::write(

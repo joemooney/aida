@@ -7673,6 +7673,11 @@ mod time_bound_flags_tests;
 #[path = "tests/headless_hint_tests.rs"]
 mod headless_hint_tests;
 
+// trace:BUG-1808 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1808_delegation_preflight_tests.rs"]
+mod bug_1808_delegation_preflight_tests;
+
 /// The project root whose `.aida/` holds the leases, drain lock and event
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
@@ -10633,6 +10638,89 @@ pub(crate) fn queue_work_role_mismatch(
         format!("shell role `{shell}` differs from pickup role `{role}`; {origin} wins before setup (use --role {shell} to choose the shell role)"))
 }
 
+/// A standalone `aida queue work <PR-N> --role reviewer`: a reviewer pickup on
+/// a PR scope that no `--auto-complete` orchestrator spawned (the orchestrator
+/// sets `AIDA_REVIEW_VERDICT_FILE` on its reviewer child). Launches through
+/// `run_standalone_reviewer`, which mints a `reviewer` child grant on both the
+/// interactive and the `--no-human` path.
+// trace:BUG-226, BUG-1808 | ai:claude
+pub(crate) fn is_standalone_reviewer(role: &str, has_review_target: bool) -> bool {
+    has_review_target
+        && role.eq_ignore_ascii_case("reviewer")
+        && std::env::var("AIDA_REVIEW_VERDICT_FILE")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_none()
+}
+
+/// Whether this `queue work` invocation will later mint a child seat grant
+/// via `seat_authority::issue_child`, and so must preflight delegation before
+/// any mutation. Mirrors the launch arms of `handle_queue_work`:
+/// - `--no-launch` launches nothing, so no child grant;
+/// - every interactive launch mints one for the pickup role;
+/// - `--no-human` mints one on a resume (`spawn_claude_headless_resume`) and
+///   on a standalone reviewer (`run_standalone_reviewer`); a fresh headless
+///   pickup execs the vendor without a child grant.
+// trace:BUG-1808 | ai:claude
+pub(crate) fn queue_work_issues_child_grant(
+    no_launch: bool,
+    no_human: bool,
+    resume: bool,
+    standalone_reviewer: bool,
+) -> bool {
+    !no_launch && (!no_human || resume || standalone_reviewer)
+}
+
+/// The refusal printed when the launcher's grant cannot delegate the child
+/// seat the pickup would launch. It names the decision that failed (child
+/// delegation) separately from the one that succeeded (queue selection), and
+/// tells a coordinating launcher (advisor / product / integrator) to choose a
+/// seat its grant delegates with an explicit `--role`.
+// trace:BUG-1808 | ai:claude
+pub(crate) fn queue_work_delegation_refusal(
+    child_seat: &str,
+    role_origin: &str,
+    launcher: Option<(&str, &[String])>,
+    cause: &str,
+) -> String {
+    // One line: agent-mode error rendering keeps only the first line.
+    let mut message = format!(
+        "child-seat delegation refused before any pickup state changed: queue selection \
+         succeeded ({role_origin} chose role `{child_seat}`), but this launcher may not start a \
+         `{child_seat}` child session: {cause}"
+    );
+    let Some((seat, delegable)) = launcher else {
+        return message;
+    };
+    let coordinator = matches!(
+        crate::canonical_role_name(seat).as_str(),
+        "advisor" | "product" | "integrator"
+    );
+    if !coordinator {
+        return message;
+    }
+    let choices: Vec<&str> = delegable
+        .iter()
+        .map(String::as_str)
+        .filter(|s| *s != child_seat)
+        .collect();
+    if choices.is_empty() {
+        message.push_str(&format!(
+            "; the `{seat}` grant delegates no seat, so re-enter it with `--delegate-seat {child_seat}`"
+        ));
+    } else {
+        message.push_str(&format!(
+            "; choose a seat the `{seat}` grant delegates with an explicit role selector: {}",
+            choices
+                .iter()
+                .map(|s| format!("`--role {s}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    message
+}
+
 // trace:TASK-1337 | ai:codex
 fn queue_work_manual_continuation(id: &str, guided: bool) -> String {
     let skill = if guided {
@@ -10997,11 +11085,32 @@ pub(crate) fn handle_queue_work(
                 &project_root,
                 session_branch_override.or(review_branch.as_deref()),
             )?;
-            if !no_launch && !no_human {
-                crate::seat_authority::validate_child_delegation(
-                    &project_root,
-                    &crate::canonical_role_name(&role),
-                )?;
+            // trace:BUG-1808 | ai:claude
+            // Preflight every launch path that later mints a child grant —
+            // including the `--no-human` resume and standalone-reviewer
+            // launches, which used to skip this check and refuse in
+            // `issue_child` only after the status bump, queue row, worktree,
+            // lease and manifest had landed.
+            if queue_work_issues_child_grant(
+                no_launch,
+                no_human,
+                matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                is_standalone_reviewer(&role, plan.review_target.is_some()),
+            ) {
+                let child_seat = crate::canonical_role_name(&role);
+                if let Err(cause) =
+                    crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
+                {
+                    let launcher = crate::seat_authority::current_grant(&project_root);
+                    anyhow::bail!(queue_work_delegation_refusal(
+                        &child_seat,
+                        role_origin,
+                        launcher
+                            .as_ref()
+                            .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
+                        &format!("{cause:#}"),
+                    ));
+                }
             }
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
@@ -12399,25 +12508,20 @@ pub(crate) fn handle_queue_work(
         // end-of-command summary) instead of `exec`'ing claude — so the
         // command no longer exits silently to the shell prompt.
         // trace:BUG-226 | ai:claude
-        let standalone_reviewer: Option<(u64, std::path::PathBuf)> = if role
-            .eq_ignore_ascii_case("reviewer")
-            && std::env::var("AIDA_REVIEW_VERDICT_FILE")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .is_none()
-        {
-            plan.review_target.map(|(_, n)| {
-                (
-                    n,
-                    project_root
-                        .join(".aida")
-                        .join("review-verdicts")
-                        .join(format!("PR-{n}.json")),
-                )
-            })
-        } else {
-            None
-        };
+        let standalone_reviewer: Option<(u64, std::path::PathBuf)> =
+            if is_standalone_reviewer(&role, plan.review_target.is_some()) {
+                plan.review_target.map(|(_, n)| {
+                    (
+                        n,
+                        project_root
+                            .join(".aida")
+                            .join("review-verdicts")
+                            .join(format!("PR-{n}.json")),
+                    )
+                })
+            } else {
+                None
+            };
         if let Some((_, verdict_path)) = &standalone_reviewer {
             if let Some(dir) = verdict_path.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -12545,7 +12649,8 @@ pub(crate) fn handle_queue_work(
                         &lease.worktree_path,
                         &tee_opts,
                         contained,
-                        &role,
+                        // trace:BUG-1808 | ai:claude — the seat the preflight validated.
+                        &crate::canonical_role_name(&role),
                     )?;
                     std::process::exit(status.code().unwrap_or(1));
                 }

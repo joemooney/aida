@@ -422,7 +422,11 @@ mod tests {
         }
         let claude_only: BTreeSet<&str> =
             file.claude_only.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(claude_only, BTreeSet::from(["aida-burndown", "aida-solo"]));
+        // trace:STORY-1692 | ai:claude
+        assert_eq!(
+            claude_only,
+            BTreeSet::from(["aida-burndown", "aida-fire", "aida-solo"])
+        );
         assert_eq!(
             not_a_skill(),
             BTreeSet::from(["aida-advise", "aida-assess", "aida-intent"])
@@ -485,6 +489,7 @@ mod tests {
         }
         for name in [
             "aida-burndown",
+            "aida-fire",
             "aida-solo",
             "aida-advise",
             "aida-assess",

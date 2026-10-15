@@ -354,7 +354,7 @@ fn create_test_home() -> std::io::Result<PathBuf> {
 unsafe fn set_home_vars(test_home: &Path) {
     #[allow(unused_unsafe)]
     unsafe {
-        std::env::set_var("HOME", test_home);
+        std::env::set_var("HOME", test_home); // allow-unisolated-home: pre-main ctor runs before threads exist
         #[cfg(windows)]
         {
             std::env::set_var("USERPROFILE", test_home);
@@ -445,8 +445,12 @@ mod tests {
     /// The redirect is in effect before any test body runs: the process
     /// `HOME` is the temp home, not any real one, and the operator's
     /// overrides are gone.
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn redirect_is_installed_before_tests_run() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let _env = crate::test_env::EnvVarsGuard::snapshot(&["HOME"]);
         let r = installed();
         assert!(r.test_home.join(".gitconfig").is_file());

@@ -1815,7 +1815,9 @@ fn complete_init_scaffolding(
         // bit; without it git silently ignores commit-msg hooks and the
         // user gets a confusing "hook was ignored" warning on every
         // commit. trace:BUG-21 | ai:claude
-        ensure_executable_if_hook(&artifact.path, &full_path);
+        // trace:BUG-2009 | ai:claude
+        ensure_executable_if_hook(&artifact.path, &full_path)
+            .with_context(|| format!("making {} executable", full_path.display()))?;
 
         if exists {
             updated_count += 1;
