@@ -8,11 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:14:13.077444075Z
-modified_at: 2026-10-15T17:56:10.933009390Z
+modified_at: 2026-10-15T17:56:13.103083099Z
 req_type: Bug
 tags:
 - relay
 - review
+comments:
+- id: 01a140b5-1aaf-7d60-950d-60cc3a7378d5
+  author: joe
+  content: 'Advisor triage 2026-10-15: APPROVED. It blocks STORY-1654 (#2661) under the sequencing ruling and was reproduced in the advisor-ordered end-to-end run. Fixed together with BUG-2149/BUG-2150 in one PR. Tier: STRICT (reviewer authority path).'
+  created_at: 2026-10-15T17:56:13.103083099Z
+  modified_at: 2026-10-15T17:56:13.103083099Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a140b5-1234-7ec0-99c2-5c51aea1163d
   author: joe
