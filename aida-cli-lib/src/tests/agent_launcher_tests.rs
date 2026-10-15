@@ -4134,6 +4134,7 @@ fn codex_fresh_launch_does_not_double_no_daemon() {
         binary: "codex",
         default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
 
     // Config default carries it.
