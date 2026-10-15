@@ -1,0 +1,25 @@
+id: 01a14104-7c9a-7320-aa51-3cd15cfc8717
+spec_id: BUG-2157
+agreed_id: BUG-2157
+title: 'Contained parent: ''aida session resume'' and ''session new/start --launch'' launch an uncontained claude (strip AIDA_CONTAINED, honour --permission-mode)'
+description: |-
+  Found in the BUG-2151 #2672 round-2 e2e (cases 8, 9, 10b; transcripts at /tmp/claude-1000/-home-joe-ai-aida/4be6f69d-3d6a-4fba-b6e3-41190732a1be/scratchpad/e2e/).
+  - session.rs:638 exec_resume_command(&target, None, false) leads to build_claude_resume_exec_command with contained=false, which runs 'claude --resume <id>' with env_remove(AIDA_CONTAINED) (session.rs:4977-4984).
+  - session new / session start --launch go through resolve_interactive_launch_mode_for_root (agent_launch.rs:2943-2990), which never calls aida_contained_env(), so it honours --permission-mode and strips AIDA_CONTAINED.
+  Ruling (BUG-2151): a contained parent's env ALWAYS wins and no flag overrides it.
+  Acceptance: under AIDA_CONTAINED=1, session resume/new/start --launch produce a contained claude (flags plus AIDA_CONTAINED=1, write roots = the session's worktree), refuse --permission-mode and refuse codex/agy. Tests for each, plus a stub-binary e2e. Tier STRICT.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:22:55.514682146Z
+modified_at: 2026-10-15T19:22:55.514682146Z
+req_type: Bug
+filed_at:
+  code_sha: 0c69debffe439310aacf3756a5efe363d1216474
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
