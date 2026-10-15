@@ -3,12 +3,16 @@
 //!
 //! - BUG-2149: the reviewer's verdict must reach the LAUNCHER checkout's
 //!   `.aida/review-verdicts/PR-<n>.json` (plus the spec record), even when a
-//!   contained reviewer could only write it inside its review worktree; and
-//!   the launch must fail when no verdict was produced.
+//!   contained reviewer could only write it inside its review worktree — but
+//!   only a verdict written during this run, at the PR's current head, by the
+//!   exact reviewer grant this launch issued. The launch fails (with its own
+//!   exit code) when no such verdict was produced.
 //! - BUG-2150: a reviewer pickup is PR-scoped: it needs no queue entry and
 //!   coexists with the implementer's live spec lease, while a second reviewer
 //!   on the same PR is still refused.
 use super::*;
+
+const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// A codex-only project fixture under an isolated home (same shape as the
 /// BUG-1607 reviewer-vendor tests). Returns `(home, project)`.
@@ -25,54 +29,94 @@ fn codex_only_project(tmp: &std::path::Path) -> (std::path::PathBuf, std::path::
     (home, project)
 }
 
-const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
-
-/// A mock reviewer that records an approval the way `aida review record`
-/// does: `<worktree>/.aida/review-verdicts/STORY-77.json`, stamped with the
-/// recording grant `grant` (a literal id, or `$AIDA_SESSION_GRANT` for the
-/// child's own grant) and the reviewed commit `sha`.
-fn writes_spec_record(worktree: &std::path::Path, grant: &str, sha: &str) -> String {
+/// Shell for a mock reviewer that records an approval the way `aida review
+/// record` does — `<worktree>/.aida/review-verdicts/STORY-77.json`, stamped
+/// with the recording grant `grant` (a literal id, or `$AIDA_SESSION_GRANT`
+/// for the child's own grant) in both the attestation and the release stamp —
+/// then runs `after` (e.g. a `touch` backdating it).
+#[cfg(unix)]
+fn records_approval(worktree: &std::path::Path, grant: &str, sha: &str, after: &str) -> String {
     let dir = worktree.join(".aida").join("review-verdicts");
     format!(
         "#!/bin/sh\nmkdir -p '{dir}'\ncat > '{dir}/STORY-77.json' <<EOF\n\
          {{\"verdict\":\"approved\",\"reviewed_sha\":\"{sha}\",\"summary\":\"ok\",\
-         \"release_grant\":{{\"id\":\"{grant}\"}}}}\nEOF\nexit 0\n",
+         \"recorder_attestation\":{{\"sha\":\"{sha}\",\"seat\":\"reviewer\",\"grant_id\":\"{grant}\"}},\
+         \"release_grant\":{{\"id\":\"{grant}\"}}}}\nEOF\n{after}\nexit 0\n",
         dir = dir.display()
     )
 }
 
+/// Backdate the recorded file to 2020 — "written before the reviewer started".
+#[cfg(unix)]
+fn backdate(worktree: &std::path::Path) -> String {
+    format!(
+        "touch -t 202001010000 '{}'",
+        worktree
+            .join(".aida/review-verdicts/STORY-77.json")
+            .display()
+    )
+}
+
+/// What a test's setup hands the launch.
+#[cfg(unix)]
+struct Launch<'a> {
+    project: &'a std::path::Path,
+    worktree: &'a std::path::Path,
+    launcher_grant: &'a str,
+}
+
 /// Run the REAL `run_standalone_reviewer` against a mock reviewer script.
-/// `script_body(worktree, launcher_grant)` builds the script; `before_launch`
-/// may plant files in the worktree. The PR head is pinned to [`HEAD`].
-/// Returns the launch result, the project root and the worktree.
+/// `setup` runs under the test's env guard once the launcher holds its grant
+/// (so it may mint further grants) and returns the mock script. A mock `gh`
+/// on PATH credits STORY-77 to PR-59; the PR head is pinned to [`HEAD`].
+/// Returns the launch result and the project root.
 #[cfg(unix)]
 fn run_mock_reviewer(
     tmp: &std::path::Path,
-    script_body: impl Fn(&std::path::Path, &str) -> String,
-    before_launch: impl Fn(&std::path::Path, &str),
-) -> (Result<()>, std::path::PathBuf, std::path::PathBuf) {
+    setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
+) -> (Result<()>, std::path::PathBuf) {
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
     std::fs::create_dir_all(worktree.join(".aida")).unwrap();
     let mock = tmp.join("mock-reviewer.sh");
+    let bin = tmp.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        "#!/bin/sh\nprintf '%s' '{\"title\":\"Fix the widget (STORY-77)\",\"body\":\"\"}'\nexit 0\n",
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
 
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
+        ("PATH", Some(path.as_str())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
         ("AIDA_TEST_PR_HEAD_SHA", Some(HEAD)),
         (crate::seat_authority::GRANT_ENV, None),
     ]);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let launcher_grant = crate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
-    crate::test_exec::write_executable(&mock, script_body(&worktree, &grant_id));
-    before_launch(&worktree, &grant_id);
+    env.set_key(crate::seat_authority::GRANT_ENV, &launcher_grant);
+    let script = setup(
+        &Launch {
+            project: &project,
+            worktree: &worktree,
+            launcher_grant: &launcher_grant,
+        },
+        &mut env,
+    );
+    env.set_key(crate::seat_authority::GRANT_ENV, &launcher_grant);
+    crate::test_exec::write_executable(&mock, script);
     crate::session::set_headless_vendor_override(None);
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&project).unwrap();
 
@@ -99,14 +143,39 @@ fn run_mock_reviewer(
         launch_vendor,
     );
     crate::session::set_headless_vendor_override(None);
-    (result, project, worktree)
+    (result, project)
+}
+
+/// Another reviewer grant delegated by the launcher — the grant an EARLIER or
+/// a parallel sibling reviewer of the same launcher would hold.
+#[cfg(unix)]
+fn sibling_reviewer_grant(l: &Launch<'_>) -> String {
+    crate::seat_authority::issue_child(l.project, "reviewer", &crate::current_user_id(None))
+        .unwrap()
+        .id
+}
+
+/// Assert the launch refused to collect anything, for `reason`.
+#[cfg(unix)]
+fn assert_refused(result: Result<()>, project: &std::path::Path, reason: &str) {
+    let err = result.expect_err("the verdict must not be collected");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        NO_REVIEW_VERDICT_EXIT_CODE,
+        "a missing verdict exits with its own code: {err:#}"
+    );
+    let msg = format!("{err:#}");
+    assert!(msg.contains(reason), "expected `{reason}` in: {msg}");
+    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+    assert!(crate::review_verdict::read_recorded_verdict(project, "STORY-77").is_none());
 }
 
 /// BUG-2149: the reviewer recorded its approval inside the review worktree
-/// (all a contained reviewer can write), under the child reviewer grant this
-/// launch issued, at the PR's current head. The launcher must collect it into
-/// its own `.aida/review-verdicts/PR-59.json` and mirror the spec record, so
-/// `aida review verdict` / `aida pr ship` see it from the primary checkout.
+/// (all a contained reviewer can write), under this launch's reviewer grant,
+/// at the PR's current head. The launcher collects it into its own
+/// `.aida/review-verdicts/PR-59.json` and mirrors the record for the spec the
+/// PR credits, so `aida review verdict` / `aida pr ship` see it from the
+/// primary checkout.
 // trace:BUG-2149 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -115,28 +184,27 @@ fn standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    let (result, project, _worktree) = run_mock_reviewer(
-        tmp.path(),
-        |wt, _| writes_spec_record(wt, "$AIDA_SESSION_GRANT", HEAD),
-        |_, _| {},
-    );
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "")
+    });
     result.expect("a verified review verdict must succeed");
 
-    let pr_file = project.join(".aida/review-verdicts/PR-59.json");
-    let body = std::fs::read_to_string(&pr_file)
+    let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json"))
         .expect("the launcher checkout must hold the canonical PR-59.json verdict");
     let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
     assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
-
+    assert!(
+        verdict.attestation.is_some(),
+        "the reviewer's attestation must survive collection"
+    );
     let spec = crate::review_verdict::read_recorded_verdict(&project, "STORY-77")
-        .expect("the spec-keyed record must be mirrored into the launcher checkout");
+        .expect("the PR's spec record must be mirrored into the launcher checkout");
     assert_eq!(spec.kind, crate::review_verdict::VerdictKind::Approved);
     assert_eq!(spec.reviewed_sha.as_deref(), Some(HEAD));
 }
 
 /// BUG-2149: a reviewer that exits cleanly without recording any verdict
-/// must make the launch command fail, so a caller waiting on its exit status
-/// never reads "no verdict" as an approval.
+/// makes the launch fail with the no-verdict exit code (not 1, a crash).
 // trace:BUG-2149 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -145,100 +213,148 @@ fn standalone_reviewer_without_verdict_fails_the_launch() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    let (result, project, _worktree) = run_mock_reviewer(
-        tmp.path(),
-        |_, _| "#!/bin/sh\nexit 0\n".to_string(),
-        |_, _| {},
-    );
-    let err = result.expect_err("a review with no verdict must not succeed");
-    assert!(
-        format!("{err:#}").contains("verifiable verdict"),
-        "unexpected error: {err:#}"
-    );
-    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+    let (result, project) = run_mock_reviewer(tmp.path(), |_, _| "#!/bin/sh\nexit 0\n".into());
+    assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
-/// BUG-2149 (advisor condition d): an APPROVED verdict planted in the review
-/// worktree BEFORE the reviewer started is not this run's verdict. It must
-/// not be collected, and the launch must fail.
+/// BUG-2149 (condition d): a verdict file that predates the reviewer's start
+/// is not collected. Freshness is the ONLY defect here: the record names this
+/// launch's own reviewer grant and the current head — it is backdated.
 // trace:BUG-2149 | ai:claude
 #[cfg(unix)]
 #[test]
-fn planted_preexisting_approval_in_worktree_is_not_collected() {
+fn preexisting_verdict_is_not_collected_on_freshness_alone() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    let (result, project, _worktree) = run_mock_reviewer(
-        tmp.path(),
-        |_, _| "#!/bin/sh\nexit 0\n".to_string(),
-        |wt, launcher_grant| {
-            let dir = wt.join(".aida/review-verdicts");
-            std::fs::create_dir_all(&dir).unwrap();
-            let planted = dir.join("STORY-77.json");
-            std::fs::write(
-                &planted,
-                format!(
-                    r#"{{"verdict":"approved","reviewed_sha":"{HEAD}","release_grant":{{"id":"{launcher_grant}"}}}}"#
-                ),
-            )
-            .unwrap();
-            let past = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
-            std::fs::File::options()
-                .write(true)
-                .open(&planted)
-                .unwrap()
-                .set_modified(past)
-                .unwrap();
-        },
-    );
-    result.expect_err("a planted pre-existing approval must not pass the launch");
-    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
-    assert!(crate::review_verdict::read_recorded_verdict(&project, "STORY-77").is_none());
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        records_approval(
+            l.worktree,
+            "$AIDA_SESSION_GRANT",
+            HEAD,
+            &backdate(l.worktree),
+        )
+    });
+    assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
-/// BUG-2149 (advisor condition b): a fresh verdict recorded under the
-/// LAUNCHER's grant, not the child reviewer's, is refused.
+/// BUG-2149 (round 1): a stale verdict (past mtime) stamped by an EARLIER
+/// reviewer grant of the same launcher is refused.
 // trace:BUG-2149 | ai:claude
 #[cfg(unix)]
 #[test]
-fn verdict_recorded_under_launcher_grant_is_not_collected() {
+fn stale_verdict_from_earlier_reviewer_grant_is_refused() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    let (result, project, _worktree) = run_mock_reviewer(
-        tmp.path(),
-        |wt, launcher_grant| writes_spec_record(wt, launcher_grant, HEAD),
-        |_, _| {},
-    );
-    let err = result.expect_err("the launcher's own grant must not stand in for the reviewer");
-    assert!(
-        format!("{err:#}").contains("launcher's own grant"),
-        "{err:#}"
-    );
-    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        let earlier = sibling_reviewer_grant(l);
+        records_approval(l.worktree, &earlier, HEAD, &backdate(l.worktree))
+    });
+    assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
-/// BUG-2149 (advisor condition b): a verdict for a commit other than the PR's
-/// current head is refused.
+/// BUG-2149 (advisor ruling: equality): a FRESH verdict recorded by a sibling
+/// reviewer grant of the same launcher — a parallel reviewer — is refused.
 // trace:BUG-2149 | ai:claude
 #[cfg(unix)]
 #[test]
-fn verdict_for_stale_head_is_not_collected() {
+fn fresh_verdict_from_sibling_reviewer_grant_is_refused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        let sibling = sibling_reviewer_grant(l);
+        records_approval(l.worktree, &sibling, HEAD, "")
+    });
+    assert_refused(result, &project, "not this launch's reviewer grant");
+}
+
+/// BUG-2149 (round 1): a fresh verdict from a reviewer grant whose PARENT is a
+/// different grant (another launcher) is refused.
+// trace:BUG-2149 | ai:claude
+#[cfg(unix)]
+#[test]
+fn fresh_verdict_from_other_launchers_reviewer_grant_is_refused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, env| {
+        let other_parent = crate::seat_authority::test_support::mint_grant_for(
+            l.project,
+            &crate::current_user_id(None),
+            "advisor",
+            &["reviewer"],
+        );
+        assert_ne!(other_parent, l.launcher_grant);
+        env.set_key(crate::seat_authority::GRANT_ENV, &other_parent);
+        let foreign = crate::seat_authority::issue_child(
+            l.project,
+            "reviewer",
+            &crate::current_user_id(None),
+        )
+        .unwrap()
+        .id;
+        records_approval(l.worktree, &foreign, HEAD, "")
+    });
+    assert_refused(result, &project, "not this launch's reviewer grant");
+}
+
+/// BUG-2149 (condition b): a fresh verdict recorded under the LAUNCHER's
+/// grant is refused.
+// trace:BUG-2149 | ai:claude
+#[cfg(unix)]
+#[test]
+fn verdict_recorded_under_launcher_grant_is_refused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        records_approval(l.worktree, l.launcher_grant, HEAD, "")
+    });
+    assert_refused(result, &project, "launcher's own grant");
+}
+
+/// BUG-2149 (condition b): a verdict for a commit other than the PR's current
+/// head is refused.
+// trace:BUG-2149 | ai:claude
+#[cfg(unix)]
+#[test]
+fn verdict_for_stale_head_is_refused() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
     let stale = "fedcba9876543210fedcba9876543210fedcba98";
-    let (result, project, _worktree) = run_mock_reviewer(
-        tmp.path(),
-        |wt, _| writes_spec_record(wt, "$AIDA_SESSION_GRANT", stale),
-        |_, _| {},
-    );
-    let err = result.expect_err("a verdict at a stale head must not pass");
-    assert!(format!("{err:#}").contains("head is now"), "{err:#}");
-    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", stale, "")
+    });
+    assert_refused(result, &project, "head is now");
+}
+
+/// BUG-2149 (round 1): a verdict path that is a symlink to a FIFO must not
+/// hang the launcher — only regular files are read.
+// trace:BUG-2149 | ai:claude
+#[cfg(unix)]
+#[test]
+fn fifo_symlink_verdict_is_skipped_not_read() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
+        let dir = l.worktree.join(".aida/review-verdicts");
+        format!(
+            "#!/bin/sh\nmkdir -p '{d}'\nmkfifo '{d}/pipe'\nln -s '{d}/pipe' '{d}/STORY-77.json'\nexit 0\n",
+            d = dir.display()
+        )
+    });
+    assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
 /// A mock `gh` whose `pr view` names STORY-77 as the PR's delivered spec.
@@ -258,7 +374,7 @@ fn lease_with_role(id: &str, scope: &str, role: &str) -> SessionLease {
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
         owner: "tester".into(),
-        worktree_path: std::path::PathBuf::from(format!("/tmp/{id}")),
+        worktree_path: std::env::temp_dir().join(id),
         branch: format!("br-{id}"),
         started_at: chrono::Utc::now(),
         hostname: "test".into(),
@@ -361,6 +477,11 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
     assert_eq!(
         review_source_branch_conflict_decision(true, true, Some("reviewer"), Some("reviewer")),
         LeaseConflictDecision::Refuse
+    );
+    // A DEAD implementer lease is still ended, as before.
+    assert_eq!(
+        review_source_branch_conflict_decision(true, false, Some("implementer"), Some("reviewer")),
+        LeaseConflictDecision::AutoEnd
     );
 }
 

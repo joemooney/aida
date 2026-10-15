@@ -1639,25 +1639,52 @@ pub struct VerdictCandidate {
 }
 
 impl VerdictCandidate {
-    /// The grant that recorded this file (`release_grant.id`), when stamped.
-    pub fn recording_grant_id(&self) -> Option<&str> {
-        self.obj
-            .get("release_grant")
-            .and_then(|g| g.get("id"))
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
+    /// Every grant this file names as its recorder: the bound
+    /// `recorder_attestation.grant_id` and the `release_grant.id` stamp.
+    /// Each one must be this launch's reviewer grant.
+    pub fn recording_grant_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = Vec::new();
+        let named = [
+            self.obj
+                .get(ATTESTATION_KEY)
+                .and_then(|a| a.get("grant_id"))
+                .and_then(|v| v.as_str()),
+            self.obj
+                .get("release_grant")
+                .and_then(|g| g.get("id"))
+                .and_then(|v| v.as_str()),
+        ];
+        for id in named.into_iter().flatten() {
+            let id = id.trim();
+            if !id.is_empty() && !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+        ids
     }
 }
 
+/// BUG-2149: the largest verdict file the collector will read. A verdict is
+/// a few KiB; anything larger is not one.
+const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
+
 /// BUG-2149: a verdict file modified at or after `since` (the reviewer's
-/// start), read as a candidate. A pre-existing file is never a candidate.
+/// start), read as a candidate. A pre-existing file is never a candidate,
+/// and neither is anything but a regular file of bounded size — a symlink to
+/// a FIFO or device must not be able to hang or flood the launcher.
 fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
-    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
+        return None;
+    }
+    let modified = meta.modified().ok()?;
     if modified < since {
         return None;
     }
     let body = std::fs::read_to_string(path).ok()?;
+    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
+        return None;
+    }
     let obj = serde_json::from_str::<serde_json::Value>(&body)
         .ok()?
         .as_object()
@@ -1700,9 +1727,9 @@ pub trait VerdictCollectionChecks {
 ///
 /// Any mismatch collects nothing and returns `Err(reason)`. On success the
 /// newest identity-checked record is written to `canonical` unless the
-/// reviewer already wrote it in place, and the spec-keyed records (`spec_ids`
-/// plus those the reviewer wrote) are mirrored into the launcher project
-/// unless the launcher already holds one written during this run.
+/// reviewer already wrote it in place, and the spec-keyed records for
+/// `spec_ids` (the specs the PR credits) — and no others — are mirrored into
+/// the launcher project unless it already holds one written during this run.
 // trace:BUG-2149 | ai:claude
 pub fn collect_standalone_verdict(
     launcher_root: &Path,
@@ -1724,7 +1751,7 @@ pub fn collect_standalone_verdict(
         let up = stem.to_ascii_uppercase();
         up.starts_with("PR-") || up.starts_with("MR-")
     };
-    let mut spec_ids: Vec<String> = spec_ids
+    let spec_ids: Vec<String> = spec_ids
         .iter()
         .map(|s| s.trim().to_ascii_uppercase())
         .filter(|s| !s.is_empty() && !is_change_key(s))
@@ -1753,10 +1780,6 @@ pub fn collect_standalone_verdict(
                     continue;
                 };
                 if !is_change_key(stem) {
-                    let id = stem.to_ascii_uppercase();
-                    if !spec_ids.contains(&id) {
-                        spec_ids.push(id);
-                    }
                     worktree_specs.push(c.clone());
                 }
                 candidates.push(c);
@@ -1776,15 +1799,15 @@ pub fn collect_standalone_verdict(
         checks
             .check_record(c)
             .map_err(|why| format!("{}: {why}", c.path.display()))?;
-        if let Some(grant) = c.recording_grant_id() {
+        for grant in c.recording_grant_ids() {
             checks
-                .check_identity(grant)
+                .check_identity(&grant)
                 .map_err(|why| format!("{}: {why}", c.path.display()))?;
         }
     }
     let source = candidates
         .iter()
-        .filter(|c| c.recording_grant_id().is_some())
+        .filter(|c| !c.recording_grant_ids().is_empty())
         .max_by_key(|c| c.modified)
         .cloned()
         .ok_or_else(|| {

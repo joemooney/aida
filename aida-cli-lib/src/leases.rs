@@ -1650,9 +1650,9 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
 /// BUG-2150: the decision for a review whose PR source branch is held by
 /// another lease. A review lease is a different kind from an implementer
 /// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
-/// with a non-reviewer holder. Every other case — a non-reviewer pickup, or a
-/// holder that is itself a reviewer — keeps the BUG-1205 prompt / auto-end /
-/// refuse handling.
+/// with a LIVE non-reviewer holder. Every other case — a non-reviewer pickup,
+/// a holder that is itself a reviewer, or a dead holder (ended as before) —
+/// keeps the BUG-1205 prompt / auto-end / refuse handling.
 // trace:BUG-2150 | ai:claude
 pub(crate) fn review_source_branch_conflict_decision(
     headless: bool,
@@ -1663,7 +1663,7 @@ pub(crate) fn review_source_branch_conflict_decision(
     let is_reviewer = |r: Option<&str>| {
         r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
     };
-    if is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+    if lease_live && is_reviewer(pickup_role) && !is_reviewer(holder_role) {
         LeaseConflictDecision::Coexist
     } else {
         lease_conflict_decision(headless, lease_live)

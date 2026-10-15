@@ -144,12 +144,11 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     // BUG-2149: the mock records no verdict, so the launch reports that —
     // but it must have got as far as spawning the vendor.
     // trace:BUG-2149 | ai:claude
-    if let Err(e) = result {
-        assert!(
-            format!("{e:#}").contains("verifiable verdict"),
-            "the launch must fail only for the missing verdict: {e:#}"
-        );
-    }
+    let e = result.expect_err("the mock records no verdict, so the launch reports that");
+    assert!(
+        e.downcast_ref::<NoReviewVerdict>().is_some(),
+        "the launch must fail only for the missing verdict: {e:#}"
+    );
 
     let argv = read_captured_argv(&capture);
     assert_eq!(

@@ -13004,7 +13004,14 @@ pub(crate) fn run_standalone_reviewer(
         .filter(|s| !s.trim().is_empty());
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
-    let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
+    // BUG-2149: every arm returns the id of the child reviewer grant it
+    // issued, so the collected verdict can be bound to exactly this launch.
+    // trace:BUG-2149 | ai:claude
+    let (status, log_path, child_grant): (
+        std::process::ExitStatus,
+        Option<std::path::PathBuf>,
+        Option<String>,
+    ) = match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
                 let log_path = project_root
@@ -13035,10 +13042,10 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:BUG-342 | ai:codex
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status = session::spawn_claude_headless_resume(
+                let (status, grant) = session::spawn_claude_headless_resume_granted(
                     prompt, &id, &log_path, worktree, &tee_opts, contained, "reviewer",
                 )?;
-                (status, Some(log_path))
+                (status, Some(log_path), Some(grant))
             } else {
                 // BUG-1607: `handle_queue_work` already refuses a
                 // non-Claude `--resume` before minting the launch decision
@@ -13070,9 +13077,20 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
+                let grant = crate::seat_authority::issue_child(
+                    project_root,
+                    "reviewer",
+                    &crate::current_user_id(None),
+                )?;
                 (
-                    session::spawn_claude_resume(&id, permission_mode, contained)?,
+                    session::spawn_claude_resume_with_grant(
+                        &id,
+                        permission_mode,
+                        contained,
+                        Some(&grant.id),
+                    )?,
                     None,
+                    Some(grant.id),
                 )
             }
         }
@@ -13111,7 +13129,7 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status = session::spawn_vendor_headless_with_seat(
+                let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
                     prompt,
@@ -13120,7 +13138,7 @@ pub(crate) fn run_standalone_reviewer(
                     &tee_opts,
                     contained,
                 )?;
-                (status, Some(log_path))
+                (status, Some(log_path), Some(grant))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
                 // BUG-1607: build the launch plan through the ONE shared
@@ -13163,8 +13181,9 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let status = session::spawn_reviewer_launch_plan(&plan, project_root)?;
-                (status, None)
+                let (status, grant) =
+                    session::spawn_reviewer_launch_plan_granted(&plan, project_root)?;
+                (status, None, Some(grant))
             }
         }
     };
@@ -13189,7 +13208,7 @@ pub(crate) fn run_standalone_reviewer(
         pr,
         head_sha: standalone_review_pr_head(project_root, pr),
         launcher_grant,
-        since: launched_at,
+        child_grant,
     };
     let collected = crate::review_verdict::collect_standalone_verdict(
         project_root,
@@ -13264,12 +13283,36 @@ pub(crate) fn standalone_reviewer_outcome(
     let Some(why) = rejection else {
         return Ok(());
     };
-    anyhow::bail!(
-        "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
-         nothing was collected into {}. Treat this as no approval and re-run the review.",
-        verdict_path.display()
-    )
+    Err(anyhow::Error::new(NoReviewVerdict {
+        message: format!(
+            "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
+             nothing was collected into {}. Treat this as no approval and re-run the review.",
+            verdict_path.display()
+        ),
+    }))
 }
+
+/// BUG-2149: exit code of a standalone review that ended without a verified
+/// verdict — distinct from 1 (a crash or any other failure) so a caller can
+/// tell "no approval" from "the launch broke".
+// trace:BUG-2149 | ai:claude
+pub(crate) const NO_REVIEW_VERDICT_EXIT_CODE: i32 = 30;
+
+/// BUG-2149: the error a standalone review with no verified verdict returns;
+/// `exit_code_for_error` maps it to [`NO_REVIEW_VERDICT_EXIT_CODE`].
+// trace:BUG-2149 | ai:claude
+#[derive(Debug)]
+pub(crate) struct NoReviewVerdict {
+    pub(crate) message: String,
+}
+
+impl std::fmt::Display for NoReviewVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for NoReviewVerdict {}
 
 /// BUG-2149: the reviewer's start as the FILESYSTEM sees it — the mtime of a
 /// marker written just before the spawn, so a verdict file's mtime compares
@@ -13313,7 +13356,9 @@ pub(crate) struct StandaloneVerdictChecks<'a> {
     pub(crate) pr: u64,
     pub(crate) head_sha: Option<String>,
     pub(crate) launcher_grant: Option<String>,
-    pub(crate) since: std::time::SystemTime,
+    /// The grant this launch issued to its reviewer child — the ONLY grant a
+    /// collected verdict may be recorded under.
+    pub(crate) child_grant: Option<String>,
 }
 
 impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
@@ -13346,31 +13391,28 @@ impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<
     }
 
     fn check_identity(&self, grant_id: &str) -> Result<(), String> {
-        let Some(launcher) = self.launcher_grant.as_deref() else {
-            return Err("the launcher holds no seat grant to verify the reviewer against".into());
-        };
-        if grant_id == launcher {
+        if self.launcher_grant.as_deref() == Some(grant_id) {
             return Err("it was recorded under the launcher's own grant".to_string());
         }
-        let grant = match crate::seat_authority::grant_check_for(
+        let Some(child) = self.child_grant.as_deref() else {
+            return Err("this launch issued no reviewer grant to verify against".to_string());
+        };
+        if grant_id != child {
+            return Err(format!(
+                "it was recorded under grant {grant_id}, not this launch's reviewer grant"
+            ));
+        }
+        match crate::seat_authority::grant_check_for(
             self.project_root,
             grant_id,
             &crate::current_user_id(None),
         ) {
-            crate::seat_authority::GrantCheck::Valid(g) => g,
-            _ => return Err(format!("its recording grant {grant_id} is not valid")),
-        };
-        if grant.seat != "reviewer" {
-            return Err(format!("it was recorded by a `{}` seat", grant.seat));
+            crate::seat_authority::GrantCheck::Valid(g) if g.seat == "reviewer" => Ok(()),
+            crate::seat_authority::GrantCheck::Valid(g) => {
+                Err(format!("it was recorded by a `{}` seat", g.seat))
+            }
+            _ => Err(format!("its recording grant {grant_id} is not valid")),
         }
-        if grant.parent_grant_id.as_deref() != Some(launcher) {
-            return Err("its recording grant was not issued by this launch".to_string());
-        }
-        let issued: std::time::SystemTime = grant.issued_at.into();
-        if issued < self.since {
-            return Err("its recording grant predates this review".to_string());
-        }
-        Ok(())
     }
 }
 

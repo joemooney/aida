@@ -1243,6 +1243,25 @@ pub fn spawn_vendor_headless_with_seat(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_with_seat_granted(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+    )
+    .map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_vendor_headless_with_seat`], also returning the id of the
+/// child seat grant it issued, so the caller can bind the child's recorded
+/// output to exactly this launch.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_vendor_headless_with_seat_granted(
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, &format!("{} session", seat.as_str()))?;
@@ -1287,7 +1306,7 @@ pub fn spawn_vendor_headless_with_seat(
     cmd.args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
-        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -1307,7 +1326,7 @@ pub fn spawn_vendor_headless_with_seat(
         .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
-    Ok(status)
+    Ok((status, child_grant.id))
 }
 
 /// STORY-612: the worktree root a non-resume headless drain runs in — its
@@ -1439,8 +1458,25 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    spawn_claude_resume_with_grant(id, permission_mode, contained, None)
+}
+
+/// BUG-2149: [`spawn_claude_resume`] with an explicit seat grant for the
+/// child, so a caller that minted the child's grant knows exactly which grant
+/// the resumed session records under. `None` inherits the ambient grant.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_claude_resume_with_grant(
+    id: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+    grant_id: Option<&str>,
+) -> Result<std::process::ExitStatus> {
     let prog = resolve_agent_program("claude");
     let mut cmd = std::process::Command::new(prog);
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant)
+            .env("AIDA_SESSION_ROLE", "reviewer");
+    }
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
@@ -1601,6 +1637,16 @@ pub(crate) fn spawn_reviewer_launch_plan(
     plan: &ReviewerLaunchPlan,
     project_root: &std::path::Path,
 ) -> Result<std::process::ExitStatus> {
+    spawn_reviewer_launch_plan_granted(plan, project_root).map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_reviewer_launch_plan`], also returning the id of the
+/// child reviewer grant it issued.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_reviewer_launch_plan_granted(
+    plan: &ReviewerLaunchPlan,
+    project_root: &std::path::Path,
+) -> Result<(std::process::ExitStatus, String)> {
     let grant = crate::seat_authority::issue_child(
         project_root,
         "reviewer",
@@ -1608,7 +1654,7 @@ pub(crate) fn spawn_reviewer_launch_plan(
     )?;
     let mut cmd = std::process::Command::new(&plan.program);
     cmd.args(&plan.args)
-        .env(crate::seat_authority::GRANT_ENV, grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
     // trace:BUG-2006 | ai:antigravity
     if plan.contained {
@@ -1616,8 +1662,10 @@ pub(crate) fn spawn_reviewer_launch_plan(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.status_retrying_etxtbsy()
-        .with_context(|| format!("failed to spawn {}", plan.program))
+    let status = cmd
+        .status_retrying_etxtbsy()
+        .with_context(|| format!("failed to spawn {}", plan.program))?;
+    Ok((status, grant.id))
 }
 
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
@@ -3606,6 +3654,24 @@ pub fn spawn_claude_headless_resume(
     contained: bool,
     seat: &str,
 ) -> Result<std::process::ExitStatus> {
+    spawn_claude_headless_resume_granted(
+        prompt, session_id, log_path, cwd, tee_opts, contained, seat,
+    )
+    .map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_claude_headless_resume`], also returning the id of the
+/// child seat grant it issued.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_claude_headless_resume_granted(
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    cwd: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    seat: &str,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -3633,7 +3699,7 @@ pub fn spawn_claude_headless_resume(
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat)
-        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
@@ -3649,7 +3715,7 @@ pub fn spawn_claude_headless_resume(
         .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
     tee.stop();
-    Ok(status)
+    Ok((status, child_grant.id))
 }
 
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
