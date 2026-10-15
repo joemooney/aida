@@ -1,0 +1,20 @@
+id: 01a13ce9-f28f-7ad2-9677-c7f27093342c
+spec_id: BUG-2132
+agreed_id: BUG-2132
+title: 'Mailbox accepts junk recipient ids: ~8h ago a sender''s word-split args created mailboxes like ''-include'', ''33492'', ''BUG-52'', ''L4425'', ''SPEC'', each holding ~18 unread (5 urgent) messages'
+description: 'Seen in ''aida mailbox list'' on 2026-10-14 ~17:15. Recipient ids that look like spec IDs, line refs (L4425), bare numbers or flags (''-include'') were accepted as agents, so the messages went nowhere. Likely a shell word-split of an unquoted --to/body in a script or hook. Fix: validate recipients against known agent ids/seats (or require --create-recipient) and reject ids starting with ''-''. Clean-up: archive the junk mailboxes after identifying the sender (read one message to find it).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:15:27.375325728Z
+modified_at: 2026-10-15T00:15:27.375325728Z
+req_type: Bug
+filed_at:
+  code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
