@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:42:53.768494949Z
-modified_at: 2026-10-15T00:42:53.768494949Z
+modified_at: 2026-10-15T04:22:08.077852305Z
 req_type: Bug
 tags:
 - build
 - capture
+comments:
+- id: 01a13dcb-c9cd-70e3-b6de-23d6d34871ea
+  author: joe
+  content: 'Fire mode 2026-10-14: hit again by two fixers — sccache temp dir under /dev/shm kept disappearing during make check-ci-fast; both had to run with RUSTC_WRAPPER= (sccache off). Raising impact: it blocks the pre-push gate for every agent.'
+  created_at: 2026-10-15T04:22:08.077852305Z
+  modified_at: 2026-10-15T04:22:08.077852305Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
