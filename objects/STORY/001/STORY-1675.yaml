@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-15T22:37:13.636026988Z
+modified_at: 2026-10-15T22:50:01.161484698Z
 req_type: Story
 tags:
 - from:aida-host
@@ -83,6 +83,15 @@ comments:
     REQUEST RULING (mail3a05e1d1): either (A) extend this story with an AIDA-owned sync preflight/reconciliation boundary, under the existing store lock, preserving frozen descriptions/stamps and first-result graph transitions for clean/conflicted sync, with failure reported before any clean-success claim and no force/reset recovery; or (B) explicitly bound this slice to canonical CLI/MCP mutations and retain clean/offline sync as a separately tracked follow-up. A is cross-cutting sync behavior beyond the signed shared-mutation sketch, so it needs a signed refinement before implementation. No additional sync code has been added. No author verdict, hold clearance, merge, Completed, or unlock override.
   created_at: 2026-10-15T22:37:13.636026988Z
   modified_at: 2026-10-15T22:37:13.636026988Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a141c2-1649-7473-9878-1272d98681d2
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTATION DRAFT PUBLISHED: https://github.com/joemooney/aida/pull/2684 at df7fe5e5f206a7abd9119309833e9bae765a4d87. Source871667a4b7 plus a three-file web enum compatibility follow-up; hypothesis/core/CLI/generator/bindings source is unchanged between heads. Full default-core1478 passed with3 existing ignored (14 new cases); final CLI/MCP2 passed; actual generator plus standalone tsc and full web-app tsc passed; final fast29/29 passed including formatting. No full-workspace runtime or CI-green claim.
+
+    Author check cap3 consumed. Third checker ran its own14 cases and32 additional cancellation/replacement probes, retaining only the clean text Git sync issue. That issue is now Draft BUG-2162, References this story; this does NOT declare it deferred or out of scope. Scope ruling request remains mail3a05e1d1 and addendum01a141b6-6024-7fc1-80df-f379a899a646. Published report eee4e737 asks for the ruling against the concrete draft. This is NOT REWORK READY. No own verdict, hold clearance, merge or Completed. Worktree/lease/cache retained.
+  created_at: 2026-10-15T22:50:01.161484698Z
+  modified_at: 2026-10-15T22:50:01.161484698Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
