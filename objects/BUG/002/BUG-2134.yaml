@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:42:47.371282267Z
-modified_at: 2026-10-15T02:00:43.616325269Z
+modified_at: 2026-10-15T03:10:43.605715026Z
 req_type: Bug
 tags:
 - capture
+comments:
+- id: 01a13d8a-6995-7f90-9ca4-eaebc8a1323b
+  author: joe
+  content: 'PR #2649 at f001ab70f6. The skip was accidental, and no status filter caused it: Needs Attention has been merge-eligible since BUG-405. The BUG-1454 open-PR guard took the fuzzy gh search hit #2606, which named BUG-1994 only in a review comment. The fix keeps only PRs whose title, body or branch names the spec, makes the hold line name the status the spec keeps and prompt triage for Needs Attention, honours non-completing markers in commit bodies, and corrects the refusal text.'
+  created_at: 2026-10-15T03:10:43.605715026Z
+  modified_at: 2026-10-15T03:10:43.605715026Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a13d49-7588-7201-b3bb-20564fab019f
   author: joe
