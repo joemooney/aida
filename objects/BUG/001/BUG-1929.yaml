@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-15T00:21:11.825433811Z
+modified_at: 2026-10-15T01:20:13.611692819Z
 req_type: Bug
 tags:
 - contained
@@ -278,6 +278,12 @@ comments:
   content: 'ADVISOR (STRICT review r3 at f04d74ecce): security APPROVE, but FUNCTIONAL FAIL in a real sandbox. Under bwrap''s user namespace, root-owned ancestors (/ and /home) show up as the overflow uid 65534, so store_hooks::establish''s ancestor-ownership check fails. host_git_command then swaps in the refusal shim, and contained store writes are refused with a misleading ''store worktree detached''. A control run without the <main>/.git denyWrite fails the same way. RULING: accept the overflow uid (read from /proc/sys/kernel/overflowuid) as an ancestor owner ONLY when (1) the process is in a non-identity user namespace (/proc/self/uid_map is not ''0 0 4294967295''), and (2) the directory meets the same mode rule as root-owned ancestors (no g+w/o+w unless sticky). The user-owned components must still be owned by the user. The refusal must name the failed check rather than ''detached''. Tests: unit tests for the uid_map parsing and the accept/reject matrix; then re-run real_claude_contained_session_claims_and_comments with AIDA_TEST_REAL_CLAUDE=1 against the new head, and it must PASS before merge.'
   created_at: 2026-10-15T00:21:11.825433811Z
   modified_at: 2026-10-15T00:21:11.825433811Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a13d25-3f2b-7103-a4f1-b0816b65bf89
+  author: joe
+  content: 'ADVISOR RULING r4 (#2541 at c290a0b80d): the overflow-uid fix is accepted, and contained claim/comment/queue-done now work. Store COMMITS from inside the sandbox stay DENIED: the <main>/.git denyWrite (8a940438ef) remains. Opening objects/ or refs/ to the sandbox would let a contained session rewrite refs/heads/main or plant objects in the code repo, and per-ref bind limits are not feasible (packed-refs). DESIGN: contained writes land as uncommitted store YAML, and the HOST commits them at the next host-side store operation or at session end, through host_git_command (hooks pinned, fsmonitor off, gitlink/nested-.git refusal). Required: (1) inside the sandbox, the swallowed commit failure becomes an explicit, non-error ''store change queued for host commit'' notice; detect containment, and never silently succeed; (2) confirm the host path that picks up pending store changes already exists (session end / sync / next write). If it does not, implement the minimal one; (3) change real_claude_contained_session_claims_and_comments to assert: writes visible from main; NO commit made from inside; a host-side aida run afterwards commits them with the gitlink/nested-repo refusal intact; (4) the real-claude test passes against the new head before merge.'
+  created_at: 2026-10-15T01:20:13.611692819Z
+  modified_at: 2026-10-15T01:20:13.611692819Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
