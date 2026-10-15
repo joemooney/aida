@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2131",
+  "publishes": [
+    {
+      "at": "2026-10-15T10:05:16.917011898Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T10:04:59.020105151Z",
+      "spec": "BUG-2131",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T10:05:09.215876947Z",
+      "spec": "BUG-2131",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2663
+      }
+    },
+    {
+      "ts": "2026-10-15T10:05:16.899451147Z",
+      "spec": "BUG-2131",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

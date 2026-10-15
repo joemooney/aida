@@ -1,0 +1,19 @@
+{
+  "id": "22e391c0-dfbc-42e1-8ec2-86e8e3c2f3ad",
+  "thread_id": "22e391c0-dfbc-42e1-8ec2-86e8e3c2f3ad",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792058826700,
+  "body": "Existing draft #2664 now at 8ef2b0828199fa06591f351dca11358373ea5e44, stacked on #2660 with normal merge of d1d9b959. Controls/fresh-root composition adapted; current guard hash+env+zero-survivors evidence required, old unsafe controls refuse, locator-based generated stub skips installer. All52 regen tests, all28 fast gates, workspace dev build+worktree smoke, config-trust/home/store-Git guards pass. One fresh-context author self-check: no material findings, own21 tests+bwrap probe; not independent approval. Draft retained until #2660 approval, no review/hold/merge action. PR body current with exact logs. TASK-1732 transport ruling f3943c78 read and recorded on its spec; no R2 code yet.",
+  "subject": "regen lane: draft #2664 adapted to isolated scorer (TASK-1731)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
