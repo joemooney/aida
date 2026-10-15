@@ -13,12 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:23:29.325881889Z
-modified_at: 2026-10-14T15:23:29.325881889Z
+modified_at: 2026-10-15T02:10:03.928150047Z
 req_type: Task
 tags:
 - authority
 - follow-up
 - merge-hold
+comments:
+- id: 01a13d52-e018-7940-824f-0fd2545b7cfa
+  author: joe
+  content: 'Observed 2026-10-14: a fresh APPROVED verdict recorded at the current head did NOT auto-release the Rework hold on #2638 (CHANGES REQUESTED for PR-2638 at 85c6036d67; approvals since then at d3d68c6c13 and c0bad0b005) or on #2541 (BUG-1929). Both needed an operator ''aida merge-hold clear''. Check whether the STORY-1687 release requires the verdict''s seat grant (the advisor ran with an env identity, not a granted seat), or the same key (PR-N vs SPEC), and make the refusal say why it didn''t release.'
+  created_at: 2026-10-15T02:10:03.928150047Z
+  modified_at: 2026-10-15T02:10:03.928150047Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 filed_at:
   code_sha: f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7
   branch: main
