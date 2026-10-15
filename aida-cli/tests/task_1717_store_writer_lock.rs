@@ -2526,3 +2526,75 @@ fn gc_runs_after_the_store_window() {
         }
     }
 }
+
+// ── BUG-2009 / BUG-2003: hook mode and hooks-dir location ─────────────────
+
+/// BUG-2009: `aida init` writes its hooks 0755; a 0644 AIDA hook with
+/// current content is reported by `aida doctor` and by the hook-only
+/// refresh's dry run, then made 0755 (same bytes, no backup) by the refresh.
+// trace:BUG-2009 | ai:claude
+#[test]
+fn non_executable_aida_hook_is_reported_and_made_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let fx = fixture_with(true);
+    let hooks = fx.repo.join(".git/hooks");
+    let mode = |name: &str| {
+        std::fs::metadata(hooks.join(name))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777
+    };
+    for name in ["pre-commit", "commit-msg", "post-commit"] {
+        assert_eq!(mode(name), 0o755, "aida init wrote {name} executable");
+    }
+    let hook = hooks.join("post-commit");
+    let body = std::fs::read_to_string(&hook).unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let doctor = fx.run(&["doctor", "--category", "git-hooks"]);
+    let t = text(&doctor);
+    assert!(t.contains("`post-commit`"), "{t}");
+    assert!(t.contains("not executable"), "{t}");
+
+    let dry = fx.run_ok(&["scaffold", "upgrade", "--only", "git-hooks", "--dry-run"]);
+    let t = text(&dry);
+    assert!(
+        t.contains("Would make the `post-commit` hook") && t.contains("executable (0755)"),
+        "{t}"
+    );
+    assert!(!t.contains("No stale AIDA git hooks"), "{t}");
+    assert_eq!(mode("post-commit"), 0o644, "dry run writes nothing");
+
+    let fixed = fx.run_ok(&["scaffold", "upgrade", "--only", "git-hooks"]);
+    assert!(
+        text(&fixed).contains("Made the `post-commit` hook"),
+        "{}",
+        text(&fixed)
+    );
+    assert_eq!(mode("post-commit"), 0o755);
+    assert_eq!(std::fs::read_to_string(&hook).unwrap(), body);
+    let again = fx.run_ok(&["scaffold", "upgrade", "--only", "git-hooks"]);
+    assert!(
+        text(&again).contains("No stale AIDA git hooks"),
+        "{}",
+        text(&again)
+    );
+    assert!(
+        !text(&again).contains("Note: core.hooksPath"),
+        "{}",
+        text(&again)
+    );
+}
+
+/// BUG-2003: the hook-only refresh says so when core.hooksPath points the
+/// repository's hooks outside its git directory.
+// trace:BUG-2003 | ai:claude
+#[test]
+fn hook_refresh_notes_a_hooks_path_outside_the_git_dir() {
+    let fx = fixture();
+    let out = fx.run_ok(&["scaffold", "upgrade", "--only", "git-hooks", "--dry-run"]);
+    let t = text(&out);
+    assert!(t.contains("Note: core.hooksPath"), "{t}");
+    assert!(t.contains(fx.hooks.to_str().unwrap()), "{t}");
+}

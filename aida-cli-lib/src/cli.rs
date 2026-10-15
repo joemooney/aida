@@ -34,9 +34,11 @@ pub enum OutputFormat {
 // trace:BUG-1977 | ai:claude
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScaffoldUpgradeOnly {
-    /// Only the AIDA-generated git hooks whose body is not this build's
-    /// shipped hook: each is backed up beside itself and replaced. Custom
-    /// hooks and every other file are left alone.
+    /// Only the AIDA git hooks git would not run as this build ships them:
+    /// a stale AIDA-generated body is backed up beside itself and replaced,
+    /// and a hook without an executable bit is set to 0755. Custom hooks
+    /// and every other file are left alone.
+    // trace:BUG-2009 | ai:claude
     GitHooks,
 }
 
@@ -890,8 +892,9 @@ pub enum ScaffoldCommand {
 
         /// Limit the upgrade to one scope. `git-hooks` replaces only the
         /// stale AIDA-generated git hooks a store write refuses (backing
-        /// each up beside itself) and touches no other file.
-        // trace:BUG-1977 | ai:claude
+        /// each up beside itself), makes non-executable AIDA hooks 0755,
+        /// and touches no other file.
+        // trace:BUG-1977 trace:BUG-2009 | ai:claude
         #[clap(long, value_enum, conflicts_with_all = ["force", "prune"])]
         only: Option<ScaffoldUpgradeOnly>,
     },

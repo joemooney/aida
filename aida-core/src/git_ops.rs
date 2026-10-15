@@ -3879,8 +3879,10 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     }
     let dir = hooks_dir(store)?;
     let mut sources_config = false;
-    // BUG-1977: every stale generated hook, reported together.
+    // BUG-1977: every stale generated hook, reported together. BUG-2003:
+    // with every custom hook that runs aida, in the same refusal.
     let mut stale: Vec<(&str, PathBuf)> = Vec::new();
+    let mut custom: Vec<(&str, PathBuf, String)> = Vec::new();
     for name in IN_TRANSACTION_HOOKS {
         let path = dir.join(name);
         let meta = match std::fs::metadata(&path) {
@@ -3918,31 +3920,46 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
             HookKind::Custom => {}
         }
         if let Some(line) = aida_writer_call(&body) {
-            anyhow::bail!(
-                "refusing AIDA store write: the `{name}` hook ({}) runs `aida` (`{line}`) and is not a shipped AIDA hook. \
-                 Git runs it while this command holds the store write lock, so an aida write from it would wait for this \
-                 command until it times out. Nothing was changed. Use the shipped AIDA hook, limit the hook to \
-                 `aida internal ...`, or move the call out of the hook.",
-                path.display()
-            );
+            custom.push((*name, path, line));
         }
     }
+    // trace:BUG-1977 trace:BUG-2003 | ai:claude
+    let mut problems = Vec::new();
+    if !custom.is_empty() {
+        let list = custom
+            .iter()
+            .map(|(name, path, line)| format!("`{name}` ({}) runs `{line}`", path.display()))
+            .collect::<Vec<_>>()
+            .join("; ");
+        problems.push(format!(
+            "{} git hook(s) run `aida` and are not a shipped AIDA hook: {list}. Git runs them while this \
+             command holds the store write lock, so an aida write from one would wait for this command \
+             until it times out. Use the shipped AIDA hook, limit the hook to `aida internal ...`, or move \
+             the call out of the hook.",
+            custom.len()
+        ));
+    }
     if !stale.is_empty() {
-        // trace:BUG-1977 | ai:claude
         let list = stale
             .iter()
             .map(|(name, path)| format!("`{name}` ({})", path.display()))
             .collect::<Vec<_>>()
             .join(", ");
-        anyhow::bail!(
-            "refusing AIDA store write: {} AIDA-generated git hook(s) are not this aida build's shipped hook \
-             (installed by another AIDA version, or edited after install): {list}. Git runs them while this \
-             command holds the store write lock, and their safety there is not established. Nothing was \
-             changed. Run `{}` to back up and replace only these hooks with this build's (no other file is \
-             touched); if you changed one on purpose, remove its two `# AIDA Generated` / `# To customize` \
-             header lines so it is checked as a custom hook.",
+        problems.push(format!(
+            "{} AIDA-generated git hook(s) are not this aida build's shipped hook (installed by another \
+             AIDA version, or edited after install): {list}. Git runs them while this command holds the \
+             store write lock, and their safety there is not established. Run `{}` to back up and replace \
+             only these hooks with this build's (no other file is touched); if you changed one on purpose, \
+             remove its two `# AIDA Generated` / `# To customize` header lines so it is checked as a \
+             custom hook.",
             stale.len(),
             refresh_hooks_command(store)
+        ));
+    }
+    if !problems.is_empty() {
+        anyhow::bail!(
+            "refusing AIDA store write: {} Nothing was changed.",
+            problems.join(" Also: ")
         );
     }
     if sources_config {
@@ -3979,11 +3996,48 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
 fn hooks_dir(repo: &Path) -> Result<PathBuf> {
     let out = git(repo, &["rev-parse", "--git-path", "hooks"])?;
     anyhow::ensure!(out.success, "locate git hooks failed: {}", out.stderr);
-    Ok(if Path::new(&out.stdout).is_absolute() {
-        PathBuf::from(&out.stdout)
+    Ok(absolute_from(repo, &out.stdout))
+}
+
+fn absolute_from(repo: &Path, out: &str) -> PathBuf {
+    if Path::new(out).is_absolute() {
+        PathBuf::from(out)
     } else {
-        repo.join(&out.stdout)
-    })
+        repo.join(out)
+    }
+}
+
+/// The repository's git directory (the common one for a linked worktree,
+/// where its hooks live) when the hooks directory git uses is outside it:
+/// `core.hooksPath` names a shared or tracked directory, so a change there
+/// is not private to this repository's git metadata. `None` when the hooks
+/// directory is inside the git directory, or either cannot be resolved.
+// trace:BUG-2003 | ai:claude
+fn hooks_dir_outside_git_dir(repo: &Path, hooks: &Path) -> Option<PathBuf> {
+    let out = git(repo, &["rev-parse", "--git-common-dir"]).ok()?;
+    if !out.success {
+        return None;
+    }
+    let git_dir = absolute_from(repo, &out.stdout).canonicalize().ok()?;
+    let hooks = hooks.canonicalize().ok()?;
+    (!hooks.starts_with(&git_dir)).then_some(git_dir)
+}
+
+/// Set the mode every AIDA-written git hook gets: 0755, explicitly, not the
+/// mode the file happened to have nor what the umask leaves. Git silently
+/// skips a hook without an executable bit. No-op off Unix.
+// trace:BUG-2009 | ai:claude
+pub fn set_hook_mode(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
 }
 
 /// The hook-only refresh command for the repository at `store`, with the
@@ -4003,15 +4057,20 @@ fn refresh_hooks_command(store: &Path) -> String {
     format!("aida scaffold upgrade --only git-hooks --project-root {quoted}")
 }
 
-/// One stale AIDA-generated git hook replaced by [`refresh_stale_aida_hooks`].
+/// One stale AIDA hook fixed by [`refresh_stale_aida_hooks`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaleHookRefresh {
     /// Git hook name (`pre-commit`, ...).
     pub name: String,
-    /// The hook file that was (or, in a dry run, would be) replaced.
+    /// The hook file that was (or, in a dry run, would be) fixed.
     pub path: PathBuf,
-    /// Where the stale copy was (or would be) saved, beside the hook.
-    pub backup: PathBuf,
+    /// Where the stale copy was (or would be) saved, beside the hook, when
+    /// its content is replaced. `None` when the content already is this
+    /// build's hook and only the mode is fixed.
+    pub backup: Option<PathBuf>,
+    /// The hook had no executable bit, so git was silently skipping it;
+    /// the refresh sets 0755.
+    pub not_executable: bool,
 }
 
 /// A stale AIDA-generated hook the refresh cannot replace: the store-write
@@ -4029,29 +4088,43 @@ pub struct StaleHookManual {
 /// What [`refresh_stale_aida_hooks`] did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StaleHookReport {
-    /// Hooks replaced (or, in a dry run, to be replaced).
+    /// Hooks fixed (or, in a dry run, to be fixed).
     pub refreshed: Vec<StaleHookRefresh>,
-    /// Hooks the store-write check refuses that need manual action.
+    /// Hooks the store-write check refuses, or git skips, that need manual
+    /// action.
     pub manual: Vec<StaleHookManual>,
+    /// The repository's git directory, when the hooks directory examined
+    /// (`core.hooksPath`) is outside it: a shared hooks directory serves
+    /// every repository that uses it, and a tracked one shows the backups
+    /// as untracked files.
+    // trace:BUG-2003 | ai:claude
+    pub hooks_dir_outside_git_dir: Option<(PathBuf, PathBuf)>,
 }
 
-/// Replace every AIDA-generated git hook whose body is not this build's
-/// shipped hook (the ones [`ensure_store_hooks_supported`] refuses) with
-/// this build's hook, as `aida init` writes it. Each stale hook is first
-/// copied beside itself as `<name>.aida-stale-<unix-seconds>[-N]` (never
-/// over an existing file). Shipped hooks, custom hooks (no generated
-/// header) and non-executable hooks are left alone, and no file outside
-/// the hooks directory is touched. A refused hook this cannot replace (a
-/// symlink, which is never written through, or a name AIDA ships no hook
-/// for) is reported in [`StaleHookReport::manual`] instead.
-// trace:BUG-1977 | ai:claude
+/// Fix every AIDA hook git would not run as this build ships it: replace
+/// each AIDA-generated hook whose body is not this build's shipped hook (the
+/// ones [`ensure_store_hooks_supported`] refuses) with this build's hook, as
+/// `aida init` writes it, and give every AIDA hook without an executable
+/// bit mode 0755 (git silently skips it otherwise; BUG-2009). Each replaced
+/// hook is first copied beside itself as
+/// `<name>.aida-stale-<unix-seconds>[-N]` (never over an existing file); a
+/// mode-only fix needs no backup. Custom hooks (no generated header and not
+/// a shipped template) are left alone, and no file outside the hooks
+/// directory is touched. A hook this cannot fix (a symlink, which is never
+/// written through, or a refused name AIDA ships no hook for) is reported
+/// in [`StaleHookReport::manual`] instead.
+// trace:BUG-1977 trace:BUG-2009 | ai:claude
 pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookReport> {
     let dir = hooks_dir(repo)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let mut report = StaleHookReport::default();
+    let mut report = StaleHookReport {
+        hooks_dir_outside_git_dir: hooks_dir_outside_git_dir(repo, &dir)
+            .map(|git_dir| (dir.clone(), git_dir)),
+        ..StaleHookReport::default()
+    };
     for name in IN_TRANSACTION_HOOKS {
         let path = dir.join(name);
         // Same view as the check: metadata follows links.
@@ -4063,14 +4136,18 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
                     .with_context(|| format!("inspecting the `{name}` hook {}", path.display()))
             }
         };
-        if !meta.is_file() || !is_executable(&meta) {
+        if !meta.is_file() {
             continue;
         }
+        let not_executable = !is_executable(&meta);
         let body = crate::read_atomic(&path)
             .with_context(|| format!("reading the `{name}` hook {}", path.display()))?;
-        if classify_hook(name, &body) != HookKind::OtherAidaGenerated {
-            continue;
-        }
+        let content_stale = match classify_hook(name, &body) {
+            HookKind::Custom => continue,
+            HookKind::Shipped if !not_executable => continue,
+            HookKind::Shipped => false,
+            HookKind::OtherAidaGenerated => true,
+        };
         let manual = |reason: String| StaleHookManual {
             name: (*name).to_string(),
             path: path.clone(),
@@ -4078,31 +4155,49 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
         };
         if let Ok(target) = std::fs::read_link(&path) {
             // Never write through a link: its target is someone else's file.
+            let what = match (content_stale, not_executable) {
+                (true, true) => "update that file and make it executable (chmod 755)",
+                (true, false) => "update that file",
+                (false, _) => "make that file executable (chmod 755)",
+            };
             report.manual.push(manual(format!(
-                "it is a symlink to {}; update that file, or replace the link with a copy of this \
+                "it is a symlink to {}; {what}, or replace the link with a copy of this \
                  build's hook",
                 target.display()
             )));
             continue;
         }
-        let Some(template) = SHIPPED_HOOKS
-            .iter()
-            .find(|(hook, _)| hook == name)
-            .and_then(|(_, key)| crate::templates::EMBEDDED_TEMPLATES.get(key))
-        else {
-            report.manual.push(manual(format!(
-                "this aida build ships no `{name}` hook to replace it with; remove the hook, or \
-                 remove its two `# AIDA Generated` / `# To customize` header lines so it is \
-                 checked as a custom hook"
-            )));
-            continue;
+        let template = if content_stale {
+            let found = SHIPPED_HOOKS
+                .iter()
+                .find(|(hook, _)| hook == name)
+                .and_then(|(_, key)| crate::templates::EMBEDDED_TEMPLATES.get(key));
+            match found {
+                Some(template) => Some(*template),
+                // Git skips a non-executable hook, and the store-write
+                // check with it: nothing to fix.
+                None if not_executable => continue,
+                None => {
+                    report.manual.push(manual(format!(
+                        "this aida build ships no `{name}` hook to replace it with; remove the \
+                         hook, or remove its two `# AIDA Generated` / `# To customize` header \
+                         lines so it is checked as a custom hook"
+                    )));
+                    continue;
+                }
+            }
+        } else {
+            None
         };
-        let mut backup = dir.join(format!("{name}.aida-stale-{stamp}"));
-        let mut n = 1;
-        while backup.exists() {
-            backup = dir.join(format!("{name}.aida-stale-{stamp}-{n}"));
-            n += 1;
-        }
+        let backup = template.map(|_| {
+            let mut backup = dir.join(format!("{name}.aida-stale-{stamp}"));
+            let mut n = 1;
+            while backup.exists() {
+                backup = dir.join(format!("{name}.aida-stale-{stamp}-{n}"));
+                n += 1;
+            }
+            backup
+        });
         if !dry_run {
             let done = report
                 .refreshed
@@ -4113,30 +4208,40 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
             let already = if done.is_empty() {
                 String::new()
             } else {
-                format!(" (already replaced: {done})")
+                format!(" (already fixed: {done})")
             };
-            backup_and_replace_hook(&dir, name, &path, &backup, template, &meta, stamp)
-                .with_context(|| format!("refreshing the `{name}` hook{already}"))?;
+            match (template, &backup) {
+                (Some(template), Some(backup)) => {
+                    backup_and_replace_hook(&dir, name, &path, backup, template, stamp)
+                        .with_context(|| format!("refreshing the `{name}` hook{already}"))?
+                }
+                _ => set_hook_mode(&path).with_context(|| {
+                    format!(
+                        "making the `{name}` hook {} executable{already}",
+                        path.display()
+                    )
+                })?,
+            }
         }
         report.refreshed.push(StaleHookRefresh {
             name: (*name).to_string(),
             path,
             backup,
+            not_executable,
         });
     }
     Ok(report)
 }
 
 /// Copy `path` to `backup` (refusing to overwrite one), then write this
-/// build's hook beside it and rename it over `path`: git never sees a
-/// partial hook, and the hook keeps its permissions.
+/// build's hook beside it, flush it, set 0755 and rename it over `path`:
+/// git never sees a partial or non-executable hook.
 fn backup_and_replace_hook(
     dir: &Path,
     name: &str,
     path: &Path,
     backup: &Path,
     template: &str,
-    meta: &std::fs::Metadata,
     stamp: u64,
 ) -> Result<()> {
     let original = std::fs::read(path)?;
@@ -4166,11 +4271,13 @@ fn backup_and_replace_hook(
         .open(&tmp)
         .with_context(|| format!("staging {}", tmp.display()))?;
     // Only a temp file this run created is cleaned up on failure.
+    // trace:BUG-2003 trace:BUG-2009 | ai:claude
     let staged = (|| {
         use std::io::Write;
         file.write_all(fresh.as_bytes())?;
+        file.sync_all()?;
         drop(file);
-        std::fs::set_permissions(&tmp, meta.permissions())?;
+        set_hook_mode(&tmp)?;
         std::fs::rename(&tmp, path)
     })();
     staged
@@ -7461,7 +7568,9 @@ mod tests {
             std::fs::read_to_string(hooks.join("pre-commit")).unwrap(),
             stale_pre
         );
-        assert!(planned.iter().all(|h| !h.backup.exists()));
+        assert!(planned
+            .iter()
+            .all(|h| h.backup.as_ref().is_some_and(|b| !b.exists())));
 
         // (b) the refresh replaces both, keeps backups, touches nothing else.
         let report = refresh_stale_aida_hooks(&repo, false).unwrap();
@@ -7470,7 +7579,10 @@ mod tests {
         let names: Vec<&str> = done.iter().map(|h| h.name.as_str()).collect();
         assert_eq!(names, ["pre-commit", "prepare-commit-msg"]);
         for hook in &done {
-            assert_eq!(hook.backup.parent(), Some(hooks.as_path()));
+            assert_eq!(
+                hook.backup.as_ref().unwrap().parent(),
+                Some(hooks.as_path())
+            );
             let body = std::fs::read_to_string(&hook.path).unwrap();
             assert_eq!(
                 classify_hook(&hook.name, &body),
@@ -7481,9 +7593,12 @@ mod tests {
             let mode = std::fs::metadata(&hook.path).unwrap().permissions().mode();
             assert_eq!(mode & 0o111, 0o111, "{} stays executable", hook.name);
         }
-        assert_eq!(std::fs::read_to_string(&done[0].backup).unwrap(), stale_pre);
         assert_eq!(
-            std::fs::read_to_string(&done[1].backup).unwrap(),
+            std::fs::read_to_string(done[0].backup.as_ref().unwrap()).unwrap(),
+            stale_pre
+        );
+        assert_eq!(
+            std::fs::read_to_string(done[1].backup.as_ref().unwrap()).unwrap(),
             stale_pair
         );
         assert_eq!(
@@ -7516,8 +7631,11 @@ mod tests {
         let again = refresh_stale_aida_hooks(&repo, false).unwrap().refreshed;
         assert_eq!(again.len(), 1);
         assert_ne!(again[0].backup, done[0].backup);
-        assert_eq!(std::fs::read_to_string(&done[0].backup).unwrap(), stale_pre);
-        assert!(std::fs::read_to_string(&again[0].backup)
+        assert_eq!(
+            std::fs::read_to_string(done[0].backup.as_ref().unwrap()).unwrap(),
+            stale_pre
+        );
+        assert!(std::fs::read_to_string(again[0].backup.as_ref().unwrap())
             .unwrap()
             .contains("echo newer"));
 
@@ -7550,6 +7668,252 @@ mod tests {
         assert!(std::fs::read_to_string(&elsewhere)
             .unwrap()
             .ends_with("echo old\n"));
+    }
+
+    /// BUG-2009: an AIDA hook git skips for lack of an executable bit is
+    /// stale. Current content at 0644 gets a mode-only fix (no backup, same
+    /// bytes); a stale body at 0644 is replaced and made 0755; a stale body
+    /// at 0700 comes out 0755 (set explicitly, not copied); a non-executable
+    /// custom hook is left alone; a symlink whose target is not executable
+    /// is manual. The store-write check is unaffected by mode (git never
+    /// runs those hooks, so they cannot re-enter the store lock).
+    // trace:BUG-2009 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2009_non_executable_aida_hooks_are_stale_and_fixed_to_0755() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let with_mode = |path: &Path, body: &str, mode: u32| {
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        let mode_of = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let wrapped = |name: &str, key: &str| {
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                crate::templates::EMBEDDED_TEMPLATES[key],
+            )
+        };
+        // Current content, 0644: what aida-relay and this repo had.
+        let current = wrapped("post-commit", "hooks/aida-post-commit.sh");
+        with_mode(&hooks.join("post-commit"), &current, 0o644);
+        // Stale body, 0644.
+        let stale_msg = format!(
+            "{}\necho old\n",
+            wrapped("commit-msg", "hooks/aida-commit-msg").trim_end()
+        );
+        with_mode(&hooks.join("commit-msg"), &stale_msg, 0o644);
+        // Stale body, executable but 0700.
+        let stale_pre = format!(
+            "{}\necho old\n",
+            wrapped("pre-commit", "hooks/aida-pre-commit.sh").trim_end()
+        );
+        with_mode(&hooks.join("pre-commit"), &stale_pre, 0o700);
+        // Custom, non-executable: the user's business.
+        with_mode(&hooks.join("post-merge"), "#!/bin/sh\necho mine\n", 0o644);
+        // A generated header under a name AIDA ships no hook for, disabled:
+        // git skips it and there is nothing to replace it with.
+        with_mode(
+            &hooks.join("pre-rebase"),
+            &wrapped("pre-rebase", "hooks/aida-pre-commit.sh"),
+            0o644,
+        );
+
+        // Dry run: listed, nothing written.
+        let planned = refresh_stale_aida_hooks(&repo, true).unwrap();
+        assert!(planned.manual.is_empty(), "{planned:?}");
+        let names: Vec<(&str, bool, bool)> = planned
+            .refreshed
+            .iter()
+            .map(|h| (h.name.as_str(), h.backup.is_some(), h.not_executable))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("pre-commit", true, false),
+                ("commit-msg", true, true),
+                ("post-commit", false, true),
+            ]
+        );
+        assert_eq!(mode_of(&hooks.join("post-commit")), 0o644);
+        assert_eq!(mode_of(&hooks.join("commit-msg")), 0o644);
+
+        let report = refresh_stale_aida_hooks(&repo, false).unwrap();
+        assert_eq!(report.refreshed.len(), 3, "{report:?}");
+        for name in ["pre-commit", "commit-msg", "post-commit"] {
+            let path = hooks.join(name);
+            assert_eq!(mode_of(&path), 0o755, "{name}");
+            let body = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(classify_hook(name, &body), HookKind::Shipped, "{name}");
+        }
+        // Mode-only fix: same bytes, no backup.
+        assert_eq!(
+            std::fs::read_to_string(hooks.join("post-commit")).unwrap(),
+            current
+        );
+        let backups: Vec<String> = std::fs::read_dir(&hooks)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".aida-stale-"))
+            .collect();
+        assert_eq!(backups.len(), 2, "{backups:?}");
+        assert!(backups.iter().all(|b| !b.starts_with("post-commit")));
+        // Custom and unshippable non-executable hooks untouched.
+        assert_eq!(mode_of(&hooks.join("post-merge")), 0o644);
+        assert_eq!(mode_of(&hooks.join("pre-rebase")), 0o644);
+        assert_eq!(
+            refresh_stale_aida_hooks(&repo, false).unwrap(),
+            StaleHookReport::default()
+        );
+
+        // A shipped hook symlinked to a non-executable file is manual: the
+        // refresh never chmods through a link.
+        let elsewhere = dir.path().join("post-checkout-target");
+        with_mode(
+            &elsewhere,
+            crate::templates::EMBEDDED_TEMPLATES["hooks/aida-sync-agent-skills.sh"],
+            0o644,
+        );
+        std::os::unix::fs::symlink(&elsewhere, hooks.join("post-checkout")).unwrap();
+        let report = refresh_stale_aida_hooks(&repo, false).unwrap();
+        assert!(report.refreshed.is_empty(), "{report:?}");
+        assert_eq!(report.manual.len(), 1, "{report:?}");
+        assert_eq!(report.manual[0].name, "post-checkout");
+        assert!(report.manual[0].reason.contains("chmod 755"), "{report:?}");
+        assert_eq!(mode_of(&elsewhere), 0o644);
+    }
+
+    /// BUG-2003 (1): a custom hook that runs aida no longer hides the stale
+    /// generated hooks next to it: one refusal names both, and the stale
+    /// hook's refresh command.
+    // trace:BUG-2003 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2003_custom_aida_hook_and_stale_hooks_refused_together() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let executable = |path: &Path, body: &str| {
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let stale = format!(
+            "{}\necho old\n",
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(".git/hooks/pre-commit"),
+                crate::templates::EMBEDDED_TEMPLATES["hooks/aida-pre-commit.sh"],
+            )
+            .trim_end()
+        );
+        executable(&hooks.join("pre-commit"), &stale);
+        executable(
+            &hooks.join("post-commit"),
+            "#!/bin/sh\naida edit TASK-1 --status done\n",
+        );
+        executable(&hooks.join("post-merge"), "#!/bin/sh\naida sync\n");
+        let err = ensure_store_hooks_supported(&repo).unwrap_err().to_string();
+        assert!(err.contains("`pre-commit`"), "{err}");
+        assert!(err.contains("`post-commit`"), "{err}");
+        assert!(err.contains("`post-merge`"), "{err}");
+        assert!(err.contains("aida edit TASK-1"), "{err}");
+        assert!(err.contains("2 git hook(s) run `aida`"), "{err}");
+        assert!(
+            err.contains("aida scaffold upgrade --only git-hooks"),
+            "{err}"
+        );
+        assert_eq!(err.matches("Nothing was changed").count(), 1, "{err}");
+
+        // Only the custom hook left: refused alone, no refresh advice.
+        let fresh = crate::scaffolding::wrap_with_aida_header(
+            Path::new(".git/hooks/pre-commit"),
+            crate::templates::EMBEDDED_TEMPLATES["hooks/aida-pre-commit.sh"],
+        );
+        executable(&hooks.join("pre-commit"), &fresh);
+        std::fs::remove_file(hooks.join("post-merge")).unwrap();
+        let err = ensure_store_hooks_supported(&repo).unwrap_err().to_string();
+        assert!(err.contains("`post-commit`"), "{err}");
+        assert!(!err.contains("`pre-commit`"), "{err}");
+        assert!(!err.contains("scaffold upgrade"), "{err}");
+    }
+
+    /// BUG-2003 (2): the refresh reports when the hooks directory it
+    /// examines (core.hooksPath) is outside the repository's git directory,
+    /// and not for the default hooks directory or a linked worktree's
+    /// (whose hooks live in the common git directory).
+    // trace:BUG-2003 | ai:claude
+    #[test]
+    fn bug_2003_hooks_path_outside_git_dir_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+        std::fs::create_dir_all(repo.join(".git/hooks")).unwrap();
+        assert_eq!(
+            refresh_stale_aida_hooks(&repo, true)
+                .unwrap()
+                .hooks_dir_outside_git_dir,
+            None
+        );
+        let linked = dir.path().join("linked");
+        let out = git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "wt",
+                linked.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        assert!(out.success, "{}", out.stderr);
+        assert_eq!(
+            refresh_stale_aida_hooks(&linked, true)
+                .unwrap()
+                .hooks_dir_outside_git_dir,
+            None
+        );
+
+        let shared = dir.path().join("shared-hooks");
+        std::fs::create_dir_all(&shared).unwrap();
+        let out = git(
+            &repo,
+            &["config", "core.hooksPath", shared.to_str().unwrap()],
+        )
+        .unwrap();
+        assert!(out.success, "{}", out.stderr);
+        let (hooks, git_dir) = refresh_stale_aida_hooks(&repo, true)
+            .unwrap()
+            .hooks_dir_outside_git_dir
+            .expect("outside the git dir");
+        assert_eq!(
+            hooks.canonicalize().unwrap(),
+            shared.canonicalize().unwrap()
+        );
+        assert_eq!(
+            git_dir,
+            repo.join(".git").canonicalize().unwrap(),
+            "the common git dir"
+        );
+        // A tracked in-repo hooks directory is outside .git too.
+        let tracked = repo.join("githooks");
+        std::fs::create_dir_all(&tracked).unwrap();
+        git(&repo, &["config", "core.hooksPath", "githooks"]).unwrap();
+        assert!(refresh_stale_aida_hooks(&repo, true)
+            .unwrap()
+            .hooks_dir_outside_git_dir
+            .is_some());
     }
 
     /// The refusal's command quotes a path that is not a plain shell word.
