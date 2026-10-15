@@ -631,6 +631,7 @@ pub(crate) fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bo
 /// when the origin ref is unknown (never fetched), git is unavailable, or the
 /// range doesn't resolve; `Some(0)` when up-to-date. trace:TASK-475 | ai:claude
 pub(crate) fn orphan_store_behind_count(project_root: &std::path::Path) -> Option<u32> {
+    // raw-git-ok(BUG-1929): read-only `rev-list` in the code checkout, naming refs.
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -1635,6 +1636,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* role */ Some("implementer".to_string()),
                 /* force_claim */ false,
                 /* use_pool */ Some(false),
+                /* self_claim */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()

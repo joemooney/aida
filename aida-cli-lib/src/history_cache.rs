@@ -30,7 +30,7 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::history::{self, CommitMeta, Event, EventKind, HistoryOpts};
@@ -708,8 +708,8 @@ impl LogStream {
         extra: &[String],
         stdin_data: Option<String>,
     ) -> Result<Self> {
-        let mut cmd = Command::new("git");
-        cmd.arg("-C").arg(store);
+        // trace:BUG-1929 | ai:claude
+        let mut cmd = aida_core::git_ops::host_git_command(store);
         for c in git_config {
             cmd.arg("-c").arg(c);
         }
@@ -805,9 +805,7 @@ struct BlobReader {
 
 impl BlobReader {
     fn spawn(store: &Path) -> Result<Self> {
-        let mut child = Command::new("git")
-            .arg("-C")
-            .arg(store)
+        let mut child = aida_core::git_ops::host_git_command(store)
             .args(["cat-file", "--batch"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -953,9 +951,7 @@ fn insert_commit(conn: &Connection, seq: i64, raw: &RawCommit, dec: &DecodedComm
 }
 
 fn git_lines(store: &Path, args: &[&str]) -> Result<Vec<String>> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(store)
+    let out = aida_core::git_ops::host_git_command(store)
         .args(args)
         .output()
         .context("failed to run git")?;

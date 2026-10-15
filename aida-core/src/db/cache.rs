@@ -819,9 +819,51 @@ fn open_connection_inner(path: &Path, lock_info_path: &Path) -> Result<Connectio
         if !journal_mode.eq_ignore_ascii_case("wal") {
             anyhow::bail!("cache did not enter WAL journal mode: {journal_mode}");
         }
+        persist_wal(&conn);
         Ok(conn)
     })
 }
+
+/// BUG-1929: keep `cache.db-wal` / `cache.db-shm` on disk when the last
+/// connection closes (`SQLITE_FCNTL_PERSIST_WAL`). A contained session's
+/// sandbox can bind only files that already exist, and binds an inode, not a
+/// name: SQLite's default delete-on-close would leave the sandbox without the
+/// sidecars (the cache drops to read-only) or, worse, pinned to an old WAL
+/// inode while the host writes a new one. Best effort: a VFS that does not
+/// support the opcode keeps the default behaviour.
+// trace:BUG-1929 | ai:claude
+fn persist_wal(conn: &Connection) {
+    let mut on: std::os::raw::c_int = 1;
+    // SAFETY: `conn.handle()` is the live sqlite3 handle owned by `conn` for
+    // the duration of this call; the opcode reads and writes one c_int.
+    unsafe {
+        rusqlite::ffi::sqlite3_file_control(
+            conn.handle(),
+            b"main\0".as_ptr().cast(),
+            rusqlite::ffi::SQLITE_FCNTL_PERSIST_WAL,
+            (&mut on as *mut std::os::raw::c_int).cast(),
+        );
+    }
+}
+
+/// Open the cache at `path` once (when it exists) so its persistent WAL
+/// sidecars exist before a contained session is launched with file binds on
+/// them. Best effort; a missing or unopenable cache is left alone.
+// trace:BUG-1929 | ai:claude
+pub fn prime_cache_sidecars(path: &Path) {
+    if !path.is_file() {
+        return;
+    }
+    let lock_info_path = cache_lock_info_path(path);
+    if let Ok(conn) = open_connection_inner(path, &lock_info_path) {
+        let _ = conn.close();
+    }
+}
+
+/// The SQLite sidecars a contained session's sandbox binds individually.
+// trace:BUG-1929 | ai:claude
+pub const CACHE_SANDBOX_SIDECARS: [&str; 4] =
+    ["-wal", "-shm", ".refresh.lock", ".refresh-request.lock"];
 
 /// True when the error chain carries a sqlite result code from the CORRUPTION
 /// class — the file exists but isn't a valid sqlite database. `NotADatabase`
@@ -1365,9 +1407,27 @@ fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
     }
     let lock_dir = lock_info_path.parent().unwrap_or_else(|| Path::new("."));
     let db_dir = path.parent().unwrap_or_else(|| Path::new("."));
-    probe_dir(lock_dir)
-        && probe_dir(db_dir)
-        && (!path.exists() || std::fs::OpenOptions::new().append(true).open(path).is_ok())
+    let appendable = |p: &Path| std::fs::OpenOptions::new().append(true).open(p).is_ok();
+    if probe_dir(lock_dir) && probe_dir(db_dir) && (!path.exists() || appendable(path)) {
+        return true;
+    }
+    // BUG-1929: a contained session's sandbox makes the database and its WAL
+    // sidecars writable as individual files while the directory stays
+    // read-only. That is enough for SQLite in WAL mode with persistent
+    // sidecars, so it counts as writable.
+    // SQLite names the sidecars after the symlink-resolved database path, so
+    // check those, not stale ones beside a symlink.
+    // trace:BUG-1929 | ai:claude
+    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let sidecar = |suffix: &str| {
+        let mut name = resolved.as_os_str().to_os_string();
+        name.push(suffix);
+        PathBuf::from(name)
+    };
+    path.exists()
+        && appendable(&resolved)
+        && appendable(&sidecar("-wal"))
+        && appendable(&sidecar("-shm"))
 }
 
 // trace:BUG-1752 | ai:codex
@@ -1910,6 +1970,12 @@ impl Cache {
 
     pub(crate) fn is_read_only(&self) -> bool {
         self.read_only
+    }
+
+    // trace:BUG-1929 | ai:claude
+    #[cfg(test)]
+    pub(crate) fn force_read_only_for_test(&mut self) {
+        self.read_only = true;
     }
 
     pub fn path(&self) -> &Path {
@@ -7941,5 +8007,89 @@ mod tests {
             })
             .unwrap();
         assert_eq!(display(&limited), ["BUG-9", "FAQ-2", "FAQ-10"]);
+    }
+
+    // BUG-1929: the WAL sidecars survive the last connection closing, so a
+    // contained session's sandbox (which binds only existing files, by inode)
+    // keeps a live, shared WAL.
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn cache_connections_persist_wal() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1929", "persist"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        drop(cache);
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
+            assert!(
+                sidecar.exists(),
+                "{} must persist after close",
+                sidecar.display()
+            );
+        }
+        let reopened = Cache::open(&path).unwrap();
+        assert!(!reopened.is_read_only());
+    }
+
+    // BUG-1929: priming a cache that exists leaves its sidecars in place; a
+    // missing cache is not created.
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn prime_cache_sidecars_creates_sidecars_only_for_an_existing_cache() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("missing").join("cache.db");
+        prime_cache_sidecars(&missing);
+        assert!(!missing.exists());
+
+        let path = dir.path().join("cache.db");
+        drop(Cache::open(&path).unwrap());
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+        prime_cache_sidecars(&path);
+        for suffix in ["-wal", "-shm"] {
+            assert!(Path::new(&format!("{}{suffix}", path.display())).exists());
+        }
+    }
+
+    // BUG-1929: a read-only cache DIRECTORY with writable database and WAL
+    // files (what a contained session's sandbox grants) is writable, and a
+    // write through it lands.
+    // trace:BUG-1929 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn writable_cache_files_in_read_only_dir_count_as_writable() {
+        use std::os::unix::fs::PermissionsExt;
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!("skipping: root ignores directory permissions");
+            return;
+        }
+        let dir = tempdir().unwrap();
+        let cache_dir = dir.path().join(".aida");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let path = cache_dir.join("cache.db");
+        drop(Cache::open(&path).unwrap());
+        let dir_mode = std::fs::metadata(&cache_dir).unwrap().permissions().mode();
+        std::fs::set_permissions(
+            &cache_dir,
+            std::fs::Permissions::from_mode(dir_mode & !0o222),
+        )
+        .unwrap();
+        let result = (|| -> Result<()> {
+            let cache = Cache::open(&path)?;
+            anyhow::ensure!(
+                !cache.is_read_only(),
+                "file-level write access must be enough"
+            );
+            let mut store = RequirementsStore::new();
+            store.requirements.push(sample_req("BUG-1929", "lands"));
+            cache.rebuild_from_store(&store, "head")?;
+            Ok(())
+        })();
+        std::fs::set_permissions(&cache_dir, std::fs::Permissions::from_mode(dir_mode)).unwrap();
+        result.unwrap();
     }
 }

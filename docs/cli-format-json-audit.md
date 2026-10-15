@@ -364,6 +364,12 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida session leases` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida session show` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida session handoff` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida session seat` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida session seat claim` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida session seat status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida session seat release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida session seat takeover` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida session seat ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida session manifest` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida session manifest write` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida session manifest mark-started` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -486,6 +492,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida type add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida type remove` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida schema` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida regen` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida regen corpus` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida export` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida import` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida user-guide` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

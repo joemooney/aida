@@ -989,9 +989,7 @@ fn newest_activity_at(
 }
 
 fn newest_store_commit_at(store_path: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let out = aida_core::git_ops::host_git_command(store_path)
         .args(["log", "-1", "--pretty=format:%aI"])
         .output()
         .ok()?;

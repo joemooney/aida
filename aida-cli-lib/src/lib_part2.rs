@@ -500,9 +500,7 @@ pub(crate) fn store_sha_is_ancestor(
     if !store_path.exists() {
         return false;
     }
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    aida_core::git_ops::host_git_command(store_path)
         .args([
             "merge-base",
             "--is-ancestor",
@@ -558,9 +556,7 @@ pub(crate) fn current_store_head_sha(project_root: &std::path::Path) -> Option<S
     if !store_path.exists() {
         return None;
     }
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_path)
+    aida_core::git_ops::host_git_command(&store_path)
         .args(["rev-parse", "HEAD"])
         .output()
         .ok()
@@ -671,6 +667,25 @@ mod story_49_store_drift_tests;
 // trace:STORY-432 | ai:codex
 // ----------------------------------------------------------------------------
 
+/// BUG-2144: refuse an `aida agent new <tool>` launch under `[agents]
+/// contained` when `<tool>` cannot run an AIDA-contained session (only Claude
+/// can) — the same rule the drain applies via
+/// [`session::require_vendor_containment`].
+// trace:BUG-2144 | ai:claude
+pub(crate) fn refuse_uncontainable_agent_tool(agent_type: &str) -> Result<()> {
+    let containable = session::HeadlessVendor::parse(agent_type)
+        .is_some_and(|v| session::containment_applied(v, true));
+    if !containable {
+        anyhow::bail!(
+            "[contained] containment is on ([agents] contained / [contained] enable), but \
+             `{agent_type}` cannot run an AIDA-contained session — refusing to launch it \
+             uncontained. Launch `aida agent new claude`, or turn containment off for this \
+             project."
+        );
+    }
+    Ok(())
+}
+
 pub(crate) fn apply_agent_default_flags(
     config: &mut AgentLaunchConfig,
     project_root: &std::path::Path,
@@ -686,6 +701,18 @@ pub(crate) fn apply_agent_default_flags(
         // precedence over the uniform knob (TASK-557 raw passthrough). A
         // `--no-default-flags` launch skips this block entirely (agents.toml
         // is never read), so it lands on the faithful native default.
+        // BUG-2144 (advisor ruling, #2665 review): containment is monotonic on
+        // the interactive `agent new` path too. `[agents] contained` on a
+        // vendor that cannot run an AIDA-contained session (codex: its own
+        // `--sandbox workspace-write` is not AIDA containment; agy; any other
+        // tool) is REFUSED here — before any side effect, and before the
+        // `--no-exec` preview renders — never downgraded to a native launch.
+        // Per-tool `default_flags` do not bypass this; only an explicit
+        // launch-posture flag on the command line does (operator override).
+        // trace:BUG-2144 | ai:claude
+        if !explicit_permission && load_agents_contained(project_root)? {
+            refuse_uncontainable_agent_tool(config.agent_type)?;
+        }
         if !explicit_permission && per_tool.is_empty() {
             let bypass = load_agents_bypass(project_root)?;
             let contained = load_agents_contained(project_root)?;
@@ -695,6 +722,8 @@ pub(crate) fn apply_agent_default_flags(
                 );
             }
             if contained {
+                // trace:BUG-2131 | ai:claude
+                aida_core::git_ops::ensure_git_supports_contained()?;
                 config
                     .default_args
                     .extend(tool_contained_flags(config.agent_type));

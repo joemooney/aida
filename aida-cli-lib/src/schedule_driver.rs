@@ -1329,11 +1329,258 @@ pub(crate) fn systemd_timer_file_present_for(project_root: &Path) -> bool {
     systemd_timer_file_present(&RealDriverHost, &repo, &tick_cron_marker(project_root))
 }
 
-/// The shared invocation for `project_root` and the running `aida` binary.
+/// The shared invocation for `project_root`, running the stable `aida`
+/// binary ([`real_stable_tick_exe`]), never a raw build that will rot.
+// trace:BUG-2142 | ai:claude
 pub(crate) fn real_tick_invocation(project_root: &Path) -> Result<TickInvocation> {
-    let exe = crate::aida_exe_path();
-    let exe = exe.canonicalize().unwrap_or(exe);
-    tick_invocation(&canonical_repo(project_root), &exe)
+    tick_invocation(&canonical_repo(project_root), &real_stable_tick_exe())
+}
+
+/// The stable homes of the live `aida` binary, as far as they exist: the
+/// PATH link (`~/.local/bin/aida`, honouring `AIDA_DEV_LINK_DIR`) and the
+/// live copy it points at (`~/.local/share/aida/live/aida`, honouring
+/// `AIDA_DEV_LIVE_DIR`). `aida dev build` replaces the binary behind both
+/// paths in place, so a driver that names one keeps running the newest build.
+// trace:BUG-2142 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct LiveAidaPaths {
+    pub link: Option<PathBuf>,
+    pub live: Option<PathBuf>,
+}
+
+impl LiveAidaPaths {
+    /// Read the real host: each candidate only when a file is there.
+    pub(crate) fn probe() -> Self {
+        let present = |dir: Result<PathBuf>| {
+            dir.ok()
+                .map(|d| d.join(format!("aida{}", std::env::consts::EXE_SUFFIX)))
+                .filter(|p| p.is_file())
+        };
+        LiveAidaPaths {
+            link: present(crate::dev_build::default_link_dir()),
+            live: present(crate::dev_build::default_live_dir()),
+        }
+    }
+
+    /// The path a scheduler driver should name: the link, else the live copy.
+    pub(crate) fn preferred(&self) -> Option<&Path> {
+        self.link.as_deref().or(self.live.as_deref())
+    }
+
+    /// Whether `exe` (as written in a driver) names a stable live path.
+    /// TASK-1769: both sides are compared canonically as well as raw, so a
+    /// driver written through a symlinked `$HOME`, or through any other link
+    /// that resolves to the live binary, is not reported as stale. A path that
+    /// cannot be resolved (gone, or never on this host) compares raw only.
+    // trace:TASK-1769 | ai:claude
+    pub(crate) fn names(&self, exe: &Path) -> bool {
+        let canonical = |p: &Path| p.canonicalize().ok();
+        let exe_canonical = canonical(exe);
+        [self.link.as_deref(), self.live.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|p| p == exe || (exe_canonical.is_some() && canonical(p) == exe_canonical))
+    }
+}
+
+/// PURE: the binary a tick driver should run. BUG-2142: the running binary
+/// (`current_exe`) is often a raw `target/` build; baked into a unit it
+/// rots, and the first job a newer `aida` registered then failed every tick.
+/// So the stable live path wins whenever it exists; only a host without one
+/// (no `aida dev build` install) falls back to the running binary.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn stable_tick_exe(running: &Path, live: &LiveAidaPaths) -> PathBuf {
+    live.preferred()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| running.to_path_buf())
+}
+
+/// [`stable_tick_exe`] on the real host.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn real_stable_tick_exe() -> PathBuf {
+    let running = crate::aida_exe_path();
+    let running = running.canonicalize().unwrap_or(running);
+    stable_tick_exe(&running, &LiveAidaPaths::probe())
+}
+
+/// One installed tick driver of this repo and the binary it runs, as
+/// written in the unit's `ExecStart=` or the marked crontab line.
+// trace:BUG-2142 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InstalledTickExe {
+    pub driver: Driver,
+    pub exe: PathBuf,
+}
+
+/// PURE: the binary of an `ExecStart=` line as `build_systemd_units` writes
+/// it (first word, double-quoted with `\\`, `\"` and `$$` escapes).
+// trace:BUG-2142 | ai:claude
+pub(crate) fn exec_start_binary(unit: &str) -> Option<PathBuf> {
+    let value = unit
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("ExecStart="))?
+        .trim_start();
+    let Some(quoted) = value.strip_prefix('"') else {
+        return value.split_whitespace().next().map(PathBuf::from);
+    };
+    let mut out = String::new();
+    let mut chars = quoted.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(PathBuf::from(out)),
+            '\\' => out.push(chars.next()?),
+            '$' => {
+                out.push('$');
+                let mut peek = chars.clone();
+                if peek.next() == Some('$') {
+                    chars.next();
+                }
+            }
+            c => out.push(c),
+        }
+    }
+    None
+}
+
+/// PURE: the binary of a marked crontab line as `render_tick_cron_line`
+/// writes it: the single-quoted word after `AIDA_SCHEDULE_INVOKER=cron`.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn cron_line_binary(line: &str) -> Option<PathBuf> {
+    let rest = line
+        .split_once("AIDA_SCHEDULE_INVOKER=cron ")?
+        .1
+        .trim_start();
+    let Some(mut quoted) = rest.strip_prefix('\'') else {
+        return rest.split_whitespace().next().map(PathBuf::from);
+    };
+    let mut out = String::new();
+    loop {
+        let end = quoted.find('\'')?;
+        out.push_str(&quoted[..end]);
+        quoted = &quoted[end + 1..];
+        // `'\''` is how `shell_quote` writes a literal quote.
+        match quoted.strip_prefix("\\''") {
+            Some(next) => {
+                out.push('\'');
+                quoted = next;
+            }
+            None => return Some(PathBuf::from(out)),
+        }
+    }
+}
+
+/// The binaries this repo's installed drivers run, read through `host`
+/// (the unit file and the crontab; never `systemctl`). A driver that is
+/// absent, unreadable or unparseable is left out.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn installed_tick_exes(
+    host: &mut dyn DriverHost,
+    repo: &str,
+    marker: &str,
+) -> Vec<InstalledTickExe> {
+    let mut out = Vec::new();
+    if host.systemd_supported() {
+        if let Ok(dir) = host.unit_dir() {
+            if let Ok(Some(unit)) = read_optional(&dir.join(unit_names(repo).0)) {
+                if unit_has_marker(&unit, marker) {
+                    if let Some(exe) = exec_start_binary(&unit) {
+                        out.push(InstalledTickExe {
+                            driver: Driver::Systemd,
+                            exe,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(Some(body)) = host.read_crontab() {
+        if let Some(exe) = body
+            .lines()
+            .find(|l| crate::maintenance_schedule::line_has_marker(l, marker))
+            .and_then(cron_line_binary)
+        {
+            out.push(InstalledTickExe {
+                driver: Driver::Cron,
+                exe,
+            });
+        }
+    }
+    out
+}
+
+/// What doctor knows about one installed driver's binary on disk.
+// trace:BUG-2142 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TickExeEvidence {
+    pub installed: InstalledTickExe,
+    /// `None` when the binary is gone.
+    pub modified: Option<std::time::SystemTime>,
+}
+
+/// PURE: flag every installed tick driver that does not run the live
+/// `aida` binary (BUG-2142: a unit pinned to an old `target/release/aida`
+/// rejected a newer job's command and stopped every substrate job for
+/// ~12h). Silent when this host has no live binary to compare against.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn build_stale_tick_binary_findings(
+    installed: &[TickExeEvidence],
+    live: &LiveAidaPaths,
+    live_modified: Option<std::time::SystemTime>,
+) -> Vec<crate::DoctorFinding> {
+    let Some(preferred) = live.preferred() else {
+        return Vec::new();
+    };
+    installed
+        .iter()
+        .filter(|e| !live.names(&e.installed.exe))
+        .map(|e| {
+            let age = match (e.modified, live_modified) {
+                (None, _) => "; that binary no longer exists".to_string(),
+                (Some(m), Some(l)) if m < l => "; it is older than the live binary".to_string(),
+                _ => String::new(),
+            };
+            let (key, action) = match e.installed.driver {
+                Driver::Systemd => ("systemd", "aida schedule install-systemd"),
+                Driver::Cron => ("cron", "aida schedule install-cron"),
+            };
+            crate::DoctorFinding {
+                category: "scheduler-driver".to_string(),
+                id: format!("scheduler-tick-stale-binary:{key}"),
+                summary: format!(
+                    "this repo's {} runs {}, not the live aida binary {}{age} — a job a newer \
+                     aida registers will fail on every tick",
+                    e.installed.driver.label(),
+                    e.installed.exe.display(),
+                    preferred.display(),
+                ),
+                action: format!(
+                    "{action} (from an interactive terminal; it writes {})",
+                    preferred.display()
+                ),
+                safe_heal: false,
+            }
+        })
+        .collect()
+}
+
+/// [`build_stale_tick_binary_findings`] on the real host for `project_root`.
+// trace:BUG-2142 | ai:claude
+pub(crate) fn stale_tick_binary_findings(project_root: &Path) -> Vec<crate::DoctorFinding> {
+    let live = LiveAidaPaths::probe();
+    let Some(preferred) = live.preferred() else {
+        return Vec::new();
+    };
+    let repo = canonical_repo(project_root).display().to_string();
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let evidence: Vec<TickExeEvidence> =
+        installed_tick_exes(&mut RealDriverHost, &repo, &tick_cron_marker(project_root))
+            .into_iter()
+            .map(|installed| TickExeEvidence {
+                modified: modified(&installed.exe),
+                installed,
+            })
+            .collect();
+    build_stale_tick_binary_findings(&evidence, &live, modified(preferred))
 }
 
 // ---------------------------------------------------------------------------
@@ -2149,3 +2396,7 @@ pub(crate) fn with_real_operator<T>(
 #[cfg(test)]
 #[path = "tests/task_1491_schedule_driver_tests.rs"]
 mod task_1491_schedule_driver_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2142_tick_binary_tests.rs"]
+mod bug_2142_tick_binary_tests;
