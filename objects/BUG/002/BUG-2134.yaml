@@ -1,0 +1,22 @@
+id: 01a13d02-f8cb-72d3-8fe4-26dc31fa7fc0
+spec_id: BUG-2134
+agreed_id: BUG-2134
+title: A merged PR whose trailer names a needs-attention spec does not complete it, so the spec stays needs-attention after its work ships
+description: 'Observed 2026-10-14: BUG-1994 stayed needs-attention after #2597 and #2618 (both with the BUG-1994 trailer) merged. The advisor had to go needs-attention -> in-progress -> done by hand. The refusal text says ''a merged PR referencing this spec completes it via aida pull'', but that did not happen. Either completion should apply to needs-attention specs, or pull should surface ''merged work for a needs-attention spec'' for triage.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:42:47.371282267Z
+modified_at: 2026-10-15T00:42:47.371282267Z
+req_type: Bug
+tags:
+- capture
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
