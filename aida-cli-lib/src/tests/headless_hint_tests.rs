@@ -184,9 +184,14 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
         include_str!("../phase_driver_trait.rs")
     )
     .replace("\r\n", "\n");
+    // BUG-2149: the standalone reviewer uses the grant-returning variant of
+    // the same launcher. trace:BUG-2149 | ai:claude
     let count = src
         .matches("session::spawn_claude_headless_resume(")
-        .count();
+        .count()
+        + src
+            .matches("session::spawn_claude_headless_resume_granted(")
+            .count();
     assert!(
         count >= 3,
         "expected implementer resume, standalone reviewer resume, and advisor resume \
