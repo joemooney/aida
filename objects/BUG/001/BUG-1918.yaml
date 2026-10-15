@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-15T05:30:32.185706727Z
+modified_at: 2026-10-15T07:23:28.071007157Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -216,6 +216,12 @@ comments:
     Night-sweep items (ledger append interleave; receipts resolve from per-user home) are to be triaged by the STRICT reviewer of the current head: blocking only if they enable a false approval.
   created_at: 2026-10-15T05:30:32.185706727Z
   modified_at: 2026-10-15T05:30:32.185706727Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e71-cdc7-73c2-ab4b-9cea9cf76af8
+  author: joe
+  content: 'Advisor note for merge time: two-seat-protocol.md still describes BUG-1918 enforcement as ''pending'' — update that line (template master + make sync-templates) in the PR or immediately after it lands.'
+  created_at: 2026-10-15T07:23:28.071007157Z
+  modified_at: 2026-10-15T07:23:28.071007157Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
