@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:46:28.056514199Z
-modified_at: 2026-10-15T00:46:28.056514199Z
+modified_at: 2026-10-15T04:03:11.471761197Z
 req_type: Bug
 tags:
 - capture
 - seats
+comments:
+- id: 01a13dba-71ef-7383-adeb-1b6dd153cc4c
+  author: joe
+  content: 'ADVISOR RULING (fire mode, 2026-10-14): Least privilege. A fresh headless queue-work child must NOT inherit the launcher''s grant. Direction: mint a child grant scoped to the routed role (subject = child, seat = routed role, delegable_seats = empty), so it falls under the BUG-1808 delegation preflight; if the launcher may not delegate that seat, the launch is refused (fail closed) rather than run under the parent grant. AIDA_SESSION_GRANT is always set explicitly for the child (never inherited from env). This is an authority-path change: an implementation SKETCH on this spec (grant minting call site, lifetime/expiry, revocation on child exit, what happens to existing in-flight children) is required and needs advisor signoff BEFORE code. Approved for sketch.'
+  created_at: 2026-10-15T04:03:11.471761197Z
+  modified_at: 2026-10-15T04:03:11.471761197Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
