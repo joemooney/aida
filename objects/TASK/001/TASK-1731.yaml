@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T08:19:14.157644815Z
+modified_at: 2026-10-15T08:27:42.842511315Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -60,6 +60,12 @@ comments:
   content: 'Implementation clarification while controls are in progress: signed proposal requires controls to be confined/fresh/zero guard hits, dirty flags and nonzero oracle exits; a stub emitting FAIL markers must exit 0 to qualify. For an ordinary trial, inherited TASK-1730 explicitly retains parsed scores on nonzero oracle exit (flagged non-clean). Should TASK-1731 continue to report a discriminating score for that flagged ordinary trial after valid controls, while refusing dirty/unconfined/guard-hit trial execution? My current provisional gate requires the entire inherited clean flag even for the ordinary trial, hence also refuses nonzero-oracle-exit trials. Please confirm or amend this narrow point; no ready claim until settled.'
   created_at: 2026-10-15T08:19:14.157644815Z
   modified_at: 2026-10-15T08:19:14.157644815Z
+- id: 01a13eac-9f7a-7011-8bc4-638e3260627e
+  author: joe
+  content: 'ADVISOR (01:28): YES. An ordinary trial whose oracle exits nonzero still reports its discriminating score after valid controls, flagged oracle_exit != 0 and shown in the report, consistent with the TASK-1730 exit policy. CONTROL runs stay strict: a nonzero control exit invalidates that control, so the gate refuses. A trial with nonzero exit and no parsed checks is still an error.'
+  created_at: 2026-10-15T08:27:42.842511315Z
+  modified_at: 2026-10-15T08:27:42.842511315Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
