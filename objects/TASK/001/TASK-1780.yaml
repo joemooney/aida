@@ -1,0 +1,30 @@
+id: 01a13f93-b4ea-7742-9c16-49a02d1586bf
+spec_id: TASK-1780
+agreed_id: TASK-1780
+title: 'Tier local testing by risk: fixer/relay templates stop running the full suite per PR; nightly full-suite job'
+description: |-
+  Operator 2026-10-15 05:39: TASK-1767 (docs-only) spent 23 minutes in cargo test while 6 cores sat at load 30, and every fixer runs a full local suite that CI repeats at the PR head.
+  ## Acceptance
+  - The aida-fire fixer template, the discipline README, the relay lane prompts and the pickup/implement skills state the tiers:
+    - FASTTRACK (docs/templates/one line): make check-ci-fast only, with no cargo.
+    - STANDARD: targeted cargo test -p <crate> <filter> for the touched modules, plus make check-ci-compile.
+    - STRICT or heft>=7: the above plus the area's integration test binaries.
+    - The full workspace suite runs only in CI.
+  - Add a scheduled nightly full-suite job (aida schedule) that files a bug on red.
+  - Add a make target such as 'make test-touched' that derives test filters from the files changed against origin/main.
+  - Edit the template masters, then run make sync-templates.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T12:40:07.146402411Z
+modified_at: 2026-10-15T12:40:07.146402411Z
+req_type: Task
+filed_at:
+  code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 453b2e22c5
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
