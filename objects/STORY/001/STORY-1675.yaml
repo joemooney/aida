@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-12T15:02:25.399470482Z
+modified_at: 2026-10-15T15:14:31.787650476Z
 req_type: Story
 tags:
 - from:aida-host
@@ -55,6 +55,13 @@ comments:
   created_at: 2026-10-12T15:02:23.855769477Z
   modified_at: 2026-10-12T15:02:23.855769477Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a14021-12eb-72c3-8975-4b10fff73ee3
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor operator option B: hypothesis tag on existing spike/decision, Prediction / Refuted if / Experiments body skeleton, append-only comments after a linked completed result establishes the lock. Proposed lock applies through shared canonical mutation seams used by CLI/MCP and preserves the pre-result description; tag removal or later result-status changes must not silently erase pre-registration evidence. Fixtures cover pre-result editing, first linked result, CLI/MCP description refusal, allowed comments and legacy untagged rows. Need signed acceptance identifying the result relationship/marker and whether first-result locking is sticky (recommended) versus current-graph-only. No new type, review/seat/grant work or guessed result detector.
+  created_at: 2026-10-15T15:14:31.787650476Z
+  modified_at: 2026-10-15T15:14:31.787650476Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
   author: joe
