@@ -1,0 +1,19 @@
+{
+  "id": "4b68acc2-e690-47c4-83dc-f479ef4dc662",
+  "thread_id": "4b68acc2-e690-47c4-83dc-f479ef4dc662",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792045330457,
+  "body": "PR #2657 (BUG-2010) has been updated with all requested changes from STRICT round 1 and marked ready for review.\n\nHead SHA: 2c31de5a8ca007a5e30f1bd6285be160072723dc\n\nChanges addressed:\n1. BLOCKING: Added explicit self_claim parameter to session_start. The launcher/spawn paths (agent new, session start --launch, worktree-gc) pass self_claim = false, so leases minted for another agent skip caller attribution and leave caller registry records untouched. Added test_agent_new_does_not_attribute_lease_to_calling_lane verifying caller lane A's current_spec and worktree_path remain untouched and lease X is not attributed to A.\n2. REQUIRED: live_agent_for_lease_or_spec strictly requires the lease's own active_pid_start_time. If missing, the lease is treated as unattributed.\n3. REQUIRED: Removed the 5s started_recently fallback from live_agent_for_lease_or_spec; matching requires active_pid == agent.pid and valid start-time liveness.\n4. REQUIRED: test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_invariants now mints the lease through session_start in an orchestrated context with a published, corroborated drain token, asserting active_pid is None and predecessor checks pass.\n5. OPTIONAL: Logged update_agent_current_spec errors with warning on failure instead of silently dropping; removed unasserted smoke call.\n\nPassed make check-ci-fast locally without warnings or failures.",
+  "subject": "PR #2657 (BUG-2010) ready for review - round 1 addressed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
