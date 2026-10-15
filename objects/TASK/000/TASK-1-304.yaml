@@ -1,0 +1,30 @@
+id: 01a13e3a-940b-7460-96b8-570ea1fa97cd
+spec_id: TASK-1-304
+title: 'Non-blocking: refuse mode now refuses a valid implementer/guest/requester grant…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: refuse mode now refuses a valid implementer/guest/requester grant inside the window (previously silent Baseline); deliberate and documented in docs/cli/06-roles-sessions.md, fail-closed.
+
+  PR: #2604
+  Reviewed sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T06:23:08.811387401Z
+modified_at: 2026-10-15T06:23:08.811387401Z
+req_type: Task
+tags:
+- carried-from:BUG-2011
+- finding-hash:180a1387
+- from-review:PR-2604
+- kind:carried-forward
+filed_at:
+  code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
