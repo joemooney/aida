@@ -1,0 +1,25 @@
+id: 01a13fbe-7f90-7ea2-bc48-908798fd86fa
+spec_id: BUG-2153
+agreed_id: BUG-2153
+title: relay.sh passes the launching seat's AIDA_SESSION_ROLE and AIDA_SESSION_GRANT to its agent sessions
+description: |-
+  2026-10-15 06:16: the advisor launched the codex implementer relay from its own shell. The codex session inherited AIDA_SESSION_ROLE=advisor and the advisor's AIDA_SESSION_GRANT, refused to implement (role conflict) and halted BLOCKED_ON_HUMAN. Worse, an implementer holding an advisor grant is an authority leak, the same class as BUG-2139.
+  ## Acceptance
+  - relay.sh scrubs AIDA_SESSION_GRANT, AIDA_SESSION_PURPOSE and AIDA_SESSION_ROLE from every agent session's environment, and sets the role only from an explicit --role flag or profile key (default: implementer for --agent codex/agy lanes, or none).
+  - With --role advisor (or the parent's grant) requested explicitly, it refuses unless --force-seat is given.
+  - Tests: launching from an env carrying an advisor grant yields a session env without it; --role implementer sets the hint.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T13:26:51.536530051Z
+modified_at: 2026-10-15T13:26:51.536530051Z
+req_type: Bug
+filed_at:
+  code_sha: 3ea566f8401deaca3f5e1bc62c61fff34c0e68c2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 453b2e22c5
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
