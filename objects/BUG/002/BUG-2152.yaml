@@ -8,12 +8,12 @@ description: |-
   - A relay queued for longer than a bound (default 15 min) is admitted even when builds are queued, provided memory and io pressure are fine; or the gate counts only CPU/mem/io, not the cargo queue.
   - The relay status shows the queued duration.
   - A test covers a persistently non-empty build queue that does not starve admission past the bound.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T13:16:38.062630877Z
-modified_at: 2026-10-15T20:26:34.627787541Z
+modified_at: 2026-10-15T20:28:22.005923878Z
 req_type: Bug
 comments:
 - id: 01a14047-2284-7820-a4be-b01ae7da24c0
@@ -28,6 +28,14 @@ comments:
   created_at: 2026-10-15T20:26:34.627787541Z
   modified_at: 2026-10-15T20:26:34.627787541Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+history:
+- id: 01a14140-6675-7e81-b25e-31dfe7633899
+  author: joe
+  timestamp: 2026-10-15T20:28:22.005912971Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 3ea566f8401deaca3f5e1bc62c61fff34c0e68c2
   branch: main
@@ -36,3 +44,6 @@ filed_at:
   aida_build_sha: 453b2e22c5
   vendor: claude
   session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T20:28:22.005891905Z
