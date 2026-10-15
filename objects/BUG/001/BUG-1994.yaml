@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-14T09:27:06.070440749Z
+modified_at: 2026-10-15T00:31:48.753319281Z
 req_type: Bug
 tags:
 - plan:night
@@ -139,6 +139,12 @@ comments:
   created_at: 2026-10-14T09:27:06.070440749Z
   modified_at: 2026-10-14T09:27:06.070440749Z
   session_id: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+- id: 01a13cf8-ec11-7303-975d-c0495f7502b9
+  author: joe
+  content: 'ADVISOR: closing. #2597 (PATH writers isolated; stress moved to weekly-linux.yml path-history-stress per the 09:27 ruling; ci.yml timeout now governed by BUG-611) and #2618 (BUG-2004 token tests under PATH isolation) are merged. The remaining HOME-isolation follow-up is TASK-1748 (#2638). The status was stuck at needs-attention: the merge trailers did not complete it.'
+  created_at: 2026-10-15T00:31:48.753319281Z
+  modified_at: 2026-10-15T00:31:48.753319281Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a13342-acaf-7d53-aad1-e25c86664054
   author: joe
