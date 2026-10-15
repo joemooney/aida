@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-15T20:14:27.199942033Z
+modified_at: 2026-10-15T20:16:09.841815789Z
 req_type: Story
 tags:
 - from:aida-host
@@ -78,6 +78,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Security-class builtin-probe scope is chosen, but Acceptance, versioned row schema, data-argument validation and expected-value normalization are not signed.. No triage reason was given.'
   created_at: 2026-10-15T15:36:06.412817535Z
   modified_at: 2026-10-15T15:36:06.412817535Z
+- id: 01a14135-3a71-7ac3-9ead-ba84f9c49474
+  author: joe
+  content: 'Relay7 started isolated implementation at main 7b51e37f21, lease01a14133a6aa. Following the exact signed 2026-10-15 08:35 built-in schema and STRICT/operator-merge boundary. Plan docs/plans/2026-10-15-story-1673-constraint-probes.md: retain malformed verify data for invalid reporting, validate a closed probe enum before host reads, explicit command only. Canonical/YAML persistence; archived backends refuse unsupported verify writes rather than silently discard. No shell, sync/drain/hook execution, author verdict, hold clearance, merge or Completed.'
+  created_at: 2026-10-15T20:16:09.841815789Z
+  modified_at: 2026-10-15T20:16:09.841815789Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-d4ab-7571-85aa-c70d967345a3
   author: joe
