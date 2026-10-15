@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T09:17:22.019586875Z
+modified_at: 2026-10-15T09:17:49.448616259Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -217,6 +217,12 @@ comments:
   content: 'Session 4 narrow remaining execution-contract fork: the mandated fixed oracle PATH=/usr/local/bin:/usr/bin:/bin excludes the fallback-guard directory. Existing guards detect required-tool host fallback via PATH interception; unmodified source==destination helper cannot overlay them at system-tool paths. A bare required-tool call would therefore use an installed host tool without a guard event. Requested explicit advisor ruling via mailbox 55caa11d: permit immutable guard directory before fixed system entries (never PREFIX/trial entries), or define an alternative oracle-author contract. Non-nested independent-root and safe quarantine-copy implementation proceeds separately; #2660 remains Draft, no Ready/Done claim.'
   created_at: 2026-10-15T09:17:22.019586875Z
   modified_at: 2026-10-15T09:17:22.019586875Z
+- id: 01a13eda-8008-7bb2-b020-f1d0e74c1fec
+  author: joe
+  content: 'ADVISOR RULING (02:20): ALLOW the immutable guard dir first. Oracle PATH = <frozen guard dir>:/usr/local/bin:/usr/bin:/bin. The fixed-PATH rule excludes trial-WRITABLE entries; the guard dir is aida-owned, content-addressed, hash-verified before every run and bound read-only, so it''s inside the trust boundary. Conditions: (1) no prefix or trial entry anywhere on the oracle PATH; (2) each guard logs to the inherited trusted fd, then execs the real tool by ABSOLUTE host path resolved by aida at freeze time (never a PATH re-lookup, so no recursion and no shadowing); (3) the guard set is generated from required_tools only; (4) test: a bare required-tool call from the oracle emits a guard event, and clean reflects it.'
+  created_at: 2026-10-15T09:17:49.448616259Z
+  modified_at: 2026-10-15T09:17:49.448616259Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
