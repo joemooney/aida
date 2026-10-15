@@ -253,6 +253,15 @@ impl OracleBundle {
             "oracle bundle overlaps trial root"
         );
         std::fs::create_dir_all(root.parent().unwrap())?;
+        // Also reject a cache inside an unrelated repository's checkout;
+        // this project's worktree inventory cannot enumerate other projects.
+        for ancestor in root.parent().unwrap().ancestors() {
+            match std::fs::symlink_metadata(ancestor.join(".git")) {
+                Ok(_) => anyhow::bail!("oracle cache must be outside every worktree"),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e).context("cannot verify external oracle cache"),
+            }
+        }
         // Ancestor symlinks must not redirect the supposedly external cache.
         anyhow::ensure!(
             root.parent().unwrap().canonicalize()? == root.parent().unwrap(),
@@ -397,6 +406,16 @@ mod tests {
         std::fs::create_dir(f.trial.path().join("tests")).unwrap();
         let fake = "#!/bin/sh\nprintf 'ok   - held-out behavior\\n'\n";
         std::fs::write(f.trial.path().join("tests/oracle.sh"), fake).unwrap();
+        std::fs::set_permissions(
+            f.trial.path().join("tests/oracle.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        let substituted = Command::new(f.trial.path().join("tests/oracle.sh"))
+            .output()
+            .unwrap();
+        assert!(substituted.status.success());
+        assert!(parse_checks(std::str::from_utf8(&substituted.stdout).unwrap()).unwrap()[0].passed);
         std::fs::write(f.repo.path().join("tests/oracle.sh"), fake).unwrap();
         let bundle = f.bundle(&["tests/"]).unwrap();
         let cfg = RegenConfig {
@@ -521,6 +540,17 @@ mod tests {
         .unwrap_err()
         .to_string()
         .contains("overlaps trial"));
+    }
+
+    #[test]
+    fn cache_inside_unrelated_worktree_is_refused() {
+        let f = Fixture::new("#!/bin/sh\nexit 0\n");
+        super::super::super::git(f.cache.path(), &["init", "-b", "main"]).unwrap();
+        assert!(f
+            .bundle(&["tests"])
+            .unwrap_err()
+            .to_string()
+            .contains("outside every worktree"));
     }
 
     #[test]
