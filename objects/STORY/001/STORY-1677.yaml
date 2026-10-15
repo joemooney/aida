@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-15T15:02:38.433293212Z
+modified_at: 2026-10-15T15:14:20.378269935Z
 req_type: Story
 tags:
 - from:aida-host
@@ -63,6 +63,12 @@ comments:
   content: 'ADVISOR RULING (04:50). (A) SCOPE SPLIT: the harness continuation/re-invocation acceptance (bullet 2) is MOVED OUT of this story into a new child spec, blocked behind launcher work (it is not this lane''s to do). This story ships the completeness check plus incomplete reporting plus split scores. (B) Component mapping: the project regen config (committed, trusted, never regenerated) gains an optional per-required-tool ''checks = [exact check names]''. The restricted score counts only mapped checks whose component passed completeness. Unmapped checks are listed as unmapped. With no mapping at all, the restricted score reports ''unavailable (no check mapping)'', never a fabricated number. (C) Non-trivial rule: the file exists, is executable, has >= min_bytes (default 64, configurable) of non-whitespace content, has no case-insensitive placeholder marker from the fixed list [TODO: implement, NotImplemented, NotImplementedError, unimplemented!, placeholder], and ''--help'' exits 0 with non-empty stdout or stderr, run under the existing score confinement. An incomplete trial is never the headline score (reader from TASK-1734 must skip it).'
   created_at: 2026-10-15T11:44:25.731227069Z
   modified_at: 2026-10-15T11:44:25.731227069Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14020-e65a-7d51-8952-3183268a1e0f
+  author: joe
+  content: Commit dcc46d8298 references this requirement
+  created_at: 2026-10-15T15:14:20.378269935Z
+  modified_at: 2026-10-15T15:14:20.378269935Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-4c9d-7ae1-9d4b-809d06333fa5
