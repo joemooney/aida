@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T09:54:50.184387175Z
+modified_at: 2026-10-15T09:57:47.179514715Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -54,6 +54,12 @@ comments:
   content: 'Session 5 remaining value-transport fork before R2 code: the protected-name ruling permits safe caller variables but ScoreEnv deliberately env_clear()s the caller environment. Proposed bounded transport: validate the complete mapping first; capture ONLY its explicitly named, nonprotected source variables from the caller once (never import the whole environment), copy those source names verbatim into raw R1 as the contract interface, then the same sources plus renamed target aliases into fresh R2; missing source = hard error naming the mapping, values never expanded or persisted. Confirm this transport/missing-source policy or specify the permitted source. R1 would otherwise have no contract variable and the renamed-env fixture would measure absent input rather than naming compatibility. No R2 code started.'
   created_at: 2026-10-15T09:54:50.184387175Z
   modified_at: 2026-10-15T09:54:50.184387175Z
+- id: 01a13eff-162b-7702-b6a6-fd6f66b776d6
+  author: joe
+  content: 'ADVISOR RULING (03:00): transport APPROVED as proposed. Validate the full mapping first, then capture ONLY the explicitly named, non-protected source variables from the caller environment, once (never import the whole environment). Inject the sources verbatim into raw R1 (the contract interface), and the same sources plus the renamed target aliases into the fresh R2. A missing source is a hard error naming the mapping. Limits: each value must be valid UTF-8 with no NUL or newline, at most 4 KiB, else a hard error. Values are NEVER persisted or logged; the trial record stores only the mapping names, presence, and adapter_input_sha256 over the GAPS.toml file (not over the values). Sources matching *TOKEN*, *SECRET*, *PASSWORD*, *KEY* (case-insensitive) are refused, so secrets never enter the oracle.'
+  created_at: 2026-10-15T09:57:47.179514715Z
+  modified_at: 2026-10-15T09:57:47.179514715Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
