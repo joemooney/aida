@@ -26,12 +26,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-15T22:41:47.731555387Z
+modified_at: 2026-10-15T22:42:29.250994123Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
 - needs-advisor
 - regenerability
+relationships:
+- rel_type: References
+  target_id: 01a12c99-676f-72a3-a393-0e2aef882ede
+  created_at: 2026-10-15T22:42:29.250988016Z
+  created_by: joe
 filed_at:
   code_sha: a46af7481e794f7ad299631a78a258f55022c503
   branch: main
