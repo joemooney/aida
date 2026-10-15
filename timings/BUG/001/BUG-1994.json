@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1994",
+  "publishes": [
+    {
+      "at": "2026-10-15T06:23:06.733640168Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T03:16:10.557245881Z",
+      "spec": "BUG-1994",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-13T16:26:46.956926440Z",
+      "spec": "BUG-1994",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-13T16:54:21.706411886Z",
+      "spec": "BUG-1994",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1994",
+        "branch": "bug-1994-work",
+        "first_seen": "2026-10-13T16:54:21.706328167+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T00:31:53.926789975Z",
+      "spec": "BUG-1994",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T00:31:53.927322116Z",
+      "spec": "BUG-1994",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T00:31:55.072678925Z",
+      "spec": "BUG-1994",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-15T06:23:06.715625815Z",
+      "spec": "BUG-1994",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7",
+        "pr": 2618,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

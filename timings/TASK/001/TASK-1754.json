@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1754",
+  "publishes": [
+    {
+      "at": "2026-10-15T06:23:07.399410802Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T18:57:11.176619823Z",
+      "spec": "TASK-1754",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2625
+      }
+    },
+    {
+      "ts": "2026-10-15T06:23:07.380276971Z",
+      "spec": "TASK-1754",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b6d97f11e5d019661d9586660ce04e7acfffaafc",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
