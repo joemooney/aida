@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-14T20:27:05.350888602Z
+modified_at: 2026-10-15T04:01:59.952351586Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -140,6 +140,12 @@ comments:
   created_at: 2026-10-14T20:27:05.350888602Z
   modified_at: 2026-10-14T20:27:05.350888602Z
   session_id: e130049a-3361-4749-9068-b3e8a10decc0
+- id: 01a13db9-5a90-7b30-93b5-286be92055a5
+  author: joe
+  content: 'performance-guard trip 2026-10-14 (advisor recheck 21:0x): aida show over 1000ms on 11.0% of 419 calls/24h, worst 11409ms vs 5000ms ceiling; per-binary worst 71d04b3609 26.7%, 3163cc1b21 21.7%, b6ba496991 21.3%; current lineage 0f8894fa34 2.5%. Real regression, not a budget change — routed here.'
+  created_at: 2026-10-15T04:01:59.952351586Z
+  modified_at: 2026-10-15T04:01:59.952351586Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
