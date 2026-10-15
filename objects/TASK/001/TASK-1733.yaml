@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:51.121660473Z
-modified_at: 2026-10-15T10:52:32.939915534Z
+modified_at: 2026-10-15T11:00:20.938030015Z
 req_type: Task
 tags:
 - needs-docs
@@ -47,6 +47,11 @@ comments:
   content: 'DOCS-LANE FLAG (needs-docs): signed gap-report implementation is in author validation, stacked on TASK-1732. AGENTS.md and OVERVIEW.md describe the behavior. Please add the aida regen report surface to the CLI manual through the single-writer docs lane, alongside corpus/score/controls/adapter documentation from the preceding slices. In this stack rg finds no ### `aida regen` manual entry; completeness against a built binary should be checked before serial shipping. Report contract: latest ordinary discriminating R1 + age/status/clean/flags; committed metadata hash+IDs/categories; matching oracle_sha/bundle/corpus pair diagnostic deltas; missing/invalid metadata no gap data; no quality inference from gap counts. Optional notes are accepted but omitted from durable diagnostic rows for privacy. No docs/ edits made by this lane.'
   created_at: 2026-10-15T10:52:32.939915534Z
   modified_at: 2026-10-15T10:52:32.939915534Z
+- id: 01a13f38-5d4a-79f2-af22-b32899fe3df5
+  author: joe
+  content: 'AUTHOR IMPLEMENTATION HANDOFF (relay Session 7): draft PR #2667 https://github.com/joemooney/aida/pull/2667 at f32626e13b67144f49bcc1ee31e3eb9442923cf5, stacked on #2666/codex/task-1732 at3107a754a36600e5b668d78e2fc993c607152a6c. Added regen report: latest ordinary discriminating R1 + age/status/clean/flags, matching oracle/bundle/corpus category diagnostic deltas, missing/invalid metadata no gap data; no gap-count quality inference. ONE shared strict parser; optional trial-v1 gaps extension v1 retains original input hash+IDs/categories from private pre-execution input; notes omitted, value-bearing IDs refuse before execution without echo. Read-only committed evidence via existing reader, no caller reread. Final-source69 regen tests and28 fast gates passed; workspace dev build+smoke passed without live promotion (build stamp pre-commit); trust/home/store-Git guards1each; fmt/diff clean. Real isolated CLI probe passed metadata, matching deltas, deleted input, missing gaps and refusal without store write. Two fresh-context AUTHOR SELF-CHECK rounds, zero review authority: privacy hardening adopted; final checker independently ran report5/privacy1/schema1 tests, no unresolved issue. Evidence /tmp/aida-session7-{regen-tests-final,fast-final,dev-build,e2e,trust,home,store-git}.log and /tmp/aida-session7-e2e.py; PR body has details. AGENTS/OVERVIEW updated; needs-docs manual follow-up already routed. No cloud green, ready, verdict, clearance, merge or manual completion claim. Advisor owns independent review and serial shipping.'
+  created_at: 2026-10-15T11:00:20.938030015Z
+  modified_at: 2026-10-15T11:00:20.938030015Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
