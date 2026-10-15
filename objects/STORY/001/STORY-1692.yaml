@@ -1,0 +1,60 @@
+id: 01a13d1d-0021-7313-9bc7-187c653a3062
+spec_id: STORY-1692
+agreed_id: STORY-1692
+title: 'Codify fire mode as a launchable workflow: /aida-fire skill + fire-mode discipline doc (advisor-driven parallel fix/review/ship burndown)'
+description: |
+  ## Problem
+  "Fire mode", the advisor-driven parallel burndown, has proven itself. On 2026-10-14 one advisor session merged 13+ PRs in about 2 hours, caught a sandbox feature that passed security review but did not work at all (#2541), and filed about 20 follow-ups instead of looping rework. But the mode exists only as handoff prose ("FIRE MODE (operator mandate, still in force)"). Each new advisor seat has to rediscover the recipe and trust a sentence in a handoff for its authority.
+
+  ## Goal
+  Make fire mode a launchable, repeatable workflow: `/aida-fire` (skill) plus a discipline doc, and later a recorded operator mandate.
+
+  ## The loop (codify this)
+  1. **Entry.** An operator mandate is in force: the scope (which seats and queue), the authority (the advisor merges on green, regardless of author) and an end time. Security, sandbox, authority and architecture changes still get a real review.
+  2. **Survey.** `aida awaiting`, `aida pr list`, the queue and needs-attention specs. Before dispatching, check for an existing branch, PR or claim on each spec (duplicate work: BUG-2138).
+  3. **Fan out** in one message, keeping the total under the workflow-size guideline (~10 agents):
+     - **Fixers**, one per spec or a tight pair. Each works in an isolated worktree, claims the spec, follows the commit format, runs `make check-ci-fast` and `cargo test --no-run` after any main merge (TASK-1763), opens a PR, and never merges. Each fixer has a STOP clause: if the work needs an architecture change, report the design fork instead.
+     - **Reviewers**, separate agents, never the fixer. The tier is scaled to risk under the throughput ruling: FASTTRACK, STANDARD, or STRICT for authority, gates, sandbox and seats. They are read-only, return a verdict with file:line and a failure scenario, and stay under a word cap.
+  4. **Gate.** For each PR:
+     - APPROVE: run `aida review record` at the exact head, then `gh pr ready`, then `aida pr ship` (FAQ-57). Use `--override-stale-check` only when the ci.yml delta is unrelated.
+     - CHANGES: resume the same fixer with a rework brief (rework-brief-craft), or mail the owning seat.
+     - Two-round cap: after round 2, merge with follow-ups or park the PR.
+     - Non-blocking findings are filed as follow-up specs, never as another round.
+  5. **Functional verification for containment and sandbox PRs.** A security APPROVE is not enough. Run the real end-to-end test (e.g. AIDA_TEST_REAL_CLAUDE) before clearing a hold. Lesson: #2541's overflow-uid check refused every contained write.
+  6. **Wait without polling.** Run background CI watchers (one per PR, exit on a terminal state), then ship on notification. After each merge, expect conflicts or compile drift in the remaining PRs. Update the branch, or resume the fixer.
+  7. **Respect spec-level gates.** If a spec says "operator merges" or "needs advisor signoff on sketch", ask, or record the signoff with its reasoning on the spec, before shipping.
+  8. **Capture.** Record rulings and signoffs as spec comments, follow-ups as drafts, and run `/aida-capture` at the end.
+  9. **Exit and handoff.** Write a seat handoff covering: shipped; in flight with the next action; held, and why; next wave; and decisions owed to the operator.
+
+  ## Acceptance
+  - `aida-core/templates/skills/aida-fire.md` exists (synced via `make sync-templates`). It encodes steps 1-9 with copy-paste fixer and reviewer prompt templates (STANDARD, STRICT, security-functional) and the ship recipe.
+  - `aida-core/templates/.aida/discipline/fire-mode.md` exists: the authority model (what the mandate permits and what it never waives), the risk tiers, the two-round cap, and the hold-clear conditions. It is linked from advisor-role.md and README.md.
+  - The skill refuses to start (it prints how to get a mandate) when no mandate is recorded. Interim: the mandate is an operator comment or directive the skill can find. Final: a recorded, expiring operator directive (separate slice).
+  - No internal spec IDs in user-facing prose, beyond references to discipline docs.
+
+  ## Out of scope / follow-ups
+  - The recorded, expiring fire-mode mandate as substrate state (a later slice).
+  - TASK-1764: a sanctioned non-interactive implementer delegation for fixer subagents (today they inherit the advisor grant and hit the code guard).
+  - TASK-1763: a compile-tests gate after a main merge.
+
+  ## See also
+  FAQ-57, BUG-2138, TASK-1763, TASK-1764; the 2026-10-14 08:48 advisor throughput ruling (mailbox f148a27f)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T01:11:13.185429246Z
+modified_at: 2026-10-15T01:11:13.185429246Z
+req_type: Story
+tags:
+- advisor
+- burndown
+- workflow
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
