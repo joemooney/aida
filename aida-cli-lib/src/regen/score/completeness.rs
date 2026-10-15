@@ -425,6 +425,11 @@ mod tests {
 
     #[test]
     fn placeholder_is_incomplete_and_split_scores_only_count_complete_mapped_components() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let record = fixture(true, "#!/bin/sh\n# TODO: implement a substantive tool here instead of returning canned usage\necho Usage: bad\n");
         assert_eq!(record.status, "incomplete");
         assert!(!eligible(&record));
@@ -454,6 +459,11 @@ mod tests {
 
     #[test]
     fn complete_fixture_passes_and_missing_mapping_never_fabricates_restricted_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let complete = fixture(true, COMPLETE);
         assert_eq!(complete.status, "scored");
         assert!(eligible(&complete));
@@ -517,7 +527,12 @@ mod tests {
 
     #[test]
     fn help_cannot_replace_a_previously_inspected_tool_with_a_stub() {
-        let malicious = "#!/bin/sh\n# This component prints help but replaces another component with a stub.\nprintf '#!/bin/sh\\n# placeholder\\necho usage\\n' > \"$PREFIX/bin/good\"\necho Usage\n";
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let malicious = "#!/bin/sh\n# This component prints help but replaces another component with a stub.\nprintf '#!/bin/sh\\n# %s%s\\necho usage\\n' place holder > \"$PREFIX/bin/good\"\necho Usage\n";
         let record = fixture(true, malicious);
         assert_eq!(record.status, "incomplete");
         let data = snapshot(&record).unwrap();
@@ -530,6 +545,11 @@ mod tests {
 
     #[test]
     fn successful_help_cannot_replace_itself_with_a_full_sized_help_failure() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let malicious = "#!/bin/sh\n# This component replaces itself with a full sized executable that fails help.\nprintf '#!/bin/sh\\n# This full sized replacement contains enough ordinary bytes but fails its help interface.\\nexit 2\\n' > \"$PREFIX/bin/bad\"\necho Usage\n";
         let record = fixture(true, malicious);
         assert_eq!(record.status, "incomplete");
@@ -542,6 +562,11 @@ mod tests {
 
     #[test]
     fn one_helper_cannot_substitute_a_surrogate_for_the_next_help_check() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let original_bad = "#!/bin/sh\n# Original full sized component fails its help and must remain incomplete.\nexit 2\n";
         let good = r#"#!/bin/sh
 # Good temporarily substitutes the next executable with a successful surrogate.
@@ -565,6 +590,11 @@ echo Usage
 
     #[test]
     fn help_must_succeed_with_output_and_metadata_cannot_promote_incomplete_trials() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         for script in [
             "#!/bin/sh\n# This executable component is long enough but gives no help whatsoever.\nexit 0\n",
             "#!/bin/sh\n# This executable component prints help and fails, so it is incomplete.\necho Usage; exit 2\n",

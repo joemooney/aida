@@ -801,6 +801,11 @@ mod execution_tests {
     use super::*;
     #[test]
     fn confined_reference_repeats_stub_and_trials_use_independent_roots_and_tools() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok

@@ -499,6 +499,11 @@ mod tests {
 
     #[test]
     fn trusted_fail_cannot_be_shadowed_by_trial_or_dirty_source() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let f = Fixture::new("#!/bin/sh\ntest \"$PWD\" != \"$AIDA_REGEN_TRIAL_ROOT\" || exit 5\nprintf 'FAIL - held-out behavior\\n'\nexit 1\n");
         std::fs::create_dir(f.trial.path().join("tests")).unwrap();
         let fake = "#!/bin/sh\nprintf 'ok   - held-out behavior\\n'\n";

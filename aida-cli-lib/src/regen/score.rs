@@ -931,6 +931,11 @@ mod tests {
 
     #[test]
     fn execution_has_private_env_and_installer_prefix_and_records_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "test \"$HOME\" != /root && test -d \"$HOME\" && test -d \"$XDG_CONFIG_HOME\" && test -d \"$XDG_RUNTIME_DIR\" && test -z \"${CARGO_HOME+x}\" && test -z \"${RUSTUP_HOME+x}\" && \"$AIDA_REGEN_PREFIX/bin/regen-fixture-tool\" && printf 'ok   - private environment\\nFAIL - assertion\\n'"]);
         cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), "printf '#!/bin/sh\\nexit 0\\n' > \"$PREFIX/bin/regen-fixture-tool\"; chmod +x \"$PREFIX/bin/regen-fixture-tool\"".into()]);
@@ -957,6 +962,11 @@ mod tests {
 
     #[test]
     fn guard_fallback_is_reported_and_can_never_be_clean_even_with_passing_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let cfg = config(&[
             "/bin/sh",
@@ -988,6 +998,11 @@ mod tests {
 
     #[test]
     fn oracle_ignores_prefix_shadow_and_uses_fresh_python_home() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1030,6 +1045,11 @@ PYTHON
 
     #[test]
     fn confined_installer_survivor_is_recorded_without_suppressing_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1123,6 +1143,11 @@ os.close(f)
 
     #[test]
     fn bare_required_system_tool_uses_guard_and_forbids_clean() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1145,6 +1170,11 @@ os.close(f)
 
     #[test]
     fn python_default_subprocess_records_guard_hit_without_inherited_fd() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1172,6 +1202,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn exit_policy_distinguishes_installer_failure_oracle_checks_and_scoring_errors() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "printf 'ok   - check\\n'; exit 7"]);
         let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
@@ -1198,6 +1233,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn default_installer_runs_when_present_and_manifest_tampering_refuses() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("install.sh");
         std::fs::write(&path, "#!/bin/sh\nexit 12\n").unwrap();
@@ -1244,6 +1284,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn confined_run_uses_existing_helper_when_available() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1333,6 +1378,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn trial_persistence_keeps_unrelated_staged_edits_and_roundtrips_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let store = TempDir::new().unwrap();
         super::super::git(store.path(), &["init", "-b", "main"]).unwrap();
         super::super::git(store.path(), &["config", "user.email", "test@example.com"]).unwrap();
