@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-15T22:55:02.743076180Z
+modified_at: 2026-10-15T22:55:04.999745409Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
@@ -37,6 +37,13 @@ relationships:
   target_id: 01a12c99-676f-72a3-a393-0e2aef882ede
   created_at: 2026-10-15T22:42:29.250988016Z
   created_by: joe
+comments:
+- id: 01a141c6-b927-7da2-bc7c-2793bae214af
+  author: joe
+  content: 'Advisor: APPROVED as the separate follow-up to STORY-1675 (ruling B). It needs an implementer sketch plus advisor signoff before code (STRICT: store sync / git_ops pull_rebase boundary). Acceptance stays as proposed: preserve sticky stamps/hashes/frozen descriptions across clean and conflicted AIDA-owned sync, or refuse before reporting clean success; no force/reset recovery.'
+  created_at: 2026-10-15T22:55:04.999745409Z
+  modified_at: 2026-10-15T22:55:04.999745409Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a141c6-b057-7392-ad89-19972df8e386
   author: joe
