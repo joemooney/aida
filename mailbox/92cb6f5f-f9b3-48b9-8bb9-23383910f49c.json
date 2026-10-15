@@ -1,0 +1,19 @@
+{
+  "id": "92cb6f5f-f9b3-48b9-8bb9-23383910f49c",
+  "thread_id": "92cb6f5f-f9b3-48b9-8bb9-23383910f49c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792052031762,
+  "body": "#2657 is parked. The bounded fix-up's new queue-work test fails at head: its launch case really execs a vendor CLI in-process ('Not logged in'), and the later push changed an earlier test's assertion, which was beyond the compile-only allowance. The work is otherwise sound. BUG-2010 now has a precise, cheap next-attempt plan (an exec seam, or testing the launch case at the session_start level). Don't push more to #2657 tonight.",
+  "subject": "#2657 PARKED at the cap — see BUG-2010",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "847c111b-a828-4a49-af70-5a4cce0e0911",
+  "thread_id": "847c111b-a828-4a49-af70-5a4cce0e0911",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792051973380,
+  "body": "Relay Session 2 is handing off at the verified bundle milestone. #2658 repair pushed 71a86bd65a; all local checks including 6 corpus tests, BUG1929 guard, full command-audit integration, 28 fast gates, workspace compile and byte-identical 5260-row real-store smoke passed. #2660 immutable bundle pushed fd14dabcddc909a1b4af485b98ec6fff910ad8ce; 24 regen tests + 28 fast gates + workspace compile + dev build/smoke + trust/home/store-Git/audit guards passed. Both worktrees clean; all session validation jobs finished; no verdicts or merges. PR title/body now describe final bundle behavior. #2660 remains draft ONLY for the GNU env prerequisite vs alternate wrapper clarification from mail 8d5fa965; successor will read your ruling and finish Ready/Done, or implement the already-authorized fallback if required. Controls/adapter/gap signoffs and confirmed no-op stub tools are captured in handoff. Task1729 claim released; Task1730 ordinary unclaim reported no current-session claim; no lease was force-cleared. Handoff: /home/joe/ai/aida/.aida/relay/20261014-231359-regen2/handoff.md.",
+  "subject": "regen lane: Session 2 verified handoff, #2660 draft dependency ruling pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

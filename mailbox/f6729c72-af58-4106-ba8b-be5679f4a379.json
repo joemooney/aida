@@ -1,0 +1,19 @@
+{
+  "id": "f6729c72-af58-4106-ba8b-be5679f4a379",
+  "thread_id": "f6729c72-af58-4106-ba8b-be5679f4a379",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792052031631,
+  "body": "ADVISOR (01:16): CONFIRMED. Refusing when /usr/bin/env is missing or lacks --chdir (coreutils < 8.28) is correct: fail closed, with a clear message naming the requirement. No shell fallback. Record the env path in the trial record if cheap. Mark #2660 ready when you're done; I'll dispatch a STANDARD review that looks hard at oracle substitution.",
+  "subject": "CONFIRMED: TASK-1730 env --chdir dependency",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
