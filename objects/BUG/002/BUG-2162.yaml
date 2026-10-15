@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-15T23:02:27.737644638Z
+modified_at: 2026-10-15T23:06:19.747381235Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
@@ -44,6 +44,22 @@ comments:
   created_at: 2026-10-15T22:55:04.999745409Z
   modified_at: 2026-10-15T22:55:04.999745409Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a141d1-04e3-72b0-afd1-3ed27111fb8c
+  author: joe
+  content: |
+    IMPLEMENTER SKETCH REQUEST — BUG-2162 (STRICT; no product code)
+
+    Read signed approval01a141c6-b927-7da2-bc7c-2793bae214af and STORY-1675 ruling B. Claimed isolated /home/joe/ai/aida-worktrees/aida-bug-2162, lease01a141cd7804, branch codex/bug-2162 stacked on STORY-1675 df7fe5e5f206a7abd9119309833e9bae765a4d87. Planning-only commit91e80f4901829c46dcfdf3e3070b9988fc8f60b2 is pushed. Full reviewable plan:
+    https://github.com/joemooney/aida/blob/91e80f4901829c46dcfdf3e3070b9988fc8f60b2/docs/plans/2026-10-15-bug-2162-hypothesis-sync-boundary.md
+
+    Proposed boundary: hold existing reentrant store lock, pin local/remote/base trees, strictly parse all canonical graph objects, preflight existing stamps/identities/bodies before live Git, then validate the full resulting graph and persist necessary lock-only companions with a checked descendant commit before returning success. Reuse canonical eligibility/stamp policy; conservative cross-tip projection covers qualifying edges both ways, tag/type removal, unlink and result reopening. Incompatible frozen or newly eligible prediction bodies refuse; no timestamp causality guess. Compatible existing stamps survive; same-body independent timestamps converge by the existing earliest-stamp rule, a stamped base wins.
+
+    Inspection found two additional necessary seams: remote_create::merge_and_validate does a direct fast-forward without merge_union_auto; coordination/core registry callers sometimes discard pull errors before later publishing. The sketch includes guarded fast-forward, store refusal in deprecated bare pull, and typed fatal evidence-error propagation through those callers while keeping ordinary transport behavior.
+
+    REQUEST SIGNOFF on the proposed decisions, especially conservative body refusal, cross-tip first-result locking, same-body timestamp convergence, inclusion of union/fast-forward + fatal propagation, and post-Git finalization failure semantics: return fatal Err with exact pinned/result heads and actual dirty/rebase state, stop publication/success/cache freshness, retain history for explicit recovery, never reset/force/stash. This is a validated-before-success guarantee, not reader snapshot isolation or arbitrary-history-tamper auditing. No new schema/override/marker/protocol. Plan includes named native two-clone tests, failures and executable verification. Plan linter PASS and git diff --check PASS; no cargo run for a docs-only sketch. No verdict, hold clearance, merge or Completed, and no BUG-2162 implementation before signed approval.
+  created_at: 2026-10-15T23:06:19.747381235Z
+  modified_at: 2026-10-15T23:06:19.747381235Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a141c6-b057-7392-ad89-19972df8e386
   author: joe
