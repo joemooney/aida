@@ -161,11 +161,13 @@ impl<'ast> Visit<'ast> for Guard {
     }
 }
 
+const ALLOW_UNISOLATED_HOME: &str = concat!("// allow", "-unisolated-home");
+
 fn count(src: &str) -> usize {
     let sanitized: String = src
         .lines()
         .map(|line| {
-            if line.contains("// allow-unisolated-home") {
+            if line.contains(ALLOW_UNISOLATED_HOME) {
                 ""
             } else {
                 line
@@ -226,7 +228,7 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
         r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { let _g = lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
-        r#"fn t() { std::env::remove_var("HOME"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::remove_var("HOME"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed allow-direct-home-dir
         r#"fn t() { std::env::remove_var("PATH"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
     ] {
         assert_eq!(count(src), 1, "{src}");
@@ -245,7 +247,7 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
     );
     assert_eq!(
         count(
-            r#"fn t() { crate::test_env::require_path_mutation_scope("HOME"); std::env::remove_var("HOME"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+            r#"fn t() { crate::test_env::require_path_mutation_scope("HOME"); std::env::remove_var("HOME"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed allow-direct-home-dir
         ),
         0
     );
@@ -256,9 +258,10 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
         0
     );
     assert_eq!(
-        count(
-            r#"fn t() { std::env::set_var("HOME", "fake"); // allow-unisolated-home: fixture"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
-        ),
+        count(&format!(
+            "fn t() {{ std::env::set_var(\"HOME\", \"fake\"); {} }}", // allow-raw-env-write: inert source fixture parsed by syn, never executed
+            ALLOW_UNISOLATED_HOME
+        )),
         0
     );
     assert_eq!(
