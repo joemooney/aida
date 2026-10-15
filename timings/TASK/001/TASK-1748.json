@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1748",
+  "publishes": [
+    {
+      "at": "2026-10-15T03:53:05.292683707Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T00:15:13.458424881Z",
+      "spec": "TASK-1748",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T03:52:14.114015117Z",
+      "spec": "TASK-1748",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T03:52:47.343154298Z",
+      "spec": "TASK-1748",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T03:52:57.785229149Z",
+      "spec": "TASK-1748",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2638
+      }
+    },
+    {
+      "ts": "2026-10-15T03:53:05.278234297Z",
+      "spec": "TASK-1748",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "70f9a8eb07ebb9ecc72c55f7187377db99707111",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
