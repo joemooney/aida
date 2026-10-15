@@ -1,0 +1,32 @@
+id: 01a1401c-8094-78f0-a33c-2f7182346f70
+spec_id: TASK-0446
+title: Map regeneration oracle check identities to contract clauses for consensus amendment drafts
+description: |-
+  Follow-up explicitly required by the 2026-10-15 STORY-1679 advisor signoff. STORY-1679 reports a clear mapping-missing diagnostic and files unparented draft amendments; no check-to-clause adapter exists in its scope. Design a trusted, versioned mapping from exact oracle check names to contract spec/clause identities, validate references against the selected corpus/store, and use it to link consensus gaps and parent amendment drafts when a mapping is available. Preserve explicit missing/invalid mapping diagnostics, exact-check draft dedup identity, report-only default, and opt-in --file semantics.
+
+  ## Acceptance
+
+  - Specify and obtain advisor signoff on the mapping schema and trust boundary before coding.
+  - Valid mappings link a reported consensus gap to the actual contract clause/spec and parent its amendment draft accordingly.
+  - Missing, invalid and stale references remain explicit without invented links.
+  - Fixtures cover valid, missing and stale mapping, and repeat filing remains idempotent.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T15:09:32.180659596Z
+modified_at: 2026-10-15T15:09:32.180659596Z
+req_type: Task
+tags:
+- from-implementer:STORY-1679
+- regenerability
+relationships:
+- rel_type: Child
+  target_id: 01a12d8f-854b-7be0-955a-33b56763ff52
+  created_at: 2026-10-15T15:09:32.180981087Z
+filed_at:
+  code_sha: dcc46d8298a7da6c5c8b3e899b8878db6fa20767
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
