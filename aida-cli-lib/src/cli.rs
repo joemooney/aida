@@ -6416,7 +6416,10 @@ pub enum QueueCommand {
         permission_mode: Option<String>,
         /// Launch Claude in contained mode: strict Bash sandboxing, no
         /// unsandboxed fallback, destructive-command deny rules, and
-        /// project-relative edit auto-allow only.
+        /// project-relative edit auto-allow only. With --auto-complete it
+        /// contains the whole drain and every agent child it spawns. A
+        /// vendor that cannot run contained (codex, agy) is refused.
+        // trace:BUG-2144 BUG-2145 | ai:claude
         #[clap(long)]
         sandbox: bool,
         /// Run the full setup (worktree, lease, manifest) but skip the
@@ -12816,6 +12819,11 @@ pub enum Command {
         json: bool,
     },
 
+    /// Freeze requirements into a deterministic regeneration corpus
+    // trace:TASK-1729 | ai:codex
+    #[clap(subcommand)]
+    Regen(RegenCommand),
+
     /// Export requirements to different formats
     #[clap(hide = true)]
     Export {
@@ -16637,4 +16645,18 @@ mod tests {
             other => panic!("expected review stranded command, got {other:?}"),
         }
     }
+}
+
+/// Versioned regeneration artifacts.
+// trace:TASK-1729 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum RegenCommand {
+    /// Export committed store content as corpus.json and manifest.json
+    Corpus {
+        /// New or empty output directory
+        dir: PathBuf,
+        /// Export committed content despite local store changes (records dirty: true)
+        #[clap(long)]
+        allow_dirty: bool,
+    },
 }

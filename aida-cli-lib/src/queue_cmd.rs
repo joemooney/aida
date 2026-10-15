@@ -6043,6 +6043,13 @@ pub(crate) fn handle_queue_command(
             // exit code), so the `queue work` logic below is reached only
             // when `--auto-complete` is absent. trace:STORY-246 | ai:claude
             if auto_complete.is_some() {
+                // BUG-2145: `--sandbox` used to be read only on the plain
+                // queue-work path below, so `--auto-complete --sandbox` ran
+                // the whole drain uncontained. Honour it here: AIDA_CONTAINED
+                // is what `session::drain_contained` (RealPhaseDriver's
+                // contained flag) and every phase child read.
+                // trace:BUG-2145 | ai:claude
+                honour_auto_complete_sandbox(*sandbox, permission_mode.as_deref())?;
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
@@ -10785,6 +10792,28 @@ pub(crate) fn preflight_queue_work_branch(
     Ok(())
 }
 
+/// BUG-2145: `aida queue work --auto-complete --sandbox` contains the whole
+/// drain. `--sandbox` exports `AIDA_CONTAINED=1` before the drain starts, so
+/// the drain's own contained flag ([`session::drain_contained`]) and every
+/// phase child it spawns resolve contained. Without `--sandbox` this is a
+/// no-op: the env / `[agents] contained` knob still apply as before.
+// trace:BUG-2145 | ai:claude
+pub(crate) fn honour_auto_complete_sandbox(
+    sandbox: bool,
+    permission_mode: Option<&str>,
+) -> Result<()> {
+    if !sandbox {
+        return Ok(());
+    }
+    if permission_mode.is_some_and(|m| !m.is_empty()) {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    apply_queue_work_contained_env(true);
+    Ok(())
+}
+
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn apply_queue_work_contained_env(contained: bool) {
     if contained {
@@ -11044,6 +11073,27 @@ pub(crate) fn handle_queue_work(
     let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
         session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
     });
+    // BUG-2146: a malformed agents.toml is a refusal naming the file, not a
+    // silent "uncontained". trace:BUG-2146 | ai:claude
+    let contained_knob = project_root_for_config
+        .as_deref()
+        .map(load_agents_contained)
+        .transpose()?
+        .unwrap_or(false);
+    // trace:BUG-2146 | ai:claude
+    let contained_env = session::aida_contained_env()?;
+    // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
+    // on a vendor that cannot apply it is refused HERE — before the queue_add
+    // row, the calibration/effort tags, any lease or worktree — rather than
+    // silently running uncontained. `contained` below uses the same inputs.
+    // trace:BUG-2144 | ai:claude
+    if !no_launch && !list_sessions {
+        session::require_vendor_containment(
+            launch_vendor,
+            !plan_only && (sandbox || contained_env || contained_knob),
+            "queue-work session",
+        )?;
+    }
     let model_root = project_root_for_config
         .clone()
         .or_else(|| std::path::Path::new(".").canonicalize().ok());
@@ -11214,13 +11264,6 @@ pub(crate) fn handle_queue_work(
         .as_deref()
         .map(|r| load_agents_bypass(r).unwrap_or(false))
         .unwrap_or(false);
-    let contained_knob = project_root_for_config
-        .as_deref()
-        .map(|r| load_agents_contained(r).unwrap_or(false))
-        .unwrap_or(false);
-    let contained_env = std::env::var("AIDA_CONTAINED")
-        .ok()
-        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
     if sandbox && permission_mode.is_some() {
         anyhow::bail!(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"

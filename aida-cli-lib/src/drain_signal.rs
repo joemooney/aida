@@ -214,7 +214,10 @@ pub(crate) fn in_flight_vendor_children(project_root: &Path, drain_pid: u32) -> 
         let Some(start) = table.get("active_pid_start_time").and_then(|v| v.as_str()) else {
             continue;
         };
-        if !aida_core::liveness::process_identity_is_alive(pid, Some(start)) {
+        // STRICT: a record that cannot be compared must not be signalled
+        // (TASK-1768); the lenient lock-reclaim probe would read it alive.
+        // trace:TASK-1768 | ai:claude
+        if !aida_core::liveness::process_identity_matches_strict(pid, start) {
             continue;
         }
         let lease_id = table
@@ -248,9 +251,9 @@ pub(crate) fn forward_term_to_children(children: &[VendorChild]) -> Vec<u32> {
             // `None` here would accept a pid recycled between collection and
             // this line and SIGTERM an unrelated process of the operator's.
             if child.pid <= 1
-                || !aida_core::liveness::process_identity_is_alive(
+                || !aida_core::liveness::process_identity_matches_strict(
                     child.pid,
-                    Some(&child.start_time),
+                    &child.start_time,
                 )
             {
                 return None;
