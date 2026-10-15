@@ -60,9 +60,12 @@ mandate.
   approval at head does not release a hold on its own. When the release
   condition is met, the advisor asks the operator to run
   `! aida merge-hold clear N`.
-- **Spec-level gates.** "Operator merges" or "needs advisor signoff on sketch"
-  on a spec is honoured: ask, or record the signoff with its reasoning on the
-  spec before shipping.
+- **Spec-level gates.** An "operator merges" gate (or a supervised hold)
+  always goes to the operator: the advisor asks, and ships only after the
+  operator explicitly authorizes that merge in-session, recording the
+  authorization on the spec. The advisor's own comment never satisfies it.
+  Only a "needs advisor signoff" gate (e.g. on a sketch) may be recorded by
+  the advisor, with its reasoning, on the spec before shipping.
 - **Independent review.** A fixer never reviews its own PR.
 
 ## Risk tiers

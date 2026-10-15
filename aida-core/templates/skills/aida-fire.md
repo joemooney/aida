@@ -124,7 +124,8 @@ Each fixer claims its spec (`aida claim <SPEC-ID>`) so a later survey sees it.
 You are a fixer in <repo path>. First read CLAUDE.md and
 .aida/discipline/README.md. Export AIDA_AGENT_TYPE=<tool> AIDA_AGENT_NAME=fixer-<id>.
 Rules:
-- Work in an isolated sibling worktree off origin/main, never the main checkout.
+- Work in an isolated sibling worktree, never the main checkout: create it
+  with `aida worktree add <SPEC-ID>` (off origin/main; prints the path).
 - Claim the spec first (`aida claim <SPEC-ID>`). If it is already claimed or
   has a branch or PR, STOP and report.
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
@@ -258,14 +259,25 @@ then resume serial shipping from step 5.
 
 ### 7. Respect spec-level gates
 
-The mandate does not override a gate written on the spec. If a spec says
-"operator merges", "needs advisor signoff on sketch", or carries a supervised
-hold, either ask the operator, or record the signoff and its reasoning as a
-spec comment **before** shipping:
+The mandate does not override a gate written on the spec. The two kinds of
+gate are handled differently:
 
-```bash
-aida comment add <SPEC-ID> "Advisor signoff (fire mode): <decision> because <reasoning>."
-```
+- **"Operator merges"** (or a supervised hold): this gate **always** goes to
+  the operator. Ask. Ship only after the operator explicitly authorizes that
+  merge in this session, then record the authorization on the spec before
+  shipping. Your own comment never satisfies this gate.
+
+  ```bash
+  aida comment add <SPEC-ID> "Operator authorized merge of #N in-session (<time>): \"<operator words>\"."
+  ```
+
+- **"Needs advisor signoff"** (e.g. on a sketch): only this kind of gate
+  may be recorded by the advisor. Record the signoff and its reasoning on the
+  spec **before** shipping:
+
+  ```bash
+  aida comment add <SPEC-ID> "Advisor signoff (fire mode): <decision> because <reasoning>."
+  ```
 
 Architecture changes still need a sketch and signoff. A fixer that hits its
 STOP clause hands you a design fork. Take it to the operator, do not rule
