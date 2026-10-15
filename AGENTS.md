@@ -1,3 +1,9 @@
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+<!-- trace:TASK-1734 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.

@@ -17,6 +17,9 @@ use uuid::Uuid;
 use crate::cli::RegenCommand;
 // trace:TASK-1730 | ai:codex
 mod score;
+// trace:TASK-1734 | ai:codex
+pub(crate) use score::report::read_summary_for_project;
+pub use score::report::RegenerationSummary;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct CorpusManifest {

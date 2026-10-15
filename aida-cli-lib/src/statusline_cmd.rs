@@ -441,6 +441,10 @@ pub(crate) fn handle_statusline_command(
     if let Some(marker) = presence::statusline_solo_marker(chrono::Utc::now()) {
         parts.push(marker.magenta().bold().to_string());
     }
+    // trace:TASK-1734 | ai:codex
+    if let Some(segment) = regeneration_statusline_segment(&project_root, chrono::Utc::now()) {
+        parts.push(segment);
+    }
     let aida_segment = parts.join(&separator);
     // trace:TASK-1479 | ai:claude — opt-in client-live merge. Only reads
     // stdin when a client was named; plain `aida statusline` (client: None)
@@ -515,6 +519,14 @@ pub(crate) fn role_display_segment_text(
             (format!("{text} (default)"), mismatch)
         }
     }
+}
+
+// trace:TASK-1734 | ai:codex
+pub(crate) fn regeneration_statusline_segment(
+    project: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    crate::regen::read_summary_for_project(project, now).map(|score| score.text())
 }
 
 pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {

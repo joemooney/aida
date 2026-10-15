@@ -516,6 +516,12 @@ no values, shell expressions, executable mappings or argument mappings in the
 file. Gap rows share this parser: IDs are unique `[a-z0-9-]{1,64}`, categories
 are `interface|missing|behavior|other`, and notes are optional plain text.
 
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+<!-- trace:TASK-1734 | ai:codex -->
+
 `aida regen report` reads committed ordinary trial records from a pinned store
 commit, without a cache rebuild or rereading the caller's trial directory.
 The headline is the latest attempt's discriminating **R1 oracle pass rate** and
