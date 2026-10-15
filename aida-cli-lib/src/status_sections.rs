@@ -1373,6 +1373,11 @@ mod bug_1607_reviewer_vendor_tests;
 #[path = "tests/bug_1686_agy_headless_argv_tests.rs"]
 mod bug_1686_agy_headless_argv_tests;
 
+// trace:BUG-2133 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2133_contained_drain_children_tests.rs"]
+mod bug_2133_contained_drain_children_tests;
+
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
 mod bug_1609_gitlab_reviewer_preflight_tests;
