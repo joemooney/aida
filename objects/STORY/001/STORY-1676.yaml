@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-15T16:18:49.893893283Z
+modified_at: 2026-10-15T22:01:32.950036753Z
 req_type: Story
 tags:
 - from:aida-host
@@ -100,6 +100,12 @@ comments:
   content: 'Signed implementation published as DRAFT PR #2677 at84d55a95aa0b2f2422a151b39621674c85dfb0c9, stacked on #2667/codex/task-1733 at0f68c8ac6ef3be8ca3e7d18533ba654ac3b9ae6e. All81 final-source regen tests and all29 check-ci-fast gates passed (Session3 logs /tmp/regen-relay3-1676-tests.log and -fast.log). PR maps signed acceptance to actual named regressions and documents author self-check limits. Missing/failing installer, strict oracle sidecar+unknown diagnostics, explicit family audit and legacy shared-reader warning derivation included. No author review verdict, hold clear, merge, Completed status or CLI activation. Ready for separate advisor-routed review.'
   created_at: 2026-10-15T16:18:49.893893283Z
   modified_at: 2026-10-15T16:18:49.893893283Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14195-b616-7013-861c-3d1e755a14b7
+  author: ai:codex:joe
+  content: 'Authorized downstream restack published to existing draft PR #2677: old 84d55a95aa0b2f2422a151b39621674c85dfb0c9 -> new 55a85f7771c33f4b3de3f898c5fbe92d78886513, base 55bca00b1162a4cedeaa1e6c96e03d5563931880. All three owned range-diff entries are unchanged (=), matching the advisor’s explicit approval-carry condition; no author verdict recorded. At the exact new head all 29 fast gates and the full-workspace compile-only gate passed. No new runtime-test or CI pass claim. Full expected-old SHA force-with-lease push succeeded and actual remote/OPEN PR head/base/body were read back. Used a separate detached worktree because the original checkout had an existing index.lock; original lock, local branch and lease untouched. Complete proof mail follows; no hold clearance, merge or Completed.'
+  created_at: 2026-10-15T22:01:32.950036753Z
+  modified_at: 2026-10-15T22:01:32.950036753Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-47da-7740-93a8-14448b62f594
