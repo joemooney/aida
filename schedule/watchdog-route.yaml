@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'trips = mail-poll-setup + repeated-prompt on advisor session 20233459: the operator-requested 10-min sweep (23:47). Session is past its context ceiling; handoff written at 00:50 (.aida/handoff/advisor/latest.md). Restart needs the operator (asleep) — exiting now would kill the in-session ship script and fixers. Operator restarts the seat in the morning.'
+due_since: 2026-10-15T11:51:33.142535047Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-10-15T11:49:30.195098831Z
+  job: watchdog
+  error: 'exit 1: '
