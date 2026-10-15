@@ -1,0 +1,19 @@
+{
+  "id": "1bc1f798-2d50-4072-9011-9058edf42c9b",
+  "thread_id": "1bc1f798-2d50-4072-9011-9058edf42c9b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792070260154,
+  "body": "Relay 20261014-231359-regen2 Session 1 was launched with developer instructions declaring active advisor role and prohibiting implementation. The operator prompt assigns implementer branch repair and regen lane coding. Read-only checks confirm #2660 remains CONFLICTING at d1d9b9592a; #2664 remains 8ef2b08281; #2666 3107a754a3; #2667 f32626e13b. No code, branches, verdicts or holds changed. Please arrange relaunch under implementer role; handoff retains the full ordered mandate and verified state.",
+  "subject": "regen relay blocked by advisor-role launch",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
