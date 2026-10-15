@@ -11230,6 +11230,10 @@ pub(crate) fn handle_queue_work(
     if contained && bypass_knob {
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
+    // trace:BUG-2131 | ai:claude
+    if contained {
+        aida_core::git_ops::ensure_git_supports_contained()?;
+    }
     apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;

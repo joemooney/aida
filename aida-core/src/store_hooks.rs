@@ -252,29 +252,247 @@ pub(crate) fn establish(_common: &Path, _store: &Path) -> Result<PathBuf> {
     anyhow::bail!("refusing AIDA store write: host-owned hooks require Linux")
 }
 
-/// Git added GIT_ATTR_SOURCE in 2.40. No repository/config lookup is needed.
+/// First git release that honours `GIT_ATTR_SOURCE`.
+pub(crate) const MIN_ATTR_SOURCE_GIT: (u32, u32) = (2, 40);
+
+/// `(major, minor)` from `git --version` output, with or without its
+/// `git version ` prefix (`2.43.0.windows.1`, `2.40.1 (Apple Git-143)`).
+/// `None` when the text is not a version.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn parse_git_version(text: &str) -> Option<(u32, u32)> {
+    let text = text.trim();
+    let version = text.strip_prefix("git version ").unwrap_or(text);
+    let mut parts = version.split_whitespace().next()?.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+    Some((major, minor))
+}
+
+/// The version gate: only a parsed version at or above 2.40 is safe.
+/// Unparseable output is unsafe.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn attr_source_supported_by(version_output: &str) -> bool {
+    parse_git_version(version_output).is_some_and(|v| v >= MIN_ATTR_SOURCE_GIT)
+}
+
+// Test seam: the `git --version` text the gate sees on this thread, so a
+// test can fake an old git without touching PATH. Set only through
+// `git_ops::with_host_git_version`; no environment variable or file selects it.
+// trace:BUG-2131 | ai:claude
+thread_local! {
+    pub(crate) static FAKE_GIT_VERSION: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Host `git --version` output, run once per process. Empty when git
+/// cannot be run or fails (which the gate treats as unsafe).
+// trace:BUG-2131 | ai:claude
+fn host_git_version(store: &Path) -> String {
+    if let Some(fake) = FAKE_GIT_VERSION.with(|f| f.borrow().clone()) {
+        return fake;
+    }
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
+            std::process::Command::new("git")
+                .env(
+                    "PATH",
+                    safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+                )
+                .arg("--version")
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+                .unwrap_or_default()
+        })
+        .clone()
+}
+
+/// Whether host git honours `GIT_ATTR_SOURCE` (git 2.40+).
 pub(crate) fn supports_attr_source(store: &Path) -> bool {
-    static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *SUPPORTED.get_or_init(|| {
-        // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
-        std::process::Command::new("git")
-            .env(
-                "PATH",
-                safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+    attr_source_supported_by(&host_git_version(store))
+}
+
+/// Human description of the host git version for refusal and warning text.
+fn describe_git_version(output: &str) -> String {
+    if output.is_empty() {
+        "could not be determined (`git --version` failed)".to_string()
+    } else if parse_git_version(output).is_none() {
+        format!("could not be determined (`git --version` printed {output:?})")
+    } else {
+        format!(
+            "is {}",
+            output.strip_prefix("git version ").unwrap_or(output)
+        )
+    }
+}
+
+/// Refuse a contained launch (or enabling contained mode) when host git
+/// ignores `GIT_ATTR_SOURCE`: a contained session writes the store, and
+/// below 2.40 host store git cannot keep its `.gitattributes` from selecting
+/// a host filter/textconv driver. Unparseable versions count as old.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn ensure_git_supports_contained() -> Result<()> {
+    let output = host_git_version(Path::new("/"));
+    if attr_source_supported_by(&output) {
+        return Ok(());
+    }
+    let (major, minor) = MIN_ATTR_SOURCE_GIT;
+    anyhow::bail!(
+        "refusing contained mode: host git {}, and git older than {major}.{minor} ignores \
+         GIT_ATTR_SOURCE, so a contained session could plant a store .gitattributes that \
+         selects a host filter/textconv driver. Upgrade git to {major}.{minor} or newer",
+        describe_git_version(&output)
+    )
+}
+
+/// The host-owned marker a contained launch leaves in the store's git common
+/// directory, which the sandbox cannot write.
+pub(crate) const CONTAINED_MARKER: &str = "aida-contained-store";
+
+/// Absolute git common directory of `store`, or `None`.
+pub(crate) fn git_common_dir(store: &Path) -> Option<PathBuf> {
+    // Read-only lookup the hardened builder depends on (BUG-2131).
+    // raw-git-ok(BUG-1929): read-only rev-parse with sanitized PATH.
+    let out = std::process::Command::new("git")
+        .env(
+            "PATH",
+            safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+        )
+        .current_dir(store)
+        .args(["-c", "core.fsmonitor=false"])
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    let dir = String::from_utf8_lossy(&out.stdout)
+        .trim_end_matches(['\n', '\r'])
+        .to_string();
+    (!dir.is_empty()).then(|| PathBuf::from(dir))
+}
+
+/// `[agents] contained` / `[contained] enable` for a project, with
+/// `load_agents_contained`'s precedence (global agents.toml, then project
+/// agents.toml, then project config.toml; last set wins). A file that exists
+/// but cannot be read or parsed counts as contained: this decides a refusal.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn contained_configured_from(
+    global_agents: Option<&Path>,
+    project_agents: &Path,
+    project_config: &Path,
+) -> bool {
+    // Some(Some(v)) = set, Some(None) = unset, None = unreadable.
+    let read = |path: &Path, section: &str, key: &str| -> Option<Option<bool>> {
+        match std::fs::read_to_string(path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(None),
+            Err(_) => None,
+            Ok(body) => {
+                let value: toml::Value = toml::from_str(&body).ok()?;
+                Some(
+                    value
+                        .get(section)
+                        .and_then(|t| t.get(key))
+                        .and_then(toml::Value::as_bool),
+                )
+            }
+        }
+    };
+    let mut contained = false;
+    let sources = [
+        global_agents.map(|p| (p, "agents", "contained")),
+        Some((project_agents, "agents", "contained")),
+        Some((project_config, "contained", "enable")),
+    ];
+    for (path, section, key) in sources.into_iter().flatten() {
+        match read(path, section, key) {
+            None => return true,
+            Some(Some(v)) => contained = v,
+            Some(None) => {}
+        }
+    }
+    contained
+}
+
+/// Whether a contained (untrusted) writer may exist for this store:
+/// `AIDA_CONTAINED` in this process, a contained-launch marker in the git
+/// common directory, or contained mode configured for the owning project.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn store_contained_enabled(store: &Path) -> bool {
+    if std::env::var("AIDA_CONTAINED").is_ok_and(|v| matches!(v.trim(), "1" | "true" | "yes")) {
+        return true;
+    }
+    if git_common_dir(store).is_some_and(|c| c.join(CONTAINED_MARKER).exists()) {
+        return true;
+    }
+    let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let abs = std::path::absolute(store).unwrap_or_else(|_| store.to_path_buf());
+    let canon = std::fs::canonicalize(store).ok();
+    [Some(abs), canon]
+        .into_iter()
+        .flatten()
+        .filter(|p| p.file_name().is_some_and(|n| n == ".aida-store"))
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .any(|root| {
+            contained_configured_from(
+                global.as_deref(),
+                &root.join(".aida").join("agents.toml"),
+                &root.join(".aida").join("config.toml"),
             )
-            .arg("--version")
-            .output()
-            .ok()
-            .filter(|out| out.status.success())
-            .and_then(|out| String::from_utf8(out.stdout).ok())
-            .and_then(|s| s.strip_prefix("git version ").map(str::to_owned))
-            .and_then(|v| {
-                let mut parts = v.split('.');
-                Some((
-                    parts.next()?.parse::<u32>().ok()?,
-                    parts.next()?.parse::<u32>().ok()?,
-                ))
-            })
-            .is_some_and(|(major, minor)| (major, minor) >= (2, 40))
-    })
+        })
+}
+
+/// What store git may do on this host's git.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum AttrSourceVerdict {
+    /// git honours GIT_ATTR_SOURCE.
+    Supported,
+    /// Old git, but no contained writer: keep working, warn once.
+    WarnOnly(String),
+    /// Old git with contained mode in play: refuse.
+    Refuse(String),
+}
+
+/// Classify store git for `store` (BUG-2131). Supported git costs nothing
+/// beyond the cached version; only old git looks for a contained writer.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn attr_source_verdict(store: &Path) -> AttrSourceVerdict {
+    let output = host_git_version(store);
+    if attr_source_supported_by(&output) {
+        return AttrSourceVerdict::Supported;
+    }
+    let (major, minor) = MIN_ATTR_SOURCE_GIT;
+    let found = describe_git_version(&output);
+    if store_contained_enabled(store) {
+        AttrSourceVerdict::Refuse(format!(
+            "refusing AIDA store git: contained sessions are enabled for this store and host \
+             git {found}; git older than {major}.{minor} ignores GIT_ATTR_SOURCE, so the \
+             store's .gitattributes could select a host filter/textconv driver that runs \
+             outside any sandbox. Upgrade git to {major}.{minor} or newer"
+        ))
+    } else {
+        AttrSourceVerdict::WarnOnly(format!(
+            "warning: host git {found}; contained sessions are unavailable until git is \
+             {major}.{minor} or newer"
+        ))
+    }
+}
+
+/// Refuse host git over a store tree when git ignores `GIT_ATTR_SOURCE` and a
+/// contained writer may exist; otherwise warn once per process and continue.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn ensure_attr_source(store: &Path) -> Result<()> {
+    match attr_source_verdict(store) {
+        AttrSourceVerdict::Supported => Ok(()),
+        AttrSourceVerdict::WarnOnly(warning) => {
+            static WARNED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("{warning}");
+            }
+            Ok(())
+        }
+        AttrSourceVerdict::Refuse(message) => Err(anyhow::anyhow!(message)),
+    }
 }

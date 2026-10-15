@@ -85,14 +85,18 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             "PATH",
             crate::store_hooks::safe_path(cwd, &std::env::var_os("PATH").unwrap_or_default()),
         );
-        if crate::store_hooks::supports_attr_source(cwd) {
-            // Git's empty tree object; never read tree-controlled attributes.
-            cmd.env(
-                "GIT_ATTR_SOURCE",
-                "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
-            );
-        }
-        if let Err(err) = resolve_store_hooks_dir(cwd) {
+        // Git's empty tree object; never read tree-controlled attributes.
+        // Below git 2.40 the variable is ignored, so store git refuses when a
+        // contained writer may exist and warns once otherwise (BUG-2131).
+        // trace:BUG-2131 | ai:claude
+        cmd.env(
+            "GIT_ATTR_SOURCE",
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        );
+        let refusal = crate::store_hooks::ensure_attr_source(cwd)
+            .err()
+            .or_else(|| resolve_store_hooks_dir(cwd).err());
+        if let Some(err) = refusal {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
             // The static script prints only its first positional argument (the
@@ -191,6 +195,52 @@ pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
 // trace:BUG-1929 | ai:codex
 #[cfg(test)]
 thread_local! { static DROP_STORE_HOOK_PIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Refuse launching (or enabling) contained mode when host git is older than
+/// 2.40 or its version cannot be parsed (BUG-2131).
+// trace:BUG-2131 | ai:claude
+pub fn ensure_git_supports_contained() -> Result<()> {
+    crate::store_hooks::ensure_git_supports_contained()
+}
+
+/// Run `f` with this thread's host git version reported as `version`
+/// (`git --version` text). For tests in this and dependent crates; the
+/// override is thread-local and restored afterwards, even on panic.
+// trace:BUG-2131 | ai:claude
+#[doc(hidden)]
+pub fn with_host_git_version<R>(version: &str, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let old = self.0.take();
+            crate::store_hooks::FAKE_GIT_VERSION.with(|v| *v.borrow_mut() = old);
+        }
+    }
+    let previous =
+        crate::store_hooks::FAKE_GIT_VERSION.with(|v| v.borrow_mut().replace(version.to_string()));
+    let _restore = Restore(previous);
+    f()
+}
+
+/// Record, in the store's host-owned git common directory, that a contained
+/// session was launched against `store`. Store git on a later old git then
+/// refuses even when the project config does not enable contained mode
+/// (a `--sandbox` launch). No-op when `store` is not a git checkout.
+// trace:BUG-2131 | ai:claude
+pub fn mark_store_contained(store: &Path) -> Result<()> {
+    let Some(common) = crate::store_hooks::git_common_dir(store) else {
+        return Ok(());
+    };
+    let marker = common.join(crate::store_hooks::CONTAINED_MARKER);
+    if !marker.exists() {
+        std::fs::write(
+            &marker,
+            "A contained AIDA session was launched against this store (BUG-2131).\n",
+        )
+        .with_context(|| format!("writing {}", marker.display()))?;
+    }
+    Ok(())
+}
 
 /// A hooks directory that holds no hook: git run with it runs none.
 // trace:BUG-1929 | ai:claude
@@ -1073,6 +1123,8 @@ pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
     // Surface the failed check itself first.
     // trace:BUG-1929 | ai:claude
     if is_store_tree(repo) {
+        // trace:BUG-2131 | ai:claude
+        crate::store_hooks::ensure_attr_source(repo)?;
         resolve_store_hooks_dir(repo)?;
     }
     if let Some(state) = store_worktree_issue(repo) {
@@ -1096,6 +1148,10 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     // shim when the store's hooks can't be verified: report that instead
     // of a false "detached".
     // trace:BUG-1929 | ai:claude
+    // trace:BUG-2131 | ai:claude
+    if is_store_tree(repo) && crate::store_hooks::ensure_attr_source(repo).is_err() {
+        return Some("contained sessions are enabled and host git is older than 2.40");
+    }
     if is_store_tree(repo) && resolve_store_hooks_dir(repo).is_err() {
         return Some("host-owned AIDA store hooks could not be verified");
     }
