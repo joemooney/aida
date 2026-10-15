@@ -20,6 +20,7 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, parallel-choice vs sequential-step UI, planning-pass file hygiene, and why recursive-failure-risk fixes ship at the keyboard not the drain |
 | [`backlog-grooming.md`](backlog-grooming.md) | Grooming the Approved/Planned backlog — bucketing by tag/type/priority, what to queue vs archive vs escalate, and the file-overlap conflict heuristic |
 | [`autonomous-burndown.md`](autonomous-burndown.md) | Draining a ready backlog hands-off — the worktree-isolated implementer fan-out + integrator loop, the pickability gate, punt-and-continue, never-down-tools, and `/aida-burndown` vs the orchestrator drain |
+| [`fire-mode.md`](fire-mode.md) | Fire mode — the advisor-driven parallel fix/review/ship burndown under an operator mandate: what the mandate permits and never waives, risk tiers, the two-round cap, serial shipping, and hold-clear conditions (procedure: `/aida-fire`) |
 | [`git-sync-and-review.md`](git-sync-and-review.md) | Recovering when `aida pull` refuses (divergent branches) + the `aida review prompt` workflow — read-on-demand detail kept out of the always-in-context `AIDA.md` |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 | [`spec-authoring.md`](spec-authoring.md) | Keep merge-time proof on the shipping spec and move post-deployment outcome measurement to a blocked follow-up spec |

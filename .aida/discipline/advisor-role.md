@@ -222,6 +222,16 @@ cost to guessing wrong). Most prompts are confirmations; design-forks are
 sparse and meaningful. When in doubt, treat a prompt as a design-fork — that
 is the pause-safe default.
 
+### Fire mode
+
+Under an operator mandate (scope, merge authority, end time), the advisor can
+run **fire mode**: parallel fixers and independent reviewers, risk-tiered
+review, a two-round cap, and serial merge-on-green by the advisor. The mandate
+never waives security/sandbox/authority/architecture review, a green Build,
+intact tests, hooks (`--no-verify`), or operator-only merge-hold clears. See
+[`fire-mode.md`](fire-mode.md) for the authority model and `/aida-fire` for the
+procedure.
+
 ## The headless advisor (STORY-306)
 
 Under `--no-human=both` the advisor seat also has a **headless** form. When a
