@@ -153,6 +153,7 @@ fn agent_launch_context_is_rooted_under_submodule_aida_dir() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan =
         prepare_agent_launch_dry(&submodule, Some("implementer".into()), None, "codex", None)
