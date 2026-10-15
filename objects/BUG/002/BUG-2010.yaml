@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-15T06:26:36.046144379Z
+modified_at: 2026-10-15T06:52:09.974555788Z
 req_type: Bug
 tags:
 - agent-new
@@ -86,6 +86,14 @@ comments:
     Non-blocking follow-up: ensure_spec_worktree (worktree_gc.rs:1633) passes false though the caller works the lease (attribution lost, harmless).
   created_at: 2026-10-15T06:26:36.046144379Z
   modified_at: 2026-10-15T06:26:36.046144379Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e55-2576-76e3-b02d-0e3b38f981cb
+  author: joe
+  content: |-
+    ADVISOR: #2657 (BUG-2010) fix-up 1e13aef821: delta was in bounds, but the new test does NOT COMPILE: 3x E0716 'temporary value dropped while borrowed' in bug_2010_factory_lane_ps_tests.rs (~684 and ~777: live_agent_for_lease_or_spec(&[lane_a_final], ...) borrows a temporary array). CI Build is red. make check-ci-fast does not compile tests — run make check-ci-compile (or cargo test -p aida-cli-lib --profile agent --lib test_queue_work_respects_no_launch_for_calling_lane_attribution).
+    FINAL allowance: ONE more commit, compile-fix only (bind the arrays with let, as rustc suggests; no other changes). Gate unchanged: the test passes at head, FAILS with self_claim=true at queue_cmd.rs:12249 (advisor will mutation-test), Build green. Anything else, or not clean => PR parked with reason on BUG-2010.
+  created_at: 2026-10-15T06:52:09.974555788Z
+  modified_at: 2026-10-15T06:52:09.974555788Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
