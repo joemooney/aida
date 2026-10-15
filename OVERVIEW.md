@@ -547,7 +547,8 @@ attempts cannot be selected. Dirty/untracked trial files never count.
 
 A discriminating check failed by every selected regeneration is a **store gap**;
 partial failures are listed separately as **capability-dependent**, never as store
-gaps. The report gives N and counts of distinct recorded models/vendors; a single
+gaps. The report gives N, the number of unclean trials included, and counts of distinct
+recorded models/vendors (vendor names are trimmed and ASCII case normalized); a single
 vendor produces an explicit weaker-consensus warning. Repeated runs are separate
 regenerations, and their actual diversity counts remain visible. These labels are
 investigation evidence rather than proof of cause. Contract clause mapping is not
@@ -557,9 +558,10 @@ By default consensus only reports. `--file` explicitly creates draft amendment
 tasks through the normal atomic requirement write path, preserving type-based IDs,
 filing provenance and store hooks. A tag `regen-gap:<sha256(exact check)[:16]>`
 identifies a check within this project store; deduplication and insertion share
-the store write lock. A non-archived draft with that tag suppresses another draft,
-including a repeated `--file` run; a closed investigation allows a new draft. The
-body retains the exact check name and compared trial IDs. No parent is invented
+the store write lock. Deduplication is scoped to this store root. Any non-archived
+item with that tag whose status is neither Completed nor Rejected suppresses a new
+draft, including after promotion to Approved or InProgress. Completed, Rejected or
+archived investigations allow a new draft. The body retains the exact check name and compared trial IDs. No parent is invented
 without a clause mapping. Check-to-clause mapping and parenting are a separate
 follow-up; the command retains its explicit missing-mapping diagnostic until then.
 <!-- trace:STORY-1679 | ai:codex -->

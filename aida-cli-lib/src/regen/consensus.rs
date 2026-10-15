@@ -8,7 +8,7 @@ struct Consensus<'a> {
     trials: Vec<&'a score::TrialRecord>,
     failures: BTreeMap<String, usize>,
     models: BTreeSet<&'a str>,
-    vendors: BTreeSet<&'a str>,
+    vendors: BTreeSet<String>,
 }
 
 fn discriminating(record: &score::TrialRecord) -> Result<BTreeMap<String, bool>> {
@@ -46,7 +46,11 @@ fn discriminating(record: &score::TrialRecord) -> Result<BTreeMap<String, bool>>
         !checks.is_empty()
             && aggregate.total == checks.len()
             && aggregate.passed == passed
-            && aggregate.pass_rate == passed as f64 / checks.len() as f64,
+            // JSON parsing may round a valid fraction by a few ULPs. Counts stay
+            // exact, and only the redundant rate gets a bounded tolerance.
+            && aggregate.pass_rate.is_finite()
+            && (aggregate.pass_rate - passed as f64 / checks.len() as f64).abs()
+                <= 8.0 * f64::EPSILON,
         "invalid discriminating score in trial {}",
         record.trial_id
     );
@@ -100,7 +104,10 @@ fn analyze<'a>(records: &'a [score::TrialRecord], ids: &[Uuid]) -> Result<Consen
         }
     }
     let models = trials.iter().map(|r| r.model.as_str()).collect();
-    let vendors = trials.iter().map(|r| r.vendor.as_str()).collect();
+    let vendors = trials
+        .iter()
+        .map(|r| r.vendor.trim().to_ascii_lowercase())
+        .collect();
     Ok(Consensus {
         trials,
         failures,
@@ -124,6 +131,13 @@ impl Consensus<'_> {
             self.models.len(),
             self.vendors.len()
         );
+        let unclean = self.trials.iter().filter(|r| !r.clean).count();
+        let _ = write!(out, "\nUnclean trials: {unclean}/{n}");
+        if unclean > 0 {
+            out.push_str(
+                "\nWarning: unclean trials are included; investigate their execution evidence",
+            );
+        }
         if self.vendors.len() == 1 {
             out.push_str("\nWarning: all regenerations came from one vendor; consensus is weaker");
         }
@@ -170,6 +184,31 @@ fn gap_tag(check: &str) -> String {
     )
 }
 
+fn gap_description(check: &str, consensus: &Consensus<'_>) -> String {
+    let exact_check = serde_json::to_string(check).expect("string serialization");
+    let n = consensus.trials.len();
+    let models = consensus.models.len();
+    let vendors = consensus.vendors.len();
+    let trial_ids = consensus
+        .trials
+        .iter()
+        .map(|r| r.trial_id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "Amend the store after a consensus oracle failure.\n\n\
+         Exact oracle check (JSON): {exact_check}\n\n\
+         Failed in every one of {n} committed regenerations ({models} models, {vendors} vendors). \
+         Contract mapping missing; investigate and link the responsible contract clause before amending it. \
+         Consensus is evidence for investigation, not proof of cause.\n\n\
+         Trial IDs: {trial_ids}\n\n\
+         ## Acceptance\n\n\
+         - Investigate the named check against the intended contract.\n\
+         - If the store omits the required behavior, amend the owning spec with evidence.\n\
+         - Otherwise record the oracle defect or capability explanation and close this draft.\n"
+    )
+}
+
 // The normal Storage atomic path uses GitBackend's store lock and delta writes.
 // Do not load/save a snapshot or deduplicate outside the write seam.
 fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<Vec<String>> {
@@ -178,9 +217,21 @@ fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<Vec<String>> {
     storage.update_atomically(|graph| {
         for check in consensus.gaps() {
             let tag = gap_tag(check);
-            if graph.requirements.iter().any(|r| r.status == RequirementStatus::Draft && !r.archived && r.tags.contains(&tag)) { continue; }
-            let description = format!("Amend the store after a consensus oracle failure.\n\nExact oracle check (JSON): {}\n\nFailed in every one of {} committed regenerations ({} models, {} vendors). Contract mapping missing; investigate and link the responsible contract clause before amending it. Consensus is evidence for investigation, not proof of cause.\n\nTrial IDs: {}\n\n## Acceptance\n\n- Investigate the named check against the intended contract.\n- If the store omits the required behavior, amend the owning spec with evidence.\n- Otherwise record the oracle defect or capability explanation and close this draft.\n",serde_json::to_string(check).expect("string serialization"),consensus.trials.len(),consensus.models.len(),consensus.vendors.len(),consensus.trials.iter().map(|r|r.trial_id.to_string()).collect::<Vec<_>>().join(", "));
-            let mut requirement = Requirement::new(format!("Amend store for consensus failure: {check}"),description);
+            if graph.requirements.iter().any(|r| {
+                !r.archived
+                    && !matches!(
+                        r.status,
+                        RequirementStatus::Completed | RequirementStatus::Rejected
+                    )
+                    && r.tags.contains(&tag)
+            }) {
+                continue;
+            }
+            let description = gap_description(check, consensus);
+            let mut requirement = Requirement::new(
+                format!("Amend store for consensus failure: {check}"),
+                description,
+            );
             requirement.req_type = RequirementType::Task;
             requirement.status = RequirementStatus::Draft;
             requirement.owner = crate::get_default_author();
@@ -188,8 +239,13 @@ fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<Vec<String>> {
             requirement.tags.insert("regenerability".into());
             let prefix = graph.get_type_prefix(&RequirementType::Task);
             let id = requirement.id;
-            graph.add_requirement_with_id(requirement,None,prefix.as_deref());
-            filed.push(graph.get_requirement_by_id(&id).and_then(|r|r.spec_id.clone()).unwrap_or_else(||id.to_string()));
+            graph.add_requirement_with_id(requirement, None, prefix.as_deref());
+            filed.push(
+                graph
+                    .get_requirement_by_id(&id)
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_else(|| id.to_string()),
+            );
         }
     })?;
     if !filed.is_empty() {
@@ -275,19 +331,28 @@ mod tests {
         assert!(out.contains("partial: 1/3 failures"));
         assert!(!out.contains("excluded: ") && !out.contains("pass: "));
         assert!(!out.contains("consensus is weaker"));
+        assert!(out.contains("Unclean trials: 0/3"));
+        assert!(!out.contains("unclean trials are included"));
         let mut rows = rows;
+        rows[1].clean = false;
         for row in &mut rows {
-            row.vendor = "one vendor".into();
+            row.vendor = if row.trial_id == Uuid::from_u128(1) {
+                "  One VENDOR  ".into()
+            } else {
+                "one vendor".into()
+            };
             row.model = "one model".into();
         }
         let out = analyze(&rows, &ids).unwrap().render();
         assert!(out.contains("1 distinct models, 1 distinct vendors"));
         assert!(out.contains("consensus is weaker"));
+        assert!(out.contains("Unclean trials: 1/3"));
+        assert!(out.contains("unclean trials are included"));
     }
 
     #[test]
     fn consensus_refuses_mixed_provenance_sets_invalid_scores_or_nonordinary_attempts() {
-        for variant in 0..9 {
+        for variant in 0..13 {
             let mut rows = rows();
             match variant {
                 0 => rows[1].oracle_sha = "other".into(),
@@ -298,7 +363,11 @@ mod tests {
                 5 => rows[1].kind = "trial-adapted".into(),
                 6 => rows[1].status = "install_failed".into(),
                 7 => rows[1].discriminating.as_mut().unwrap().pass_rate = 0.99,
-                _ => rows[1].excluded_checks.push("nonexistent".into()),
+                8 => rows[1].excluded_checks.push("nonexistent".into()),
+                9 => rows[1].discriminating.as_mut().unwrap().passed = 3,
+                10 => rows[1].discriminating.as_mut().unwrap().total = 4,
+                11 => rows[1].discriminating.as_mut().unwrap().pass_rate = f64::NAN,
+                _ => rows[1].discriminating.as_mut().unwrap().pass_rate = f64::INFINITY,
             }
             assert!(analyze(&rows, &ids()).is_err(), "variant {variant}");
         }
@@ -338,6 +407,25 @@ mod tests {
         let graph = storage.load().unwrap();
         assert_eq!(graph.requirements.len(), 1);
         assert_eq!(graph.requirements[0].id, first_id);
+        // Grooming a gap into any non-closed status must retain its identity.
+        for status in [
+            RequirementStatus::Approved,
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            RequirementStatus::Done,
+            RequirementStatus::NeedsAttention,
+            RequirementStatus::Superseded,
+        ] {
+            storage
+                .update_atomically(|graph| graph.requirements[0].status = status.clone())
+                .unwrap();
+            let before = head(store.path()).unwrap();
+            handle(store.path(), &ids(), true).unwrap();
+            assert_eq!(head(store.path()).unwrap(), before, "status {status:?}");
+            let graph = storage.load().unwrap();
+            assert_eq!(graph.requirements.len(), 1, "status {status:?}");
+            assert_eq!(graph.requirements[0].id, first_id);
+        }
         // Once the old draft is closed, the same check can file a new investigation.
         storage
             .update_atomically(|graph| graph.requirements[0].status = RequirementStatus::Rejected)
@@ -350,6 +438,65 @@ mod tests {
         let before = head(store.path()).unwrap();
         assert!(handle(store.path(), &ids(), true).is_err());
         assert_eq!(head(store.path()).unwrap(), before);
+    }
+
+    #[test]
+    fn consensus_accepts_committed_json_fraction_43_of_44() {
+        let store = store();
+        let mut rows = rows();
+        for row in &mut rows {
+            row.checks = (0..44)
+                .map(|i| score::CheckOutcome {
+                    name: format!("check-{i}"),
+                    passed: i != 0,
+                })
+                .collect();
+            row.excluded_checks.clear();
+            row.discriminating = Some(score::Aggregate {
+                passed: 43,
+                total: 44,
+                pass_rate: 43.0 / 44.0,
+            });
+        }
+        commit_rows(store.path(), &rows);
+        let committed = score::read_committed_trials(store.path()).unwrap();
+        let report = analyze(&committed, &ids()).unwrap();
+        assert_eq!(report.gaps(), ["check-0"]);
+        handle(store.path(), &ids(), false).unwrap();
+
+        // A materially wrong redundant rate still refuses committed evidence.
+        rows[1].discriminating.as_mut().unwrap().pass_rate = 0.99;
+        commit_rows(store.path(), &rows);
+        assert!(handle(store.path(), &ids(), true).is_err());
+        assert!(!store.path().join("objects").exists());
+    }
+
+    #[test]
+    fn completed_rejected_or_archived_gap_allows_a_new_investigation() {
+        for (status, archived) in [
+            (RequirementStatus::Completed, false),
+            (RequirementStatus::Rejected, false),
+            (RequirementStatus::Approved, true),
+        ] {
+            let store = store();
+            commit_rows(store.path(), &rows());
+            handle(store.path(), &ids(), true).unwrap();
+            let storage = aida_core::Storage::new(store.path());
+            storage
+                .update_atomically(|graph| {
+                    graph.requirements[0].status = status.clone();
+                    graph.requirements[0].archived = archived;
+                })
+                .unwrap();
+            handle(store.path(), &ids(), true).unwrap();
+            let graph = storage.load().unwrap();
+            assert_eq!(
+                graph.requirements.len(),
+                2,
+                "{status:?}, archived={archived}"
+            );
+            assert_eq!(graph.requirements[1].status, RequirementStatus::Draft);
+        }
     }
 
     #[test]
