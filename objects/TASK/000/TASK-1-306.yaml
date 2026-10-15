@@ -1,0 +1,30 @@
+id: 01a13e3a-9aef-7ba1-af54-2e1f2778ed48
+spec_id: TASK-1-306
+title: 'Non-blocking: session_grant_lookup resolves root via find_project_root (falls b…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: session_grant_lookup resolves root via find_project_root (falls back to '.') while other role commands use statusline_project_root; divergence can only cause extra RosterDenied refusals (fail closed).
+
+  PR: #2604
+  Reviewed sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T06:23:10.575057660Z
+modified_at: 2026-10-15T06:23:10.575057660Z
+req_type: Task
+tags:
+- carried-from:BUG-2011
+- finding-hash:c891fb28
+- from-review:PR-2604
+- kind:carried-forward
+filed_at:
+  code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
