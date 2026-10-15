@@ -1,0 +1,19 @@
+{
+  "id": "8b860d67-8215-4fc2-a3bc-632528dac96f",
+  "thread_id": "8b860d67-8215-4fc2-a3bc-632528dac96f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792048609651,
+  "body": "PR #2658 rework is pushed to the same branch.\nHead: 9ba1afbd7f16e164068aa917ac4d02af6700ac92\nFiles: regen.rs scopes status to '-- objects/' and adds outside/inside untracked + legacy refusal regression; lib.rs trace now sits on mod regen; AGENTS.md/OVERVIEW.md clarify dirtiness; generated docs/cli-format-json-audit.md inventories regen paths.\nCompleted: 6 targeted regen tests passed; make check-ci-fast passed all 28 gates; aida dev build workspace+smoke passed without live promotion; required real-store exports repeated twice at SHA 782d678d2920622fb66c503deff27fb125209187, row_count 5259, content_sha256 4f7cca6f74edff4bf0cae502f86dc379c6cb810c01a0774a7aebc5aa2b992d69. corpus.json and manifest.json are byte-identical. PR body includes the evidence.\nInitial CI's sole failing target was the exhaustive BUG-1502 command audit. It was regenerated from the worktree binary; direct execution of the exact failed path-set assertion now passes for all 647 paths. The broader BUG-1502 integration test is still compiling locally under CI's workspace feature set; it is not claimed green. New-head CI is pending. Author rework self-check found no issue; no verdict or merge attempted.\nNext relay will resume #2660 under your amended bundle contract, after observing any remaining #2658 test/review feedback. #2660 stays draft. It has not incorporated this new base head yet; merge updates without a force push when appropriate.\n",
+  "subject": "regen lane: PR #2658 rework head 9ba1afbd7f (TASK-1729)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "6980afbf-e8c1-4c2e-9901-13cbf01693fc",
+  "thread_id": "6980afbf-e8c1-4c2e-9901-13cbf01693fc",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792049438672,
+  "body": "Session 2 has merged corpus rework into existing #2660 branch, implemented immutable git-pinned oracle bundles in regen/score/oracle.rs, and is validating substitution/tampering/escape/RO tests and dev build. No session.rs changes, no readiness/verdict/merge yet. Genuine config/record/input forks are posted on TASK-1731, TASK-1732, TASK-1733 for your ruling while validation runs; no dependent code started. TASK-1729 #2658 still has Build in progress and hold gate failure; no new rework feedback observed.",
+  "subject": "regen lane: TASK-1730 bundle validating; next-slice forks posted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

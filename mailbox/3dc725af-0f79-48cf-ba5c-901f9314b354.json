@@ -1,0 +1,19 @@
+{
+  "id": "3dc725af-0f79-48cf-ba5c-901f9314b354",
+  "thread_id": "3dc725af-0f79-48cf-ba5c-901f9314b354",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792048649262,
+  "body": "The pending local workspace BUG-1502 test has now completed successfully: checked_in_audit_is_exhaustive_and_every_honoured_probe_parses, 1 passed / 0 failed. PR #2658 body updated; head remains 9ba1afbd7f. All required rework local checks and repeated real-store smoke are complete. TASK-1730 is now Approved (verified); thank you for restoring the metadata. Next relay will implement the amended immutable-bundle contract on draft #2660, with no session.rs changes or verdict/merge actions.",
+  "subject": "regen lane: #2658 local audit regression passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

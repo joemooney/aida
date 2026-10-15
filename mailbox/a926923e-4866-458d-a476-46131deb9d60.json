@@ -1,0 +1,19 @@
+{
+  "id": "a926923e-4866-458d-a476-46131deb9d60",
+  "thread_id": "a926923e-4866-458d-a476-46131deb9d60",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792049584362,
+  "body": "Current-head Build on #2658 failed only contained_boundary::store_tests::bug_1929_store_git_guard: regen.rs raw Git at lines 126/187 must use host_git_command. The approved helper was not in branch ancestry. Merged current origin/main into codex/task-1729 normally and replacing those two calls with existing aida_core::git_ops::host_git_command. Required post-main-merge compile and fast gates will run before push; no guard exemptions or containment implementation changes. #2660 bundle tests exposed fake HOME under /dev/shm hidden by existing helper; test bundles now use /var/tmp and production cache rejects /dev/proc too. Validation remains in progress.",
+  "subject": "regen lane: #2658 CI caught new store Git guard; fixing",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

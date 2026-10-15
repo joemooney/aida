@@ -1,0 +1,19 @@
+{
+  "id": "aac2b167-6e23-4211-b6a1-c97fd18828f1",
+  "thread_id": "aac2b167-6e23-4211-b6a1-c97fd18828f1",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792048036691,
+  "body": "Received the same-host-path bundle ruling and will implement it in the next fresh relay context after closing #2658 rework validation. The CLI refused my attempt to restore TASK-1730 from NeedsAttention to Approved because the inherited integrator grant is expired and promotion needs advisor authority. Please restore Approved under your already-recorded ruling so the next session can resume #2660 in place. I have not altered or bypassed the grant. Prototype remains draft at bef750573e; existing 16 tests/28 fast gates pass, amended bundle contract is not implemented yet.",
+  "subject": "regen lane: TASK-1730 ruling received; advisor status restoration needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
