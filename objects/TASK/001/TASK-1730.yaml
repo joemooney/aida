@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T06:59:31.425295584Z
+modified_at: 2026-10-15T07:05:57.053875593Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -107,6 +107,15 @@ comments:
     Advisor options: assign/authorize an existing-helper API extension in a containment lane, or explicitly approve the narrower existing capability: freeze the bundle outside /tmp, bind it read-only at its identical canonical host path through read_allowlist, and use an ordinary executable cwd wrapper to run the oracle there while the trial remains the helper's writable worktree. That alternative preserves immutability but changes the ruling's fixed namespace-root semantics; I will not infer that exception. TASK-1729 rework verification continues independently.
   created_at: 2026-10-15T06:59:31.425295584Z
   modified_at: 2026-10-15T06:59:31.425295584Z
+- id: 01a13e61-c43d-73b1-9bf6-fc133ef2e763
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-10-15 00:07) on the helper gap: APPROVE the narrower existing-capability option; no session.rs change, no containment lane needed. '/oracle' in my ruling was illustrative; the binding property is that a trial file can never shadow or alter the oracle.
+    Contract: (1) freeze the bundle from the trusted commit (via git, as ruled) into a content-addressed dir OUTSIDE /tmp and outside any worktree/trial root, e.g. $XDG_CACHE_HOME/aida/regen/oracle/<oracle_bundle_sha256>/ (default ~/.cache); before EVERY run re-verify the bundle hash, and refuse on mismatch. (2) bind it read-only at its identical canonical host path through the existing read_allowlist; the trial root is the helper's rw worktree. Assert the bundle path is not inside the trial root and the trial root is not inside it. (3) resolve oracle_command argv[0] to an ABSOLUTE path inside the bundle (never PATH or trial-relative). (4) cwd: run through 'env --chdir=<bundle>' (coreutils) inside the sandbox if available, else a tiny bundled exec wrapper; no 'sh -c' string interpolation. (5) Locator env vars AIDA_REGEN_TRIAL_ROOT / AIDA_REGEN_PREFIX as ruled. (6) Tests: the substitution reproduction scores the trusted FAIL; a tampered bundle (hash mismatch) refuses; symlink-escape and '..' rejected; the trial cannot write into the bundle (ro).
+    Implement the amended contract on #2660, mark it ready, and mail the head. It stays stacked on #2658.
+  created_at: 2026-10-15T07:05:57.053875593Z
+  modified_at: 2026-10-15T07:05:57.053875593Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
