@@ -2388,7 +2388,32 @@ fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
         .map(|r| contained_managed_domains_only(r))
         .unwrap_or(false);
     // trace:BUG-1928 | ai:claude
-    contained_settings_json(&allowed_hosts, managed_only, write_roots)
+    // BUG-1929: the main checkout's store and cache, so the session's `aida`
+    // writes (claim, comment, queue done) land. Priming first makes the
+    // cache's persistent sidecars exist, since the sandbox skips a missing path.
+    // BUG-1971: the main checkout is resolved from the session's own write
+    // root, so no write roots (outside git) grants no store paths either: the
+    // boundary stays fail closed.
+    // trace:BUG-1929 | ai:claude
+    let store_paths = match write_roots.first() {
+        Some(worktree) => {
+            let main = crate::main_worktree_root_from(worktree);
+            aida_core::db::prime_cache_sidecars(&main.join(".aida").join("cache.db"));
+            // Host-owned hooks must exist before the sandbox makes the common
+            // git directory read-only. Every later store write re-verifies them
+            // and refuses on failure; the write boundary is never widened.
+            // trace:BUG-1929 | ai:codex
+            let store = main.join(".aida-store");
+            if store.is_dir() {
+                if let Err(error) = aida_core::git_ops::resolve_store_hooks_dir(&store) {
+                    eprintln!("{error:#}");
+                }
+            }
+            crate::contained_boundary::contained_store_write_paths(&main)
+        }
+        None => Vec::new(),
+    };
+    contained_settings_json_with_store(&allowed_hosts, managed_only, write_roots, &store_paths)
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2502,6 +2527,21 @@ pub(crate) fn contained_settings_json(
     managed_domains_only: bool,
     write_roots: &[PathBuf],
 ) -> String {
+    contained_settings_json_with_store(allowed_hosts, managed_domains_only, write_roots, &[])
+}
+
+/// [`contained_settings_json`] plus BUG-1929's `sandbox.filesystem`: the main
+/// checkout's store and cache paths in `allowWrite`, which widen only what
+/// sandboxed Bash (the `aida` binary) may write, and the store's `.git`
+/// pointer in `denyWrite`. The Edit/Write tool boundary stays at
+/// `write_roots`. The key is omitted when no path can be expressed.
+// trace:BUG-1929 | ai:claude
+pub(crate) fn contained_settings_json_with_store(
+    allowed_hosts: &[String],
+    managed_domains_only: bool,
+    write_roots: &[PathBuf],
+    store_write_paths: &[PathBuf],
+) -> String {
     let mut sandbox = serde_json::json!({
         "enabled": true,
         "failIfUnavailable": true,
@@ -2527,10 +2567,28 @@ pub(crate) fn contained_settings_json(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
+    if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
+        sandbox["filesystem"] = filesystem;
+    }
+    // Tool writes do not pass through Bash's OS sandbox, so deny the host
+    // git authority paths in both layers (including exact pointer files).
+    // trace:BUG-1929 | ai:codex
+    let mut deny: Vec<String> = destructive_command_deny_rules()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths) {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
+            for tool in crate::contained_boundary::WRITE_TOOLS {
+                deny.push(format!("{tool}(/{abs})"));
+                deny.push(format!("{tool}(/{abs}/**)"));
+            }
+        }
+    }
     serde_json::json!({
         "permissions": {
             "allow": crate::contained_boundary::write_allow_rules(write_roots),
-            "deny": destructive_command_deny_rules()
+            "deny": deny
         },
         "sandbox": sandbox
     })
