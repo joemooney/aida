@@ -1,0 +1,34 @@
+id: 01a1412c-da09-7063-89b6-06d068a4164e
+spec_id: STORY-1695
+agreed_id: STORY-1695
+title: 'Review PR-2682: [AI:codex] feat(provenance): persist write context and query usage (STORY-1674)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `codex/story-1674`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2682>
+  - Branch: `codex/story-1674` → `main`
+
+  ## Covers
+
+  - STORY-1674
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2682` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T20:07:00.873242058Z
+modified_at: 2026-10-15T20:07:00.873242058Z
+req_type: Story
+filed_at:
+  code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
