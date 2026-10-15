@@ -16,12 +16,12 @@ description: |
   - `session_grant_lookup()` is built on top of `grant_check()`: `Rejected` maps to `Unresolved` with the rejection's reason; `Valid` supplies the seat and the effective expiry (min of grant and parent).
   - A test covers, for each `GrantRejection` fixture (subject mismatch, roster denied, parent principal mismatch, parent not delegating, padded handle), that `aida role expiry --refuse-within 1h` refuses exactly when `grant_check` rejects.
   - The existing TASK-1736 expiry-warning tests still pass unchanged.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:57:56.546136069Z
-modified_at: 2026-10-14T01:31:47.531111291Z
+modified_at: 2026-10-15T06:22:52.733652913Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -106,6 +106,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13e3a-5535-7613-b02f-7695c1e54da6
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:22:52.725268063Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-553d-75a2-ae81-1bb1b6b91983
+  timestamp: 2026-10-15T06:22:52.733647707Z
+  agent: implementer
+  commit_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
+  summary: Refuse-mode expiry now decided solely by grant_check; every GrantRejection variant (incl. reviewer-added parent/id-mismatch cases) refuses exit 3; warn-mode expired notice preserved; tests catch skip-grant_check, variant->OK, warn-notice drop, inverted comparison; clippy clean.
+  review_verdict: approved
 filed_at:
   code_sha: 76c06c9f9506fcce544abd71c24cb25fe8fdfc4e
   branch: bug-1983-grant-verdict
@@ -114,3 +128,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:22:52.725262763Z
+  completion_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
