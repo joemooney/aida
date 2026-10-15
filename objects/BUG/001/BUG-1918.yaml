@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-15T05:16:06.908300701Z
+modified_at: 2026-10-15T05:30:32.185706727Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -204,6 +204,18 @@ comments:
   content: 'Fixer 2026-10-14: PR #2485 brought current with main at 72365b48bb (merge, no force-push). Main had split lib_part1-6 into modules; every BUG-1918 hunk re-applied at the code''s new home. Kept BUG-1978 refusal wording + record_seat_allowed inside the TTY floor, BUG-1994 path-isolation guards on TASK-1458 tests. Adapted main''s new BUG-1983/TASK-1741 review_record fixture to supply a reviewer session id (anchor rule). Glossary regenerated (BUG-1950 generator). Lib tests 8531/3 (3 environmental: binary outside checkout), check-ci-fast green, CI clippy clean. HOLD still applies (STORY-1654); not merged.'
   created_at: 2026-10-15T05:16:06.908300701Z
   modified_at: 2026-10-15T05:16:06.908300701Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e0a-6979-7c90-9e90-99e153d6517a
+  author: joe
+  content: |-
+    ADVISOR RULINGS (fire mode 2026-10-14) on open questions:
+    (a) ACCEPT: env AIDA_SESSION_ID + ledger pid record is sufficient binding for the foreground 'agent new' path. N1 (also record session:<native_session_id> under os_wrap/forking wrappers) becomes a follow-up, not a blocker.
+    (b) ACCEPT the strictest policy: no TTY-human exception; only non-authors may override. Fails closed; the operator's escape hatch remains the human-only merge-hold/terminal paths, which are outside this check.
+    (c) CONFIRMED: 'drop the opt-out' means a fasttrack / lifecycle:no-review drain stops at merge until a non-author approves. That matches fire-mode FASTTRACK (one light review, never zero).
+    N3: REQUIRED as a doc-only addition in this PR (migration note: an operator who 'aida worktree enter's a worker's lease is refused as author, and why). N2, N4: follow-ups.
+    Night-sweep items (ledger append interleave; receipts resolve from per-user home) are to be triaged by the STRICT reviewer of the current head: blocking only if they enable a false approval.
+  created_at: 2026-10-15T05:30:32.185706727Z
+  modified_at: 2026-10-15T05:30:32.185706727Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
