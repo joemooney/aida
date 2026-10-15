@@ -5,3 +5,22 @@ last_by:
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
   vendor: claude
 result: done
+due_since: 2026-10-15T18:54:36.741523414Z
+due_reason: on CronJobFailed:performance-guard
+due_failure:
+  trip_id: performance-guard@2026-10-15T18:52:26.795304649Z
+  performance:
+  - command: show
+    budget_ms: 1000
+    over_budget: 275
+    denominator: 806
+    proportion_millipercent: 34119
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 11409
+    excluded_samples: 64
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
+  job: performance-guard
+  error: 'exit 1: '
