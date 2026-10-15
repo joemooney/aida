@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-12T06:07:55.806805036Z
+modified_at: 2026-10-15T15:13:23.421471220Z
 req_type: Story
 tags:
 - from:aida-host
@@ -59,6 +59,13 @@ comments:
   created_at: 2026-10-12T06:07:55.806805036Z
   modified_at: 2026-10-12T06:07:55.806805036Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a14020-07dd-7850-9904-f60aa04b028d
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH (relay Session 2; no implementation). Follow the groom split: first report-only whole-file/function trace coverage reusing existing trace definitions/exemptions, then a separate report-only unexplained-constants slice. Propose Rust-first fixtures, JSON + human output, and no automatic store edits. Constants compare normalized literal values with the owning traced spec and linked decision text; only 0/1 and an explicit inline arbitrary marker are exempt initially, avoiding guessed index exemptions. Need signed split/acceptance, language scope and literal/exemption rules; current Acceptance is still a triage placeholder and status Draft. No new scanner convention or language claim is implemented.
+  created_at: 2026-10-15T15:13:23.421471220Z
+  modified_at: 2026-10-15T15:13:23.421471220Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
