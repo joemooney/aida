@@ -190,7 +190,105 @@ fn disk_entries(root: &Path, dir: &Path, entries: &mut BTreeMap<String, Entry>) 
 }
 use std::os::unix::fs::MetadataExt;
 
+// Registered worktrees may be prunable because their directory disappeared.
+// Preserve their reserved path in overlap checks without requiring that an
+// absent checkout exists. Resolve every existing ancestor; dangling redirects
+// and errors other than absence still refuse.
+fn registered_worktree_path(path: &Path) -> Result<PathBuf> {
+    let mut current = path;
+    let mut missing = Vec::new();
+    loop {
+        match current.canonicalize() {
+            Ok(mut resolved) => {
+                for component in missing.iter().rev() {
+                    resolved.push(component);
+                }
+                return Ok(resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(current).is_ok_and(|m| m.file_type().is_symlink()) {
+                    anyhow::bail!(
+                        "registered worktree has a dangling redirect: {}",
+                        current.display()
+                    );
+                }
+                missing.push(
+                    current
+                        .file_name()
+                        .context("registered worktree has no existing ancestor")?
+                        .to_os_string(),
+                );
+                current = current
+                    .parent()
+                    .context("registered worktree has no parent")?;
+            }
+            Err(error) => {
+                return Err(error).context("resolve registered worktree for oracle isolation")
+            }
+        }
+    }
+}
+
 impl OracleBundle {
+    #[cfg(not(test))]
+    pub(super) fn freeze_guards(project: &Path, trial: &Path, tools: &[String]) -> Result<Self> {
+        let cache = match std::env::var_os("XDG_CACHE_HOME") {
+            Some(path) => PathBuf::from(path),
+            None => aida_core::home::home_dir()
+                .context("cannot resolve guard cache home")?
+                .join(".cache"),
+        };
+        Self::freeze_guards_in_cache(project, trial, tools, &cache)
+    }
+
+    pub(super) fn freeze_guards_in_cache(
+        project: &Path,
+        trial: &Path,
+        tools: &[String],
+        cache: &Path,
+    ) -> Result<Self> {
+        let mut entries = BTreeMap::new();
+        for tool in tools {
+            // These names come from validated trusted config. The generated
+            // script never searches PATH; absolute system delegation is flagged.
+            let executable = ["/usr/local/bin", "/usr/bin", "/bin"]
+                .iter()
+                .map(|dir| Path::new(dir).join(tool))
+                .find(|path| {
+                    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.mode() & 0o111 != 0)
+                });
+            let action = match executable {
+                Some(path) => format!(
+                    "exec '{}' \"$@\"",
+                    path.to_string_lossy().replace('\'', "'\"'\"'")
+                ),
+                None => "exit 127".into(),
+            };
+            let script = format!("#!/bin/sh\nprintf '%s\\n' '{tool}' > \"$AIDA_REGEN_GUARD_PIPE\" || exit 98\n{action}\n");
+            entries.insert(
+                format!("bin/{tool}"),
+                Entry {
+                    mode: "100755".into(),
+                    bytes: script.into_bytes(),
+                },
+            );
+        }
+        // Empty tool sets still need an unambiguous, nonempty strict allowlist
+        // and a content-addressed directory that can be verified normally.
+        entries.insert(
+            ".aida-guard-format".into(),
+            Entry {
+                mode: "100644".into(),
+                bytes: b"guard-fifo-v1\n".to_vec(),
+            },
+        );
+        let hash = hash(&entries);
+        let bundle = Self::materialize(project, "guards".into(), hash, entries, cache, trial)?;
+        std::fs::create_dir_all(bundle.root.join("bin"))?;
+        bundle.verify()?;
+        Ok(bundle)
+    }
+
     pub(super) fn freeze(
         project: &Path,
         sha: String,
@@ -241,7 +339,7 @@ impl OracleBundle {
         let worktrees = super::super::git(project, &["worktree", "list", "--porcelain", "-z"])?;
         for field in worktrees.split(|b| *b == 0) {
             if let Some(path) = field.strip_prefix(b"worktree ") {
-                let path = PathBuf::from(std::str::from_utf8(path)?).canonicalize()?;
+                let path = registered_worktree_path(Path::new(std::str::from_utf8(path)?))?;
                 anyhow::ensure!(
                     !root.starts_with(&path) && !path.starts_with(&root),
                     "oracle bundle overlaps a project worktree"
@@ -464,6 +562,38 @@ mod tests {
             .to_string()
             .contains("hash mismatch"));
         assert!(f.bundle(&["tests"]).is_err());
+    }
+
+    #[test]
+    fn missing_registered_worktree_remains_in_overlap_checks() {
+        let f = Fixture::new("#!/bin/sh\nexit 0\n");
+        let parent = TempDir::new().unwrap();
+        let stale = parent.path().join("stale");
+        super::super::super::git(
+            f.repo.path(),
+            &["worktree", "add", "-b", "stale", stale.to_str().unwrap()],
+        )
+        .unwrap();
+        std::fs::remove_dir_all(&stale).unwrap();
+        assert_eq!(registered_worktree_path(&stale).unwrap(), stale);
+        assert!(
+            f.bundle(&["tests"]).is_ok(),
+            "a missing unrelated checkout must not prevent an external bundle"
+        );
+        // Recreating its path as a cache is still an overlap with that reserved
+        // checkout, even though no .git file was recreated there.
+        let nested_cache = stale.join("cache");
+        assert!(OracleBundle::freeze_in_cache(
+            f.repo.path(),
+            f.sha.clone(),
+            &["tests".into()],
+            f.trial.path(),
+            &nested_cache
+        )
+        .is_err());
+        let dangling = parent.path().join("dangling");
+        symlink(parent.path().join("absent"), &dangling).unwrap();
+        assert!(registered_worktree_path(&dangling.join("child")).is_err());
     }
 
     #[test]

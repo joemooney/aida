@@ -1,3 +1,10 @@
+Regen scoring uses independent private `/tmp` install roots and same-path
+quarantine snapshots, then fresh oracle HOME/XDG/TMPDIR. Only immutable guards
+and fixed system directories are on oracle PATH; regenerated tools use locators.
+Guards write an AIDA-owned, read-only-bound FIFO before absolute host delegation.
+Survivor detection is best effort and flags raw scores as non-clean. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
 `aida regen score <dir> --corpus <dir> --model <name> --vendor <name>
 --harness <name>` runs trusted-config argv commands via existing bubblewrap
 confinement and records raw R1 trial JSON under `regen/trials/` in the store.

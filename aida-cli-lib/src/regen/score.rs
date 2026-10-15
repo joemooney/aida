@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+mod guards;
 mod oracle; // trace:TASK-1730 | ai:codex
+mod roots; // trace:TASK-1730 | ai:codex // trace:TASK-1730 | ai:codex
 use oracle::OracleBundle;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -139,8 +141,14 @@ pub(super) struct TrialRecord {
     pub(super) clean: bool,
     pub(super) guard_hits: Vec<String>,
     pub(super) unconfined: bool,
+    #[serde(default)]
+    pub(super) survivors_detected: usize,
     pub(super) flags: Vec<String>,
     pub(super) error: Option<String>,
+    #[serde(default)]
+    pub(super) env_executable: Option<String>,
+    #[serde(default)]
+    pub(super) guard_bundle_sha256: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,24 +190,43 @@ fn read_manifest(corpus: &Path) -> Result<Manifest> {
     Ok(manifest)
 }
 
-/// Scoring scratch is the only additional writable path passed to the existing
-/// bwrap helper. HOME/XDG/PREFIX and the fallback guard all live here.
+/// Each writable install root is independently bound; the run parent itself is
+/// never mounted. This is required for same-path quarantine replacement.
 struct ScoreEnv {
+    run_root: PathBuf,
     root: PathBuf,
     prefix: PathBuf,
-    guard_log: PathBuf,
+    guards: OracleBundle,
+    guard_channel: guards::GuardChannel,
     path: std::ffi::OsString,
     bwrap: Option<PathBuf>,
+    install_ran: std::cell::Cell<bool>,
+    #[cfg(test)]
+    _guard_cache: tempfile::TempDir,
+}
+
+fn phase_dirs(root: &Path) -> Result<()> {
+    for name in ["home", "config", "data", "cache", "state", "run", "tmp"] {
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(root.join(name))?;
+    }
+    Ok(())
 }
 
 impl Drop for ScoreEnv {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
+        let _ = std::fs::remove_dir_all(&self.run_root);
     }
 }
 
 impl ScoreEnv {
+    #[cfg(test)]
     fn new(config: &RegenConfig, unconfined: bool) -> Result<Self> {
+        Self::for_project(config, unconfined, &std::env::current_dir()?)
+    }
+
+    fn for_project(config: &RegenConfig, unconfined: bool, project: &Path) -> Result<Self> {
         let bwrap = if unconfined {
             None
         } else {
@@ -215,39 +242,41 @@ impl ScoreEnv {
                     .canonicalize()?,
             )
         };
-        let root = std::env::temp_dir().join(format!("aida-regen-score-{}", Uuid::new_v4()));
+        let run_root = PathBuf::from("/tmp").join(format!("aida-regen-score-{}", Uuid::new_v4()));
+        std::fs::DirBuilder::new().mode(0o700).create(&run_root)?;
+        let root = run_root.join("install-env");
         std::fs::DirBuilder::new().mode(0o700).create(&root)?;
+        #[cfg(test)]
+        let guard_cache = tempfile::TempDir::new_in("/var/tmp")?;
+        #[cfg(test)]
+        let guards = OracleBundle::freeze_guards_in_cache(
+            project,
+            &run_root,
+            &config.required_tools,
+            guard_cache.path(),
+        )?;
+        #[cfg(not(test))]
+        let guards = OracleBundle::freeze_guards(project, &run_root, &config.required_tools)?;
+        let guard_channel =
+            guards::GuardChannel::new(guards.root.parent().context("guard cache parent missing")?)?;
         let mut env = Self {
-            prefix: root.join("prefix"),
-            guard_log: root.join("guard-hits"),
+            prefix: run_root.join("prefix"),
+            run_root,
+            guards,
+            guard_channel,
             root,
             path: Default::default(),
             bwrap,
+            install_ran: std::cell::Cell::new(false),
+            #[cfg(test)]
+            _guard_cache: guard_cache,
         };
-        for dir in [
-            "home",
-            "config",
-            "data",
-            "cache",
-            "state",
-            "run",
-            "guard",
-            "prefix/bin",
-        ] {
-            std::fs::create_dir_all(env.root.join(dir))?;
-            std::fs::set_permissions(env.root.join(dir), std::fs::Permissions::from_mode(0o700))?;
-        }
-        std::fs::write(&env.guard_log, "")?;
-        for tool in &config.required_tools {
-            let script = format!("#!/bin/sh\nprintf '%s\\n' '{tool}' >> \"$AIDA_REGEN_GUARD_LOG\"\nprintf '%s\\n' 'GUARD: fallback to PATH {tool}' >&2\nexit 97\n");
-            let path = env.root.join("guard").join(tool);
-            std::fs::write(&path, script)?;
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
-        }
+        phase_dirs(&env.root)?;
+        std::fs::create_dir_all(env.prefix.join("bin"))?;
         // Prefix tools win; guards intercept any fallback before system dirs.
         env.path = std::env::join_paths([
             env.prefix.join("bin"),
-            env.root.join("guard"),
+            env.guards.root.join("bin"),
             PathBuf::from("/usr/bin"),
             PathBuf::from("/bin"),
         ])?;
@@ -264,7 +293,22 @@ impl ScoreEnv {
         argv: &[String],
         bundle: Option<&OracleBundle>,
     ) -> Result<Output> {
-        let mut reads = vec![self.root.to_string_lossy().into_owned()];
+        let phase_root = if bundle.is_some() {
+            // Created only after installation and the snapshot. No installer
+            // namespace ever receives this root or a bound ancestor of it.
+            let root = self.run_root.join("oracle-env");
+            std::fs::DirBuilder::new().mode(0o700).create(&root)?;
+            phase_dirs(&root)?;
+            root
+        } else {
+            self.root.clone()
+        };
+        roots::validate_mounts(&[dir.to_path_buf(), phase_root.clone(), self.prefix.clone()])?;
+        self.guards.verify()?;
+        let mut reads = vec![
+            self.guards.root.to_string_lossy().into_owned(),
+            self.guard_channel.root.to_string_lossy().into_owned(),
+        ];
         if let Some(bundle) = bundle {
             bundle.verify()?;
             reads.push(bundle.root.to_string_lossy().into_owned());
@@ -276,7 +320,7 @@ impl ScoreEnv {
             // or launcher behavior is changed here.
             cmd.args(crate::session::bwrap_confinement_args_inner(
                 dir,
-                std::slice::from_ref(&self.root),
+                &[phase_root.clone(), self.prefix.clone()],
                 &reads,
             ));
             cmd.arg("--").arg(&argv[0]);
@@ -284,23 +328,46 @@ impl ScoreEnv {
         } else {
             Command::new(&argv[0])
         };
+        use std::os::unix::process::CommandExt;
+        let fd = self.guard_channel.fd();
+        unsafe {
+            cmd.pre_exec(move || {
+                if libc::fcntl(fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let path = if bundle.is_some() {
+            std::env::join_paths([
+                self.guards.root.join("bin"),
+                PathBuf::from("/usr/local/bin"),
+                PathBuf::from("/usr/bin"),
+                PathBuf::from("/bin"),
+            ])?
+        } else {
+            self.path.clone()
+        };
         cmd.args(&argv[1..])
             .current_dir(dir)
             .env_clear()
-            .env("PATH", &self.path)
-            .env("HOME", self.root.join("home"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
-            .env("XDG_DATA_HOME", self.root.join("data"))
-            .env("XDG_CACHE_HOME", self.root.join("cache"))
-            .env("XDG_STATE_HOME", self.root.join("state"))
-            .env("XDG_RUNTIME_DIR", self.root.join("run"))
-            .env("TMPDIR", &self.root)
-            .env("PREFIX", &self.prefix)
-            .env("AIDA_REGEN_GUARD_LOG", &self.guard_log)
+            .env("PATH", path)
+            .env("HOME", phase_root.join("home"))
+            .env("XDG_CONFIG_HOME", phase_root.join("config"))
+            .env("XDG_DATA_HOME", phase_root.join("data"))
+            .env("XDG_CACHE_HOME", phase_root.join("cache"))
+            .env("XDG_STATE_HOME", phase_root.join("state"))
+            .env("XDG_RUNTIME_DIR", phase_root.join("run"))
+            .env("TMPDIR", phase_root.join("tmp"))
+            .env("AIDA_REGEN_GUARD_PIPE", &self.guard_channel.pipe)
             .env("AIDA_REGEN_TRIAL_ROOT", dir)
-            .env("AIDA_REGEN_PREFIX", &self.prefix)
-            .env("LANG", "C.UTF-8")
-            .output()
+            .env("LANG", "C.UTF-8");
+        if bundle.is_none() {
+            cmd.env("PREFIX", &self.prefix);
+        } else if self.install_ran.get() {
+            cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
+        }
+        cmd.output()
             .with_context(|| format!("run regen command {}", argv[0]))
     }
 
@@ -325,11 +392,8 @@ impl ScoreEnv {
         Ok(())
     }
 
-    fn guard_hits(&self) -> Result<Vec<String>> {
-        Ok(std::fs::read_to_string(&self.guard_log)?
-            .lines()
-            .map(str::to_owned)
-            .collect())
+    fn guard_hits(&mut self) -> Result<Vec<String>> {
+        self.guard_channel.collect()
     }
 }
 
@@ -347,6 +411,7 @@ fn execute(
             .then(|| vec!["./install.sh".into()])
     });
     if let Some(installer) = installer {
+        env.install_ran.set(true);
         let install = match env.run(dir, &installer) {
             Ok(output) => output,
             Err(error) => {
@@ -362,6 +427,14 @@ fn execute(
             return Ok(());
         }
     }
+    // Each root has an independent bind. No mounted parent exposes the new
+    // entries to a surviving installer namespace. Keep old roots through scoring.
+    record.survivors_detected = roots::survivors(
+        &[dir.to_path_buf(), env.prefix.clone(), env.root.clone()],
+        Some(env.guard_channel.fd()),
+        true,
+    )?;
+    let _snapshot = roots::Quarantine::snapshot(&[dir.to_path_buf(), env.prefix.clone()])?;
     let oracle = env
         .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
         .context(
@@ -451,7 +524,7 @@ fn run_trial_in_env(
     vendor: &str,
     harness: &str,
     unconfined: bool,
-    env: ScoreEnv,
+    mut env: ScoreEnv,
     bundle: &OracleBundle,
 ) -> Result<TrialRecord> {
     let mut flags = Vec::new();
@@ -481,17 +554,25 @@ fn run_trial_in_env(
         clean: false,
         guard_hits: Vec::new(),
         unconfined,
+        survivors_detected: 0,
         flags,
         error: None,
+        env_executable: Some("/usr/bin/env".into()),
+        guard_bundle_sha256: Some(env.guards.hash.clone()),
     };
-    if let Err(error) = execute(&mut record, config, dir, &env, bundle) {
+    // Stage before installation so every installed absolute path lives under
+    // private /tmp, outside the helper's essential read mounts.
+    let trial = env.run_root.join("trial");
+    std::fs::DirBuilder::new().mode(0o700).create(&trial)?;
+    roots::copy_tree(dir, &trial)?;
+    if let Err(error) = execute(&mut record, config, &trial, &env, bundle) {
         record.error = Some(format!("{error:#}"));
     }
     match env.guard_hits() {
         Ok(hits) => record.guard_hits = hits,
         Err(error) => {
             record.status = "error".into();
-            record.error = Some(format!("cannot read guard log: {error}"));
+            record.error = Some(format!("cannot collect guard evidence: {error}"));
         }
     }
     finalize(&mut record);
@@ -499,6 +580,9 @@ fn run_trial_in_env(
 }
 
 fn finalize(record: &mut TrialRecord) {
+    if record.survivors_detected > 0 && !record.flags.iter().any(|f| f == "installer_survivors") {
+        record.flags.push("installer_survivors".into());
+    }
     if !record.guard_hits.is_empty() && !record.flags.iter().any(|f| f == "guard_hits") {
         record.flags.push("guard_hits".into());
     }
@@ -543,7 +627,7 @@ pub(super) fn handle_score(
     let project = crate::project_root_from_store_hint(store);
     let (config, oracle_sha) = load_config(&project)?;
     let manifest = read_manifest(corpus)?;
-    let environment = ScoreEnv::new(&config, unconfined)?;
+    let environment = ScoreEnv::for_project(&config, unconfined, &project)?;
     let dir = dir.canonicalize()?;
     let bundle = OracleBundle::freeze(&project, oracle_sha, &config.oracle_paths, &dir)?;
     environment.require_source_hidden(&dir, &project.canonicalize()?)?;
@@ -639,7 +723,7 @@ mod tests {
     #[test]
     fn execution_has_private_env_and_installer_prefix_and_records_raw_score() {
         let dir = TempDir::new().unwrap();
-        let mut cfg = config(&["/bin/sh", "-c", "test \"$HOME\" != /root && test -d \"$HOME\" && test -d \"$XDG_CONFIG_HOME\" && test -d \"$XDG_RUNTIME_DIR\" && test -z \"${CARGO_HOME+x}\" && test -z \"${RUSTUP_HOME+x}\" && regen-fixture-tool && printf 'ok   - private environment\\nFAIL - assertion\\n'"]);
+        let mut cfg = config(&["/bin/sh", "-c", "test \"$HOME\" != /root && test -d \"$HOME\" && test -d \"$XDG_CONFIG_HOME\" && test -d \"$XDG_RUNTIME_DIR\" && test -z \"${CARGO_HOME+x}\" && test -z \"${RUSTUP_HOME+x}\" && \"$AIDA_REGEN_PREFIX/bin/regen-fixture-tool\" && printf 'ok   - private environment\\nFAIL - assertion\\n'"]);
         cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), "printf '#!/bin/sh\\nexit 0\\n' > \"$PREFIX/bin/regen-fixture-tool\"; chmod +x \"$PREFIX/bin/regen-fixture-tool\"".into()]);
         let record = run_trial(
             &cfg,
@@ -691,6 +775,190 @@ mod tests {
             record.clean,
             "the same passing record is clean without contamination"
         );
+    }
+
+    #[test]
+    fn oracle_ignores_prefix_shadow_and_uses_fresh_python_home() {
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let dir = TempDir::new().unwrap();
+        let mut cfg = config(&["/bin/sh", "-c", "test \"$(grep sentinel \"$AIDA_REGEN_TRIAL_ROOT/value\")\" = sentinel && /usr/bin/python3 -c \"print('ok   - fresh home')\" && \"$AIDA_REGEN_PREFIX/bin/real-tool\""]);
+        cfg.install_command = Some(vec![
+            "/bin/sh".into(),
+            "-c".into(),
+            r#"
+printf 'sentinel\n' > value
+printf '#!/bin/sh\necho shadowed\n' > "$PREFIX/bin/grep"
+mkdir -p lib
+printf '#!/bin/sh\nprintf "ok   - locator tool\\n"\n' > lib/real-tool
+printf '#!/bin/sh\nexec "%s/lib/real-tool"\n' "$AIDA_REGEN_TRIAL_ROOT" > "$PREFIX/bin/real-tool"
+chmod +x "$PREFIX/bin/grep" "$PREFIX/bin/real-tool" lib/real-tool
+/usr/bin/python3 - <<'PYTHON'
+import os,sys
+p=os.path.join(os.environ['HOME'], '.local/lib/python%d.%d/site-packages'%sys.version_info[:2])
+os.makedirs(p)
+open(os.path.join(p,'usercustomize.py'),'w').write("print('ok   - INJECTED HOME')\n")
+PYTHON
+"#
+            .into(),
+        ]);
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", false).unwrap();
+        assert_eq!(record.status, "scored", "{:?}", record.error);
+        assert_eq!(
+            record
+                .checks
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect::<Vec<_>>(),
+            ["fresh home", "locator tool"]
+        );
+        assert!(record.clean, "{:?}", record.flags);
+    }
+
+    #[test]
+    fn confined_installer_survivor_is_recorded_without_suppressing_raw_score() {
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let dir = TempDir::new().unwrap();
+        let mut cfg = config(&[
+            "/bin/sh",
+            "-c",
+            "printf 'ok   - retained raw result\\n'; exit 7",
+        ]);
+        cfg.install_command = Some(vec![
+            "/usr/bin/python3".into(),
+            "-c".into(),
+            r#"
+import os,time
+r,w=os.pipe()
+pid=os.fork()
+if pid:
+ os.close(w); os.read(r,1); os._exit(0)
+os.setsid(); os.close(r); os.close(1); os.close(2)
+os.write(w,b'x'); os.close(w)
+time.sleep(5)
+"#
+            .into(),
+        ]);
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", false).unwrap();
+        assert_eq!(record.status, "scored", "{:?}", record.error);
+        assert!(record.survivors_detected >= 1);
+        assert!(!record.clean);
+        assert!(record.flags.iter().any(|f| f == "installer_survivors"));
+        assert_eq!(record.oracle_exit, Some(7));
+        assert_eq!(record.aggregate.unwrap().passed, 1);
+    }
+
+    #[test]
+    fn frozen_guards_cannot_be_changed_and_pipe_hits_cannot_be_truncated() {
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let trial = TempDir::new().unwrap();
+        let mut cfg = config(&["/bin/true"]);
+        cfg.required_tools = vec!["sh".into()];
+        let mut env = ScoreEnv::new(&cfg, false).unwrap();
+        let guard = env.guards.root.join("bin/sh");
+        let output = env.run(trial.path(), &["/bin/sh".into(), "-c".into(), "sh -c true; : > \"$HOME/guard-hits\"; : > \"$AIDA_REGEN_GUARD_PIPE\"; if printf bad > \"$1\"; then exit 1; fi".into(), "probe".into(), guard.to_str().unwrap().into()]).unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let protection = env
+            .run(
+                trial.path(),
+                &[
+                    "/usr/bin/python3".into(),
+                    "-c".into(),
+                    r#"
+import os,errno
+p=os.environ['AIDA_REGEN_GUARD_PIPE']
+def refused(f, expected):
+ try: f()
+ except OSError as e: assert e.errno == expected, e; return
+ raise AssertionError('guard evidence was mutable/readable')
+refused(lambda: os.open(p,os.O_RDONLY|os.O_NONBLOCK),errno.EACCES)
+refused(lambda: os.chmod(p,0o600),errno.EROFS)
+refused(lambda: os.unlink(p),errno.EROFS)
+f=os.open(p,os.O_WRONLY|os.O_NONBLOCK)
+refused(lambda: os.fchmod(f,0o600),errno.EROFS)
+refused(lambda: os.ftruncate(f,0),errno.EINVAL)
+os.close(f)
+"#
+                    .into(),
+                ],
+            )
+            .unwrap();
+        assert!(
+            protection.status.success(),
+            "{}",
+            String::from_utf8_lossy(&protection.stderr)
+        );
+        assert_eq!(env.guard_hits().unwrap(), ["sh"]);
+        // Host-side corruption is also refused, before the next child starts.
+        std::fs::write(guard, "tampered").unwrap();
+        assert!(env.run(trial.path(), &["/bin/true".into()]).is_err());
+    }
+
+    #[test]
+    fn bare_required_system_tool_uses_guard_and_forbids_clean() {
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let dir = TempDir::new().unwrap();
+        let mut cfg = config(&[
+            "/bin/sh",
+            "-c",
+            "grep sentinel \"$AIDA_REGEN_TRIAL_ROOT/value\" && printf 'ok   - host fallback\\n'",
+        ]);
+        cfg.required_tools = vec!["grep".into()];
+        std::fs::write(dir.path().join("value"), "sentinel\n").unwrap();
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", false).unwrap();
+        assert_eq!(record.status, "scored", "{:?}", record.error);
+        assert_eq!(record.guard_hits, ["grep"]);
+        assert!(!record.clean);
+    }
+
+    #[test]
+    fn python_default_subprocess_records_guard_hit_without_inherited_fd() {
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("value"), "sentinel\n").unwrap();
+        let mut cfg = config(&[
+            "/usr/bin/python3",
+            "-c",
+            r#"
+import os,subprocess
+r=subprocess.run(['grep','sentinel',os.environ['AIDA_REGEN_TRIAL_ROOT']+'/value'],capture_output=True,text=True)
+print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - ')+'subprocess tool')
+"#,
+        ]);
+        cfg.required_tools = vec!["grep".into()];
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", false).unwrap();
+        assert_eq!(record.status, "scored", "{:?}", record.error);
+        assert_eq!(record.aggregate.unwrap().passed, 1);
+        assert_eq!(record.guard_hits, ["grep"]);
+        assert!(!record.clean);
     }
 
     #[test]

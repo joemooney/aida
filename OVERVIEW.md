@@ -409,19 +409,42 @@ never through PATH or the trial. The oracle runs from the read-only bundle via
 GNU coreutils `/usr/bin/env --chdir` (required; missing or unsupported means
 scoring fails closed), using `AIDA_REGEN_TRIAL_ROOT` and
 `AIDA_REGEN_PREFIX` to locate the regenerated system and private install prefix.
-The installer runs from the selected system directory and receives `PREFIX`, whose
-`bin/` precedes guards and system directories on PATH. The environment has private
-HOME/XDG directories and no inherited Cargo/Rustup settings. Existing bubblewrap strict-read
+The scorer first copies the selected system into a private `/tmp` trial root.
+The installer runs there and receives `PREFIX`, whose `bin/` precedes guards and
+system directories on its PATH. The oracle uses only frozen guards followed by
+`/usr/local/bin:/usr/bin:/bin`; it invokes regenerated tools through the locator
+variables, never by adding trial or prefix directories to PATH. Installer and
+oracle use separate private HOME/XDG/TMPDIR trees; the oracle's directories are
+created after installation. No Cargo/Rustup settings are inherited. Existing bubblewrap strict-read
 confinement is reused, and scoring refuses if its source-visibility probe can
 still see the original project (including projects in essential system paths).
 Confinement is required unless `--unconfined` explicitly records a non-clean trial.
+Fallback guards are generated only for `required_tools`, frozen and hash-verified
+like the oracle bundle, and bound read-only. They record an event to a per-run
+AIDA-owned FIFO before executing an absolute host tool path (or failing if the tool
+is absent). The FIFO is outside writable roots and read-only-bound with write-only
+inode permissions: subprocesses can append evidence but cannot consume it, unlink
+it, change permissions or truncate it. Logging failure refuses tool execution;
+channel errors and unexpected EOF forbid a clean result. An inherited descriptor
+is retained only as a best-effort survivor identity marker, not as the guard log.
+Each install-writable root is independently bound with no bound ancestor. After
+installation, the host quarantines the trial and prefix roots and copies their
+bytes into replacements at the same paths, preserving embedded absolute paths.
+Copying pins source descriptors, never follows source symlinks, and creates new
+files rather than hardlinks/reflinks. A best-effort process/fd scan kills detected
+installer survivors and records their count; any detection forbids a clean result
+without suppressing the raw score. This is snapshot isolation, not a guarantee
+that every descendant was found. Unconfined execution has no mount-namespace
+isolation and remains subject to concurrent-write races.
 
 The oracle emits exact LF-delimited `ok   - <name>` and `FAIL - <name>` lines on
-stdout. Duplicate/conflicting names or no exact checks are scoring errors.
+stdout. Oracle authors should not echo unchecked trial output as marker lines.
+Duplicate/conflicting names or no exact checks are scoring errors.
 Installer failures have no score; nonzero oracle exits with parsed checks retain
 the score and an exit flag. Guard hits, dirty corpus provenance and unconfined
 execution are recorded and forbid a clean result. Records include the trusted
-`oracle_sha` and `oracle_bundle_sha256`. Trial timestamps support age
+`oracle_sha`, `oracle_bundle_sha256`, `guard_bundle_sha256`, the env executable
+path and `survivors_detected` (older records default that count to zero). Trial timestamps support age
 reporting; per-check outcomes are retained for later controls and comparisons.
 Raw cleanliness describes execution conditions, not the pass rate or completed
 controls validation. Control gating is a subsequent slice.
