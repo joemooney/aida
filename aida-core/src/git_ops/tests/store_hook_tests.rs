@@ -746,3 +746,28 @@ fn bug_2131_contained_config_precedence_fails_closed() {
         "unparseable counts as contained"
     );
 }
+
+// The host git version is cached, but not forever: a long-running server
+// re-reads it once the cache is older than GIT_VERSION_TTL, so a git upgrade
+// or downgrade takes effect without a restart.
+// trace:TASK-1775 | ai:claude
+#[test]
+fn task_1775_git_version_cache_expires() {
+    use crate::store_hooks::{cached_git_version, GitVersionCache, GIT_VERSION_TTL};
+    let cache: GitVersionCache = std::sync::Mutex::new(None);
+    let t0 = std::time::Instant::now();
+    let first = cached_git_version(&cache, t0, || "git version 2.39.5".to_string());
+    assert_eq!(first, "git version 2.39.5");
+    let fresh = cached_git_version(&cache, t0 + GIT_VERSION_TTL / 2, || {
+        panic!("a fresh cache must not re-read git")
+    });
+    assert_eq!(fresh, "git version 2.39.5");
+    let reread = cached_git_version(&cache, t0 + GIT_VERSION_TTL, || {
+        "git version 2.45.0".to_string()
+    });
+    assert_eq!(
+        reread, "git version 2.45.0",
+        "an expired cache re-reads git"
+    );
+    assert!(crate::store_hooks::attr_source_supported_by(&reread));
+}
