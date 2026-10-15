@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:10:01.221147663Z
-modified_at: 2026-10-15T16:17:14.022181355Z
+modified_at: 2026-10-15T17:15:48.673508165Z
 req_type: Task
 tags:
 - needs-docs
@@ -53,6 +53,12 @@ comments:
   content: Commit bfddcbee42 references this requirement
   created_at: 2026-10-15T16:17:14.022181355Z
   modified_at: 2026-10-15T16:17:14.022181355Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14090-1c41-7a13-a28c-d3674d3a1b53
+  author: ai:codex:joe
+  content: 'Advisor round1 rework submitted to existing DRAFT PR #2673 at e5f919ef6837cf8898eba911285e4f54c79a4566, normal descendant of d63cf03f39; base #2667/codex/task-1733 unchanged. HEAD/build-keyed derived display cache, one pinned blob batch, zero-Git warm optional reader, digest until cutoff, compact age, separate non-clean/flagged cases. Failed reads never persist an empty cache; display-only ratios tolerate JSON roundtrip and are recomputed from integer counts; shared core store resolver entirely unchanged. Author self-check two rounds, findings addressed; parent checks also fixed nested env guard and Linux fixture annotation without weakening assertions. Exact final workspace-compiled binary passed75regen +22digest; all29 final fast gates and full workspace compile-only gate passed. Logs /tmp/regen-relay3-1734-exact-{regen,digest}.log, -fast-final.log, -compile.log. SPEC-447 investigates strict float validation separately. Ready for round2 separate review; no author verdict, hold clearance, merge, Completed or CLI promotion.'
+  created_at: 2026-10-15T17:15:48.673508165Z
+  modified_at: 2026-10-15T17:15:48.673508165Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
