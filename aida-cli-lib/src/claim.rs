@@ -57,6 +57,37 @@ pub(crate) fn is_own_claim(lease: &SessionLease, scope: &str, my_pid: Option<u32
     lease.claim_verb && lease.scope.eq_ignore_ascii_case(scope) && lease.creator_pid == my_pid
 }
 
+/// BUG-2143: the path an `aida claim --worktree <P>` lease records. A blank
+/// `P` records none; anything else is canonicalized when it exists and kept
+/// verbatim otherwise. The result is INFORMATIONAL only — a claim lease is
+/// advisory and is never re-entered as a worktree, whatever it names.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn claim_worktree_path(worktree: Option<&str>) -> std::path::PathBuf {
+    worktree
+        .map(str::trim)
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let p = std::path::PathBuf::from(w);
+            p.canonicalize().unwrap_or(p)
+        })
+        .unwrap_or_default()
+}
+
+/// BUG-2143: the leases the BUG-637 pickup gate weighs for `scope` — every
+/// lease except the caller's OWN `aida claim` on it, so `aida claim <spec>`
+/// then `aida worktree add <spec>` from one shell never self-blocks.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn without_own_claims(
+    leases: Vec<SessionLease>,
+    scope: &str,
+    my_pid: Option<u32>,
+) -> Vec<SessionLease> {
+    leases
+        .into_iter()
+        .filter(|l| !is_own_claim(l, scope, my_pid))
+        .collect()
+}
+
 /// BUG-2143: the branch a claim lease records — the claimed worktree's own
 /// branch, or empty when the claim names no worktree (or names the primary
 /// checkout). Never the primary checkout's branch: a worktree-less claim has
@@ -101,12 +132,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     let leases = list_leases(&project_root);
     let existing = leases.iter().find(|l| is_own_claim(l, &scope, my_pid));
 
-    let worktree_path = worktree
-        .map(|w| {
-            let p = std::path::PathBuf::from(w);
-            p.canonicalize().unwrap_or(p)
-        })
-        .unwrap_or_default();
+    let worktree_path = claim_worktree_path(worktree);
 
     // BUG-2143: the branch is the CLAIMED WORKTREE's branch, or none. Reading
     // it off the project root stamped the primary checkout's `main` on every

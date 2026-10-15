@@ -255,6 +255,25 @@ pub(crate) fn reap_branch<'a>(lease: &'a SessionLease, default_ref: Option<&str>
     }
 }
 
+/// BUG-2143: the lease as the reap reasons about it. An ADVISORY lease (`aida
+/// claim` / `aida review`) whose recorded path is blank or IS the project root
+/// (`aida claim X --worktree .`) owns no tree: it is viewed as worktree-less, so
+/// a dead claim on a finished spec is reapable (the lease is ended) and the
+/// reap never touches the primary checkout.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn reap_view(lease: &SessionLease, project_root: &std::path::Path) -> SessionLease {
+    let mut view = lease.clone();
+    if (view.claim_verb || view.review_verb) && !view.worktree_path.as_os_str().is_empty() {
+        let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        if view.worktree_path.to_string_lossy().trim().is_empty()
+            || canon(&view.worktree_path) == canon(project_root)
+        {
+            view.worktree_path = std::path::PathBuf::new();
+        }
+    }
+    view
+}
+
 /// One row of the reap report — a session the pass considered, with the verdict
 /// it reached and (after execution) what actually happened to it.
 // trace:TASK-1177 | ai:claude
@@ -776,6 +795,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         .unwrap_or_else(|_| project_root.to_path_buf());
 
     for lease in &leases {
+        let lease = &reap_view(lease, project_root);
         let has_worktree = !lease.worktree_path.as_os_str().is_empty();
         // HARD FLOOR: the main checkout and the store worktree are never reap
         // targets, however the rest of the facts read. A lease whose worktree
@@ -927,6 +947,7 @@ fn reap_one_with_clear_hooks(
     before_missing_worktree_clear: impl FnOnce(),
     after_final_registration_check: impl FnOnce(),
 ) -> String {
+    let lease = &reap_view(lease, project_root);
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
     let branch = reap_branch(lease, resolve_default_branch_ref(project_root).as_deref());
 
@@ -1034,7 +1055,7 @@ fn reap_one_with_clear_hooks(
 // How a registration-clear attempt for an absent lease path ended.
 // trace:BUG-1694 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RegistrationClearOutcome {
+pub(crate) enum RegistrationClearOutcome {
     /// The stale admin registration was removed.
     Cleared,
     /// The path could not be confirmed unoccupied (or the removal itself
@@ -1058,7 +1079,7 @@ enum RegistrationClearOutcome {
 // uses the byte-identical path value the `gitdir` identity match uses, so the
 // two cannot diverge; a relative lease path is declined outright rather than
 // resolved against a process cwd. trace:BUG-1694 | ai:claude
-fn clear_missing_worktree_registration(
+pub(crate) fn clear_missing_worktree_registration(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
     before_clear: impl FnOnce(),
