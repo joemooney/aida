@@ -4058,6 +4058,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "CEILING",
         "10",
         session::HeadlessVendor::Claude,
+        false,
     );
     assert!(
         advisor_cmd
@@ -4074,6 +4075,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "CEILING",
         "10",
         session::HeadlessVendor::Claude,
+        false,
     );
     assert!(
         ci_fix_cmd
