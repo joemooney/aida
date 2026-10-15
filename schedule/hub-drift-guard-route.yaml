@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 1 unpushed store commit pushed; gitlab and origin agree (5e7d66a361); drift clear
+due_since: 2026-10-15T10:07:33.350282959Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-15T10:02:56.739374164Z
+  job: hub-drift-guard
+  error: 'exit 1: '
