@@ -18,7 +18,7 @@ Four of these commands look superficially similar — they all "report on the pr
 | **Why is *this one* spec still open?** | `aida why` | the spec's store signals |
 | **Are agents actually lifting load?** (proof, metrics) | `aida metrics` / `aida usage` | the telemetry logs (`~/.aida/*.jsonl`) |
 
-The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics`/`usage` don't read the graph at all — they read the telemetry substrate. `why` is the only one scoped to a single spec.
+The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics` and ordinary `usage` read the telemetry substrate; `usage show --provenance` also reads the selected spec's write events. `why` is the only one scoped to a single spec.
 
 ## Time bounds
 
@@ -356,6 +356,52 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 **Chains with** — the inspection half of the telemetry surface; `metrics` is the presentation half. The `/aida-insights` skill synthesizes `usage` + `usage drains` into the monthly review.
 
 ---
+
+#### Write provenance
+
+<!-- trace:STORY-1674 | ai:codex -->
+
+```bash
+aida usage show STORY-123 --provenance
+aida usage show STORY-123 --provenance --json
+aida usage show STORY-123 --provenance --toon
+```
+
+This view reads the requirement's filing, edit, comment and nested reply events.
+For each event it reports its author, timestamp, exact session ID and explicitly
+reported harness version. Write paths preserve existing event context, including
+unknown context on legacy entries. A programmatic edit without a field-history
+entry records a write event with an empty change list; no-op retries add none.
+Comment creation context stays attached to its original identity; later edits
+receive a new write event.
+
+Only `AIDA_HARNESS_VERSION`, explicitly supplied to the writing process by its
+launcher, supplies a captured harness version. Missing or blank values mean
+unknown. This change does not configure launchers to provide that variable.
+
+The query opens `.aida/derived/token-ledger-v1.sqlite` read-only. It includes
+measured rows whose vendor session ID **or** attributed AIDA session ID matches
+exactly and whose parsed timestamp is at or before the write. It excludes
+missing/invalid timestamps and future rows, handles timezone offsets, and lists
+all observed models rather than choosing one. Ledger v1 has no explicit effort
+column, so effort remains unknown. No transcript parsing or vendor-based guesses
+occur in this view, and it neither rebuilds nor creates a ledger. A missing
+ledger still permits showing persisted write metadata.
+
+Token classes report a known measured subtotal (null/unknown when no value was
+measured) plus a count of matching rows with an unknown value. Zero is a known
+measurement. **These are cumulative session-at-write totals, overlapping between
+events. Do not add them up as per-write or per-spec costs.** `--cost` remains the
+ordinary usage/cost view and cannot be combined with `--provenance`.
+
+Legacy YAML preserves optional fields through its write paths. Legacy SQLite
+schema v9 adds nullable `filed_at` JSON; existing rows remain un-attributed and
+history/comments retain their optional JSON context. Migration, export and tree
+import preserve historical event context, including unknowns; the current import
+receives its own write event. This is compatibility for
+archived stores, not a new storage mode. The opt-in archived PostgreSQL backend
+is outside this implementation and validation scope; it still lacks filing-context
+persistence.
 
 ### `aida metrics`
 

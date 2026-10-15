@@ -8512,6 +8512,10 @@ pub enum UsageCommand {
         // trace:TASK-1434 | ai:codex
         #[clap(long)]
         cost: bool,
+        /// Per-write author/session/harness context with session usage at write time.
+        // trace:STORY-1674 | ai:codex
+        #[clap(long, conflicts_with = "cost")]
+        provenance: bool,
         #[clap(long)]
         json: bool,
         #[clap(long, conflicts_with = "json")]

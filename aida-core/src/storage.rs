@@ -574,6 +574,16 @@ impl Storage {
     /// Saves requirements to file with file locking
     /// Automatically detects file type from extension (.db/.sqlite for SQLite, otherwise YAML)
     pub fn save(&self, store: &RequirementsStore) -> Result<()> {
+        self.save_with_origin(store, false)
+    }
+
+    /// Transfer historical context without retro-attributing unknown events.
+    // trace:STORY-1674 | ai:codex
+    pub fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.save_with_origin(store, true)
+    }
+
+    fn save_with_origin(&self, store: &RequirementsStore, imported: bool) -> Result<()> {
         // Check if this is a SQLite database by extension
         let is_sqlite = matches!(
             self.file_path.extension().and_then(|e| e.to_str()),
@@ -581,7 +591,13 @@ impl Storage {
         );
 
         if is_sqlite {
-            return self.save_sqlite(store);
+            use crate::db::{DatabaseBackend, SqliteBackend};
+            let backend = SqliteBackend::new(&self.file_path)?;
+            return if imported {
+                backend.save_imported(store)
+            } else {
+                backend.save(store)
+            };
         }
 
         // Directory paths → git-canonical store (EPIC-1-001). Symmetric with
@@ -593,7 +609,11 @@ impl Storage {
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
             let backend = self.git_backend_for(&self.file_path)?;
-            return backend.save(store);
+            return if imported {
+                backend.save_imported(store)
+            } else {
+                backend.save(store)
+            };
         }
 
         // Create parent directories if they don't exist
@@ -613,7 +633,19 @@ impl Storage {
         );
 
         // Serialize and write to file
-        let yaml = serde_yaml::to_string(store)?;
+        // trace:STORY-1674 | ai:codex — snapshot under the existing write lock.
+        let disk: RequirementsStore = if self.file_path.exists() {
+            serde_yaml::from_reader(File::open(&self.file_path)?)?
+        } else {
+            RequirementsStore::new()
+        };
+        let mut stamped = store.clone();
+        if imported {
+            crate::provenance::stamp_store_import(&mut stamped, &disk.requirements)?;
+        } else {
+            crate::provenance::stamp_store_write(&mut stamped, &disk.requirements)?;
+        }
+        let yaml = serde_yaml::to_string(&stamped)?;
         fs::write(&self.file_path, yaml)?;
 
         // Lock is automatically released when lock_file is dropped
@@ -634,15 +666,6 @@ impl Storage {
             return Ok(());
         }
         self.save(store)
-    }
-
-    /// Saves requirements to a SQLite database file
-    fn save_sqlite(&self, store: &RequirementsStore) -> Result<()> {
-        use crate::db::{DatabaseBackend, SqliteBackend};
-
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.save(store)?;
-        Ok(())
     }
 
     /// Reload file from disk, detecting external changes
@@ -679,7 +702,7 @@ impl Storage {
             let mut store = self.load()?;
             update_fn(&mut store);
             self.save(&store)?;
-            return Ok(store);
+            return self.load();
         }
 
         // Directory paths → git-canonical store (EPIC-1-001). Same pattern
@@ -716,8 +739,10 @@ impl Storage {
         let mut store: RequirementsStore = serde_yaml::from_reader(reader)
             .with_context(|| format!("Failed to parse YAML from {:?}", self.file_path))?;
 
+        let disk = store.requirements.clone();
         // Apply the update
         update_fn(&mut store);
+        crate::provenance::stamp_store_write(&mut store, &disk)?;
 
         // Save back
         let yaml = serde_yaml::to_string(&store)?;
@@ -904,6 +929,7 @@ impl Storage {
         final_store.restrict_prefixes = local_store.restrict_prefixes;
 
         // Save the merged/updated store
+        crate::provenance::stamp_store_write(&mut final_store, &disk_store.requirements)?;
         let yaml = serde_yaml::to_string(&final_store)?;
         fs::write(&self.file_path, yaml)?;
 
@@ -1097,6 +1123,7 @@ impl Storage {
             RequirementsStore::new()
         };
 
+        let disk = disk_store.requirements.clone();
         match resolution {
             ConflictResolution::ForceLocal => {
                 // Replace disk requirement with local version
@@ -1146,6 +1173,7 @@ impl Storage {
             }
         }
 
+        crate::provenance::stamp_store_write(&mut disk_store, &disk)?;
         // Save the updated store
         let yaml = serde_yaml::to_string(&disk_store)?;
         fs::write(&self.file_path, yaml)?;
@@ -1224,6 +1252,7 @@ impl Storage {
             RequirementsStore::new()
         };
 
+        let disk = disk_store.requirements.clone();
         // Count external requirement additions (requirements in disk but not in local)
         let local_req_ids: std::collections::HashSet<Uuid> =
             local_store.requirements.iter().map(|r| r.id).collect();
@@ -1259,6 +1288,7 @@ impl Storage {
             .and_then(|r| r.spec_id.clone())
             .unwrap_or_default();
 
+        crate::provenance::stamp_store_write(&mut disk_store, &disk)?;
         // Save the updated store
         let yaml = serde_yaml::to_string(&disk_store).inspect_err(|_e| {
             // Log which field might contain control characters for debugging
@@ -1347,6 +1377,7 @@ impl Storage {
 
         // Save the updated store to SQLite
         backend.save(&disk_store)?;
+        let disk_store = backend.load()?;
 
         Ok(AddResult {
             store: disk_store,
@@ -1757,6 +1788,80 @@ mod tests {
 
     fn create_test_requirement(title: &str) -> Requirement {
         Requirement::new(title.to_string(), format!("Description for {}", title))
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_yaml_writes_stamp_new_context_and_preserve_legacy_rows() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "yaml-session"),
+            ("AIDA_HARNESS_VERSION", "yaml-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.yaml");
+        let storage = Storage::new(&path);
+        let mut store = RequirementsStore::new();
+        let mut old = Requirement::new("old".into(), "body".into());
+        old.spec_id = Some("TASK-1".into());
+        old.history.push(crate::models::HistoryEntry::new(
+            "old author".into(),
+            Vec::new(),
+        ));
+        store.requirements.push(old.clone());
+        std::fs::write(&path, serde_yaml::to_string(&store).unwrap()).unwrap();
+        let mut new = Requirement::new("new".into(), "body".into());
+        new.spec_id = Some("TASK-2".into());
+        store.requirements.push(new);
+        store.requirements[0].title = "edited".into();
+        storage.save(&store).unwrap();
+        let persisted: RequirementsStore =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(persisted.requirements[0].filed_at.is_none());
+        assert!(persisted.requirements[0].history[0].session_id.is_none());
+        assert_eq!(
+            persisted.requirements[0].history[1]
+                .harness_version
+                .as_deref(),
+            Some("yaml-harness")
+        );
+        assert_eq!(
+            persisted.requirements[1]
+                .filed_at
+                .as_ref()
+                .unwrap()
+                .session
+                .as_deref(),
+            Some("yaml-session")
+        );
+        // Repeat a pre-stamp full save: no duplicated write event.
+        let before = std::fs::read_to_string(&path).unwrap();
+        storage.save(&store).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        let result = storage
+            .update_atomically(|s| s.requirements[0].title = "atomic".into())
+            .unwrap();
+        assert_eq!(
+            result.requirements[0]
+                .history
+                .last()
+                .unwrap()
+                .session_id
+                .as_deref(),
+            Some("yaml-session")
+        );
+        let result = storage
+            .add_requirement_atomic(
+                &result,
+                Requirement::new("added".into(), "body".into()),
+                None,
+                None,
+            )
+            .unwrap();
+        let added = result.store.requirements.last().unwrap();
+        assert_eq!(
+            added.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("yaml-harness")
+        );
     }
 
     #[test]

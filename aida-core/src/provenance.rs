@@ -1,4 +1,4 @@
-//! Filing provenance capture (CR-8).
+//! Filing provenance capture (CR-8) and per-write context (STORY-1674).
 //!
 //! Every new requirement is stamped, once, with the code state and tooling it
 //! was filed against — see [`FilingProvenance`]. This module is the single
@@ -147,6 +147,7 @@ pub fn capture_in(dir: &Path) -> FilingProvenance {
         aida_build_sha: nonempty(tool.build_sha).filter(|s| s != "unknown"),
         vendor: nonempty(tool.vendor),
         session: session_from_env(),
+        harness_version: WriteContext::capture().harness_version,
     }
 }
 
@@ -162,6 +163,7 @@ pub fn capture() -> FilingProvenance {
                 aida_build_sha: nonempty(tool.build_sha).filter(|s| s != "unknown"),
                 vendor: nonempty(tool.vendor),
                 session: session_from_env(),
+                harness_version: WriteContext::capture().harness_version,
                 ..FilingProvenance::default()
             }
         }
@@ -193,9 +195,447 @@ pub fn preserve_from_disk(incoming: &mut Requirement, disk: &Requirement) {
     }
 }
 
+/// Small context captured without Git, transcript or model probes.
+// trace:STORY-1674 | ai:codex
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WriteContext {
+    pub session_id: Option<String>,
+    pub harness_version: Option<String>,
+}
+
+impl WriteContext {
+    pub fn capture() -> Self {
+        Self::from_reported(
+            session_from_env(),
+            std::env::var("AIDA_HARNESS_VERSION").ok(),
+        )
+    }
+
+    fn from_reported(session: Option<String>, harness: Option<String>) -> Self {
+        Self {
+            session_id: nonempty(session),
+            harness_version: nonempty(harness),
+        }
+    }
+}
+
+/// Preserve historical context by identity, including nested replies. Only
+/// newly persisted entries acquire the current writing context. The capture
+/// describes the session that persisted the entry, not a guessed model.
+// trace:STORY-1674 | ai:codex
+pub fn stamp_write(
+    incoming: &mut Requirement,
+    disk: Option<&Requirement>,
+    context: &WriteContext,
+) -> anyhow::Result<()> {
+    stamp_write_impl(incoming, disk, context, true)
+}
+
+fn stamp_write_impl(
+    incoming: &mut Requirement,
+    disk: Option<&Requirement>,
+    context: &WriteContext,
+    record_fallback: bool,
+) -> anyhow::Result<()> {
+    use crate::models::Comment;
+
+    fn comments(next: &mut [Comment], old: &[Comment], context: &WriteContext) -> bool {
+        let mut added = false;
+        for c in next {
+            let previous = old.iter().find(|p| p.id == c.id);
+            if let Some(p) = previous {
+                c.session_id = p.session_id.clone();
+                c.harness_version = p.harness_version.clone();
+            } else {
+                if c.session_id.is_none() {
+                    c.session_id = context.session_id.clone();
+                }
+                if c.harness_version.is_none() {
+                    c.harness_version = context.harness_version.clone();
+                }
+                added = true;
+            }
+            added |= comments(
+                &mut c.replies,
+                previous.map_or(&[], |p| &p.replies),
+                context,
+            );
+        }
+        added
+    }
+
+    if let Some(old) = disk {
+        preserve_from_disk(incoming, old);
+        // A retry with the caller's pre-stamp copy must retain the fallback
+        // write event, rather than adding a fresh one on every save.
+        for entry in &old.history {
+            if entry.changes.is_empty() && !incoming.history.iter().any(|e| e.id == entry.id) {
+                incoming.history.push(entry.clone());
+            }
+        }
+    }
+    let mut added_history = false;
+    for entry in &mut incoming.history {
+        if let Some(previous) = disk.and_then(|d| d.history.iter().find(|e| e.id == entry.id)) {
+            entry.session_id = previous.session_id.clone();
+            entry.harness_version = previous.harness_version.clone();
+        } else {
+            if entry.session_id.is_none() {
+                entry.session_id = context.session_id.clone();
+            }
+            if entry.harness_version.is_none() {
+                entry.harness_version = context.harness_version.clone();
+            }
+            added_history = true;
+        }
+    }
+    let added_comment = comments(
+        &mut incoming.comments,
+        disk.map_or(&[], |d| &d.comments),
+        context,
+    );
+    if let Some(old) = disk {
+        // Some programmatic mutations have no field-history builder. Record
+        // the write with no invented field delta; a true no-op adds nothing.
+        if record_fallback
+            && !added_history
+            && !added_comment
+            && serde_yaml::to_string(incoming)? != serde_yaml::to_string(old)?
+        {
+            incoming.history.push(write_event(context));
+        }
+    }
+    Ok(())
+}
+
+fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {
+    let mut event = crate::models::HistoryEntry::new(
+        nonempty(std::env::var("AIDA_AUTHOR").ok())
+            .or_else(|| nonempty(std::env::var("USER").ok()))
+            .unwrap_or_else(|| "unknown".into()),
+        Vec::new(),
+    );
+    event.session_id = context.session_id.clone();
+    event.harness_version = context.harness_version.clone();
+    event
+}
+
+/// Importers preserve source event context, including unknowns, and record
+/// only the present-day import as a new write. Never relabel historical rows.
+// trace:STORY-1674 | ai:codex
+pub fn stamp_import_write(
+    incoming: &mut Requirement,
+    disk: Option<&Requirement>,
+) -> anyhow::Result<()> {
+    stamp_write_impl(incoming, disk, &WriteContext::default(), false)?;
+    let changed = match disk {
+        Some(old) => serde_yaml::to_string(incoming)? != serde_yaml::to_string(old)?,
+        None => true,
+    };
+    if changed {
+        incoming.history.push(write_event(&WriteContext::capture()));
+    }
+    Ok(())
+}
+
+pub fn stamp_store_import(
+    incoming: &mut crate::models::RequirementsStore,
+    disk: &[Requirement],
+) -> anyhow::Result<()> {
+    let old: std::collections::HashMap<_, _> = disk.iter().map(|r| (r.id, r)).collect();
+    for req in &mut incoming.requirements {
+        stamp_import_write(req, old.get(&req.id).copied())?;
+    }
+    Ok(())
+}
+
+/// Compatibility whole-store writers share the same per-object boundary.
+// trace:STORY-1674 | ai:codex
+pub fn stamp_store_write(
+    incoming: &mut crate::models::RequirementsStore,
+    disk: &[Requirement],
+) -> anyhow::Result<()> {
+    let old: std::collections::HashMap<_, _> = disk.iter().map(|r| (r.id, r)).collect();
+    let context = WriteContext::capture();
+    let mut filing = None;
+    for req in &mut incoming.requirements {
+        let previous = old.get(&req.id).copied();
+        if previous.is_none() {
+            let provenance = filing.get_or_insert_with(capture);
+            stamp_with(req, provenance);
+        }
+        stamp_write(req, previous, &context)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-1674 | ai:codex
+    fn write_context() -> WriteContext {
+        WriteContext::from_reported(Some("exact-session".into()), Some("harness-1.2".into()))
+    }
+
+    #[test]
+    fn story1674_transfers_preserve_historical_unknowns_in_all_backends() {
+        use crate::db::{DatabaseBackend, GitBackend, SqliteBackend, YamlBackend};
+        use crate::models::{Comment, HistoryEntry, RequirementsStore};
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "importer"),
+            ("AIDA_HARNESS_VERSION", "importer-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let targets: Vec<Box<dyn DatabaseBackend>> = vec![
+            Box::new(
+                GitBackend::new(&dir.path().join("git"))
+                    .unwrap()
+                    .with_auto_commit(false),
+            ),
+            Box::new(YamlBackend::new(dir.path().join("legacy.yaml"))),
+            Box::new(SqliteBackend::new(dir.path().join("legacy.db")).unwrap()),
+        ];
+        let mut source = RequirementsStore::new();
+        let mut req = Requirement::new("historical".into(), "body".into());
+        req.spec_id = Some("TASK-1".into());
+        req.history
+            .push(HistoryEntry::new("old author".into(), Vec::new()));
+        let mut comment = Comment::new("old author".into(), "historical comment".into());
+        comment.replies.push(Comment::new_reply(
+            "old author".into(),
+            "old reply".into(),
+            comment.id,
+        ));
+        req.comments.push(comment);
+        source.requirements.push(req.clone());
+        for target in targets {
+            target.save_imported(&source).unwrap();
+            let row = target.get_requirement(&req.id).unwrap().unwrap();
+            assert!(row.filed_at.is_none(), "{}", target.path().display());
+            assert_eq!(row.history.len(), 2);
+            assert!(row.history[0].session_id.is_none());
+            assert!(row.history[0].harness_version.is_none());
+            assert!(row.comments[0].session_id.is_none());
+            assert!(row.comments[0].replies[0].harness_version.is_none());
+            assert_eq!(row.history[1].session_id.as_deref(), Some("importer"));
+            assert_eq!(
+                row.history[1].harness_version.as_deref(),
+                Some("importer-harness")
+            );
+            target.save_imported(&source).unwrap();
+            let retried = target.get_requirement(&req.id).unwrap().unwrap();
+            assert_eq!(retried.history, row.history, "import retry must be a no-op");
+        }
+    }
+
+    #[test]
+    fn story1674_import_retains_destination_replace_baseline_and_exports_detach_source() {
+        use crate::db::{DatabaseBackend, GitBackend};
+        let dir = tempfile::tempdir().unwrap();
+        let backend = GitBackend::new(&dir.path().join("source"))
+            .unwrap()
+            .with_auto_commit(false);
+        let mut old = Requirement::new("replace me".into(), "body".into());
+        old.spec_id = Some("TASK-1".into());
+        backend.add_requirement(old).unwrap();
+        let mut destination = backend.load().unwrap();
+        let mut replacement = Requirement::new("replacement".into(), "body".into());
+        replacement.spec_id = Some("TASK-2".into());
+        destination.requirements.clear();
+        destination.requirements.push(replacement);
+        backend.save_imported(&destination).unwrap();
+        assert!(backend
+            .get_requirement_by_spec_id("TASK-1")
+            .unwrap()
+            .is_none());
+        assert!(backend
+            .get_requirement_by_spec_id("TASK-2")
+            .unwrap()
+            .is_some());
+        let mut foreign = backend.load().unwrap();
+        assert!(foreign.loaded_objects.is_some());
+        // Same transfer boundary as both db export-git dispatchers.
+        foreign.loaded_objects = None;
+        let target = GitBackend::new(&dir.path().join("target"))
+            .unwrap()
+            .with_auto_commit(false);
+        target.save_imported(&foreign).unwrap();
+        assert_eq!(target.load().unwrap().requirements.len(), 1);
+        // A destination snapshot still fences concurrent writes.
+        let mut mine = target.load().unwrap();
+        let r = &mut mine.requirements[0];
+        r.title = "my import".into();
+        let mut peer = target.get_requirement(&r.id).unwrap().unwrap();
+        peer.title = "peer edit".into();
+        target.update_requirement(&peer).unwrap();
+        assert!(target.save_imported(&mine).is_err());
+    }
+
+    #[test]
+    fn story1674_reported_context_is_optional_and_trimmed() {
+        assert_eq!(
+            WriteContext::from_reported(None, None),
+            WriteContext::default()
+        );
+        assert_eq!(
+            WriteContext::from_reported(Some("  ".into()), Some(" ".into())),
+            WriteContext::default()
+        );
+        assert_eq!(
+            WriteContext::from_reported(
+                Some(" exact-session ".into()),
+                Some(" harness-1.2 ".into())
+            ),
+            write_context()
+        );
+    }
+
+    #[test]
+    fn story1674_capture_uses_only_the_explicit_harness_variable() {
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_ID", Some("exact-session")),
+            ("AIDA_HARNESS_VERSION", None),
+            ("CLAUDE_CODE_VERSION", Some("must-not-use")),
+            ("CODEX_VERSION", Some("must-not-use")),
+        ]);
+        assert_eq!(WriteContext::capture().harness_version, None);
+        env.set_key("AIDA_HARNESS_VERSION", "  harness-1.2  ");
+        assert_eq!(WriteContext::capture(), write_context());
+        assert_eq!(
+            capture_in(tempfile::tempdir().unwrap().path())
+                .harness_version
+                .as_deref(),
+            Some("harness-1.2")
+        );
+        env.set_key("AIDA_HARNESS_VERSION", "  ");
+        assert_eq!(WriteContext::capture().harness_version, None);
+    }
+
+    #[test]
+    fn story1674_legacy_history_and_comment_yaml_stay_unknown() {
+        let mut req = Requirement::new("old".into(), "body".into());
+        req.history.push(crate::models::HistoryEntry::new(
+            "old author".into(),
+            Vec::new(),
+        ));
+        req.comments.push(crate::models::Comment::new(
+            "old author".into(),
+            "old text".into(),
+        ));
+        let yaml = serde_yaml::to_string(&req).unwrap();
+        assert!(!yaml.contains("harness_version"));
+        assert!(!yaml.contains("session_id"));
+        let old: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        let mut next = old.clone();
+        next.title = "edited now".into();
+        stamp_write(&mut next, Some(&old), &write_context()).unwrap();
+        assert!(next.filed_at.is_none());
+        assert!(next.history[0].session_id.is_none());
+        assert!(next.history[0].harness_version.is_none());
+        assert!(next.comments[0].session_id.is_none());
+        assert_eq!(next.history.len(), 2);
+        assert_eq!(next.history[1].session_id, write_context().session_id);
+        assert_eq!(
+            next.history[1].harness_version,
+            write_context().harness_version
+        );
+        let back: Requirement =
+            serde_yaml::from_str(&serde_yaml::to_string(&next).unwrap()).unwrap();
+        assert_eq!(back.history, next.history);
+        assert_eq!(back.comments, next.comments);
+    }
+
+    #[test]
+    fn story1674_new_history_and_nested_reply_acquire_context() {
+        use crate::models::{Comment, HistoryEntry};
+        let mut old = Requirement::new("old".into(), "body".into());
+        let mut parent = Comment::new("old author".into(), "old text".into());
+        parent.replies.push(Comment::new_reply(
+            "old".into(),
+            "old reply".into(),
+            parent.id,
+        ));
+        old.comments.push(parent);
+        let mut next = old.clone();
+        next.history
+            .push(HistoryEntry::new("writer".into(), Vec::new()));
+        let parent = &mut next.comments[0];
+        parent.replies.push(Comment::new_reply(
+            "writer".into(),
+            "new reply".into(),
+            parent.id,
+        ));
+        stamp_write(&mut next, Some(&old), &write_context()).unwrap();
+        assert!(next.comments[0].session_id.is_none());
+        assert!(next.comments[0].replies[0].session_id.is_none());
+        assert_eq!(
+            next.comments[0].replies[1].session_id,
+            write_context().session_id
+        );
+        assert_eq!(
+            next.comments[0].replies[1].harness_version,
+            write_context().harness_version
+        );
+        assert_eq!(next.history.len(), 1);
+        assert_eq!(next.history[0].session_id, write_context().session_id);
+        assert_eq!(
+            next.history[0].harness_version,
+            write_context().harness_version
+        );
+    }
+
+    #[test]
+    fn story1674_noop_and_retry_add_no_duplicate_write_events() {
+        let old = Requirement::new("old".into(), "body".into());
+        let mut noop = old.clone();
+        stamp_write(&mut noop, Some(&old), &write_context()).unwrap();
+        assert!(noop.history.is_empty());
+        let mut caller = old.clone();
+        caller.title = "new".into();
+        let mut persisted = caller.clone();
+        stamp_write(&mut persisted, Some(&old), &write_context()).unwrap();
+        assert_eq!(persisted.history.len(), 1);
+        stamp_write(&mut caller, Some(&persisted), &WriteContext::default()).unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&caller).unwrap(),
+            serde_yaml::to_string(&persisted).unwrap()
+        );
+    }
+
+    #[test]
+    fn story1674_existing_context_cannot_be_rewritten_or_retro_attributed() {
+        use crate::models::{Comment, HistoryEntry};
+        let mut old = Requirement::new("old".into(), "body".into());
+        old.comments
+            .push(Comment::new("old".into(), "comment".into()));
+        old.history
+            .push(HistoryEntry::new("old".into(), Vec::new()));
+        let mut next = old.clone();
+        next.comments[0].session_id = Some("invented".into());
+        next.comments[0].harness_version = Some("invented".into());
+        next.history[0].session_id = Some("invented".into());
+        next.history[0].harness_version = Some("invented".into());
+        stamp_write(&mut next, Some(&old), &write_context()).unwrap();
+        assert_eq!(next.comments, old.comments);
+        assert_eq!(next.history, old.history);
+    }
+
+    #[test]
+    fn story1674_comment_edit_records_new_writer_without_relabeling_creation() {
+        let mut old = Requirement::new("old".into(), "body".into());
+        old.comments
+            .push(crate::models::Comment::new("old".into(), "comment".into()));
+        stamp_write(&mut old, None, &write_context()).unwrap();
+        let mut next = old.clone();
+        next.comments[0].content = "edited".into();
+        let editor = WriteContext::from_reported(Some("editor".into()), Some("harness-2".into()));
+        stamp_write(&mut next, Some(&old), &editor).unwrap();
+        assert_eq!(next.comments[0].session_id, write_context().session_id);
+        assert_eq!(next.history.len(), 1);
+        assert_eq!(next.history[0].session_id, editor.session_id);
+        assert_eq!(next.history[0].harness_version, editor.harness_version);
+    }
 
     #[test]
     fn parses_clean_branch_state() {
@@ -284,6 +724,7 @@ mod tests {
             aida_build_sha: Some("def5678".into()),
             vendor: Some("codex".into()),
             session: None,
+            harness_version: None,
         };
         assert_eq!(
             p.summary_line(),

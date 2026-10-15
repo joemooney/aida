@@ -11156,6 +11156,49 @@ mod tests {
         assert_eq!(req.status, RequirementStatus::Draft);
     }
 
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_mcp_comment_and_edit_persist_write_context() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_ID", Some("mcp-exact-session")),
+            ("AIDA_HARNESS_VERSION", Some("mcp-harness")),
+        ]);
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(
+                &json!({"title":"Provenance target","description":"body","type":"task"}),
+            )
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        server
+            .tool_add_comment(&json!({"id":id,"text":"a note"}))
+            .unwrap();
+        server
+            .tool_update_requirement(&json!({"id":id,"title":"Edited through MCP"}))
+            .unwrap();
+        let store: RequirementsStore = serde_yaml::from_str(
+            &std::fs::read_to_string(dir.path().join(".aida/mcp-test-cache.yaml")).unwrap(),
+        )
+        .unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(
+            req.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("mcp-harness")
+        );
+        assert_eq!(
+            req.comments.last().unwrap().harness_version.as_deref(),
+            Some("mcp-harness")
+        );
+        assert_eq!(
+            req.comments.last().unwrap().session_id.as_deref(),
+            Some("mcp-exact-session")
+        );
+        let edit = req.history.last().unwrap();
+        assert_eq!(edit.session_id.as_deref(), Some("mcp-exact-session"));
+        assert_eq!(edit.harness_version.as_deref(), Some("mcp-harness"));
+    }
+
     /// `add_comment` carries no status/lifecycle mutation — confirm it leaves
     /// the spec's status untouched no matter what.
     // trace:TASK-681 | ai:claude

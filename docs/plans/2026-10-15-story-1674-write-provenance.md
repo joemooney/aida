@@ -71,7 +71,15 @@ it must never be summed as per-event or per-spec incremental cost.
 
 ## State
 
-Exploration only in Session3. No production implementation yet. Base:
+Implementation in relay Session5, validation in progress. The first author
+self-check found that historical export/import needs a distinct persistence
+boundary; `save_imported` now preserves historical unknowns and records the
+current import as its own write event. Ordinary create/edit paths retain the
+shared stamping helper. Returned atomic snapshots come from persisted rows.
+A default legacy add operation also re-reads its persisted result.
+
+No review approval, merge, or Completed status is claimed. Source self-checks
+and test evidence will be recorded in the PR trail once completed. Original Base:
 `origin/main` at `3d85bbde84`; worktree `/home/joe/ai/aida-story-1674`,
 branch `codex/story-1674`, lease `01a1403c9371`. Prior regen validation and
 TASK-1734 rework take priority. Do not describe this plan as shipped acceptance.

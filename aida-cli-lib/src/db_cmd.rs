@@ -395,7 +395,10 @@ pub(crate) fn handle_db_command(
                 aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
             }
 
-            target.save(&store)?;
+            // trace:STORY-1674 | ai:codex — source snapshots do not fence destination writes.
+            let mut transferred = store.clone();
+            transferred.loaded_objects = None;
+            target.save_imported(&transferred)?;
             println!(
                 "{} Exported {} requirements to git store at {}",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),

@@ -883,16 +883,8 @@ impl GitBackend {
             incoming.failure_reason = disk.failure_reason.clone();
         }
 
-        for comment in &mut incoming.comments {
-            if comment.session_id.is_some() {
-                continue;
-            }
-            if let Some(old) = disk.comments.iter().find(|old| old.id == comment.id) {
-                comment.session_id = old.session_id.clone();
-            }
-        }
-        // CR-8: filing provenance is write-once — the on-disk stamp wins.
-        // trace:CR-8 | ai:claude
+        // Context preservation/stamping is shared with targeted and transaction writes.
+        // trace:STORY-1674 | ai:codex
         crate::provenance::preserve_from_disk(&mut incoming, disk);
 
         incoming
@@ -916,15 +908,17 @@ impl GitBackend {
         // differs from the on-disk one (dropped by a caller that built the
         // struct fresh, or rewritten), write the on-disk stamp back instead.
         // trace:CR-8 | ai:claude
-        let existing = object_store::read_object(&self.objects_root, spec_id).ok();
-        let provenance_fixed: Option<Requirement> = match &existing {
-            Some(old) if old.filed_at != requirement.filed_at => {
-                let mut fixed = requirement.clone();
-                crate::provenance::preserve_from_disk(&mut fixed, old);
-                Some(fixed)
-            }
-            _ => None,
+        let existing = if object_store::object_exists(&self.objects_root, spec_id)? {
+            Some(object_store::read_object(&self.objects_root, spec_id)?)
+        } else {
+            None
         };
+        let mut stamped = requirement.clone();
+        crate::provenance::stamp_write(
+            &mut stamped,
+            existing.as_ref(),
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
         // Record ops for changed fields (compare with existing if possible).
         if let Some(old) = existing {
@@ -991,8 +985,7 @@ impl GitBackend {
             }
         }
 
-        let to_write = provenance_fixed.as_ref().unwrap_or(requirement);
-        let wrote = object_store::write_object_if_changed(&self.objects_root, to_write)?;
+        let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -1129,7 +1122,9 @@ impl GitBackend {
             if let Some(written) = self.stage_requirement_update(&next)? {
                 changed.push(written.to_string());
             }
-            report.written.push(next);
+            report
+                .written
+                .push(object_store::read_object(&self.objects_root, &spec_id)?);
         }
         if !changed.is_empty() {
             let paths: Vec<String> = changed
@@ -1214,6 +1209,14 @@ impl GitBackend {
     /// newer than the incoming copy is a conflict (TASK-1161).
     // trace:BUG-1612 | ai:claude
     pub(crate) fn save_reporting(&self, store: &RequirementsStore) -> Result<SaveReport> {
+        self.save_reporting_with_origin(store, false)
+    }
+
+    fn save_reporting_with_origin(
+        &self,
+        store: &RequirementsStore,
+        imported: bool,
+    ) -> Result<SaveReport> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -1234,6 +1237,11 @@ impl GitBackend {
                                                                   // filing provenance. Captured lazily, once per save.
                                                                   // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+
+        // A new path may be an existing UUID renamed by ID migration. Resolve
+        // that identity once per full save, so old unknown events remain old.
+        // trace:STORY-1674 | ai:codex
+        let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
         for req in &store.requirements {
             let Some(ref spec_id) = req.spec_id else {
@@ -1279,16 +1287,61 @@ impl GitBackend {
                         conflicts.push(spec_id.clone());
                         continue;
                     }
-                    Self::preserve_full_save_only_fields(req.clone(), &disk)
+                    let mut next = Self::preserve_full_save_only_fields(req.clone(), &disk);
+                    if imported {
+                        crate::provenance::stamp_import_write(&mut next, Some(&disk))?;
+                    } else {
+                        crate::provenance::stamp_write(
+                            &mut next,
+                            Some(&disk),
+                            &crate::provenance::WriteContext::capture(),
+                        )?;
+                    }
+                    next
                 }
                 // Absent (or unparseable, as before): this save creates it.
                 _ => {
-                    let mut created = req.clone();
-                    if created.filed_at.is_none() {
-                        let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
-                        crate::provenance::stamp_with(&mut created, p);
+                    if previous_by_uuid.is_none() {
+                        let mut by_uuid = std::collections::HashMap::new();
+                        for (old_id, _) in &existing {
+                            if let Ok(old) = object_store::read_object(&self.objects_root, old_id) {
+                                if by_uuid.insert(old.id, old).is_some() {
+                                    anyhow::bail!("cannot resolve renamed requirement: duplicate UUID in store");
+                                }
+                            }
+                        }
+                        previous_by_uuid = Some(by_uuid);
                     }
-                    created
+                    if let Some(old) = previous_by_uuid.as_ref().and_then(|m| m.get(&req.id)) {
+                        let mut renamed = Self::preserve_full_save_only_fields(req.clone(), old);
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut renamed, Some(old))?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut renamed,
+                                Some(old),
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        renamed
+                    } else {
+                        let mut created = req.clone();
+                        if !imported && created.filed_at.is_none() {
+                            let p =
+                                filing_provenance.get_or_insert_with(crate::provenance::capture);
+                            crate::provenance::stamp_with(&mut created, p);
+                        }
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut created, None)?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut created,
+                                None,
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        created
+                    }
                 }
             };
             let caller_fp = match snapshot {
@@ -1503,7 +1556,10 @@ impl GitBackend {
             };
             self.auto_commit_paths(&message, &[&rel]);
         }
-        Ok(Some(next))
+        Ok(Some(object_store::read_object(
+            &self.objects_root,
+            &spec_id,
+        )?))
     }
 
     /// Compare-and-swap check: the object at `path` must still hold `before`.
@@ -1653,7 +1709,9 @@ impl GitBackend {
         for req in &changed {
             if let Some(sid) = self.stage_requirement_update(req)? {
                 paths.push(object_store::relative_object_path(sid)?);
-                summary.written.push((*req).clone());
+                summary
+                    .written
+                    .push(object_store::read_object(&self.objects_root, sid)?);
             }
         }
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
@@ -1663,6 +1721,11 @@ impl GitBackend {
                 let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
                 crate::provenance::stamp_with(&mut new_req, p);
             }
+            crate::provenance::stamp_write(
+                &mut new_req,
+                None,
+                &crate::provenance::WriteContext::capture(),
+            )?;
             self.record_op(
                 new_req.id,
                 crate::oplog::OpKind::Create {
@@ -1688,7 +1751,7 @@ impl GitBackend {
         // that was written to disk.
         for written in &summary.written {
             if let Some(slot) = store.requirements.iter_mut().find(|r| r.id == written.id) {
-                slot.filed_at = written.filed_at.clone();
+                *slot = written.clone();
             }
         }
 
@@ -1765,6 +1828,13 @@ impl DatabaseBackend for GitBackend {
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
         self.save_reporting(store).map(|_| ())
+    }
+
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        // Keep the destination-loaded import's optimistic/deletion baseline.
+        // Foreign exporters clear their source baseline at the transfer call site.
+        self.save_reporting_with_origin(store, true).map(|_| ())
     }
 
     /// Per-spec compare-and-swap.
@@ -1877,6 +1947,11 @@ impl DatabaseBackend for GitBackend {
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
         crate::provenance::stamp_if_absent(&mut req);
+        crate::provenance::stamp_write(
+            &mut req,
+            None,
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
         if req.spec_id.is_none() {
             // Load metadata to get counters, assign ID, save metadata back
@@ -2436,12 +2511,20 @@ impl<'a> BulkWriter<'a> {
         let provenance = crate::provenance::capture();
         for staged in &self.staged {
             let mut stamped = staged.clone();
-            let is_new = stamped.spec_id.as_deref().is_none_or(|sid| {
-                object_store::read_object(&self.backend.objects_root, sid).is_err()
-            });
-            if is_new {
+            let previous = match stamped.spec_id.as_deref() {
+                Some(sid) if object_store::object_exists(&self.backend.objects_root, sid)? => {
+                    Some(object_store::read_object(&self.backend.objects_root, sid)?)
+                }
+                _ => None,
+            };
+            if previous.is_none() {
                 crate::provenance::stamp_with(&mut stamped, &provenance);
             }
+            crate::provenance::stamp_write(
+                &mut stamped,
+                previous.as_ref(),
+                &crate::provenance::WriteContext::capture(),
+            )?;
             let req = &stamped;
             if object_store::write_object_if_changed(&self.backend.objects_root, req)? {
                 if let Some(spec) = &req.spec_id {
@@ -3868,6 +3951,151 @@ mod tests {
         assert!(
             new.filed_at.is_some(),
             "a spec created by a full-store save is stamped"
+        );
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_canonical_write_routes_persist_context_and_return_stamped_rows() {
+        use crate::models::{Comment, HistoryEntry};
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "session1674"),
+            ("AIDA_HARNESS_VERSION", "harness1674"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut req = Requirement::new("new".into(), "body".into());
+        req.comments
+            .push(Comment::new("writer".into(), "new comment".into()));
+        let added = backend.add_requirement(req).unwrap();
+        assert_eq!(
+            added.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("harness1674")
+        );
+        assert_eq!(added.comments[0].session_id.as_deref(), Some("session1674"));
+        let sid = added.spec_id.as_deref().unwrap();
+        let read = || object_store::read_object(&backend.objects_root, sid).unwrap();
+        let check = |req: &Requirement| {
+            let event = req.history.last().expect("write must have an event");
+            assert_eq!(event.session_id.as_deref(), Some("session1674"));
+            assert_eq!(event.harness_version.as_deref(), Some("harness1674"));
+        };
+        let mut edit = added.clone();
+        edit.title = "direct edit".into();
+        edit.history
+            .push(HistoryEntry::new("writer".into(), Vec::new()));
+        backend.update_requirement(&edit).unwrap();
+        check(&read());
+        // A retry with a pre-stamp copy must produce identical persisted bytes.
+        let prior = serde_yaml::to_string(&read()).unwrap();
+        backend.update_requirement(&edit).unwrap();
+        assert_eq!(serde_yaml::to_string(&read()).unwrap(), prior);
+        // Full save, per-spec atomic, bulk CAS, whole-store transaction.
+        let mut store = backend.load().unwrap();
+        store.requirements[0].description = "full save".into();
+        backend.save(&store).unwrap();
+        check(&read());
+        let current = read();
+        let next = backend
+            .update_spec_atomically(&current, |r| r.title = "per-spec".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&next).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        check(&next);
+        let report = backend
+            .bulk_update_atomically(&[next], "test", |r| {
+                r.title = "bulk CAS".into();
+                true
+            })
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&report.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let (store, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].title = "transaction".into())
+            .unwrap();
+        check(&store.requirements[0]);
+        assert_eq!(
+            serde_yaml::to_string(&store.requirements[0]).unwrap(),
+            serde_yaml::to_string(&summary.written[0]).unwrap()
+        );
+        assert_eq!(
+            serde_yaml::to_string(&summary.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let mut writer = backend.bulk_writer().unwrap();
+        let mut new = Requirement::new("bulk created".into(), "body".into());
+        let mut c = Comment::new("writer".into(), "parent".into());
+        c.replies
+            .push(Comment::new_reply("writer".into(), "reply".into(), c.id));
+        new.comments.push(c);
+        let created_id = writer.add(new).unwrap().spec_id.clone().unwrap();
+        writer.finish("test provenance").unwrap();
+        let new = object_store::read_object(&backend.objects_root, &created_id).unwrap();
+        assert_eq!(
+            new.comments[0].replies[0].harness_version.as_deref(),
+            Some("harness1674")
+        );
+        // The shared Storage facade used by MCP must persist the same metadata.
+        let storage = crate::storage::Storage::new(root);
+        let store = storage
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == added.id)
+                    .unwrap()
+                    .title = "facade edit".into()
+            })
+            .unwrap();
+        check(
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == added.id)
+                .unwrap(),
+        );
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_full_save_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy
+            .history
+            .push(crate::models::HistoryEntry::new("old".into(), Vec::new()));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let mut store = backend.load().unwrap();
+        store.requirements[0].spec_id = Some("TASK-2".into());
+        backend.save(&store).unwrap();
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none());
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert_eq!(
+            renamed.history.last().unwrap().session_id.as_deref(),
+            Some("renamer")
+        );
+        assert_eq!(
+            renamed.history.last().unwrap().harness_version.as_deref(),
+            Some("rename-harness")
         );
     }
 

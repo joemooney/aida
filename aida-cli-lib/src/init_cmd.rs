@@ -1041,7 +1041,7 @@ fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
         root.join(db_path)
     };
     if let Ok(store) = Storage::new(&source).load() {
-        let _ = Storage::new(&cache_path).save(&store);
+        let _ = Storage::new(&cache_path).save_imported(&store);
     }
 }
 

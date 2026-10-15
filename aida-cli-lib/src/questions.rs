@@ -719,6 +719,7 @@ pub(crate) fn push_why_open(req: &mut Requirement, label: &str, consequence: &st
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
 }
@@ -1312,6 +1313,7 @@ pub(crate) fn handle_research_command(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
 

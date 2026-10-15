@@ -58,6 +58,10 @@ impl DatabaseBackend for YamlBackend {
         self.storage.save(store)
     }
 
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.storage.save_imported(store)
+    }
+
     fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
     where
         F: FnOnce(&mut RequirementsStore),

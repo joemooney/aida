@@ -117,11 +117,20 @@ pub(crate) fn handle_import_command(
         created_by: Some(get_default_author()),
     };
 
+    let old_ids: std::collections::HashSet<_> = store.requirements.iter().map(|r| r.id).collect();
     // Perform import
     let result = export::import_tree_from_file(&mut store, file, options)?;
 
     // Save the updated store
-    storage.save(&store)?;
+    // New specs are filed now, but their copied comments remain historical.
+    // trace:STORY-1674 | ai:codex
+    let filing = aida_core::provenance::capture();
+    for req in &mut store.requirements {
+        if !old_ids.contains(&req.id) {
+            aida_core::provenance::stamp_with(req, &filing);
+        }
+    }
+    storage.save_imported(&store)?;
 
     // Print results
     println!("{}: Import completed", "Success".green());

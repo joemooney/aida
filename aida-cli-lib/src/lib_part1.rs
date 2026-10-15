@@ -4007,9 +4007,17 @@ pub(crate) fn run() -> Result<()> {
                         spec,
                         group_by,
                         cost,
+                        provenance,
                         json,
                         toon,
                     } => {
+                        if *provenance {
+                            let store = storage.load()?;
+                            let req = store.get_requirement_by_spec_id(spec)
+                                .ok_or_else(|| anyhow::anyhow!("requirement not found: {spec}"))?;
+                            return crate::write_provenance::show(&find_project_root()?, req, *json || output_format_is_json(), *toon);
+                        }
+
                         token_ledger::show(
                             &find_project_root()?,
                             spec,

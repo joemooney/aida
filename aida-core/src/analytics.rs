@@ -458,6 +458,8 @@ mod tests {
         let mut req = make_req("Churny", RequirementStatus::Draft, 5);
         for i in 0..10 {
             req.history.push(crate::models::HistoryEntry {
+                session_id: None,
+                harness_version: None,
                 id: uuid::Uuid::now_v7(),
                 timestamp: Utc::now(),
                 author: "joe".into(),

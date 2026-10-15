@@ -143,6 +143,7 @@ pub(crate) fn handle_import_plan_command(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
 

@@ -12,6 +12,8 @@ fn dt(ts: &str) -> DateTime<Utc> {
 
 fn hist_status(ts: &str, old_value: &str, new_value: &str) -> HistoryEntry {
     HistoryEntry {
+        session_id: None,
+        harness_version: None,
         id: Uuid::now_v7(),
         author: "test".to_string(),
         timestamp: dt(ts),

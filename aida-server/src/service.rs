@@ -708,6 +708,7 @@ impl RequirementsService for AidaService {
             reactions: Vec::new(),
             // trace:TASK-330 | ai:claude — REST/gRPC writes carry no session id
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         };
 
@@ -1650,6 +1651,7 @@ impl RequirementsService for AidaServiceMultiProject {
             reactions: Vec::new(),
             // trace:TASK-330 | ai:claude — REST/gRPC writes carry no session id
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         };
 

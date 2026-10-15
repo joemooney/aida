@@ -1186,6 +1186,8 @@ mod tests {
 
     fn hist(author: &str, ts: &str) -> HistoryEntry {
         HistoryEntry {
+            session_id: None,
+            harness_version: None,
             id: Uuid::now_v7(),
             author: author.to_string(),
             timestamp: DateTime::parse_from_rfc3339(ts)
@@ -2335,6 +2337,8 @@ mod tests {
 
     fn status_hist(author: &str, ts: &str, old: &str, new: &str) -> HistoryEntry {
         HistoryEntry {
+            session_id: None,
+            harness_version: None,
             id: Uuid::now_v7(),
             author: author.to_string(),
             timestamp: DateTime::parse_from_rfc3339(ts)

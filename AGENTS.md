@@ -1,3 +1,10 @@
+`aida usage show <SPEC> --provenance` reports persisted write context and
+read-only session-ledger evidence at or before each write. Harness versions
+come only from `AIDA_HARNESS_VERSION`; missing model/effort/token evidence stays
+unknown. Session totals overlap between events and must not be summed.
+See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.

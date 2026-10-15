@@ -43,6 +43,7 @@ pub(crate) fn findings_audit_comment(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     }
 }
@@ -1391,6 +1392,7 @@ pub(crate) fn handle_findings_recur(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
     req.modified_at = now;
@@ -1562,6 +1564,7 @@ pub(crate) fn promote_finding_to_gate(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     };
     let mut screening = format!(

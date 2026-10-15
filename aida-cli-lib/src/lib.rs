@@ -211,6 +211,7 @@ mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
 mod worktree_gc;
+mod write_provenance;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;

@@ -25,8 +25,8 @@ use crate::models::{
 
 use super::traits::{BackendType, DatabaseBackend};
 
-/// Current schema version - updated to 8 for requirement weight/attachments/gitlab issues
-const SCHEMA_VERSION: i32 = 8;
+/// Legacy schema v9 preserves optional filing context (STORY-1674).
+const SCHEMA_VERSION: i32 = 9;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -269,6 +269,16 @@ impl SqliteBackend {
             });
 
             let _ = conn.execute("UPDATE schema_version SET version = 8", []);
+        }
+
+        // Optional provenance compatibility for archived stores; old rows stay NULL.
+        // trace:STORY-1674 | ai:codex
+        if from_version < 9 {
+            let exists: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('requirements') WHERE name='filed_at')", [], |row| row.get(0))?;
+            if !exists {
+                conn.execute_batch("ALTER TABLE requirements ADD COLUMN filed_at TEXT;")?;
+            }
+            conn.execute("UPDATE schema_version SET version = 9", [])?;
         }
 
         Ok(())
@@ -593,7 +603,14 @@ impl SqliteBackend {
                 execution_mode: None,
                 // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                 origin: None,
-                filed_at: None,
+                filed_at: conn
+                    .query_row(
+                        "SELECT filed_at FROM requirements WHERE id=?1",
+                        [id.to_string()],
+                        |row| row.get::<_, Option<String>>(0),
+                    )?
+                    .map(|json| Self::from_json(&json))
+                    .transpose()?,
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -850,8 +867,301 @@ impl SqliteBackend {
         }
     }
 
+    fn load_requirement(&self, conn: &Connection, id: &Uuid) -> Result<Option<Requirement>> {
+        // Check if new columns exist (for schema migration compatibility)
+        let has_trace_links = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        let query = if has_trace_links {
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
+             FROM requirements WHERE id = ?1"
+        } else {
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
+                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
+             FROM requirements WHERE id = ?1"
+        };
+
+        let result = conn
+            .query_row(query, [id.to_string()], |row| {
+                let id_str: String = row.get(0)?;
+                let spec_id: Option<String> = row.get(1)?;
+                let prefix_override: Option<String> = row.get(2)?;
+                let title: String = row.get(3)?;
+                let description: String = row.get(4)?;
+                let status_str: String = row.get(5)?;
+                let priority_str: String = row.get(6)?;
+                let owner: String = row.get(7)?;
+                let feature: String = row.get(8)?;
+                let created_at_str: String = row.get(9)?;
+                let created_by: Option<String> = row.get(10)?;
+                let modified_at_str: String = row.get(11)?;
+                let req_type_str: String = row.get(12)?;
+                let dependencies_json: String = row.get(13)?;
+                let tags_json: String = row.get(14)?;
+                let relationships_json: String = row.get(15)?;
+                let comments_json: String = row.get(16)?;
+                let history_json: String = row.get(17)?;
+                let archived: bool = row.get(18)?;
+                let custom_status: Option<String> = row.get(19)?;
+                let custom_priority: Option<String> = row.get(20)?;
+                let custom_fields_json: String = row.get(21)?;
+                let urls_json: String = row.get(22)?;
+                let trace_links_json: Option<String> = row.get(23)?;
+                let implementation_info_json: Option<String> = row.get(24)?;
+                let ai_evaluation_json: Option<String> = row.get(25)?;
+                let weight: Option<f32> = row.get(26)?;
+                let attachments_json: String = row.get(27)?;
+                let gitlab_issues_json: String = row.get(28)?;
+                let version: i64 = row.get(29)?;
+
+                Ok((
+                    id_str,
+                    spec_id,
+                    prefix_override,
+                    title,
+                    description,
+                    status_str,
+                    priority_str,
+                    owner,
+                    feature,
+                    created_at_str,
+                    created_by,
+                    modified_at_str,
+                    req_type_str,
+                    dependencies_json,
+                    tags_json,
+                    relationships_json,
+                    comments_json,
+                    history_json,
+                    archived,
+                    custom_status,
+                    custom_priority,
+                    custom_fields_json,
+                    urls_json,
+                    trace_links_json,
+                    implementation_info_json,
+                    ai_evaluation_json,
+                    weight,
+                    attachments_json,
+                    gitlab_issues_json,
+                    version,
+                ))
+            })
+            .optional()?;
+
+        match result {
+            Some((
+                id_str,
+                spec_id,
+                prefix_override,
+                title,
+                description,
+                status_str,
+                priority_str,
+                owner,
+                feature,
+                created_at_str,
+                created_by,
+                modified_at_str,
+                req_type_str,
+                dependencies_json,
+                tags_json,
+                relationships_json,
+                comments_json,
+                history_json,
+                archived,
+                custom_status,
+                custom_priority,
+                custom_fields_json,
+                urls_json,
+                trace_links_json,
+                implementation_info_json,
+                ai_evaluation_json,
+                weight,
+                attachments_json,
+                gitlab_issues_json,
+                version,
+            )) => {
+                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
+                let status = Self::str_to_status(&status_str);
+                let priority = Self::str_to_priority(&priority_str);
+                let req_type = Self::str_to_type(&req_type_str);
+                let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+                let modified_at = chrono::DateTime::parse_from_rfc3339(&modified_at_str)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+                let dependencies: Vec<Uuid> =
+                    Self::from_json(&dependencies_json).unwrap_or_default();
+                let tags: HashSet<String> = Self::from_json(&tags_json).unwrap_or_default();
+                let relationships: Vec<Relationship> =
+                    Self::from_json(&relationships_json).unwrap_or_default();
+                let comments: Vec<Comment> = Self::from_json(&comments_json).unwrap_or_default();
+                let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
+                let custom_fields: HashMap<String, String> =
+                    Self::from_json(&custom_fields_json).unwrap_or_default();
+                let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+                let trace_links: Vec<TraceLink> = trace_links_json
+                    .and_then(|json| Self::from_json(&json).ok())
+                    .unwrap_or_default();
+                let implementation_info: Option<ImplementationInfo> =
+                    implementation_info_json.and_then(|json| Self::from_json(&json).ok());
+                let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
+                let attachments: Vec<Attachment> =
+                    Self::from_json(&attachments_json).unwrap_or_default();
+                let gitlab_issues: Vec<GitLabIssueLink> =
+                    Self::from_json(&gitlab_issues_json).unwrap_or_default();
+
+                Ok(Some(Requirement {
+                    id,
+                    spec_id,
+                    agreed_id: None,
+                    prefix_override,
+                    title,
+                    description,
+                    status,
+                    priority,
+                    owner,
+                    // trace:STORY-639 | ai:claude — legacy backend does not persist assignee.
+                    assignee: None,
+                    feature,
+                    created_at,
+                    created_by,
+                    modified_at,
+                    req_type,
+                    meta_subtype: None, // Loaded separately if needed
+                    dependencies,
+                    tags,
+                    weight,
+                    relationships,
+                    comments,
+                    history,
+                    // STORY-582: legacy centralized backend — not persisted.
+                    processing_record: Vec::new(),
+                    archived,
+                    // STORY-441: legacy centralized backend — not persisted.
+                    archived_at: None,
+                    // STORY-584: legacy centralized backend — not persisted.
+                    deferred: false,
+                    deferred_at: None,
+                    deferred_until: None,
+                    deferred_reason: None,
+                    // trace:TASK-1148 | ai:claude — narrative fields not carried by legacy backend
+                    risk_notes: None,
+                    test_coverage_notes: None,
+                    implementation_summary: None,
+                    execution_mode: None,
+                    // trace:STORY-634 | ai:claude — origin not carried by legacy backend
+                    origin: None,
+                    filed_at: conn
+                        .query_row(
+                            "SELECT filed_at FROM requirements WHERE id=?1",
+                            [id.to_string()],
+                            |row| row.get::<_, Option<String>>(0),
+                        )?
+                        .map(|json| Self::from_json(&json))
+                        .transpose()?,
+                    custom_status,
+                    custom_priority,
+                    custom_fields,
+                    urls,
+                    attachments,
+                    trace_links,
+                    gitlab_issues,
+                    // STORY-476: legacy centralized backend — not persisted.
+                    // trace:STORY-476 | ai:claude
+                    external_refs: Vec::new(),
+                    implementation_info,
+                    ai_evaluation,
+                    // STORY-332: legacy centralized backend — not persisted.
+                    attention_reason: None,
+                    // EPIC-28: legacy centralized backend — not persisted.
+                    // trace:EPIC-28 | ai:claude
+                    failure_reason: None,
+                    // STORY-333: legacy centralized backend — not persisted.
+                    // trace:STORY-333 | ai:claude
+                    human_only: false,
+                    // trace:STORY-522 | ai:claude
+                    decision_request: None,
+                    // STORY-542: legacy centralized backend — not persisted.
+                    // trace:STORY-542 | ai:claude
+                    interface_changes: None,
+                    // trace:STORY-631 | ai:claude
+                    intent: None,
+                    version,
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn save_with_origin(&self, store: &RequirementsStore, imported: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Use a transaction for atomicity
+        conn.execute("BEGIN TRANSACTION", [])?;
+
+        let disk = self.load_requirements(&conn)?;
+        let mut stamped = store.clone();
+        if imported {
+            crate::provenance::stamp_store_import(&mut stamped, &disk)?;
+        } else {
+            crate::provenance::stamp_store_write(&mut stamped, &disk)?;
+        }
+        let store = &stamped;
+
+        // Clear existing data
+        conn.execute("DELETE FROM requirements", [])?;
+        conn.execute("DELETE FROM users", [])?;
+
+        // Save all requirements
+        for req in &store.requirements {
+            self.write_requirement(&conn, req)?;
+        }
+
+        // Save all users
+        for user in &store.users {
+            self.save_user(&conn, user)?;
+        }
+
+        // Save metadata
+        self.save_metadata(&conn, store)?;
+
+        conn.execute("COMMIT", [])?;
+        Ok(())
+    }
+
     /// Save a requirement to the database (for full store save)
+    // trace:STORY-1674 | ai:codex
     fn save_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
+        let previous = self.load_requirement(conn, &req.id)?;
+        let mut next = req.clone();
+        if previous.is_none() {
+            crate::provenance::stamp_if_absent(&mut next);
+        }
+        crate::provenance::stamp_write(
+            &mut next,
+            previous.as_ref(),
+            &crate::provenance::WriteContext::capture(),
+        )?;
+        self.write_requirement(conn, &next)
+    }
+
+    fn write_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
         let ai_eval_json = req.ai_evaluation.as_ref().map(Self::to_json).transpose()?;
         let impl_info_json = req
             .implementation_info
@@ -950,6 +1260,13 @@ impl SqliteBackend {
                 ],
             )?;
         }
+        conn.execute(
+            "UPDATE requirements SET filed_at=?1 WHERE id=?2",
+            params![
+                req.filed_at.as_ref().map(Self::to_json).transpose()?,
+                req.id.to_string()
+            ],
+        )?;
         Ok(())
     }
 
@@ -1284,30 +1601,10 @@ impl DatabaseBackend for SqliteBackend {
     }
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-
-        // Use a transaction for atomicity
-        conn.execute("BEGIN TRANSACTION", [])?;
-
-        // Clear existing data
-        conn.execute("DELETE FROM requirements", [])?;
-        conn.execute("DELETE FROM users", [])?;
-
-        // Save all requirements
-        for req in &store.requirements {
-            self.save_requirement(&conn, req)?;
-        }
-
-        // Save all users
-        for user in &store.users {
-            self.save_user(&conn, user)?;
-        }
-
-        // Save metadata
-        self.save_metadata(&conn, store)?;
-
-        conn.execute("COMMIT", [])?;
-        Ok(())
+        self.save_with_origin(store, false)
+    }
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.save_with_origin(store, true)
     }
 
     fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
@@ -1322,8 +1619,10 @@ impl DatabaseBackend for SqliteBackend {
         drop(conn);
         let mut store = self.load()?;
 
+        let disk = store.requirements.clone();
         // Apply changes
         update_fn(&mut store);
+        crate::provenance::stamp_store_write(&mut store, &disk)?;
 
         // Save within transaction
         let conn = self.conn.lock().unwrap();
@@ -1334,7 +1633,7 @@ impl DatabaseBackend for SqliteBackend {
 
         // Save all requirements
         for req in &store.requirements {
-            self.save_requirement(&conn, req)?;
+            self.write_requirement(&conn, req)?;
         }
 
         // Save all users
@@ -1352,240 +1651,7 @@ impl DatabaseBackend for SqliteBackend {
     // Override for more efficient single-requirement operations
 
     fn get_requirement(&self, id: &Uuid) -> Result<Option<Requirement>> {
-        let conn = self.conn.lock().unwrap();
-
-        // Check if new columns exist (for schema migration compatibility)
-        let has_trace_links = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-
-        let query = if has_trace_links {
-            "SELECT id, spec_id, prefix_override, title, description, status, priority,
-                    owner, feature, created_at, created_by, modified_at, req_type,
-                    dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
-             FROM requirements WHERE id = ?1"
-        } else {
-            "SELECT id, spec_id, prefix_override, title, description, status, priority,
-                    owner, feature, created_at, created_by, modified_at, req_type,
-                    dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
-                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
-             FROM requirements WHERE id = ?1"
-        };
-
-        let result = conn
-            .query_row(query, [id.to_string()], |row| {
-                let id_str: String = row.get(0)?;
-                let spec_id: Option<String> = row.get(1)?;
-                let prefix_override: Option<String> = row.get(2)?;
-                let title: String = row.get(3)?;
-                let description: String = row.get(4)?;
-                let status_str: String = row.get(5)?;
-                let priority_str: String = row.get(6)?;
-                let owner: String = row.get(7)?;
-                let feature: String = row.get(8)?;
-                let created_at_str: String = row.get(9)?;
-                let created_by: Option<String> = row.get(10)?;
-                let modified_at_str: String = row.get(11)?;
-                let req_type_str: String = row.get(12)?;
-                let dependencies_json: String = row.get(13)?;
-                let tags_json: String = row.get(14)?;
-                let relationships_json: String = row.get(15)?;
-                let comments_json: String = row.get(16)?;
-                let history_json: String = row.get(17)?;
-                let archived: bool = row.get(18)?;
-                let custom_status: Option<String> = row.get(19)?;
-                let custom_priority: Option<String> = row.get(20)?;
-                let custom_fields_json: String = row.get(21)?;
-                let urls_json: String = row.get(22)?;
-                let trace_links_json: Option<String> = row.get(23)?;
-                let implementation_info_json: Option<String> = row.get(24)?;
-                let ai_evaluation_json: Option<String> = row.get(25)?;
-                let weight: Option<f32> = row.get(26)?;
-                let attachments_json: String = row.get(27)?;
-                let gitlab_issues_json: String = row.get(28)?;
-                let version: i64 = row.get(29)?;
-
-                Ok((
-                    id_str,
-                    spec_id,
-                    prefix_override,
-                    title,
-                    description,
-                    status_str,
-                    priority_str,
-                    owner,
-                    feature,
-                    created_at_str,
-                    created_by,
-                    modified_at_str,
-                    req_type_str,
-                    dependencies_json,
-                    tags_json,
-                    relationships_json,
-                    comments_json,
-                    history_json,
-                    archived,
-                    custom_status,
-                    custom_priority,
-                    custom_fields_json,
-                    urls_json,
-                    trace_links_json,
-                    implementation_info_json,
-                    ai_evaluation_json,
-                    weight,
-                    attachments_json,
-                    gitlab_issues_json,
-                    version,
-                ))
-            })
-            .optional()?;
-
-        match result {
-            Some((
-                id_str,
-                spec_id,
-                prefix_override,
-                title,
-                description,
-                status_str,
-                priority_str,
-                owner,
-                feature,
-                created_at_str,
-                created_by,
-                modified_at_str,
-                req_type_str,
-                dependencies_json,
-                tags_json,
-                relationships_json,
-                comments_json,
-                history_json,
-                archived,
-                custom_status,
-                custom_priority,
-                custom_fields_json,
-                urls_json,
-                trace_links_json,
-                implementation_info_json,
-                ai_evaluation_json,
-                weight,
-                attachments_json,
-                gitlab_issues_json,
-                version,
-            )) => {
-                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
-                let status = Self::str_to_status(&status_str);
-                let priority = Self::str_to_priority(&priority_str);
-                let req_type = Self::str_to_type(&req_type_str);
-                let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(|_| chrono::Utc::now());
-                let modified_at = chrono::DateTime::parse_from_rfc3339(&modified_at_str)
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(|_| chrono::Utc::now());
-                let dependencies: Vec<Uuid> =
-                    Self::from_json(&dependencies_json).unwrap_or_default();
-                let tags: HashSet<String> = Self::from_json(&tags_json).unwrap_or_default();
-                let relationships: Vec<Relationship> =
-                    Self::from_json(&relationships_json).unwrap_or_default();
-                let comments: Vec<Comment> = Self::from_json(&comments_json).unwrap_or_default();
-                let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
-                let custom_fields: HashMap<String, String> =
-                    Self::from_json(&custom_fields_json).unwrap_or_default();
-                let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
-                let trace_links: Vec<TraceLink> = trace_links_json
-                    .and_then(|json| Self::from_json(&json).ok())
-                    .unwrap_or_default();
-                let implementation_info: Option<ImplementationInfo> =
-                    implementation_info_json.and_then(|json| Self::from_json(&json).ok());
-                let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
-                let attachments: Vec<Attachment> =
-                    Self::from_json(&attachments_json).unwrap_or_default();
-                let gitlab_issues: Vec<GitLabIssueLink> =
-                    Self::from_json(&gitlab_issues_json).unwrap_or_default();
-
-                Ok(Some(Requirement {
-                    id,
-                    spec_id,
-                    agreed_id: None,
-                    prefix_override,
-                    title,
-                    description,
-                    status,
-                    priority,
-                    owner,
-                    // trace:STORY-639 | ai:claude — legacy backend does not persist assignee.
-                    assignee: None,
-                    feature,
-                    created_at,
-                    created_by,
-                    modified_at,
-                    req_type,
-                    meta_subtype: None, // Loaded separately if needed
-                    dependencies,
-                    tags,
-                    weight,
-                    relationships,
-                    comments,
-                    history,
-                    // STORY-582: legacy centralized backend — not persisted.
-                    processing_record: Vec::new(),
-                    archived,
-                    // STORY-441: legacy centralized backend — not persisted.
-                    archived_at: None,
-                    // STORY-584: legacy centralized backend — not persisted.
-                    deferred: false,
-                    deferred_at: None,
-                    deferred_until: None,
-                    deferred_reason: None,
-                    // trace:TASK-1148 | ai:claude — narrative fields not carried by legacy backend
-                    risk_notes: None,
-                    test_coverage_notes: None,
-                    implementation_summary: None,
-                    execution_mode: None,
-                    // trace:STORY-634 | ai:claude — origin not carried by legacy backend
-                    origin: None,
-                    filed_at: None,
-                    custom_status,
-                    custom_priority,
-                    custom_fields,
-                    urls,
-                    attachments,
-                    trace_links,
-                    gitlab_issues,
-                    // STORY-476: legacy centralized backend — not persisted.
-                    // trace:STORY-476 | ai:claude
-                    external_refs: Vec::new(),
-                    implementation_info,
-                    ai_evaluation,
-                    // STORY-332: legacy centralized backend — not persisted.
-                    attention_reason: None,
-                    // EPIC-28: legacy centralized backend — not persisted.
-                    // trace:EPIC-28 | ai:claude
-                    failure_reason: None,
-                    // STORY-333: legacy centralized backend — not persisted.
-                    // trace:STORY-333 | ai:claude
-                    human_only: false,
-                    // trace:STORY-522 | ai:claude
-                    decision_request: None,
-                    // STORY-542: legacy centralized backend — not persisted.
-                    // trace:STORY-542 | ai:claude
-                    interface_changes: None,
-                    // trace:STORY-631 | ai:claude
-                    intent: None,
-                    version,
-                }))
-            }
-            None => Ok(None),
-        }
+        self.load_requirement(&self.conn.lock().unwrap(), id)
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
@@ -1835,6 +1901,103 @@ impl DatabaseBackend for SqliteBackend {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_sqlite_legacy_migration_and_all_writes_preserve_unknown_history() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "sqlite-session"),
+            ("AIDA_HARNESS_VERSION", "sqlite-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.db");
+        let backend = SqliteBackend::new(&path).unwrap();
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy
+            .history
+            .push(HistoryEntry::new("old author".into(), Vec::new()));
+        legacy
+            .comments
+            .push(Comment::new("old author".into(), "old comment".into()));
+        // Seed exactly the historical un-attributed shape and simulate v8.
+        {
+            let conn = backend.conn.lock().unwrap();
+            backend.write_requirement(&conn, &legacy).unwrap();
+            conn.execute_batch("ALTER TABLE requirements DROP COLUMN filed_at; UPDATE schema_version SET version=8;").unwrap();
+        }
+        drop(backend);
+        let backend = SqliteBackend::new(&path).unwrap();
+        let old = backend.get_requirement(&legacy.id).unwrap().unwrap();
+        assert!(old.filed_at.is_none());
+        assert!(old.history[0].session_id.is_none());
+        let mut edit = old;
+        edit.title = "new title".into();
+        backend.update_requirement(&edit).unwrap();
+        let persisted = backend.get_requirement(&legacy.id).unwrap().unwrap();
+        assert!(persisted.filed_at.is_none());
+        assert!(persisted.history[0].session_id.is_none());
+        assert!(persisted.comments[0].session_id.is_none());
+        assert_eq!(
+            persisted.history.last().unwrap().harness_version.as_deref(),
+            Some("sqlite-harness")
+        );
+        let mut store = backend.load().unwrap();
+        let mut fresh = Requirement::new("new spec".into(), "body".into());
+        fresh.spec_id = Some("TASK-2".into());
+        store.requirements.push(fresh.clone());
+        backend.save(&store).unwrap();
+        let fresh = backend.get_requirement(&fresh.id).unwrap().unwrap();
+        assert_eq!(
+            fresh.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("sqlite-harness")
+        );
+        let result = backend
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == fresh.id)
+                    .unwrap()
+                    .title = "atomic edit".into()
+            })
+            .unwrap();
+        let row = result
+            .requirements
+            .iter()
+            .find(|r| r.id == fresh.id)
+            .unwrap();
+        assert_eq!(
+            row.history.last().unwrap().session_id.as_deref(),
+            Some("sqlite-session")
+        );
+        assert_eq!(
+            row.history,
+            backend.get_requirement(&fresh.id).unwrap().unwrap().history
+        );
+        let returned = backend
+            .add_requirement(Requirement::new("default add".into(), "body".into()))
+            .unwrap();
+        assert_eq!(
+            returned
+                .filed_at
+                .as_ref()
+                .unwrap()
+                .harness_version
+                .as_deref(),
+            Some("sqlite-harness")
+        );
+        assert_eq!(
+            returned.filed_at,
+            backend
+                .get_requirement(&returned.id)
+                .unwrap()
+                .unwrap()
+                .filed_at
+        );
+        let current = backend.get_requirement(&legacy.id).unwrap().unwrap();
+        assert!(current.history[0].session_id.is_none());
+        assert!(current.filed_at.is_none());
+    }
 
     #[test]
     fn test_sqlite_backend_create_and_load() {

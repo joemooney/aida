@@ -1657,6 +1657,14 @@ impl DatabaseBackend for CachedGitBackend {
         Ok(())
     }
 
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.refuse_store_write_on_read_only_cache()?;
+        let _lock = self.inner.lock_store()?;
+        self.inner.save_imported(store)?;
+        self.with_cache_schema_retry("rebuild cache after import", || self.full_rebuild(false))
+    }
+
     /// Whole-store transaction written per spec, then the cache rows it
     /// touched. Holds the store write lock across both.
     // trace:BUG-1612 | ai:claude

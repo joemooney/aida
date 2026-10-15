@@ -3,13 +3,15 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (8);
+INSERT INTO schema_version (version) VALUES (9);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
     id TEXT PRIMARY KEY NOT NULL,
     spec_id TEXT,
     prefix_override TEXT,
+    -- trace:STORY-1674 | ai:codex
+    filed_at TEXT,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'Draft',

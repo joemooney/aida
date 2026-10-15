@@ -1,3 +1,12 @@
+Spec creation, history and comments carry small optional write context.
+`aida usage show <SPEC> --provenance` joins exact session IDs to the existing
+read-only token ledger through each write timestamp; it never reads transcripts
+or infers model/effort. `AIDA_HARNESS_VERSION` is the sole harness-version source.
+Missing evidence remains unknown, including legacy rows. Per-event session
+usage is cumulative and overlapping. See
+[write provenance](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.

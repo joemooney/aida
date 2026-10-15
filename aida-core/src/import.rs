@@ -789,6 +789,8 @@ pub fn execute_import(
         }
     }
 
+    // trace:STORY-1674 | ai:codex — preserve historical context; audit the import itself.
+    crate::provenance::stamp_store_import(&mut target_store, &[])?;
     // Save the imported store
     let yaml = serde_yaml::to_string(&target_store)?;
     fs::write(target_path, yaml)?;
