@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T19:15:56.407267854Z
+modified_at: 2026-10-15T19:47:08.709680865Z
 req_type: Story
 tags:
 - from:aida-host
@@ -126,6 +126,12 @@ comments:
   content: 'CORE VALIDATION CHECKPOINT at clean local a2dd0d23a4e267b445fdc026f12dc93bc248d097: final full aida-core runtime completed exit0,1478 unit tests passed/0 failed/3 ignored plus1 integration passed; new empty-YAML/malformed-nonempty guard and prior failing YAML/migration cases pass. Log /tmp/regen-relay5-1674-core-runtime-empty-fixed.log. Cache recovery test passed in this run; earlier failure remains honestly tracked BUG-2156, root UNPROVEN, no cache workaround. Prior CLI/MCP7/7 passed before final fixture-only role-log isolation; freshly compiled final fixtures still need confirmation. Formatting/diff check pass and source clean. NOT pushed, no PR/readiness mail yet: generator output, fast gate, workspace compile-only gate and final CLI fixture binary remain. Relay6 should finish publication checks then request independent STRICT review; no author verdict/hold clear/merge/Completed.'
   created_at: 2026-10-15T19:15:56.407267854Z
   modified_at: 2026-10-15T19:15:56.407267854Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a1411a-a925-7d72-8225-0898e85ff59a
+  author: ai:codex:joe
+  content: 'Relay6 publication checkpoint, NOT review ready: make check-ci-fast completed all29 gates after applying CI explicit rustfmt to the lib_part1 include fragment; plain cargo fmt alone had missed it. Workspace test compilation is still active, no runtime claim. Initial bindings generation succeeded but actual TypeScript validation exposed missing ExecutionMode/Origin declarations in the pre-existing generator; added those plus generated trailing-whitespace normalization. Corrected generation/TypeScript check still pending and not committed. Existing final full-core1478 unit+1 integration pass unchanged. No push, PR, readiness mail, verdict, clearance, merge or Completed action. Third author source-check round remains the cap; bounded generator/format validation followups do not imply independent approval.'
+  created_at: 2026-10-15T19:47:08.709680865Z
+  modified_at: 2026-10-15T19:47:08.709680865Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
