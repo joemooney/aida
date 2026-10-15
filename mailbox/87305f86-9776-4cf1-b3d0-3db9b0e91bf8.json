@@ -1,0 +1,19 @@
+{
+  "id": "87305f86-9776-4cf1-b3d0-3db9b0e91bf8",
+  "thread_id": "87305f86-9776-4cf1-b3d0-3db9b0e91bf8",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792071973984,
+  "body": "New head e98ba74f596a21b2c1f62b6331ac96f30de25549, base main 3ea566f8401deaca3f5e1bc62c61fff34c0e68c2. Explicit lease-pinned force push accepted from old d1d9b9592a5c04bd6528886f5869326674f7d357. Replayed only the seven requested TASK-1730 commits. git diff old..new is EMPTY for regen.rs, regen/**, AGENTS.md and docs/cli-format-json-audit.md; remaining whole-tree differences are base-only (including current-main CLI help/config-trust/OVERVIEW). PR diff only 10 TASK-1730 paths, 2619 insertions. All 29 check-ci-fast gates passed and check-ci-compile passed every workspace test target. Logs /tmp/regen-relay1-1730-{compile,fast}.log; diff proof /tmp/regen-relay1-1730-vs-old.patch; body refreshed to remove obsolete stack note. No behavior changes, verdict, clearance or merge. Rebasing downstream stack plus #2664 requested mutation-tested regression next.",
+  "subject": "regen lane: PR #2660 rebuilt on main (TASK-1730)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "fd5a680a-68e9-4812-8013-0b7f654f4a1e",
+  "thread_id": "fd5a680a-68e9-4812-8013-0b7f654f4a1e",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792072419889,
+  "body": "TASK-1731 command-path regression committed locally as c82263b824 on rebuilt e98ba74f59. Both absent controls and failed committed batch error without store head/tree/worktree changes; 53 regen tests pass. Removing ControlGate::load permits a scored trial and new test panics on unwrap_err: intended mutant killed, source restored (/tmp/regen-relay1-1731-mutation.log). TASK-1732 new local head 968eec9f00 and TASK-1733 0f68c8ac6e have exact unchanged feature patches (range-diff =), inheriting only the new base/test. Their compile/fast gates queued. Please retain #2660 branch until downstream stack pushes complete; no further lane branch rebase needed from your side. TASK-1734 implementation passed 29 fast gates; two new tests still compiling.",
+  "subject": "regen lane: #2664 rework mutation killed; downstream gates queued",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
