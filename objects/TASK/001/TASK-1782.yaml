@@ -9,13 +9,21 @@ description: |-
     - Unknown (pid_start missing/unreadable): it may really be the agent. Suggest 'ps -p <pid>', then a manual kill.
   - Add an agent_stop_in_project test: a live sleep with pid_start=None gives Err, no signal, and the entry kept.
   - Also fix the SIGKILL re-check test race: have the TERM-ignoring sh write a ready marker after 'trap' and wait for it before sending TERM.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T18:54:51.040293500Z
-modified_at: 2026-10-15T18:54:51.040293500Z
+modified_at: 2026-10-15T18:55:09.482570257Z
 req_type: Task
+history:
+- id: 01a140eb-10aa-7752-bc63-86eff36e0ad8
+  author: joe
+  timestamp: 2026-10-15T18:55:09.482562693Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
