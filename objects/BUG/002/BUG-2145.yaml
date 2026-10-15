@@ -3,16 +3,24 @@ spec_id: BUG-2145
 agreed_id: BUG-2145
 title: queue work --auto-complete --sandbox silently runs the whole drain uncontained
 description: 'From the #2655 review, gap 3: clap accepts --auto-complete --sandbox, but the auto-complete branch dispatches (~queue_cmd.rs:6045) before --sandbox is read (line 11229), so an explicit containment request is dropped. Fix: honour --sandbox on the auto-complete path (thread into RealPhaseDriver contained), or reject the combination in clap. Test both.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T05:33:15.323717652Z
-modified_at: 2026-10-15T05:33:15.323717652Z
+modified_at: 2026-10-15T05:33:30.482325675Z
 req_type: Bug
 tags:
 - sandbox
 - security
+history:
+- id: 01a13e0d-21f2-7082-bb4d-e392afa61d62
+  author: joe
+  timestamp: 2026-10-15T05:33:30.482319953Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: dedea1776c0a252400fb552dd14d5bd93720e0e9
   branch: main
