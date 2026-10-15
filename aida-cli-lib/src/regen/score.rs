@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+mod adapter; // trace:TASK-1732 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
 mod guards; // trace:TASK-1730 | ai:codex
@@ -125,7 +126,7 @@ pub(super) fn parse_checks(output: &str) -> Result<Vec<CheckOutcome>> {
         .collect())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct Aggregate {
     pub(super) passed: usize,
     pub(super) total: usize,
@@ -135,6 +136,10 @@ pub(super) struct Aggregate {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct TrialRecord {
     pub(super) format_version: u32,
+    // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
+    // trace:TASK-1732 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) adapter: Option<adapter::AdapterRecord>,
     // Additive v1 extensions. Older records lack fresh-root/control evidence.
     // trace:TASK-1731 | ai:codex
     #[serde(default = "trial_kind")]
@@ -237,6 +242,9 @@ struct ScoreEnv {
     path: std::ffi::OsString,
     bwrap: Option<PathBuf>,
     install_ran: std::cell::Cell<bool>,
+    // Explicitly captured interface inputs, supplied only to the oracle.
+    // trace:TASK-1732 | ai:codex
+    oracle_environment: BTreeMap<String, String>,
     #[cfg(test)]
     _guard_cache: tempfile::TempDir,
 }
@@ -304,6 +312,7 @@ impl ScoreEnv {
             path: Default::default(),
             bwrap,
             install_ran: std::cell::Cell::new(false),
+            oracle_environment: BTreeMap::new(),
             #[cfg(test)]
             _guard_cache: guard_cache,
         };
@@ -400,8 +409,11 @@ impl ScoreEnv {
             .env("LANG", "C.UTF-8");
         if bundle.is_none() {
             cmd.env("PREFIX", &self.prefix);
-        } else if self.install_ran.get() {
-            cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
+        } else {
+            cmd.envs(&self.oracle_environment);
+            if self.install_ran.get() {
+                cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
+            }
         }
         cmd.output()
             .with_context(|| format!("run regen command {}", argv[0]))
@@ -551,19 +563,18 @@ fn run_trial(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_trial_in_env(
-    config: &RegenConfig,
-    dir: &Path,
+// Empty evidence is also used when R2 cannot reach execution. No exits, checks,
+// guard attestation or fresh-root claim is borrowed from the completed R1.
+// trace:TASK-1732 | ai:codex
+fn initial_record(
     manifest: Manifest,
     model: &str,
     vendor: &str,
     harness: &str,
     unconfined: bool,
-    mut env: ScoreEnv,
     bundle: &OracleBundle,
-    setup: Option<controls::RunSetup>,
-) -> Result<TrialRecord> {
+    guard_hash: Option<String>,
+) -> TrialRecord {
     let mut flags = Vec::new();
     if unconfined {
         flags.push("unconfined".into());
@@ -571,8 +582,9 @@ fn run_trial_in_env(
     if manifest.dirty {
         flags.push("dirty_corpus".into());
     }
-    let mut record = TrialRecord {
+    TrialRecord {
         format_version: 1,
+        adapter: None,
         kind: trial_kind(),
         root_fresh: false,
         control_run_id: None,
@@ -603,9 +615,33 @@ fn run_trial_in_env(
         survivors_detected: 0,
         flags,
         error: None,
-        env_executable: Some("/usr/bin/env".into()),
-        guard_bundle_sha256: Some(env.guards.hash.clone()),
-    };
+        env_executable: guard_hash.as_ref().map(|_| "/usr/bin/env".into()),
+        guard_bundle_sha256: guard_hash,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_trial_in_env(
+    config: &RegenConfig,
+    dir: &Path,
+    manifest: Manifest,
+    model: &str,
+    vendor: &str,
+    harness: &str,
+    unconfined: bool,
+    mut env: ScoreEnv,
+    bundle: &OracleBundle,
+    setup: Option<controls::RunSetup>,
+) -> Result<TrialRecord> {
+    let mut record = initial_record(
+        manifest,
+        model,
+        vendor,
+        harness,
+        unconfined,
+        bundle,
+        Some(env.guards.hash.clone()),
+    );
     if let Some(setup) = setup {
         record.kind = setup.kind.into();
         record.root_fresh = true;
@@ -637,6 +673,7 @@ fn run_trial_in_env(
             record.error = Some(format!("cannot collect guard evidence: {error}"));
         }
     }
+    adapter::sanitize_output(&mut record, &env.oracle_environment);
     finalize(&mut record);
     Ok(record)
 }
@@ -716,7 +753,17 @@ pub(super) fn handle_score(
             &config.oracle_paths,
             root.path(),
         )?;
-        let env = ScoreEnv::for_project(&config, unconfined, &project)?;
+        // Full validation precedes capture and all execution, including probes.
+        // Read from the private input snapshot once; neither install can change it.
+        let adapter = if control.is_none() {
+            adapter::CapturedAdapter::load(root.path())?
+        } else {
+            None
+        };
+        let mut env = ScoreEnv::for_project(&config, unconfined, &project)?;
+        if let Some(adapter) = &adapter {
+            env.oracle_environment = adapter.raw_environment();
+        }
         let gate = if control.is_none() {
             Some(controls::ControlGate::load(
                 store,
@@ -752,12 +799,18 @@ pub(super) fn handle_score(
                 repeats: control.map(|_| repeats),
             }),
         )?;
-        if let Some(gate) = gate.filter(|_| record.status == "scored") {
-            if let Err(error) = gate.apply(&mut record) {
-                record.status = "controls_refused".into();
-                record.clean = false;
-                record.error = Some(format!("{error:#}"));
-            }
+        adapter::apply_gate(&mut record, gate.as_ref());
+        if let Some(adapter) = adapter {
+            adapter::run_adapted(
+                &mut record,
+                adapter,
+                &root,
+                &config,
+                manifest.clone(),
+                &project,
+                &bundle,
+                gate.as_ref(),
+            )?;
         }
         persist(store, &record)?;
         // A refused trial is durable diagnostic evidence, never a reported score.
