@@ -7,12 +7,12 @@ description: |-
   (1) recovery_with_old_format_crash_during_normalization_preserves_records skips with 'if first.is_ok() { continue; }' and never asserts that each named step crashed at least once. Removing a step() call in production silently shrinks the matrix (mutation M11 survives). Record which steps fired and assert full coverage.
   (2) dev_build.rs:788: say only that the marker must come before .rollback/.promoted moves.
   (3) Add a doc comment to recover_live_dir_with_steps (dev_build.rs:763).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:08:30.506576968Z
-modified_at: 2026-10-14T18:41:46.703186192Z
+modified_at: 2026-10-15T06:23:03.562669639Z
 req_type: Task
 tags:
 - review-follow-up
@@ -30,6 +30,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a13e3a-7f86-7492-ac91-a221c616e959
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:23:03.558840308Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-7f8a-7751-bb92-d49696097b7e
+  timestamp: 2026-10-15T06:23:03.562667069Z
+  agent: aida
+  commit_sha: 9d4610275eac5359d0b045d632338250c3f48318
+  summary: Completed via merge 9d461027
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
@@ -38,3 +51,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:23:03.558835150Z
+  completion_sha: 9d4610275eac5359d0b045d632338250c3f48318
