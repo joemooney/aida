@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:16:06.364684179Z
-modified_at: 2026-10-15T04:03:56.989791609Z
+modified_at: 2026-10-15T05:33:32.496740268Z
 req_type: Bug
 comments:
 - id: 01a13dba-6525-7d20-a0ec-2753909bb1aa
@@ -16,6 +16,12 @@ comments:
   content: 'ADVISOR RULING (fire mode, 2026-10-14): Containment is monotonic. A contained drain contains EVERY agent child it spawns: CI-fix AND advisor children. No child ever runs with more authority/less confinement than its parent. Rationale: CI-fix writes code (obvious); the advisor child reads untrusted PR content and runs commands, so it is the higher prompt-injection exposure, not the lower. Its legitimate writes (review verdicts, comments) go through the same host-commit/contained-write path as any contained child. Implementation: thread the parent''s contained flag into headless_vendor_args at the phase_driver call sites instead of hard-coded false; if containment is requested but unavailable (no bwrap), FAIL CLOSED (refuse to launch the child), never silently downgrade. Tier: STRICT + functional verification (a contained CI-fix child: an in-worktree write succeeds, a write outside is refused). Approved for implementation.'
   created_at: 2026-10-15T04:03:08.197822189Z
   modified_at: 2026-10-15T04:03:08.197822189Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e0d-29d0-7c81-8099-62790177748c
+  author: joe
+  content: 'Advisor: #2655 approved (STRICT+functional). Per reviewer condition, gap 1 filed as BUG-2144 (high) before close; also BUG-2145, BUG-2146, TASK-1770.'
+  created_at: 2026-10-15T05:33:32.496740268Z
+  modified_at: 2026-10-15T05:33:32.496740268Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13dba-6e59-7e90-b831-61107fb1f466
