@@ -3574,7 +3574,13 @@ impl<'a> McpServer<'a> {
         let id = id_long.replace('-', "")[..12].to_string();
         let owner = std::env::var("USER").unwrap_or_else(|_| "mcp".to_string());
         let hostname = hostname_or_unknown();
-        let branch = current_branch_at(&self.project_root).unwrap_or_else(|| "main".to_string());
+        // BUG-2143: the claimed worktree's own branch, or none — never the
+        // primary checkout's `main`, which `aida session reap` protects forever.
+        // trace:BUG-2143 | ai:claude
+        let branch = crate::claim::claim_lease_branch(
+            std::path::Path::new(&worktree_path_arg),
+            &self.project_root,
+        );
 
         let lease = LightLease {
             id: id.clone(),

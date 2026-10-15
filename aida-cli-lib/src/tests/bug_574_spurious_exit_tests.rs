@@ -70,3 +70,27 @@ fn existing_lease_for_scope_none_when_unleased() {
     // Empty registry: also no re-entry.
     assert!(existing_lease_for_scope(&[], "ANYTHING-1").is_none());
 }
+
+/// BUG-2143: a worktree-less lease for the scope (an `aida claim` lease) is
+/// NOT re-entry — `session start` must go on to create the worktree instead of
+/// reporting `cd ` with a blank path.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn existing_lease_for_scope_skips_worktreeless_claim() {
+    let mut claim = lease_for("BUG-2143");
+    claim.worktree_path = std::path::PathBuf::new();
+    claim.claim_verb = true;
+    let leases = vec![claim.clone()];
+    assert!(
+        existing_lease_for_scope(&leases, "BUG-2143").is_none(),
+        "a claim lease holds no worktree to re-enter"
+    );
+    let mut held = lease_for("BUG-2143");
+    held.id = "held".into();
+    let leases = vec![claim, held];
+    assert_eq!(
+        existing_lease_for_scope(&leases, "BUG-2143").map(|l| l.id.as_str()),
+        Some("held"),
+        "the lease that holds a worktree is the one re-entered"
+    );
+}
