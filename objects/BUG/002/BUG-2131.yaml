@@ -3,12 +3,12 @@ spec_id: BUG-2131
 agreed_id: BUG-2131
 title: 'Store host-git: refuse store writes on git < 2.40, where GIT_ATTR_SOURCE is ignored and store .gitattributes can select host filter/textconv drivers'
 description: 'From the STRICT review of #2541 (BUG-1929). store_hooks.rs:183 neutralises the store''s .gitattributes via GIT_ATTR_SOURCE=<empty tree>, which needs git >= 2.40. On older git, a contained session can plant .gitattributes that selects a filter/textconv driver from the host''s git config, and that driver runs on the host during store git operations. Fix: detect the git version once and refuse (or fall back to read-only) store writes below 2.40, with a clear message. Acceptance: a unit test of the version gate; a doc note in the contained-session docs.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:08:49.105623604Z
-modified_at: 2026-10-15T08:00:01.422583619Z
+modified_at: 2026-10-15T10:05:15.855169849Z
 req_type: Bug
 comments:
 - id: 01a13e93-458e-70b1-8e01-b0d99a0710b2
@@ -17,6 +17,20 @@ comments:
   created_at: 2026-10-15T08:00:01.422583619Z
   modified_at: 2026-10-15T08:00:01.422583619Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+history:
+- id: 01a13f05-eecb-7e61-93cd-c482936fc3ca
+  author: aida-auto-bump
+  timestamp: 2026-10-15T10:05:15.851241291Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13f05-eecf-7423-a346-c01e7b0c62a5
+  timestamp: 2026-10-15T10:05:15.855167637Z
+  agent: advisor
+  commit_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
+  summary: Completed via merge 6ddf336d
 filed_at:
   code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
   branch: main
@@ -25,3 +39,7 @@ filed_at:
   aida_build_sha: 84a4942786
   vendor: claude
   session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T10:05:15.851231576Z
+  completion_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
