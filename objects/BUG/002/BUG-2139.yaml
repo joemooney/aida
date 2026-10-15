@@ -1,0 +1,23 @@
+id: 01a13d06-56d8-7783-a70b-0f0282c7a429
+spec_id: BUG-2139
+agreed_id: BUG-2139
+title: A fresh headless queue-work child inherits the launcher's full grant (including delegable seats), so an advisor running implementer work headless does it with advisor authority
+description: 'From the #2645 (BUG-1808) STRICT review. exec_vendor_headless (session.rs:3041) neither sets nor clears AIDA_SESSION_GRANT, so the fresh headless child runs under the launcher''s grant: same subject, same seat, same delegable_seats. AIDA_SESSION_ROLE shows the routed role but is display-only, and classify_role_display shows ''Ungranted''. This predates BUG-1808. Decide whether a fresh headless child should get a minted child grant scoped to the routed role (which would bring it under the delegation preflight) or run with a reduced grant. Security/authority review required.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:46:28.056514199Z
+modified_at: 2026-10-15T00:46:28.056514199Z
+req_type: Bug
+tags:
+- capture
+- seats
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
