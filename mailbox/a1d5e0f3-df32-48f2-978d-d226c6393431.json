@@ -1,0 +1,19 @@
+{
+  "id": "a1d5e0f3-df32-48f2-978d-d226c6393431",
+  "thread_id": "a1d5e0f3-df32-48f2-978d-d226c6393431",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792020855517,
+  "body": "PR #2642 (BUG-2009: non-executable AIDA hooks are stale; scaffold writers set 0755; doctor git-hooks check; root cause = scaffold upgrade Create w/o chmod). Risk STANDARD. check-ci-fast green, clippy clean, mutation-probed. CI pending.\n",
+  "subject": "READY #2642 BUG-2009",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

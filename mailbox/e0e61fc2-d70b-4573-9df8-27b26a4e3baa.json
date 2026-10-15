@@ -1,0 +1,19 @@
+{
+  "id": "e0e61fc2-d70b-4573-9df8-27b26a4e3baa",
+  "thread_id": "e0e61fc2-d70b-4573-9df8-27b26a4e3baa",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792021880698,
+  "body": "PR #2639 fix-forward pushed: format-json audit regenerated for the new history views. Ready for review.\n",
+  "subject": "READY #2639 STORY-1664",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
