@@ -86,9 +86,11 @@ under_shared_codex_daemon() {
         } <"/proc/$pid/cmdline" 2>/dev/null
         # The daemon is `codex app-server ...`; an interpreter-run stand-in
         # shifts it one slot (`bash .../codex app-server`).
-        case "${a0##*/} $a1 ${a1##*/} $a2" in
-            "codex app-server "* | *" codex app-server") return 0 ;;
-        esac
+        # Compare argv slots exactly so `app-server` must be codex's subcommand.
+        if { [ "${a0##*/}" = codex ] && [ "$a1" = app-server ]; } ||
+            { [ "${a1##*/}" = codex ] && [ "$a2" = app-server ]; }; then
+            return 0
+        fi
         IFS= read -r stat <"/proc/$pid/stat" 2>/dev/null || return 1
         # Field 4 is the ppid; skip past "(comm) " since comm may hold spaces.
         rest=${stat##*) }

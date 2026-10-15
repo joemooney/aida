@@ -2696,6 +2696,23 @@ pub(crate) fn agent_seed_session_args(
 /// Keeps an interactive codex off the shared app-server daemon (BUG-2007).
 pub(crate) const CODEX_NO_DAEMON_FLAG: &str = "--no-daemon";
 
+/// codex rejects a repeated `--no-daemon` ("cannot be used multiple times"), so
+/// when the operator's `--extra-flag` or agents.toml `default_flags` already
+/// carry it, the injected copy must not double it. Keeps the first occurrence.
+// trace:BUG-2007 | ai:claude
+pub(crate) fn dedupe_codex_no_daemon(agent_type: &str, args: &mut Vec<String>) {
+    if agent_type != "codex" {
+        return;
+    }
+    let mut seen = false;
+    args.retain(|a| {
+        if a != CODEX_NO_DAEMON_FLAG {
+            return true;
+        }
+        !std::mem::replace(&mut seen, true)
+    });
+}
+
 // trace:STORY-790 | ai:codex
 pub(crate) fn agent_resume_args(
     agent_type: &str,
@@ -2717,6 +2734,8 @@ pub(crate) fn agent_resume_args(
         ],
         other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
     };
+    // trace:BUG-2007 | ai:claude
+    dedupe_codex_no_daemon(agent_type, &mut args);
     if !prompt.trim().is_empty() {
         args.push(prompt.to_string());
     }
