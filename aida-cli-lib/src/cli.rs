@@ -12816,6 +12816,11 @@ pub enum Command {
         json: bool,
     },
 
+    /// Freeze requirements into a deterministic regeneration corpus
+    // trace:TASK-1729 | ai:codex
+    #[clap(subcommand)]
+    Regen(RegenCommand),
+
     /// Export requirements to different formats
     #[clap(hide = true)]
     Export {
@@ -16637,4 +16642,18 @@ mod tests {
             other => panic!("expected review stranded command, got {other:?}"),
         }
     }
+}
+
+/// Versioned regeneration artifacts.
+// trace:TASK-1729 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum RegenCommand {
+    /// Export committed store content as corpus.json and manifest.json
+    Corpus {
+        /// New or empty output directory
+        dir: PathBuf,
+        /// Export committed content despite local store changes (records dirty: true)
+        #[clap(long)]
+        allow_dirty: bool,
+    },
 }
