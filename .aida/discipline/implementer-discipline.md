@@ -138,6 +138,11 @@ every open PR's merge latency, not just yours.
 
 1. `make check-ci-fast` before every push, no exceptions. It is ~90s and needs
    no build; "I ran my own test file" does not substitute.
+   **After merging main into a branch, also run `make check-ci-compile`**
+   (compiles every test target, runs none, agent profile). check-ci-fast
+   builds nothing, so it cannot see a test initializer that no longer compiles
+   against a struct changed on main: on 2026-10-14 two PRs passed check-ci-fast
+   after a main merge and went red in CI with E0063 (TASK-1763).
 2. A **new or changed test runs locally, targeted, before its first push** —
    `cargo test -p <crate> <filter>` is cheap once anything has built, and the
    cheap agent compile profile exists for exactly this. A test you have never

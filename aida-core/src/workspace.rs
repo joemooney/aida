@@ -191,16 +191,14 @@ pub fn init_workspace(
 
     // Add remote if provided
     if let Some(remote) = registry_remote {
-        let has_remote = std::process::Command::new("git")
-            .current_dir(&store_full)
+        let has_remote = crate::git_ops::host_git_command(&store_full)
             .args(["remote", "get-url", "origin"])
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
 
         if !has_remote {
-            std::process::Command::new("git")
-                .current_dir(&store_full)
+            crate::git_ops::host_git_command(&store_full)
                 .args(["remote", "add", "origin", remote])
                 .output()?;
         }

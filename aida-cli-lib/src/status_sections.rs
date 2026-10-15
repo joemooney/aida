@@ -1275,7 +1275,6 @@ pub(crate) fn extract_status_changes_from_commits(
     commits: &[(String, String, String)],
     modified_specs_per_commit: &std::collections::BTreeMap<String, Vec<String>>,
 ) -> Vec<StatusTransition> {
-    use std::process::Command as ProcessCommand;
     let mut out = Vec::new();
     for (sha, _subj, source) in commits {
         let Some(specs) = modified_specs_per_commit.get(sha) else {
@@ -1284,9 +1283,7 @@ pub(crate) fn extract_status_changes_from_commits(
         if specs.is_empty() {
             continue;
         }
-        let diff = match ProcessCommand::new("git")
-            .arg("-C")
-            .arg(store_path)
+        let diff = match aida_core::git_ops::host_git_command(store_path)
             .args(["show", "--no-color", "--unified=0", sha, "--"])
             .args(specs.iter().map(|s| format!("objects/*/{}.yaml", s)))
             .output()

@@ -2014,6 +2014,61 @@ fn summary_line(v: &RecordedVerdict) -> String {
         .unwrap_or_default()
 }
 
+/// BUG-2136: what one `aida review record` call did to the verdict record,
+/// stated explicitly so the caller never has to infer it from the
+/// informational "previously on record" block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RecordOutcome {
+    /// A new recording landed; `round` counts it together with every
+    /// retained earlier round (1 on a first recording).
+    Recorded { round: usize },
+    /// The record already held a byte-equivalent recording (same commit,
+    /// recorder, verdict and findings); nothing new was added.
+    Unchanged,
+}
+
+/// BUG-2136: compare the record as it stood before the write (`before`, `None`
+/// when there was no file) with the object about to be written (`after`).
+/// Uses the same [`recording_key`] that decides round retention, so the
+/// printed outcome can never disagree with what the record kept.
+// trace:BUG-2136 | ai:claude
+pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
+    let identical = before.is_some_and(|prev| {
+        round_sha(prev).is_some() && recording_key(prev) == recording_key(after)
+    });
+    if identical {
+        return RecordOutcome::Unchanged;
+    }
+    let retained = after
+        .get("rounds")
+        .and_then(|v| v.as_array())
+        .map_or(0, Vec::len);
+    RecordOutcome::Recorded {
+        round: retained + 1,
+    }
+}
+
+/// BUG-2136: the one outcome line `aida review record` prints, e.g.
+/// `recorded APPROVED for BUG-7 at 0123456789ab (round 2)` or
+/// `unchanged: identical APPROVED already recorded at 0123456789ab`.
+// trace:BUG-2136 | ai:claude
+pub(crate) fn record_outcome_line(
+    outcome: &RecordOutcome,
+    label: &str,
+    key: &str,
+    sha: Option<&str>,
+) -> String {
+    let sha = sha.map(short_sha).unwrap_or("unknown commit");
+    match outcome {
+        RecordOutcome::Recorded { round } => {
+            format!("recorded {label} for {key} at {sha} (round {round})")
+        }
+        RecordOutcome::Unchanged => {
+            format!("unchanged: identical {label} already recorded at {sha}")
+        }
+    }
+}
+
 /// First 12 chars of a sha (or the whole string when shorter) — enough to
 /// identify a commit in a message without wrapping the line.
 pub fn short_sha(sha: &str) -> &str {

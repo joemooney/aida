@@ -100,6 +100,21 @@
 "Trace/doc-header stranding gate" = "fast"
 "Docs-drift guards schedule on docs-only PRs" = "fast"
 
+# Local-only gates DERIVED from one CI step: `"<local name>" = "<CI step>"`.
+# Not part of `make check-ci` (the CI step itself runs there), shown by
+# `make check-ci-list`, run by their own make target.
+#
+# "Compile tests" exists because `make check-ci-fast` builds nothing: two PRs
+# on 2026-10-14 passed it after merging main and then failed CI with E0063 (a
+# struct field added on main, missing from their test initializers), and main
+# went red for ~75 minutes from two independently green PRs. Run
+# `make check-ci-compile` after every merge of main into a branch. It carries
+# no command: `scripts/check-ci-gates.py` takes CI's `Run tests` body, drops the
+# run-only parts, adds `--no-run --profile agent`, and refuses a step shape it
+# does not understand. trace:TASK-1763 | ai:claude
+[derived]
+"Compile tests" = "Run tests"
+
 # Gates that genuinely cannot run here. The reason is PRINTED, one line per
 # gate, every time the runner skips it — AC1 asks for the skip list to be
 # visible rather than silent, and a skip nobody sees is how this drifted in the

@@ -586,6 +586,12 @@ impl GitBackend {
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
+        // A contained session leaves the commit to the host, and says so.
+        // trace:BUG-1929 | ai:claude
+        if crate::git_ops::store_commit_deferred_to_host(&self.root) {
+            crate::git_ops::notice_store_commit_deferred();
+            return;
+        }
         let _ = crate::git_ops::add_all(&self.root, "objects");
         if self.metadata_path.exists() {
             let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
@@ -593,7 +599,11 @@ impl GitBackend {
         if self.root.join("oplog.yaml").exists() {
             let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
         }
-        let _ = crate::git_ops::commit(&self.root, message);
+        if let Err(e) = crate::git_ops::commit(&self.root, message) {
+            // Never succeed silently: the write is on disk but uncommitted.
+            // trace:BUG-1929 | ai:claude
+            eprintln!("warning: store change written but not committed: {e:#}");
+        }
     }
 
     /// Stage only the listed paths (relative to repo root) and commit. Skips
@@ -603,6 +613,11 @@ impl GitBackend {
     /// trace:BUG-1-040 | ai:claude
     fn auto_commit_paths(&self, message: &str, paths: &[&str]) {
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
+            return;
+        }
+        // trace:BUG-1929 | ai:claude
+        if crate::git_ops::store_commit_deferred_to_host(&self.root) {
+            crate::git_ops::notice_store_commit_deferred();
             return;
         }
         for p in paths {
@@ -626,7 +641,10 @@ impl GitBackend {
             .map(|s| !s.success()) // non-zero exit means there ARE staged changes
             .unwrap_or(false);
         if staged {
-            let _ = crate::git_ops::commit(&self.root, message);
+            if let Err(e) = crate::git_ops::commit(&self.root, message) {
+                // trace:BUG-1929 | ai:claude
+                eprintln!("warning: store change written but not committed: {e:#}");
+            }
         }
     }
 

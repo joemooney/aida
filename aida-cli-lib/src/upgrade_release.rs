@@ -1967,14 +1967,12 @@ pub(crate) fn check_template_symlinks(root: &std::path::Path) -> String {
 /// Returns (ahead, behind) of `aida-store` branch vs `origin/aida-store`.
 pub(crate) fn orphan_branch_sync_state(store_path: &std::path::Path) -> Option<(usize, usize)> {
     // Run inside the store worktree so we see the right branch.
-    let ahead = std::process::Command::new("git")
+    let ahead = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-list", "--count", "origin/aida-store..HEAD"])
-        .current_dir(store_path)
         .output()
         .ok()?;
-    let behind = std::process::Command::new("git")
+    let behind = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-list", "--count", "HEAD..origin/aida-store"])
-        .current_dir(store_path)
         .output()
         .ok()?;
     if !ahead.status.success() || !behind.status.success() {

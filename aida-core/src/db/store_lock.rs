@@ -201,10 +201,13 @@ impl StoreWriteGuard {
 // trace:TASK-1717 | ai:claude
 pub fn with_store_write_lock<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
     let guard = acquire(root)?;
-    crate::git_ops::ensure_store_write_safe(root)?;
+    // A refused host hook profile is not a detached/missing repository.
+    // Validate it before state probes so its plain-language refusal survives.
+    // trace:BUG-1929 | ai:codex
     if guard.is_outermost() {
         crate::git_ops::ensure_store_hooks_supported(root)?;
     }
+    crate::git_ops::ensure_store_write_safe(root)?;
     f()
 }
 
