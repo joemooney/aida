@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::cli::RegenCommand;
+// trace:TASK-1730 | ai:codex
+mod score;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct CorpusManifest {
@@ -295,6 +297,17 @@ pub(crate) fn export_corpus(store: &Path, dir: &Path, allow_dirty: bool) -> Resu
 
 pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
     match cmd {
+        // trace:TASK-1730 | ai:codex
+        RegenCommand::Score {
+            dir,
+            corpus,
+            model,
+            vendor,
+            harness,
+            unconfined,
+        } => {
+            score::handle_score(store, dir, corpus, model, vendor, harness, *unconfined)?;
+        }
         RegenCommand::Corpus { dir, allow_dirty } => {
             let manifest = export_corpus(store, dir, *allow_dirty)?;
             println!(
