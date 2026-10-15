@@ -3,29 +3,47 @@
 
 use crate::*;
 
+/// True for a scaffold artifact that must be executable: a git or Claude
+/// Code hook, or a shell script.
+// trace:BUG-21 trace:BUG-2009 | ai:claude
+pub(crate) fn is_executable_artifact(rel_path: &std::path::Path) -> bool {
+    let s = rel_path.to_string_lossy();
+    s.starts_with(".git/hooks/") || s.starts_with(".claude/hooks/") || s.ends_with(".sh")
+}
+
 /// Ensure git/claude hook files are executable. Called from scaffolder
 /// write paths so freshly-scaffolded hooks don't trigger git's "hook was
-/// ignored because not executable" warning.
-/// trace:BUG-21 | ai:claude
-pub(crate) fn ensure_executable_if_hook(rel_path: &std::path::Path, full_path: &std::path::Path) {
-    let s = rel_path.to_string_lossy();
-    let is_hook =
-        s.starts_with(".git/hooks/") || s.starts_with(".claude/hooks/") || s.ends_with(".sh");
-    if !is_hook {
-        return;
+/// ignored because not executable" warning. Sets 0755 explicitly (never
+/// the mode an overwritten file had, nor what the umask leaves for a new
+/// one), and a failure is returned: a hook git skips is silent.
+// trace:BUG-21 trace:BUG-2009 | ai:claude
+pub(crate) fn ensure_executable_if_hook(
+    rel_path: &std::path::Path,
+    full_path: &std::path::Path,
+) -> std::io::Result<()> {
+    if !is_executable_artifact(rel_path) {
+        return Ok(());
     }
+    aida_core::git_ops::set_hook_mode(full_path)
+}
+
+/// True when the scaffold artifact at `full_path` must be executable and is
+/// not: its content may match, but git skips such a hook.
+// trace:BUG-2009 | ai:claude
+pub(crate) fn hook_artifact_needs_mode(
+    rel_path: &std::path::Path,
+    full_path: &std::path::Path,
+) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(full_path) {
-            let mut p = meta.permissions();
-            p.set_mode(0o755);
-            let _ = std::fs::set_permissions(full_path, p);
-        }
+        is_executable_artifact(rel_path)
+            && std::fs::metadata(full_path).is_ok_and(|m| m.permissions().mode() & 0o111 == 0)
     }
     #[cfg(not(unix))]
     {
-        let _ = full_path; // no-op on non-unix
+        let _ = (rel_path, full_path);
+        false
     }
 }
 
