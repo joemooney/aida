@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T09:57:47.179514715Z
+modified_at: 2026-10-15T10:02:11.412316853Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -60,6 +60,11 @@ comments:
   created_at: 2026-10-15T09:57:47.179514715Z
   modified_at: 2026-10-15T09:57:47.179514715Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13f03-1e54-7110-9bda-427d5d99aa21
+  author: joe
+  content: 'Session 5 records binding advisor mail f3943c78 (03:00): validate all mappings first, capture only named nonprotected sources from the caller once, inject sources into R1 and sources plus target aliases into fresh R2; missing source is a named hard error. Each value must be valid UTF-8, no NUL/newline, <=4 KiB; never log or persist values or hashes of them. Persist only mapping names/presence and GAPS.toml input hash. Case-insensitive source names containing TOKEN, SECRET, PASSWORD or KEY refuse. R2 implementation may now proceed under this ruling after the current controls checkpoint.'
+  created_at: 2026-10-15T10:02:11.412316853Z
+  modified_at: 2026-10-15T10:02:11.412316853Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
