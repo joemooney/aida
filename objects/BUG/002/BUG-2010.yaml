@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-15T08:13:33.543462051Z
+modified_at: 2026-10-15T12:03:46.341523435Z
 req_type: Bug
 tags:
 - agent-new
@@ -101,6 +101,12 @@ comments:
   created_at: 2026-10-15T08:13:33.543462051Z
   modified_at: 2026-10-15T08:13:33.543462051Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13f72-6e25-7111-9a4c-cad3d517a2c3
+  author: joe
+  content: 'ADVISOR (05:04): round-3 delta at 5d2d59b878 reviewed. The vendor exec is removed, but the launch test no longer guards :12249; that hole comes from the advisor''s option (b). One bounded change was sent to agy: a queue_work_self_claim helper plus a mutation check. Approve on that.'
+  created_at: 2026-10-15T12:03:46.341523435Z
+  modified_at: 2026-10-15T12:03:46.341523435Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
