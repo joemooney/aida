@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-12T15:02:22.135801612Z
+modified_at: 2026-10-15T15:13:14.604976619Z
 req_type: Story
 tags:
 - from:aida-host
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-10-12T15:02:21.311643562Z
   modified_at: 2026-10-12T15:02:21.311643562Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a1401f-e56c-7360-973a-d364f5922923
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor the recorded operator choice B+C: retain small write provenance, preserve session identity on edits/comments, add harness_version only from an explicitly reported harness value (otherwise unknown), and join model/effort/token evidence from the EPIC-71 ledger by session/time when queried. No inferred model or duplicated cumulative-token stamps. Proposed acceptance: current/legacy write roundtrips; reported vs absent harness_version; edit/comment session identity; query fixture matching and missing ledger evidence with unknown values. Need signed acceptance for the exact query surface, reported-value source and session/time join semantics before this schema/write-path change. Recommendation: extend the existing per-spec cost/provenance query rather than introduce a second ledger.
+  created_at: 2026-10-15T15:13:14.604976619Z
+  modified_at: 2026-10-15T15:13:14.604976619Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
   author: joe
