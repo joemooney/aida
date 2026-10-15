@@ -5,13 +5,21 @@ title: Merge-time completion misses specs on squash merges whose subject ends '(
 description: |-
   Seen 2026-10-15: after aida pr ship, TASK-1730 (#2660), TASK-1731 (#2664) and TASK-1732 (#2666) were left at 'done'/'approved', not completed, and the advisor closed them by hand. Earlier today BUG-2141, DOC-6, TASK-1750 and TASK-1768 were also closed by hand. The squash subjects look like '[AI:codex] feat(regen): ... (TASK-1732) (#2666)'. Hypothesis: the completion parser only reads the LAST parenthesized group, which is '(#2666)' and not a spec id. BUG-2143's subject without a trailing ' (#N)' completed fine.
   Acceptance: the completion parser takes spec IDs from any trailing parenthesized groups, ignoring a final '(#N)' PR-number group. Tests cover '(SPEC) (#N)', '(SPEC-A SPEC-B) (#N)' and '(SPEC)'. A one-off sweep reports already-merged PRs whose credited specs are not completed (dry-run by default).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:57:25.809251438Z
-modified_at: 2026-10-15T22:57:25.809251438Z
+modified_at: 2026-10-15T22:57:36.624784740Z
 req_type: Bug
+history:
+- id: 01a141c9-0970-7c33-acda-acee2aa91e57
+  author: joe
+  timestamp: 2026-10-15T22:57:36.624779783Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c419f6a5efdbdf3c450a099b26f79428c01c8d3b
   branch: main
