@@ -116,11 +116,12 @@ Local forms use the offset in effect on that date, so they stay right across a d
 
 **One line** — the audit trail: what's been touched and how it stands now.
 
-**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Five views, from broadest to most detailed:
+**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Six views, from broadest to most detailed:
 - **Status flow** (default, no SPEC-ID) — every status change across the project, newest first, one line each: when, the spec ID, `old → new` status, and the spec's title. A spec filed in the window shows as `(new) → <status>`, so filing straight at Approved is visible too. A spec that moved several times gets one line per move. This is the "what moved?" view, and it is fast because it reads only the history index (see Gotchas). <!-- trace:STORY-1650 | ai:claude -->
 - **Digest** (`aida history --digest`) — a per-requirement view sorted by last-touch, one row per spec with its current status ("what was I up to last session?"). This was the default before the status flow; its output is unchanged.
 - **Status progression** (`aida history <SPEC-ID>`, shorthand for `aida history --id <SPEC-ID>`) — that one spec's status transitions in chronological order, oldest first, each with a timestamp and its old→new status. This is the "how did this spec get here?" view. Every output format shows the same transitions: prose at a terminal, a TOON table with one row per transition for agent/piped output, and a JSON document with `--json`. <!-- trace:BUG-1635 | ai:claude -->
 - **Timeline** (`aida history <SPEC-ID> --timeline`) — where that spec's elapsed time actually went, as a chronological list of spans each labelled `work`, `wait` or `unknown`. A different question from the other views: not "what changed" but "how long did each stage take, and how much of the clock is simply unaccounted for". <!-- trace:STORY-1478 | ai:claude -->
+- **List views** (`aida history opened`, `completed`, `rejected`, `approved`, `closed`) — the specs filed, completed, rejected, approved or closed in a window, as an `aida list`-style table with a `When` column. This is the "what was filed / shipped this week?" view. See [History list views](#history-list-views). <!-- trace:STORY-1664 | ai:claude -->
 - **Full trail** (`aida history events`, or `--full` after a SPEC-ID) — the complete chronological per-event feed, decoding each commit's YAML diff into one line per change (status transitions, comments, tag edits, field edits, …), newest first. Slower than the other two (it shells out per file per commit) — the mode for a forensic read of one spec, or of everything in a time window.
 
 **Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "How did this spec get to where it is?" (`aida history <SPEC-ID>`), "did my ship register?" (`--shipped`), "what got approved / filed this week?" (`--to approved` / `--opened` with `--since 7d`), "what moved this week?" (`--since`), "show me *everything* that happened to `<spec-id>`" (`aida history <SPEC-ID> --full`, same as `aida history events --id`).
@@ -161,6 +162,58 @@ Local forms use the offset in effect on that date, so they stay right across a d
 **Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed a SPEC-ID straight from `list`/`show` to see one spec's status story.
 
 ---
+
+#### History list views
+
+<!-- trace:STORY-1664 | ai:claude -->
+
+`aida history opened`, `aida history completed`, `aida history rejected`,
+`aida history approved` and `aida history closed` answer "which specs were
+filed / completed / rejected / approved / closed in this window?" with one row
+per spec, in the same columns as `aida list` plus a leading `When`:
+
+```bash
+aida history completed                      # shipped in the last 7 days
+aida history opened --since 30d --type bug  # bugs filed this month
+aida history closed --since 2026-10-01 --tags cli --oldest-first
+aida history approved --all-events --json
+```
+
+- **When is the event time; every other column is the spec's current state.**
+  A spec filed this week and completed since shows in `opened` with the time it
+  was filed and status `Completed`. A spec deleted since the event has no
+  current state and no row.
+- **The window defaults to the last 7 days.** `--since`/`--until` take the same
+  grammar as the rest of `aida history`, and the human output starts with the
+  resolved `Window: …` line.
+- **`closed`** is any move into Completed, Rejected or Superseded. Archiving is
+  not closing. A transition must change the status, so a respelling of the
+  same status never counts. `opened` counts filings only, including a spec filed
+  straight at a non-draft status.
+- **One row per spec**, at its most recent matching event, newest first. A spec
+  completed, reopened and completed again in the window shows once; pass
+  `--all-events` for one row per event. `--oldest-first` reverses the order, and
+  `--limit`/`-n` caps the rows after that.
+- **Filters match the spec's current fields**, as `aida list` does: `--type`,
+  `--priority`, `--status` and `--tags a,b` (every listed tag must be present).
+  `--author` matches who made the change. Meta specs are hidden unless you pass `--type meta` or
+  `--include-meta`; archived and deferred specs are hidden unless you pass
+  `--all`, `--archived` or `--deferred`.
+- **Output** — a table at a terminal; a TOON document under agent/piped output
+  (`view`, `since`, `until`, `truncated`, `count`, then `specs` rows of `when`,
+  `id`, `type`, `status`, `priority`, `title`); and with `--json` a document of
+  `view`, `since`, `until`, `source`, `truncated`, `truncated_at`, `count` and
+  `specs` (each `{when, spec_id, title, type, status, priority, tags}`).
+- **Completeness.** The view reads the history index when it can answer, and
+  then sees the whole window. Otherwise it reads the store's git log, up to 250
+  commits by default (`--max-commits` changes that). When the commit limit cuts
+  the window short, the output says so: `truncated` is `true`, `truncated_at`
+  names the time of the oldest commit read, and the human output prints a
+  notice. A short list with `truncated: false` is the whole answer.
+- Each view is its own view, so it refuses a SPEC-ID and the flags that pick a
+  different view (`--full`, `--digest`, `--timeline`, `--to`, `--from`,
+  `--opened`, `--shipped`, `--status-changes`, `--comments`, `--kind`,
+  `--oneline`, `--template`, `--fields`).
 
 #### History layouts and columns
 

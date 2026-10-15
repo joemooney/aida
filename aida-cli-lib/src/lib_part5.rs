@@ -165,6 +165,11 @@
 #[path = "tests/task_518_pr_to_spec_tests.rs"]
 mod task_518_pr_to_spec_tests;
 
+// trace:BUG-1993 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1993_review_surface_unknown_tests.rs"]
+mod bug_1993_review_surface_unknown_tests;
+
 /// trace:STORY-67 | ai:claude
 /// The review surface a held spec is sitting on — what `aida review <SPEC>`
 /// resolves the spec to before reviewing. NEVER asserts a closed/absent PR
@@ -186,7 +191,17 @@ pub(crate) enum ReviewSurface {
     /// No commits and no trace comments reference the spec — built locally
     /// and never pushed, or not started.
     Local,
+    /// BUG-1993: a bounded linkage scan timed out before it could tell where
+    /// the work sits, so it may well be on a pushed branch. Never treated as
+    /// `Local`: callers keep the spec visible with an "unknown" note.
+    /// `reason` names the scan (`commit scan timed out`, ...).
+    // trace:BUG-1993 | ai:claude
+    Unknown { reason: &'static str },
 }
+
+/// BUG-1993: the `aida human` surface label for [`ReviewSurface::Unknown`].
+// trace:BUG-1993 | ai:claude
+pub(crate) const REVIEW_SURFACE_UNKNOWN_LABEL: &str = "unknown (scan timed out)";
 
 pub(crate) fn review_branch_no_change_context_card(
     spec_id: &str,
@@ -448,7 +463,12 @@ pub(crate) fn classify_review_surface_forge_first(
             branch,
             commits: linkage.commits.len(),
         },
-        (None, _) => ReviewSurface::Local,
+        // BUG-1993: no branch because a scan timed out is unknown, not
+        // "never pushed". trace:BUG-1993 | ai:claude
+        (None, _) => match linkage.unknown_reason() {
+            Some(reason) => ReviewSurface::Unknown { reason },
+            None => ReviewSurface::Local,
+        },
     }
 }
 
@@ -503,9 +523,14 @@ pub(crate) fn spec_eligible_for_review_awaiting(
     // merged (the merged-PR signal); `Local` = never pushed. Neither is a
     // review awaiting a human. The LEGITIMATE case — Done-on-a-branch with an
     // OPEN PR not yet merged — is `OpenChange` and stays included.
+    // BUG-1993: an `Unknown` surface (scan timed out) may be a real pushed
+    // branch, so it stays on the seat with an "unknown" note rather than
+    // silently dropping. trace:BUG-1993 | ai:claude
     matches!(
         surface,
-        ReviewSurface::OpenChange { .. } | ReviewSurface::BranchNoChange { .. }
+        ReviewSurface::OpenChange { .. }
+            | ReviewSurface::BranchNoChange { .. }
+            | ReviewSurface::Unknown { .. }
     )
 }
 
@@ -531,7 +556,9 @@ pub(crate) fn review_surface_branch(surface: &ReviewSurface) -> Option<&str> {
         ReviewSurface::OpenChange { branch, .. } | ReviewSurface::BranchNoChange { branch, .. } => {
             Some(branch.as_str())
         }
-        ReviewSurface::Shipped { .. } | ReviewSurface::Local => None,
+        ReviewSurface::Shipped { .. } | ReviewSurface::Local | ReviewSurface::Unknown { .. } => {
+            None
+        }
     }
 }
 
@@ -589,8 +616,14 @@ pub(crate) fn classify_human_review_bucket(
         return HumanReviewBucket::Excluded;
     }
     // Draft + pushed branch + no open PR ⇒ loose WIP, not a review gate.
+    // BUG-1993: a Draft whose surface is unknown (scan timed out) is listed
+    // as WIP too — visible, but not asserted as a review gate.
+    // trace:BUG-1993 | ai:claude
     if matches!(status, aida_core::RequirementStatus::Draft)
-        && matches!(surface, ReviewSurface::BranchNoChange { .. })
+        && matches!(
+            surface,
+            ReviewSurface::BranchNoChange { .. } | ReviewSurface::Unknown { .. }
+        )
     {
         return HumanReviewBucket::WipBranch;
     }
@@ -1149,6 +1182,22 @@ pub(crate) fn handle_review_spec(
                  then re-run {}.",
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 format!("({spec_id})").cyan(),
+                format!("aida review {spec_id}").cyan()
+            );
+            return Ok(());
+        }
+        // BUG-1993: a timed-out linkage scan is not "never pushed" — say the
+        // surface is unknown and ask for a re-run. trace:BUG-1993 | ai:claude
+        ReviewSurface::Unknown { reason } => {
+            println!(
+                "  {} {}",
+                "Surface".bold(),
+                format!("unknown — {reason} (git under load); the work may be on a pushed branch")
+                    .yellow()
+            );
+            println!(
+                "  {} re-run {} when git is less busy.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 format!("aida review {spec_id}").cyan()
             );
             return Ok(());
