@@ -3035,6 +3035,16 @@ fn agent_launch_lease_is_active(
         lease_state_for(lease, live, chrono::Utc::now()),
         LeaseState::Live
     ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
+        || {
+            // trace:BUG-2010 | ai:antigravity
+            let live_agents = agent_registry::load_live_entries(project_root);
+            agent_registry::live_agent_for_lease_or_spec(
+                &live_agents,
+                Some(lease),
+                Some(&lease.scope),
+            )
+            .is_some()
+        }
 }
 
 pub(crate) fn prepare_agent_launch(
