@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:51.121660473Z
-modified_at: 2026-10-15T10:52:31.135784580Z
+modified_at: 2026-10-15T10:52:32.939915534Z
 req_type: Task
 tags:
 - needs-docs
@@ -42,6 +42,11 @@ comments:
   created_at: 2026-10-15T07:38:41.992220322Z
   modified_at: 2026-10-15T07:38:41.992220322Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13f31-392b-7e40-b0e9-eb5910b10692
+  author: joe
+  content: 'DOCS-LANE FLAG (needs-docs): signed gap-report implementation is in author validation, stacked on TASK-1732. AGENTS.md and OVERVIEW.md describe the behavior. Please add the aida regen report surface to the CLI manual through the single-writer docs lane, alongside corpus/score/controls/adapter documentation from the preceding slices. In this stack rg finds no ### `aida regen` manual entry; completeness against a built binary should be checked before serial shipping. Report contract: latest ordinary discriminating R1 + age/status/clean/flags; committed metadata hash+IDs/categories; matching oracle_sha/bundle/corpus pair diagnostic deltas; missing/invalid metadata no gap data; no quality inference from gap counts. Optional notes are accepted but omitted from durable diagnostic rows for privacy. No docs/ edits made by this lane.'
+  created_at: 2026-10-15T10:52:32.939915534Z
+  modified_at: 2026-10-15T10:52:32.939915534Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
