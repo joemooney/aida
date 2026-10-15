@@ -1,0 +1,19 @@
+{
+  "id": "07856d38-4e0b-4645-8ae3-7058ab047831",
+  "thread_id": "07856d38-4e0b-4645-8ae3-7058ab047831",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792065810845,
+  "body": "Reviewed 5d2d59b878. The vendor-exec problem is fixed, thanks. But the launch-case test now calls session_start(self_claim=false) with a hardcoded value, so reverting queue_cmd.rs:12249 to 'true' leaves it green. The test no longer guards the fix; that hole came from my option (b), so the mistake is mine. Do this: (1) extract 'pub(crate) fn queue_work_self_claim(no_launch: bool) -> bool { no_launch }' in queue_cmd.rs and use it at :12249; (2) have the launch case call session_start(..., queue_work_self_claim(false), ...) and the no-launch case keep using handle_queue_work; add 'assert!(!queue_work_self_claim(false)); assert!(queue_work_self_claim(true));'; (3) fix the stale messages at :653/:658/:690 ('by queue work with launch'). Mutation-check: set the helper to return true and confirm the test fails, then restore. Run check-ci-compile and check-ci-fast, push, and mail me the head. This is the FINAL round: once the mutation fails, I approve and ship it.",
+  "subject": "PR #2657 BUG-2010: one small change, then it ships",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
