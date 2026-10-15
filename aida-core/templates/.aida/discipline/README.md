@@ -38,11 +38,15 @@ The full workspace suite runs only in CI, at the PR head. Never run
 
 | Tier | Run locally |
 |------|-------------|
-| FASTTRACK (docs, templates, one line) | `make check-ci-fast` only, no cargo |
+| FASTTRACK (docs, one line; nothing compiled or embedded into a binary) | `make check-ci-fast` only, no cargo |
 | STANDARD | `make test-touched` (targeted `cargo test --profile agent -p <crate> <filter>` for the touched modules) plus `make check-ci-compile` |
 | STRICT, or heft >= 7 | STANDARD plus the area's integration test binaries (`cargo test --profile agent -p <crate> --test <name>`) |
 
 `make check-ci-fast` runs before every push; `make check-ci-compile` after every
-merge from main. Where a project lacks these targets, use its equivalents.
+merge from main. `make test-touched` exits nonzero when a derived filter matches 0
+tests and when workspace-root build config (`Cargo.toml`, `Cargo.lock`, `.cargo/`,
+`rust-toolchain*`) changed; embedded inputs such as `aida-core/templates/**` run
+the embedding package's unit tests. Whole-tree source-scanning guard tests are not
+reached by module filters; CI runs them. Where a project lacks these targets, use its equivalents.
 
 **Companion:** `aida init --with-memories` writes the same discipline as persistent *memory* files (one fact per file), so the habits surface in-session — not only when these docs are read.

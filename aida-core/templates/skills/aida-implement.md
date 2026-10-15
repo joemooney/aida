@@ -347,7 +347,7 @@ wait → red → re-trigger. The floor:
 2. New or changed tests run locally, targeted, before the first push,
    by the spec's testing tier. The full workspace suite runs only in CI;
    never run `cargo test --workspace` locally.
-   - FASTTRACK (docs, templates, one line): `make check-ci-fast` only, no cargo.
+   - FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
    - STANDARD: `make test-touched` (targeted `cargo test --profile agent
      -p <crate> <filter>` for the touched modules) plus
      `make check-ci-compile`.

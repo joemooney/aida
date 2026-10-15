@@ -477,7 +477,7 @@ follow related links, write the code, add trace comments
 Test locally by the spec's tier; the full workspace suite runs only in CI
 (never `cargo test --workspace` locally):
 
-- **FASTTRACK** (docs, templates, one line): `make check-ci-fast` only, no cargo.
+- **FASTTRACK** (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
 - **STANDARD**: `make test-touched` (targeted `cargo test --profile agent -p
   <crate> <filter>` for the touched modules) plus `make check-ci-compile`.
 - **STRICT or heft >= 7**: STANDARD plus the area's integration test binaries

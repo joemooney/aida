@@ -133,7 +133,7 @@ Rules:
 - Template masters only; never edit generated mirrors.
 - Testing tier for YOUR work (the full workspace suite runs only in CI; never
   run `cargo test --workspace` locally). <Pick one:>
-  FASTTRACK (docs, templates, one line): `make check-ci-fast` only, no cargo.
+  FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
   STANDARD: `make test-touched` (targeted `cargo test --profile agent -p
   <crate> <filter>` for the touched modules) plus `make check-ci-compile`.
   STRICT or heft >= 7: STANDARD plus the area's integration test binaries
