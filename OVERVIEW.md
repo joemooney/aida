@@ -406,7 +406,8 @@ modes and bytes) is rechecked before execution; tampering refuses scoring.
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
 never through PATH or the trial. The oracle runs from the read-only bundle via
-coreutils `/usr/bin/env --chdir`, using `AIDA_REGEN_TRIAL_ROOT` and
+GNU coreutils `/usr/bin/env --chdir` (required; missing or unsupported means
+scoring fails closed), using `AIDA_REGEN_TRIAL_ROOT` and
 `AIDA_REGEN_PREFIX` to locate the regenerated system and private install prefix.
 The installer runs from the selected system directory and receives `PREFIX`, whose
 `bin/` precedes guards and system directories on PATH. The environment has private

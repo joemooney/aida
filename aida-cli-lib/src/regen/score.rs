@@ -364,7 +364,9 @@ fn execute(
     }
     let oracle = env
         .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
-        .context("oracle launch failed")?;
+        .context(
+            "oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required",
+        )?;
     record.oracle_exit = oracle.status.code();
     if !oracle.status.success() {
         record.flags.push("oracle_nonzero_exit".into());
@@ -373,7 +375,7 @@ fn execute(
         parse_checks(std::str::from_utf8(&oracle.stdout).context("oracle output is not UTF-8")?)
             .with_context(|| {
                 format!(
-                    "oracle stderr: {}",
+                    "oracle stderr (requires GNU coreutils /usr/bin/env with --chdir support): {}",
                     String::from_utf8_lossy(&oracle.stderr)
                         .chars()
                         .take(4096)
