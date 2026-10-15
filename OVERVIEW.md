@@ -1,3 +1,11 @@
+C7 lifecycle commands resolve invoking caller authority after acquiring the
+seat lock; ack/release also revalidate persisted requester authority locally.
+The dormant runtime gate refreshes its caller at the same locked boundary.
+Absolute deadlines reconcile on lifecycle/gate entry without a live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
@@ -539,6 +547,19 @@ unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
 stale definition, and hold refusals for scripts. See
 [git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
 <!-- trace:TASK-1606 | ai:codex -->
+
+
+Seat occupancy is at the early C7 core checkpoint: process identity, permanent
+seat record/lock, graceful transitions and seat commands are implemented, while
+production gateway wiring requires fresh independent review. The C7 rework
+bounds lock acquisition to ten seconds, shares policy with the main-worktree
+state root, and defines a delegated child's review scope through persisted
+spawn identity and direct review/implements edges. One-shot shell Route/Spawn
+validates authority without claiming; harness/loop operations retain implicit
+claims. Hard takeover (`--kill`) remains disabled scaffolding. The
+[sketch C7 addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements)
+records the actual phase operations and unattended launcher dispositions.
+<!-- trace:TASK-1607 | ai:codex -->
 
 Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
 `PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an

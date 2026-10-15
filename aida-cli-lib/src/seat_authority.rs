@@ -350,6 +350,18 @@ pub(crate) fn current_grant(project_root: &Path) -> Option<SeatGrant> {
     grant_check(project_root).into_valid()
 }
 
+// Shared local authority validation for current callers and persisted takeover
+// requesters: the same verdict as `grant_check_for_at`, collapsed to Option.
+// trace:TASK-1607 | ai:codex
+pub(crate) fn validated_grant(
+    project_root: &Path,
+    id: &str,
+    subject: &str,
+    now: DateTime<Utc>,
+) -> Option<SeatGrant> {
+    grant_check_for_at(project_root, id, subject, now).into_valid()
+}
+
 pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }

@@ -495,6 +495,7 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
 mod seat_rotation;
