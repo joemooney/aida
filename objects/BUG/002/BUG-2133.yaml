@@ -1,0 +1,20 @@
+id: 01a13cea-8adc-71b0-aee0-d0fe3da8e556
+spec_id: BUG-2133
+agreed_id: BUG-2133
+title: Contained drain launches its phase_driver CI-fix and advisor child sessions uncontained
+description: 'Found in the #2640 (BUG-2124) review, and predates it. phase_driver CI-fix and advisor children call headless_vendor_args(.., false, ..), so under a contained drain they always run without the sandbox. Before #2640 they inherited AIDA_CONTAINED=1 (posture only); now they are honestly uncontained. Decide: should a contained drain contain every agent child it spawns? Likely yes for CI-fix (it writes code); the advisor child needs a ruling. Security review required.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:16:06.364684179Z
+modified_at: 2026-10-15T00:16:06.364684179Z
+req_type: Bug
+filed_at:
+  code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
