@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-15T15:14:20.378269935Z
+modified_at: 2026-10-15T17:15:52.750082529Z
 req_type: Story
 tags:
 - from:aida-host
@@ -69,6 +69,12 @@ comments:
   content: Commit dcc46d8298 references this requirement
   created_at: 2026-10-15T15:14:20.378269935Z
   modified_at: 2026-10-15T15:14:20.378269935Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14090-2c2e-7883-9061-e2d6231c5c2d
+  author: ai:codex:joe
+  content: 'Signed completeness implementation published as DRAFT PR #2679 at14ac3b8225a4c25de5c523942013173d23b6fbd3, stacked on repaired #2673/codex/task-1734 e5f919ef6837cf8898eba911285e4f54c79a4566. All83 final-source regen tests and all29 fast gates passed; clean and normally pushed. Completeness predicate and display-only integer ratio validation both retained across restack; installed tools/helpers checked and fingerprinted after every help, incomplete diagnostics preserved and headline eligibility refused. Component mapping is trusted exact-check mapping, absence unavailable; continuation/reinvoke remains TASK-1778. Self-check three source rounds with findings fixed; mechanical fixture-only base fixes retain assertions. Separate review needed; no author verdict/hold clear/merge/Completed/live binary promotion. Logs /tmp/regen-relay3-1677-tests-final.log and -fast.log.'
+  created_at: 2026-10-15T17:15:52.750082529Z
+  modified_at: 2026-10-15T17:15:52.750082529Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-4c9d-7ae1-9d4b-809d06333fa5
