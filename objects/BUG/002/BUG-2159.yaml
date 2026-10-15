@@ -1,0 +1,25 @@
+id: 01a1412b-f0ab-71e0-a887-8399220455fa
+spec_id: BUG-2159
+agreed_id: BUG-2159
+title: pre-push 'refusing to push to main' blocks aida remote mirror-sync's fast-forward of origin/main to mirror hubs (aida-relay gitlab stuck behind)
+description: |-
+  Seen 2026-10-15 13:06 in aida-relay after #95 merged:
+  - 'aida pr ship 95' reported main -> gitlab FAILED.
+  - 'aida remote mirror-sync' fails the same way, because the pre-push hook refuses ANY push to refs/heads/main, including a mirror push whose source is refs/remotes/origin/main (a pure fast-forward: gitlab 888dce5 is an ancestor of origin c7534df).
+  The guard exists to stop unreviewed direct pushes, but mirroring origin's already-merged tip is not one of those.
+  Acceptance: the hook allows a push to a NON-origin remote when the pushed sha equals the current origin/<branch> tip and it is a fast-forward of the remote's ref. Direct pushes to origin main stay refused. mirror-sync succeeds in that case. Tests for both paths. The hub-drift-guard will keep tripping until this is fixed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T20:06:01.131201098Z
+modified_at: 2026-10-15T20:06:01.131201098Z
+req_type: Bug
+filed_at:
+  code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
