@@ -565,6 +565,128 @@ mod tests {
             .to_string()
             .contains("invalid control/trial"));
     }
+    // Exercise the public command path, including its pre-execution load seam.
+    // trace:TASK-1731 | ai:codex
+    #[test]
+    fn handle_score_refuses_absent_or_failed_committed_controls_without_scored_record() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let cache = tempfile::tempdir_in("/var/tmp").unwrap();
+        let _env =
+            crate::test_env::EnvVarGuard::set("XDG_CACHE_HOME", cache.path().to_str().unwrap());
+        let project = tempfile::tempdir().unwrap();
+        let git = |root: &Path, args: &[&str]| super::super::super::git(root, args).unwrap();
+        git(project.path(), &["init", "-b", "main"]);
+        git(project.path(), &["config", "user.name", "Test"]);
+        git(
+            project.path(),
+            &["config", "user.email", "test@example.com"],
+        );
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            "[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\n",
+        )
+        .unwrap();
+        std::fs::write(
+            project.path().join("oracle.sh"),
+            "#!/bin/sh\nprintf 'ok   - behavior\\nok   - hollow\\n'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            project.path().join("oracle.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        git(project.path(), &["add", "."]);
+        git(project.path(), &["commit", "-m", "trusted oracle"]);
+        let (config, sha) = load_config(project.path()).unwrap();
+        let trial = tempfile::tempdir().unwrap();
+        let bundle =
+            OracleBundle::freeze(project.path(), sha, &config.oracle_paths, trial.path()).unwrap();
+        let guards = ScoreEnv::for_project(&config, false, project.path()).unwrap();
+        let corpus = tempfile::tempdir().unwrap();
+        let bytes = br#"{"format_version":1,"rows":[]}"#;
+        let corpus_hash = format!("{:x}", Sha256::digest(bytes));
+        std::fs::write(corpus.path().join("corpus.json"), bytes).unwrap();
+        std::fs::write(
+            corpus.path().join("manifest.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "format_version": 1, "store_sha": "a".repeat(40),
+                "corpus_file": "corpus.json", "content_sha256": corpus_hash,
+                "row_count": 0
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        for failed_batch in [false, true] {
+            let store = project.path().join(".aida-store");
+            std::fs::create_dir(&store).unwrap();
+            git(&store, &["init", "-b", "aida-store"]);
+            git(&store, &["config", "user.name", "Test"]);
+            git(&store, &["config", "user.email", "test@example.com"]);
+            if failed_batch {
+                let mut rows = records();
+                rows[0].checks[0].passed = false;
+                rows[0].aggregate = Some(Aggregate {
+                    passed: 1,
+                    total: 2,
+                    pass_rate: 0.5,
+                });
+                std::fs::create_dir_all(store.join("regen/trials")).unwrap();
+                for r in &mut rows {
+                    r.oracle_sha = bundle.sha.clone();
+                    r.oracle_bundle_sha256 = bundle.hash.clone();
+                    r.content_sha256 = corpus_hash.clone();
+                    r.guard_bundle_sha256 = Some(guards.guards.hash.clone());
+                    std::fs::write(
+                        store.join(format!("regen/trials/{}.json", r.trial_id)),
+                        serde_json::to_vec(r).unwrap(),
+                    )
+                    .unwrap();
+                }
+                git(&store, &["add", "."]);
+            }
+            git(
+                &store,
+                &["commit", "--allow-empty", "-m", "control fixture"],
+            );
+            let before_head = super::super::super::head(&store).unwrap();
+            let before_tree = git(&store, &["ls-tree", "-r", "HEAD"]);
+            let error = handle_score(
+                &store,
+                Some(trial.path()),
+                None,
+                corpus.path(),
+                "m",
+                "v",
+                "h",
+                false,
+            )
+            .unwrap_err();
+            let expected = if failed_batch {
+                "reference control failed: every repeat must pass 100%"
+            } else {
+                "missing matching reference control"
+            };
+            assert!(format!("{error:#}").contains(expected), "{error:#}");
+            assert_eq!(super::super::super::head(&store).unwrap(), before_head);
+            assert_eq!(git(&store, &["ls-tree", "-r", "HEAD"]), before_tree);
+            assert!(git(&store, &["status", "--porcelain", "--untracked-files=all"]).is_empty());
+            assert!(read_records(&store)
+                .unwrap()
+                .iter()
+                .all(|r| r.kind != "trial"));
+            std::fs::remove_dir_all(&store).unwrap();
+        }
+    }
     #[test]
     fn trial_sandbox_contamination_refuses_even_with_valid_controls() {
         let gate = gate(records()).unwrap();
