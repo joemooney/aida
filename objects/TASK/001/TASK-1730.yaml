@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T06:55:20.699048122Z
+modified_at: 2026-10-15T06:56:01.867702635Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -71,6 +71,11 @@ comments:
     DECISION REQUEST: approve an immutable held-out oracle input contract before further scorer code. Recommended direction: freeze an explicitly declared oracle file/subtree allow-list from the trusted project commit, mount that bundle read-only using the existing helper, keep installer cwd at trial root, and define oracle cwd plus an explicit trial-root/PREFIX locator. This needs the oracle-path config and provenance/cwd semantics settled; I will not guess that new format or add mounts outside the existing confinement implementation. The implementation remains a prototype until this is resolved; I will preserve it for advisor inspection. TASK-1729 rework continues independently. Later lane items depend on this oracle contract.
   created_at: 2026-10-15T06:53:18.280415176Z
   modified_at: 2026-10-15T06:53:18.280415176Z
+- id: 01a13e58-af4b-78c0-9351-9273e0c4322e
+  author: joe
+  content: Commit b13bf7d3eb references this requirement
+  created_at: 2026-10-15T06:56:01.867702635Z
+  modified_at: 2026-10-15T06:56:01.867702635Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
