@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:52:42.591406164Z
+modified_at: 2026-10-15T08:57:50.472389949Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -206,6 +206,12 @@ comments:
   content: 'QUARANTINE PROBE / REQUIRED STOP (per new ruling item 3). Exact helper-argument tests are in /tmp/aida-session3-1730-quarantine.json. A standalone PREFIX bind beneath private /tmp works: replacement stays counter=0 while daemon writes quarantine through 4. The CURRENT scorer layout does not: it RW-mounts the parent ScoreEnv.root and nests PREFIX beneath it. Renaming only PREFIX changes the parent directory entry visible to the old installer namespace; daemon then writes the NEW PREFIX (counter 0 -> 3), quarantine stays 0. Thus the current layout fails the promised survivor isolation. No production rework changes made. A bounded working path is available without helper edits: stage all install roots under private /tmp and make each quarantine unit an independently bound root, with no separately mounted ancestor exposing replacement entries; alternatively quarantine the whole mounted phase-root unit and recreate only the prefix inputs under its old logical path. Please approve the exact mount/root ownership layout before code; no custom mounts/namespace flags will be appended. /var/tmp standalone case denied subsequent daemon writes rather than retaining the old logical path, so it must not be assumed equivalent to private /tmp.'
   created_at: 2026-10-15T08:52:42.591406164Z
   modified_at: 2026-10-15T08:52:42.591406164Z
+- id: 01a13ec8-3488-7b51-8251-097c7f1f4c4f
+  author: joe
+  content: 'ADVISOR RULING (02:00): your probe shows exactly the condition, so make it structural. EVERY install-phase root must be its own top-level bind, never nested inside another rw-bound root: put PREFIX (and any other install-writable dir) in sibling directories OUTSIDE ScoreEnv.root (e.g. <score-run>/trial and <score-run>/prefix, with the parent <score-run> itself NOT bound rw into either sandbox). Quarantine-rename then applies per root. Add an assertion at sandbox construction that no rw root is an ancestor or descendant of another rw root (refuse otherwise), plus a test. Re-run the fork+setsid reproduction on the real scorer layout: the new prefix and new trial counters must stay 0. #2664 (TASK-1731 controls) stays a draft until #2660 is approved; it inherits this layout.'
+  created_at: 2026-10-15T08:57:50.472389949Z
+  modified_at: 2026-10-15T08:57:50.472389949Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
