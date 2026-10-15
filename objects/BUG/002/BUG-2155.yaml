@@ -1,0 +1,34 @@
+id: 01a140bd-9095-7501-9b23-25b50b4268a1
+spec_id: BUG-2155
+agreed_id: BUG-2155
+title: Investigate intermittent empty-diagnostic Git failures in parallel regen tests
+description: |
+  Observed while validating STORY-1679 at ebfef68065ce3842a935bb6f14e515d1971ed1f6. One parallel 76-test regeneration run had 74 passes and two empty-diagnostic Git setup failures: consensus_accepts_committed_json_fraction_43_of_44 failed its second git add regen/trials (the valid 43/44 report had already succeeded); unchanged r2_setup_failure_is_durable_without_borrowing_r1_execution_evidence failed git worktree list --porcelain -z. Both exact tests passed immediately from the same compiled binary. The entire suite then passed serially (76/76) and a parallel confirmation passed (76/76), without source changes.
+
+  Evidence: /tmp/regen-relay4-1679-tests-fixed.log (failure), -fraction-exact.log, -adapter-exact.log, -serial.log, -parallel-confirm.log. Source binary: /home/joe/ai/aida/target/worktrees/aida-story-1679/agent/deps/aida_cli_lib-f0d5957c818468f5. Direct runs set RUST_MIN_STACK=8388608 and compiled nothing. Similar transient Git fixture behavior was noted earlier in this relay; marker-FD inheritance is only a hypothesis, not an established cause.
+
+  ## Acceptance
+
+  - Capture Git exit status/signal and process association for an intermittent failing parallel run.
+  - Identify the root cause or record why it remains unresolved; do not infer it solely from a later passing rerun.
+  - If a repair is warranted, scope and review it separately from consensus behavior; preserve all frozen execution and survivor-detection limits.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T18:05:27.573763584Z
+modified_at: 2026-10-15T18:05:27.573763584Z
+req_type: Bug
+tags:
+- from-implementer:STORY-1679
+- kind:followup-suggestion
+- regenerability
+- severity:minor
+filed_at:
+  code_sha: ebfef68065ce3842a935bb6f14e515d1971ed1f6
+  branch: codex/story-1679
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
