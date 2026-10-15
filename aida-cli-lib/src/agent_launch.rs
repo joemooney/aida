@@ -1188,6 +1188,7 @@ pub(crate) fn agent_resume_ended(
         binary: binary_name,
         default_args: agent_resume_args(&entry.agent_type, native_session_id, resume_prompt)?,
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project_root.to_path_buf(),
@@ -1298,12 +1299,14 @@ pub(crate) fn parse_resets_when(raw: &str) -> Result<chrono::DateTime<chrono::Ut
     Ok(chrono::Utc::now() + delta)
 }
 
+// trace:BUG-2124 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentLaunchConfig {
     pub(crate) agent_type: &'static str,
     pub(crate) binary: &'static str,
     pub(crate) default_args: Vec<String>,
     pub(crate) prompt_style: AgentPromptStyle,
+    pub(crate) contained: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1917,11 +1920,13 @@ pub(crate) fn agent_new_claude(
     }
     let mut default_args = Vec::new();
     let mut explicit = permission_mode.is_some() || sandbox;
+    let mut contained = false;
     if let Some(m) = permission_mode {
         default_args.push("--permission-mode".to_string());
         default_args.push(m.to_string());
     } else if sandbox {
         default_args.extend(tool_contained_flags("claude"));
+        contained = true;
     } else if bg {
         // STORY-495: a detached `--bg` launch has no answerable TTY, so a
         // native (prompting) child would hang forever on the first
@@ -1948,6 +1953,7 @@ pub(crate) fn agent_new_claude(
         binary: "claude",
         default_args,
         prompt_style: AgentPromptStyle::Positional,
+        contained,
     };
     if bg {
         agent_new_bg_dispatch(
@@ -2021,7 +2027,12 @@ pub(crate) fn agent_new_codex(
             return Ok(());
         }
     };
-    let mut default_args = Vec::new();
+    // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
+    // hooks (and tools) with the daemon's environment, i.e. whichever shell
+    // first started the daemon, so the child got another session's role and
+    // grant. Run it standalone so its own AIDA_SESSION_ROLE/grant apply.
+    // trace:BUG-2007 | ai:claude
+    let mut default_args = vec![CODEX_NO_DAEMON_FLAG.to_string()];
     if bypass_sandbox {
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
@@ -2030,6 +2041,7 @@ pub(crate) fn agent_new_codex(
         binary: "codex",
         default_args,
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
     // uniform knob is free to inject the bypass flag.
@@ -2093,6 +2105,7 @@ pub(crate) fn agent_new_antigravity(
         binary: "agy",
         default_args,
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
     // uniform knob is free to inject the bypass flag.
@@ -2688,6 +2701,26 @@ pub(crate) fn agent_seed_session_args(
     }
 }
 
+/// Keeps an interactive codex off the shared app-server daemon (BUG-2007).
+pub(crate) const CODEX_NO_DAEMON_FLAG: &str = "--no-daemon";
+
+/// codex rejects a repeated `--no-daemon` ("cannot be used multiple times"), so
+/// when the operator's `--extra-flag` or agents.toml `default_flags` already
+/// carry it, the injected copy must not double it. Keeps the first occurrence.
+// trace:BUG-2007 | ai:claude
+pub(crate) fn dedupe_codex_no_daemon(agent_type: &str, args: &mut Vec<String>) {
+    if agent_type != "codex" {
+        return;
+    }
+    let mut seen = false;
+    args.retain(|a| {
+        if a != CODEX_NO_DAEMON_FLAG {
+            return true;
+        }
+        !std::mem::replace(&mut seen, true)
+    });
+}
+
 // trace:STORY-790 | ai:codex
 pub(crate) fn agent_resume_args(
     agent_type: &str,
@@ -2696,7 +2729,12 @@ pub(crate) fn agent_resume_args(
 ) -> Result<Vec<String>> {
     let mut args = match agent_type {
         "claude" => vec!["--resume".to_string(), native_session_id.to_string()],
-        "codex" => vec!["resume".to_string(), native_session_id.to_string()],
+        // trace:BUG-2007 | ai:claude
+        "codex" => vec![
+            "resume".to_string(),
+            native_session_id.to_string(),
+            CODEX_NO_DAEMON_FLAG.to_string(),
+        ],
         "antigravity" => vec![
             "--conversation".to_string(),
             native_session_id.to_string(),
@@ -2704,6 +2742,8 @@ pub(crate) fn agent_resume_args(
         ],
         other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
     };
+    // trace:BUG-2007 | ai:claude
+    dedupe_codex_no_daemon(agent_type, &mut args);
     if !prompt.trim().is_empty() {
         args.push(prompt.to_string());
     }
@@ -4364,33 +4404,13 @@ pub(crate) fn build_agent_new_bg_command(
 }
 
 // trace:BUG-2006 | ai:antigravity
-pub(crate) fn is_contained_args(agent_type: &str, args: &[String]) -> bool {
-    match agent_type {
-        "claude" => {
-            let has_settings = resolved_flag_value(args, "--settings").is_some()
-                || resolved_flag_value(args, "-s").is_some();
-            let has_bypass = resolved_flag_value(args, "--permission-mode").is_some()
-                || args
-                    .iter()
-                    .any(|arg| arg == "--dangerously-skip-permissions");
-            has_settings && !has_bypass
-        }
-        "codex" => {
-            let sandbox = resolved_flag_value(args, "--sandbox");
-            let is_contained_sandbox =
-                sandbox == Some("workspace-write") || sandbox == Some("read-only");
-            let has_bypass = args.iter().any(|arg| {
-                arg == "--dangerously-bypass-approvals-and-sandbox" || arg == "--full-auto"
-            });
-            is_contained_sandbox && !has_bypass
-        }
-        _ => false,
-    }
-}
-
-// trace:BUG-2006 | ai:antigravity
+// trace:BUG-2124 | ai:antigravity
 pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
-    is_contained_args(config.agent_type, &config.default_args)
+    let vendor = match session::HeadlessVendor::parse(config.agent_type) {
+        Some(v) => v,
+        None => return false,
+    };
+    session::containment_applied(vendor, config.contained)
 }
 
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on
