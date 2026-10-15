@@ -1,0 +1,22 @@
+id: 01a14104-a627-74a3-a251-89dd6a885e38
+spec_id: BUG-2158
+agreed_id: BUG-2158
+title: 'Contained parent: widening passthrough flags (--add-dir, --allowedTools, --tools, --plugin-dir/url, --mcp-config, --agents) reach a contained claude child'
+description: |-
+  Found in the BUG-2151 #2672 round-2 e2e case 11: '--extra-flag=--add-dir=/ --extra-flag=--allowedTools=Edit(//**)' passed through to the contained child alongside AIDA_CONTAINED=1. The claude strip list (agent_launch.rs:1501-1509) is a denylist missing these flags. The contained write boundary is itself expressed as Edit/Write allow rules, so these flags widen it.
+  Acceptance: under a contained parent, any extra or default flag NOT on an explicit allowlist is refused with a clear message (allowlist, not denylist). Tests cover each named flag and an unknown flag. Tier STRICT.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:23:06.151798270Z
+modified_at: 2026-10-15T19:23:06.151798270Z
+req_type: Bug
+filed_at:
+  code_sha: 0c69debffe439310aacf3756a5efe363d1216474
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
