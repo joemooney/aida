@@ -9,12 +9,12 @@ description: |-
   - Excludes code, tests, docs and git metadata.
   - Writes a manifest with the store SHA and a content hash.
   - A test covers the exclusion rules and determinism.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:06.487408623Z
-modified_at: 2026-10-15T06:06:58.436319992Z
+modified_at: 2026-10-15T06:15:39.699578563Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -61,6 +61,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a13e33-b9b3-7971-a420-52aa3027114b
+  author: joe
+  timestamp: 2026-10-15T06:15:39.699570925Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
