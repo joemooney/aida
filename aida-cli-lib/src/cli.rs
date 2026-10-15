@@ -16651,6 +16651,25 @@ mod tests {
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegenCommand {
+    /// Run the declared installer and oracle, then record a raw R1 trial
+    // trace:TASK-1730 | ai:codex
+    Score {
+        /// Regenerated system directory (commands run relative to this root)
+        dir: PathBuf,
+        /// Corpus directory containing corpus.json and manifest.json
+        #[clap(long)]
+        corpus: PathBuf,
+        #[clap(long)]
+        model: String,
+        #[clap(long)]
+        vendor: String,
+        #[clap(long)]
+        harness: String,
+        /// Explicitly bypass bubblewrap; the recorded trial is never clean
+        #[clap(long)]
+        unconfined: bool,
+    },
+
     /// Export committed store content as corpus.json and manifest.json
     Corpus {
         /// New or empty output directory

@@ -389,6 +389,30 @@ count as dirty. The override still exports committed HEAD and adds
 `dirty: true` to the manifest. Legacy stores must migrate to git-canonical storage.
 <!-- trace:TASK-1729 | ai:codex -->
 
+`aida regen score <system-dir> --corpus <corpus-dir> --model <name> --vendor <name>
+--harness <name>` runs raw R1 scoring and records versioned JSON under
+`regen/trials/<uuid>.json` in the canonical store. Configure `[regen]` on the
+trusted default branch with `oracle_command` (required argv array), optional
+`install_command` (argv array; defaults to `./install.sh` when present), and
+`required_tools` (tool names guarded against fallback). Commands run relative to
+the selected system directory. The installer receives a private `PREFIX`, whose
+`bin/` precedes guards and system directories on PATH. The environment has private
+HOME/XDG directories and no inherited Cargo/Rustup settings. Existing bubblewrap strict-read
+confinement is reused, and scoring refuses if its source-visibility probe can
+still see the original project (including projects in essential system paths).
+Confinement is required unless `--unconfined` explicitly records a non-clean trial.
+
+The oracle emits exact LF-delimited `ok   - <name>` and `FAIL - <name>` lines on
+stdout. Duplicate/conflicting names or no exact checks are scoring errors.
+Installer failures have no score; nonzero oracle exits with parsed checks retain
+the score and an exit flag. Guard hits, dirty corpus provenance and unconfined
+execution are recorded and forbid a clean result. Trial timestamps support age
+reporting; per-check outcomes are retained for later controls and comparisons.
+Raw cleanliness describes execution conditions, not the pass rate or completed
+controls validation. Control gating is a subsequent slice.
+<!-- trace:TASK-1730 | ai:codex -->
+
+
 External wall displays and dashboards use a narrow, versioned read-only
 contract rather than depending on incidental CLI JSON fields. The eleven
 polling lenses and local event follow feed are declared by `aida contract

@@ -1,3 +1,10 @@
+`aida regen score <dir> --corpus <dir> --model <name> --vendor <name>
+--harness <name>` runs trusted-config argv commands via existing bubblewrap
+confinement and records raw R1 trial JSON under `regen/trials/` in the store.
+Exact v1 check markers, fallback guards, private HOME/XDG and explicit
+`--unconfined` flags govern score cleanliness. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
 `aida regen corpus <dir>` exports committed store content as deterministic
 `corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
 records `dirty: true` while exporting HEAD. See OVERVIEW.md.
