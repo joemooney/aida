@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:07:32.089278044Z
-modified_at: 2026-10-15T12:08:13.637408619Z
+modified_at: 2026-10-15T14:40:57.878400678Z
 req_type: Task
 comments:
 - id: 01a13f76-8245-7192-a9ab-c5ed5397b39c
@@ -23,6 +23,12 @@ comments:
   content: 'Add from the #2664 review: assert_pristine checks the unmounted input root (fresh.rs:89), not run_root/trial; the bwrap execution test silently skips without bwrap and is not in the forced live-bwrap gate.'
   created_at: 2026-10-15T12:08:13.637408619Z
   modified_at: 2026-10-15T12:08:13.637408619Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14002-5816-78d3-8621-b73aea16e3a2
+  author: joe
+  content: 'Add from the #2667 STRICT review: (1) validate_gaps ''duplicate GAPS.toml gap id: {}'' prints the ID before the value check, so a secret-bearing duplicate reaches stderr: drop the ID from the message; (2) the value-in-ID check is case-sensitive (a lowercased value is persisted); (3) gaps.input_sha256 duplicates adapter_input_sha256; (4) document that gap snapshots require GAPS.toml; (5) add tests for an inconsistent pass_rate and for passed > total.'
+  created_at: 2026-10-15T14:40:57.878400678Z
+  modified_at: 2026-10-15T14:40:57.878400678Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
