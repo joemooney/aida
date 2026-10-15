@@ -2027,7 +2027,12 @@ pub(crate) fn agent_new_codex(
             return Ok(());
         }
     };
-    let mut default_args = Vec::new();
+    // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
+    // hooks (and tools) with the daemon's environment, i.e. whichever shell
+    // first started the daemon, so the child got another session's role and
+    // grant. Run it standalone so its own AIDA_SESSION_ROLE/grant apply.
+    // trace:BUG-2007 | ai:claude
+    let mut default_args = vec![CODEX_NO_DAEMON_FLAG.to_string()];
     if bypass_sandbox {
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
@@ -2696,6 +2701,26 @@ pub(crate) fn agent_seed_session_args(
     }
 }
 
+/// Keeps an interactive codex off the shared app-server daemon (BUG-2007).
+pub(crate) const CODEX_NO_DAEMON_FLAG: &str = "--no-daemon";
+
+/// codex rejects a repeated `--no-daemon` ("cannot be used multiple times"), so
+/// when the operator's `--extra-flag` or agents.toml `default_flags` already
+/// carry it, the injected copy must not double it. Keeps the first occurrence.
+// trace:BUG-2007 | ai:claude
+pub(crate) fn dedupe_codex_no_daemon(agent_type: &str, args: &mut Vec<String>) {
+    if agent_type != "codex" {
+        return;
+    }
+    let mut seen = false;
+    args.retain(|a| {
+        if a != CODEX_NO_DAEMON_FLAG {
+            return true;
+        }
+        !std::mem::replace(&mut seen, true)
+    });
+}
+
 // trace:STORY-790 | ai:codex
 pub(crate) fn agent_resume_args(
     agent_type: &str,
@@ -2704,7 +2729,12 @@ pub(crate) fn agent_resume_args(
 ) -> Result<Vec<String>> {
     let mut args = match agent_type {
         "claude" => vec!["--resume".to_string(), native_session_id.to_string()],
-        "codex" => vec!["resume".to_string(), native_session_id.to_string()],
+        // trace:BUG-2007 | ai:claude
+        "codex" => vec![
+            "resume".to_string(),
+            native_session_id.to_string(),
+            CODEX_NO_DAEMON_FLAG.to_string(),
+        ],
         "antigravity" => vec![
             "--conversation".to_string(),
             native_session_id.to_string(),
@@ -2712,6 +2742,8 @@ pub(crate) fn agent_resume_args(
         ],
         other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
     };
+    // trace:BUG-2007 | ai:claude
+    dedupe_codex_no_daemon(agent_type, &mut args);
     if !prompt.trim().is_empty() {
         args.push(prompt.to_string());
     }

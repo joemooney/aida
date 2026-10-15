@@ -160,4 +160,41 @@ if command -v timeout >/dev/null 2>&1; then
         "# AIDA active role: advisor" "$(printf '%s\n' "$ctx" | head -n 1)"
 fi
 
+# BUG-2007: under the shared Codex app-server daemon a hook inherits the
+# daemon's env (another session's role and grant). A stand-in parent whose
+# command line reads `codex app-server ...` runs the hook as its child, so the
+# hook's real /proc ancestry is checked. Linux only (/proc).
+if [ -r /proc/self/stat ]; then
+    mkdir -p "$TMP/daemon"
+    cat >"$TMP/daemon/codex" <<'PARENT'
+#!/bin/bash
+# Stays the hook's parent (no exec) so its argv is in the ancestry.
+bash "$HOOK_UNDER_TEST"
+PARENT
+    chmod +x "$TMP/daemon/codex"
+    under_daemon() {
+        local hook="$1"
+        shift
+        (cd "$TMP/project" && env -u AIDA_SESSION_ROLE -u AIDA_SESSION_GRANT \
+            -u AIDA_SESSION_PROJECT -u CODEX_PROJECT_DIR \
+            CLAUDE_PROJECT_DIR="$TMP/project" PATH="$TMP/bin:$PATH" \
+            AIDA_MAIN_CHECKOUT_DRIFT=off HOOK_UNDER_TEST="$hook" "$@" \
+            "$TMP/daemon/codex" app-server --managed-daemon)
+    }
+    out=$(under_daemon "$SESSION_HOOK" AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
+    check "under the Codex daemon the digest does not borrow the daemon's role" \
+        "AIDA · role: unresolved · queue: 0 · in-flight: 0" "$(printf '%s\n' "$out" | head -n 1)"
+    contains "under the Codex daemon the digest says why and how to fix it" \
+        "codex --no-daemon" "$out"
+    raw=$(under_daemon "$ROLE_HOOK" AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
+    ctx=$(printf '%s' "$raw" | python3 -c '
+import json, sys
+raw = sys.stdin.read()
+print(json.loads(raw)["hookSpecificOutput"]["additionalContext"] if raw.strip() else "")')
+    check "under the Codex daemon the addendum does not borrow the daemon's role" \
+        "# AIDA active role: unresolved" "$(printf '%s\n' "$ctx" | head -n 1)"
+    absent "under the Codex daemon the advisor purpose is not injected" \
+        "Route work and groom the queue." "$ctx"
+fi
+
 exit "$fail"

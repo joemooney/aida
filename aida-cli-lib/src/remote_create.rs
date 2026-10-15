@@ -2051,6 +2051,10 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
                 std::fs::write(&target, &script)
                     .with_context(|| format!("failed to refresh {}", target.display()))?;
             }
+            // BUG-2009: an AIDA hook is always 0755; git skips it otherwise.
+            // trace:BUG-2009 | ai:claude
+            aida_core::git_ops::set_hook_mode(&target)
+                .with_context(|| format!("failed to make {} executable", target.display()))?;
             println!("{check} pre-push mirror hook already installed");
             return Ok(());
         }

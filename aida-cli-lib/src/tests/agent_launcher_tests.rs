@@ -1893,7 +1893,7 @@ fn agent_resume_adapter_args_are_vendor_specific() {
     );
     assert_eq!(
         agent_resume_args("codex", "sid-1", "read context").unwrap(),
-        vec!["resume", "sid-1", "read context"]
+        vec!["resume", "sid-1", "--no-daemon", "read context"]
     );
     assert_eq!(
         agent_resume_args("antigravity", "sid-1", "read context").unwrap(),
@@ -4110,4 +4110,90 @@ fn apply_queue_work_contained_env_sets_and_removes() {
         std::env::var("AIDA_CONTAINED").is_err(),
         "apply_queue_work_contained_env(false) must remove AIDA_CONTAINED"
     );
+}
+
+/// BUG-2007 S1: codex rejects a repeated `--no-daemon`, so the injected copy
+/// must not double an operator-supplied one (config default or extra flag).
+// trace:BUG-2007 | ai:claude
+#[test]
+fn codex_fresh_launch_does_not_double_no_daemon() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents.codex]\ndefault_flags = [\"--no-daemon\", \"--project-codex\"]\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+    let launcher = || AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+
+    // Config default carries it.
+    let mut from_config = launcher();
+    apply_agent_default_flags(
+        &mut from_config,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        from_config.default_args,
+        vec!["--no-daemon", "--project-codex"]
+    );
+
+    // `--extra-flag=--no-daemon` with config defaults skipped.
+    let mut from_extra = launcher();
+    apply_agent_default_flags(
+        &mut from_extra,
+        &project,
+        AgentDefaultFlagOptions::new(false, vec!["--no-daemon".to_string()], None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(from_extra.default_args, vec!["--no-daemon"]);
+
+    // Fresh launch with nothing extra still gets exactly one injected copy.
+    let mut plain = launcher();
+    apply_agent_default_flags(
+        &mut plain,
+        &project,
+        AgentDefaultFlagOptions::new(false, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(plain.default_args, vec!["--no-daemon"]);
+}
+
+// trace:BUG-2007 | ai:claude
+#[test]
+fn codex_resume_carries_exactly_one_no_daemon() {
+    let args = agent_resume_args("codex", "sid-1", "read context").unwrap();
+    assert_eq!(
+        args.iter().filter(|a| *a == CODEX_NO_DAEMON_FLAG).count(),
+        1,
+        "{args:?}"
+    );
+    // A resume argv that already carries the flag is collapsed, not doubled.
+    let mut resume = vec![
+        "resume".to_string(),
+        "sid-1".to_string(),
+        "--no-daemon".to_string(),
+        "--no-daemon".to_string(),
+    ];
+    dedupe_codex_no_daemon("codex", &mut resume);
+    assert_eq!(resume, vec!["resume", "sid-1", "--no-daemon"]);
+    // Other agents' argv is never touched.
+    let mut claude = vec!["--no-daemon".to_string(), "--no-daemon".to_string()];
+    dedupe_codex_no_daemon("claude", &mut claude);
+    assert_eq!(claude.len(), 2);
 }
