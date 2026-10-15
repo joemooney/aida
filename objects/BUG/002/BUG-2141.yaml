@@ -3,16 +3,24 @@ spec_id: BUG-2141
 agreed_id: BUG-2141
 title: ensure_aida_runtime_excluded writes an unanchored '.aida/' into the shared info/exclude, silently ignoring tracked .aida/discipline and template masters in every worktree
 description: 'Found in the #2648 (STORY-1692) review. ensure_aida_runtime_excluded (aida-core/src/git_ops.rs ~91-102) appends ''.aida/'' to the path from ''git rev-parse --git-path info/exclude''. Its doc comment calls that file worktree-local, but it is the ONE file shared by every worktree. The pattern has no leading slash, so it matches every directory named .aida, including aida-core/templates/.aida/, and it shadows .gitignore''s !.aida/discipline/** and !.aida/config.toml. Effect: ''git add'' silently skips new template masters (aida-core/templates/.aida/discipline/fire-mode.md was left out of #2648), and the pre-commit ignored-file check (check-ignore --no-index) refuses tracked discipline files, pushing implementers to AIDA_ALLOW_INTERMEDIATE=1, which skips every later hook gate. Fix: write an anchored, narrow pattern (/.aida/* plus the re-includes, or only the runtime subpaths), migrate existing unanchored entries in place, and fix the doc comment. Tests: a new file under aida-core/templates/.aida/ and under .aida/discipline is addable; runtime .aida files stay ignored. Likely a regression of BUG-914.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T03:01:40.084506985Z
-modified_at: 2026-10-15T03:01:40.084506985Z
+modified_at: 2026-10-15T04:03:43.072598530Z
 req_type: Bug
 tags:
 - git
 - scaffolding
+history:
+- id: 01a13dba-ed60-78b0-8116-fbf8674c43b4
+  author: aida-lease-take
+  timestamp: 2026-10-15T04:03:43.072597686Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9e9c09c093d998d2f1694a6d75dc54deb82a0254
   branch: main
