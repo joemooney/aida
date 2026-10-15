@@ -44,7 +44,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T01:11:13.185429246Z
-modified_at: 2026-10-15T01:56:48.887737655Z
+modified_at: 2026-10-15T03:39:43.431092371Z
 req_type: Story
 tags:
 - advisor
@@ -62,6 +62,12 @@ comments:
   content: 'Correction for the skill: ''aida merge-hold clear'' refuses advisor and dispatch authority (''requires a human at an interactive terminal ... integrity floor''), even though the 2026-10-14 08:48 throughput ruling says the advisor clears holds. A fresh APPROVED verdict at head did NOT auto-release #2541''s Rework hold either. The skill must route hold clears to the operator (''! aida merge-hold clear N'') until the CLI implements the ruling, or the ruling is narrowed.'
   created_at: 2026-10-15T01:56:48.887737655Z
   modified_at: 2026-10-15T01:56:48.887737655Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a13da4-f5c7-7343-9f11-6754e3337d9a
+  author: joe
+  content: 'Lesson 2 (20:27): the serial queue caught a second semantic conflict BEFORE main. #2541 (BUG-1929), updated from main after #2645 (BUG-1808) merged, failed the BUG-1808 snapshot tests (the refusal path touched cache.db-shm). This confirms the rule: update from main and get a fresh Build per PR, every time, even when both PRs were green. Also: a byte-identical snapshot test should exclude volatile SQLite -shm files by design.'
+  created_at: 2026-10-15T03:39:43.431092371Z
+  modified_at: 2026-10-15T03:39:43.431092371Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
