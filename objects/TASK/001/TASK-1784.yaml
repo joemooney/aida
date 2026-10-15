@@ -1,0 +1,25 @@
+id: 01a1411e-dd12-7e83-b121-323427fe930c
+spec_id: TASK-1784
+agreed_id: TASK-1784
+title: worktree add after a hand-deleted worktree refuses with a misleading 'no local lease holds it' instead of re-minting
+description: |-
+  Follow-up from BUG-2143 #2675 round 2 (approved).
+  - After 'rm -rf' of a spec's worktree, 'aida worktree add <SPEC>' exits 1: 'spec is InProgress but no local lease holds it'. The non-advisory lease still exists; it just isn't re-enterable.
+  - Fix: when the only lease holding the spec is a non-advisory lease whose tree is gone, treat it as the caller's own (end it, then mint fresh). Otherwise, name that lease and 'aida session end <id>' in the error.
+  - Add a test that mints through the real session_start; the current e2e stubs the mint and uses a repo-wide prune.
+  - Document in the PR/CLI docs that spec leases at the project root are no longer re-entered.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:51:44.146542081Z
+modified_at: 2026-10-15T19:51:44.146542081Z
+req_type: Task
+filed_at:
+  code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
