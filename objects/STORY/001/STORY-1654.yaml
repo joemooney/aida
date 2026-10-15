@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-15T06:53:46.951678160Z
+modified_at: 2026-10-15T08:11:55.445411407Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -153,6 +153,32 @@ comments:
   created_at: 2026-10-11T13:18:19.627954574Z
   modified_at: 2026-10-11T13:18:19.627954574Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a13e9e-2ab5-70a2-b4fb-e74cfea54bb3
+  author: joe
+  content: |-
+    E2E (A2), fixer-story-1654, 2026-10-15. Build: origin/main + claude/story-1654 (PR #2661, 43343de15d) + bug-1918-work (72365b48bb), merged cleanly in a scratch worktree (sha 9e5ece2a1f, not pushed). Vehicle: throwaway PR #2659 (one docs file) against a scratch base branch `e2e/story-1654-base`, never main. All scratch branches and worktrees are deleted.
+
+    IMPLEMENTER: `aida claim STORY-1654` on the combined build wrote a ledger record with tokens session:20233459…, proc:245269 (this harness), and lease:01a13e57024a.
+
+    NEGATIVE (Agent-tool reviewer in the implementer's session):
+      aida review record PR-2659 --pr 2659 --sha 1d453d74af… --branch e2e/story-1654-impl --verdict approved
+      -> error: "refused: this session is the one that claimed or implemented the work (lease 01a13e57024a on STORY-1654 (claim record)) — a session cannot approve its own work"  exit=1
+      aida pr ship 2659 -> error: "PR-2659 has no approval recorded at its head…"  (no merge)
+
+    POSITIVE (Bash-launched reviewer):
+      aida queue work PR-2659 --role reviewer --no-human --vendor claude --force-claim
+      -> claude -p reviewer, session 01a13e98 (claude 01a13e97-cd54…), recorded APPROVED at 1d453d74; wall 177.7 s (model 138 s, 13 turns, $0.88)
+      aida pr ship 2659 --no-pull --no-cleanup --no-complete (no override flag) -> MERGED 2026-10-15T08:08:46Z (22ded295e1)
+
+    CAVEATS (the positive run is not yet clean; these need follow-up specs):
+    1. The recorded attestation carries the PARENT advisor grant 1e6af8e4 with seat=advisor. No child reviewer grant was minted, so the sketch's issue_child premise did not hold on this path. The gate passed on identity alone.
+    2. AIDA_REVIEW_VERDICT_FILE was empty in the child (contained launch), so `.aida/review-verdicts/PR-2659.json` was never written. The verdict landed in the review worktree's `.aida/review-verdicts/STORY-1654.json`, and `aida pr ship` found the approval only when run from that worktree. From the main checkout it said "no approval recorded".
+    3. The reviewer pickup needs the backing spec in a queue (I used `queue add --for reviewer`, since removed) and needs the implementer lease released (`--force-claim`). A PR without a spec ID in title/branch/commit is refused.
+    4. Contained-mode identity shows up as proc:2/shell:2 (a PID namespace). The reviewer's AIDA store writes were blocked by the sandbox (BUG-1928/1929).
+    A3 nested-harness unit test: written and passing on the combined build (patch available for #2485).
+  created_at: 2026-10-15T08:11:55.445411407Z
+  modified_at: 2026-10-15T08:11:55.445411407Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
   author: aida-lease-take
