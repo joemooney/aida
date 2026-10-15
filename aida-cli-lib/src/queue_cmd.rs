@@ -12274,34 +12274,44 @@ pub(crate) fn handle_queue_work(
     // shim, conflict detection. We always pass launch=false so we can
     // (a) write the cluster manifest from the new lease and (b) emit
     // a queue-work-specific launch summary before exec.
-    session_start(
-        &plan.scope,
-        session_branch_override,
-        resolved_base.as_deref(),
-        /* reuse_branch */ false,
-        path_override,
-        /* forge_override */ None,
-        /* branch_style */ "auto",
-        /* launch */ false,
-        /* launch_title */ None,
-        /* launch_set_title */ false,
-        /* launch_name */ None,
-        // STORY-495: inert here (launch=false); the real launch below threads
-        // the resolved `permission_mode` into the exec call directly.
-        /* permission_mode */
-        permission_mode.as_deref(),
-        /* launch_contained */
-        false,
-        /* role */ Some(role.clone()),
-        /* force_claim */ force_claim,
-        // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
-        // only for non-stacked spawns (resolved_base is None unless --stack /
-        // --base), so stacked work keeps a fresh `git worktree add`.
-        /* use_pool */
-        None,
-        /* self_claim */
-        queue_work_self_claim(no_launch),
-    )?;
+    // BUG-1918: when this command launches the worker, the claim is made FOR
+    // it — the ledger must name the worker, not this launcher.
+    // trace:BUG-1918 | ai:claude
+    let start = || {
+        session_start(
+            &plan.scope,
+            session_branch_override,
+            resolved_base.as_deref(),
+            /* reuse_branch */ false,
+            path_override,
+            /* forge_override */ None,
+            /* branch_style */ "auto",
+            /* launch */ false,
+            /* launch_title */ None,
+            /* launch_set_title */ false,
+            /* launch_name */ None,
+            // STORY-495: inert here (launch=false); the real launch below threads
+            // the resolved `permission_mode` into the exec call directly.
+            /* permission_mode */
+            permission_mode.as_deref(),
+            /* launch_contained */
+            false,
+            /* role */ Some(role.clone()),
+            /* force_claim */ force_claim,
+            // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
+            // only for non-stacked spawns (resolved_base is None unless --stack /
+            // --base), so stacked work keeps a fresh `git worktree add`.
+            /* use_pool */
+            None,
+            /* self_claim */
+            queue_work_self_claim(no_launch),
+        )
+    };
+    if no_launch {
+        start()?;
+    } else {
+        crate::review_authority::as_launcher(start)?;
+    }
 
     // trace:TASK-1337 | ai:codex
     let setup_result = (|| -> Result<()> {
@@ -12549,6 +12559,10 @@ pub(crate) fn handle_queue_work(
         }
         std::env::set_current_dir(&lease.worktree_path)
             .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
+        // BUG-1918: the launched worker (exec'd or spawned below) carries its
+        // lease id, so it stays its lease's author wherever it later runs.
+        // trace:BUG-1918 | ai:claude
+        crate::review_authority::export_worker_session_env(&lease.id);
 
         // TASK-112: exec — resume the prior conversation, or cold-launch
         // with the minted session id so this conversation is itself

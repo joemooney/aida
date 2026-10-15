@@ -55,16 +55,20 @@ into a shell verbatim and have succeed.** The real commands are:
 `autonomous-merge each` was used in a drain meant to keep a reviewer in
 the loop. Autonomous-merge **skips** the reviewer handoff — the
 `Review PR-N` story is filed by `aida session end`, which an
-autonomous-merge flow never reaches. Ten PRs merged; the reviewer queue
-stayed empty.
+autonomous-merge flow never reaches. The reviewer queue stayed empty, so
+nothing merged: every merge needs an approval recorded by a session that
+did not author the work.
 
 **Rule: the mechanism clause must match the intended handoff.**
 
 - `review` mode → each item ends with `aida session end`, which files a
   `Review PR-N` story for the `reviewer` role. The reviewer stays in the
   loop. **This is the default.**
-- `merge` mode → each item autonomously merges its own PR. No reviewer
-  checkpoint. Use only when you explicitly want no review.
+- `merge` mode → each item tries to merge its own PR without filing a
+  `Review PR-N` story. The merge still needs an independent approval of
+  the PR head, recorded by a session that did not author the work; without
+  one the PR is held, not merged. Use only when approvals arrive through
+  another channel.
 
 ## Flags
 

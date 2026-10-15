@@ -4,9 +4,10 @@ description: "The low-ceremony lane for genuinely trivial work: cosmetic, docume
 ---
 # Fasttrack a trivial change
 
-Fasttrack is a single lane for work that is genuinely too small to justify a
-human-review round trip. It files an Approved requirement, queues it, and adds
-`batch:fasttrack` + `lifecycle:no-review`. CI still runs and must pass.
+Fasttrack is a single lane for work that is genuinely too small to justify
+the full reviewer model session. It files an Approved requirement, queues it, and adds
+`batch:fasttrack` + `lifecycle:no-review`. CI still runs and must pass, and
+merging still requires an independent approval (no tag opts a PR out of it).
 
 <!-- trace:TASK-1267 | ai:codex -->
 
@@ -37,8 +38,10 @@ the desired behavior is full autonomous execution with the normal gates.
    `// trace:<SPEC-ID>` comment for code changes.
 5. Run the relevant build, `cargo fmt --all -- --check`, correctness clippy,
    and a focused smoke test.
-6. Commit with the `(SPEC-ID)` trailer. Merge only after CI succeeds, then run
-   `aida pull` so the spec auto-completes.
+6. Commit with the `(SPEC-ID)` trailer. Merge only after CI succeeds and an
+   independent session (a reviewer seat or a human at a terminal) has
+   approved the head — `lifecycle:no-review` skips the reviewer model phase,
+   never the approval gate. Then run `aida pull` so the spec auto-completes.
 
 `aida fasttrack --express` remains as a deprecated compatibility alias for one
 release. It files Approved + queued work with `execution_mode=drain` and no
