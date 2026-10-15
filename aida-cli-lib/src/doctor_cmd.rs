@@ -717,6 +717,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-2009: an AIDA git hook without an executable bit is skipped by git
+    // with no signal (the TASK-917 bypass detector sat off for 9 days), and
+    // a stale generated one blocks store writes. One `git rev-parse` + a
+    // read per hook; the same dry run `aida scaffold upgrade --only
+    // git-hooks` prints. trace:BUG-2009 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "git-hooks")? {
+        findings.extend(scan_aida_git_hooks(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1330: identity hygiene. 2026-10-05: an employer-identifying email
     // reached public history because a work machine's git config used it and
     // nothing refused it. When `[identity] allowed_emails` is configured,
@@ -1757,6 +1767,90 @@ fn cargo_slot_findings(
     findings
 }
 
+/// `git-hooks` doctor findings: one per AIDA git hook git would not run as
+/// this build ships it, from the dry run of the hook-only refresh. Silent
+/// outside a git repository.
+// trace:BUG-2009 | ai:claude
+fn scan_aida_git_hooks(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    if !aida_core::git_ops::is_git_repo(project_root) {
+        return Vec::new();
+    }
+    match aida_core::git_ops::refresh_stale_aida_hooks(project_root, true) {
+        Ok(report) => aida_git_hook_findings(&report, project_root),
+        Err(err) => vec![DoctorFinding {
+            category: "git-hooks".to_string(),
+            id: "git-hooks-unreadable".to_string(),
+            summary: format!("could not inspect the repository's git hooks: {err:#}"),
+            action: "check the hooks directory's permissions (`git rev-parse --git-path hooks`)"
+                .to_string(),
+            safe_heal: false,
+        }],
+    }
+}
+
+/// The pure core of [`scan_aida_git_hooks`].
+// trace:BUG-2009 | ai:claude
+fn aida_git_hook_findings(
+    report: &aida_core::git_ops::StaleHookReport,
+    project_root: &std::path::Path,
+) -> Vec<DoctorFinding> {
+    let remedy = format!(
+        "run `aida scaffold upgrade --only git-hooks --project-root {}` (add --dry-run to \
+         preview); it touches only AIDA's own hooks",
+        project_root.display()
+    );
+    let mut findings: Vec<DoctorFinding> = report
+        .refreshed
+        .iter()
+        .map(|hook| {
+            let (id, summary) = if hook.backup.is_none() {
+                (
+                    format!("aida-hook-not-executable-{}", hook.name),
+                    format!(
+                        "the AIDA `{}` git hook ({}) is not executable, so git silently skips \
+                         it on every commit",
+                        hook.name,
+                        hook.path.display()
+                    ),
+                )
+            } else {
+                let mode = if hook.not_executable {
+                    " and is not executable, so git silently skips it"
+                } else {
+                    "; store writes refuse it"
+                };
+                (
+                    format!("aida-hook-stale-{}", hook.name),
+                    format!(
+                        "the AIDA-generated `{}` git hook ({}) is not this build's hook{mode}",
+                        hook.name,
+                        hook.path.display()
+                    ),
+                )
+            };
+            DoctorFinding {
+                category: "git-hooks".to_string(),
+                id,
+                summary,
+                action: remedy.clone(),
+                safe_heal: false,
+            }
+        })
+        .collect();
+    findings.extend(report.manual.iter().map(|hook| DoctorFinding {
+        category: "git-hooks".to_string(),
+        id: format!("aida-hook-manual-{}", hook.name),
+        summary: format!(
+            "the AIDA `{}` git hook ({}) needs manual action",
+            hook.name,
+            hook.path.display()
+        ),
+        action: hook.reason.clone(),
+        safe_heal: false,
+    }));
+    findings
+}
+
 /// Compare the installed pre-push mirror hook against the current generator
 /// (`mirror_pre_push_hook_script`) and report when a re-install is needed.
 /// Resolves the hooks directory exactly as the installer does
@@ -1978,6 +2072,105 @@ mod task_1330_identity_hygiene_tests {
             Some(hook),
         );
         assert!(findings.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod bug_2009_git_hook_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// `aida doctor` reports a non-executable AIDA hook (and a stale one),
+    /// with the hook-only refresh as the remedy; a non-executable custom
+    /// hook and a healthy repository are silent; the category filter and
+    /// its aliases select it.
+    // trace:BUG-2009 | ai:claude
+    #[test]
+    fn non_executable_aida_hook_is_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let hooks = root.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        assert!(scan_aida_git_hooks(root).is_empty(), "healthy: silent");
+
+        let wrapped = |name: &str, key: &str| {
+            aida_core::scaffolding::wrap_with_aida_header(
+                std::path::Path::new(&format!(".git/hooks/{name}")),
+                aida_core::templates::EMBEDDED_TEMPLATES[key],
+            )
+        };
+        let put = |name: &str, body: &str, mode: u32| {
+            let path = hooks.join(name);
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        put(
+            "post-commit",
+            &wrapped("post-commit", "hooks/aida-post-commit.sh"),
+            0o644,
+        );
+        put(
+            "pre-commit",
+            &format!(
+                "{}\necho old\n",
+                wrapped("pre-commit", "hooks/aida-pre-commit.sh").trim_end()
+            ),
+            0o755,
+        );
+        put("post-merge", "#!/bin/sh\necho mine\n", 0o644);
+
+        let findings = scan_aida_git_hooks(root);
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "aida-hook-stale-pre-commit",
+                "aida-hook-not-executable-post-commit"
+            ],
+            "{findings:?}"
+        );
+        assert!(findings.iter().all(|f| f.category == "git-hooks"));
+        assert!(
+            findings[1].summary.contains("silently skips"),
+            "{findings:?}"
+        );
+        assert!(findings
+            .iter()
+            .all(|f| f.action.contains("aida scaffold upgrade --only git-hooks")));
+        assert!(findings.iter().all(|f| !f.safe_heal));
+        // Report-only: the doctor scan wrote nothing.
+        let mode = std::fs::metadata(hooks.join("post-commit"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o644);
+
+        for raw in [
+            "git-hooks",
+            "aida-hooks",
+            "hook-mode",
+            "non-executable-hooks",
+        ] {
+            assert!(
+                doctor_category_selected(Some(raw), "git-hooks").unwrap(),
+                "{raw}"
+            );
+        }
+        assert!(!doctor_category_selected(Some("mirror-hook-drift"), "git-hooks").unwrap());
+    }
+
+    /// Outside a git repository the scan is silent.
+    // trace:BUG-2009 | ai:claude
+    #[test]
+    fn non_git_directory_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(scan_aida_git_hooks(tmp.path()).is_empty());
     }
 }
 
@@ -2585,8 +2778,12 @@ mod bug_1744_trust_breadth_tests {
     }
 
     // trace:BUG-1744 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn the_trust_scan_never_writes_the_claude_config() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fake_home = tempfile::tempdir().unwrap();
         let project_root = tempfile::tempdir().unwrap();
         let trusted_parent = project_root.path().parent().unwrap();
