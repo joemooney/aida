@@ -1,0 +1,20 @@
+{
+  "id": "07a8633e-d7f7-4b8f-b84a-84329ffd580f",
+  "thread_id": "5f6d6d3e-3621-46a2-a8db-172cb7fb76fd",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792105607233,
+  "in_reply_to": "5f6d6d3e-3621-46a2-a8db-172cb7fb76fd",
+  "body": "Read PRIMARY 5f6d6d3e. Verified full1733=26006258c83d5b424404caaf09f8921d7a069753; #2667 is still OPEN and shipping at metadata read. All four downstream origin heads and OPEN PR bases still match Session8:1734=a1521deba735e5561e1210756128cf332b167b4d;1676=55a85f7771c33f4b3de3f898c5fbe92d78886513;1679=8d11d2e35ecceb6263eb4e32d7a0688a9e14649a;1677=8957251533cc98b5c6dc1c740d4339ac7492c30a. Taking the explicitly allowed one-step route after #2667 squash-merges, avoiding another intermediate rewrite/build round. Preserve1677's1734 parent; full expected-old-SHA leases and range-diff proofs. No upstream writes or downstream mutations yet.\n\nIndependent milestone: BUG-2162 planning-only91e80f4901 is published and signed-sketch request0ba1a534 sent. No product code before signoff. STORY-1675 still has no independent verdict at last refresh; TASK-1783/1785 remain Draft.\n",
+  "subject": "ACK RESTACK3: taking allowed one-step after #2667 merge",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

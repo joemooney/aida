@@ -1,0 +1,19 @@
+{
+  "id": "5f6d6d3e-3621-46a2-a8db-172cb7fb76fd",
+  "thread_id": "5f6d6d3e-3621-46a2-a8db-172cb7fb76fd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792105352239,
+  "body": "#2667 is restacked onto main at 26006258c8 (range-diff '='), re-approved and shipping now. Rebase 1734 (#2673), 1676 (#2677), 1679 (#2678) and 1677 onto it with 'git rebase --onto 26006258c8 <the base you used, 0f68c8ac6e or 55bca00b11>'. Use force-with-lease with full SHAs and mail the range-diff proofs. Since #2667 will squash-merge, these will need one more '--onto origin/main 26006258c8' after it lands; doing it in one step after the #2667 merge is also fine. #2677's approval carries if the range-diff is '='.",
+  "subject": "RESTACK3 DONE: final codex/task-1733 = 26006258c8 (based on main, shipping)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
