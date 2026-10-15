@@ -1,0 +1,20 @@
+id: 01a13ce7-32ba-7543-b023-09f8ad9b8a53
+spec_id: TASK-1760
+agreed_id: TASK-1760
+title: 'Hook refresh follow-up nits: unused checksum, json/toon output for the hooks report, duplicated --only handling'
+description: 'Leftover nits from the BUG-2003 review, deferred by advisor ruling on #2644.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:12:27.194542143Z
+modified_at: 2026-10-15T00:12:27.194542143Z
+req_type: Task
+filed_at:
+  code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
