@@ -690,19 +690,204 @@ pub fn process_start_identity(pid: u32) -> Option<String> {
     process_start_time(pid).map(|time| time.to_rfc3339())
 }
 
+/// Scheme prefix of the exact Linux start identity: clock ticks since boot,
+/// field 22 of the process stat file. Immune to boot-time (btime) shifts.
+const EXACT_LINUX_SCHEME: &str = "linux-starttime:";
+
+/// Scheme prefix of the non-Linux fallback of [`process_start_identity_exact`]:
+/// the same rfc3339 value [`process_start_identity`] returns, prefixed.
+const EXACT_SYSINFO_SCHEME: &str = "sysinfo-start:";
+
+/// Scheme-prefixed kernel start identity of `pid`, or `None` when it cannot be
+/// read. Linux reads the `starttime` field (clock ticks since boot) from the
+/// process stat file, which is exact and never changes for a process's life:
+/// `linux-starttime:<ticks>`. Elsewhere it is sysinfo's start time (seconds
+/// resolution): `sysinfo-start:<rfc3339>`.
+///
+/// Moved here from `db::cache_lock` (which re-exports it under its old name,
+/// `live_start_identity`) so the canonical liveness path can read records in
+/// this format. No writer outside the cache lock records it yet.
+// trace:TASK-1484 | ai:claude
+// trace:TASK-1750 | ai:claude
+#[cfg(target_os = "linux")]
+pub fn process_start_identity_exact(pid: u32) -> Option<String> {
+    if pid == 0 {
+        return None;
+    }
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    parse_proc_stat_starttime(&stat).map(|ticks| format!("{EXACT_LINUX_SCHEME}{ticks}"))
+}
+
+/// Best effort elsewhere: sysinfo's start time (seconds resolution).
+// trace:TASK-1484 | ai:claude
+// trace:TASK-1750 | ai:claude
+#[cfg(not(target_os = "linux"))]
+pub fn process_start_identity_exact(pid: u32) -> Option<String> {
+    if pid == 0 {
+        return None;
+    }
+    process_start_identity(pid).map(|t| format!("{EXACT_SYSINFO_SCHEME}{t}"))
+}
+
+/// Field 22 (`starttime`) of a Linux process stat line. The command name
+/// (field 2) is parenthesised and may itself contain spaces or `)`, so parsing
+/// resumes after the LAST `)`; the next token is field 3.
+// trace:TASK-1484 | ai:claude
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_proc_stat_starttime(stat: &str) -> Option<u64> {
+    let rest = &stat[stat.rfind(')')? + 1..];
+    rest.split_whitespace().nth(22 - 3)?.parse().ok()
+}
+
 /// True when the PID is alive unless both the recorded and live kernel start
 /// times are available and differ. Missing start-time data degrades to the
 /// pre-TASK-1284 PID-only check so legacy lock holders are never reclaimed
 /// merely because their record predates process identities or the platform
 /// cannot report a live start time.
+///
+/// The recorded value is compared in its OWN format (TASK-1750): a bare
+/// rfc3339 value (what [`process_start_identity`] writes) against
+/// [`process_start_identity`], exactly as before; a scheme-prefixed value
+/// (`linux-starttime:` / `sysinfo-start:`, what
+/// [`process_start_identity_exact`] writes) against the exact identity. A
+/// value in neither recognised format, or one whose live identity is in a
+/// different scheme, cannot be compared and reads alive: fail closed toward
+/// holding a lock, never toward reclaiming it.
 // trace:TASK-1284 | ai:codex
+// trace:TASK-1750 | ai:claude
 pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
     process_identity_is_alive_with(
         pid,
         recorded_start_time,
         pid_is_alive,
         process_start_identity,
+        process_start_identity_exact,
     )
+}
+
+/// Verdict of comparing a recorded start identity against the live process.
+// trace:TASK-1750 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityMatch {
+    /// Same process.
+    Same,
+    /// The pid now names a different process (it was reused).
+    Different,
+    /// Not comparable: unrecognised or unparsable record, unreadable live
+    /// identity, or a live identity in another scheme. Callers treat it as
+    /// alive.
+    Unknown,
+}
+
+/// The format a recorded start identity was written in.
+// trace:TASK-1750 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecordedIdentityFormat {
+    /// Bare rfc3339 from [`process_start_identity`].
+    Legacy,
+    /// Scheme-prefixed from [`process_start_identity_exact`].
+    Exact,
+    /// Neither: an unknown scheme or a malformed payload.
+    Unrecognised,
+}
+
+// trace:TASK-1750 | ai:claude
+fn recorded_identity_format(recorded: &str) -> RecordedIdentityFormat {
+    if let Some(ticks) = recorded.strip_prefix(EXACT_LINUX_SCHEME) {
+        // Only the canonical spelling the writer emits: plain ASCII digits, no
+        // sign and no leading zero. `u64::from_str` alone would accept `+5`
+        // and `007`, which no writer produces (TASK-1768).
+        // trace:TASK-1768 | ai:claude
+        let canonical = !ticks.is_empty()
+            && ticks.bytes().all(|b| b.is_ascii_digit())
+            && (ticks == "0" || !ticks.starts_with('0'));
+        return if canonical && ticks.parse::<u64>().is_ok() {
+            RecordedIdentityFormat::Exact
+        } else {
+            RecordedIdentityFormat::Unrecognised
+        };
+    }
+    if let Some(time) = recorded.strip_prefix(EXACT_SYSINFO_SCHEME) {
+        return if chrono::DateTime::parse_from_rfc3339(time).is_ok() {
+            RecordedIdentityFormat::Exact
+        } else {
+            RecordedIdentityFormat::Unrecognised
+        };
+    }
+    if chrono::DateTime::parse_from_rfc3339(recorded).is_ok() {
+        RecordedIdentityFormat::Legacy
+    } else {
+        RecordedIdentityFormat::Unrecognised
+    }
+}
+
+/// Scheme of an exact identity: everything up to and including the first `:`.
+fn exact_identity_scheme(identity: &str) -> &str {
+    identity.find(':').map(|i| &identity[..=i]).unwrap_or("")
+}
+
+/// Compare `recorded` against the live identity of `pid`, probing ONLY the
+/// identity source that matches the record's own format.
+// trace:TASK-1750 | ai:claude
+fn compare_recorded_identity(
+    pid: u32,
+    recorded: &str,
+    live_legacy: impl FnOnce(u32) -> Option<String>,
+    live_exact: impl FnOnce(u32) -> Option<String>,
+) -> IdentityMatch {
+    match recorded_identity_format(recorded) {
+        RecordedIdentityFormat::Unrecognised => IdentityMatch::Unknown,
+        RecordedIdentityFormat::Legacy => match live_legacy(pid) {
+            Some(actual) if actual == recorded => IdentityMatch::Same,
+            Some(_) => IdentityMatch::Different,
+            None => IdentityMatch::Unknown,
+        },
+        RecordedIdentityFormat::Exact => match live_exact(pid) {
+            Some(actual) if exact_identity_scheme(&actual) != exact_identity_scheme(recorded) => {
+                IdentityMatch::Unknown
+            }
+            Some(actual) if actual == recorded => IdentityMatch::Same,
+            Some(_) => IdentityMatch::Different,
+            None => IdentityMatch::Unknown,
+        },
+    }
+}
+
+/// STRICT identity check for paths that SIGNAL a process: true only when the
+/// pid is alive AND its live start identity positively equals `recorded`.
+///
+/// [`process_identity_is_alive`] reads "cannot tell" (an unrecognised or
+/// unparsable record, an unreadable live identity, or a live identity in
+/// another scheme) as alive, which is the safe answer for holding a lock but
+/// the DANGEROUS answer before a `kill`: it would signal a process that may
+/// not be the one recorded. Here every such case is "no match". Lock-reclaim
+/// callers keep the lenient [`process_identity_is_alive`].
+// trace:TASK-1768 | ai:claude
+pub fn process_identity_matches_strict(pid: u32, recorded_start_time: &str) -> bool {
+    process_identity_matches_strict_with(
+        pid,
+        recorded_start_time,
+        pid_is_alive,
+        process_start_identity,
+        process_start_identity_exact,
+    )
+}
+
+// trace:TASK-1768 | ai:claude
+fn process_identity_matches_strict_with(
+    pid: u32,
+    recorded_start_time: &str,
+    is_pid_alive: impl FnOnce(u32) -> bool,
+    live_start_time: impl FnOnce(u32) -> Option<String>,
+    live_exact_start_time: impl FnOnce(u32) -> Option<String>,
+) -> bool {
+    is_pid_alive(pid)
+        && compare_recorded_identity(
+            pid,
+            recorded_start_time,
+            live_start_time,
+            live_exact_start_time,
+        ) == IdentityMatch::Same
 }
 
 fn process_identity_is_alive_with(
@@ -710,6 +895,7 @@ fn process_identity_is_alive_with(
     recorded_start_time: Option<&str>,
     is_pid_alive: impl FnOnce(u32) -> bool,
     live_start_time: impl FnOnce(u32) -> Option<String>,
+    live_exact_start_time: impl FnOnce(u32) -> Option<String>,
 ) -> bool {
     if !is_pid_alive(pid) {
         return false;
@@ -719,10 +905,8 @@ fn process_identity_is_alive_with(
         return true;
     };
 
-    match live_start_time(pid) {
-        Some(actual) => recorded == actual,
-        None => true,
-    }
+    compare_recorded_identity(pid, recorded, live_start_time, live_exact_start_time)
+        != IdentityMatch::Different
 }
 
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
@@ -1483,6 +1667,7 @@ mod tests {
             None,
             |_| true,
             |_| panic!("legacy records do not require a kernel start-time probe"),
+            |_| panic!("legacy records do not require an exact start-time probe"),
         ));
     }
 
@@ -1493,6 +1678,7 @@ mod tests {
             Some("2026-09-18T12:00:00+00:00"),
             |_| true,
             |_| None,
+            |_| panic!("a legacy rfc3339 record must not probe the exact identity"),
         ));
     }
 
@@ -1503,6 +1689,7 @@ mod tests {
             Some("2026-09-18T12:00:00+00:00"),
             |_| true,
             |_| Some("2026-09-18T12:00:01+00:00".to_string()),
+            |_| panic!("a legacy rfc3339 record must not probe the exact identity"),
         ));
     }
 
@@ -1513,7 +1700,307 @@ mod tests {
             Some("2026-09-18T12:00:00+00:00"),
             |_| true,
             |_| Some("2026-09-18T12:00:00+00:00".to_string()),
+            |_| panic!("a legacy rfc3339 record must not probe the exact identity"),
         ));
+    }
+
+    // ---- TASK-1750: scheme-aware identity comparison ----------------------
+
+    fn never_probed(_: u32) -> Option<String> {
+        panic!("this identity source must not be probed for this record format")
+    }
+
+    fn identity_alive(
+        recorded: &str,
+        legacy: impl FnOnce(u32) -> Option<String>,
+        exact: impl FnOnce(u32) -> Option<String>,
+    ) -> bool {
+        process_identity_is_alive_with(42, Some(recorded), |_| true, legacy, exact)
+    }
+
+    #[test]
+    fn legacy_rfc3339_record_is_dead_when_the_pid_is_dead() {
+        assert!(!process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| false,
+            never_probed,
+            never_probed,
+        ));
+    }
+
+    #[test]
+    fn exact_linux_record_alive_when_ticks_match() {
+        assert!(identity_alive(
+            "linux-starttime:987654",
+            never_probed,
+            |_| Some("linux-starttime:987654".to_string()),
+        ));
+    }
+
+    #[test]
+    fn exact_linux_record_dead_when_pid_was_reused() {
+        assert!(!identity_alive(
+            "linux-starttime:987654",
+            never_probed,
+            |_| Some("linux-starttime:987655".to_string()),
+        ));
+    }
+
+    #[test]
+    fn exact_linux_record_dead_when_the_pid_is_dead() {
+        assert!(!process_identity_is_alive_with(
+            42,
+            Some("linux-starttime:987654"),
+            |_| false,
+            never_probed,
+            never_probed,
+        ));
+    }
+
+    #[test]
+    fn exact_record_alive_when_live_identity_is_unreadable() {
+        assert!(identity_alive(
+            "linux-starttime:987654",
+            never_probed,
+            |_| None
+        ));
+    }
+
+    // The motivating hazard: the rfc3339 identity is derived from boot time
+    // plus ticks, so a boot-time (btime) shift moves it while the process is
+    // unchanged. An exact record compares ticks, never the shifted wall time.
+    #[test]
+    fn exact_record_survives_a_boot_time_shift() {
+        let ticks = "linux-starttime:987654";
+        assert!(identity_alive(
+            ticks,
+            // The wall-clock identity has moved by a second: a legacy
+            // comparison would call this holder dead.
+            |_| Some("2026-09-18T12:00:01+00:00".to_string()),
+            |_| Some(ticks.to_string()),
+        ));
+    }
+
+    #[test]
+    fn sysinfo_start_record_matches_and_mismatches() {
+        let rec = "sysinfo-start:2026-09-18T12:00:00+00:00";
+        assert!(identity_alive(rec, never_probed, |_| Some(rec.to_string())));
+        assert!(!identity_alive(rec, never_probed, |_| Some(
+            "sysinfo-start:2026-09-18T12:00:07+00:00".to_string()
+        )));
+    }
+
+    // A record written in one exact scheme read where the live identity is in
+    // the other (another platform/build wrote it) is not comparable: alive.
+    #[test]
+    fn cross_scheme_exact_record_is_unknown_and_never_reclaimed() {
+        assert!(identity_alive(
+            "sysinfo-start:2026-09-18T12:00:00+00:00",
+            never_probed,
+            |_| Some("linux-starttime:987654".to_string()),
+        ));
+        assert!(identity_alive(
+            "linux-starttime:987654",
+            never_probed,
+            |_| Some("sysinfo-start:2026-09-18T12:00:00+00:00".to_string()),
+        ));
+    }
+
+    // Signoff condition (a): an unrecognised scheme or an unparsable record is
+    // Unknown, which reads alive (never reclaim). Neither probe is consulted.
+    #[test]
+    fn unrecognised_or_unparsable_record_is_unknown_and_never_reclaimed() {
+        for rec in [
+            "windows-start:1234",
+            "linux-starttime:not-a-number",
+            "linux-starttime:",
+            "sysinfo-start:yesterday",
+            "garbage",
+            "",
+        ] {
+            assert!(
+                identity_alive(rec, never_probed, never_probed),
+                "{rec:?} must read alive (Unknown)"
+            );
+        }
+    }
+
+    #[test]
+    fn recorded_identity_format_classifies_each_writer() {
+        assert_eq!(
+            recorded_identity_format("2026-09-18T12:00:00+00:00"),
+            RecordedIdentityFormat::Legacy
+        );
+        assert_eq!(
+            recorded_identity_format("linux-starttime:1"),
+            RecordedIdentityFormat::Exact
+        );
+        assert_eq!(
+            recorded_identity_format("sysinfo-start:2026-09-18T12:00:00+00:00"),
+            RecordedIdentityFormat::Exact
+        );
+        assert_eq!(
+            recorded_identity_format("linux-starttime:-1"),
+            RecordedIdentityFormat::Unrecognised
+        );
+        assert_eq!(
+            recorded_identity_format("linux-starttime:0"),
+            RecordedIdentityFormat::Exact
+        );
+    }
+
+    // ---- TASK-1768: strict identity match for signal paths ----------------
+
+    // Only the canonical ticks spelling classifies exact: a sign or a leading
+    // zero (which `u64::from_str` would accept) is Unknown.
+    // trace:TASK-1768 | ai:claude
+    #[test]
+    fn non_canonical_linux_ticks_are_unrecognised() {
+        for rec in [
+            "linux-starttime:+5",
+            "linux-starttime:007",
+            "linux-starttime: 5",
+            "linux-starttime:５",
+        ] {
+            assert_eq!(
+                recorded_identity_format(rec),
+                RecordedIdentityFormat::Unrecognised,
+                "{rec:?}"
+            );
+        }
+    }
+
+    fn strict(
+        recorded: &str,
+        legacy: impl FnOnce(u32) -> Option<String>,
+        exact: impl FnOnce(u32) -> Option<String>,
+    ) -> bool {
+        process_identity_matches_strict_with(42, recorded, |_| true, legacy, exact)
+    }
+
+    // trace:TASK-1768 | ai:claude
+    #[test]
+    fn strict_match_is_false_for_every_unknown_record() {
+        for rec in [
+            "windows-start:1234",
+            "linux-starttime:not-a-number",
+            "linux-starttime:",
+            "linux-starttime:+5",
+            "linux-starttime:007",
+            "sysinfo-start:yesterday",
+            "garbage",
+            "wrong-identity",
+            "",
+        ] {
+            assert!(
+                !strict(rec, never_probed, never_probed),
+                "{rec:?} must not match"
+            );
+            // The lenient lock-holding probe is unchanged: Unknown reads alive.
+            assert!(
+                identity_alive(rec, never_probed, never_probed),
+                "{rec:?} lenient"
+            );
+        }
+    }
+
+    // trace:TASK-1768 | ai:claude
+    #[test]
+    fn strict_match_is_false_for_cross_scheme_and_unreadable_live_identity() {
+        let cross = |_: u32| Some("sysinfo-start:2026-09-18T12:00:00+00:00".to_string());
+        assert!(!strict("linux-starttime:5", never_probed, cross));
+        assert!(identity_alive("linux-starttime:5", never_probed, cross));
+        assert!(!strict("linux-starttime:5", never_probed, |_| None));
+        assert!(identity_alive("linux-starttime:5", never_probed, |_| None));
+        let legacy = "2026-09-18T12:00:00+00:00";
+        assert!(!strict(legacy, |_| None, never_probed));
+        assert!(identity_alive(legacy, |_| None, never_probed));
+    }
+
+    // trace:TASK-1768 | ai:claude
+    #[test]
+    fn strict_match_requires_a_live_pid_and_a_positive_match() {
+        let legacy = "2026-09-18T12:00:00+00:00";
+        assert!(strict(legacy, |_| Some(legacy.to_string()), never_probed));
+        assert!(!strict(
+            legacy,
+            |_| Some("2026-09-18T12:00:01+00:00".to_string()),
+            never_probed
+        ));
+        assert!(strict("linux-starttime:5", never_probed, |_| Some(
+            "linux-starttime:5".into()
+        )));
+        assert!(!strict("linux-starttime:5", never_probed, |_| Some(
+            "linux-starttime:6".into()
+        )));
+        assert!(!process_identity_matches_strict_with(
+            42,
+            legacy,
+            |_| false,
+            never_probed,
+            never_probed
+        ));
+        // And the real probe agrees for this very process.
+        let me = std::process::id();
+        let mine = process_start_identity(me).expect("own identity");
+        assert!(process_identity_matches_strict(me, &mine));
+        assert!(!process_identity_matches_strict(me, "garbage"));
+    }
+
+    // Signoff condition (b) round trip: what the current binary writes for
+    // itself (`process_start_identity`, every writer today) still reads alive
+    // through the canonical path, and so does the exact identity.
+    #[test]
+    fn current_writer_records_round_trip_alive_for_self() {
+        let me = std::process::id();
+        let legacy = process_start_identity(me).expect("own legacy identity");
+        assert_eq!(
+            recorded_identity_format(&legacy),
+            RecordedIdentityFormat::Legacy
+        );
+        assert!(process_identity_is_alive(me, Some(&legacy)));
+        let exact = process_start_identity_exact(me).expect("own exact identity");
+        assert_eq!(
+            recorded_identity_format(&exact),
+            RecordedIdentityFormat::Exact
+        );
+        assert!(process_identity_is_alive(me, Some(&exact)));
+    }
+
+    // Round trip through an on-disk record: serialize the current writer's
+    // identity to a file, read it back, and it still reads alive.
+    #[test]
+    fn on_disk_record_from_current_binary_reads_alive() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("holder");
+        let me = std::process::id();
+        let start = process_start_identity(me).expect("own identity");
+        std::fs::write(&path, format!("pid={me}\npid_start={start}\n")).expect("write");
+        let body = std::fs::read_to_string(&path).expect("read");
+        let recorded = body
+            .lines()
+            .find_map(|l| l.strip_prefix("pid_start="))
+            .expect("pid_start line");
+        assert!(process_identity_is_alive(me, Some(recorded)));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exact_identity_for_self_is_linux_ticks_and_stable() {
+        let me = std::process::id();
+        let a = process_start_identity_exact(me).expect("own identity");
+        assert!(a.starts_with("linux-starttime:"), "{a}");
+        assert_eq!(Some(a), process_start_identity_exact(me));
+        assert_eq!(process_start_identity_exact(0), None);
+    }
+
+    #[test]
+    fn proc_stat_starttime_parses_field_22() {
+        // Command name with spaces and a closing paren; starttime = 987654.
+        let stat = "4242 (aida (tick) x) S 1 4242 4242 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 987654 1000 50";
+        assert_eq!(parse_proc_stat_starttime(stat), Some(987_654));
+        assert_eq!(parse_proc_stat_starttime("garbage"), None);
     }
 
     #[test]
