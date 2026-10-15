@@ -892,13 +892,8 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
 
     // BUG-1594 (PRIN-5): a bounded scan that stopped early is reported as
     // partial, never as a complete (or empty) linkage. trace:BUG-1594 | ai:claude
-    let mut incomplete: Vec<String> = Vec::new();
-    if let Some((scanned, total)) = linkage.branch_scan_truncated {
-        incomplete.push(crate::format_branch_scan_truncated_note(scanned, total));
-    }
-    if linkage.files_scan_incomplete {
-        incomplete.push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
-    }
+    // trace:BUG-1993 | ai:claude — commit-scan / shipped-check timeouts too.
+    let incomplete = linkage.incomplete_notes();
     let incomplete_md: String = incomplete
         .iter()
         .map(|n| format!("- **Incomplete:** {n}\n"))
@@ -914,7 +909,11 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
 
     let mut out = String::from("\n## Git linkage\n\n");
 
-    let state = if linkage.shipped {
+    // trace:BUG-1993 | ai:claude — a timed-out check is unknown, not unshipped.
+    // trace:BUG-1993 | ai:claude — name WHICH scan timed out.
+    let state = if let Some(reason) = linkage.unknown_reason() {
+        format!("unknown ({reason})")
+    } else if linkage.shipped {
         match linkage.shipped_pr {
             Some(pr) => format!("shipped (merged via PR #{})", pr),
             None => "shipped (merged to the default branch)".to_string(),

@@ -178,6 +178,8 @@ pub(crate) fn handle_advisor_register(
         project_root: cwd.to_string_lossy().to_string(),
         registered_at: chrono::Utc::now().to_rfc3339(),
         claude_pid,
+        // trace:TASK-1750 | ai:claude
+        claude_pid_start: claude_pid.and_then(process_probe::process_start_identity),
     };
     advisor::write_registration(&reg)?;
 
@@ -213,7 +215,7 @@ pub(crate) fn handle_advisor_registration_status(json: bool) -> Result<()> {
                 let advisor = locate_for_status(r);
                 let (alive, size_bytes, est_cost) = match &advisor {
                     Some(a) => (
-                        advisor::is_alive(a, r.claude_pid),
+                        advisor::is_alive(a, r.claude_pid, r.claude_pid_start.as_deref()),
                         Some(a.jsonl_size_bytes),
                         Some(advisor::estimated_fork_cost_usd(a.jsonl_size_bytes)),
                     ),
@@ -262,7 +264,7 @@ pub(crate) fn handle_advisor_registration_status(json: bool) -> Result<()> {
             let advisor = locate_for_status(&r);
             match advisor {
                 Some(a) => {
-                    let alive = advisor::is_alive(&a, r.claude_pid);
+                    let alive = advisor::is_alive(&a, r.claude_pid, r.claude_pid_start.as_deref());
                     let mb = a.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
                     let cost = advisor::estimated_fork_cost_usd(a.jsonl_size_bytes);
                     println!(
@@ -333,7 +335,7 @@ pub(crate) fn handle_advisor_dashboard(
     };
     let live = reg.as_ref().and_then(|r| {
         let a = locate_for_status(r)?;
-        let alive = advisor::is_alive(&a, r.claude_pid);
+        let alive = advisor::is_alive(&a, r.claude_pid, r.claude_pid_start.as_deref());
         let cost = advisor::estimated_fork_cost_usd(a.jsonl_size_bytes);
         Some((a, alive, cost))
     });

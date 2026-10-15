@@ -1330,6 +1330,13 @@ pub(crate) fn handle_git_backend_command(
         eprintln!();
     }
 
+    // BUG-1993: `show` records per-phase timings into its usage event, so a
+    // latency regression can be attributed to cache open, lookup, or git
+    // linkage instead of only the total. trace:BUG-1993 | ai:claude
+    if matches!(command, Command::Show { .. }) {
+        crate::usage::arm_phases();
+    }
+    let open_phase = crate::usage::phase("open");
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
@@ -1371,6 +1378,7 @@ pub(crate) fn handle_git_backend_command(
         }
         Err(e) => return Err(e),
     };
+    drop(open_phase);
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
@@ -4873,6 +4881,7 @@ pub(crate) fn handle_git_backend_command(
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
             // Read-only: the tolerant resolver keeps `show` off the cache
             // write lock. trace:BUG-1670 | ai:claude
+            let lookup_phase = crate::usage::phase("lookup");
             let lookup = backend
                 .get_requirement_unambiguous_for_read(id)
                 .map_err(|e| {
@@ -4888,6 +4897,7 @@ pub(crate) fn handle_git_backend_command(
                         aida_core::object_store::parse_failure_hint(None),
                     )
                 });
+            drop(lookup_phase);
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -4912,9 +4922,11 @@ pub(crate) fn handle_git_backend_command(
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
+                    let context_phase = crate::usage::phase("context");
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
                     let (cached_epic_status, serialize_cluster_command) =
                         show_cached_context(&backend, &req);
+                    drop(context_phase);
                     // BUG-626: the cache projects an EPIC's read-only child
                     // rollup. Using that projection avoids loading every YAML
                     // object merely to render one spec. trace:BUG-626
@@ -4982,7 +4994,10 @@ pub(crate) fn handle_git_backend_command(
                         struct GitLinkageJson {
                             commits: Vec<GitCommitJson>,
                             files: Vec<GitFileJson>,
-                            shipped: bool,
+                            // BUG-1993: `null` when a bounded scan timed
+                            // out before the shipped state was known — never
+                            // a false "not shipped". trace:BUG-1993 | ai:claude
+                            shipped: Option<bool>,
                             branch: Option<String>,
                             worktree: Option<String>,
                             shipped_pr: Option<u64>,
@@ -5031,7 +5046,10 @@ pub(crate) fn handle_git_backend_command(
                                     ids.push(origin.to_string());
                                 }
                             }
-                            let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            let linkage = {
+                                let _phase = crate::usage::phase("linkage");
+                                crate::collect_git_linkage(&project_root, &ids)
+                            };
                             // TASK-1475: compute before `linkage.{files,commits}`
                             // are moved into the JSON payload below.
                             // trace:TASK-1475 | ai:claude
@@ -5041,16 +5059,8 @@ pub(crate) fn handle_git_backend_command(
                                 &linkage.files,
                                 &linkage.commits,
                             );
-                            // trace:BUG-1594 | ai:claude
-                            let mut incomplete = Vec::new();
-                            if let Some((scanned, total)) = linkage.branch_scan_truncated {
-                                incomplete
-                                    .push(crate::format_branch_scan_truncated_note(scanned, total));
-                            }
-                            if linkage.files_scan_incomplete {
-                                incomplete
-                                    .push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
-                            }
+                            // trace:BUG-1594 trace:BUG-1993 | ai:claude
+                            let incomplete = linkage.incomplete_notes();
                             Some(GitLinkageJson {
                                 complete: incomplete.is_empty(),
                                 incomplete,
@@ -5068,7 +5078,11 @@ pub(crate) fn handle_git_backend_command(
                                     .into_iter()
                                     .map(|(file, symbol)| GitFileJson { file, symbol })
                                     .collect(),
-                                shipped: linkage.shipped,
+                                shipped: if linkage.shipped_unknown {
+                                    None
+                                } else {
+                                    Some(linkage.shipped)
+                                },
                                 branch: linkage.branch,
                                 worktree: linkage.worktree,
                                 shipped_pr: linkage.shipped_pr,
@@ -5361,6 +5375,7 @@ pub(crate) fn handle_git_backend_command(
                         if !*no_git {
                             if let Some(root) = store_path.parent() {
                                 let ids = crate::shipped_linkage::spec_lookup_ids(&req);
+                                let _phase = crate::usage::phase("linkage");
                                 lines.push(crate::shipped_linkage::toon_show_linkage_line(
                                     root, &ids,
                                 ));
@@ -6013,6 +6028,7 @@ pub(crate) fn handle_git_backend_command(
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let _phase = crate::usage::phase("linkage");
                         print_git_linkage(&project_root, &ids, *verbose, req.filed_at.as_ref());
                     }
                     // TASK-269: `aida show` output runs 50-150 lines, so the
@@ -8715,6 +8731,72 @@ pub(crate) fn handle_git_backend_command(
                 }
                 return Ok(());
             }
+            // STORY-1664: the list-shaped views share only the window, type,
+            // limit, author and archive flags with the rest of `history`;
+            // a flag that picks a different view is refused, not ignored.
+            // trace:STORY-1664 | ai:claude
+            if let Some((view, args)) = cmd.as_ref().and_then(HistoryCommand::view) {
+                let other_view_flags = [
+                    ("a SPEC-ID", spec.is_some() || id.is_some()),
+                    ("--template", template.is_some()),
+                    ("--fields", fields.is_some()),
+                    ("--full", *full || *events),
+                    ("--digest", *digest),
+                    ("--status-changes", *status_changes),
+                    ("--kind", kind.is_some()),
+                    ("--shipped", *shipped),
+                    ("--to", to.is_some()),
+                    ("--from", from.is_some()),
+                    ("--opened", *opened),
+                    ("--comments", *comments),
+                    ("--oneline", *oneline),
+                    ("--timeline", *timeline),
+                ];
+                if let Some((flag, _)) = other_view_flags.iter().find(|(_, set)| *set) {
+                    anyhow::bail!(
+                        "`aida history {}` is its own view; {flag} selects a different one. \
+                         Drop {flag}, or run plain `aida history` with it",
+                        view.name()
+                    );
+                }
+                let status = args
+                    .status
+                    .as_deref()
+                    .map(|raw| history::resolve_status_filter("--status", raw))
+                    .transpose()?;
+                let query = crate::history_views::ViewQuery {
+                    since: since.clone(),
+                    until: until.clone(),
+                    author: author.clone(),
+                    max_commits: *max_commits,
+                    limit: limit_flag,
+                    all_events: args.all_events,
+                    oldest_first: args.oldest_first,
+                    filters: crate::history_views::ViewFilters {
+                        req_type: r#type.clone(),
+                        priority: args.priority.clone(),
+                        tags: args.tags.clone(),
+                        status,
+                        archive: if *all {
+                            aida_core::ArchiveFilter::Both
+                        } else if *archived {
+                            aida_core::ArchiveFilter::ArchivedOnly
+                        } else {
+                            aida_core::ArchiveFilter::NonArchivedOnly
+                        },
+                        defer: if *all || *archived {
+                            aida_core::DeferFilter::Both
+                        } else if *deferred {
+                            aida_core::DeferFilter::DeferredOnly
+                        } else {
+                            aida_core::DeferFilter::NonDeferredOnly
+                        },
+                        include_meta: *include_meta,
+                    },
+                };
+                let json = *json || args.json || crate::output_format_is_json();
+                return crate::history_views::run(&backend, store_path, view, &query, json);
+            }
             if template.is_some()
                 && (*json
                     || matches!(
@@ -8769,6 +8851,8 @@ pub(crate) fn handle_git_backend_command(
             let explicit_events = match cmd {
                 Some(HistoryCommand::Events { .. }) => true,
                 Some(HistoryCommand::Templates { .. }) => unreachable!(),
+                // trace:STORY-1664 | ai:claude — the list views returned above.
+                Some(_) => unreachable!(),
                 None => {
                     if *events {
                         note_hidden_alias(

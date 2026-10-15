@@ -61,6 +61,10 @@ fn add_bare_origin(tmp: &tempfile::TempDir, root: &std::path::Path) {
     git(root, &["push", "-q", "-u", "origin", "main"]);
 }
 
+fn far_deadline() -> std::time::Instant {
+    std::time::Instant::now() + std::time::Duration::from_secs(60)
+}
+
 fn wanted(ids: &[&str]) -> HashSet<String> {
     ids.iter().map(|s| s.to_string()).collect()
 }
@@ -73,7 +77,10 @@ fn local_ref_equal_to_remote_is_not_scanned() {
     add_bare_origin(&tmp, &root);
     let refs = default_branch_refs(&root);
     assert_eq!(refs.in_scan_order(), vec!["origin/main", "main"]);
-    assert_eq!(refs_worth_scanning(&root, &refs), vec!["origin/main"]);
+    assert_eq!(
+        refs_worth_scanning(&root, &refs, far_deadline()),
+        vec!["origin/main"]
+    );
 
     let scan = scan_default_branch_linkage(&root, &["TASK-1".to_string()]);
     assert_eq!(scan.scanned_refs, vec!["origin/main"], "{scan:?}");
@@ -139,12 +146,22 @@ fn path_named_like_the_branch_does_not_break_the_scan() {
     commit(&root, "c.txt", "x", "feat: local ahead (TASK-8)");
 
     let ids = wanted(&["TASK-6"]);
-    assert_eq!(referencing_commits_on_ref(&root, "main", &ids).len(), 1);
     assert_eq!(
-        referencing_commits_on_ref(&root, "origin/main", &ids).len(),
+        referencing_commits_on_ref(&root, "main", &ids, far_deadline())
+            .unwrap()
+            .len(),
         1
     );
-    assert_eq!(trace_files_on_ref(&root, "main", &wanted(&["TASK-5"])), 1);
+    assert_eq!(
+        referencing_commits_on_ref(&root, "origin/main", &ids, far_deadline())
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        trace_files_on_ref(&root, "main", &wanted(&["TASK-5"]), far_deadline()).unwrap(),
+        1
+    );
 
     let scan = scan_default_branch_linkage(&root, &["TASK-6".to_string()]);
     assert_eq!(scan.found_on.as_deref(), Some("origin/main"), "{scan:?}");
@@ -231,5 +248,8 @@ fn trace_files_on_ref_counts_colon_path() {
         "// trace:TASK-9 | ai:claude\n",
         "feat: second colon path, same prefix",
     );
-    assert_eq!(trace_files_on_ref(&root, "main", &wanted(&["TASK-9"])), 2);
+    assert_eq!(
+        trace_files_on_ref(&root, "main", &wanted(&["TASK-9"]), far_deadline()).unwrap(),
+        2
+    );
 }

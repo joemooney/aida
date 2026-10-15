@@ -2138,6 +2138,8 @@ pub(crate) fn render_spec_card(
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        // trace:BUG-1993 | ai:claude
+        let _phase = crate::usage::phase("linkage");
         print_git_linkage(&project_root, &ids, verbose, req.filed_at.as_ref());
     }
     println!("{}", rule.dimmed());

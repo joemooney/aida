@@ -698,10 +698,12 @@ pub(crate) fn apply_agent_default_flags(
                 config
                     .default_args
                     .extend(tool_contained_flags(config.agent_type));
+                config.contained = config.agent_type == "claude";
             } else if bypass {
                 config
                     .default_args
                     .extend(tool_bypass_flags(config.agent_type));
+                config.contained = false;
             }
         }
         // BUG-1699: per-tool `default_flags` used to be appended AFTER an explicit posture
@@ -758,6 +760,10 @@ pub(crate) fn apply_agent_default_flags(
         config.default_args.extend(["--model".to_string(), model]);
     }
     config.default_args.extend(flag_options.extra_flags);
+    // BUG-2007: the codex launcher injects `--no-daemon`; an operator who also
+    // passes it (extra flag or config default) must not get a doubled flag.
+    // trace:BUG-2007 | ai:claude
+    crate::agent_launch::dedupe_codex_no_daemon(config.agent_type, &mut config.default_args);
     Ok(())
 }
 

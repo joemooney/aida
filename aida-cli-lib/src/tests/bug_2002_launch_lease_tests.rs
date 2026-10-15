@@ -35,6 +35,7 @@ fn launch(root: &std::path::Path, background: bool, preview: bool) -> Result<()>
         binary: "/usr/bin/true",
         default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let launch = if background {
         agent_new_bg_dispatch
@@ -415,6 +416,7 @@ fn agent_new_foreground_and_background_reenter_with_explicit_owning_cwd() {
             binary: "/bin/sh",
             default_args: vec![script.display().to_string()],
             prompt_style: AgentPromptStyle::Positional,
+            contained: false,
         };
         let launch = if background {
             agent_new_bg_dispatch
