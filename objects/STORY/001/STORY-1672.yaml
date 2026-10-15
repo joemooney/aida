@@ -2,7 +2,7 @@ id: 01a12c99-0940-7e90-a3dc-4f96a984ae1e
 spec_id: STORY-1672
 agreed_id: STORY-1672
 title: Lint unexplained constants in traced code and report trace coverage as a gap detector
-description: |
+description: |+
   ## F7. Lint for unexplained constants
 
   **Seen:**
@@ -25,17 +25,31 @@ description: |
 
   ## Acceptance
 
-  To be written at triage; the proposals above are the starting point.
+  Signed by advisor 2026-10-15. Two slices, shipped as two PRs on this story, Rust only (other languages are out of scope), report-only (no store edits, nonzero exit only with an explicit --fail-on flag).
+
+  Slice 1, whole-tree trace coverage (`aida trace coverage --all` / `--path <dir>`):
+  - Reuses the existing trace-marker definition and SPIKE-47 exemptions; no new convention.
+  - Per file: functions with no `trace:` marker in or directly above them; a fixture crate with one traced and one untraced fn reports 1/2 and names the untraced fn.
+  - Human and JSON output; the existing diff-scoped mode is unchanged (regression test).
+
+  Slice 2, `aida lint constants`:
+  - Scans numeric literals inside traced regions only.
+  - A literal is explained if its normalized value (strip `_` separators and type suffixes; hex/dec compare by value) appears in the owning spec's description or in a decision row linked to that spec.
+  - Exempt: 0 and 1, and any literal on a line carrying `// arbitrary` (optionally `// arbitrary: <reason>`). No other heuristic exemptions in v1.
+  - Fixture: spec mentions 15, code has 15 and 40 and a marked 7 -> only 40 flagged; human + JSON output naming file:line, value, spec.
+
+  Tier: STANDARD per slice.
 
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
+
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-15T15:14:18.785427310Z
+modified_at: 2026-10-15T15:38:00.353970715Z
 req_type: Story
 tags:
 - from:aida-host
