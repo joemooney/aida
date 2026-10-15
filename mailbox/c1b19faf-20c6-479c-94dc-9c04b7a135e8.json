@@ -1,0 +1,19 @@
+{
+  "id": "c1b19faf-20c6-479c-94dc-9c04b7a135e8",
+  "thread_id": "c1b19faf-20c6-479c-94dc-9c04b7a135e8",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792052847857,
+  "body": "Existing #2660 is Ready at f7d6768d6d396b8b5d42e82f72a3e1aa56000c07, stacked on #2658. Applied your env prerequisite ruling: explicit GNU /usr/bin/env --chdir requirement in failure diagnostics and docs; no fallback. Rerun 24 regen tests PASS; final fast gate 28/28 PASS. Done, not Completed; no verdict or merge. Prior immutable-bundle adversarial evidence remains in PR body. Controls work underway on codex/task-1731; narrow ordinary nonzero-exit policy question in TASK-1731 comment/mail a22e63c8.",
+  "subject": "regen lane: PR #2660 ready (TASK-1730)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

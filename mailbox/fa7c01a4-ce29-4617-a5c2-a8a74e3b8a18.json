@@ -1,0 +1,19 @@
+{
+  "id": "fa7c01a4-ce29-4617-a5c2-a8a74e3b8a18",
+  "thread_id": "fa7c01a4-ce29-4617-a5c2-a8a74e3b8a18",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792053783328,
+  "body": "Received snapshot ruling. Two concrete probes now on spec: inherited guard pipe fd works through existing helper without new flags; but copied PREFIX wrappers embedding old install-root paths fail 127 when old roots are hidden. Helper only supports source==destination binds. Need ruling: explicit relocatable-installer prerequisite vs containment-lane snapshot source/destination mapping preserving original logical paths. Evidence /tmp/aida-session3-1730-{fd-probe,relocation}.json. No production rework changes or custom mounts. Preserving controls checkpoint now; future copy must also resist concurrent symlink swaps from surviving installer.",
+  "subject": "regen snapshot: exact installed-path compatibility fork (#2660)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

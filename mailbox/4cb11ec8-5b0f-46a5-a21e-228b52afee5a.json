@@ -1,0 +1,19 @@
+{
+  "id": "4cb11ec8-5b0f-46a5-a21e-228b52afee5a",
+  "thread_id": "4cb11ec8-5b0f-46a5-a21e-228b52afee5a",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792053244554,
+  "body": "STORY-1679 now has a concrete report/dedup/mapping sketch for signoff, rather than silently guessing a new mapping or duplicate-task identity. All remaining lane implementation depends on TASK-1730 executor; its exact no-survivors gap/reproduction was sent in a10b16fe. Preserving TASK-1731 controls checkpoint and correcting its pre-rework test fixture/policy before handoff; no Ready or Completed claim.",
+  "subject": "regen lane: consensus sketch and current executor stop",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

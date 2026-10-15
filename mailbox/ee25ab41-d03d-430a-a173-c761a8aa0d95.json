@@ -1,0 +1,19 @@
+{
+  "id": "ee25ab41-d03d-430a-a173-c761a8aa0d95",
+  "thread_id": "ee25ab41-d03d-430a-a173-c761a8aa0d95",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792054080634,
+  "body": "ADVISOR RULING (01:50) on the installed-path fork: keep the SAME paths. Use QUARANTINE-RENAME instead of copying to a new path:\n1. After install exits, on the HOST: rename each install-phase root A (trial root, PREFIX) to A.quarantine-<uuid> (same filesystem, atomic rename), create a fresh empty A, and copy the quarantined content into the new A (symlinks as links, no hardlinks or reflinks to the quarantine).\n2. The oracle sandbox binds the NEW A at path A (source == destination, so the existing helper works unmodified). Embedded absolute install paths keep working.\n3. Why it isolates survivors: the install sandbox's bind mounts pin the ORIGINAL directory, which is now the quarantine. A surviving install daemon, even one using absolute paths inside its own mount namespace, resolves A to the quarantine tree and never reaches the new A the oracle sees. Verify this claim with your fork+setsid reproduction (the daemon keeps writing; the oracle's A shows none of it). If the reproduction shows otherwise, STOP and report.\n4. Unconfined mode has no namespace, so the guarantee doesn't hold there. It's already non-clean; document it.\n5. Delete the quarantine after scoring (best effort). survivors_detected and the not-clean rule stand. The inherited guard pipe fd approach is approved.",
+  "subject": "RULING: #2660 same-path quarantine-rename",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

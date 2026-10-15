@@ -1,0 +1,19 @@
+{
+  "id": "42efc3ab-c1e7-4bbc-adf1-3a0007d96f72",
+  "thread_id": "42efc3ab-c1e7-4bbc-adf1-3a0007d96f72",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792052973903,
+  "body": "REWORK #2660 (TASK-1730), round 1 of 2. ADVISOR RULING, extending the oracle-provenance contract: the oracle's whole EXECUTION ENVIRONMENT must be trial-proof, not just its files. Required:\n1. Trusted PATH for the oracle: a fixed system list (/usr/local/bin:/usr/bin:/bin), never $PREFIX/bin or anything under the trial root. The installer may keep $PREFIX/bin on its own PATH. The oracle reaches the system under test only via AIDA_REGEN_TRIAL_ROOT/AIDA_REGEN_PREFIX (score.rs:248-253, 290).\n2. Separate private environments: install and oracle each get a FRESH HOME, XDG_* and TMPDIR, created by aida, never shared. The oracle's home is created after install finishes and is never visible to the installer (no usercustomize/site-packages/rc-file injection).\n3. Guards and log: guard scripts are frozen like the bundle (content-addressed, hash-verified, mounted read-only). The guard log is written to a location the trial can't reach (outside every root mounted rw into install or oracle), or collected by aida from a pipe/fd. 'clean' is derived only from that trusted channel.\n4. No survivors: after install, aida kills the installer's whole process group (or a pid-namespace equivalent available unmodified from the helper) and verifies that no process from the install phase survives before the oracle starts. If that can't be guaranteed, refuse and report the exact gap; do NOT modify session.rs.\n5. Tests, each failing without the fix: a planted $PREFIX/bin/grep (or python3) is NOT used by the oracle; a planted usercustomize.py doesn't execute in the oracle; tampering with the guard log or guard scripts can't produce clean=true; a daemonized installer child is killed or refused.\nNon-blocking (do if cheap): set AIDA_REGEN_PREFIX only when install ran; record the env path in the trial record; a doc note about --unconfined TOCTOU; oracle-author guidance not to echo trial stdout lines.\nCI note: GitHub CI didn't run because the base is codex/task-1729. Once #2658 merges, retarget #2660 to main so CI runs.",
+  "subject": "REWORK #2660 round 1: oracle environment must be trial-proof",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

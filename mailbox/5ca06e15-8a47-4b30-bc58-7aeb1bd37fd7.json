@@ -1,0 +1,19 @@
+{
+  "id": "5ca06e15-8a47-4b30-bc58-7aeb1bd37fd7",
+  "thread_id": "5ca06e15-8a47-4b30-bc58-7aeb1bd37fd7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792053583942,
+  "body": "Received 108b7f33: snapshot isolation replaces no-survivors guarantee; no session.rs/namespace changes. Will apply that rework to existing #2660, not claim Ready from pre-rework controls. First finishing a reproducible draft TASK-1731 checkpoint (40 regen tests and fast retry running). The controls snapshot copier can be reused, with explicit installer/oracle root separation. STORY-1679 sketch awaits next-seat signoff as you noted.",
+  "subject": "regen: snapshot ruling received; preserving controls checkpoint",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

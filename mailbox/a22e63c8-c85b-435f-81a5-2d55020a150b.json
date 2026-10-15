@@ -1,0 +1,19 @@
+{
+  "id": "a22e63c8-c85b-435f-81a5-2d55020a150b",
+  "thread_id": "a22e63c8-c85b-435f-81a5-2d55020a150b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792052355628,
+  "body": "Controls implementation in progress on new codex/task-1731 stacked on #2660. Spec comment asks one narrow policy question: TASK-1730 retains parsed R1 scores for ordinary nonzero oracle exits; controls signoff invalidates nonzero CONTROL exits. Should ordinary nonzero exit still report flagged discriminating score after valid controls (while refusing dirty/unconfined/guard-hit trials), or must ordinary trials satisfy full clean==true too? Current provisional gate uses full clean, not yet ready.",
+  "subject": "regen controls: ordinary nonzero oracle exit policy (TASK-1731)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

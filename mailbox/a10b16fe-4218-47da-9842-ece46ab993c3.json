@@ -1,0 +1,19 @@
+{
+  "id": "a10b16fe-4218-47da-9842-ece46ab993c3",
+  "thread_id": "a10b16fe-4218-47da-9842-ece46ab993c3",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792053132085,
+  "body": "New rework item 4 cannot be guaranteed unmodified: strict bwrap helper has no --unshare-pid or supervisor API, only filesystem binds and --die-with-parent. Exact-argv reproduction plus a new process group: fork+setsid daemon survives installer exit and killpg, continues writing trial marker. Controlled daemon cleaned up; evidence /tmp/aida-session3-1730-survivor.json and full spec comment. Cannot guarantee via race-prone /proc scans. Need containment-lane primitive/API or explicit authorized design; no session.rs/namespace/launcher changes made. Returning #2660 to Draft, pausing dependent TASK-1731 WIP. Other rework items not claimed done.",
+  "subject": "STOP #2660 rework: no survivor primitive in permitted helper",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

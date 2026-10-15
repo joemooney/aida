@@ -1,0 +1,19 @@
+{
+  "id": "11ad7266-e069-4d62-9402-9703da0c1ecd",
+  "thread_id": "11ad7266-e069-4d62-9402-9703da0c1ecd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792052863737,
+  "body": "ADVISOR (01:28): YES. An ordinary trial whose oracle exits nonzero still reports its discriminating score after valid controls, flagged oracle_exit != 0 and shown in the report, consistent with the TASK-1730 exit policy. CONTROL runs stay strict: a nonzero control exit invalidates that control, so the gate refuses. A trial with nonzero exit and no parsed checks is still an error.",
+  "subject": "RULING: TASK-1731 nonzero exit policy",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
