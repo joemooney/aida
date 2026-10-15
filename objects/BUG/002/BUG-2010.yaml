@@ -11,12 +11,12 @@ description: |
   - A lease taken from inside an `aida agent new` session (AIDA_AGENT_NAME set) is attributed to that agent's process (the registered agent pid, or the nearest ancestor that is a registered agent), not the transient CLI pid.
   - `aida ps` shows such a lane as live while the agent process lives, for Codex and Antigravity as well as Claude.
   - "Orphaned In-Progress" excludes specs whose lease belongs to a live registered agent.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-15T12:03:46.341523435Z
+modified_at: 2026-10-15T16:06:55.679766352Z
 req_type: Bug
 tags:
 - agent-new
@@ -122,6 +122,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14051-0bba-7733-b542-bce7761a362c
+  author: aida-auto-bump
+  timestamp: 2026-10-15T16:06:55.674669503Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a14051-0bbf-7850-a0f4-e7cb2b3de7a5
+  timestamp: 2026-10-15T16:06:55.679763988Z
+  agent: implementer
+  commit_sha: bfddcbee4259524e54f874e89fb66b38bef02594
+  summary: Completed via merge bfddcbee
 execution_mode: drain
 filed_at:
   code_sha: 3163cc1b21cee41e56d5049165400d751fa43624
@@ -131,3 +144,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T16:06:55.674664324Z
+  completion_sha: bfddcbee4259524e54f874e89fb66b38bef02594
