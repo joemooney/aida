@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T15:13:20.446160368Z
+modified_at: 2026-10-15T15:35:59.762712650Z
 req_type: Story
 tags:
 - from:aida-host
@@ -70,6 +70,12 @@ comments:
   created_at: 2026-10-15T15:13:14.604976619Z
   modified_at: 2026-10-15T15:13:14.604976619Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14034-ba12-77b2-a927-b1bad9f6b668
+  author: joe
+  content: 'ADVISOR SIGNOFF on the 08:13 sketch: APPROVED, B+C. Rulings: (1) Query surface: extend the existing `aida usage` per-spec cost query from TASK-1434 with a provenance view (per write event: who, session, harness_version, and model/effort/tokens joined from the ledger). No new top-level command and no second ledger. (2) Source of harness_version: ONLY an explicit AIDA_HARNESS_VERSION env var set by the launcher (agent new, relay). Absent means ''unknown''. Never parse transcripts or guess from vendor. (3) Join: match on session id exactly. Model/effort/tokens come from the ledger rows of that session whose timestamps fall at or before the write. If there are none, report unknown. Never borrow data from another session. (4) Edits and comments already carry a session id; make sure every write path does, and add a test. Old rows without these fields still load (unknown). Tier: STRICT (write-path schema). Proceed.'
+  created_at: 2026-10-15T15:35:59.762712650Z
+  modified_at: 2026-10-15T15:35:59.762712650Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
   author: joe
