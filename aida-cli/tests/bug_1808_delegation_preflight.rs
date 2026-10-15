@@ -79,6 +79,10 @@ fn fixture(for_role: &str) -> Fixture {
     let claude = bin.join("claude");
     std::fs::write(&claude, "#!/bin/sh\nexit 97\n").unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Hermetic forge: PR metadata lookups fail fast instead of reaching GitHub.
+    let gh = bin.join("gh");
+    std::fs::write(&gh, "#!/bin/sh\nexit 1\n").unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
     git(&repo, &["config", "user.email", "t@t.t"]);
@@ -282,5 +286,118 @@ fn advisor_without_the_routed_seat_is_told_to_use_an_explicit_role() {
     assert!(!ok, "{text}");
     assert!(text.contains("does not delegate `implementer`"), "{text}");
     assert!(text.contains("`--role reviewer`"), "{text}");
+    assert_unchanged(&before, &snapshot(&fx));
+}
+
+// trace:BUG-1808 | ai:claude
+// POSITIVE control: a grant that delegates the routed seat passes the new
+// headless-resume preflight and proceeds to setup and launch, so the check
+// does not refuse a legitimate resume. The fake `claude` exits 97, which
+// proves the launch was reached.
+#[test]
+fn delegating_grant_passes_headless_resume_preflight_and_launches() {
+    let fx = fixture("implementer");
+    let grant = support::grant_seat(&fx.home, &fx.repo, "advisor", &["implementer"]);
+    let out = aida(&fx.repo, &fx.home, &fx.bin)
+        .env("AIDA_SESSION_GRANT", &grant)
+        .args([
+            "queue",
+            "work",
+            &fx.spec,
+            "--no-human",
+            "--resume",
+            RESUME_ID,
+            "--no-pull",
+        ])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!text.contains("child-seat delegation refused"), "{text}");
+    assert!(!text.contains("does not delegate"), "{text}");
+    assert_eq!(
+        out.status.code(),
+        Some(97),
+        "launch must be reached: {text}"
+    );
+    assert!(
+        std::fs::read_dir(fx.repo.join(".aida/sessions"))
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false),
+        "setup must have proceeded (lease minted): {text}"
+    );
+}
+
+// trace:BUG-1808 | ai:claude
+// A standalone `queue work PR-N --role reviewer --no-human` mints a `reviewer`
+// child grant in `run_standalone_reviewer`; without a grant that delegates
+// reviewer it must refuse before any store, queue, ref, worktree or manifest
+// write.
+#[test]
+fn headless_standalone_reviewer_without_reviewer_delegation_is_refused_without_mutation() {
+    let fx = fixture("implementer");
+    // A review story ties PR-7 to the spec without any forge access.
+    let advisor = support::ensure_seat(&fx.home, &fx.repo, "advisor", &["implementer", "reviewer"])
+        .expect("initialized");
+    let review = aida(&fx.repo, &fx.home, &fx.bin)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", &advisor)
+        .args([
+            "add",
+            "--type",
+            "story",
+            "--status",
+            "approved",
+            "--title",
+            &format!("Review PR-7: delegation preflight ({})", fx.spec),
+        ])
+        .output()
+        .unwrap();
+    assert!(review.status.success(), "{review:?}");
+    let review_out = String::from_utf8_lossy(&review.stdout);
+    let review_id = review_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| t.starts_with("STORY-"))
+        .unwrap_or_else(|| panic!("no story id in {review_out}"))
+        .to_string();
+    // Queue the review story so `PR-7` keeps its PR scope (standalone reviewer).
+    let queued = aida(&fx.repo, &fx.home, &fx.bin)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", &advisor)
+        .args(["queue", "add", &review_id, "--for", "reviewer"])
+        .output()
+        .unwrap();
+    assert!(queued.status.success(), "{queued:?}");
+    let settle = aida(&fx.repo, &fx.home, &fx.bin)
+        .args(["queue", "list", "--all"])
+        .output()
+        .unwrap();
+    assert!(settle.status.success(), "{settle:?}");
+    let grant = support::grant_seat(&fx.home, &fx.repo, "advisor", &["implementer"]);
+    let before = snapshot(&fx);
+    let (ok, text) = run(
+        &fx,
+        &grant,
+        &[
+            "queue",
+            "work",
+            "PR-7",
+            "--role",
+            "reviewer",
+            "--no-human",
+            "--fresh",
+            "--no-pull",
+        ],
+    );
+    assert!(!ok, "{text}");
+    assert!(text.contains("child-seat delegation refused"), "{text}");
+    assert!(text.contains("does not delegate `reviewer`"), "{text}");
+    assert!(
+        text.contains("queue selection succeeded (--role flag chose role `reviewer`)"),
+        "{text}"
+    );
     assert_unchanged(&before, &snapshot(&fx));
 }
