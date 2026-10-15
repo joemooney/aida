@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T04:21:48.579518689Z
-modified_at: 2026-10-15T05:05:44.978962446Z
+modified_at: 2026-10-15T06:22:20.917493498Z
 req_type: Bug
+comments:
+- id: 01a13e39-d8f5-7e73-98db-37127b172809
+  author: joe
+  content: 'Advisor 2026-10-14 23:20, more impact: the leases left by claim + failed worktree add record branch = "main" (and often worktree_path = ""). aida session reap then classifies them ''protected checkout/branch — never reaped'', so dead leases for MERGED specs (TASK-1763, BUG-2003/2009, BUG-2136, ...) pile up in aida ps forever; I ended 7 by hand with session end --yes. Acceptance addition: a lease created by claim records the worktree branch (or none), never the primary checkout''s main; reap treats a dead-pid lease on a merged spec as reapable regardless.'
+  created_at: 2026-10-15T06:22:20.917493498Z
+  modified_at: 2026-10-15T06:22:20.917493498Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13df3-b812-7973-bb01-fb0a6f16a06f
   author: joe
