@@ -1,0 +1,19 @@
+{
+  "id": "e453521e-6d64-4c97-bbfc-b071d55997f3",
+  "thread_id": "e453521e-6d64-4c97-bbfc-b071d55997f3",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792045553025,
+  "body": "PR #2658 https://github.com/joemooney/aida/pull/2658 is ready for independent review.\nHead: 4e8eef7bea2e501aaf1c02cd636ab721eb6c37cb\nBranch/worktree: codex/task-1729, /home/joe/ai/aida-task-1729\nFiles: new aida-cli-lib/src/regen.rs; enum/dispatch wiring in cli.rs, lib.rs, lib_part1.rs, store_sync.rs; AGENTS.md and OVERVIEW.md orientation updates.\nChecks completed: 5 targeted regen tests passed; make check-ci-fast passed all 28 gates. Initial formatting failure in included lib_part1.rs was fixed with direct rustfmt before rerunning all gates. One required fresh-context author self-check round found no issues (static inspection only; not an independent review/verdict). No CI-green claim yet.\nTASK-1729 is Done, not Completed. No verdicts recorded and no merge attempted. Approved corpus-v1 contract including dirty override and cross-checkout byte identity is implemented. I will continue with TASK-1730 stacked on #2658 if it is unmerged.\n",
+  "subject": "regen lane: PR #2658 (TASK-1729)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
