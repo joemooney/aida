@@ -12246,7 +12246,7 @@ pub(crate) fn handle_queue_work(
         /* use_pool */
         None,
         /* self_claim */
-        true,
+        no_launch,
     )?;
 
     // trace:TASK-1337 | ai:codex

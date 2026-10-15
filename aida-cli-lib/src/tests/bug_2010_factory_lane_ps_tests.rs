@@ -139,7 +139,7 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         false,
         None,
         None,
-        "slug",
+        "auto",
         false,
         None,
         false,
@@ -395,7 +395,7 @@ fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_inv
         false,
         None,
         None,
-        "slug",
+        "auto",
         false,
         None,
         false,
@@ -430,19 +430,26 @@ fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_inv
     );
 
     // BUG-1930 predecessor check MUST hold
-    let my_start = crate::process_probe::process_start_identity(live_pid);
+    let orch_pid = lease
+        .creator_pid
+        .expect("minted lease must have creator_pid");
+    let orch_start = lease.creator_pid_start_time.clone();
     assert!(
-        leases::lease_minted_by_returned_phase_child(lease, live_pid, my_start.as_deref()),
+        leases::lease_minted_by_returned_phase_child(lease, orch_pid, orch_start.as_deref()),
         "BUG-1930 predecessor check must succeed when active_pid is None and creator_pid matches"
     );
 
     // If active_pid was erroneously set (as would happen if is_drain_child branch were deleted),
     // predecessor check would fail
     let mut broken_lease = lease.clone();
-    broken_lease.active_pid = Some(live_pid);
-    broken_lease.active_pid_start_time = my_start.clone();
+    broken_lease.active_pid = Some(orch_pid);
+    broken_lease.active_pid_start_time = orch_start.clone();
     assert!(
-        !leases::lease_minted_by_returned_phase_child(&broken_lease, live_pid, my_start.as_deref()),
+        !leases::lease_minted_by_returned_phase_child(
+            &broken_lease,
+            orch_pid,
+            orch_start.as_deref()
+        ),
         "BUG-1930 predecessor check must fail if active_pid was erroneously attributed"
     );
 }
@@ -534,8 +541,9 @@ fn test_agent_new_does_not_attribute_lease_to_calling_lane() {
     );
 
     // Assert 3: ps / live_agent_for_lease_or_spec does NOT attribute lease X to lane A
+    let live_agents = [lane_a_after];
     let matched = agent_registry::live_agent_for_lease_or_spec(
-        &[lane_a_after],
+        &live_agents,
         Some(lease_x),
         Some("TASK-2000"),
     );
@@ -543,6 +551,260 @@ fn test_agent_new_does_not_attribute_lease_to_calling_lane() {
         matched.is_none(),
         "lease X must not be matched to calling lane A"
     );
+}
+
+/// Item 1 (queue work): Leases minted via `queue work` (which launches by default)
+/// must not be attributed to the calling lane, and the calling lane's registry entry
+/// must not be overwritten. With `--no-launch`, the lease IS attributed to the caller.
+// trace:BUG-2010 | ai:antigravity
+#[test]
+fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    init_git_repo(&root);
+
+    let lane_a_pid = std::process::id();
+    let lane_a_name = "lane-a-calling";
+    let mut lane_a = agent_entry(
+        "codex",
+        lane_a_name,
+        lane_a_pid,
+        None,
+        root.join("lane-a-wt"),
+    );
+    lane_a.current_spec = Some("TASK-1000".to_string());
+    agent_registry::write_entry(&root, &lane_a).unwrap();
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "implementer",
+        &["implementer"],
+        &[
+            ("AIDA_AGENT_NAME", Some(lane_a_name)),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_AGENT_CMD", Some("/bin/sh")),
+        ],
+    );
+
+    let store_root = root.join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let registry_dir = store_root.join("registry");
+    std::fs::create_dir_all(&registry_dir).unwrap();
+    std::fs::write(
+        registry_dir.join("team.toml"),
+        format!(
+            "[members]\n\"{}\" = [\"implementer\"]\n",
+            crate::test_env::HERMETIC_TEST_USER
+        ),
+    )
+    .unwrap();
+
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req1 = aida_core::Requirement::new("Spec for launch".to_string(), String::new());
+    req1.spec_id = Some("TASK-2000".to_string());
+    req1.status = aida_core::RequirementStatus::Approved;
+    store.requirements.push(req1);
+
+    let mut req2 = aida_core::Requirement::new("Spec for no-launch".to_string(), String::new());
+    req2.spec_id = Some("TASK-3000".to_string());
+    req2.status = aida_core::RequirementStatus::Approved;
+    store.requirements.push(req2);
+    backend.save(&store).unwrap();
+
+    let prev_cwd = std::env::current_dir().unwrap();
+
+    // 1. With launch (no_launch: false) - calling lane A runs queue work for TASK-2000
+    std::env::set_current_dir(&root).unwrap();
+    let _ = crate::queue_cmd::handle_queue_work(
+        &storage,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some("TASK-2000"),
+        None,
+        false,
+        /* no_launch */ false,
+        Some("implementer"),
+        true,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+        false,
+        None,
+        "codex",
+        false,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+    );
+
+    // Assert 1: Calling lane A's registry entry is completely UNCHANGED
+    let entries = agent_registry::load_entries(&root);
+    let (_, lane_a_after) = entries
+        .into_iter()
+        .find(|(_, e)| e.id == lane_a.id)
+        .expect("lane A record must still exist");
+    assert_eq!(
+        lane_a_after.current_spec.as_deref(),
+        Some("TASK-1000"),
+        "lane A current_spec must NOT be overwritten by queue work with launch"
+    );
+    assert_eq!(
+        lane_a_after.worktree_path,
+        root.join("lane-a-wt"),
+        "lane A worktree_path must NOT be overwritten by queue work with launch"
+    );
+
+    // Assert 2: Lease for TASK-2000 is NOT lane A's
+    let leases = crate::leases::list_leases(&root);
+    let lease_x = leases
+        .iter()
+        .find(|l| l.scope == "TASK-2000")
+        .expect("lease for TASK-2000 must exist");
+
+    assert_ne!(
+        lease_x.owner, lane_a_name,
+        "lease for TASK-2000 must not be owned by calling lane A"
+    );
+    assert_ne!(
+        lease_x.active_pid,
+        Some(lane_a_pid),
+        "lease for TASK-2000 active_pid must not be calling lane A's pid"
+    );
+    assert_eq!(
+        lease_x.active_pid, None,
+        "lease for TASK-2000 active_pid must be None until child agent runs"
+    );
+    assert_eq!(
+        lease_x.active_pid_start_time, None,
+        "lease for TASK-2000 active_pid_start_time must be None until child agent runs"
+    );
+
+    // Assert 3: ps / live_agent_for_lease_or_spec does NOT attribute lease X to lane A
+    let live_agents = [lane_a_after];
+    let matched = agent_registry::live_agent_for_lease_or_spec(
+        &live_agents,
+        Some(lease_x),
+        Some("TASK-2000"),
+    );
+    assert!(
+        matched.is_none(),
+        "lease X must not be matched to calling lane A"
+    );
+
+    // 2. With --no-launch (no_launch: true) - calling lane A runs queue work for TASK-3000
+    std::env::set_current_dir(&root).unwrap();
+    let res = crate::queue_cmd::handle_queue_work(
+        &storage,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some("TASK-3000"),
+        None,
+        false,
+        /* no_launch */ true,
+        Some("implementer"),
+        true,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        false,
+        false,
+        None,
+        "codex",
+        false,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+    );
+    assert!(
+        res.is_ok(),
+        "queue work --no-launch should succeed: {res:?}"
+    );
+
+    // Assert 4: With --no-launch, the lease IS attributed to lane A
+    let leases = crate::leases::list_leases(&root);
+    let lease_y = leases
+        .iter()
+        .find(|l| l.scope == "TASK-3000")
+        .expect("lease for TASK-3000 must exist");
+
+    assert_eq!(
+        lease_y.owner, lane_a_name,
+        "lease for TASK-3000 must be owned by calling lane A under --no-launch"
+    );
+    assert_eq!(
+        lease_y.active_pid,
+        Some(lane_a_pid),
+        "lease for TASK-3000 active_pid must be calling lane A's pid under --no-launch"
+    );
+    assert_eq!(
+        lease_y.active_pid_start_time, lane_a.pid_start,
+        "lease for TASK-3000 active_pid_start_time must match calling lane A's start time under --no-launch"
+    );
+
+    // Assert 5: Calling lane A's registry entry IS updated with TASK-3000 and the worktree path
+    let entries = agent_registry::load_entries(&root);
+    let (_, lane_a_final) = entries
+        .into_iter()
+        .find(|(_, e)| e.id == lane_a.id)
+        .expect("lane A record must still exist");
+    assert_eq!(
+        lane_a_final.current_spec.as_deref(),
+        Some("TASK-3000"),
+        "lane A current_spec must be updated to TASK-3000 under --no-launch"
+    );
+    assert_eq!(
+        lane_a_final.worktree_path, lease_y.worktree_path,
+        "lane A worktree_path must be updated to lease worktree path under --no-launch"
+    );
+
+    // Assert 6: ps / live_agent_for_lease_or_spec DOES attribute lease Y to lane A
+    let live_agents_final = [lane_a_final];
+    let matched_no_launch = agent_registry::live_agent_for_lease_or_spec(
+        &live_agents_final,
+        Some(lease_y),
+        Some("TASK-3000"),
+    );
+    assert!(
+        matched_no_launch.is_some(),
+        "lease Y must be matched to calling lane A under --no-launch"
+    );
+
+    let _ = std::env::set_current_dir(prev_cwd);
 }
 
 /// Blocker 2: update_agent_current_spec updates only the target agent's entry
