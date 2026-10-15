@@ -251,6 +251,21 @@ pub(crate) struct Task {
     /// running; tick and `schedule status` surface the reason.
     // trace:BUG-1655 | ai:claude
     problem: Option<String>,
+    /// A substrate job whose `command` this binary does not know (a job
+    /// registered by a newer `aida`, or a typo). The job stays in the
+    /// registry: the tick fails THAT job (ledger + `CronJobFailed`) and keeps
+    /// running every other due job, instead of the whole registry failing
+    /// to load and silently stopping them all.
+    // trace:BUG-2142 | ai:claude
+    invalid_command: Option<InvalidCommand>,
+}
+
+/// The raw `command` string of a substrate job and why it was rejected.
+// trace:BUG-2142 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InvalidCommand {
+    raw: String,
+    error: String,
 }
 
 impl Task {
@@ -280,6 +295,9 @@ impl Task {
     }
 
     fn what(&self) -> String {
+        if let Some(bad) = &self.invalid_command {
+            return format!("aida {} (unsupported)", bad.raw.trim());
+        }
         match (&self.command, &self.prompt) {
             (Some(c), _) => format!("aida {}", c.display),
             (None, Some(p)) => p.clone(),
@@ -446,9 +464,23 @@ pub(crate) fn handle_schedule_command(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
     match cmd {
         MaintenanceScheduleCommand::Tick { hook } => {
-            let outcome = tick(project_root, *hook, backend)?;
-            if !outcome.is_empty() {
-                println!("{}", outcome.join("\n"));
+            let run = run_tick(project_root, *hook, backend)?;
+            if !run.lines.is_empty() {
+                println!("{}", run.lines.join("\n"));
+            }
+            // BUG-2142: every other due job has already run; the tick still
+            // exits nonzero so the driver (systemd/cron log) shows the
+            // registry needs a binary that knows these commands.
+            // trace:BUG-2142 | ai:claude
+            if !run.unsupported.is_empty() {
+                anyhow::bail!(
+                    "schedule tick: {} scheduled job(s) use a command this aida binary does not \
+                     support and were recorded as failed: {}. Every other due job ran. Update \
+                     the binary the scheduler runs (`aida schedule install-systemd` or \
+                     `install-cron` from the current aida) or fix the job's `command`.",
+                    run.unsupported.len(),
+                    run.unsupported.join(", ")
+                );
             }
         }
         MaintenanceScheduleCommand::Run { name } => {
@@ -565,15 +597,30 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
             "scheduled job '{name}' needs a `command` (substrate job) or a `prompt` (seat job)"
         ),
     };
-    let command = match kind {
+    // BUG-2142: an unknown command fails only this job at tick time; it no
+    // longer fails the whole registry (which stopped every substrate job).
+    // trace:BUG-2142 | ai:claude
+    let (command, invalid_command) = match kind {
         JobKind::Substrate => {
             let raw = job
                 .command
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("substrate job '{name}' needs a `command`"))?;
-            Some(parse_scheduled_command(raw)?)
+            match parse_scheduled_command(raw) {
+                Ok(c) => (Some(c), None),
+                Err(e) => (
+                    None,
+                    Some(InvalidCommand {
+                        raw: raw.to_string(),
+                        error: format!(
+                            "this aida binary does not support the command of scheduled job \
+                             '{name}': {e:#}"
+                        ),
+                    }),
+                ),
+            }
         }
-        _ => None,
+        _ => (None, None),
     };
     if kind == JobKind::Seat && job.prompt.as_deref().unwrap_or("").trim().is_empty() {
         anyhow::bail!(
@@ -629,6 +676,7 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
         enabled: job.enabled,
         source,
         problem: None,
+        invalid_command,
     })
 }
 
@@ -787,18 +835,37 @@ fn store_root(project_root: &Path) -> PathBuf {
 // tick / run
 // ---------------------------------------------------------------------------
 
+/// What one `aida schedule tick` did: its report lines, and the enabled
+/// substrate jobs whose command this binary does not support (BUG-2142;
+/// always empty for a hook tick, which never runs them).
+// trace:BUG-2142 | ai:claude
+struct TickRun {
+    lines: Vec<String>,
+    unsupported: Vec<String>,
+}
+
+#[cfg(test)]
 fn tick(
     project_root: &Path,
     hook: bool,
     backend: Option<&aida_core::CachedGitBackend>,
 ) -> Result<Vec<String>> {
+    run_tick(project_root, hook, backend).map(|run| run.lines)
+}
+
+fn run_tick(
+    project_root: &Path,
+    hook: bool,
+    backend: Option<&aida_core::CachedGitBackend>,
+) -> Result<TickRun> {
     // Hooks from two sessions can arrive together. Only one may inspect and
     // advance schedule cursors at a time; a hook never waits on its peer.
     // trace:TASK-1281 | ai:codex
     let Some(_tick_lock) = try_tick_lock(project_root)? else {
-        return Ok(vec![
-            "schedule tick: another tick is already running".to_string()
-        ]);
+        return Ok(TickRun {
+            lines: vec!["schedule tick: another tick is already running".to_string()],
+            unsupported: Vec::new(),
+        });
     };
     // BUG-1600: cap the machine-global `~/.aida/schedule-tick.log` before
     // this process's own stdout/stderr add to it. That file is shared by
@@ -816,11 +883,19 @@ fn tick(
     // backstop. Hook ticks stay network-free; explicit/timer ticks inspect the
     // bounded forge list even when no user schedule registry exists.
     let Some(config) = load_registry(project_root)? else {
-        return Ok(if hook {
-            Vec::new()
-        } else {
-            crate::sweep_orphaned_reviews(project_root)
+        return Ok(TickRun {
+            lines: if hook {
+                Vec::new()
+            } else {
+                crate::sweep_orphaned_reviews(project_root)
+            },
+            unsupported: Vec::new(),
         });
+    };
+    let unsupported = if hook {
+        Vec::new()
+    } else {
+        unsupported_substrate_jobs(&config)
     };
     let mut state = load_state(project_root)?;
     let now = Utc::now();
@@ -828,10 +903,13 @@ fn tick(
         let min_gap = parse_duration(&config.min_gap)
             .with_context(|| format!("invalid [schedule] min_gap '{}'", config.min_gap))?;
         if now.signed_duration_since(last_tick) < min_gap {
-            return Ok(vec![format!(
-                "schedule tick: suppressed by min-gap {}",
-                config.min_gap
-            )]);
+            return Ok(TickRun {
+                lines: vec![format!(
+                    "schedule tick: suppressed by min-gap {}",
+                    config.min_gap
+                )],
+                unsupported,
+            });
         }
     }
     let mut recovery_lines = if hook {
@@ -855,7 +933,10 @@ fn tick(
         |fields| collect_snapshot(project_root, fields, backend),
         &events,
     )?);
-    Ok(recovery_lines)
+    Ok(TickRun {
+        lines: recovery_lines,
+        unsupported,
+    })
 }
 
 fn run_now(project_root: &Path, only: Option<&str>) -> Result<Vec<String>> {
@@ -952,7 +1033,13 @@ where
             }
             continue;
         }
-        if hook && task.command.as_ref().is_some_and(|c| !c.hook_allowed) {
+        // A hook tick runs only hook-allowed substrate commands; an
+        // unsupported command (BUG-2142) is left to the full tick.
+        // trace:BUG-2142 | ai:claude
+        if hook
+            && task.kind == JobKind::Substrate
+            && !task.command.as_ref().is_some_and(|c| c.hook_allowed)
+        {
             continue;
         }
         if quiet_now(task) {
@@ -1067,14 +1154,9 @@ where
 
         match task.kind {
             JobKind::Substrate => {
-                let Some(command) = &task.command else {
+                let Some(outcome) = run_substrate_task(project_root, task, &exec) else {
                     continue;
                 };
-                let outcome = exec(project_root, command).unwrap_or_else(|e| TaskOutcome {
-                    status: 1,
-                    stdout: String::new(),
-                    stderr: e.to_string(),
-                });
                 touched = true;
                 let trip = failure_trip(task, now, &outcome);
                 record_outcome_local(project_root, state, task, now, &outcome, trip.as_ref());
@@ -1139,6 +1221,52 @@ where
     Ok(lines)
 }
 
+/// Exit status recorded for a substrate job whose command this binary does
+/// not support (the shell's "command not found").
+// trace:BUG-2142 | ai:claude
+const UNSUPPORTED_COMMAND_STATUS: i32 = 127;
+
+/// Run one substrate job through `exec`. A job whose command this binary
+/// does not support fails as itself (status 127, the reason on stderr), so
+/// the caller ledgers it and fires its `CronJobFailed` route like any other
+/// failure. `None` only for a substrate job with neither (never built).
+// trace:BUG-2142 | ai:claude
+fn run_substrate_task<F>(project_root: &Path, task: &Task, exec: &F) -> Option<TaskOutcome>
+where
+    F: Fn(&Path, &ScheduledCommand) -> Result<TaskOutcome>,
+{
+    if let Some(bad) = &task.invalid_command {
+        return Some(TaskOutcome {
+            status: UNSUPPORTED_COMMAND_STATUS,
+            stdout: String::new(),
+            stderr: bad.error.clone(),
+        });
+    }
+    let command = task.command.as_ref()?;
+    Some(exec(project_root, command).unwrap_or_else(|e| TaskOutcome {
+        status: 1,
+        stdout: String::new(),
+        stderr: e.to_string(),
+    }))
+}
+
+/// Enabled substrate jobs in `project_root`'s registry whose command this
+/// binary does not support, as `name (aida <raw>)`. A full tick that finds
+/// any exits nonzero naming them, after running every other due job.
+// trace:BUG-2142 | ai:claude
+fn unsupported_substrate_jobs(config: &LoadedScheduleConfig) -> Vec<String> {
+    config
+        .tasks
+        .iter()
+        .filter(|t| t.enabled && t.kind == JobKind::Substrate)
+        .filter_map(|t| {
+            t.invalid_command
+                .as_ref()
+                .map(|bad| format!("{} (`aida {}`)", t.name, bad.raw.trim()))
+        })
+        .collect()
+}
+
 /// `aida schedule run [<job>]`: force a substrate job now (all enabled ones
 /// without a name); for a seat job, print its prompt + the report-back line —
 /// the scheduler still does not act on the seat's behalf.
@@ -1168,14 +1296,9 @@ where
         }
         match task.kind {
             JobKind::Substrate => {
-                let Some(command) = &task.command else {
+                let Some(outcome) = run_substrate_task(project_root, task, &exec) else {
                     continue;
                 };
-                let outcome = exec(project_root, command).unwrap_or_else(|e| TaskOutcome {
-                    status: 1,
-                    stdout: String::new(),
-                    stderr: e.to_string(),
-                });
                 ran_any = true;
                 let trip = failure_trip(task, now, &outcome);
                 record_outcome_local(project_root, state, task, now, &outcome, trip.as_ref());
@@ -1354,11 +1477,23 @@ fn status_row(
         _ => None,
     };
     let reason = due_reason(task, ledger, local, now);
+    // trace:BUG-2142 | ai:claude
+    let problem = task.problem.clone().or_else(|| {
+        task.invalid_command.as_ref().map(|bad| {
+            format!(
+                "{}; each due tick records it as failed until the scheduler runs an aida that \
+                 supports it",
+                bad.error
+            )
+        })
+    });
     let status = if task.problem.is_some() {
         // trace:BUG-1655 | ai:claude
         "invalid"
     } else if !task.enabled {
         "disabled"
+    } else if task.invalid_command.is_some() {
+        "invalid"
     } else if task.kind == JobKind::FiresTask {
         "legacy"
     } else if quiet_now(task) {
@@ -1393,7 +1528,7 @@ fn status_row(
         }),
         due_reason: reason,
         source: task.source.as_str(),
-        problem: task.problem.clone(),
+        problem,
     }
 }
 
@@ -1433,6 +1568,7 @@ fn legacy_tasks(project_root: &Path) -> Vec<Task> {
             enabled: s.enabled,
             source: JobSource::Legacy,
             problem: None,
+            invalid_command: None,
         })
         .collect()
 }
@@ -1837,9 +1973,8 @@ pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
     let repo = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
-    let aida_exe = crate::aida_exe_path();
-    let aida_exe = aida_exe.canonicalize().unwrap_or(aida_exe);
-    build_tick_cron_line(&repo, &aida_exe)
+    // trace:BUG-2142 | ai:claude
+    build_tick_cron_line(&repo, &crate::schedule_driver::real_stable_tick_exe())
 }
 
 /// Read the current user's crontab. `Ok(None)` means no crontab exists yet
@@ -2425,6 +2560,31 @@ pub(crate) fn build_invalid_route_findings(tasks: &[Task]) -> Vec<crate::DoctorF
         .collect()
 }
 
+/// Doctor: an enabled substrate job whose `command` this binary does not
+/// support. The tick fails it every time it is due (BUG-2142).
+// trace:BUG-2142 | ai:claude
+pub(crate) fn build_unsupported_command_findings(tasks: &[Task]) -> Vec<crate::DoctorFinding> {
+    tasks
+        .iter()
+        .filter(|t| t.enabled && t.kind == JobKind::Substrate)
+        .filter_map(|t| t.invalid_command.as_ref().map(|bad| (t, bad)))
+        .map(|(t, bad)| crate::DoctorFinding {
+            category: "scheduler-driver".to_string(),
+            id: format!("schedule-command-unsupported:{}", t.name),
+            summary: format!(
+                "scheduled job '{}' runs `aida {}`, which this aida binary does not support; \
+                 every due tick records it as failed",
+                t.name,
+                bad.raw.trim()
+            ),
+            action: "update aida and reinstall the tick driver, or fix the job's `command` \
+                     (`aida schedule list` shows its source)"
+                .to_string(),
+            safe_heal: false,
+        })
+        .collect()
+}
+
 /// `aida doctor` entry point, evidence-gated by
 /// [`scheduler_driver_check_needed`].
 // trace:STORY-1463 | ai:claude
@@ -2444,6 +2604,8 @@ pub(crate) fn scheduler_driver_doctor_findings(
             // trace:TASK-1535 | ai:codex
             let mut findings = build_unbound_route_findings(&c.tasks);
             findings.extend(build_invalid_route_findings(&c.tasks));
+            // trace:BUG-2142 | ai:claude
+            findings.extend(build_unsupported_command_findings(&c.tasks));
             findings
         })
         .unwrap_or_default();
@@ -2456,6 +2618,10 @@ pub(crate) fn scheduler_driver_doctor_findings(
         &status,
         &overdue,
         Utc::now(),
+    ));
+    // trace:BUG-2142 | ai:claude
+    out.extend(crate::schedule_driver::stale_tick_binary_findings(
+        project_root,
     ));
     // TASK-1517: an unattended wave's memory ceiling only exists if the user
     // manager can enforce it. Read only where the systemd timer of this repo
@@ -3249,6 +3415,7 @@ pub(super) fn bug_1745_failure_trip(
         enabled: true,
         source: JobSource::Project,
         problem: None,
+        invalid_command: None,
     };
     failure_trip(
         &task,
@@ -3466,6 +3633,7 @@ mod tests {
             enabled: true,
             source: JobSource::Project,
             problem: None,
+            invalid_command: None,
         }
     }
 
@@ -3487,6 +3655,7 @@ mod tests {
             enabled: true,
             source: JobSource::Project,
             problem: None,
+            invalid_command: None,
         }
     }
 
@@ -4076,6 +4245,7 @@ mod tests {
             enabled: true,
             source: JobSource::Project,
             problem: None,
+            invalid_command: None,
         };
         let mut state = ScheduleState::default();
         let lines = run_with_executor(
@@ -6055,5 +6225,202 @@ enabled = false
         assert_eq!(outcome.status, 124);
         assert!(outcome.stderr.starts_with("could not be spawned:"));
         assert!(!outcome.stderr.contains("timed out"));
+    }
+
+    // -----------------------------------------------------------------
+    // BUG-2142: an unsupported job command fails only that job.
+    // -----------------------------------------------------------------
+
+    const BUG_2142_REGISTRY: &str = r#"
+[[schedule.jobs]]
+name = "watchdog"
+command = "doctor"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --from-the-future"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "history-index-tick-route"
+seats = ["advisor"]
+on = ["CronJobFailed:history-index-tick"]
+prompt = "look"
+enabled = true
+"#;
+
+    // trace:BUG-2142 | ai:claude
+    #[test]
+    fn bug_2142_unknown_command_loads_as_an_invalid_job_not_a_registry_error() {
+        let cfg = parse_project(BUG_2142_REGISTRY)
+            .expect("one unknown command must not fail the registry")
+            .unwrap();
+        let bad = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "history-index-tick")
+            .unwrap();
+        assert!(bad.command.is_none());
+        let invalid = bad.invalid_command.as_ref().unwrap();
+        assert!(invalid.error.contains("unknown scheduled task command"));
+        assert!(bad.enabled, "it stays enabled so each due tick records it");
+        assert!(cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "watchdog")
+            .unwrap()
+            .command
+            .is_some());
+        assert_eq!(
+            unsupported_substrate_jobs(&cfg),
+            vec!["history-index-tick (`aida cache refresh --history --from-the-future`)"]
+        );
+
+        let row = status_row(bad, None, None, at(12));
+        assert_eq!(row.status, "invalid");
+        assert!(row.problem.unwrap().contains("does not support"));
+        assert!(row.command.contains("(unsupported)"));
+
+        let findings = build_unsupported_command_findings(&cfg.tasks);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].id,
+            "schedule-command-unsupported:history-index-tick"
+        );
+    }
+
+    // trace:BUG-2142 | ai:claude
+    #[test]
+    fn bug_2142_tick_fails_only_the_unsupported_job_and_routes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = parse_project(BUG_2142_REGISTRY).unwrap().unwrap();
+        let routes: Vec<Task> = cfg
+            .tasks
+            .iter()
+            .filter(|t| t.kind == JobKind::Seat)
+            .cloned()
+            .collect();
+        let mut jobs = cfg.clone();
+        jobs.tasks.retain(|t| t.kind == JobKind::Substrate);
+        let mut state = ScheduleState::default();
+        let ran = RefCell::new(Vec::new());
+        let lines = tick_with_executor(tmp.path(), jobs, &mut state, at(12), false, |_r, cmd| {
+            ran.borrow_mut().push(cmd.display);
+            Ok(TaskOutcome {
+                status: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        })
+        .expect("an unsupported job must not abort the tick");
+        assert_eq!(*ran.borrow(), vec!["doctor"], "every other due job ran");
+        assert!(
+            lines.contains(&"schedule tick: watchdog ok".to_string()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"schedule tick: history-index-tick failed".to_string()),
+            "{lines:?}"
+        );
+
+        let ledger = schedule_ledger::load(&store_root(tmp.path()), "history-index-tick").unwrap();
+        assert_eq!(
+            ledger.result.as_deref(),
+            Some(format!("failed:{UNSUPPORTED_COMMAND_STATUS}").as_str())
+        );
+        assert_eq!(ledger.failure_trips.len(), 1);
+        assert_eq!(
+            state.tasks["history-index-tick"].last_status,
+            Some(UNSUPPORTED_COMMAND_STATUS)
+        );
+
+        let events = events::read_all(tmp.path());
+        let failed: Vec<(&str, &str)> = events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                EventKind::CronJobFailed { job, error, .. } => Some((job.as_str(), error.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert_eq!(failed[0].0, "history-index-tick");
+        assert!(failed[0].1.contains("does not support"), "{}", failed[0].1);
+
+        // Its CronJobFailed route comes due like any other failure.
+        bug_1655_route(tmp.path(), routes, &events);
+        let route =
+            schedule_ledger::load(&store_root(tmp.path()), "history-index-tick-route").unwrap();
+        assert!(route.due_since.is_some());
+        assert_eq!(
+            route.due_failure.and_then(|f| f.job).as_deref(),
+            Some("history-index-tick")
+        );
+    }
+
+    // trace:BUG-2142 | ai:claude
+    #[test]
+    fn bug_2142_hook_tick_leaves_an_unsupported_job_to_the_full_tick() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut cfg = parse_project(BUG_2142_REGISTRY).unwrap().unwrap();
+        cfg.tasks.retain(|t| t.name == "history-index-tick");
+        let mut state = ScheduleState::default();
+        let lines = tick_with_executor(tmp.path(), cfg, &mut state, at(12), true, |_r, _c| {
+            unreachable!("nothing runnable in a hook tick")
+        })
+        .unwrap();
+        assert!(lines.is_empty(), "{lines:?}");
+        assert!(schedule_ledger::load(&store_root(tmp.path()), "history-index-tick").is_none());
+    }
+
+    // trace:BUG-2142 | ai:claude
+    #[test]
+    fn bug_2142_full_tick_runs_the_rest_and_reports_the_unsupported_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        let root = tmp.path().join("project");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            r#"
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --from-the-future"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "nightly-review"
+seats = ["advisor"]
+every = "1h"
+prompt = "review"
+enabled = true
+"#,
+        )
+        .unwrap();
+        let run = run_tick(&root, false, None).expect("the tick itself must not abort");
+        assert!(
+            run.lines
+                .contains(&"schedule tick: history-index-tick failed".to_string()),
+            "{:?}",
+            run.lines
+        );
+        assert!(
+            run.lines
+                .iter()
+                .any(|l| l.starts_with("schedule tick: nightly-review due")),
+            "the other due job still ran: {:?}",
+            run.lines
+        );
+        assert_eq!(run.unsupported.len(), 1);
+        assert!(run.unsupported[0].starts_with("history-index-tick"));
+
+        let hook = run_tick(&root, true, None).unwrap();
+        assert!(
+            hook.unsupported.is_empty(),
+            "a hook tick never reports them"
+        );
     }
 }

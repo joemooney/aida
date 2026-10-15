@@ -1925,6 +1925,8 @@ pub(crate) fn agent_new_claude(
         default_args.push("--permission-mode".to_string());
         default_args.push(m.to_string());
     } else if sandbox {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
         default_args.extend(tool_contained_flags("claude"));
         contained = true;
     } else if bg {
@@ -2788,6 +2790,8 @@ pub(crate) fn resolve_interactive_launch_mode_for_root(
             );
         }
         if contained {
+            // trace:BUG-2131 | ai:claude
+            aida_core::git_ops::ensure_git_supports_contained()?;
             return Ok(ResolvedClaudeLaunch {
                 mode: None,
                 contained: true,

@@ -546,3 +546,203 @@ fn bug_1929_store_commit_deferred_only_when_git_dir_unwritable() {
     assert!(deferred, "an unwritable object database defers to the host");
     assert!(!store_commit_deferred_to_host(&store));
 }
+
+// The GIT_ATTR_SOURCE version gate: 2.40+ only; anything unparseable is unsafe.
+// trace:BUG-2131 | ai:claude
+#[test]
+fn bug_2131_git_version_gate() {
+    use crate::store_hooks::{attr_source_supported_by as ok, parse_git_version as parse};
+    assert_eq!(parse("2.39.5"), Some((2, 39)));
+    assert_eq!(parse("git version 2.43.0.windows.1\n"), Some((2, 43)));
+    assert_eq!(parse("git version 2.40.1 (Apple Git-143)"), Some((2, 40)));
+    assert!(!ok("2.39.5"));
+    assert!(!ok("git version 2.39.5"));
+    assert!(ok("2.40.0"));
+    assert!(ok("2.43.0.windows.1"));
+    assert!(ok("git version 2.40.1 (Apple Git-143)"));
+    assert!(ok("git version 3.0.0"));
+    assert!(!ok("git version 1.99.9"));
+    for garbage in [
+        "",
+        "garbage",
+        "git version ",
+        "git version x.y",
+        "2",
+        "2.",
+        "v2.45.0",
+    ] {
+        assert_eq!(parse(garbage), None, "{garbage:?}");
+        assert!(!ok(garbage), "{garbage:?} must count as unsafe");
+    }
+}
+
+fn bug_2131_contained_env_set() -> bool {
+    std::env::var("AIDA_CONTAINED").is_ok_and(|v| matches!(v.trim(), "1" | "true" | "yes"))
+}
+
+// Old (or unknown) git on a project with no contained writer: store git keeps
+// working, carries GIT_ATTR_SOURCE anyway, and the verdict is a warning that
+// contained mode is unavailable. trace:BUG-2131 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2131_old_git_uncontained_project_works_with_warning() {
+    if bug_2131_contained_env_set() {
+        return; // This process is itself contained; the gate must refuse here.
+    }
+    use crate::store_hooks::{attr_source_verdict, AttrSourceVerdict};
+    for fake in ["git version 2.39.5", "not a version"] {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, store) = bug_1929_main_with_store(dir.path());
+        // Explicitly off, so a user-global `contained = true` cannot leak in.
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        std::fs::write(
+            main.join(".aida/agents.toml"),
+            "[agents]\ncontained = false\n",
+        )
+        .unwrap();
+        with_host_git_version(fake, || {
+            match attr_source_verdict(&store) {
+                AttrSourceVerdict::WarnOnly(w) => assert!(
+                    w.contains("contained sessions are unavailable until git is 2.40"),
+                    "{fake}: {w}"
+                ),
+                other => panic!("{fake}: expected a warning, got {other:?}"),
+            }
+            ensure_store_write_safe(&store).unwrap();
+            assert_eq!(store_worktree_issue(&store), None);
+            crate::db::with_store_write_lock(&store, || {
+                std::fs::write(store.join("notes.txt"), "one\n")?;
+                add(&store, &["notes.txt"])?;
+                commit_paths(&store, "chore: store write", &["notes.txt"])
+            })
+            .unwrap_or_else(|e| panic!("{fake}: {e:#}"));
+        });
+        let log = git(&store, &["log", "-1", "--format=%s"]).unwrap().stdout;
+        assert_eq!(log, "chore: store write", "{fake}");
+    }
+}
+
+// Old (or unknown) git with contained mode in play, by project config or by a
+// contained-launch marker: every store git path refuses before touching the
+// index. trace:BUG-2131 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2131_old_git_contained_project_refuses_store_git() {
+    for (fake, expect) in [
+        ("git version 2.39.5", "host git is 2.39.5"),
+        ("not a version", "could not be determined"),
+    ] {
+        for source in ["config", "agents", "marker"] {
+            let dir = tempfile::tempdir().unwrap();
+            let (main, store) = bug_1929_main_with_store(dir.path());
+            std::fs::create_dir_all(main.join(".aida")).unwrap();
+            match source {
+                "config" => std::fs::write(
+                    main.join(".aida/config.toml"),
+                    "[contained]\nenable = true\n",
+                )
+                .unwrap(),
+                "agents" => std::fs::write(
+                    main.join(".aida/agents.toml"),
+                    "[agents]\ncontained = true\n",
+                )
+                .unwrap(),
+                _ => {
+                    std::fs::write(
+                        main.join(".aida/agents.toml"),
+                        "[agents]\ncontained = false\n",
+                    )
+                    .unwrap();
+                    mark_store_contained(&store).unwrap();
+                    assert!(main
+                        .join(".git")
+                        .join(crate::store_hooks::CONTAINED_MARKER)
+                        .is_file());
+                }
+            }
+            let before = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+            std::fs::write(store.join("notes.txt"), "planted\n").unwrap();
+            with_host_git_version(fake, || {
+                let safe = format!("{:#}", ensure_store_write_safe(&store).unwrap_err());
+                assert!(
+                    safe.contains(expect)
+                        && safe.contains("contained sessions are enabled")
+                        && safe.contains("Upgrade git to 2.40"),
+                    "{fake}/{source}: {safe}"
+                );
+                assert_eq!(
+                    store_worktree_issue(&store),
+                    Some("contained sessions are enabled and host git is older than 2.40")
+                );
+                let out = host_git_command(&store)
+                    .args(["add", "notes.txt"])
+                    .output()
+                    .unwrap();
+                assert!(!out.status.success(), "{fake}/{source}: {out:?}");
+                assert!(
+                    String::from_utf8_lossy(&out.stderr).contains("ignores GIT_ATTR_SOURCE"),
+                    "{fake}/{source}: {out:?}"
+                );
+                let committed = crate::db::with_store_write_lock(&store, || {
+                    add(&store, &["notes.txt"])?;
+                    commit_paths(&store, "chore: store write", &["notes.txt"])
+                });
+                assert!(
+                    committed.is_err(),
+                    "{fake}/{source}: store write must refuse"
+                );
+                // A code checkout never depends on the gate.
+                assert!(host_git_command(&main)
+                    .args(["status", "--porcelain"])
+                    .output()
+                    .unwrap()
+                    .status
+                    .success());
+                // Launching or enabling contained mode refuses too.
+                let launch = format!("{:#}", ensure_git_supports_contained().unwrap_err());
+                assert!(
+                    launch.contains("refusing contained mode") && launch.contains(expect),
+                    "{launch}"
+                );
+            });
+            assert_eq!(git(&store, &["rev-parse", "HEAD"]).unwrap().stdout, before);
+            let staged = Command::new("git")
+                .current_dir(&store)
+                .args(["diff", "--cached", "--name-only"])
+                .output()
+                .unwrap();
+            assert!(staged.stdout.is_empty(), "{fake}/{source}: {staged:?}");
+        }
+    }
+    with_host_git_version("git version 2.40.0", || {
+        ensure_git_supports_contained().unwrap();
+    });
+}
+
+// A config file that exists but cannot be parsed counts as contained.
+// trace:BUG-2131 | ai:claude
+#[test]
+fn bug_2131_contained_config_precedence_fails_closed() {
+    use crate::store_hooks::contained_configured_from as on;
+    let dir = tempfile::tempdir().unwrap();
+    let p = |name: &str, body: Option<&str>| {
+        let path = dir.path().join(name);
+        if let Some(body) = body {
+            std::fs::write(&path, body).unwrap();
+        }
+        path
+    };
+    let global_on = p("g-on.toml", Some("[agents]\ncontained = true\n"));
+    let agents_off = p("a-off.toml", Some("[agents]\ncontained = false\n"));
+    let config_on = p("c-on.toml", Some("[contained]\nenable = true\n"));
+    let missing = p("missing.toml", None);
+    let broken = p("broken.toml", Some("[agents\ncontained = "));
+    assert!(!on(None, &missing, &missing));
+    assert!(on(Some(&global_on), &missing, &missing));
+    assert!(!on(Some(&global_on), &agents_off, &missing));
+    assert!(on(Some(&global_on), &agents_off, &config_on));
+    assert!(
+        on(None, &broken, &missing),
+        "unparseable counts as contained"
+    );
+}
