@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-15T08:11:55.445411407Z
+modified_at: 2026-10-15T08:14:18.177883933Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -178,6 +178,12 @@ comments:
     A3 nested-harness unit test: written and passing on the combined build (patch available for #2485).
   created_at: 2026-10-15T08:11:55.445411407Z
   modified_at: 2026-10-15T08:11:55.445411407Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13ea0-5841-7560-9bcd-2e928e342f49
+  author: joe
+  content: 'ADVISOR (2026-10-15 01:20): e2e recorded, but A2 is NOT satisfied. The negative path is clean; the positive path exposed three defects: (1) the reviewer ran under the PARENT advisor grant with no child reviewer grant minted, so the gate passed on identity alone. This is BUG-2139 (signed sketch), now a BLOCKER for BUG-1918/#2485. (2) BUG-2149: the verdict file path isn''t passed to the reviewer. (3) BUG-2150: pickup needed --force-claim. HOLD: #2661 (its templates steer orchestrators onto this flow) and #2485 both stay held until BUG-2139 and BUG-2149 land and the positive e2e is clean on the combined build. The A3 nested-harness test patch is at /tmp/claude-1000/-home-joe-ai-aida/20233459-56a6-48d3-8cb0-332dcfaf0277/scratchpad/a3-nested-harness-test.patch; it belongs on #2485.'
+  created_at: 2026-10-15T08:14:18.177883933Z
+  modified_at: 2026-10-15T08:14:18.177883933Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
