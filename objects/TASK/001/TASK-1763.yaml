@@ -3,12 +3,12 @@ spec_id: TASK-1763
 agreed_id: TASK-1763
 title: 'Pre-push gate misses test-compile breakage from main drift: add a cheap ''cargo test --no-run'' tier to the gate fixers run after merging main'
 description: 'Observed 2026-10-14: #2641 and #2645 both passed make check-ci-fast after merging main, then went red in CI with E0063 (a new AgentLaunchConfig.contained field from #2640 was missing in test initializers). check-ci-fast deliberately builds nothing. Proposal: a ''make check-ci-compile'' (cargo test --workspace --no-run with the agent profile and sccache) that agent fixers run after any main merge, or check-ci-fast running it when the merge touched struct definitions.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:13.159351104Z
-modified_at: 2026-10-15T01:59:45.787465202Z
+modified_at: 2026-10-15T05:39:01.023383347Z
 req_type: Task
 tags:
 - capture
@@ -21,6 +21,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13e12-2d1b-7fd1-a3e1-bab2af183015
+  author: aida-auto-bump
+  timestamp: 2026-10-15T05:39:01.019766330Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13e12-2d1f-7040-9529-fa237ad9f93d
+  timestamp: 2026-10-15T05:39:01.023381478Z
+  agent: advisor
+  commit_sha: 403be14eddc78e845f636fc5ae366fe2b9e53d75
+  summary: Completed via merge 403be14e
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
@@ -29,3 +42,7 @@ filed_at:
   aida_build_sha: 84a4942786
   vendor: claude
   session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T05:39:01.019762613Z
+  completion_sha: 403be14eddc78e845f636fc5ae366fe2b9e53d75
