@@ -2071,6 +2071,96 @@ pub fn headless_vendor_args(
     }
 }
 
+/// BUG-2133: [`headless_vendor_args`] for a drain child whose working
+/// directory is `contained_in` rather than the drain process's cwd. `Some(dir)`
+/// requests the contained posture with the write boundary scoped to `dir`
+/// (which must itself be a git root, else no write roots: fail closed); `None`
+/// is uncontained. Callers run [`require_child_containment`] first, so a
+/// vendor that cannot apply containment never reaches this with `Some`.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn headless_vendor_args_contained_in(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained_in: Option<&Path>,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Vec<String> {
+    match (vendor, contained_in) {
+        (HeadlessVendor::Claude, Some(dir)) => claude_headless_args_for_roots(
+            prompt,
+            session_id,
+            Some(&contained_resume_write_roots(dir)),
+            model,
+            effort,
+        ),
+        _ => headless_vendor_args(vendor, prompt, session_id, false, model, effort),
+    }
+}
+
+/// BUG-2133: containment is monotonic — a contained drain contains every
+/// agent child it spawns. Resolves whether the drain running in this process
+/// is contained, the same way its phase-1 `aida queue work` children do
+/// (`AIDA_CONTAINED` in the environment, or the `[agents] contained` knob), so
+/// the children the drain spawns directly (CI-fix, advisor, harvest) can never
+/// run with less confinement than their implementer sibling.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn drain_contained(project_root: &Path) -> bool {
+    let env = std::env::var("AIDA_CONTAINED")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+    env || crate::agent_config::load_agents_contained(project_root).unwrap_or(false)
+}
+
+/// BUG-2133: fail closed. A child launch that was asked to run contained must
+/// be able to: the vendor must apply containment (only Claude does), and on
+/// Linux the sandbox the contained posture turns on needs `bwrap`. Otherwise
+/// refuse to launch rather than silently run the child uncontained.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn require_child_containment(
+    vendor: HeadlessVendor,
+    contained: bool,
+    child: &str,
+) -> Result<()> {
+    let bwrap_needed = cfg!(target_os = "linux");
+    child_containment_preflight(
+        vendor,
+        contained,
+        !bwrap_needed || which_on_path("bwrap").is_some(),
+        child,
+    )
+}
+
+/// The pure decision behind [`require_child_containment`]; `sandbox_available`
+/// is whether the host can provide the contained sandbox.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn child_containment_preflight(
+    vendor: HeadlessVendor,
+    contained: bool,
+    sandbox_available: bool,
+    child: &str,
+) -> Result<()> {
+    if !contained {
+        return Ok(());
+    }
+    if !containment_applied(vendor, true) {
+        anyhow::bail!(
+            "[contained] this drain is contained, but the `{}` vendor cannot run a contained \
+             session — refusing to launch the {child} uncontained. Run the drain on claude \
+             (AIDA_HEADLESS_VENDOR=claude) or turn containment off for this drain.",
+            vendor.as_str()
+        );
+    }
+    if !sandbox_available {
+        anyhow::bail!(
+            "[contained] this drain is contained, but `bwrap` (bubblewrap) was not found on \
+             PATH — refusing to launch the {child} uncontained. Install it ({BWRAP_INSTALL_DEBIAN}) \
+             or turn containment off for this drain."
+        );
+    }
+    Ok(())
+}
+
 /// TASK-1048: the `agy` argv (after the `agy` program name) for a one-shot
 /// headless run. Mirrors the Codex arm's shape: AGY's non-interactive `-p`/
 /// `--print` mode is the AGY analogue of `claude -p` / `codex exec` — it runs a
@@ -2194,7 +2284,27 @@ pub fn claude_headless_args_with_posture_model_and_effort(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Vec<String> {
-    let permission_mode = if contained {
+    let roots = contained.then(contained_session_write_roots);
+    claude_headless_args_for_roots(prompt, session_id, roots.as_deref(), model, effort)
+}
+
+/// BUG-2133: the `claude -p` argv with the contained write boundary given
+/// explicitly. `Some(roots)` is the contained posture (`dontAsk` + the
+/// `--settings` boundary over exactly `roots`; empty roots deny every edit);
+/// `None` is the uncontained `bypassPermissions` posture. A drain child that
+/// runs in a different directory from the drain process (the CI-fix child in
+/// the implementer worktree) needs this — the process-cwd roots
+/// [`claude_headless_args_with_posture_model_and_effort`] uses would scope it
+/// to the wrong tree.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn claude_headless_args_for_roots(
+    prompt: &str,
+    session_id: &str,
+    contained_roots: Option<&[PathBuf]>,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Vec<String> {
+    let permission_mode = if contained_roots.is_some() {
         "dontAsk"
     } else {
         "bypassPermissions"
@@ -2205,11 +2315,11 @@ pub fn claude_headless_args_with_posture_model_and_effort(
         permission_mode.to_string(),
     ]
     .into_iter()
-    .chain(if contained {
-        claude_contained_flags()
-    } else {
-        Vec::new()
-    })
+    .chain(
+        contained_roots
+            .map(claude_contained_flags_for_roots)
+            .unwrap_or_default(),
+    )
     .chain([
         "--output-format".to_string(),
         "stream-json".to_string(),
@@ -3300,16 +3410,44 @@ pub fn advisor_tier_program_and_args_with_tuning(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> (String, Vec<String>) {
+    advisor_tier_program_and_args_with_posture(
+        vendor,
+        is_fork,
+        seeded_prompt,
+        advisor_uuid,
+        model,
+        effort,
+        None,
+    )
+}
+
+/// BUG-2133: the advisor tier's `(program, args)` with the drain's
+/// containment threaded in. `contained_in = Some(dir)` (the advisor child's
+/// cwd) gives the Claude arms, fork and cold-boot alike, the contained posture
+/// scoped to `dir`; `None` is the uncontained posture. Non-Claude arms cannot
+/// be contained — the caller refuses them first via
+/// [`require_child_containment`].
+// trace:BUG-2133 | ai:claude
+pub(crate) fn advisor_tier_program_and_args_with_posture(
+    vendor: HeadlessVendor,
+    is_fork: bool,
+    seeded_prompt: &str,
+    advisor_uuid: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+    contained_in: Option<&Path>,
+) -> (String, Vec<String>) {
     match vendor {
         HeadlessVendor::Claude => {
             let args = if is_fork {
                 // Fork branch inherits the live advisor's context via --resume.
-                claude_headless_resume_args("/aida-advise", advisor_uuid)
+                claude_headless_resume_args_with_posture("/aida-advise", advisor_uuid, contained_in)
             } else {
-                claude_headless_args_with_posture_model_and_effort(
+                let roots = contained_in.map(contained_resume_write_roots);
+                claude_headless_args_for_roots(
                     seeded_prompt,
                     advisor_uuid,
-                    false,
+                    roots.as_deref(),
                     model,
                     effort,
                 )
