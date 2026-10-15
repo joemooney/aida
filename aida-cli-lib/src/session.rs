@@ -6654,8 +6654,12 @@ mod tests {
     // resolver fall through to the built-in Claude default. This preflight is
     // pure and runs before the queue-work worktree/lease mutation path.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_autopicks_single_enabled_profile() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6682,8 +6686,12 @@ mod tests {
     // BUG-898: an all-disabled profile is a launch configuration error and
     // must be reported before queue-work creates a worktree or lease.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_refuses_all_disabled_profile() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6715,8 +6723,12 @@ mod tests {
     // operator explicitly asks for disabled Claude in a codex-only project, we
     // refuse instead of silently launching Claude or mutating queue-work state.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_refuses_explicit_disabled_vendor() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6752,8 +6764,12 @@ mod tests {
     /// (`resolve_enabled_headless_vendor`) both the standalone reviewer launch
     /// and the implementer launch share.
     // trace:BUG-1607 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn reviewer_vendor_resolution_explicit_flag_wins_over_config_default() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");

@@ -280,10 +280,72 @@ fn hook_fallback_allows_store_push_when_owning_project_has_no_allowlist() {
     assert!(remote_has_store_branch(&f));
 }
 
+fn is_path_isolated_process() -> bool {
+    let Ok(name) = std::env::var("AIDA_TEST_PATH_CHILD") else {
+        return false;
+    };
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    !name.is_empty()
+        && args.len() == 4
+        && args[0] == "--exact"
+        && args[1] == "--nocapture"
+        && args[2] == "--test-threads=1"
+        && args[3] == name
+}
+
+fn require_path_mutation_scope(key: &str) {
+    if key == "PATH" || key == "HOME" {
+        assert!(
+            is_path_isolated_process(),
+            "{key} mutation requires run_path_isolated_test() before any fixture or env guard"
+        );
+    }
+}
+
+fn run_path_isolated_test() -> bool {
+    let thread = std::thread::current();
+    let name = thread.name().expect("libtest thread name");
+    if is_path_isolated_process() {
+        assert_eq!(std::env::var("AIDA_TEST_PATH_CHILD").unwrap(), name);
+        return false;
+    }
+    let home = tempfile::tempdir().unwrap();
+    std::fs::write(
+        home.path().join(".gitconfig"),
+        "[user]\nname = AIDA Test\nemail = test@example.invalid\n[init]\ndefaultBranch = main\n",
+    )
+    .unwrap();
+    let mut command = std::process::Command::new(
+        std::env::current_exe().expect("resolve current test executable"),
+    );
+    command
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", home.path())
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("AIDA_TEST_PATH_CHILD", name)
+        .arg("--exact")
+        .arg("--nocapture")
+        .arg("--test-threads=1")
+        .arg(name);
+    let output = command.output().expect("spawn isolated test runner");
+    if !output.status.success() {
+        panic!(
+            "path-isolated test `{name}` failed:\n--- stdout ---\n{}\n--- stderr ---\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    true
+}
+
 // ---- aida_core::git_ops::push(store_root, ..) ---------------------------
 
 #[test]
 fn git_ops_push_from_store_root_is_gated_by_project_allowlist() {
+    if run_path_isolated_test() {
+        return;
+    }
     let _g = lock();
     let forbidden = fixture(Some(ALLOWED), true);
     let allowed = fixture(Some(ALLOWED), true);
@@ -303,11 +365,15 @@ fn git_ops_push_from_store_root_is_gated_by_project_allowlist() {
     std::env::set_var("AIDA_TELEMETRY", "0");
     std::env::remove_var("AIDA_STORE");
 
+    require_path_mutation_scope("HOME");
     std::env::set_var("HOME", &forbidden.home);
+    require_path_mutation_scope("PATH");
     std::env::set_var("PATH", &forbidden.path_with_aida);
     let refused = aida_core::git_ops::push(&forbidden.store, "origin", "aida-store");
 
+    require_path_mutation_scope("HOME");
     std::env::set_var("HOME", &allowed.home);
+    require_path_mutation_scope("PATH");
     std::env::set_var("PATH", &allowed.path_with_aida);
     let accepted = aida_core::git_ops::push(&allowed.store, "origin", "aida-store");
     drop(env);

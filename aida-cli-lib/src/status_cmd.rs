@@ -1295,8 +1295,12 @@ mod story_976_absence_tests {
         assert!(status.success(), "backdated git commit failed");
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn synthetic_store_thirty_days_old_triggers_absence_report() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let project = tempdir().unwrap();
         let home = tempdir().unwrap();
         let aida_dir = project.path().join(".aida");
@@ -1325,8 +1329,12 @@ mod story_976_absence_tests {
         assert_eq!(report.top_titles[0].title, "welcome back digest");
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn below_threshold_stays_silent() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let project = tempdir().unwrap();
         let home = tempdir().unwrap();
         std::fs::create_dir_all(project.path().join(".aida")).unwrap();

@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-audit check-ci-list \
+        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -491,6 +491,14 @@ ensure-agent-skill-hooks:
 # trace:TASK-1555 | ai:claude
 check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
 	@python3 scripts/check-ci-gates.py --tier fast
+
+# check-ci-fast builds nothing, so it cannot see a test that no longer
+# compiles against main (E0063 from a struct field added on main). This compiles
+# every test target, runs none: CI's `Run tests` body, reshaped by the runner to
+# `--no-run --profile agent`. Run it after every merge of main into a branch.
+# trace:TASK-1763 | ai:claude
+check-ci-compile: ## After merging main: compile every test target, run none (agent profile)
+	@python3 scripts/check-ci-gates.py --tier compile
 
 check-ci: ## Run every CI gate that can run locally, in CI's order (needs a build)
 	@python3 scripts/check-ci-gates.py --tier all
