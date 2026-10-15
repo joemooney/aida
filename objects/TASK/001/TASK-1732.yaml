@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T14:38:42.146270519Z
+modified_at: 2026-10-15T21:04:39.124615531Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -97,6 +97,12 @@ comments:
   created_at: 2026-10-15T14:38:42.146270519Z
   modified_at: 2026-10-15T14:38:42.146270519Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14161-9ed4-7730-b4ea-993d51352b7d
+  author: joe
+  content: 'Restacked onto main after #2660 squash: 968eec9f00->7e21281509 (on new #2664 head 42aac84a65). range-diff: ''='' (no changes). Gates on stack top 55bca00b11 green (check-ci-fast, check-ci-compile, regen 71/71).'
+  created_at: 2026-10-15T21:04:39.124615531Z
+  modified_at: 2026-10-15T21:04:39.124615531Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
