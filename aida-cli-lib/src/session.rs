@@ -2551,7 +2551,7 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
+pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2586,20 +2586,23 @@ fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
                     eprintln!("{error:#}");
                 }
             }
-            // BUG-2131: launchers refuse contained mode on git < 2.40; should
-            // any path reach here anyway, the session gets no store write
-            // access at all. Otherwise mark the store so later host store git
-            // on an older git refuses even without contained config.
+            // BUG-2131: mark the store before the git version check, so host
+            // store git on an older git refuses even without contained config.
+            // Launchers refuse contained mode on git < 2.40; should any path
+            // reach here anyway, no store write paths are granted, but a write
+            // root that is the primary checkout still covers `.aida-store`, so
+            // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
+            // trace:TASK-1775 | ai:claude
+            if store.is_dir() {
+                if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
+                    eprintln!("{error:#}");
+                }
+            }
             if let Err(error) = aida_core::git_ops::ensure_git_supports_contained() {
                 eprintln!("{error:#}");
                 Vec::new()
             } else {
-                if store.is_dir() {
-                    if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
-                        eprintln!("{error:#}");
-                    }
-                }
                 crate::contained_boundary::contained_store_write_paths(&main)
             }
         }
