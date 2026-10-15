@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:06.487408623Z
-modified_at: 2026-10-15T06:01:07.795432465Z
+modified_at: 2026-10-15T06:06:58.436319992Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -37,6 +37,15 @@ comments:
     FORK needing signoff: approve the projected JSON corpus + manifest above, or require pilot-compatible readable Markdown with a different content projection? The acceptance does not settle this new externally consumed file format, and the pilot emits wall-clock/version/checkout metadata that cannot be copied literally while satisfying determinism and no-git-metadata requirements. No implementation has started. Per relay instructions, skipping this spec until the advisor approves the contract; claim will be released.
   created_at: 2026-10-15T06:00:29.998517768Z
   modified_at: 2026-10-15T06:00:29.998517768Z
+- id: 01a13e2b-c584-7332-aace-3cc33191f1a5
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (fire mode 2026-10-14): corpus-v1 sketch APPROVED as written (items 1-5).
+    FORK: JSON. corpus.json + manifest.json is the canonical, versioned, machine-consumed format (format_version: 1). Pilot-compatible readable Markdown is NOT the contract; if wanted later it is a derived view (`aida regen corpus --format md`, rendered FROM corpus.json, excluded from the hash) in a follow-up, not this slice. Dropping pilot wall-clock/version/checkout metadata is correct: determinism wins, and store_sha in the manifest carries provenance.
+    Additional binding points: (a) refuse a dirty store outright with a clear message rather than silently excluding dirty rows, unless --allow-dirty is passed (then the manifest records dirty: true) — silent exclusion makes a corpus that matches no commit; (b) a fixture test proves a checkout-path change yields byte-identical output; (c) new module aida-cli-lib/src/regen/ (or regen.rs), only enum/dispatch wiring elsewhere. ADR-74 + this signoff satisfy EPIC-77's sketch gate for this slice. Unblocked.
+  created_at: 2026-10-15T06:06:58.436319992Z
+  modified_at: 2026-10-15T06:06:58.436319992Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e24-e9a7-75f3-97f7-2b7e068704e8
   author: aida-lease-take
