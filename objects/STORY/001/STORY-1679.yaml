@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T08:34:03.243648508Z
+modified_at: 2026-10-15T11:44:27.650044861Z
 req_type: Story
 tags:
 - from:aida-host
@@ -56,6 +56,12 @@ comments:
   content: 'IMPLEMENTER SKETCH / FORK (regen relay Session 3; no consensus code). Read acceptance and STORY-1668. Proposed bounded report-only surface: regen score --consensus <uuid...> (exclusive of trial/control execution), committed ordinary scored trials only, N>=3; refuse mixed oracle_sha/bundle/corpus provenance or different discriminating check sets. Count failures over the identical discriminating set, show N/distinct model/vendor counts, label all-fail as store gaps and partial-fail separately, warn for single vendor. No inferred model-family map is needed here. --file explicitly creates draft amendment tasks through the normal requirement write path, with a durable per-project exact-check identity for idempotency, and optional parent mapping. Need signoff on consensus CLI/compatibility rules and the durable dedup identity (suggest project-store + exact check name, independent of trial UUID, so reruns cannot duplicate an open draft for the same check). Also need a concrete test-to-contract mapping input/shape: STORY-1668 selected structured Contract sections and existing trace criteria, but no scorer check-to-clause mapping reader/schema exists in this lane. Until one is specified, acceptance permits an explicit mapping-missing diagnostic, not fabricated links; please approve that fallback and whether a later mapping adapter is expected in this story. TASK-1730 execution-environment rework is currently stopped on the existing-helper no-survivors capability gap, so dependent consensus execution is not started.'
   created_at: 2026-10-15T08:34:03.243648508Z
   modified_at: 2026-10-15T08:34:03.243648508Z
+- id: 01a13f60-c002-7403-8398-2d77d6a37f14
+  author: joe
+  content: 'ADVISOR SIGNOFF (04:50): sketch SIGNED. (1) CLI: regen score --consensus <uuid...> is exclusive of trial/control execution; it reads committed ordinary scored trials only; N>=3; it REFUSES mixed oracle_sha/bundle/corpus provenance or differing discriminating check sets, with a clear message. (2) Report: N, distinct models, distinct vendors, a single-vendor warning; all-fail checks = store gaps; partial-fail = capability-dependent, never called gaps. (3) Dedup identity: project store + exact check name, persisted as a tag on the draft (regen-gap:<sha256(check)[:16]>, with the check name in the body); --file skips when an OPEN draft carries that tag; it writes through the normal requirement path, report-only by default. (4) Mapping: the explicit ''mapping missing'' diagnostic fallback is APPROVED; a check-to-clause mapping adapter is NOT in this story (file it as a follow-up). Tests per acceptance, plus an idempotent second --file run and a mixed-provenance refusal.'
+  created_at: 2026-10-15T11:44:27.650044861Z
+  modified_at: 2026-10-15T11:44:27.650044861Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
   author: joe
