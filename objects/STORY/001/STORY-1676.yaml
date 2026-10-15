@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-12T14:56:16.346326008Z
+modified_at: 2026-10-15T07:37:22.915056496Z
 req_type: Story
 tags:
 - from:aida-host
@@ -64,6 +64,11 @@ comments:
   created_at: 2026-10-12T05:55:25.093047850Z
   modified_at: 2026-10-12T05:55:25.093047850Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a13e7e-8ae3-7fa0-87dd-8c5f16a81172
+  author: joe
+  content: IMPLEMENTER DESIGN FORK (regen relay Session 2; no code for this story yet). Raw scorer TASK-1730 is under validation and already runs the declared/default installer with private PREFIX, but its approved exact-marker v1 contract carries only check name/pass-fail. It has no per-check stderr or exit code, so this story cannot reliably distinguish a traceback/usage/126/127 crash from an assertion failure per check. Please approve a diagnostic association contract (for example a versioned per-check result sidecar inside the immutable oracle protocol, with stable check name, kind and exit), or explicitly authorize a conservative unknown classification rather than inventing marker syntax. Also need a stable model-family identity rule (model name mapping vs explicit recorded family) and report surface; vendor alone does not identify model family. Installer missing => install_failed and own-installer layout fixtures are settled acceptance, but the complete story needs these diagnostic/report decisions. No containment, launcher or interpreter rewriting is proposed.
+  created_at: 2026-10-15T07:37:22.915056496Z
+  modified_at: 2026-10-15T07:37:22.915056496Z
 history:
 - id: 01a1309d-47da-7740-93a8-14448b62f594
   author: joe
