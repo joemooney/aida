@@ -71,10 +71,22 @@ This skill composes existing surfaces rather than restating them:
 ## Required capabilities
 
 This skill needs four harness capabilities:
-- a subagent launcher (Claude Code: `Agent`);
+- a subagent launcher (Claude Code: `Agent`), used for implementers only;
 - a way to message a running subagent (`SendMessage`);
 - Bash `run_in_background` jobs that notify when they exit;
 - a way to stop a stuck job (`TaskStop`).
+
+**Reviewers are never Agent-tool subagents.** Every review runs as a separate
+reviewer process that you start from Bash (step 5). This needs your seat to
+delegate the reviewer seat; the operator enters it once at a terminal:
+
+```bash
+aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer
+```
+
+Without `--delegate-seat reviewer` the first reviewer launch fails closed.
+Report that to the operator; don't work around it.
+<!-- trace:STORY-1654 | ai:claude -->
 
 **Implementation and review must always run in separate sessions.** Without
 subagents, launch them with `aida queue work <SPEC> --strict` (the spec must be
@@ -227,35 +239,55 @@ says why.
 
 ### 5. Fresh review of every branch
 
-Every branch gets a reviewer that did not write it. Make the review **strict**
-for:
-- drain logic;
-- merge-gate logic;
-- store and cache writes;
-- locks;
-- authority and identity;
-- anything that launches unattended work.
+Every branch gets a reviewer that did not write it, running as a **separate
+process with its own identity**. The approval that `aida pr ship` accepts is
+the one that reviewer records from its own reviewer seat. An Agent-tool
+subagent shares your session, and you are an author of everything your
+implementer subagents wrote, so its approval is refused at ship.
 
-The review brief must include:
-- the exact diff command;
-- the spec and any signed-off sketch;
-- the specific risks to probe, for example "can an agent run `<cmd>` and
-  enable X by itself?" or "does a second `save()` drop edits?";
-- to run the targeted tests in a scratch worktree, then remove it;
-- the known flaky tests;
-- to reply `VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`. Only real
-  correctness, integrity or safety problems count as blockers.
+1. Open the branch's PR if it has none
+   (`gh pr create --draft --head <branch> ...`), and note its number `<n>`.
+2. Launch the reviewer from Bash, as a `run_in_background` job, and wait for
+   it to exit:
 
-On `REQUEST_CHANGES`, send the findings back to the **same implementer** so it
-keeps its context. Include a PROXY DECISION on any routine design question. Then
-re-review with a **new** reviewer.
+   ```bash
+   aida queue work PR-<n> --role reviewer --no-human
+   ```
+
+   It starts a headless reviewer in its own review worktree with a child
+   reviewer grant and the AIDA-generated review prompt. When it exits it
+   prints a summary.
+3. Read the verdict from `.aida/review-verdicts/PR-<n>.json`.
+
+Rules for the review launch:
+- **Don't write the reviewer's prompt.** No `claude -p "<your text>"`, no
+  `aida agent new --role reviewer --prompt ...` as the review of record, and
+  no verdict guidance or pre-digested conclusions. If the operator left
+  review checklist comments on the spec, the reviewer reads them itself; at
+  most, point at them in a spec comment.
+- **Never record a verdict yourself.** `aida review record` runs inside the
+  reviewer process, never from your shell.
+- At most 3 reviewer processes at once, one per PR, counted with
+  implementers against the concurrency cap. Don't pass `--sandbox`.
+
+The reviewer applies the strict tier itself when the diff touches drain logic,
+merge gates, store and cache writes, locks, authority and identity, or
+anything that launches unattended work.
+
+On `RequestChanges`, send the findings from the verdict file back to the
+**same implementer** so it keeps its context. Include a PROXY DECISION on any
+routine design question. Then launch a **new** reviewer process at the new
+head. A stale approval (the head moved after review) also means a new
+reviewer; never use `--override-stale-approval`.
 
 Any code you write yourself, even a small integration fix, is reviewed by
-someone else.
+a reviewer process.
 
-On approval, run `aida comment add <SPEC> "Review: APPROVE (...)"` and queue the
-spec for a batch. Non-blocking notes worth doing become approved follow-up
-specs. Optional or data-gated notes become deferred specs with a trigger.
+On approval, run `aida comment add <SPEC> "Review: APPROVE (PR #<n> at <sha>)"`
+and queue the spec for a batch. Non-blocking notes worth doing become approved
+follow-up specs. Optional or data-gated notes become deferred specs with a
+trigger.
+<!-- trace:STORY-1654 | ai:claude -->
 
 ### 6. Batched integration
 
@@ -271,8 +303,8 @@ Put the approved branches into one integration branch based on
   integration break.
 - **Mechanical** integration fixes can be made inside the batch, for example a
   new struct field missing from a test fixture, or two branches bumping the
-  same contract version. Each fix goes to a fresh reviewer before you push, and
-  each is listed in the PR body.
+  same contract version. Each fix is listed in the PR body, and the batch PR
+  is reviewed by a reviewer process at its own head (step 7).
 - A conflict that turns on a **design choice** goes to the advisor or the
   operator. The proxy never resolves it.
 - If main moved while the checks were running, merge main in and re-run the
@@ -287,10 +319,15 @@ Put the approved branches into one integration branch based on
   checks, use plain `--watch` and report that). Never poll from the model.
   On GitLab or other forges, use the equivalent, or `/aida-integrate`'s forge
   probes.
-- Merge on the exact sha:
-  `gh pr merge N --squash --match-head-commit <full-sha> --subject "... (#N)" --body "<one line per spec>"`.
-  End a body line with `(SPEC-ID)` **only when this merge completes that spec**.
-  For a slice, trailer the child task, never the parent.
+- The ship gate accepts an approval only at the PR's exact head, recorded by
+  a reviewer process. A batch PR's head is a new commit, so launch a reviewer
+  for it (`aida queue work PR-N --role reviewer --no-human`, step 5) and wait
+  for `Approved` at that head. A single-branch batch whose head a reviewer
+  already approved needs no second review.
+- Ship with `aida pr ship N`. It checks the approval and CI, squash-merges,
+  and pulls. Never ship over a refused approval; launch a new reviewer.
+  In the PR body, end a line with `(SPEC-ID)` **only when this merge completes
+  that spec**. For a slice, trailer the child task, never the parent.
 - **Never** use `--admin`. Never disable or edit required checks or branch
   protection. If `merge-hold-gate` is red or a hold is set, stop and report.
 - **Verify MERGED** with `gh pr view N --json state` before touching specs.

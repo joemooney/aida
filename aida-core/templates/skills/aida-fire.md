@@ -112,9 +112,11 @@ that costs more coordination than it saves.
 
 - **Fixers:** one per spec, or a tight pair that shares files. Never two
   fixers on files that overlap. Serialize those.
-- **Reviewers:** a separate agent per PR, never the fixer. Pick the tier
-  by risk (see `fire-mode.md`): FASTTRACK for docs/test-only, STANDARD for
-  ordinary code, STRICT for authority, gates, sandbox, containment and seats.
+- **Reviewers:** a separate reviewer **process** per PR, never the fixer and
+  never an Agent-tool subagent. Launch each from Bash as a
+  `run_in_background` job (see "Reviewer launch" below). The reviewer picks
+  the depth itself from the diff; the tiers in `fire-mode.md` tell you which
+  PRs also need functional verification.
 
 Each fixer claims its spec (`aida claim <SPEC-ID>`) so a later survey sees it.
 
@@ -142,33 +144,32 @@ Task: <SPEC-ID>. Read `aida show <SPEC-ID> --comments` in full.
 Report the PR number, head SHA, files changed and check results in under 150 words.
 ```
 
-#### Reviewer prompt template: STANDARD
+#### Reviewer launch
 
-```text
-You are an independent reviewer for PR #<N> (<SPEC-ID>) in <repo path>.
-You did not write it. Read-only: do not edit, commit, push or record verdicts.
-Read `aida show <SPEC-ID> --comments`, then `gh pr diff <N>` at head <SHA>.
-Check: does it meet every acceptance criterion; is it correct on the edge
-cases; are there tests that would fail without the change; trace comments
-and commit format; no generated mirror edited by hand. Rely on GitHub CI,
-do not run the local test suite.
-Return: VERDICT: APPROVE | CHANGES. For each finding: file:line, severity
-(blocking / non-blocking), and a concrete failure scenario. Under 250 words.
-Non-blocking findings are listed separately; they become follow-ups, not rework.
+The approval `aida pr ship` accepts is the one a reviewer process records from
+its own reviewer seat. You are an author of every PR your fixer subagents
+wrote, so a verdict you record, or one an Agent-tool reviewer records inside
+your session, is refused at ship. Launch each reviewer from Bash:
+
+```bash
+aida queue work PR-<N> --role reviewer --no-human
 ```
 
-#### Reviewer prompt template: STRICT (authority, gates, sandbox, seats)
+It starts a headless reviewer with its own session, a PR-scoped lease, a
+review worktree, a child reviewer grant and the AIDA-generated review prompt
+(which already carries the strict authority checklist). It records its
+verdict and writes `.aida/review-verdicts/PR-<N>.json`; read that file when
+the job exits.
 
-```text
-<STANDARD template>, plus:
-- Enumerate every path that grants, checks or bypasses authority in the diff.
-  For each, name who can reach it and what stops a seat without the grant.
-- Look for fail-open: an error, a missing file, an env var, or a timeout that
-  turns a refusal into an allow.
-- Check that no existing test was weakened, deleted or marked ignored to pass.
-- Name the test that proves the refusal path, not only the happy path.
-Under 400 words. Default to CHANGES when the refusal path is untested.
-```
+- Don't write the reviewer's prompt and don't pass it conclusions. If the PR
+  needs operator-specific checks, leave them as a comment on the spec; the
+  reviewer reads the spec itself.
+- Your seat must have been entered with
+  `aida role enter <seat> --delegate-seat reviewer`. Without it the launch
+  fails closed; ask the operator to re-enter the seat.
+- Reviewer processes count toward the wave cap; run at most 3 at once. Don't
+  pass `--sandbox`.
+<!-- trace:STORY-1654 | ai:claude -->
 
 #### Functional verification: security, sandbox and containment PRs
 
@@ -187,26 +188,30 @@ Report WORKS / BROKEN with the evidence, under 200 words. Do not edit code.
 
 ### 4. Gate each PR
 
-**APPROVE:** ship it with the FAQ-57 recipe, at the exact head the reviewer saw:
+**Approved:** the reviewer process already recorded the approval at the head
+it saw. Ship it:
 
 ```bash
-read H B < <(gh pr view N --json headRefOid,headRefName --jq '"\(.headRefOid) \(.headRefName)"')
-aida review record PR-N --pr N --sha "$H" --branch "$B" --verdict approved --summary "<TIER>: <why>"
 gh pr ready N
 aida pr ship N    # --override-stale-check ONLY when the ci.yml delta on main is unrelated
 ```
 
-If the head moved after review (rework push, merge from main), record again
-at the new head. The approval binds to a SHA.
+Never run `aida review record` yourself. If the head moved after review
+(rework push, merge from main), launch a new reviewer at the new head; the
+approval binds to a SHA, and `--override-stale-approval` stays an operator
+tool.
 
-**CHANGES:** resume the **same** fixer (`SendMessage` to its agent id) with
+**RequestChanges:** resume the **same** fixer (`SendMessage` to its agent id) with
 a rework brief per `.aida/discipline/rework-brief-craft.md`: each blocking
 finding, its file:line, the failure scenario, and what "fixed" looks like. If
 the PR belongs to another seat, mail the owning seat instead.
 
 **Two-round cap.** After the second review round, rule. Either merge and file
 the remaining findings as follow-ups, or park the PR with a reason on the spec.
-There is no round three. Non-blocking findings are **always** filed as
+There is no round three. Merging still needs an approval at head recorded by
+a reviewer process (or by the operator at a terminal); the advisor cannot
+record one, so a PR whose second round ends in RequestChanges is parked or
+handed to the operator. Non-blocking findings are **always** filed as
 follow-up specs (`aida add ... --status draft`), never as another round.
 
 **Merge holds:** the advisor does not clear them. When the release condition

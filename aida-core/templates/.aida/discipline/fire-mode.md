@@ -66,7 +66,12 @@ mandate.
   authorization on the spec. The advisor's own comment never satisfies it.
   Only a "needs advisor signoff" gate (e.g. on a sketch) may be recorded by
   the advisor, with its reasoning, on the spec before shipping.
-- **Independent review.** A fixer never reviews its own PR.
+- **Independent review.** A fixer never reviews its own PR. Each review runs
+  as a separate reviewer process launched from Bash
+  (`aida queue work PR-<n> --role reviewer --no-human`), never as an
+  Agent-tool subagent, and the advisor never records a verdict itself: it is
+  an author of every PR its fixer subagents wrote, so the ship gate refuses
+  its approvals. <!-- trace:STORY-1654 | ai:claude -->
 
 ## Risk tiers
 

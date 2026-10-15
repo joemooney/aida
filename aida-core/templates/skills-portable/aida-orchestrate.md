@@ -75,7 +75,7 @@ AIDA provides every mechanic you need.
 |---|---|
 | Start an implementer headless (no terminal needed; the spec must be queued) | `aida queue work <SPEC> --vendor <claude\|codex\|agy> --no-human --strict` |
 | Start an interactive seat in another terminal | `aida agent new <claude\|codex\|antigravity> --role <implementer\|reviewer\|advisor> --spec <SPEC> --prompt "<brief>"` |
-| Start a reviewer that holds no lease | `aida agent new <claude\|codex\|antigravity> --role reviewer --prompt "<review brief>"` |
+| Review a PR in a separate reviewer process (waits for the verdict) | `aida queue work PR-<n> --role reviewer --no-human --vendor <claude\|codex\|agy>` |
 | Hand a session its brief or findings | `aida brief <agent> <SPEC> --note - --notify` (the note is read from stdin) |
 | Message a named agent | `aida mailbox send --to <agent> --subject "<SPEC> findings" --stdin` |
 | Type into a live interactive session | `aida session send <session-or-SPEC> "<text>" --enter` |
@@ -330,36 +330,38 @@ shows no live session for it.
 
 ### 5. Fresh review of every branch
 
-Every branch gets a reviewer that did not write it: a **new** session, never
-the implementer and never you. Launch it without `--spec`, so it does not
-collide with the implementer's lease:
+Every branch gets a reviewer that did not write it: a **separate reviewer
+process**, never the implementer and never you. Open the branch's PR if it
+has none (`gh pr create --draft --head <branch> ...`), then run:
 
 ```bash
-aida agent new codex --role reviewer --prompt "$(cat review-brief.md)"
+aida queue work PR-<n> --role reviewer --no-human --vendor codex
 ```
 
-Make the review **strict** for:
-- drain logic;
-- merge-gate logic;
-- store and cache writes;
-- locks;
-- authority and identity;
-- anything that launches unattended work.
+It creates a PR-scoped lease and review worktree, mints a child reviewer
+grant, starts the reviewer headless with the AIDA-generated review prompt, and
+waits. The reviewer records its own verdict with `aida review record`; read it
+from `.aida/review-verdicts/PR-<n>.json` after the command exits.
+`aida pr ship` accepts only an approval recorded this way.
 
-The review brief must include:
-- the exact diff command;
-- the spec and any signed-off sketch;
-- the specific risks to probe, for example "can an agent run `<cmd>` and
-  enable X by itself?" or "does a second `save()` drop edits?";
-- to run the targeted tests in a scratch worktree, then remove it;
-- the known flaky tests;
-- to reply `VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`, and to record it
-  with `aida review record <SPEC> --verdict approved|request-changes --sha <full-sha> --branch <branch> --summary "<one line>"`.
-  Only real correctness, integrity or safety problems count as blockers.
+- Your seat must delegate the reviewer seat. The operator enters it once at a
+  terminal: `aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer`.
+  Without it the launch fails closed; report that, don't work around it.
+- **Don't write the reviewer's prompt.** No `aida agent new --role reviewer
+  --prompt "<brief>"` and no hand-rolled `claude -p` / `codex exec` as the
+  review of record, and no verdict guidance or conclusions. Operator checklist
+  comments on the spec are read by the reviewer itself.
+- **Never record a verdict yourself.**
+- At most 3 reviewer processes at once, one per PR. Don't pass `--sandbox`.
+- The reviewer applies the strict tier itself when the diff touches drain
+  logic, merge gates, store and cache writes, locks, authority and identity,
+  or anything that launches unattended work.
 
-On `REQUEST_CHANGES`, send the findings back to the implementer. Include a
-PROXY DECISION on any routine design question. Then re-review with a **new**
-reviewer.
+On `RequestChanges`, send the findings back to the implementer. Include a
+PROXY DECISION on any routine design question. Then launch a **new** reviewer
+process at the new head. A stale approval also means a new reviewer; never use
+`--override-stale-approval`.
+<!-- trace:STORY-1654 | ai:claude -->
 
 - **Implementer session still live:** `aida session send <SPEC> "<findings>" --enter`,
   or `aida brief <agent> <SPEC> --note - --notify`, or
@@ -407,8 +409,8 @@ Put the approved branches into one integration branch based on
   integration break.
 - **Mechanical** integration fixes can be made inside the batch, for example a
   new struct field missing from a test fixture, or two branches bumping the
-  same contract version. Each fix goes to a fresh reviewer session before you
-  push, and each is listed in the PR body.
+  same contract version. Each fix is listed in the PR body, and the batch PR
+  is reviewed by a reviewer process at its own head (step 7).
 - A conflict that turns on a **design choice** goes to the advisor or the
   operator. The proxy never resolves it.
 - If main moved while the checks were running, merge main in and re-run the
@@ -423,10 +425,14 @@ Put the approved branches into one integration branch based on
   124. In a repo with no required checks, use plain `--watch` and report that.
   Never poll from the model. On GitLab or other forges, use the equivalent
   forge CLI.
-- Merge on the exact sha:
-  `gh pr merge N --squash --match-head-commit <full-sha> --subject "... (#N)" --body "<one line per spec>"`.
-  End a body line with `(SPEC-ID)` **only when this merge completes that spec**.
-  For a slice, trailer the child task, never the parent.
+- The ship gate accepts an approval only at the PR's exact head, recorded by
+  a reviewer process. A batch PR's head is a new commit, so launch a reviewer
+  for it (`aida queue work PR-N --role reviewer --no-human`, step 5) and wait
+  for `Approved` at that head.
+- Ship with `aida pr ship N`. It checks the approval and CI, squash-merges,
+  and pulls. In the PR body, end a line with `(SPEC-ID)` **only when this
+  merge completes that spec**. For a slice, trailer the child task, never the
+  parent.
 - **Never** use `--admin`. Never disable or edit required checks or branch
   protection. If `merge-hold-gate` is red or a hold is set, stop and report.
 - **Verify MERGED** with `gh pr view N --json state` before touching specs.

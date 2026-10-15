@@ -210,12 +210,41 @@ every PR it opened has reached a terminal state and been merged, held, or
 explicitly listed as a straggler (step 6). The last PR is the one this bug
 strands — give it the same wait every other PR got.
 
-For each returned PR: if all checks pass and it's mergeable + clean, merge it
-(`--squash` only — NO `--delete-branch`: the implementer's worktree still holds
-the branch, so the local delete is refused, and in an `&&` chain that silently
-drops the pull leg) and then run `aida pull` as its own step — the spec was
+**Review every PR in a separate reviewer process before merging it.** The
+merge gate accepts only an approval recorded at the PR's head by a reviewer
+process with its own identity. Your implementer subagents run inside your
+session, so you are an author of every wave PR: an approval you record, or
+one recorded by an Agent-tool reviewer, is refused at merge. Launch
+each reviewer from Bash, detached, and wait for its verdict file in bounded
+foreground polls:
+
+```bash
+nohup aida queue work PR-<n> --role reviewer --no-human \
+  > .aida/burndown-review-PR-<n>.log 2>&1 &
+# then, in bounded steps (a minute or so per call) until it exists:
+cat .aida/review-verdicts/PR-<n>.json
+```
+
+- Never use the Agent tool for review, never write the reviewer's prompt, and
+  never run `aida review record` yourself. The reviewer process reads the spec
+  and any operator checklist comments itself.
+- At most 3 reviewer processes at once, one per PR. Don't pass `--sandbox`.
+- The burndown seat must have been entered with
+  `aida role enter <seat> --delegate-seat reviewer`; without it the launch
+  fails closed. Report that as a blocker; don't work around it.
+- `RequestChanges` → resume the same implementer (`SendMessage`) with the
+  findings, then launch a **new** reviewer at the new head. A stale approval
+  also means a new reviewer; never use `--override-stale-approval`.
+<!-- trace:STORY-1654 | ai:claude -->
+
+For each returned PR: if all checks pass, it's mergeable + clean, and a
+reviewer process approved its current head, merge it with
+`aida pr ship <n> --no-cleanup`. It re-checks the approval, squash-merges,
+leaves a branch that a sibling worktree still holds, and pulls. If it refuses
+the approval, don't merge another way: launch a new reviewer. The spec was
 marked **Done** by its implementer (step 2), so the merge-driven auto-bump
-promotes it to **Completed** on pull. Branch deletion happens in the prune step
+promotes it to **Completed** on pull (run `aida pull` yourself if the ship
+reported the pull failed). Branch deletion happens in the prune step
 below, after the worktree is removed. As a fallback (e.g. the implementer skipped `queue done`, or the
 auto-bump missed), run `aida db reconcile-status --spec <SPEC>` to force the
 Completed bump. **Hold (do not merge) any PR whose spec is
@@ -360,8 +389,8 @@ channels** — they reach different audiences and neither replaces the other:
   change parks (CI red → no merge), so no *single* bad PR reaches `main`. But CI
   ran each PR against the *old* base, so a parallel wave can still break `main`
   *together* (BUG-496) — the per-wave `cargo build` on integrated `main` (step 3)
-  is what catches that. Both gates together are what let the integrator merge
-  greens without re-reviewing each.
+  is what catches that. Both gates catch build breaks; neither replaces the
+  per-PR reviewer process, whose approval the merge gate requires.
 - **Keep at the keyboard, not the drain:** releases/tags and changes to the
   autonomy machinery itself (the orchestrator, this runner) ship supervised — a
   fix riding through a broken drain gets caught in the breakage.

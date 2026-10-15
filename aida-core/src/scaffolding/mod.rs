@@ -4700,9 +4700,12 @@ mod tests {
             "ADVISOR SIGNOFF: APPROVED",
             "separate sessions",
             "Never review",
-            "VERDICT: APPROVE",
+            // trace:STORY-1654 | ai:claude — review runs as a separate
+            // reviewer process and ships through the approval gate.
+            "aida queue work PR-<n> --role reviewer --no-human",
+            "Never record a verdict yourself",
             "Batched integration",
-            "--match-head-commit",
+            "aida pr ship N",
             "gh pr view N --json state",
             "Never merge as proxy",
             "--admin",
