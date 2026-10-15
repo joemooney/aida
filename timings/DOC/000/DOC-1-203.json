@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "DOC-1-203",
+  "publishes": [
+    {
+      "at": "2026-10-15T12:09:38.537592275Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T04:20:18.613592673Z",
+      "spec": "DOC-1-203",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-12T04:20:18.613994743Z",
+      "spec": "DOC-1-203",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T12:09:38.512279110Z",
+      "spec": "DOC-1-203",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-15T12:09:38.513120657Z",
+      "spec": "DOC-1-203",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
