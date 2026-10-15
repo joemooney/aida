@@ -98,12 +98,17 @@ pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
             "unsafe control record: {path}"
         );
         let bytes = super::super::git(store, &["cat-file", "blob", fields[2]])?;
-        let record: TrialRecord = serde_json::from_slice(&bytes)
+        let mut record: TrialRecord = serde_json::from_slice(&bytes)
             .with_context(|| format!("invalid control/trial record: {path}"))?;
         anyhow::ensure!(
             path == format!("regen/trials/{}.json", record.trial_id),
             "control record identity/path mismatch: {path}"
         );
+        // Derive legacy/invalid-sidecar quality warnings for every read surface,
+        // including optional statusline/digest readers sharing this function.
+        // Controls remain byte-for-byte execution evidence, never quality-flagged.
+        // trace:STORY-1676 | ai:codex
+        diagnostics::flag_trial(&mut record);
         records.push(record);
     }
     Ok(records)

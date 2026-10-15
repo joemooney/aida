@@ -316,6 +316,35 @@ mod tests {
     }
 
     #[test]
+    fn committed_reader_derives_legacy_quality_warnings_without_rewriting_evidence() {
+        let store = tempfile::tempdir().unwrap();
+        for args in [
+            &["init", "-b", "aida-store"][..],
+            &["config", "user.name", "Test"],
+            &["config", "user.email", "test@example.com"],
+        ] {
+            super::super::super::git(store.path(), args).unwrap();
+        }
+        super::super::super::git(store.path(), &["commit", "--allow-empty", "-m", "fixture"])
+            .unwrap();
+        let legacy = row();
+        super::persist(store.path(), &legacy).unwrap();
+        let sha = super::super::super::head(store.path()).unwrap();
+        let rows = controls::read_records(store.path()).unwrap();
+        assert!(!rows[0].clean);
+        assert_eq!(rows[0].flags, ["unclassified: review before reporting"]);
+        let path = format!("regen/trials/{}.json", legacy.trial_id);
+        let original: TrialRecord = serde_json::from_slice(
+            &super::super::super::git(store.path(), &["show", &format!("HEAD:{path}")]).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            original.clean && original.flags.is_empty() && original.failure_diagnostics.is_none()
+        );
+        assert_eq!(super::super::super::head(store.path()).unwrap(), sha);
+    }
+
+    #[test]
     fn model_family_is_explicit_validated_metadata() {
         for invalid in [
             "",

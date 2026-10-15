@@ -481,7 +481,9 @@ of **all** failures produce `unclassified: review before reporting`. Both can
 apply. Ordinary R1/R2 warnings are attached after control validation and forbid a
 clean headline; expected stub failures retain diagnostics without changing control
 execution cleanliness. Reports show counts/unknown share and put warnings beside
-the headline, including for legacy or invalid diagnostic extensions.
+the headline, including for legacy or invalid diagnostic extensions. The shared committed reader
+derives these ordinary-trial warnings without rewriting historical bytes, so
+statusline/digest consumers also receive the non-clean marker.
 
 `regen score --model-family <identity>` records an explicit optional family on the
 trial (and nested R2); model/vendor strings never infer it. `regen report` lists
