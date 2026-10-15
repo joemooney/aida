@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:42:53.768494949Z
-modified_at: 2026-10-15T05:06:52.123990842Z
+modified_at: 2026-10-15T05:48:45.648584381Z
 req_type: Bug
 tags:
 - build
@@ -20,6 +20,11 @@ comments:
   created_at: 2026-10-15T04:22:08.077852305Z
   modified_at: 2026-10-15T04:22:08.077852305Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e1b-18d0-7e60-a67d-026983448549
+  author: joe
+  content: 'Opened draft PR #2656 (head dc1f3ff110) with sccache stable TMPDIR handling and missing temp dir detection/hint.'
+  created_at: 2026-10-15T05:48:45.648584381Z
+  modified_at: 2026-10-15T05:48:45.648584381Z
 history:
 - id: 01a13df3-b34c-7f21-8a32-f536ba184c86
   author: joe
