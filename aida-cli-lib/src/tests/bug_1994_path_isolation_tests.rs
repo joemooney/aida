@@ -152,6 +152,13 @@ fn unisolated_path_mutation_is_refused_before_setting_environment() {
     require_path_mutation_scope("PATH");
 }
 
+// trace:TASK-1748 | ai:antigravity
+#[test]
+#[should_panic(expected = "HOME mutation requires run_path_isolated_test")]
+fn unisolated_home_mutation_is_refused_before_setting_environment() {
+    require_path_mutation_scope("HOME");
+}
+
 // libtest accepts a union of filters in one process:
 // https://github.com/rust-lang/rust/blob/master/library/test/src/cli.rs
 // Each round exercises history readers with all formerly shared PATH writers

@@ -94,11 +94,12 @@ pub(crate) fn is_path_isolated_process() -> bool {
 }
 
 // trace:BUG-1994 | ai:codex
+// trace:TASK-1748 | ai:antigravity
 pub(crate) fn require_path_mutation_scope(key: &str) {
-    if key == "PATH" {
+    if key == "PATH" || key == "HOME" {
         assert!(
             is_path_isolated_process(),
-            "PATH mutation requires run_path_isolated_test() before any fixture or env guard"
+            "{key} mutation requires run_path_isolated_test() before any fixture or env guard"
         );
     }
 }
