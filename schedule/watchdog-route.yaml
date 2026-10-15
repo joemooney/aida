@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'trip = mail-poll-setup on advisor session 20233459: a single 10-min sweep cron the OPERATOR explicitly requested at 23:47 (''check your email every 10-15m at least''). Not a runaway; kept deliberately. Session-only; dies with the session.'
+due_since: 2026-10-15T07:54:33.831308692Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-10-15T07:46:19.947806333Z
+  job: watchdog
+  error: 'exit 1: '
