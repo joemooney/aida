@@ -13,7 +13,7 @@ Follow `.claude/skills/aida-fasttrack/SKILL.md`:
    This creates Approved + queued work tagged `batch:fasttrack` and
    `lifecycle:no-review`.
 4. Implement on a fresh branch, run the reduced local gate, and merge only
-   after CI succeeds.
+   after CI succeeds and an independent session has approved the head.
 5. If the work grows beyond trivial, punt it, file a finding, and remove the
    fasttrack tags.
 

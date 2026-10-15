@@ -486,17 +486,26 @@ fn queue_gate_refusal(store: &Path) -> String {
 /// handler, rooted at the same project.
 // trace:BUG-1983 | ai:claude
 fn review_record(root: &Path) -> anyhow::Result<()> {
-    crate::handle_review_record_at(
-        root.to_path_buf(),
-        SPEC,
-        "approved",
-        Some(SHA),
-        Some("some-branch"),
-        None,
-        &[],
-        &[],
-        None,
-    )
+    // BUG-1918: an approval must name its recorder (here, an independent
+    // session id) or the anchor rule refuses it; a rejected grant still
+    // refuses first. trace:BUG-1918 | ai:claude
+    let reviewer = crate::review_authority::IdentitySource {
+        session_ids: vec!["independent-reviewer".into()],
+        ..Default::default()
+    };
+    crate::review_authority::with_identity_source(reviewer, || {
+        crate::handle_review_record_at(
+            root.to_path_buf(),
+            SPEC,
+            "approved",
+            Some(SHA),
+            Some("some-branch"),
+            None,
+            &[],
+            &[],
+            None,
+        )
+    })
 }
 
 /// The refusal names the grant by its 8-character prefix only (C2), the
