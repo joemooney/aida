@@ -3134,6 +3134,13 @@ pub(crate) fn handle_review_record_at(
     // `record_verdict` uses, with the typed classes layered on before the
     // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
     let path = review_verdict::verdict_path(&project_root, spec);
+    // BUG-2136: snapshot the record as it stands so the outcome line can say
+    // whether this call added a round or re-recorded an identical one.
+    // trace:BUG-2136 | ai:claude
+    let record_before = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned());
     let mut verdict_obj = review_verdict::build_verdict_object(
         &project_root,
         &path,
@@ -3148,6 +3155,12 @@ pub(crate) fn handle_review_record_at(
     // trace:STORY-1687 | ai:codex
     crate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
+    let outcome = review_verdict::record_outcome(record_before.as_ref(), &verdict_obj);
+    let recorded_sha = verdict_obj
+        .get("reviewed_sha")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| resolved_sha.clone());
     review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
     // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
@@ -3188,15 +3201,19 @@ pub(crate) fn handle_review_record_at(
         kind.label().to_string(),
         resolved_sha.clone(),
     );
+    // BUG-2136: state the outcome explicitly — a new round, or an identical
+    // re-recording — instead of leaving it to be inferred from the
+    // "previously on record" block printed before the write.
+    // trace:BUG-2136 | ai:claude
     println!(
-        "{} recorded {} for {}{}",
+        "{} {}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
-        kind.label().bold(),
-        spec.to_ascii_uppercase().cyan(),
-        resolved_sha
-            .as_deref()
-            .map(|s| format!(" against {}", review_verdict::short_sha(s)))
-            .unwrap_or_default()
+        review_verdict::record_outcome_line(
+            &outcome,
+            kind.label(),
+            &spec.to_ascii_uppercase(),
+            recorded_sha.as_deref(),
+        )
     );
     if kind.blocks_done() {
         let detail = summary

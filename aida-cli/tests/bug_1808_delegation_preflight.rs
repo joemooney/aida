@@ -175,6 +175,14 @@ fn snapshot(fx: &Fixture) -> BTreeMap<String, Vec<u8>> {
                 }
                 walk(root, &path, out);
             } else if ft.is_file() {
+                // SQLite's `-shm` is the volatile WAL index (reader marks,
+                // rebuilt from the WAL), not state. The cache keeps it on disk
+                // (SQLITE_FCNTL_PERSIST_WAL), so any reader rewrites it. The
+                // `.db` and `-wal` files stay in the snapshot.
+                // trace:BUG-1929 | ai:claude
+                if path.extension().is_some_and(|e| e == "db-shm") {
+                    continue;
+                }
                 let rel = path.strip_prefix(root).unwrap().display().to_string();
                 out.insert(rel, std::fs::read(&path).unwrap());
             }
