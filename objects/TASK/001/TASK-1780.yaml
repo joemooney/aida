@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:40:07.146402411Z
-modified_at: 2026-10-15T16:24:50.222117363Z
+modified_at: 2026-10-15T20:55:45.269812406Z
 req_type: Task
 comments:
 - id: 01a13f98-5bc3-7163-8498-acfc5a3f26f1
@@ -56,7 +56,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STANDARD round 1: test-touched derives filters that match 0 tests, and fail-opens on non-.rs compile inputs'
+  detail: 'STANDARD round 2: both round-1 findings are fixed (path/include mapping, inputs, root exit 4), but zero-match exits 3 even for modules with no tests, contrary to the ruling. Narrow round 3.'
   recovery_hint: address the review findings, move TASK-1780 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-10-15T16:24:50.222117363Z
+  shelved_at: 2026-10-15T20:55:45.269812406Z
