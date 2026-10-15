@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-15T20:16:09.841815789Z
+modified_at: 2026-10-15T20:29:59.455752243Z
 req_type: Story
 tags:
 - from:aida-host
@@ -83,6 +83,12 @@ comments:
   content: 'Relay7 started isolated implementation at main 7b51e37f21, lease01a14133a6aa. Following the exact signed 2026-10-15 08:35 built-in schema and STRICT/operator-merge boundary. Plan docs/plans/2026-10-15-story-1673-constraint-probes.md: retain malformed verify data for invalid reporting, validate a closed probe enum before host reads, explicit command only. Canonical/YAML persistence; archived backends refuse unsupported verify writes rather than silently discard. No shell, sync/drain/hook execution, author verdict, hold clearance, merge or Completed.'
   created_at: 2026-10-15T20:16:09.841815789Z
   modified_at: 2026-10-15T20:16:09.841815789Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14141-e31f-7f91-b03c-cdebe8a513c6
+  author: joe
+  content: 'Relay7 source checkpoint: isolated codex/story-1673 at 9aa4bb286f (plan dc3c2809f4), NOT pushed or review ready. Three author self-check rounds: R1 fixed sync verify loss and effective-user PATH access; R2 fixed creating/migrating read loader and bad-YAML arguments disappearing; R3 no new blocking source finding, bounded actual-module invalid/CPU/memory smoke passed. These are author checks, not independent review. Added canonical data-only edit --verify/--clear-verify through existing protected CAS/history, raw noncreating reads, six closed probes, invalid data retention, typed comparisons, strict/no-exec fixtures. Early seven core tests passed before final corrections; final12 core tests, six CLI tests, generated bindings and publication gates remain pending/active. No author verdict/hold clear/merge/Completed; operator owns merge.'
+  created_at: 2026-10-15T20:29:59.455752243Z
+  modified_at: 2026-10-15T20:29:59.455752243Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-d4ab-7571-85aa-c70d967345a3
