@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T06:37:59.444808692Z
+modified_at: 2026-10-15T06:53:18.280415176Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -58,6 +58,19 @@ comments:
   content: 'Implementation note: raw scorer reuses existing session::bwrap_availability (the public wrapper of private bwrap_preflight) and bwrap_confinement_args_inner with its existing strict read allowlist. The convenience bwrap_confinement_args wrapper exposes the entire host read-only; author self-check reproduced access to original source with zero guard hits, so that wrapper was unsuitable. Independent probe of the existing strict arm confirmed private HOME/all XDG/PREFIX writability and hidden /home/joe/ai original source, without modifying session.rs or adding a sandbox. A pre-command source-visibility probe refuses if the original project git entry remains visible, including an original checkout exposed by essential system mounts. Config commands use the established trusted-default-branch reader; trial records retain per-check outcomes, timestamps, exit/error state, guard hits and unconfined/dirty flags. Local validation is in progress; no independent review verdict has been recorded.'
   created_at: 2026-10-15T06:37:59.444808692Z
   modified_at: 2026-10-15T06:37:59.444808692Z
+- id: 01a13e56-3048-7cb1-bd12-2eb62ebd23db
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER FORK / STOP (TASK-1730, relay 20261014-231359-regen2).
+    The config/record implementation and 16 targeted tests plus all 28 fast gates and the config-trust guard pass locally, but an adversarial follow-up found an unsettled oracle provenance boundary. No ready PR, verdict or merge is claimed.
+
+    Reproduction (fresh checker, exact current strict bwrap helper argv): trusted [regen].oracle_command = ["./tests/oracle.sh"]; the original project's oracle emits `FAIL - held-out behavior` and exits 1; the trial supplies its own tests/oracle.sh emitting `ok   - held-out behavior` and exits 0. Commands run relative to the trial root as the approved sketch specifies, so the replacement is selected. Trusted config authenticates argv, not the held-out oracle's bytes. This follows the signed cwd rule but conflicts with STORY-1669 F4's held-out-test intent.
+
+    The existing unmodified strict helper can mount a dedicated oracle input directory read-only; no session.rs change or second sandbox is required for that capability. However, neither the signed schema nor acceptance defines which trusted oracle files/dependencies are copied, their commit provenance, oracle cwd, or how the oracle locates the regenerated system. Rewriting argv[0] alone is not general: ["./tests/oracle.sh"], ["sh","./tests/oracle.sh"] and ["sh","-c",...] differ, and copying all source would expose the original implementation.
+
+    DECISION REQUEST: approve an immutable held-out oracle input contract before further scorer code. Recommended direction: freeze an explicitly declared oracle file/subtree allow-list from the trusted project commit, mount that bundle read-only using the existing helper, keep installer cwd at trial root, and define oracle cwd plus an explicit trial-root/PREFIX locator. This needs the oracle-path config and provenance/cwd semantics settled; I will not guess that new format or add mounts outside the existing confinement implementation. The implementation remains a prototype until this is resolved; I will preserve it for advisor inspection. TASK-1729 rework continues independently. Later lane items depend on this oracle contract.
+  created_at: 2026-10-15T06:53:18.280415176Z
+  modified_at: 2026-10-15T06:53:18.280415176Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
