@@ -278,11 +278,11 @@ def aida_stub_dir(root: Path, stack) -> str:
 
 
 # trace:BUG-2135 | ai:antigravity
-def sccache_missing_tmpdir() -> str | None:
-    """Check if any running sccache process has a deleted TMPDIR."""
+def sccache_server_status() -> tuple[bool, str | None]:
+    """Check if any running sccache process has a deleted TMPDIR and whether any sccache is alive."""
     proc = Path(os.environ.get("AIDA_SCCACHE_PROC_DIR", "/proc"))
     if not proc.is_dir():
-        return None
+        return False, None
     pids_env = os.environ.get("AIDA_SCCACHE_PIDS")
     if pids_env:
         candidates = [proc / p for p in pids_env.split() if p.isdigit()]
@@ -290,36 +290,49 @@ def sccache_missing_tmpdir() -> str | None:
         try:
             candidates = [p for p in proc.iterdir() if p.name.isdigit()]
         except OSError:
-            return None
+            return False, None
 
+    is_running = False
+    missing_tmp = None
     for pid_dir in candidates:
         try:
             comm_file = pid_dir / "comm"
             if comm_file.exists() and comm_file.read_text().strip() != "sccache":
                 continue
+            is_running = True
             raw_env = (pid_dir / "environ").read_bytes()
             for entry in raw_env.split(b"\0"):
                 if entry.startswith(b"TMPDIR="):
                     tmp = entry[7:].decode("utf-8", errors="replace")
                     if tmp and not os.path.isdir(tmp):
-                        return tmp
+                        missing_tmp = tmp
         except (OSError, UnicodeDecodeError):
             continue
-    return None
+    return is_running, missing_tmp
+
+
+def sccache_missing_tmpdir() -> str | None:
+    return sccache_server_status()[1]
 
 
 def ensure_sccache_server() -> None:
-    """Ensure sccache is running with a stable TMPDIR, restarting if broken."""
+    """Ensure sccache is running with a stable TMPDIR, pre-starting or restarting if broken."""
+    if "RUSTC_WRAPPER" in os.environ:
+        wrapper = os.environ["RUSTC_WRAPPER"].strip()
+        if not wrapper or "sccache" not in wrapper:
+            return
     if os.environ.get("AIDA_SCCACHE_DISABLE") == "1":
         return
-    sccache_bin = os.environ.get("AIDA_SCCACHE") or shutil.which("sccache") or "/home/joe/.cargo/bin/sccache"
-    if not os.path.isfile(sccache_bin) or not os.access(sccache_bin, os.X_OK):
+    sccache_bin = os.environ.get("AIDA_SCCACHE") or shutil.which("sccache")
+    if not sccache_bin or not os.path.isfile(sccache_bin) or not os.access(sccache_bin, os.X_OK):
         return
-    missing = sccache_missing_tmpdir()
+    is_running, missing = sccache_server_status()
+    stable_tmp = os.environ.get("AIDA_SCCACHE_TMPDIR", "/tmp")
+    env = dict(os.environ, TMPDIR=stable_tmp)
     if missing:
         subprocess.run([sccache_bin, "--stop-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        stable_tmp = os.environ.get("AIDA_SCCACHE_TMPDIR", "/tmp")
-        env = dict(os.environ, TMPDIR=stable_tmp)
+        subprocess.run([sccache_bin, "--start-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif not is_running:
         subprocess.run([sccache_bin, "--start-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -446,13 +459,19 @@ def run_plan(
         print(f"RUN   {name}  [{tiers[name]}]", flush=True)
         passed, seconds = run_gate(root, name, resolved, env)
         if not passed:
-            missing = sccache_missing_tmpdir()
-            if missing:
-                print(
-                    f"check-ci-gates: sccache server temp directory ({missing}) is missing.\n"
-                    f"        hint: restart sccache with: TMPDIR=/tmp sccache --start-server",
-                    file=sys.stderr,
-                )
+            sccache_active = True
+            wrapper_val = env.get("RUSTC_WRAPPER", os.environ.get("RUSTC_WRAPPER"))
+            if wrapper_val is not None:
+                wrapper_val = wrapper_val.strip()
+                sccache_active = bool(wrapper_val and "sccache" in wrapper_val)
+            if sccache_active:
+                missing = sccache_missing_tmpdir()
+                if missing:
+                    print(
+                        f"check-ci-gates: sccache server temp directory ({missing}) is missing.\n"
+                        f"        hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
+                        file=sys.stderr,
+                    )
             # Exit on the FIRST failure: CI's order is the cheapest order,
             # and a second failure after the first is noise.
             origin = (

@@ -682,28 +682,33 @@ pub(crate) fn full_clean_command(layout: &DevLayout) -> Command {
 }
 
 // trace:BUG-2135 | ai:antigravity
-/// Check if any running `sccache` process has a missing `TMPDIR`.
-/// Returns the missing path if found.
-pub(crate) fn sccache_missing_tmpdir() -> Option<PathBuf> {
+/// Check if any running `sccache` process has a missing `TMPDIR` and whether
+/// an sccache server process is currently alive.
+/// Returns `(is_running, missing_tmpdir)`.
+pub(crate) fn sccache_server_status() -> (bool, Option<PathBuf>) {
     let proc_dir = std::env::var_os("AIDA_SCCACHE_PROC_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/proc"));
     let pids = std::env::var("AIDA_SCCACHE_PIDS").ok();
-    sccache_missing_tmpdir_in(&proc_dir, pids.as_deref())
+    sccache_server_status_in(&proc_dir, pids.as_deref())
 }
 
-pub(crate) fn sccache_missing_tmpdir_in(
+pub(crate) fn sccache_missing_tmpdir() -> Option<PathBuf> {
+    sccache_server_status().1
+}
+
+pub(crate) fn sccache_server_status_in(
     proc_dir: &Path,
     pids_env: Option<&str>,
-) -> Option<PathBuf> {
+) -> (bool, Option<PathBuf>) {
     if !proc_dir.is_dir() {
-        return None;
+        return (false, None);
     }
     let pids: Vec<String> = if let Some(env) = pids_env {
         env.split_whitespace().map(|s| s.to_string()).collect()
     } else {
         let Ok(read_dir) = std::fs::read_dir(proc_dir) else {
-            return None;
+            return (false, None);
         };
         read_dir
             .filter_map(|e| e.ok())
@@ -711,6 +716,9 @@ pub(crate) fn sccache_missing_tmpdir_in(
             .filter(|name| name.chars().all(|c| c.is_ascii_digit()))
             .collect()
     };
+
+    let mut is_running = false;
+    let mut missing_tmpdir = None;
 
     for pid in pids {
         let pid_dir = proc_dir.join(&pid);
@@ -722,6 +730,7 @@ pub(crate) fn sccache_missing_tmpdir_in(
                 }
             }
         }
+        is_running = true;
         let env_path = pid_dir.join("environ");
         let Ok(raw) = std::fs::read(&env_path) else {
             continue;
@@ -732,19 +741,34 @@ pub(crate) fn sccache_missing_tmpdir_in(
                     if !val.is_empty() {
                         let path = PathBuf::from(val);
                         if !path.is_dir() {
-                            return Some(path);
+                            missing_tmpdir = Some(path);
                         }
                     }
                 }
             }
         }
     }
-    None
+    (is_running, missing_tmpdir)
+}
+
+pub(crate) fn sccache_missing_tmpdir_in(
+    proc_dir: &Path,
+    pids_env: Option<&str>,
+) -> Option<PathBuf> {
+    sccache_server_status_in(proc_dir, pids_env).1
 }
 
 /// Ensure sccache server is running with a stable TMPDIR (/tmp).
-/// If sccache server has a missing TMPDIR, stop it and restart it with TMPDIR=/tmp.
+/// Respects the opt-out: if RUSTC_WRAPPER is set and empty or doesn't name sccache, does nothing.
+/// If no sccache server is running, pre-starts it with `TMPDIR=/tmp sccache --start-server`.
+/// If an sccache server is running with a missing TMPDIR, stops it and restarts it with `TMPDIR=/tmp`.
 pub(crate) fn ensure_sccache_server() -> Result<()> {
+    if let Ok(wrapper) = std::env::var("RUSTC_WRAPPER") {
+        let trimmed = wrapper.trim();
+        if trimmed.is_empty() || !trimmed.contains("sccache") {
+            return Ok(());
+        }
+    }
     if std::env::var("AIDA_SCCACHE_DISABLE").as_deref() == Ok("1") {
         return Ok(());
     }
@@ -757,20 +781,29 @@ pub(crate) fn ensure_sccache_server() -> Result<()> {
     }) {
         path
     } else {
-        let default_bin = PathBuf::from("/home/joe/.cargo/bin/sccache");
-        if default_bin.is_file() {
-            default_bin
-        } else {
-            return Ok(());
-        }
+        return Ok(());
     };
 
-    if sccache_missing_tmpdir().is_some() {
-        let _ = Command::new(&sccache_bin).arg("--stop-server").status();
-        let stable_tmp = std::env::var("AIDA_SCCACHE_TMPDIR").unwrap_or_else(|_| "/tmp".into());
+    let (is_running, missing) = sccache_server_status();
+    let stable_tmp = std::env::var("AIDA_SCCACHE_TMPDIR").unwrap_or_else(|_| "/tmp".into());
+    if missing.is_some() {
+        let _ = Command::new(&sccache_bin)
+            .arg("--stop-server")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
         let _ = Command::new(&sccache_bin)
             .arg("--start-server")
             .env("TMPDIR", stable_tmp)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    } else if !is_running {
+        let _ = Command::new(&sccache_bin)
+            .arg("--start-server")
+            .env("TMPDIR", stable_tmp)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status();
     }
     Ok(())
@@ -781,13 +814,22 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
         .status()
         .with_context(|| format!("could not run {what}"))?;
     if !status.success() {
-        if let Some(missing) = sccache_missing_tmpdir() {
-            bail!(
-                "{what} exited with {status}\n\
-                 sccache: error: sccache server temp directory ({}) is missing.\n\
-                 hint: restart sccache with: TMPDIR=/tmp sccache --start-server",
-                missing.display()
-            );
+        let sccache_active = match std::env::var("RUSTC_WRAPPER") {
+            Ok(ref w) => {
+                let trimmed = w.trim();
+                !trimmed.is_empty() && trimmed.contains("sccache")
+            }
+            Err(_) => true,
+        };
+        if sccache_active {
+            if let Some(missing) = sccache_missing_tmpdir() {
+                bail!(
+                    "{what} exited with {status}\n\
+                     sccache: error: sccache server temp directory ({}) is missing.\n\
+                     hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
+                    missing.display()
+                );
+            }
         }
         bail!("{what} exited with {status}");
     }
@@ -1443,12 +1485,10 @@ impl BuildSteps for RealSteps {
     }
 
     fn clean_full(&mut self, layout: &DevLayout) -> Result<()> {
-        let _ = ensure_sccache_server();
         run_checked(&mut full_clean_command(layout), "cargo clean")
     }
 
     fn build(&mut self, layout: &DevLayout) -> Result<()> {
-        let _ = ensure_sccache_server();
         // Parity with `make build-fast`: best-effort hook install, then the
         // incremental agent-profile build with sccache disabled (BUG-1684).
         let hooks = layout.repo.join("scripts/install-agent-skill-hooks.sh");
