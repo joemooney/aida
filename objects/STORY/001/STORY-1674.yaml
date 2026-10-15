@@ -19,12 +19,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T15:35:59.762712650Z
+modified_at: 2026-10-15T15:36:09.239916031Z
 req_type: Story
 tags:
 - from:aida-host
@@ -76,6 +76,11 @@ comments:
   created_at: 2026-10-15T15:35:59.762712650Z
   modified_at: 2026-10-15T15:35:59.762712650Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14034-df17-7191-bcf9-f61827422895
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Missing testable acceptance and signed implementation sketch for schema/write provenance and query-time ledger join; exact query surface, reported harness-version source and session/time join semantics are undecided.. No triage reason was given.'
+  created_at: 2026-10-15T15:36:09.239902182Z
+  modified_at: 2026-10-15T15:36:09.239902182Z
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
   author: joe
@@ -98,6 +103,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a14034-df17-7191-bcf9-f603c4852cc9
+  author: joe
+  timestamp: 2026-10-15T15:36:09.239890974Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -106,9 +118,3 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
-attention_reason:
-  category: missing-context
-  detail: Missing testable acceptance and signed implementation sketch for schema/write provenance and query-time ledger join; exact query surface, reported harness-version source and session/time join semantics are undecided.
-  lean: Sign the short posted sketch and concrete acceptance, then return to Approved for isolated implementation.
-  raised_by: implementer
-  raised_at: 2026-10-15T15:13:20.446160368Z
