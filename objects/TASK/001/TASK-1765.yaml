@@ -1,0 +1,22 @@
+id: 01a13d8b-be49-7613-af7a-c3fbadea498e
+spec_id: TASK-1765
+agreed_id: TASK-1765
+title: 'Completion follow-ups from BUG-2134: retry held merges after the blocking PR closes; review-story path completes specs of non-completing PRs; stale hold comment'
+description: 'From the #2649 review. (1) A merge held because another open PR named the spec is never rechecked once it leaves the scan window. Add a small persisted retry list, or rescan held specs on each pull, so the spec completes when the holder closes or merges. (2) db_reconcile.rs ~2163-2197: the review-story path completes a spec whose implementing PR declared a non-completing slice; aida pr ship has the same gap. Reuse pr_body_declares_non_completing. (3) The db_reconcile.rs:418 comment still says the hold covers ''title, body, and comments''; it is now title, body and branch. (4) Minor: branch_names_spec misses ids not at a segment start (fix-bug-1994); the open-PR search caps at 30 hits.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T03:12:10.825296692Z
+modified_at: 2026-10-15T03:12:10.825296692Z
+req_type: Task
+tags:
+- completion
+filed_at:
+  code_sha: defb55f88bc4108334f0ec266e20a5afed5a83f3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
