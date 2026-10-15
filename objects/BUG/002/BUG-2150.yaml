@@ -3,16 +3,24 @@ spec_id: BUG-2150
 agreed_id: BUG-2150
 title: Standalone reviewer pickup needs the spec queued and the implementer lease released (--force-claim)
 description: 'From the STORY-1654 e2e: launching the standalone reviewer via ''aida queue work PR-<n> --role reviewer --no-human'' required the spec to be queued and the implementer lease released (--force-claim). The reviewer role should be able to pick up a PR review while the implementer lease exists (review is a distinct claim), without force.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:14:13.077444075Z
-modified_at: 2026-10-15T08:14:13.077444075Z
+modified_at: 2026-10-15T17:56:10.933009390Z
 req_type: Bug
 tags:
 - relay
 - review
+history:
+- id: 01a140b5-1234-7ec0-99c2-5c51aea1163d
+  author: joe
+  timestamp: 2026-10-15T17:56:10.933001734Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 92763a125a7b2ac062064c6324063723a02a80ad
   branch: main
