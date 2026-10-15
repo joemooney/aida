@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-15T22:55:01.037550909Z
+modified_at: 2026-10-15T22:58:33.711552806Z
 req_type: Story
 tags:
 - from:aida-host
@@ -104,6 +104,15 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: Draft PR2684 at df7fe5e5f2 implements and verifies the signed canonical mutation slice, but clean AIDA-owned Git synchronization can still rewrite frozen evidence (Draft BUG-2162). Decide whether this story extends to a signed sync boundary or is explicitly bounded to canonical CLI/MCP mutation paths with BUG-2162 as a separately accepted follow-up; the author has not deferred it. Three author-check rounds are consumed.. No triage reason was given.'
   created_at: 2026-10-15T22:55:01.037541221Z
   modified_at: 2026-10-15T22:55:01.037541221Z
+- id: 01a141c9-e86f-7a62-9118-b0ea379850f5
+  author: ai:codex:joe
+  content: |
+    REVIEW READY per advisor ruling01a141c6-a3ee-7970-b15f-aecab238d952 / mail87b24229. https://github.com/joemooney/aida/pull/2684 is OPEN, no longer Draft, at df7fe5e5f206a7abd9119309833e9bae765a4d87. Body explicitly bounds this slice to canonical CLI/MCP mutations and links approved BUG-2162 as the separate STRICT/sketch-first sync follow-up. No additional code was needed for the ruling.
+
+    Final validation: full default-core1478 passed/3 existing ignored (14 hypothesis cases), CLI edit-helper and actual MCP update/comment2 passed, actual TypeScript generator plus standalone and full-app type checks passed, final fast29/29 passed including formatting. Author self-check cap3 consumed; no additional in-scope findings in round3, with its own14 tests and32 adversarial probes. Core/CLI/generator/bindings source is unchanged from checked871667a4b7; later df7fe5e5f2 fixes only three exhaustive web enum maps, verified by full-app tsc. No fourth author checker, no full-workspace runtime or CI-green claim, no independent verdict, hold clearance, merge or Completed. Actual head and readiness were read back from GitHub; independent STANDARD review belongs to the advisor's dispatch.
+  created_at: 2026-10-15T22:58:33.711552806Z
+  modified_at: 2026-10-15T22:58:33.711552806Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
   author: joe
