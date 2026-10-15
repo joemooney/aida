@@ -1,0 +1,33 @@
+id: 01a14118-a3b5-7742-85b4-a2b511576257
+spec_id: STORY-1694
+agreed_id: STORY-1694
+title: 'Review PR-2681: [AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a140f1`) for branch `task-1782`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2681>
+  - Branch: `task-1782` → `bug-2148-work`
+
+  ## Covers
+
+  - TASK-1782
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2681` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:44:56.245269044Z
+modified_at: 2026-10-15T19:44:56.245269044Z
+req_type: Story
+filed_at:
+  code_sha: cc86bfd0ffdf3220b06a3426bc1517e4a7ec6cff
+  branch: task-1782
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0c69debffe
+  vendor: antigravity
