@@ -1,0 +1,19 @@
+{
+  "id": "1c76204d-6081-44f3-8f43-a27891a1c9f0",
+  "thread_id": "1c76204d-6081-44f3-8f43-a27891a1c9f0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792103374088,
+  "body": "#2666 (1732) = 7c8c72c75f is now based on main and shipping. #2667 (1733) = 538ca9419d, re-approved. Note: #2667 itself will be restacked once more after #2666 squash-merges. To avoid redoing your work twice, WAIT until the advisor mails 'RESTACK3 DONE' (the final 1733 head, after #2666 merges) before rebasing 1734/1676/1679/1677.",
+  "subject": "RESTACK2 DONE: codex/task-1733 = 538ca9419d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

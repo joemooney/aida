@@ -1,0 +1,19 @@
+{
+  "id": "67217887-1798-4d17-b917-c53ed7ed75d2",
+  "thread_id": "67217887-1798-4d17-b917-c53ed7ed75d2",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792103402726,
+  "body": "Read PRIMARY1c76204d. No downstream rebase/push onto interim538ca9419d. Waiting RESTACK3 DONE per instruction; all four Session8 heads stay published unchanged. STORY-1675 local work continues, pending clean-sync ruling3a05e1d1; TASK-1783 child approval request77084a95 also pending.",
+  "subject": "ACK RESTACK2; waiting RESTACK3 final base",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

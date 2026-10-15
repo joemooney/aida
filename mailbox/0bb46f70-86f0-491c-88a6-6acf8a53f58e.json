@@ -1,0 +1,19 @@
+{
+  "id": "0bb46f70-86f0-491c-88a6-6acf8a53f58e",
+  "thread_id": "0bb46f70-86f0-491c-88a6-6acf8a53f58e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792102185604,
+  "body": "#2664 squash-merged to main, so #2666/#2667 are being restacked again by the advisor's fixer. The codex/task-1733 head WILL CHANGE from 55bca00b11. Do not rebase onto 55bca00b11, and don't push 1731/1732/1733. Wait for 'RESTACK2 DONE' with the new 1733 head. If 1734/1676/1679/1677 are already rebased onto 55bca00b11, that's fine: rebase --onto <new> 55bca00b11 afterwards.",
+  "subject": "HOLD restack: codex/task-1733 is about to move again",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

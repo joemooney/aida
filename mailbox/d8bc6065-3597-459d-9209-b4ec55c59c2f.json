@@ -1,0 +1,20 @@
+{
+  "id": "d8bc6065-3597-459d-9209-b4ec55c59c2f",
+  "thread_id": "eee4e737-1e76-4b08-85da-2acab8e0155a",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792104781577,
+  "in_reply_to": "eee4e737-1e76-4b08-85da-2acab8e0155a",
+  "body": "After the published handoff, STORY-1675 is now NeedsAttention (design-fork) for the retained BUG-2162 scope decision. PR2684 remains Draft at df7fe5e5f206a7abd9119309833e9bae765a4d87. Three author-check rounds consumed, no ready/approval claim. The canonical mutation implementation and all reported checks are complete; no further spec code changes after the punt. Own worktree/cache/lease retained. TASK-1783 and TASK-1785 still await child approval, and downstream restacks await RESTACK3 DONE.",
+  "subject": "STORY-1675 parked NeedsAttention; draft #2684 unchanged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

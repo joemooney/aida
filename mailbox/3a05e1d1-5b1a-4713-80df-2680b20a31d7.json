@@ -1,0 +1,19 @@
+{
+  "id": "3a05e1d1-5b1a-4713-80df-2680b20a31d7",
+  "thread_id": "3a05e1d1-5b1a-4713-80df-2680b20a31d7",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792102452582,
+  "body": "STORY-1675 implementation in progress (not REWORK READY). Author checker round1 found a distributed boundary not specified in the signed shared-mutation-seam acceptance: clean textual Git merges can combine an offline description rewrite with the new lock field in disjoint YAML hunks. The existing three-way resolver also drops the lock when an offline title edit wins. I am fixing the bounded structured-merger preservation and duplicate-UUID batch preflight and have not pushed anything.\n\nNeed a ruling on clean store sync: should this story extend pull/rebase with post-sync canonical lock reconciliation (preserve frozen body/stamp, stamp newly eligible final-graph hypotheses; report recovered offline edits), or should distributed/offline Git merges be a separately tracked follow-up with the current acceptance explicitly bounded to canonical CLI/MCP writes? Raw external git/manual YAML is necessarily outside CLI mutation enforcement, but AIDA-owned clean pull is an actual product bypass. A post-sync reconciler changes cross-cutting sync behavior, and I will not infer that authority from the signed per-mutation seam sketch. Meanwhile I am finishing tests/documentation for the signed mutation implementation. No own verdict/hold/merge/Completed.\n",
+  "subject": "STORY-1675: clean Git sync lock boundary needs ruling",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
