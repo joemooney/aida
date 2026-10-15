@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:51.121660473Z
-modified_at: 2026-10-15T14:39:02.681446217Z
+modified_at: 2026-10-15T21:04:41.452314390Z
 req_type: Task
 tags:
 - needs-docs
@@ -58,6 +58,12 @@ comments:
   created_at: 2026-10-15T14:39:02.681446217Z
   modified_at: 2026-10-15T14:39:02.681446217Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14161-a7ec-7013-a914-5fd5cf54275d
+  author: joe
+  content: 'Restacked onto main after #2660 squash: 0f68c8ac6e->55bca00b11 (on new #2666 head 7e21281509). range-diff: ''='' (no changes). Gates on this head: check-ci-fast 29/29, check-ci-compile pass, cargo test -p aida-cli-lib regen 71/71.'
+  created_at: 2026-10-15T21:04:41.452314390Z
+  modified_at: 2026-10-15T21:04:41.452314390Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
