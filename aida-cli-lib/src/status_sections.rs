@@ -1184,28 +1184,23 @@ pub(crate) fn print_status_working_tree_section(root: &std::path::Path) {
     println!();
 }
 
-/// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
-/// are still alive. trace:BUG-61 | ai:claude
 /// Which of `pids` are running right now.
 ///
 /// A ZOMBIE does not count. A terminated child stays in the process table until its parent
-/// reaps it, and sysinfo still lists it — so treating "present" as "alive" would make
-/// `agent stop` report that it had failed to kill something it had just killed.
+/// reaps it — so treating "present" as "alive" would make `agent stop` report that it had
+/// failed to kill something it had just killed. The canonical probe already excludes zombies,
+/// and it is O(1) per pid instead of a full process-table walk.
 // trace:BUG-1703 | ai:claude
+// trace:TASK-1750 | ai:claude
 pub(crate) fn live_pids(pids: &[u32]) -> Vec<u32> {
-    use sysinfo::{ProcessRefreshKind, ProcessStatus, RefreshKind, System};
-    let mut sys =
-        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
     pids.iter()
         .copied()
-        .filter(|&pid| {
-            sys.process(sysinfo::Pid::from_u32(pid))
-                .is_some_and(|p| !matches!(p.status(), ProcessStatus::Zombie | ProcessStatus::Dead))
-        })
+        .filter(|&pid| aida_core::liveness::pid_is_alive(pid))
         .collect()
 }
 
+/// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
+/// are still alive. trace:BUG-61 | ai:claude
 /// SIGTERM, wait, SIGKILL the survivors, then report who is STILL alive.
 ///
 /// BUG-1703: this used to return `()`, and `agent stop` printed success regardless. Callers must
@@ -3041,3 +3036,7 @@ mod bug_560_status_forge_tests;
 #[cfg(test)]
 #[path = "tests/task_490_status_in_progress_tests.rs"]
 mod task_490_status_in_progress_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1750_liveness_primitive_guard_tests.rs"]
+mod task_1750_liveness_primitive_guard_tests;

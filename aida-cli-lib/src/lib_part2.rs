@@ -694,10 +694,12 @@ pub(crate) fn apply_agent_default_flags(
                 config
                     .default_args
                     .extend(tool_contained_flags(config.agent_type));
+                config.contained = config.agent_type == "claude";
             } else if bypass {
                 config
                     .default_args
                     .extend(tool_bypass_flags(config.agent_type));
+                config.contained = false;
             }
         }
         // BUG-1699: per-tool `default_flags` used to be appended AFTER an explicit posture

@@ -677,3 +677,41 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
         "the work was salvaged before the reset: {salvaged:?}"
     );
 }
+
+// BUG-1991: the session's own MCP `claim_task` claim
+// (`mcp-claim.<spec>.toml`, same scope, same worktree) parses as a lease. It
+// must not count as a peer sharing the tree, or every holder check is skipped
+// and the tree is removed with a live process inside it.
+// trace:BUG-1991 | ai:claude
+#[test]
+fn session_end_with_its_own_mcp_claim_still_refuses_a_live_holder() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Session::start();
+    let claim = s
+        .repo
+        .join(".aida/sessions")
+        .join(format!("mcp-claim.{}.toml", s.spec.to_ascii_lowercase()));
+    std::fs::write(
+        &claim,
+        format!(
+            "id = \"0196aaaabbbb\"\nscope = \"{spec}\"\nslug = \"{spec}\"\nowner = \"agent\"\n\
+             worktree_path = {wt}\nbranch = \"main\"\n\
+             started_at = \"2026-09-24T01:02:03.456789+00:00\"\nhostname = \"h\"\n\
+             role = \"implementer\"\nmcp_claim = true\n",
+            spec = s.spec,
+            wt = toml::Value::String(s.worktree.display().to_string()),
+        ),
+    )
+    .unwrap();
+    let live = s.spawn_live_process();
+    let pid = live.0.id();
+
+    let out = s.end(&s.repo, &[]);
+    let msg = text(&out);
+    assert!(!out.status.success(), "session end must refuse:\n{msg}");
+    assert!(msg.contains(&format!("pid {pid}")), "names the pid:\n{msg}");
+    assert!(s.worktree.is_dir(), "worktree must survive the refusal");
+    assert!(s.lease_exists(), "lease must survive the refusal");
+    assert!(claim.exists(), "a refusal changes nothing, claim included");
+    drop(live);
+}

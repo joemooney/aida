@@ -67,6 +67,9 @@ pub(crate) struct DefaultBranchLinkage {
     pub(crate) trace_files: usize,
     /// PR number parsed from the newest squash-merge subject (`(#NN)`).
     pub(crate) shipped_pr: Option<u64>,
+    /// BUG-1993: a git call ran past [`SHIPPED_SCAN_BUDGET`], so a missing
+    /// corroboration means "unknown", not "not shipped".
+    pub(crate) scan_incomplete: bool,
 }
 
 impl DefaultBranchLinkage {
@@ -74,6 +77,42 @@ impl DefaultBranchLinkage {
     /// trace comment on the default branch.
     pub(crate) fn corroborated(&self) -> bool {
         self.found_on.is_some()
+    }
+}
+
+/// BUG-1993: the wall-clock budget for one whole default-branch scan (the
+/// ancestor check plus a `git log` and a `git grep` per ref). Measured on this
+/// repo (73k commits, 2026-10-14): ~60 ms per log, ~80 ms per grep, under
+/// 10 ms for the ancestor check. The headroom is for a loaded host; past it
+/// the scan reports itself incomplete instead of "not shipped".
+// trace:BUG-1993 | ai:claude
+pub(crate) const SHIPPED_SCAN_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// BUG-1993: the scan deadline passed before a git call finished.
+#[derive(Debug)]
+struct ScanTimedOut;
+
+/// [`git_out`], bounded by the scan `deadline`. `Ok(None)` is a git error or
+/// non-zero exit, as with `git_out`; `Err` means the deadline passed, either
+/// before the spawn or while git ran.
+// trace:BUG-1993 | ai:claude
+fn git_out_until(
+    project_root: &std::path::Path,
+    args: &[&str],
+    deadline: std::time::Instant,
+) -> Result<Option<String>, ScanTimedOut> {
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(ScanTimedOut);
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(project_root).args(args);
+    match command_output_with_timeout_detail(cmd, remaining) {
+        BoundedCommandOutput::Completed(o) if o.status.success() => Ok(Some(
+            String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
+        )),
+        BoundedCommandOutput::TimedOut => Err(ScanTimedOut),
+        _ => Ok(None),
     }
 }
 
@@ -148,7 +187,8 @@ fn referencing_commits_on_ref(
     project_root: &std::path::Path,
     git_ref: &str,
     wanted: &HashSet<String>,
-) -> Vec<(String, String)> {
+    deadline: std::time::Instant,
+) -> Result<Vec<(String, String)>, ScanTimedOut> {
     let mut args: Vec<&str> = vec!["log", git_ref, "-F", "--pretty=format:%h%x1f%s%x1f%B%x1e"];
     for id in wanted {
         args.push("--grep");
@@ -159,10 +199,11 @@ fn referencing_commits_on_ref(
     // ambiguous — a swallowed error here would read as "nothing shipped".
     // trace:BUG-1958 | ai:claude
     args.push("--");
-    let Some(log) = git_out(project_root, &args) else {
-        return Vec::new();
+    let Some(log) = git_out_until(project_root, &args, deadline)? else {
+        return Ok(Vec::new());
     };
-    log.split('\u{1e}')
+    Ok(log
+        .split('\u{1e}')
         .filter_map(|record| {
             let record = record.trim_start_matches(['\n', '\r']);
             if record.is_empty() {
@@ -178,7 +219,7 @@ fn referencing_commits_on_ref(
                 .any(|id| wanted.contains(id))
                 .then_some((short, subject))
         })
-        .collect()
+        .collect())
 }
 
 /// Distinct tracked files at `git_ref` whose content carries a trace token
@@ -189,7 +230,8 @@ fn trace_files_on_ref(
     project_root: &std::path::Path,
     git_ref: &str,
     wanted: &HashSet<String>,
-) -> usize {
+    deadline: std::time::Instant,
+) -> Result<usize, ScanTimedOut> {
     // BUG-1958: `-z` NUL-terminates the `<ref>:<path>` head so a path that
     // itself contains ':' parses intact, and `--` keeps a path named like the
     // branch from making the ref ambiguous. trace:BUG-1958 | ai:claude
@@ -201,10 +243,10 @@ fn trace_files_on_ref(
     args.push(git_ref.to_string());
     args.push("--".into());
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let Some(hits) = git_out(project_root, &arg_refs) else {
-        return 0;
+    let Some(hits) = git_out_until(project_root, &arg_refs, deadline)? else {
+        return Ok(0);
     };
-    count_trace_hit_files(&hits, git_ref, wanted)
+    Ok(count_trace_hit_files(&hits, git_ref, wanted))
 }
 
 /// Distinct files in `git grep -z <ref>` output (`<ref>:<path>\0<line>` per
@@ -243,23 +285,27 @@ fn count_trace_hit_files(hits: &str, git_ref: &str, wanted: &HashSet<String>) ->
 ///
 /// One `git merge-base --is-ancestor <local> <remote>` covers both cases (a
 /// commit is its own ancestor). Fail-safe: any git error (missing ref, no
-/// merge base, git unavailable) reads as "not covered", so both refs are
-/// scanned.
+/// merge base, git unavailable, or the BUG-1993 `deadline` passing) reads as
+/// "not covered", so both refs are scanned.
 // trace:BUG-1958 | ai:claude
 pub(crate) fn refs_worth_scanning(
     project_root: &std::path::Path,
     refs: &DefaultBranchRefs,
+    deadline: std::time::Instant,
 ) -> Vec<String> {
     let (Some(remote), Some(local)) = (refs.remote.as_deref(), refs.local.as_deref()) else {
         return refs.in_scan_order();
     };
     // `git_out` is `Some` only on exit 0: exit 1 (not an ancestor) and any
     // error both come back `None`.
-    let covered = git_out(
-        project_root,
-        &["merge-base", "--is-ancestor", local, remote],
-    )
-    .is_some();
+    let covered = matches!(
+        git_out_until(
+            project_root,
+            &["merge-base", "--is-ancestor", local, remote],
+            deadline,
+        ),
+        Ok(Some(_))
+    );
     if covered {
         vec![remote.to_string()]
     } else {
@@ -268,14 +314,26 @@ pub(crate) fn refs_worth_scanning(
 }
 
 /// The cheap scan: consult the default-branch refs in order and stop at the
-/// first one that corroborates any of `ids`.
+/// first one that corroborates any of `ids`. BUG-1993: the whole scan shares
+/// one [`SHIPPED_SCAN_BUDGET`]; running out sets `scan_incomplete`.
 // trace:STORY-1649 | ai:claude
 pub(crate) fn scan_default_branch_linkage(
     project_root: &std::path::Path,
     ids: &[String],
 ) -> DefaultBranchLinkage {
+    scan_default_branch_linkage_within(project_root, ids, SHIPPED_SCAN_BUDGET)
+}
+
+/// [`scan_default_branch_linkage`] with an explicit budget.
+// trace:BUG-1993 | ai:claude
+pub(crate) fn scan_default_branch_linkage_within(
+    project_root: &std::path::Path,
+    ids: &[String],
+    budget: std::time::Duration,
+) -> DefaultBranchLinkage {
+    let deadline = std::time::Instant::now() + budget;
     // trace:BUG-1958 | ai:claude
-    let refs = refs_worth_scanning(project_root, &default_branch_refs(project_root));
+    let refs = refs_worth_scanning(project_root, &default_branch_refs(project_root), deadline);
     let wanted: HashSet<String> = ids
         .iter()
         .map(|id| id.trim().to_ascii_uppercase())
@@ -289,9 +347,25 @@ pub(crate) fn scan_default_branch_linkage(
         return out;
     }
     for git_ref in refs {
-        let commits = referencing_commits_on_ref(project_root, &git_ref, &wanted);
-        let trace_files = trace_files_on_ref(project_root, &git_ref, &wanted);
+        // BUG-1993: a timed-out log ends the scan unknown. A timed-out grep
+        // after the log found commits still corroborates; only the file count
+        // is then partial. trace:BUG-1993 | ai:claude
+        let Ok(commits) = referencing_commits_on_ref(project_root, &git_ref, &wanted, deadline)
+        else {
+            out.scan_incomplete = true;
+            break;
+        };
+        let trace_files = match trace_files_on_ref(project_root, &git_ref, &wanted, deadline) {
+            Ok(n) => n,
+            Err(ScanTimedOut) => {
+                out.scan_incomplete = true;
+                0
+            }
+        };
         if commits.is_empty() && trace_files == 0 {
+            if out.scan_incomplete {
+                break;
+            }
             continue;
         }
         out.shipped_pr = commits
@@ -329,7 +403,16 @@ pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
     if linkage.scanned_refs.is_empty() {
         return "unknown (no default branch found)".to_string();
     }
-    let mut parts: Vec<String> = vec![format!("shipped={}", linkage.corroborated())];
+    // BUG-1993: an incomplete scan that found nothing is unknown, not false.
+    // trace:BUG-1993 | ai:claude
+    let shipped = if linkage.corroborated() {
+        "true"
+    } else if linkage.scan_incomplete {
+        "unknown"
+    } else {
+        "false"
+    };
+    let mut parts: Vec<String> = vec![format!("shipped={shipped}")];
     if let Some(pr) = linkage.shipped_pr {
         parts.push(format!("shipped_pr={pr}"));
     }
@@ -337,7 +420,12 @@ pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
         parts.push(format!("commit={short}"));
     }
     parts.push(format!("commits={}", linkage.commits.len()));
-    parts.push(format!("files={}", linkage.trace_files));
+    if linkage.scan_incomplete {
+        parts.push("files=unknown".to_string());
+        parts.push("reason=scan-timeout".to_string());
+    } else {
+        parts.push(format!("files={}", linkage.trace_files));
+    }
     match linkage.found_on.as_deref() {
         Some(found) => parts.push(format!("on={found}")),
         None => parts.push(format!("checked={}", linkage.scanned_refs.join("+"))),
@@ -384,7 +472,7 @@ pub(crate) fn completion_linkage_warning(
     }
     let ids = spec_lookup_ids(req);
     let linkage = scan_default_branch_linkage(project_root, &ids);
-    if linkage.scanned_refs.is_empty() || linkage.corroborated() {
+    if !linkage_warrants_warning(&linkage) {
         return None;
     }
     // trace:BUG-1958 | ai:claude
@@ -393,6 +481,15 @@ pub(crate) fn completion_linkage_warning(
         &linkage.scanned_refs,
         is_shallow_repository(project_root),
     ))
+}
+
+/// Whether a scan result supports "no shipped commit": there was a default
+/// branch to check, nothing corroborated, and the scan finished. BUG-1993: a
+/// timed-out scan cannot say nothing shipped, so it does not warn; `aida
+/// doctor --category completed-without-commit` applies the rule unbounded.
+// trace:BUG-1993 | ai:claude
+fn linkage_warrants_warning(linkage: &DefaultBranchLinkage) -> bool {
+    !linkage.scanned_refs.is_empty() && !linkage.corroborated() && !linkage.scan_incomplete
 }
 
 /// `git rev-parse --is-shallow-repository` — false when git says no or the
@@ -465,3 +562,7 @@ mod story_1649_shipped_linkage_tests;
 #[cfg(test)]
 #[path = "tests/bug_1958_shipped_linkage_tests.rs"]
 mod bug_1958_shipped_linkage_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1993_shipped_scan_tests.rs"]
+mod bug_1993_shipped_scan_tests;

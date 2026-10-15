@@ -800,17 +800,38 @@ fn spawn_judge(
     let binary_override = std::env::var("AIDA_COMPETE_JUDGE").ok();
     let (cmd_bin, cmd_args) =
         compete::judge_command(judge_vendor, binary_override.as_deref(), prompt);
-    let mut judge_cmd = std::process::Command::new(&cmd_bin);
-    judge_cmd.args(&cmd_args).current_dir(project_root);
-    if judge_vendor.needs_stdin_closed() {
-        judge_cmd.stdin(std::process::Stdio::null());
-    }
+    let mut judge_cmd =
+        build_compete_judge_command(project_root, &cmd_bin, &cmd_args, judge_vendor);
     let o = judge_cmd
         .output_retrying_etxtbsy()
         .context("failed to spawn the judge")?;
     let mut s = String::from_utf8_lossy(&o.stdout).to_string();
     s.push_str(&String::from_utf8_lossy(&o.stderr));
     Ok(s)
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_compete_judge_command(
+    project_root: &std::path::Path,
+    cmd_bin: &str,
+    cmd_args: &[String],
+    judge_vendor: compete::JudgeVendor,
+) -> std::process::Command {
+    let mut judge_cmd = std::process::Command::new(cmd_bin);
+    judge_cmd.args(cmd_args).current_dir(project_root);
+    if judge_vendor.needs_stdin_closed() {
+        judge_cmd.stdin(std::process::Stdio::null());
+    }
+    let headless_vendor = match judge_vendor {
+        compete::JudgeVendor::Claude => session::HeadlessVendor::Claude,
+        compete::JudgeVendor::Codex => session::HeadlessVendor::Codex,
+    };
+    if session::containment_applied(headless_vendor, false) {
+        judge_cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        judge_cmd.env_remove("AIDA_CONTAINED");
+    }
+    judge_cmd
 }
 
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
@@ -892,10 +913,8 @@ fn run_compete_arm(
     let log_dir = compete_log_dir(project_root, branch);
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{vendor}.log"));
-    let vendor_out = std::process::Command::new(command)
-        .args(argv)
-        .current_dir(&worktree_dir)
-        .output_retrying_etxtbsy();
+    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor);
+    let vendor_out = arm_cmd.output_retrying_etxtbsy();
     let ran = match &vendor_out {
         Ok(o) if o.status.success() => Ran::Ok,
         Ok(_) => Ran::Failed,
@@ -977,6 +996,26 @@ fn run_compete_arm(
         },
         files_touched,
     ))
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_compete_arm_command(
+    worktree_dir: &std::path::Path,
+    command: &str,
+    argv: &[String],
+    vendor: &str,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(command);
+    cmd.args(argv).current_dir(worktree_dir);
+    let contained = session::HeadlessVendor::parse(vendor)
+        .map(|v| session::containment_applied(v, false))
+        .unwrap_or(false);
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
 }
 
 /// The worktree directory a compete arm uses for `branch` — a sibling of the

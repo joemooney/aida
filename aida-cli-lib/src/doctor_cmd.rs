@@ -3327,6 +3327,7 @@ mod story_1422_performance_gate_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -3800,6 +3801,7 @@ mod bug_1572_binary_lineage_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 

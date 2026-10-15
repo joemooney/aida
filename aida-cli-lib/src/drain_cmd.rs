@@ -1026,7 +1026,8 @@ pub(crate) fn handle_drain_resume(
 
     // PID-liveness gate — the catastrophic double-drive guard. Conservative:
     // any doubt resolves to "alive". trace:STORY-492 | ai:claude
-    let orchestrator_alive = process_probe::pid_is_alive(state.orchestrator_pid);
+    // trace:TASK-1750 | ai:claude
+    let orchestrator_alive = state.orchestrator_alive();
 
     let current = state.current.clone();
     let member = current

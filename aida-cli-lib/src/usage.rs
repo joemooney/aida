@@ -44,6 +44,86 @@ pub struct UsageEvent {
     // trace:BUG-1600 trace:STORY-1218 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule_source: Option<String>,
+    /// BUG-1993: wall-clock milliseconds spent in each named phase of the
+    /// invocation, for commands that arm [`arm_phases`] (today: `show`).
+    /// Lets a latency regression be attributed to a phase (cache open,
+    /// lookup, git linkage) instead of only the total. Empty for every
+    /// other command and for older records.
+    // trace:BUG-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub phases: Vec<PhaseTiming>,
+}
+
+/// BUG-1993: one named phase and its accumulated wall-clock time.
+// trace:BUG-1993 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhaseTiming {
+    pub name: String,
+    pub ms: u64,
+}
+
+// BUG-1993: process-global phase recorder. `None` until a command arms it,
+// so instrumented code shared with other commands records nothing for them.
+// trace:BUG-1993 | ai:claude
+static PHASES: std::sync::Mutex<Option<Vec<PhaseTiming>>> = std::sync::Mutex::new(None);
+
+/// BUG-1993: start collecting phase timings for this invocation.
+pub fn arm_phases() {
+    if let Ok(mut g) = PHASES.lock() {
+        g.get_or_insert_with(Vec::new);
+    }
+}
+
+/// BUG-1993: add `elapsed` to the phase `name`. A repeated name accumulates
+/// into its first entry, so phase order is first-seen order. No-op unless
+/// [`arm_phases`] ran.
+pub fn record_phase(name: &str, elapsed: std::time::Duration) {
+    let Ok(mut g) = PHASES.lock() else {
+        return;
+    };
+    if let Some(phases) = g.as_mut() {
+        accumulate_phase(phases, name, elapsed.as_millis() as u64);
+    }
+}
+
+fn accumulate_phase(phases: &mut Vec<PhaseTiming>, name: &str, ms: u64) {
+    match phases.iter_mut().find(|p| p.name == name) {
+        Some(p) => p.ms = p.ms.saturating_add(ms),
+        None => phases.push(PhaseTiming {
+            name: name.to_string(),
+            ms,
+        }),
+    }
+}
+
+/// BUG-1993: drain the recorded phases (empty when never armed) and disarm.
+pub fn take_phases() -> Vec<PhaseTiming> {
+    PHASES
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+        .unwrap_or_default()
+}
+
+/// BUG-1993: records the time from construction to drop under `name`.
+pub struct PhaseTimer {
+    name: &'static str,
+    started: std::time::Instant,
+}
+
+impl Drop for PhaseTimer {
+    fn drop(&mut self) {
+        record_phase(self.name, self.started.elapsed());
+    }
+}
+
+/// BUG-1993: time the rest of the enclosing scope as phase `name`:
+/// `let _phase = usage::phase("linkage");`.
+pub fn phase(name: &'static str) -> PhaseTimer {
+    PhaseTimer {
+        name,
+        started: std::time::Instant::now(),
+    }
 }
 
 /// Resolve `~/.aida/usage.jsonl`. Returns `None` when the home dir
@@ -376,6 +456,63 @@ pub fn schedule_invocation_source(argv: &[String]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1993: a repeated phase accumulates into its first entry, so the
+    // order is first-seen order. (The armed/unarmed global is exercised
+    // end-to-end by aida-cli/tests/bug_1993_show_phase_timings.rs, in its
+    // own process, so no in-process test races on it.)
+    // trace:BUG-1993 | ai:claude
+    #[test]
+    fn accumulate_phase_sums_repeats_in_first_seen_order() {
+        let mut phases = Vec::new();
+        accumulate_phase(&mut phases, "lookup", 5);
+        accumulate_phase(&mut phases, "linkage", 7);
+        accumulate_phase(&mut phases, "lookup", 3);
+        assert_eq!(
+            phases,
+            vec![
+                PhaseTiming {
+                    name: "lookup".into(),
+                    ms: 8
+                },
+                PhaseTiming {
+                    name: "linkage".into(),
+                    ms: 7
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn phases_serialize_only_when_present() {
+        let mut ev = UsageEvent {
+            ts: "t".into(),
+            cmd: "show".into(),
+            args_count: 1,
+            exit_code: 0,
+            duration_ms: 10,
+            binary_sha: None,
+            role: None,
+            scope: None,
+            schedule_source: None,
+            phases: Vec::new(),
+        };
+        assert!(!serde_json::to_string(&ev).unwrap().contains("phases"));
+        ev.phases.push(PhaseTiming {
+            name: "open".into(),
+            ms: 4,
+        });
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(
+            json.contains(r#""phases":[{"name":"open","ms":4}]"#),
+            "{json}"
+        );
+        let old: UsageEvent = serde_json::from_str(
+            r#"{"ts":"t","cmd":"show","args_count":1,"exit_code":0,"duration_ms":1}"#,
+        )
+        .unwrap();
+        assert!(old.phases.is_empty());
+    }
 
     #[test]
     fn parse_telemetry_enabled_finds_false() {
