@@ -1,0 +1,24 @@
+id: 01a140f3-e94b-77d0-8fc1-7829493e54ab
+spec_id: BUG-2156
+agreed_id: BUG-2156
+title: Investigate intermittent stale result after cache writer lock release in full core tests
+description: 'Observed during STORY-1674 validation on 2026-10-15. Full aida-core agent-profile runtime:1473 passed,4 failed,3 ignored. Three failures were a separate newly introduced empty-YAML first-save regression (being fixed). The fourth was db::cached_git_backend::tests::writer_busy_next_reader_retries_incremental_after_lock_release at cached_git_backend.rs:4337: metadata stale was true instead of false after ROLLBACK released the SQLite writer. The exact same compiled binary rerun of this one test passed in2.84s without any cache-product source change. Evidence: /tmp/regen-relay5-1674-core-runtime-corrected.log and /tmp/regen-relay5-1674-cache-busy-exact.log; binary /home/joe/ai/aida/target/worktrees/aida-story-1674/agent/deps/aida_core-47a8ae8d887838bb. Root cause is UNPROVEN; do not call this pre-existing or environment-only without baseline evidence. BUG-1965 fixed a related but different assertion in reader_incremental_lock_error_does_not_full_rebuild. Investigation should identify the actual stale/refreshing branch (deadline, refresh flock, Git, or another cause), retain the bounded reader contract, and make the recovery assertion deterministic without loosening product budgets or weakening assertions. No cache product/test workaround belongs in STORY-1674 merely to turn this green.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:04:49.227492330Z
+modified_at: 2026-10-15T19:04:49.227492330Z
+req_type: Bug
+tags:
+- from-implementer:STORY-1674
+- root-cause-unknown
+- test-flake
+filed_at:
+  code_sha: 0c69debffe439310aacf3756a5efe363d1216474
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
