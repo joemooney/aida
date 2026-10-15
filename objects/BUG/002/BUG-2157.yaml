@@ -8,13 +8,21 @@ description: |-
   - session new / session start --launch go through resolve_interactive_launch_mode_for_root (agent_launch.rs:2943-2990), which never calls aida_contained_env(), so it honours --permission-mode and strips AIDA_CONTAINED.
   Ruling (BUG-2151): a contained parent's env ALWAYS wins and no flag overrides it.
   Acceptance: under AIDA_CONTAINED=1, session resume/new/start --launch produce a contained claude (flags plus AIDA_CONTAINED=1, write roots = the session's worktree), refuse --permission-mode and refuse codex/agy. Tests for each, plus a stub-binary e2e. Tier STRICT.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:22:55.514682146Z
-modified_at: 2026-10-15T19:22:55.514682146Z
+modified_at: 2026-10-15T19:23:14.288317914Z
 req_type: Bug
+history:
+- id: 01a14104-c5f0-78b1-87b8-d796387ae496
+  author: joe
+  timestamp: 2026-10-15T19:23:14.288309340Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
