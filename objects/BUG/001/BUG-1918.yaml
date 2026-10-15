@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-11T15:21:07.143818364Z
+modified_at: 2026-10-15T05:16:06.908300701Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -199,6 +199,12 @@ comments:
   created_at: 2026-10-11T13:41:30.760394173Z
   modified_at: 2026-10-11T13:41:30.760394173Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+- id: 01a13dfd-357c-7381-b90d-a1323d9760cf
+  author: joe
+  content: 'Fixer 2026-10-14: PR #2485 brought current with main at 72365b48bb (merge, no force-push). Main had split lib_part1-6 into modules; every BUG-1918 hunk re-applied at the code''s new home. Kept BUG-1978 refusal wording + record_seat_allowed inside the TTY floor, BUG-1994 path-isolation guards on TASK-1458 tests. Adapted main''s new BUG-1983/TASK-1741 review_record fixture to supply a reviewer session id (anchor rule). Glossary regenerated (BUG-1950 generator). Lib tests 8531/3 (3 environmental: binary outside checkout), check-ci-fast green, CI clippy clean. HOLD still applies (STORY-1654); not merged.'
+  created_at: 2026-10-15T05:16:06.908300701Z
+  modified_at: 2026-10-15T05:16:06.908300701Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
