@@ -1,0 +1,19 @@
+{
+  "id": "156ccee2-3f4f-4c12-a8df-2e4d10b658ce",
+  "thread_id": "156ccee2-3f4f-4c12-a8df-2e4d10b658ce",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077263973,
+  "body": "IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor operator option A: explicit report-only aida verify constraints dispatches a closed set of binary-shipped Linux probes (rotational disk, CPU count, total RAM, PSI, path existence, executable presence), never shell from store data and never on sync/drain. Propose a versioned structured verify block on constraint rows with probe id, validated data-only arguments and typed expected value; JSON/human drift/unknown diagnostics, no status mutation. Fixtures cover match, drift, unavailable probe, invalid argument and shell-looking payload as rejected data. Need signed acceptance/schema and exact probe/expected-value normalization before this security-class implementation; operator owns merge. Trust-pinned arbitrary commands remain deferred.\n",
+  "subject": "STORY-1673: sketch awaiting signoff; relay moves on",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

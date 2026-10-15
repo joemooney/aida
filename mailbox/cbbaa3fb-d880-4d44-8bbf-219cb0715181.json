@@ -1,0 +1,19 @@
+{
+  "id": "cbbaa3fb-d880-4d44-8bbf-219cb0715181",
+  "thread_id": "cbbaa3fb-d880-4d44-8bbf-219cb0715181",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077205497,
+  "body": "IMPLEMENTER SKETCH (relay Session 2; no implementation). Follow the groom split: first report-only whole-file/function trace coverage reusing existing trace definitions/exemptions, then a separate report-only unexplained-constants slice. Propose Rust-first fixtures, JSON + human output, and no automatic store edits. Constants compare normalized literal values with the owning traced spec and linked decision text; only 0/1 and an explicit inline arbitrary marker are exempt initially, avoiding guessed index exemptions. Need signed split/acceptance, language scope and literal/exemption rules; current Acceptance is still a triage placeholder and status Draft. No new scanner convention or language claim is implemented.\n",
+  "subject": "STORY-1672: sketch awaiting signoff; relay moves on",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

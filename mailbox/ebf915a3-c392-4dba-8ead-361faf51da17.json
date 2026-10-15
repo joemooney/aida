@@ -1,0 +1,19 @@
+{
+  "id": "ebf915a3-c392-4dba-8ead-361faf51da17",
+  "thread_id": "ebf915a3-c392-4dba-8ead-361faf51da17",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792076192745,
+  "body": "Review at d63cf03f39. (1) BLOCKING, statusline latency: each render spawns rev-parse + ls-tree + one 'git cat-file blob' PER regen/trials record (controls included, unbounded). Fix: cache the summary keyed by store HEAD SHA (an unchanged HEAD means zero git calls), and on a miss read the blobs with ONE 'git cat-file --batch'. (2) summary() must filter completed_at <= until (digest --until currently shows a future score as age 0s). (3) Compact age (14d/3h/12m), not raw seconds. Tests: the until filter; the cached statusline path spawns no cat-file; non-clean and flagged as separate cases. Targeted tests plus check-ci-fast/compile. Push and mail me the head. Keep going on STORY-1676 in parallel only if it doesn't share files.",
+  "subject": "PR #2673 TASK-1734: CHANGES round 1 of 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

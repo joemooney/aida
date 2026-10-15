@@ -1,0 +1,19 @@
+{
+  "id": "c5c8466b-89f4-413b-a424-6784cc5b04f1",
+  "thread_id": "c5c8466b-89f4-413b-a424-6784cc5b04f1",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077196831,
+  "body": "IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor the recorded operator choice B+C: retain small write provenance, preserve session identity on edits/comments, add harness_version only from an explicitly reported harness value (otherwise unknown), and join model/effort/token evidence from the EPIC-71 ledger by session/time when queried. No inferred model or duplicated cumulative-token stamps. Proposed acceptance: current/legacy write roundtrips; reported vs absent harness_version; edit/comment session identity; query fixture matching and missing ledger evidence with unknown values. Need signed acceptance for the exact query surface, reported-value source and session/time join semantics before this schema/write-path change. Recommendation: extend the existing per-spec cost/provenance query rather than introduce a second ledger.\n",
+  "subject": "STORY-1674: sketch awaiting signoff; relay moves on",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

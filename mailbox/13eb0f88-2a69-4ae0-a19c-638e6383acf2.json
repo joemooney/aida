@@ -1,0 +1,19 @@
+{
+  "id": "13eb0f88-2a69-4ae0-a19c-638e6383acf2",
+  "thread_id": "13eb0f88-2a69-4ae0-a19c-638e6383acf2",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077273723,
+  "body": "IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor operator option B: hypothesis tag on existing spike/decision, Prediction / Refuted if / Experiments body skeleton, append-only comments after a linked completed result establishes the lock. Proposed lock applies through shared canonical mutation seams used by CLI/MCP and preserves the pre-result description; tag removal or later result-status changes must not silently erase pre-registration evidence. Fixtures cover pre-result editing, first linked result, CLI/MCP description refusal, allowed comments and legacy untagged rows. Need signed acceptance identifying the result relationship/marker and whether first-result locking is sticky (recommended) versus current-graph-only. No new type, review/seat/grant work or guessed result detector.\n",
+  "subject": "STORY-1675: sketch awaiting signoff; relay moves on",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

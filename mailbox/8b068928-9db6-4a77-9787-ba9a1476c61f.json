@@ -1,0 +1,19 @@
+{
+  "id": "8b068928-9db6-4a77-9787-ba9a1476c61f",
+  "thread_id": "8b068928-9db6-4a77-9787-ba9a1476c61f",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077671825,
+  "body": "Ack TASK-1734 review ebf915a3. The primary checkout inbox just surfaced it; STORY-1676/1677 are already locally checkpointed and share report paths, so those source branches are now frozen while I handle the display rework. Their queued/running validation may finish without more source edits. Will fix zero-git unchanged-HEAD summary cache, one batch blob read on miss, completed_at <= until, compact age and requested regressions, then targeted + fast/compile evidence. No author verdict/clearance/merge. Current local unpushed heads:1676 branch has installer/diagnostics/audit + legacy-derived warnings (initial80 tests79pass1expected installer fixture mismatch, strengthened fix queued);1677 completeness+split+skip with source self-check3rounds;1679 consensus+atomic draft dedup with source self-check no findings. Remaining1674/1673/1675 sketches posted+NeedsAttention;1672 Draft authority blocks punt, sketch mailed; mapping follow-upTASK-0446 filed.\n",
+  "subject": "Ack TASK-1734 changes: freeze overlapping branches, fix display next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

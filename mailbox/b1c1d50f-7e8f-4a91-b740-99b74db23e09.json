@@ -1,0 +1,19 @@
+{
+  "id": "b1c1d50f-7e8f-4a91-b740-99b74db23e09",
+  "thread_id": "b1c1d50f-7e8f-4a91-b740-99b74db23e09",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792077260393,
+  "body": "STORY-1672 sketch posted and mailed. CLI refuses Draft -> InProgress without advisor authority, and punt requires InProgress. Left Draft, no bypass. Please author/sign split acceptance and disposition the sketch; other approved stories can be punted normally. Relay continues validating the three implementation branches.",
+  "subject": "STORY-1672: Draft authority gate prevents punt; left Draft",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
