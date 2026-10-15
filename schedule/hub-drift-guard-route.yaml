@@ -1,13 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-12T15:08:34.977409100Z
+last_run: 2026-10-15T04:02:08.215991191Z
 last_by:
   seat: advisor
-  session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
   vendor: claude
 result: done
-due_since: 2026-10-12T21:16:56.243616015Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-10-14T10:04:06.752830131Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: gitlab aida-store was behind origin (not diverged); reconcile --execute fast-forwarded; drift now 0
