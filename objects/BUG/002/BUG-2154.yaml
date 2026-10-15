@@ -1,0 +1,25 @@
+id: 01a13fc1-3565-7fe2-ac63-08c62ef4f44e
+spec_id: BUG-2154
+agreed_id: BUG-2154
+title: Contained launch continues when the contained-store marker write fails (eprintln only), leaving old-git store protection to config alone
+description: |-
+  From the #2670 STRICT review: session.rs:~2531 prints the marker write error and continues; the behavior predates TASK-1775. On git < 2.40, host store git then relies only on contained config.
+  ## Acceptance
+  - If the marker write fails, the launch grants NO store write paths (or refuses the contained launch).
+  - A test injects a marker write failure and asserts no store write paths.
+  - Also guard the raw rev-parse at aida-core/src/db/yaml_backend.rs:102 or mark it raw-git-ok with a reason.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T13:29:49.157270897Z
+modified_at: 2026-10-15T13:29:49.157270897Z
+req_type: Bug
+filed_at:
+  code_sha: 596a91dbc047f434d8db31558d6465c1f4c0030e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 453b2e22c5
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
