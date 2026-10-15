@@ -1,5 +1,6 @@
 id: 01a13e3a-9763-7f81-ab21-9b1fc7e013d1
 spec_id: TASK-1-305
+agreed_id: TASK-1373
 title: 'Non-blocking: display_grant_lookup (seat_authority.rs:457) remains a second, tr…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
