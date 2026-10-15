@@ -84,7 +84,7 @@ fn require_execution(
     Ok(())
 }
 
-fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
+pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
     // Only committed evidence counts; pin once to avoid mixing concurrent writes.
     let sha = super::super::head(store)?;
     let rows = super::super::git(store, &["ls-tree", "-rz", &sha, "--", "regen/trials/"])?;
@@ -247,6 +247,7 @@ mod tests {
     fn record(kind: &str, run: Uuid, ordinal: usize, values: &[(&str, bool)]) -> TrialRecord {
         let passed = values.iter().filter(|(_, pass)| *pass).count();
         TrialRecord {
+            gaps: None,
             format_version: 1,
             adapter: None,
             trial_id: Uuid::new_v4(),

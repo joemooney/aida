@@ -16772,6 +16772,10 @@ pub enum RegenControl {
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegenCommand {
+    /// Report the latest discriminating oracle score and diagnostic gap trends
+    // trace:TASK-1733 | ai:codex
+    Report,
+
     /// Run the declared installer and oracle, then record a raw R1 trial
     // trace:TASK-1730 | ai:codex
     Score {

@@ -17,6 +17,7 @@ mod controls; // trace:TASK-1731 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
 mod guards; // trace:TASK-1730 | ai:codex
 mod oracle; // trace:TASK-1730 | ai:codex
+pub(super) mod report; // trace:TASK-1733 | ai:codex
 mod roots; // trace:TASK-1730 | ai:codex
 use oracle::OracleBundle;
 
@@ -136,6 +137,11 @@ pub(super) struct Aggregate {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct TrialRecord {
     pub(super) format_version: u32,
+    // Diagnostic metadata is optional on older trials. Decode separately so an
+    // invalid diagnostic extension cannot hide an otherwise readable score.
+    // trace:TASK-1733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) gaps: Option<serde_json::Value>,
     // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
     // trace:TASK-1732 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -584,6 +590,7 @@ fn initial_record(
     }
     TrialRecord {
         format_version: 1,
+        gaps: None,
         adapter: None,
         kind: trial_kind(),
         root_fresh: false,
@@ -801,6 +808,10 @@ pub(super) fn handle_score(
         )?;
         adapter::apply_gate(&mut record, gate.as_ref());
         if let Some(adapter) = adapter {
+            // Capture from the same private, pre-execution input as the adapter.
+            // Never reread a caller path after installation/scoring.
+            // trace:TASK-1733 | ai:codex
+            record.gaps = Some(adapter.gap_snapshot()?);
             adapter::run_adapted(
                 &mut record,
                 adapter,

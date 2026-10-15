@@ -14,7 +14,7 @@ struct GapsFile {
 
 // The shared v1 schema also accepts the diagnostic rows used by gap reporting.
 // Keeping one parser prevents two interpretations of the same trial input.
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Gap {
     id: String,
@@ -22,7 +22,7 @@ struct Gap {
     note: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Category {
     Interface,
@@ -107,31 +107,70 @@ impl GapsFile {
                 anyhow::bail!("conflicting environment mappings {other_source}->{target} and {source}->{target}: shared target");
             }
         }
-        let mut ids = HashSet::new();
-        for gap in &file.gaps {
-            anyhow::ensure!(
-                (1..=64).contains(&gap.id.len())
-                    && gap
-                        .id
-                        .bytes()
-                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'),
-                "invalid GAPS.toml gap id"
-            );
-            anyhow::ensure!(
-                ids.insert(&gap.id),
-                "duplicate GAPS.toml gap id: {}",
-                gap.id
-            );
-            // Parsed as plain text and a closed category, never interpreted.
-            let _ = (&gap.category, &gap.note);
-        }
+        validate_gaps(&file.gaps)?;
         Ok(file)
     }
+}
+
+// trace:TASK-1733 | ai:codex
+fn validate_gaps(gaps: &[Gap]) -> Result<()> {
+    let mut ids = HashSet::new();
+    for gap in gaps {
+        anyhow::ensure!(
+            (1..=64).contains(&gap.id.len())
+                && gap
+                    .id
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'),
+            "invalid GAPS.toml gap id"
+        );
+        anyhow::ensure!(
+            ids.insert(&gap.id),
+            "duplicate GAPS.toml gap id: {}",
+            gap.id
+        );
+        // Parsed as plain text and a closed category, never interpreted.
+        let _ = (&gap.category, &gap.note);
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GapSnapshot {
+    format_version: u32,
+    input_sha256: String,
+    rows: Vec<Gap>,
+}
+
+// Diagnostic extensions are deliberately decoded independently of the score.
+// There is still only one strict GAPS.toml parser.
+// trace:TASK-1733 | ai:codex
+pub(super) fn gap_counts(value: &serde_json::Value) -> Option<[usize; 4]> {
+    let snapshot: GapSnapshot = serde_json::from_value(value.clone()).ok()?;
+    if snapshot.format_version != 1
+        || snapshot.input_sha256.len() != 64
+        || !snapshot.input_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        || validate_gaps(&snapshot.rows).is_err()
+    {
+        return None;
+    }
+    let mut counts = [0; 4];
+    for row in snapshot.rows {
+        counts[match row.category {
+            Category::Interface => 0,
+            Category::Missing => 1,
+            Category::Behavior => 2,
+            Category::Other => 3,
+        }] += 1;
+    }
+    Some(counts)
 }
 
 // Intentionally neither Debug nor Serialize: values cannot enter trial JSON.
 pub(super) struct CapturedAdapter {
     input_sha256: String,
+    gaps: Vec<Gap>,
     mappings: BTreeMap<String, String>,
     sources: BTreeMap<String, String>,
 }
@@ -195,8 +234,19 @@ impl CapturedAdapter {
             anyhow::ensure!(value.len() <= 4096 && !value.contains(['\0', '\n', '\r']), "invalid value for environment mapping {mapping}: expected <=4 KiB without NUL or newline");
             sources.insert(source.clone(), value);
         }
+        // Stable IDs are persisted diagnostics. Apply the same privacy boundary
+        // as oracle check names before any execution; do not echo the ID/value.
+        // trace:TASK-1733 | ai:codex
+        anyhow::ensure!(
+            !sources
+                .values()
+                .filter(|v| !v.is_empty())
+                .any(|value| file.gaps.iter().any(|gap| gap.id.contains(value))),
+            "gap identity contains a mapped input value; diagnostics withheld"
+        );
         Ok(Self {
             input_sha256: format!("{:x}", Sha256::digest(bytes)),
+            gaps: file.gaps,
             mappings: file.environment,
             sources,
         })
@@ -204,6 +254,20 @@ impl CapturedAdapter {
 
     pub(super) fn raw_environment(&self) -> BTreeMap<String, String> {
         self.sources.clone()
+    }
+
+    // trace:TASK-1733 | ai:codex
+    pub(super) fn gap_snapshot(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::json!({
+            "format_version": 1,
+            "input_sha256": self.input_sha256,
+            // Notes are accepted as plain input text but need not enter durable
+            // diagnostics: they could echo captured values or private prose.
+            "rows": self.gaps.iter().map(|gap| serde_json::json!({
+                "id": gap.id,
+                "category": gap.category,
+            })).collect::<Vec<_>>(),
+        }))
     }
 
     pub(super) fn adapted_environment(&self) -> BTreeMap<String, String> {
@@ -429,6 +493,29 @@ mod tests {
             assert!(GapsFile::parse(input(&format!("GOOD='{target}'")).as_bytes()).is_err());
             assert!(GapsFile::parse(input(&format!("{target}='GOOD'")).as_bytes()).is_err());
         }
+    }
+
+    // trace:TASK-1733 | ai:codex
+    #[test]
+    fn diagnostic_snapshot_omits_notes_and_refuses_value_bearing_ids() {
+        let value = "private-value";
+        let body = "format_version=1\n[environment]\nMODE='RENAMED'\n[[gaps]]\nid='safe-id'\ncategory='interface'\nnote='private-value'\n";
+        let captured = CapturedAdapter::capture(body.as_bytes(), |_| Some(value.into())).unwrap();
+        let snapshot = captured.gap_snapshot().unwrap();
+        assert!(!snapshot.to_string().contains(value));
+        assert!(snapshot["rows"][0].get("note").is_none());
+        assert_eq!(
+            snapshot["input_sha256"],
+            format!("{:x}", Sha256::digest(body.as_bytes()))
+        );
+        assert_eq!(gap_counts(&snapshot), Some([1, 0, 0, 0]));
+        let bad = body.replace("safe-id", value);
+        let error = match CapturedAdapter::capture(bad.as_bytes(), |_| Some(value.into())) {
+            Ok(_) => panic!("persistable identity contains a mapped value"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("gap identity contains a mapped input value"));
+        assert!(!error.contains(value));
     }
 
     #[test]

@@ -297,6 +297,8 @@ pub(crate) fn export_corpus(store: &Path, dir: &Path, allow_dirty: bool) -> Resu
 
 pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
     match cmd {
+        // trace:TASK-1733 | ai:codex
+        RegenCommand::Report => println!("{}", score::report::read_report(store)?),
         // trace:TASK-1730 | ai:codex
         RegenCommand::Score {
             dir,
