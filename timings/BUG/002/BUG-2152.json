@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2152",
+  "publishes": [
+    {
+      "at": "2026-10-15T20:28:23.698802969Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T20:28:23.670480452Z",
+      "spec": "BUG-2152",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:28:23.671070343Z",
+      "spec": "BUG-2152",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
