@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-15T14:50:31.650711514Z
+modified_at: 2026-10-15T14:54:23.436603039Z
 req_type: Story
 tags:
 - from:aida-host
@@ -75,6 +75,13 @@ comments:
   created_at: 2026-10-15T11:44:23.573261910Z
   modified_at: 2026-10-15T11:44:23.573261910Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a1400e-a2cc-75d3-a749-32eef25443c6
+  author: ai:codex:joe
+  content: |
+    Implementation in isolated codex/story-1676 (base #2667). Signed optional JSONL is oracle-only AIDA_REGEN_CHECK_RESULTS, scorer-created after install, strict v/check/kind/exit, bounded 1MiB original-handle read; absent/invalid => all failures unknown. Crash share uses classified failures (trusted crash_failure_share_percent default50), unknown share all failures (>50); raw quality warnings attach only after control validation, propagate nested R2 cleanliness, and appear beside regen report headline. Explicit --model-family on current score command persists trial identity and nested R2 (no launcher added). Audit uses latest scored R1 per explicit family with matching corpus/oracle/bundle; absent family count and unobserved checks are excluded explicitly. Missing/failing installer is install_failed; generated stub alone bypasses install. Acceptance PATH sentence amended exactly per ADVISOR ruling D. Targeted regen tests and fast gates QUEUED, not yet validated. Needs CLI manual refresh for --model-family, sidecar and report audit (OVERVIEW/AGENTS updated). No completion/review/hold/ship action.
+  created_at: 2026-10-15T14:54:23.436603039Z
+  modified_at: 2026-10-15T14:54:23.436603039Z
+  session_id: 01a14005f01a
 history:
 - id: 01a1309d-47da-7740-93a8-14448b62f594
   author: joe
