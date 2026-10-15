@@ -10401,6 +10401,51 @@ mod tests {
         assert!(err.contains("not found"), "{err}");
     }
 
+    // trace:STORY-1675 | ai:codex
+    #[test]
+    fn hypothesis_mcp_update_refuses_description_and_allows_amendment() {
+        use aida_core::db::DatabaseBackend;
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = aida_core::GitBackend::new(&root)
+            .unwrap()
+            .with_auto_commit(false);
+        let mut h = Requirement::new("hypothesis".into(), "pre-result".into());
+        h.spec_id = Some("SPIKE-991".into());
+        h.req_type = RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        let mut result = Requirement::new("result".into(), "data".into());
+        result.spec_id = Some("TASK-992".into());
+        result.status = RequirementStatus::Completed;
+        h.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::VerifiedBy,
+            target_id: result.id,
+            created_at: None,
+            created_by: None,
+        });
+        let mut store = aida_core::RequirementsStore::new();
+        store.requirements = vec![h, result];
+        backend.save(&store).unwrap();
+        let storage = Storage::new(root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let error = server
+            .tool_update_requirement(&json!({"id": "SPIKE-991", "description": "post hoc"}))
+            .unwrap_err();
+        assert!(error.contains("aida comment add SPIKE-991"), "{error}");
+        server
+            .tool_update_requirement(&json!({"id": "SPIKE-991", "title": "retitled"}))
+            .unwrap();
+        server
+            .tool_add_comment(&json!({"id": "SPIKE-991", "text": "amendment"}))
+            .unwrap();
+        let loaded = storage.load().unwrap();
+        let h = loaded.get_requirement_by_spec_id("SPIKE-991").unwrap();
+        assert_eq!(h.description, "pre-result");
+        assert_eq!(h.title, "retitled");
+        assert!(h.hypothesis_lock.is_some());
+        assert!(h.comments.iter().any(|c| c.content == "amendment"));
+    }
+
     // trace:STORY-82 | ai:claude
     #[test]
     fn mcp_update_requirement_sets_title_type_priority_tags_parent() {

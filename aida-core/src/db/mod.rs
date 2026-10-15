@@ -138,3 +138,6 @@ pub fn open_or_create(
 ) -> Result<Box<dyn DatabaseBackend>> {
     create_backend(path, backend_type)
 }
+
+#[cfg(all(test, feature = "native"))]
+mod hypothesis_tests; // trace:STORY-1675 | ai:codex

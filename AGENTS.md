@@ -1,3 +1,9 @@
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 Regen scoring uses independent private `/tmp` install roots and same-path
 quarantine snapshots, then fresh oracle HOME/XDG/TMPDIR. Only immutable guards
 and fixed system directories are on oracle PATH; regenerated tools use locators.

@@ -303,6 +303,10 @@ pub struct ExportedRequirement {
     /// Requirement description
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Permanent pre-registration evidence travels with a copied tree.
+    // trace:STORY-1675 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis_lock: Option<crate::models::HypothesisLock>,
     /// Requirement type
     pub req_type: RequirementType,
     /// Meta subtype (for Meta requirements)
@@ -493,6 +497,7 @@ fn export_requirement_tree(
         } else {
             Some(req.description.clone())
         },
+        hypothesis_lock: req.hypothesis_lock.clone(),
         req_type: req.req_type.clone(),
         meta_subtype: req.meta_subtype.clone(),
         status: req.status.clone(),
@@ -600,6 +605,7 @@ fn import_requirement_recursive(
 
     let description = exported.description.clone().unwrap_or_default();
     let mut new_req = Requirement::new(title.clone(), description);
+    new_req.hypothesis_lock = exported.hypothesis_lock.clone();
     new_req.req_type = exported.req_type.clone();
     new_req.meta_subtype = exported.meta_subtype.clone();
     new_req.status = exported.status.clone();
