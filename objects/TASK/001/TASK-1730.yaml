@@ -9,12 +9,12 @@ description: |-
   - Parses results from exact markers only; loose-prefix output is rejected (test).
   - Records score and age in the store.
   - Guard hits are reported, and a score with guard hits is never marked clean (test).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T07:05:57.053875593Z
+modified_at: 2026-10-15T07:07:39.407597033Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -116,6 +116,11 @@ comments:
   created_at: 2026-10-15T07:05:57.053875593Z
   modified_at: 2026-10-15T07:05:57.053875593Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e63-540f-7c52-b742-0be8391fe684
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-10-15T07:07:39.407587979Z
+  modified_at: 2026-10-15T07:07:39.407587979Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
@@ -131,6 +136,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13e63-540f-7c52-b742-0bde49d0cea6
+  author: joe
+  timestamp: 2026-10-15T07:07:39.407584226Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
