@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T20:07:00.873242058Z
-modified_at: 2026-10-15T20:07:08.718897474Z
+modified_at: 2026-10-15T20:08:50.188368274Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,13 @@ relationships:
   target_id: 01a12c99-47ed-7591-8bad-ecc9f28e1d7e
   created_at: 2026-10-15T20:07:08.718894711Z
   created_by: joe
+comments:
+- id: 01a1412e-850c-7ee2-923c-eb4c501b6282
+  author: ai:codex:joe
+  content: 'AUTHOR HANDOFF only: PR2682 head03b132c107bef11afc20c1188cec69fd2b1f510e requires independent STRICT gate under STORY-1674 advisor-signed2026-10-15 08:35 B+C ruling. Read original spec COMMENTS, not just placeholder Acceptance/proposal. PR body records exact validation scopes,3 author source-check rounds and bounded followups; these are NOT independent review. No author may record approval or merge. Original signed ruling: usage provenance view, AIDA_HARNESS_VERSION only, exact session/time ledger join; historical unknowns stay unknown. Operator owns merge. This review story is Draft after autoqueue; advisor disposition needed before normal pickup.'
+  created_at: 2026-10-15T20:08:50.188368274Z
+  modified_at: 2026-10-15T20:08:50.188368274Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
   branch: main
