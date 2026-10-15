@@ -1,0 +1,49 @@
+id: 01a13d03-f1ad-76a1-a10e-30cc8b01b29b
+spec_id: FAQ-57
+agreed_id: FAQ-57
+title: How does the advisor ship a reviewed PR (record, ready, ship, stale-check override)?
+description: |
+  **Run `aida review record` against the PR head, then `gh pr ready N`, then `aida pr ship N`. Add `--override-stale-check` only when the CI-definition change on main has nothing to do with the PR.**
+
+  ## Why
+  Under the 2026-10-14 throughput ruling, the advisor merges on green CI after a review scaled to the PR's risk: FASTTRACK, STANDARD or STRICT. `aida pr ship` refuses a PR in three cases: it has no recorded approval at its exact head SHA, it is still a draft (GitHub's merge API rejects drafts), or its green Build finished before `.github/workflows/*.yml` changed on main. In the last case the green came from an older CI definition.
+
+  ## How
+  ```bash
+  export AIDA_AGENT_TYPE=claude AIDA_AGENT_NAME=advisor
+  read H B < <(gh pr view N --json headRefOid,headRefName --jq '"\(.headRefOid) \(.headRefName)"')
+  aida review record PR-N --pr N --sha "$H" --branch "$B" --verdict approved --summary "<tier>: <why>"
+  gh pr ready N                      # no-op if it is already ready
+  aida pr ship N                     # add --override-stale-check only if the ci.yml delta is unrelated
+  ```
+  - After a merge from main or a rework push, the head SHA changes, so record the approval again at the new head.
+  - `CONFLICTING` means `gh pr update-branch N` or a merge from main is needed first. After that merge, compile the tests (`cargo test --no-run`), because `make check-ci-fast` does not compile them.
+  - A PR with a merge hold also needs its hold cleared. The advisor clears holds once the release condition is met.
+
+  ## Caveat
+  `aida review record` can print an ambiguous "Already on record for PR #N:" line even when it did record the new round (BUG-2136). Check `.aida/review-verdicts/PR-N.json` for `reviewed_sha`.
+
+  ## See also
+  BUG-2136, TASK-1763
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:51.085615713Z
+modified_at: 2026-10-15T00:43:51.085615713Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:merge
+- topic:review-gate
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T00:43:51.085662513Z
