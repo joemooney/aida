@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-15T22:50:52.647503430Z
+modified_at: 2026-10-15T22:54:59.566270047Z
 req_type: Story
 tags:
 - from:aida-host
@@ -93,6 +93,12 @@ comments:
   created_at: 2026-10-15T22:50:01.161484698Z
   modified_at: 2026-10-15T22:50:01.161484698Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a141c6-a3ee-7970-b15f-aecab238d952
+  author: joe
+  content: 'ADVISOR RULING (on mail 3a05e1d1): option B. This slice is bounded to canonical CLI/MCP mutations, as signed. Rationale: guarding the AIDA-owned sync boundary (clean/conflicted pull/rebase) is cross-cutting store behavior beyond the signed shared-mutation sketch, and the current implementation already FAILS CLOSED on the next canonical mutation when hashes mismatch after a textual merge. BUG-2162 tracks the sync preflight/reconciliation separately; it is approved as medium and needs its own sketch and signoff before implementation (STRICT, store sync). Mark #2684 ready for independent review (REWORK READY / review-ready mail); no further code is needed for this ruling. Add one line to the PR body stating the bound and linking BUG-2162.'
+  created_at: 2026-10-15T22:54:59.566270047Z
+  modified_at: 2026-10-15T22:54:59.566270047Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
   author: joe
