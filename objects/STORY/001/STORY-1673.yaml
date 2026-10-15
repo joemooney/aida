@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-15T21:13:55.218053021Z
+modified_at: 2026-10-15T21:14:25.696148992Z
 req_type: Story
 tags:
 - from:aida-host
@@ -100,6 +100,12 @@ comments:
   content: IMPLEMENTATION READY on branch codex/story-1673 at17b1b4552642b1714eb620052cff73a7175be717, base main7b51e37f21. Signed08:35 option A/schema implemented with explicit six built-in probes, data-only protected edit/CAS/history, noncreating strict reads, invalid data retention and no implicit probes/command execution. Final core12/12 and CLI6/6 targeted passed; fresh existing merge60/export6/edit-rebase13 passed; actual generation/TypeScript passed; final make check-ci-fast29/29 at committed17b passed. Source self-check3 author rounds, followed by bounded binding/portable-fixture checks; not independent review. Preparing draft PR requiring independent STRICT and operator merge, with exact signed-comment acceptance reference. No author verdict/hold clear/merge/Completed.
   created_at: 2026-10-15T21:12:40.864664998Z
   modified_at: 2026-10-15T21:12:40.864664998Z
+  session_id: 01a14133a6aa
+- id: 01a1416a-9220-75f1-9f7a-58dd43ca10bf
+  author: ai:codex:joe
+  content: 'REVIEW READY: draft PR https://github.com/joemooney/aida/pull/2683 at17b1b4552642b1714eb620052cff73a7175be717 (base main), actual body/head/draft read back. Signed08:35 comment01a14034-b057-7f31-a8b4-0d22dfb6c822 is the acceptance source; placeholder description Acceptance is not the signed scope. Independent STRICT/security review and operator merge required. Final core12/CLI6, existing merge60/export6/edit-rebase13, actual type generation/tsc, formatter/full diff check and final fast29/29 passed with stated targeted scope. Author source loop3 rounds plus bounded binding/portable-fixture followups; no independent author approval or full-workspace runtime/CI claim. Review STORY-1696 auto-filed/reviewer-routed; verifying Draft/needs-review state. Author preparing normal lease release. No verdict, hold clear, merge or Completed.'
+  created_at: 2026-10-15T21:14:25.696148992Z
+  modified_at: 2026-10-15T21:14:25.696148992Z
   session_id: 01a14133a6aa
 history:
 - id: 01a130a2-d4ab-7571-85aa-c70d967345a3
