@@ -21,12 +21,12 @@ description: |
   - No unlock/override flag, force push, or destructive reset recovery. Maintain store-lock and existing conflict-recovery discipline.
 
   Advisor must decide whether this boundary extends STORY-1675 or is a separately accepted follow-up. It is NOT declared out of scope or deferred by the author. Pending request: mail3a05e1d1 and the STORY-1675 sketch addendum. No implementation of the clean-sync guard has started.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-15T22:42:29.250994123Z
+modified_at: 2026-10-15T22:55:02.743076180Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
@@ -37,6 +37,14 @@ relationships:
   target_id: 01a12c99-676f-72a3-a393-0e2aef882ede
   created_at: 2026-10-15T22:42:29.250988016Z
   created_by: joe
+history:
+- id: 01a141c6-b057-7392-ad89-19972df8e386
+  author: joe
+  timestamp: 2026-10-15T22:55:02.743069893Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: a46af7481e794f7ad299631a78a258f55022c503
   branch: main
