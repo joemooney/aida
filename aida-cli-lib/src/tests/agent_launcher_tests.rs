@@ -1145,6 +1145,66 @@ fn sandbox_flag_interactive_claude_resolves_promptable_sandbox() {
     );
 }
 
+// A contained launch, by `--sandbox` or by project config, refuses on git
+// older than 2.40 or an unparseable version; enabling the contained posture
+// refuses too and writes nothing. 2.40 still launches contained.
+// trace:BUG-2131 | ai:claude
+#[test]
+fn bug_2131_contained_launch_refuses_on_old_git() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let configured = tmp.path().join("configured");
+    let plain = tmp.path().join("plain");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(configured.join(".aida")).unwrap();
+    std::fs::create_dir_all(plain.join(".aida")).unwrap();
+    std::fs::write(
+        configured.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    for fake in ["git version 2.39.5", "not a version"] {
+        aida_core::git_ops::with_host_git_version(fake, || {
+            for (root, sandbox) in [(&plain, true), (&configured, false)] {
+                let err = resolve_interactive_launch_mode_for_root(None, sandbox, Some(root))
+                    .unwrap_err();
+                let msg = format!("{err:#}");
+                assert!(
+                    msg.contains("refusing contained mode") && msg.contains("Upgrade git to 2.40"),
+                    "{fake}: {msg}"
+                );
+            }
+            // An uncontained launch is unaffected.
+            assert!(
+                !resolve_interactive_launch_mode_for_root(None, false, Some(&plain))
+                    .unwrap()
+                    .contained
+            );
+            let posture = crate::config_cmd::apply_permission_posture(
+                &plain,
+                crate::cli::ConfigPermissionTier::Contained,
+                crate::config_cmd::PermissionPostureScope::Local,
+            );
+            assert!(
+                format!("{:#}", posture.unwrap_err()).contains("refusing contained mode"),
+                "{fake}"
+            );
+            assert!(
+                !plain.join(".aida/agents.toml").exists(),
+                "{fake}: nothing written"
+            );
+        });
+    }
+    aida_core::git_ops::with_host_git_version("git version 2.40.0", || {
+        assert!(
+            resolve_interactive_launch_mode_for_root(None, true, Some(&plain))
+                .unwrap()
+                .contained
+        );
+    });
+}
+
 // trace:STORY-1124 | ai:codex
 #[test]
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {

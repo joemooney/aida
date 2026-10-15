@@ -287,9 +287,13 @@ both the sandbox and direct tool rules, including a primary-checkout launch.
 Store git removes relative/empty PATH entries
 and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` so the
 store's `.gitattributes` cannot select a host filter or textconv driver. Older
-Git ignores that variable, so on Git below 2.40 (or when `git --version` cannot
-be parsed) every host git command over a store tree refuses with a message
-naming the version; upgrade Git to 2.40 or newer.
+Git ignores that variable. On Git below 2.40, or when `git --version` cannot be
+parsed, contained mode is unavailable: launching a contained session or
+enabling the contained posture refuses, and host store git refuses while
+contained mode is in play for the store (`[agents] contained` /
+`[contained] enable`, `AIDA_CONTAINED`, or the marker a contained launch leaves
+in the git common directory). Without contained mode, store git keeps working
+and warns once. The fix is Git 2.40 or newer.
 <!-- trace:BUG-2131 | ai:claude --> The store-only hook marker keeps detached and override stores
 away from project-local executable probes without bypassing code-commit gates.
 Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.rs`

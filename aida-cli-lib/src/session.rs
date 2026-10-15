@@ -2409,7 +2409,22 @@ fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
                     eprintln!("{error:#}");
                 }
             }
-            crate::contained_boundary::contained_store_write_paths(&main)
+            // BUG-2131: launchers refuse contained mode on git < 2.40; should
+            // any path reach here anyway, the session gets no store write
+            // access at all. Otherwise mark the store so later host store git
+            // on an older git refuses even without contained config.
+            // trace:BUG-2131 | ai:claude
+            if let Err(error) = aida_core::git_ops::ensure_git_supports_contained() {
+                eprintln!("{error:#}");
+                Vec::new()
+            } else {
+                if store.is_dir() {
+                    if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
+                        eprintln!("{error:#}");
+                    }
+                }
+                crate::contained_boundary::contained_store_write_paths(&main)
+            }
         }
         None => Vec::new(),
     };
