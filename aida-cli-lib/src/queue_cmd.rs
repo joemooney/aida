@@ -10794,6 +10794,13 @@ pub(crate) fn apply_queue_work_contained_env(contained: bool) {
     }
 }
 
+/// BUG-2010: true when caller is working the lease itself (self-claim under `--no-launch`).
+/// false when launching/spawning another agent.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn queue_work_self_claim(no_launch: bool) -> bool {
+    no_launch
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -12246,7 +12253,7 @@ pub(crate) fn handle_queue_work(
         /* use_pool */
         None,
         /* self_claim */
-        no_launch,
+        queue_work_self_claim(no_launch),
     )?;
 
     // trace:TASK-1337 | ai:codex

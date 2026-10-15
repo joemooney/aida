@@ -615,7 +615,9 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
 
     let prev_cwd = std::env::current_dir().unwrap();
 
-    // 1. Launch case at the session_start(self_claim=false) level (as queue work passes when no_launch: false)
+    // 1. Launch case at the session_start level (self_claim = queue_work_self_claim(false))
+    assert!(!crate::queue_cmd::queue_work_self_claim(false));
+    assert!(crate::queue_cmd::queue_work_self_claim(true));
     std::env::set_current_dir(&root).unwrap();
     let res1 = crate::session_start::session_start(
         "TASK-2000",
@@ -634,7 +636,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         Some("implementer".to_string()),
         /* force_claim */ true,
         /* use_pool */ None,
-        /* self_claim */ false,
+        /* self_claim */ crate::queue_cmd::queue_work_self_claim(false),
     );
     assert!(
         res1.is_ok(),
@@ -650,12 +652,12 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     assert_eq!(
         lane_a_after.current_spec.as_deref(),
         Some("TASK-1000"),
-        "lane A current_spec must NOT be overwritten by queue work with launch"
+        "lane A current_spec must NOT be overwritten when self_claim is false"
     );
     assert_eq!(
         lane_a_after.worktree_path,
         root.join("lane-a-wt"),
-        "lane A worktree_path must NOT be overwritten by queue work with launch"
+        "lane A worktree_path must NOT be overwritten when self_claim is false"
     );
 
     // Assert 2: Lease for TASK-2000 is NOT lane A's
@@ -692,7 +694,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     );
     assert!(
         matched.is_none(),
-        "lease X must not be matched to calling lane A"
+        "lease X must not be matched to calling lane A when self_claim is false"
     );
 
     // 2. With --no-launch (no_launch: true) - calling lane A runs queue work for TASK-3000
