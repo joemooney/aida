@@ -9,12 +9,12 @@ description: |-
   - Parses results from exact markers only; loose-prefix output is rejected (test).
   - Records score and age in the store.
   - Guard hits are reported, and a score with guard hits is never marked clean (test).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T06:53:18.280415176Z
+modified_at: 2026-10-15T06:55:20.699048122Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -79,6 +79,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13e58-0e7b-7b93-be7f-8b0a4d397473
+  author: ai:codex:joe
+  timestamp: 2026-10-15T06:55:20.699038720Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
