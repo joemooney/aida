@@ -528,6 +528,45 @@ hours, minutes or seconds. The cache grants no scoring or control authority;
 unusual Git discovery environments omit this optional segment.
 <!-- trace:TASK-1734 | ai:codex -->
 
+Before scoring each actual system, required installed `PREFIX/bin/<tool>` entries
+must be regular executables (links may resolve inside the private system/prefix),
+contain at least `[regen].min_bytes` non-whitespace bytes (default 64, positive),
+and contain none of these ASCII case-insensitive markers: `TODO: implement`,
+`NotImplemented`, `NotImplementedError`, `unimplemented!`, `placeholder`. This is
+a conservative heuristic, not a proof of implementation. The complete file is
+scanned, including across read boundaries; binary/text files use the same rule.
+`--help` must exit 0 with nonempty stdout or stderr, under the existing score
+confinement and private installation environment. Helper output is never stored.
+After each helper, the existing survivor scan and same-path quarantine run
+again; all tool content, mode and resolved-target fingerprints are rechecked
+before another helper or the oracle. A helper that replaces itself or a later
+tool loses completeness, including a full-sized replacement without markers.
+Unconfined execution retains the existing concurrent-writer limits.
+
+`[regen.components.<required-tool>]` may declare `checks = ["exact check name"]`.
+Mappings come only from pinned trusted config; names must be required tools and
+each exact check may map to only one tool. Without any mapping, the restricted
+score reads `unavailable (no check mapping)`. Unmapped observed checks are listed;
+observed checks mapped to complete components alone form the restricted pass rate.
+Split rates are derived from recorded checks/outcomes when reading, not trusted
+from redundant stored percentages.
+
+Trial JSON gains an optional versioned `completeness` extension. An incomplete
+actual system records `status: incomplete`, with per-component reasons, overall
+oracle pass rate and the restricted score as diagnostic numbers. Oracle execution
+still runs so those diagnostics are available. Expected generated stubs skip
+completeness. Completeness status is attached after raw control validation;
+incomplete reference controls cannot validate later trials. R1/R2 retain their
+own evidence and parent cleanliness reflects both. The statusline/digest reader
+skips incomplete trials (and invalid completeness metadata), selecting the latest
+eligible scored ordinary R1. `regen report` shows the latest attempt and its
+incomplete diagnostics without turning its number into a headline.
+
+Harness continuation/re-invocation is separate launcher work; these checks do
+not launch or continue regenerators.
+<!-- trace:STORY-1677 | ai:codex -->
+
+
 `aida regen report` reads committed ordinary trial records from a pinned store
 commit, without a cache rebuild or rereading the caller's trial directory.
 The headline is the latest attempt's discriminating **R1 oracle pass rate** and

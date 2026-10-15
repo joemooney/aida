@@ -260,6 +260,7 @@ mod tests {
         let passed = values.iter().filter(|(_, pass)| *pass).count();
         TrialRecord {
             gaps: None,
+            completeness: None,
             format_version: 1,
             adapter: None,
             trial_id: Uuid::new_v4(),
@@ -833,6 +834,8 @@ mod execution_tests {
             install_command: None,
             required_tools: vec!["regen-fixture-tool".into()],
             reference_repeats: 3,
+            min_bytes: 64,
+            components: BTreeMap::new(),
         };
         let cache = tempfile::tempdir_in("/var/tmp").unwrap();
         let bundle_trial = fresh::FreshRoot::empty().unwrap();

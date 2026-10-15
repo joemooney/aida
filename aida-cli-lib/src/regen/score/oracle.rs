@@ -519,6 +519,8 @@ mod tests {
             oracle_command: vec!["./tests/oracle.sh".into()],
             oracle_paths: vec!["tests/".into()],
             reference_repeats: 3,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             install_command: None,
             required_tools: vec![],
         };
@@ -698,6 +700,8 @@ mod tests {
             oracle_command: vec!["tests/oracle.sh".into()],
             oracle_paths: vec!["tests".into()],
             reference_repeats: 3,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             install_command: None,
             required_tools: vec![],
         };

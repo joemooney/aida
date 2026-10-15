@@ -196,7 +196,7 @@ pub(super) struct AdapterRecord {
     adapter_input_sha256: String,
     mappings: Vec<Mapping>,
     r1: R1Scores,
-    r2: Box<TrialRecord>,
+    pub(super) r2: Box<TrialRecord>,
     raw_delta: Option<f64>,
     discriminating_delta: Option<f64>,
 }
@@ -631,6 +631,8 @@ mod tests {
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 1,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             required_tools: vec!["regen-fixture-tool".into()],
             install_command: Some(vec!["/bin/sh".into(), "-c".into(), installer.into()]),
         };

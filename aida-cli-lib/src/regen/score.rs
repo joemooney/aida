@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 mod adapter; // trace:TASK-1732 | ai:codex
+mod completeness; // trace:STORY-1677 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
 mod guards; // trace:TASK-1730 | ai:codex
@@ -28,6 +29,10 @@ struct RegenConfig {
     oracle_paths: Vec<String>,
     #[serde(default = "default_reference_repeats")]
     reference_repeats: usize,
+    #[serde(default = "completeness::default_min_bytes")]
+    min_bytes: usize,
+    #[serde(default)]
+    components: BTreeMap<String, completeness::ComponentConfig>,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -69,6 +74,7 @@ impl RegenConfig {
             );
             anyhow::ensure!(tools.insert(tool), "duplicate required tool: {tool}");
         }
+        completeness::validate_config(&config)?;
         Ok(config)
     }
 }
@@ -142,6 +148,10 @@ pub(super) struct TrialRecord {
     // trace:TASK-1733 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) gaps: Option<serde_json::Value>,
+    // Independently versioned completeness evidence; absent on older trials.
+    // trace:STORY-1677 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) completeness: Option<serde_json::Value>,
     // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
     // trace:TASK-1732 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -489,6 +499,17 @@ fn execute(
         true,
     )?;
     let _snapshot = roots::Quarantine::snapshot(&[dir.to_path_buf(), env.prefix.clone()])?;
+    // No host file inspection before installer roots have been quarantined.
+    // Help uses the same score confinement; isolate its survivors before oracle.
+    // trace:STORY-1677 | ai:codex
+    let _help_snapshots = if record.kind != "control-stub" {
+        let (completeness, survivors, snapshots) = completeness::check(config, dir, env)?;
+        record.survivors_detected += survivors;
+        record.completeness = Some(serde_json::to_value(completeness)?);
+        snapshots
+    } else {
+        Vec::new()
+    };
     let oracle = env
         .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
         .context(
@@ -591,6 +612,7 @@ fn initial_record(
     TrialRecord {
         format_version: 1,
         gaps: None,
+        completeness: None,
         adapter: None,
         kind: trial_kind(),
         root_fresh: false,
@@ -823,10 +845,11 @@ pub(super) fn handle_score(
                 gate.as_ref(),
             )?;
         }
+        completeness::finish(&mut record);
         persist(store, &record)?;
         // A refused trial is durable diagnostic evidence, never a reported score.
         anyhow::ensure!(
-            record.status == "scored",
+            matches!(record.status.as_str(), "scored" | "incomplete"),
             "trial {} recorded as {}: {}",
             record.trial_id,
             record.status,
@@ -848,6 +871,8 @@ mod tests {
             oracle_command: oracle.iter().map(|s| (*s).into()).collect(),
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 3,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             install_command: None,
             required_tools: vec!["regen-fixture-tool".into()],
         }

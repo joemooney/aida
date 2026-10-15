@@ -53,10 +53,11 @@ fn valid_rate(passed: usize, total: usize, rate: f64) -> bool {
 }
 
 fn scored_aggregate(record: &TrialRecord) -> Option<&Aggregate> {
-    record
-        .discriminating
-        .as_ref()
-        .filter(|a| record.status == "scored" && valid_rate(a.passed, a.total, a.pass_rate))
+    record.discriminating.as_ref().filter(|a| {
+        record.status == "scored"
+            && completeness::eligible(record)
+            && valid_rate(a.passed, a.total, a.pass_rate)
+    })
 }
 
 fn summary(records: &[TrialRecord], now: DateTime<Utc>) -> Option<RegenerationSummary> {
@@ -143,6 +144,7 @@ fn render(records: &[TrialRecord], now: DateTime<Utc>) -> String {
                 .join(", ")
         );
     }
+    completeness::render(&mut out, latest);
     let previous = trials.into_iter().skip(1).find(|r| {
         r.oracle_sha == latest.oracle_sha
             && r.oracle_bundle_sha256 == latest.oracle_bundle_sha256
@@ -371,6 +373,30 @@ mod tests {
         git(&store, &["commit", "-m", "invalid committed record"]);
         check_surfaces(None, true, &[]);
         assert!(!project.path().join(".aida/cache.db").exists());
+    }
+
+    // trace:STORY-1677 | ai:codex
+    #[test]
+    fn display_skips_incomplete_or_invalid_completeness_even_with_aggregate() {
+        let older = trial(1, 100);
+        let mut incomplete = trial(2, 150);
+        incomplete.status = "incomplete".into();
+        let now = DateTime::from_timestamp(200, 0).unwrap();
+        assert!(summary(&[incomplete], now).is_none());
+        let mut incomplete = trial(2, 150);
+        incomplete.status = "incomplete".into();
+        assert_eq!(
+            summary(&[older, incomplete], now).unwrap().trial_id,
+            Uuid::from_u128(1)
+        );
+        let mut invalid = trial(3, 180);
+        invalid.completeness = Some(json!({"format_version":999}));
+        assert!(summary(&[invalid], now).is_none());
+        let mut incomplete = trial(2, 150);
+        incomplete.status = "incomplete".into();
+        let out = render(&[incomplete], now);
+        assert!(out.starts_with("Discriminating oracle pass rate: unavailable"));
+        assert!(out.contains("status incomplete"));
     }
 
     #[test]

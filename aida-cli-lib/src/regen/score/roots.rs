@@ -325,6 +325,8 @@ mod tests {
         }
         let config = RegenConfig {
             reference_repeats: 3,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             install_command: None,

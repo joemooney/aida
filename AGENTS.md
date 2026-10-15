@@ -1,3 +1,9 @@
+Regeneration completeness checks installed required tools before the oracle and
+rechecks file content after quarantining helper writes. Incomplete trials keep
+overall and trusted-component split diagnostics but never supply a headline
+score. Harness continuation is separate launcher work. See OVERVIEW.md.
+<!-- trace:STORY-1677 | ai:codex -->
+
 `aida statusline` and every `aida digest` format show the latest scored ordinary
 discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
 Digest JSON includes an optional `regeneration` object. Missing scores or invalid
