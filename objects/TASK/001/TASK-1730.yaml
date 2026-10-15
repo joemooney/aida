@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T09:46:42.520256518Z
+modified_at: 2026-10-15T13:46:14.125100985Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -249,6 +249,12 @@ comments:
   content: 'Round-1 execution-environment rework pushed to existing #2660 at d1d9b9592a5c04bd6528886f5869326674f7d357. PR body/title refreshed and Ready for independent advisor re-review; implementation Done, not Completed. Final code: 36/36 regen tests; 28/28 make check-ci-fast gates; workspace aida dev build+smoke passed (worktree only, no live promotion); config-trust/shared-home/store-Git source guards passed. Author self-check had 3 rounds: root mount proof; found Python subprocess fd-loss and fixed with signed FIFO ruling; independent FIFO proof with no remaining concrete finding. Missing registered worktrees retain reserved-path overlap checks; dangling redirects/errors refuse. Logs /tmp/aida-session4-regen-current-tests.log, /tmp/aida-session4-fast-final.log, /tmp/aida-session4-dev-build.log; PR body source /tmp/aida-task1730-pr-body-session4.md. Still stacked on #2658, base codex/task-1729; do not infer full CI from stacked workflow. No verdict, hold clearance, merge, force push, hook bypass, or containment implementation changes.'
   created_at: 2026-10-15T09:46:42.520256518Z
   modified_at: 2026-10-15T09:46:42.520256518Z
+- id: 01a13fd0-3ced-7ed1-b2df-442d04d5422a
+  author: joe
+  content: 'Base-only rebuild pushed to #2660 at e98ba74f596a21b2c1f62b6331ac96f30de25549 on main 3ea566f840. Scorer/regen files, AGENTS and CLI audit byte-identical to old d1d9b9592a; other differences are current main only. make check-ci-fast 29/29 and check-ci-compile all workspace test targets passed. Advisor notified; no verdict/clearance/merge.'
+  created_at: 2026-10-15T13:46:14.125100985Z
+  modified_at: 2026-10-15T13:46:14.125100985Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
