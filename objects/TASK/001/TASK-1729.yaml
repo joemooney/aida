@@ -14,12 +14,44 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:06.487408623Z
-modified_at: 2026-10-12T15:09:06.487408623Z
+modified_at: 2026-10-15T06:01:07.795432465Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a12c98-a1cd-7902-8a9f-088c60cf53a1
   created_at: 2026-10-12T15:09:10.116912789Z
+comments:
+- id: 01a13e25-d82e-7b32-971e-385e38a0e08d
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH / ADVISOR DECISION REQUEST (relay 20261014-225755-regen, Session 1).
+    Read this spec, STORY-1669 and EPIC-77, ADR-74, and the aida-host scripts/regen-corpus.sh reference. ADR-74 settles hybrid vs built-in, but EPIC-77 explicitly requires architecture sketch + advisor signoff before any slice; no such approval is recorded here or on STORY-1669.
+
+    Proposed bounded corpus-v1 contract for signoff:
+    1. `aida regen corpus <dir>` resolves the canonical git store, pins its HEAD commit once, and reads committed object blobs from that exact tree (not the mutable worktree/cache and not the code checkout). Refuse legacy non-git stores with a clear explanation. A dirty store is excluded rather than attributed to HEAD.
+    2. New dedicated regen module; only ordinary CLI enum/dispatch wiring in cli.rs/lib.rs, no lib.rs split, session/queue/launcher/review/containment edits. No template changes unless command documentation scaffolding requires one.
+    3. Output exactly corpus.json and manifest.json into a new/empty directory, refusing existing nonempty dirs to prevent preexisting code/tests/docs from entering the trial. Corpus contains all spec/knowledge rows including archived rows, ordered by canonical UUID; an explicit content projection retains IDs, title, full description, type, status, priority, feature, sorted tags/dependencies, typed relationships and full comment/reply text. Exclude implementation/file-link metadata, attachments, history/processing records, runtime/cache/next-command fields, code-repository SHA/filed_at and arbitrary store files. Store-authored prose remains verbatim; this is exclusion of source artifacts, not semantic redaction of prose.
+    4. Canonical UTF-8 JSON with explicit fixed field order and LF newline, no runtime timestamps, absolute paths or binary version. manifest.json = {format_version: 1, store_sha: <pinned commit>, corpus_file: "corpus.json", content_sha256: <SHA-256 of exact corpus.json bytes>, row_count: N}. Manifest excluded from its own hash. Same committed store and corpus format version yield byte-identical output across checkout paths.
+    5. Fixture tests: repeated exports byte-identical; dirty/untracked objects ignored; code/tests/docs/.git and store attachments excluded; knowledge/archived rows and nested comments retained; SHA/content hash verified; nonempty output refused. Targeted tests + make check-ci-fast before push; one PR, independent advisor review/ship.
+
+    FORK needing signoff: approve the projected JSON corpus + manifest above, or require pilot-compatible readable Markdown with a different content projection? The acceptance does not settle this new externally consumed file format, and the pilot emits wall-clock/version/checkout metadata that cannot be copied literally while satisfying determinism and no-git-metadata requirements. No implementation has started. Per relay instructions, skipping this spec until the advisor approves the contract; claim will be released.
+  created_at: 2026-10-15T06:00:29.998517768Z
+  modified_at: 2026-10-15T06:00:29.998517768Z
+history:
+- id: 01a13e24-e9a7-75f3-97f7-2b7e068704e8
+  author: aida-lease-take
+  timestamp: 2026-10-15T05:59:28.935276131Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a13e26-6bd3-7432-a073-8cf5eeffbf7b
+  author: ai:codex:joe
+  timestamp: 2026-10-15T06:01:07.795423655Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main

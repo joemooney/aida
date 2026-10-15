@@ -14,12 +14,32 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-12T15:09:14.890959895Z
+modified_at: 2026-10-15T06:00:42.311560337Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a12c98-a1cd-7902-8a9f-088c60cf53a1
   created_at: 2026-10-12T15:09:18.462935698Z
+comments:
+- id: 01a13e26-0847-7a73-b183-f70b401aed40
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH / SCOPE ESCALATION (relay 20261014-225755-regen, Session 1).
+    Read TASK-1730 and STORY-1669 (including ADR-74 decision). This spec explicitly requires a config-schema sketch + advisor signoff before code; none is recorded. It also requires new sandboxed scoring, while the operator relay mandate explicitly excludes sandbox/containment and launcher/session.rs work. I will not implement or modify those surfaces in this lane.
+
+    Proposed schema for advisor consideration, not an implemented convention:
+    [regen]
+    # Commands are argv arrays, not shell strings; no implicit shell interpolation.
+    oracle_command = ["./tests/oracle.sh"]
+    install_command = ["./install.sh"]
+    required_tools = ["tool-a", "tool-b"]
+    # Harness launching remains a skill per ADR-74; omit harness execution config from slice 2.
+
+    Proposal: run configured commands relative to the selected regeneration root, require a declared oracle, and distinguish installer failure from oracle failure; installer default only when ./install.sh exists (STORY-1676). Exact per-check markers need a versioned contract (pilot uses `ok   - <name>` / `FAIL - <name>`; reject loose-prefix lines, duplicate/conflicting identifiers and empty result sets). Store recording must preserve per-check outcomes and trial identity/model/vendor, not only an aggregate, because controls, R2 and consensus depend on them. Record completion timestamp for age outside the deterministic corpus format. The precise store record type, oracle exit-vs-check policy, and confinement integration need approval with this schema.
+
+    DECISIONS NEEDED: approve/revise the config, marker and durable trial-record sketch; assign the sandbox executor to a lane authorized to touch containment (or explicitly expand this lane). TASK-1731..1734 and STORY-1676/1677/1679 depend on this contract. STORY-1678 explicitly requires reuse of session.rs confinement and is also outside the current lane. Skipping code per relay instruction rather than inventing a second sandbox or bypassing the boundary.
+  created_at: 2026-10-15T06:00:42.311560337Z
+  modified_at: 2026-10-15T06:00:42.311560337Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main

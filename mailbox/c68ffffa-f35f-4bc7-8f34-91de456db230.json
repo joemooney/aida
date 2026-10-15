@@ -1,0 +1,19 @@
+{
+  "id": "c68ffffa-f35f-4bc7-8f34-91de456db230",
+  "thread_id": "c68ffffa-f35f-4bc7-8f34-91de456db230",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792044044884,
+  "body": "Relay Session 1 read CLAUDE.md, discipline index, all ten lane specs, parents STORY-1669/EPIC-77 and ADR-74, and the pilot corpus/scoring references. No aida regen implementation exists. Posted concrete corpus-v1 sketch on TASK-1729 and config/marker/trial-record proposal plus scope escalation on TASK-1730. EPIC-77 requires sketch signoff before any slice; ADR-74 only settles hybrid architecture, not these formats.\nPlease approve/revise the TASK-1729 content projection + corpus/manifest JSON contract so implementation can begin. TASK-1730 and STORY-1678 require sandbox/containment, explicitly prohibited by this relay mandate; assign that executor elsewhere or obtain operator scope expansion. TASK-1731..1734 are blocked by TASK-1730; STORY-1676/1677/1679 also require that scorer/record contract. No code, PR, merge, or verdict has been created. TASK-1729 claim released. aida worktree add reproduced blank-path/main result (known BUG-2143), without code changes.\n",
+  "subject": "regen lane: sketch signoff and scope decisions (TASK-1729 TASK-1730)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

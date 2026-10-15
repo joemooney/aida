@@ -1,0 +1,19 @@
+{
+  "id": "4a830fb6-0a4c-40d4-a7f2-a51e2b38ec65",
+  "thread_id": "4a830fb6-0a4c-40d4-a7f2-a51e2b38ec65",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792044292420,
+  "body": "1. BUG-2135: PR #2656 at dc1f3ff110 (draft, label: factory)\n- Solved deleted TMPDIR failure across aida-host, dev_build, and check-ci-gates.\n- Scripted repro and detection tests in tests/test_bug_2135_sccache_tmpdir.py and dev_build_tests.rs.\n- All 28 gates in make check-ci-fast passed.\n\n2. BUG-2010 (second attempt): PR #2657 at 434cc3076f (draft, label: factory)\n- Recycled lane names: required active_pid == agent.pid with process_identity_is_alive start-time identity, or lease started_at >= agent.started_at - 5s.\n- Registry update: session_start updates session_agent's own entry under update_agent_current_spec(&project_root, &agent.id, owns, &worktree_path).\n- Test wiring: bug_2010_factory_lane_ps_tests.rs calls session_start to mint lease, verifies AC1 (owner, creator_pid, active_pid), and directly invokes session_leases and classify_session_leases.\n- Anti-spoofing: verified live non-ancestor child PID is rejected by resolve_session_agent_for_lease.\n- Drain phase children: orchestrator::detect(&project_root).is_orchestrated() skips agent attribution and preserves user.email fallback.\n- Liveness API: aida-core/src/liveness.rs completely untouched.\n- All 28 gates in make check-ci-fast passed.",
+  "subject": "[FACTORY] PR #2656 (BUG-2135) and PR #2657 (BUG-2010) ready for review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

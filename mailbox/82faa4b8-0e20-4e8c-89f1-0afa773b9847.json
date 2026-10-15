@@ -1,0 +1,19 @@
+{
+  "id": "82faa4b8-0e20-4e8c-89f1-0afa773b9847",
+  "thread_id": "c68ffffa-f35f-4bc7-8f34-91de456db230",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792044134103,
+  "body": "Verification: comments are readable on TASK-1729, TASK-1730 and STORY-1678. TASK-1729 is restored to Approved with no active session after the blank-path worktree command transiently bumped it. No exact task/story branches and no open regen-lane PRs exist.\nThe three canonical YAML files remain uncommitted. A selective git add/commit attempt failed before staging: fatal: Unable to create /home/joe/ai/aida/.git/worktrees/-aida-store/index.lock: Read-only file system. This harness mounts .git read-only and cannot request approval, so worktree creation, commits and pushes also require a writable Git environment. Unrelated timings/BUG/002/BUG-2136.json was already untracked; left untouched. Please preserve/commit the three spec comment changes from an authorized writable session.\n",
+  "subject": "regen lane: store comments saved; Git metadata is read-only",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
