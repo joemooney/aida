@@ -1957,6 +1957,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
         Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
@@ -6116,6 +6117,8 @@ pub(crate) fn handle_git_backend_command(
             description,
             description_from_file,
             description_stdin,
+            verify,
+            clear_verify,
             status,
             priority,
             r#type,
@@ -6324,6 +6327,8 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1117 | ai:claude
             let no_field_flags = title.is_none()
                 && description.is_none()
+                && verify.is_none()
+                && !*clear_verify
                 && status.is_none()
                 && priority.is_none()
                 && r#type.is_none()
@@ -6389,6 +6394,16 @@ pub(crate) fn handle_git_backend_command(
             };
 
             let mut changed = false;
+            // No probe runs while authoring the data-only block.
+            // trace:STORY-1673 | ai:codex
+            if let Some(change) =
+                verify_cmd::apply_verify_edit(&mut req, verify.as_deref(), *clear_verify)?
+            {
+                let author = get_default_author();
+                req.record_change(author, vec![change]);
+                changed = true;
+            }
+
             let mut force_dropped_structural_tags: Vec<String> = Vec::new();
             // STORY-1434: (target uuid, target display id) once the
             // carve-out target has been resolved+validated and the edge +

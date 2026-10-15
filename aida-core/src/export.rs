@@ -327,6 +327,14 @@ pub struct ExportedRequirement {
     /// Custom fields
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub custom_fields: HashMap<String, String>,
+    /// Data-only host verification; invalid blocks remain reportable.
+    // trace:STORY-1673 | ai:codex
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::constraints::deserialize_verify"
+    )]
+    pub verify: Option<serde_json::Value>,
     /// Custom status (for types with custom statuses)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_status: Option<String>,
@@ -502,6 +510,7 @@ fn export_requirement_tree(
         tags: req.tags.clone(),
         comments: req.comments.clone(),
         custom_fields: req.custom_fields.clone(),
+        verify: req.verify.clone(),
         custom_status: req.custom_status.clone(),
         custom_priority: req.custom_priority.clone(),
         archived: req.archived,
@@ -609,6 +618,7 @@ fn import_requirement_recursive(
     new_req.tags = exported.tags.clone();
     new_req.comments = exported.comments.clone();
     new_req.custom_fields = exported.custom_fields.clone();
+    new_req.verify = exported.verify.clone();
     new_req.custom_status = exported.custom_status.clone();
     new_req.custom_priority = exported.custom_priority.clone();
     new_req.archived = exported.archived;

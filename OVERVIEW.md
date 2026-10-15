@@ -775,3 +775,20 @@ another checkout), and preserves foreground stall behavior. A replaced root or
 rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
+
+
+### Explicit host constraint verification
+
+Constraint rows can carry an optional version-1 `verify` block containing a
+closed built-in probe ID, scalar arguments and a typed expectation. The explicit
+`aida verify constraints` command reports match, drift, unknown or invalid per
+configured row, as human text or JSON; only `--fail-on-drift` turns drift into an
+error exit. It never changes requirement status or executes stored commands.
+Linux procfs/sysfs supply CPU, memory, PSI and disk facts; path and executable
+presence use metadata/access checks. PATH lookup never launches the target.
+No sync, drain or hook invokes probes. Unknown/malformed blocks remain loadable
+so the report can label them invalid. `edit --verify` and `--clear-verify` use
+the protected canonical edit flow; YAML row roundtrips preserve the data, while
+archived writers refuse unsupported blocks. See the
+[manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
+<!-- trace:STORY-1673 | ai:codex -->

@@ -10380,6 +10380,16 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
         description_stdin: bool,
 
+        /// Replace the data-only constraint verification block with JSON.
+        /// Probes run only with `aida verify constraints`.
+        // trace:STORY-1673 | ai:codex
+        #[clap(long, value_name = "JSON", conflicts_with = "clear_verify")]
+        verify: Option<String>,
+
+        /// Remove a constraint's verification block.
+        #[clap(long)]
+        clear_verify: bool,
+
         /// New status (draft, approved, planned, in-progress, done,
         /// completed, rejected, superseded). Needs Attention is set via
         /// `aida punt`. `superseded` = adopted, then replaced by a later
@@ -13950,6 +13960,12 @@ pub enum Command {
         json: bool,
     },
 
+    /// Explicit, report-only host verification using built-in probes.
+    /// Never executes a command from the requirements store.
+    // trace:STORY-1673 | ai:codex
+    #[clap(subcommand)]
+    Verify(VerifyCommand),
+
     /// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
     /// --diagram` prints a Mermaid state diagram generated from the single
     /// declared transition model in `aida-core`, so the picture can't drift
@@ -14233,6 +14249,21 @@ pub enum Command {
         json: bool,
         #[clap(subcommand)]
         command: Option<AliasCommand>,
+    },
+}
+
+/// The closed, explicit host-verification command group.
+// trace:STORY-1673 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum VerifyCommand {
+    /// Compare constraint verify blocks with this Linux host. Read-only.
+    Constraints {
+        /// Emit one match/drift/unknown/invalid result per configured row.
+        #[clap(long)]
+        json: bool,
+        /// Return a nonzero exit only when a row reports drift.
+        #[clap(long)]
+        fail_on_drift: bool,
     },
 }
 

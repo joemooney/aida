@@ -2831,6 +2831,12 @@ pub(crate) fn run() -> Result<()> {
         return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
+    // Explicit only: no sync/drain/hook path invokes host probes.
+    // trace:STORY-1673 | ai:codex
+    if let Command::Verify(cmd) = &cli.command {
+        return verify_cmd::handle_verify_command(cmd, cli.file.as_deref());
+    }
+
     // `aida gate` reads the embedded gate library (and, for `run`, self-loads
     // the store) — no shared storage handle. trace:STORY-1427 | ai:claude
     if let Command::Gate(gate_cmd) = &cli.command {
@@ -3809,6 +3815,8 @@ pub(crate) fn run() -> Result<()> {
             description,
             description_from_file,
             description_stdin,
+            verify,
+            clear_verify,
             status,
             priority,
             r#type,
@@ -3852,6 +3860,12 @@ pub(crate) fn run() -> Result<()> {
             // FR-283: the numeric weight is git-canonical only, same rule.
             weight: _,
         } => {
+            // trace:STORY-1673 | ai:codex
+            anyhow::ensure!(
+                verify.is_none() && !*clear_verify,
+                "--verify and --clear-verify require a git-canonical store"
+            );
+
             // trace:BUG-1234 | ai:codex — keep legacy and git-canonical edit
             // behavior aligned for file/stdin description replacement.
             let resolved_description =
@@ -4167,6 +4181,7 @@ pub(crate) fn run() -> Result<()> {
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
         Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")

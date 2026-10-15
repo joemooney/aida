@@ -356,6 +356,11 @@ pub fn merge_spec_three_way(
     // by the object-level winner snapshot — same rule as execution_mode.
     merged.origin =
         merge_scalar(&base.origin, &ours.origin, &theirs.origin, ours_is_winner).clone();
+    // A concurrent unrelated edit must not discard a configured probe.
+    // trace:STORY-1673 | ai:codex
+    merged.verify =
+        merge_scalar(&base.verify, &ours.verify, &theirs.verify, ours_is_winner).clone();
+
     // CR-8: filing provenance is write-once — the first stamp ever recorded
     // wins (base, then the deterministic winner, then the other side), so a
     // divergent sync can never rewrite or drop it. trace:CR-8 | ai:claude

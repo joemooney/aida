@@ -434,6 +434,7 @@ impl PostgresBackend {
             // trace:STORY-634 | ai:claude — origin not carried by legacy backend
             origin: None,
             filed_at: None,
+            verify: None,
             custom_status,
             custom_priority,
             custom_fields,
@@ -470,6 +471,9 @@ impl PostgresBackend {
 
     /// Save a requirement to the database
     fn save_requirement<C: GenericClient>(&self, client: &mut C, req: &Requirement) -> Result<()> {
+        // trace:STORY-1673 | ai:codex
+        anyhow::ensure!(req.verify.is_none(), "constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+
         let ai_eval_json = req.ai_evaluation.as_ref().map(Self::to_json).transpose()?;
         let impl_info_json = req
             .implementation_info
@@ -1139,6 +1143,10 @@ impl DatabaseBackend for PostgresBackend {
     }
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
+        // Preflight before starting a transaction or deleting existing rows.
+        // trace:STORY-1673 | ai:codex
+        anyhow::ensure!(store.requirements.iter().all(|r| r.verify.is_none()), "constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+
         let mut client = self
             .pool
             .get()

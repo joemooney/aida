@@ -147,6 +147,24 @@ fn merge_maps(
             Some(s) => format!("{prefix}.{s}"),
             None => format!("{prefix}.?"),
         };
+        // `verify: null` is invalid-but-retained data, distinct from no block.
+        // Treat the complete block atomically, including field presence.
+        // trace:STORY-1673 | ai:codex
+        if name == "verify" {
+            let (r, p, c) = (read.get(k), planned.get(k), current.get(k));
+            let chosen = if p == r || c == p {
+                c
+            } else if c == r {
+                p
+            } else {
+                conflicts.push(name.clone());
+                c
+            };
+            if let Some(value) = chosen {
+                out.insert(k.clone(), value.clone());
+            }
+            continue;
+        }
         let r = read.get(k).unwrap_or(&null);
         let p = planned.get(k).unwrap_or(&null);
         let c = current.get(k).unwrap_or(&null);

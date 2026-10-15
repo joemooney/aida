@@ -27,6 +27,9 @@ fn generate_types_content() -> String {
 };";
 
     let decls: Vec<String> = vec![
+        // Raw verify blocks retain invalid JSON-compatible data for reporting.
+        // trace:STORY-1673 | ai:codex
+        serde_json::Value::decl(),
         // Models from aida_core::models
         models::RequirementStatus::decl(),
         // STORY-332: punt / NeedsAttention types
@@ -85,6 +88,11 @@ fn generate_types_content() -> String {
         // STORY-631 cached intent. trace:STORY-648 | ai:claude
         models::ProcessingRecord::decl(),
         models::SpecIntent::decl(),
+        // Requirement references these existing optional fields and verify data.
+        // trace:STORY-1673 | ai:codex
+        models::FilingProvenance::decl(),
+        models::ExecutionMode::decl(),
+        models::Origin::decl(),
         models::Requirement::decl(),
         // BUG-571: lightweight web-DTO projection of Requirement (list/board/
         // dashboard fetch this via GET /api/v2/requirements?view=summary so the
@@ -137,7 +145,13 @@ fn generate_types_content() -> String {
     // `QueueEntryResponse`. trace:STORY-522 | ai:claude
     body.push_str(QUEUE_ENTRY_DECL);
 
+    // Normalize ts-rs trailing spaces so generated output passes diff checks.
+    // trace:STORY-1673 | ai:codex
     format!("{HEADER}\n\n{body}")
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn main() {

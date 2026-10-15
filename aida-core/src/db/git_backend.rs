@@ -867,6 +867,12 @@ impl GitBackend {
         if incoming.external_refs.is_empty() && !disk.external_refs.is_empty() {
             incoming.external_refs = disk.external_refs.clone();
         }
+        // Preserve data omitted by full-store projection callers. Targeted
+        // edits can still explicitly clear a verify block.
+        // trace:STORY-1673 | ai:codex
+        if incoming.verify.is_none() {
+            incoming.verify = disk.verify.clone();
+        }
         if incoming.risk_notes.is_none() {
             incoming.risk_notes = disk.risk_notes.clone();
         }

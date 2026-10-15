@@ -26,8 +26,11 @@ checks availability of the three standard procfs pressure files.
 Canonical/YAML serialization must preserve valid and invalid blocks, including
 explicit null. Archived backends must refuse writes of a verify block rather
 than silently discard it. No legacy feature/schema migration is added. A
-data-only YAML import is the authoring path; adding CLI/MCP mutation parameters
-is outside the signed command/schema scope.
+data-only `aida edit --verify <JSON>` and `--clear-verify` flags use the
+existing protected canonical edit path, with history and atomic block merging.
+They do not execute a probe. Legacy edit flags refuse rather than disappear.
+The explicit null block remains distinguishable from an absent block, including
+when a concurrent edit merges. MCP gets no new tool parameters in this slice.
 
 Verification: schema table covering every probe/type/op/unknown-key boundary;
 injected host fixture reads for match/drift/unknown; executable sentinel proving

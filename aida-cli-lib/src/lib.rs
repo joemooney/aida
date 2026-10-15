@@ -559,6 +559,8 @@ mod ultraplan_cmd;
 mod upgrade_cmd;
 mod usage;
 mod usage_cmd;
+// trace:STORY-1673 | ai:codex
+mod verify_cmd;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
 mod worker;

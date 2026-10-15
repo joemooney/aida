@@ -612,3 +612,58 @@ Print the versioned JSON field subset promised to read-only external monitor
 consumers. See [the monitor contract](../monitor-contract.md) for compatibility
 rules, fixtures, and the event-follow example. Use `aida contract --json` in
 automation; monitor consumers must not parse human-formatted command output.
+
+
+### `aida verify`
+
+Run explicit host-fact checks stored on constraint rows:
+
+```bash
+aida verify constraints
+aida verify constraints --json
+aida verify constraints --fail-on-drift
+```
+
+Use this after a host change to find assumptions that drifted. It runs only
+when invoked: sync, drain and hooks never trigger these checks. Each configured
+constraint reports `match`, `drift`, `unknown` (host data unavailable), or
+`invalid` (bad block, arguments, type, operator or version). Rows without a
+block are skipped. Reports do not edit requirements or status. Results exit
+successfully unless drift exists and `--fail-on-drift` was supplied; store load
+and command errors still fail normally.
+
+Author a block on an existing constraint in a canonical store:
+
+```bash
+aida edit <constraint-id> --verify '{"version":1,"probe":"cpu-count","args":{},"expect":{"op":"ge","value":6}}'
+aida edit <constraint-id> --clear-verify
+```
+
+This is JSON data, never a shell command. Authoring does not run the probe;
+unknown or malformed blocks remain stored and are reported as `invalid` by
+verification. Invalid JSON syntax is refused at edit time. A block is optional;
+old rows load normally. Canonical and YAML row serialization preserve it;
+archived SQLite/PostgreSQL writers refuse blocks they cannot preserve.
+
+The fixed version-1 schema is `version`, `probe`, `args`, and `expect` containing
+`op` and `value`. All keys are required and unknown keys are invalid.
+
+| Probe | Arguments | Result |
+| --- | --- | --- |
+| `cpu-count` | `{}` | Integer logical CPU count from Linux procfs |
+| `mem-total-bytes` | `{}` | Integer MemTotal in bytes, without unit strings |
+| `psi-available` | `{}` | Boolean availability of cpu, memory and io pressure files |
+| `disk-rotational` | `{"path":"/dev/sda"}` | Boolean Linux sysfs rotational flag; partitions use their parent disk |
+| `path-exists` | `{"path":"/absolute/path"}` | Boolean path existence |
+| `command-on-path` | `{"name":"aida"}` | Boolean executable availability to the invoking caller on PATH |
+
+Integer results accept `eq`, `ge`, or `le`, with an integer expected value.
+Boolean results accept `eq` or `exists`, with a boolean expected value;
+`exists` compares the observed presence boolean to that value. Floats, numeric
+strings, boolean strings and unit strings are invalid. Paths must be absolute
+without parent traversal, control characters or shell metacharacters. Command
+names must match `[A-Za-z0-9._-]+`; the probe looks up executable regular files
+and never runs them. Missing paths or commands produce a known false value;
+lookup/read errors produce `unknown`. No stored command or custom probe runs.
+
+<!-- trace:STORY-1673 | ai:codex -->

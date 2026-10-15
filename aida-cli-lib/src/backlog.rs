@@ -1415,6 +1415,7 @@ mod tests {
             weight: None,
             origin: None,
             filed_at: None,
+            verify: None,
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),

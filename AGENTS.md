@@ -1,3 +1,11 @@
+Explicit `aida verify constraints` reads data-only version-1 blocks using six
+closed built-in Linux probes. It never runs stored shell commands or probes
+from sync/drain/hooks, and reports match/drift/unknown/invalid without status
+mutation. Canonical `edit --verify <JSON>` / `--clear-verify` author blocks;
+archived writers refuse unsupported blocks. See
+[constraint verification](docs/cli/08-reporting.md#aida-verify).
+<!-- trace:STORY-1673 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.
