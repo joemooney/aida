@@ -26,12 +26,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T11:44:27.650044861Z
+modified_at: 2026-10-15T15:04:50.442590132Z
 req_type: Story
 tags:
 - from:aida-host
@@ -70,6 +70,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a14018-340a-7e43-a4c8-948e94cf30be
+  author: aida-session-start
+  timestamp: 2026-10-15T15:04:50.442589558Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
