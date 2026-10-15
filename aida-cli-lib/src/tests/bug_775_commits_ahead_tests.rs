@@ -352,16 +352,30 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
         ("AIDA_REVIEW_VERDICT_FILE", &verdict_s),
     ]);
 
-    crate::handle_review_record(
-        "STORY-993",
-        "approved",
-        Some("abc123"),
-        Some("story-993"),
-        Some("looks good"),
-        &[],
-        &[],
-        Some(1706),
-    )
+    // BUG-1918: a PR approval resolves the PR's subject through the forge.
+    let subject = crate::ReviewPrSubject {
+        head_ref: "story-993".into(),
+        commit_subjects: vec![],
+    };
+    // BUG-1918: an approval must name its recorder (here, a session id).
+    let reviewer = crate::review_authority::IdentitySource {
+        session_ids: vec!["independent-reviewer".into()],
+        ..Default::default()
+    };
+    crate::with_review_pr_subject(subject, || {
+        crate::review_authority::with_identity_source(reviewer, || {
+            crate::handle_review_record(
+                "STORY-993",
+                "approved",
+                Some("abc123"),
+                Some("story-993"),
+                Some("looks good"),
+                &[],
+                &[],
+                Some(1706),
+            )
+        })
+    })
     .unwrap();
 
     assert!(

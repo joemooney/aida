@@ -1196,6 +1196,28 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
             return false;
         }
     };
+    // BUG-1918: a wave merge needs what `aida pr ship` needs — an attested
+    // approval by a non-author session covering the forge head — checked
+    // under the merge lease and pinned to that head.
+    // trace:BUG-1918 | ai:claude
+    let wave_match_head = match crate::pr_cmd::merge_path_approval_gate(
+        project_root,
+        pr.number,
+        std::slice::from_ref(&pr.spec),
+        Some(pr.branch.as_str()),
+        forge_head.as_deref(),
+    ) {
+        Ok(pin) => pin,
+        Err(refusal) => {
+            eprintln!(
+                "  {} refusing to auto-merge PR-{} ({}) — {refusal}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                pr.number,
+                pr.spec,
+            );
+            return false;
+        }
+    };
     let mut sink = network_retry::StderrSink;
     let change_ref = forge::ChangeRef {
         id: pr.number,
@@ -1209,7 +1231,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         squash_subject: None,
         squash_body: None, // trace:TASK-1330 | ai:claude
         delete_branch: false,
-        match_head: None,
+        match_head: wave_match_head, // trace:BUG-1918
     };
     match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
         Ok(_) => {

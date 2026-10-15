@@ -137,24 +137,35 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             } else {
                 None
             };
-            session_start(
-                owns,
-                branch.as_deref(),
-                base.as_deref(),
-                *reuse_branch,
-                path.as_deref(),
-                forge.as_deref(),
-                branch_style,
-                *launch,
-                title.clone(),
-                !*no_title,
-                name.clone(),
-                mode.mode.as_deref(),
-                mode.contained,
-                role.clone(),
-                *force_claim,
-                use_pool,
-            )
+            let start = || {
+                session_start(
+                    owns,
+                    branch.as_deref(),
+                    base.as_deref(),
+                    *reuse_branch,
+                    path.as_deref(),
+                    forge.as_deref(),
+                    branch_style,
+                    *launch,
+                    title.clone(),
+                    !*no_title,
+                    name.clone(),
+                    mode.mode.as_deref(),
+                    mode.contained,
+                    role.clone(),
+                    *force_claim,
+                    use_pool,
+                    !*launch,
+                )
+            };
+            // BUG-1918: `--launch` claims FOR the agent it starts; without
+            // it, the caller is the one who will work the lease.
+            // trace:BUG-1918 | ai:claude
+            if *launch {
+                review_authority::as_launcher(start)
+            } else {
+                start()
+            }
         }
         SessionCommand::HarnessWorktreeRegister {
             agent_id,
@@ -2638,6 +2649,14 @@ pub(crate) fn agent_new_bg_dispatch(
                 }
             });
             manifest.claude_session_id = Some(sid.clone());
+            // BUG-1918: the backgrounded agent — not this launcher — works
+            // the lease; record its session id as one of the lease's authors.
+            // trace:BUG-1918 | ai:claude
+            review_authority::record_lease_identity(
+                &plan.project_root,
+                lease_id,
+                &[format!("session:{sid}")],
+            );
             if let Err(err) = session_manifest::save(&manifest_path, &manifest) {
                 eprintln!(
                     "  {} couldn't record claude sessionId on lease manifest: {err}",
@@ -3042,6 +3061,16 @@ fn agent_launch_lease_is_active(
         lease_state_for(lease, live, chrono::Utc::now()),
         LeaseState::Live
     ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
+        || {
+            // trace:BUG-2010 | ai:antigravity
+            let live_agents = agent_registry::load_live_entries(project_root);
+            agent_registry::live_agent_for_lease_or_spec(
+                &live_agents,
+                Some(lease),
+                Some(&lease.scope),
+            )
+            .is_some()
+        }
 }
 
 pub(crate) fn prepare_agent_launch(
@@ -3148,31 +3177,37 @@ fn prepare_agent_launch_with_cwd(
             let previous_cwd = std::env::current_dir()?;
             std::env::set_current_dir(project_root)
                 .with_context(|| format!("failed to cd to {}", project_root.display()))?;
-            let start_result = session_start(
-                &spec,
-                /* branch */ None,
-                /* base */ None,
-                /* reuse_branch */ false,
-                /* explicit_path */ None,
-                /* forge_override */ None,
-                /* branch_style */ "auto",
-                /* launch_claude */ false,
-                /* launch_title */ None,
-                /* launch_set_title */ false,
-                /* launch_name */ None,
-                // STORY-495: inert here (launch_claude=false). The agent-new
-                // launch path injects its own posture via `config.default_args`.
-                /* launch_permission_mode */
-                None,
-                /* launch_contained */
-                false,
-                role.clone(),
-                /* force_claim */ false,
-                // STORY-714: config-driven (no per-command flag on this path
-                // yet) — [worktree_pool] enabled decides.
-                /* use_pool */
-                None,
-            );
+            // BUG-1918: `agent new` claims FOR the agent it launches.
+            // trace:BUG-1918 | ai:claude
+            let start_result = review_authority::as_launcher(|| {
+                session_start(
+                    &spec,
+                    /* branch */ None,
+                    /* base */ None,
+                    /* reuse_branch */ false,
+                    /* explicit_path */ None,
+                    /* forge_override */ None,
+                    /* branch_style */ "auto",
+                    /* launch_claude */ false,
+                    /* launch_title */ None,
+                    /* launch_set_title */ false,
+                    /* launch_name */ None,
+                    // STORY-495: inert here (launch_claude=false). The agent-new
+                    // launch path injects its own posture via `config.default_args`.
+                    /* launch_permission_mode */
+                    None,
+                    /* launch_contained */
+                    false,
+                    role.clone(),
+                    /* force_claim */ false,
+                    // STORY-714: config-driven (no per-command flag on this path
+                    // yet) — [worktree_pool] enabled decides.
+                    /* use_pool */
+                    None,
+                    /* self_claim */
+                    false,
+                )
+            });
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
                 .with_context(|| format!("failed to restore cwd to {}", previous_cwd.display()))?;
@@ -4408,6 +4443,11 @@ pub(crate) fn build_agent_new_bg_command(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
+    // BUG-1918: the backgrounded worker carries its lease id too.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
     Ok(command)
 }
 
@@ -4610,11 +4650,22 @@ pub(crate) fn run_tracked_agent(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
+    // BUG-1918: the worker carries its lease id, so it stays its lease's
+    // author after it leaves the worktree or the lease is released.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
 
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
+    // BUG-1918: this launcher made the claim; record the worker it spawned.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::record_launched_worker(&plan.project_root, lease_id, child_pid);
+    }
     let terminal = agent_registry::current_terminal_identity();
     let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
     let mut title_restore = None;

@@ -3380,13 +3380,27 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
         .parse::<DocumentMut>()
         .with_context(|| format!("parsing lease {}", path.display()))?;
     doc["active_pid"] = value(i64::from(pid));
-    if let Some(start_time) = crate::process_probe::process_start_identity(pid) {
-        doc["active_pid_start_time"] = value(start_time);
+    let start_time = crate::process_probe::process_start_identity(pid);
+    if let Some(start_time) = &start_time {
+        doc["active_pid_start_time"] = value(start_time.clone());
     }
     // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&path, doc.to_string())
         .with_context(|| format!("writing lease {}", path.display()))?;
+    // BUG-1918: the spawned worker — not the launcher that claimed — works
+    // this lease; record its process as one of the lease's authors so the
+    // ledger outlives the lease.
+    // trace:BUG-1918 | ai:claude
+    crate::review_authority::record_lease_identity(
+        project_root,
+        lease_id,
+        &[crate::review_authority::process_token(
+            "proc",
+            pid,
+            start_time.as_deref(),
+        )],
+    );
     Ok(())
 }
 
