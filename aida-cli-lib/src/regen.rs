@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use aida_core::models::{
     Comment, RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
@@ -123,9 +123,7 @@ fn project(req: &Requirement) -> Result<CorpusRow<'_>> {
 }
 
 fn git(store: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(store)
+    let out = aida_core::git_ops::host_git_command(store)
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .output()
@@ -184,9 +182,7 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
         return Ok(Vec::new());
     }
     let input: String = objects.iter().map(|(oid, _)| format!("{oid}\n")).collect();
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(store)
+    let mut child = aida_core::git_ops::host_git_command(store)
         .args(["cat-file", "--batch"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
