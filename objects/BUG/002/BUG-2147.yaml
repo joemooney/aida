@@ -3,12 +3,12 @@ spec_id: BUG-2147
 agreed_id: BUG-2147
 title: 'merge-hold clear reads a stale verdict: reports ''release condition NOT met'' and logs a human override when an APPROVED verdict at the current head is already recorded'
 description: '2026-10-14 23:24-23:25, PR #2656: the advisor recorded APPROVED at head cdc443a02b (.aida/review-verdicts/PR-2656.json, recorded_at 06:24:43Z, verdict approved). About a minute later the operator ran ''aida merge-hold clear 2656'' in the same main checkout and got: ''release condition is NOT met: the verdict on record is CHANGES REQUESTED ... at dc1f3ff11082 ... no APPROVED verdict is recorded at the current head cdc443a02b15 ... Clearing it anyway as a recorded human override.'' So the clear path resolves the verdict from a different/stale source (committed store ledger? cache?) than review record writes. Effect: a legitimate clear is recorded as an override, which trains operators to ignore the warning. Also note the verdict JSON has sha/head_sha keys = null at top level; check which field the clear path compares. Acceptance: a clear immediately after review record at the current head reports the condition met and records no override; test covers record-then-clear with no sync in between.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T06:25:53.315383909Z
-modified_at: 2026-10-15T12:04:44.000801804Z
+modified_at: 2026-10-15T12:04:49.578407844Z
 req_type: Bug
 tags:
 - merge-hold
@@ -34,6 +34,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13f73-652a-7cd0-bdda-6ffaf7195249
+  author: joe
+  timestamp: 2026-10-15T12:04:49.578402293Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 filed_at:
   code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
   branch: main
