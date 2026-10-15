@@ -18,8 +18,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:00:48.072168455Z
-modified_at: 2026-10-15T12:01:12.774241974Z
+modified_at: 2026-10-15T12:01:16.140672961Z
 req_type: Story
+comments:
+- id: 01a13f70-236c-78a1-8d63-e85a1bca1622
+  author: joe
+  content: 'ADVISOR SIGNOFF (05:01): the design in the acceptance is the sketch, and it is SIGNED. This is a display-only addition to handoff --show plus a file-append subcommand; it adds no new authority path. Fire mode, STANDARD tier.'
+  created_at: 2026-10-15T12:01:16.140672961Z
+  modified_at: 2026-10-15T12:01:16.140672961Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a13f70-1646-7cf0-b0c1-8f427fa73e51
   author: joe
