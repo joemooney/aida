@@ -39,3 +39,33 @@ invalid, absent and null row roundtrips; CLI parsing/report formatting and exit
 gate tests; canonical readback; required fast gate and targeted Rust tests.
 
 <!-- trace:STORY-1673 | ai:codex -->
+
+## Verified source and binding evidence
+
+At source `dddf4c5d97`, the final targeted core run passed all 12 new tests;
+the final targeted CLI run passed all 6 tests. Existing merge, export and
+edit/rebase regressions passed 60, 6 and 13 tests respectively using the fresh
+compiled test artifacts. These are targeted runtime results, not a full
+workspace runtime claim. Logs are `/tmp/regen-relay7-1673-{core-final,cli-final,
+conflict,export,edit-rebase}.log`.
+
+The generator ran successfully and its real output passed standalone TypeScript
+checking (`--noEmit --skipLibCheck --target ES2020 --moduleResolution bundler
+--module esnext shared/types.ts`). The generated diff includes JsonValue and
+verify, required existing FilingProvenance/ExecutionMode/Origin declarations,
+and previously stale existing model fields; ts-rs trailing spaces are normalized.
+Semantic diff: `/tmp/regen-relay7-1673-types-semantic.diff`.
+
+Three fresh-context AUTHOR source checks were used. Round 1 found sync field
+loss and incorrect PATH permission detection; round 2 found creating/migrating
+read paths and bad YAML arguments dropping rows. Both rounds' findings were
+fixed. Round 3 reported no new blocking source finding and ran bounded checks of
+the actual probe module. Subsequent binding declarations and portable fixture
+strings received compiler/runtime/static checks. This is not independent review
+or approval; no fourth author check was run.
+
+The first fast-gate attempt failed only at the portability ratchet on hardcoded
+sample payload paths. Fixture strings were corrected, and the isolated guard
+passed. Publication requires a complete final fast-gate run at the committed
+head; the exact completed result belongs in the PR and spec trail. Independent
+STRICT review and operator merge remain outstanding.
