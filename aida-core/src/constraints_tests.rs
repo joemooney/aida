@@ -79,7 +79,7 @@ fn story1673_closed_schema_validates_all_six_probes_and_exact_types() {
         block("path-exists", json!({"path": 1}), "eq", json!(true)),
         block(
             "path-exists",
-            json!({"path": "/tmp", "extra": false}),
+            json!({"path": "/fixture", "extra": false}),
             "eq",
             json!(true),
         ),
@@ -127,12 +127,12 @@ fn story1673_shell_looking_arguments_are_invalid_before_any_host_read() {
     }
     for path in [
         "relative",
-        "/tmp/../etc",
-        "/tmp/$(touch sentinel)",
-        "/tmp/x;touch sentinel",
-        "/tmp/`id`",
-        "/tmp/a|b",
-        "/tmp/a\nb",
+        "/fixture/../etc",
+        "/fixture/$(touch sentinel)",
+        "/fixture/x;touch sentinel",
+        "/fixture/`id`",
+        "/fixture/a|b",
+        "/fixture/a\nb",
     ] {
         for probe in ["path-exists", "disk-rotational"] {
             assert_eq!(

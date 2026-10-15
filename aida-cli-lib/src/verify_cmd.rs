@@ -162,7 +162,7 @@ mod tests {
                 "verify",
                 "constraints",
                 "--command",
-                "touch /tmp/never",
+                "touch sentinel",
             ],
         ] {
             assert!(crate::cli::Cli::try_parse_from(args).is_err());
@@ -216,7 +216,7 @@ mod edit_tests {
         let mut req = Requirement::new("fixture".into(), "fixture".into());
         assert!(apply_verify_edit(&mut req, Some("{}"), false).is_err());
         req.req_type = RequirementType::Constraint;
-        let raw = r#"{"version":99,"probe":"shell","args":{"command":"touch /tmp/NEVER"},"expect":{"op":"eq","value":true}}"#;
+        let raw = r#"{"version":99,"probe":"shell","args":{"command":"touch sentinel"},"expect":{"op":"eq","value":true}}"#;
         assert_eq!(
             apply_verify_edit(&mut req, Some(raw), false)
                 .unwrap()
