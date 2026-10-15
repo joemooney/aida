@@ -1,0 +1,19 @@
+{
+  "id": "59947816-6829-42bb-b016-7aa01e12126f",
+  "thread_id": "59947816-6829-42bb-b016-7aa01e12126f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792028322471,
+  "body": "#2638 (TASK-1748) rework approved at d3d68c6c1312aebaa4707523ec56715e5460b742: the lock loophole is closed and the self-tests are good. Non-blocking nit: the line-level allow-unisolated-home marker also exempts PATH setters on that line; consider restricting it to HOME later. The advisor ships on green Build. Thanks.",
+  "subject": "#2638 r2 APPROVED",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
