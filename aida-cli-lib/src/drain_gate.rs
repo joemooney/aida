@@ -1547,6 +1547,17 @@ pub(crate) fn run_auto_complete(
     // the carried field (`driver.is_zen_run()`) rather than re-deriving zen-ness
     // from a bare `AIDA_ZEN` env read. The env var stays as the cross-process
     // transport to phase children / skill templates. trace:ADR-10 | ai:claude
+    // BUG-2146: resolve the drain's contained posture as a hard precondition.
+    // A malformed agents.toml is a refusal naming the file — never a silent
+    // uncontained drain. (`RealPhaseDriver::new` re-reads it and fails closed.)
+    // trace:BUG-2146 | ai:claude
+    if let Err(err) = crate::session::drain_contained(&project_root) {
+        eprintln!(
+            "{} {err:#}",
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+        );
+        return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+    }
     let mut driver = RealPhaseDriver::new(
         project_root.clone(),
         spec.to_string(),
