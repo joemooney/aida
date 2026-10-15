@@ -13,12 +13,12 @@ description: |
   - The SessionStart hook output that names the role also points at the standing orders when present (one line).
   - Seed advisor standing orders in the template: fire-mode ship authority; never hand the operator commands the advisor can run itself; hold clears are the only TTY-only act, batched in one line; keep fixers busy (never zero fixers running during a mandate); use serial-ship; rule on implementer sketches rather than letting a lane block.
   - Tests: ordering, both sources, the absent cases, the add/list round-trip.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:00:48.072168455Z
-modified_at: 2026-10-15T12:02:14.013249651Z
+modified_at: 2026-10-15T16:24:43.308374604Z
 req_type: Story
 comments:
 - id: 01a13f70-236c-78a1-8d63-e85a1bca1622
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14061-562c-7e80-ad45-4d41d2f5110d
+  author: aida-orchestrator
+  timestamp: 2026-10-15T16:24:43.308411768Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
   branch: main
@@ -50,3 +57,11 @@ filed_at:
   aida_build_sha: 6ddf336ddd
   vendor: claude
   session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'STANDARD round 1: the --show behavior meets acceptance, but the nested standing-orders/ dir breaks discipline-pack scaffolding (ENOENT); CI is red with 7 failures'
+  recovery_hint: address the review findings, move STORY-1693 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-15T16:24:43.308374604Z
