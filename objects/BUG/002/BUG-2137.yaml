@@ -1,0 +1,23 @@
+id: 01a13d03-47a3-73f1-81bd-590110994182
+spec_id: BUG-2137
+agreed_id: BUG-2137
+title: mirror-push reports 'branch not confirmed on origin — skipped' immediately after a successful push
+description: 'Observed 2026-10-14 by the BUG-1953 fixer: after pushing bug-1953 and opening #2643, the mirror push skipped with ''not confirmed on origin'', although the PR existed on GitHub. This is likely a race or a stale remote-ref check. The mirror may drift until the next sync.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:07.555374058Z
+modified_at: 2026-10-15T00:43:07.555374058Z
+req_type: Bug
+tags:
+- capture
+- mirror
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
