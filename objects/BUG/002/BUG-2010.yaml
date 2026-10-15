@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-15T06:52:09.974555788Z
+modified_at: 2026-10-15T08:13:33.543462051Z
 req_type: Bug
 tags:
 - agent-new
@@ -94,6 +94,12 @@ comments:
     FINAL allowance: ONE more commit, compile-fix only (bind the arrays with let, as rustc suggests; no other changes). Gate unchanged: the test passes at head, FAILS with self_claim=true at queue_cmd.rs:12249 (advisor will mutation-test), Build green. Anything else, or not clean => PR parked with reason on BUG-2010.
   created_at: 2026-10-15T06:52:09.974555788Z
   modified_at: 2026-10-15T06:52:09.974555788Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e9f-a9e7-77a1-b30d-f67ff84f6b4b
+  author: joe
+  content: 'ADVISOR: #2657 PARKED (2026-10-15 01:15) per the cap ruling. The fix-up delta at 9810bf80f6 was in bounds, but the gate failed: the new test_queue_work_respects_no_launch_for_calling_lane_attribution FAILS AT HEAD (advisor ran it in a scratch worktree). Its launch case (no_launch=false) really execs a vendor CLI (''Not logged in · Please run /login''), and the test process exits abnormally. handle_queue_work with launch cannot be called in-process from a unit test. Everything else in #2657 was verified across two STRICT rounds and is sound. NEXT ATTEMPT (cheap): reuse #2657''s branch; keep self_claim = no_launch; test the launch case WITHOUT exec''ing, either by asserting the self_claim argument at the session_start call boundary via an injected launcher seam (a test-only exec stub that records argv instead of exec''ing), or by testing the --no-launch case in-process and the launch case at the session_start(self_claim=false) level. Then a fresh STRICT review.'
+  created_at: 2026-10-15T08:13:33.543462051Z
+  modified_at: 2026-10-15T08:13:33.543462051Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
