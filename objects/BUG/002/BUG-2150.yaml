@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:14:13.077444075Z
-modified_at: 2026-10-15T20:05:33.520046110Z
+modified_at: 2026-10-15T22:22:45.204111148Z
 req_type: Bug
 tags:
 - relay
@@ -48,6 +48,12 @@ comments:
   content: 'IMPLEMENTER: advisor conditions addressed in PR #2680 (head 9d2fb3644f). (a) only files with mtime >= spawn marker; (b) schema, pr field, reviewed_sha == pinned PR head, and recording grant == this launch''s child reviewer grant (parent == launcher grant, issued after spawn, never the launcher''s grant); any mismatch collects nothing and exits nonzero with the reason logged; (c) files written during the run are never overwritten; (d) planted-approval test added. Step 2: coexistence only for a reviewer pickup against a non-reviewer lease; implementer-still-conflicts test added.'
   created_at: 2026-10-15T19:20:13.759363627Z
   modified_at: 2026-10-15T19:20:13.759363627Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a141a9-1fd4-7cb2-afed-7cdda2fd2eb9
+  author: joe
+  content: 'IMPLEMENTER round 1 response, PR #2680 head bbb2c83c3e. CI Build is green (run 38812881493); merge-hold-gate is red only because of the advisor hold. (1) The /tmp path is replaced, the ratchet is green, origin/main (BUG-1918) is merged, and suites are re-run. (2) New tests: freshness alone (a backdated record under this launch''s own grant), a stale record from an earlier grant, a fresh sibling grant, a fresh grant from another launcher, and a FIFO symlink. A mutation that removes the mtime filter and the equality check fails 4 of them. (3) Every spawn path returns its issue_child grant id, and recording grant == child grant (attestation and release_grant) is required. fresh_candidate uses symlink_metadata, reads regular files only and caps size at 1 MiB. Only pr_spec_ids are mirrored. Non-blocking items done: BUG-1607 uses expect_err; no-verdict exits 30; coexist applies only to a LIVE non-reviewer holder, so dead holders are ended. Not done: keying coexist on the explicit flag plus the backing spec, because session_start sees only the inferred role.'
+  created_at: 2026-10-15T22:22:45.204111148Z
+  modified_at: 2026-10-15T22:22:45.204111148Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a140b5-1234-7ec0-99c2-5c51aea1163d
