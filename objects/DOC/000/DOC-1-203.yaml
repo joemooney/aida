@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-12T04:20:17.621675449Z
+modified_at: 2026-10-15T12:09:32.173778727Z
 req_type: Doc
 tags:
 - factory:2026-10-11
@@ -330,6 +330,12 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 5: all five rework-brief items done; the per-launcher table verified row by row against origin/main; the roles chapter is now accurate. Three textual inaccuracies remain in hunks this PR rewrote (advisor-role.md x2, environment-variables.md). Text-only fix; no re-architecture.. No triage reason was given.'
   created_at: 2026-10-12T04:20:17.621668658Z
   modified_at: 2026-10-12T04:20:17.621668658Z
+- id: 01a13f77-b50d-7631-84b6-e32c53dbe0f4
+  author: joe
+  content: 'ADVISOR (05:10): #2499 (slice B3) merged on 2026-10-12. The spec lists no other slice, so it is completed. Merge-time completion missed it. If a docs slice is still missing, file it as a new DOC.'
+  created_at: 2026-10-15T12:09:32.173778727Z
+  modified_at: 2026-10-15T12:09:32.173778727Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
   author: aida-session-start
