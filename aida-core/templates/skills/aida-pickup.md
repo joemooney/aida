@@ -474,6 +474,17 @@ Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
 follow related links, write the code, add trace comments
 (`// trace:<spec_id> | ai:claude`), commit.
 
+Test locally by the spec's tier; the full workspace suite runs only in CI
+(never `cargo test --workspace` locally):
+
+- **FASTTRACK** (docs, templates, one line): `make check-ci-fast` only, no cargo.
+- **STANDARD**: `make test-touched` (targeted `cargo test --profile agent -p
+  <crate> <filter>` for the touched modules) plus `make check-ci-compile`.
+- **STRICT or heft >= 7**: STANDARD plus the area's integration test binaries
+  (`cargo test --profile agent -p <crate> --test <name>`).
+
+`make check-ci-fast` runs before every push. trace:TASK-1780 | ai:claude
+
 ### Step 5: Mark done atomically
 
 When the work lands:
