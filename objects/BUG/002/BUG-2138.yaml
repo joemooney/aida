@@ -1,0 +1,23 @@
+id: 01a13d03-770f-7100-a5f8-765b76f55c88
+spec_id: BUG-2138
+agreed_id: BUG-2138
+title: 'Two seats implemented BUG-2009 in parallel (#2642 and #2644): claiming the spec did not prevent duplicate work'
+description: 'Observed 2026-10-14: a seat opened #2642 (BUG-2009) at 23:34Z while an advisor-launched fixer, claiming BUG-2009+BUG-2003, built #2644. #2642 was closed as superseded. Investigate whether the second claim was refused or warned, whether subagent fixers skipped the claim, or whether the claim lease was not visible. Expected: the second claimant is refused, or told who holds it.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:19.695580202Z
+modified_at: 2026-10-15T00:43:19.695580202Z
+req_type: Bug
+tags:
+- capture
+- coordination
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
