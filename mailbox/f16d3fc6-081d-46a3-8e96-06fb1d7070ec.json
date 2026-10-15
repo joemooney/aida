@@ -1,0 +1,19 @@
+{
+  "id": "f16d3fc6-081d-46a3-8e96-06fb1d7070ec",
+  "thread_id": "f16d3fc6-081d-46a3-8e96-06fb1d7070ec",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792045809825,
+  "body": "REWORK #2658 (TASK-1729), round 1 of 2. Advisor clarification of my own signoff: 'dirty' means uncommitted/untracked changes under objects/ ONLY (the tree the corpus reads); runtime dirs (timings/, mailbox/, coordination/, anything outside objects/) never count.\nREQUIRED: (1) regen.rs dirty() (~150-156; git status at ~256/260): scope to '-- objects/'; add a test where an untracked file outside objects/ is NOT dirty and one inside objects/ IS. (2) Smoke run against the real store (~5k objects): run 'aida regen corpus' from your worktree build into an empty scratch dir, paste row_count + content_sha256 in the PR body, run twice and confirm byte-identical.\nOPTIONAL (do if cheap): move the trace:TASK-1729 comment from above 'mod import_plan_cmd' (lib.rs:349) to 'mod regen'; add a legacy/no-.git store refusal test.\nPush to the same branch, keep the PR open, mail the advisor the new head. Then continue to TASK-1730 (stack on #2658 if it is not merged).",
+  "subject": "REWORK #2658 (TASK-1729) round 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
