@@ -14,12 +14,12 @@ description: |
   - A test ships a PR by number from `main` with a lease on the PR head branch and asserts the lease is ended (or the BUG-61 inside-worktree skip is reported, not "nothing to clean up").
 
   Found by the night-fable review sweep of pr_ship post-merge cleanup. Related: BUG-733 (fixed the delete/stacked logic but not step 5). Size S.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T07:27:47.747877137Z
-modified_at: 2026-10-14T23:35:38.217983542Z
+modified_at: 2026-10-15T00:00:36.016070263Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -145,6 +145,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a13cdc-58ab-7912-97aa-852e0a176dd3
+  author: aida-auto-bump
+  timestamp: 2026-10-15T00:00:36.011757604Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a13cdc-58b0-7c50-908d-e4fa06866b9c
+  timestamp: 2026-10-15T00:00:36.016068334Z
+  agent: implementer
+  commit_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
+  summary: Completed via merge 11154cd1
+  punted:
+  - 'punted: phase-1 PR/MR 2615 is Closed, not open'
 execution_mode: guided
 filed_at:
   code_sha: 9116ba7f2331ae940c1985b019c714d34de1ef20
@@ -154,11 +169,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: fe2e54bf-a248-4cf2-b0bc-4c1b6031e41c
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-unavailable
-  detail: phase-1 PR/MR 2615 is Closed, not open
-  recovery_hint: 'CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1953 --auto-complete`.'
-  shelved_by: integrator
-  shelved_at: 2026-10-14T02:36:50.418442180Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T00:00:36.011752553Z
+  completion_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
