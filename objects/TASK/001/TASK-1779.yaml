@@ -1,0 +1,27 @@
+id: 01a13f75-dff9-77b0-9228-dc3f1769a021
+spec_id: TASK-1779
+agreed_id: TASK-1779
+title: 'TASK-1732 hardening batch (from #2666 STRICT review)'
+description: |-
+  Non-blocking findings from the #2666 review, batched:
+  - Value matching is substring-only (adapter.rs:296-304): short values over-refuse; transformed echoes are not caught.
+  - Self-map recording is untested at record level (the persisted adapter.mappings row).
+  - source_present is hardcoded true (adapter.rs:255).
+  - Installer stderr is over-redacted on mapped runs.
+  - The GAPS.toml read has no size cap (adapter.rs:178).
+  - The AGENTS.md paragraph is misplaced (prepended above the first line).
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T12:07:32.089278044Z
+modified_at: 2026-10-15T12:07:32.089278044Z
+req_type: Task
+filed_at:
+  code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6ddf336ddd
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
