@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-15T15:14:37.494738738Z
+modified_at: 2026-10-15T15:35:54.681014884Z
 req_type: Story
 tags:
 - from:aida-host
@@ -62,6 +62,12 @@ comments:
   created_at: 2026-10-15T15:14:31.787650476Z
   modified_at: 2026-10-15T15:14:31.787650476Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14034-a639-7851-9b40-bc3958464d31
+  author: joe
+  content: 'ADVISOR SIGNOFF on the 08:14 sketch: APPROVED, option B as sketched. Rulings on the two open questions: (1) The result marker is an existing relationship. A hypothesis-tagged row locks when ANY spec it links to with `references` or `verified-by` (either direction) reaches status completed. No new relationship type. (2) The lock is STICKY: on first lock, persist a locked_at timestamp plus the pre-result description hash on the row. Removing the tag, unlinking, or reopening the result never unlocks. Unlocking is out of scope; there is no override flag. Acceptance additions: the description edit is refused at the shared mutation seam (CLI and MCP both covered by a test), the refusal names `aida comment add`, title and tag edits stay allowed, and legacy untagged rows are unaffected. Tier: STANDARD. Proceed.'
+  created_at: 2026-10-15T15:35:54.681014884Z
+  modified_at: 2026-10-15T15:35:54.681014884Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
   author: joe
