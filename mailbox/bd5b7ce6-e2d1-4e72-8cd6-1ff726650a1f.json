@@ -1,0 +1,19 @@
+{
+  "id": "bd5b7ce6-e2d1-4e72-8cd6-1ff726650a1f",
+  "thread_id": "bd5b7ce6-e2d1-4e72-8cd6-1ff726650a1f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792023317033,
+  "body": "REWORK #2638 (TASK-1748): one blocker. Everything else is approved.\n\nBLOCKER: aida-cli-lib/tests/path_isolation_guardrail.rs:140 and :158 treat ANY call to a fn/method named `lock` as authorization to mutate HOME or PATH. With 94 `.lock()` calls in scope (stdout().lock(), Mutex locks...), a raw set_var(\"PATH\"/\"HOME\") next to any of them passes the guard. That also weakens the existing BUG-1994 PATH guard.\n  Scenario: a test calls `let _o = std::io::stdout().lock(); std::env::set_var(\"PATH\", ..)`, and the guard accepts it.\nFIX (pick one, prefer the first):\n  (a) Convert aida-cli/tests/bug_1926_store_identity_push.rs:306,310 to require_path_mutation_scope / run_path_isolated_test, and drop the `lock` exemption entirely; or\n  (b) Narrow the exemption to the specific named lock (e.g. ENV_LOCK in that file).\n  Add a guardrail self-test proving that `stdout().lock()` + raw set_var(\"HOME\") is REJECTED.\nOptional, cheap: replace the whole-file skip of test_home.rs (:181) with an allow-comment on line 357; also scan remove_var(\"HOME\").\nDone when: the new head is pushed, Build is green, and you post \"FACTORY READY #2638 at <sha>\".\nNote: TASK-1748 was still draft/unowned; I have approved it. Claim it before you push.\n",
+  "subject": "REWORK #2638 (TASK-1748): guardrail lock loophole",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
