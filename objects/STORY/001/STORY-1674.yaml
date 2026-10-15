@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T16:19:38.344241642Z
+modified_at: 2026-10-15T18:42:34.541503364Z
 req_type: Story
 tags:
 - from:aida-host
@@ -92,6 +92,12 @@ comments:
   content: Inspected implementation plan saved at docs/plans/2026-10-15-story-1674-write-provenance.md, local commit8c626057b2 in codex/story-1674 (base3d85bbde84, lease01a1403c9371). Production implementation has NOT begun. Existing FilingProvenance.session and Comment.session_id are present, but HistoryEntry lacks session identity; ledger v1 lacks a dedicated effort column. Plan maps canonical create/update/full-save/atomic/transaction seams plus legacy handling, exact session/parsed timestamp join, and missing evidence unknown. No guessed effort/model, new ledger, transcript parsing or launcher/seat edits. Resume this signed scope after current regen checks/publication.
   created_at: 2026-10-15T16:19:38.344241642Z
   modified_at: 2026-10-15T16:19:38.344241642Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a140df-8bad-7b43-956f-ba2da982150c
+  author: joe
+  content: Commit bfddcbee42 references this requirement
+  created_at: 2026-10-15T18:42:34.541503364Z
+  modified_at: 2026-10-15T18:42:34.541503364Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
