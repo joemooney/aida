@@ -235,6 +235,8 @@ mod tests {
         super::super::tests::trial(id, time)
     }
 
+    // Executable wrapper must live off the noexec RAM test root.
+    #[cfg(target_os = "linux")]
     #[test]
     fn warm_statusline_and_historical_digest_use_no_git_and_misses_batch_once() {
         if crate::test_env::run_path_isolated_test() {
