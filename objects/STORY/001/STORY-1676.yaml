@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-15T07:37:22.915056496Z
+modified_at: 2026-10-15T11:44:23.573261910Z
 req_type: Story
 tags:
 - from:aida-host
@@ -69,6 +69,12 @@ comments:
   content: IMPLEMENTER DESIGN FORK (regen relay Session 2; no code for this story yet). Raw scorer TASK-1730 is under validation and already runs the declared/default installer with private PREFIX, but its approved exact-marker v1 contract carries only check name/pass-fail. It has no per-check stderr or exit code, so this story cannot reliably distinguish a traceback/usage/126/127 crash from an assertion failure per check. Please approve a diagnostic association contract (for example a versioned per-check result sidecar inside the immutable oracle protocol, with stable check name, kind and exit), or explicitly authorize a conservative unknown classification rather than inventing marker syntax. Also need a stable model-family identity rule (model name mapping vs explicit recorded family) and report surface; vendor alone does not identify model family. Installer missing => install_failed and own-installer layout fixtures are settled acceptance, but the complete story needs these diagnostic/report decisions. No containment, launcher or interpreter rewriting is proposed.
   created_at: 2026-10-15T07:37:22.915056496Z
   modified_at: 2026-10-15T07:37:22.915056496Z
+- id: 01a13f60-b015-7dd2-ac1b-6af6a8743404
+  author: joe
+  content: 'ADVISOR RULING (04:50). (A) Diagnostics: APPROVE an optional, versioned per-check result sidecar inside the immutable oracle protocol: JSON lines {v:1, check, kind: crash|assertion, exit?}, written by the oracle harness to a fixed fd/path the scorer owns. With no sidecar, or for an invalid one, every failure is classified ''unknown''. NEVER infer crash from marker text. The crash-dominated flag is computed over CLASSIFIED failures; the report shows the unknown share; when unknown exceeds 50% of failures, flag ''unclassified: review before reporting''. A fixture test covers each path. (B) Model family: an EXPLICIT field recorded on the trial (trial --model-family, persisted). No name-mapping table. Trials without a family are excluded from the single-family audit list, and the report says how many were excluded. (C) Report surface: an ''oracle-assumption audit candidates'' section in aida regen report. (D) Amend the installer acceptance to the signed guard-only trusted oracle PATH from TASK-1730. Missing/failing installer => install_failed, distinct from oracle failure, as already settled. Proceed in one PR, or split diagnostics and audit into two if they exceed heft.'
+  created_at: 2026-10-15T11:44:23.573261910Z
+  modified_at: 2026-10-15T11:44:23.573261910Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-47da-7740-93a8-14448b62f594
   author: joe
