@@ -3928,11 +3928,16 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     if !custom.is_empty() {
         let list = custom
             .iter()
-            .map(|(name, path, line)| format!("`{name}` ({}) runs `{line}`", path.display()))
+            .map(|(name, path, line)| {
+                format!(
+                    "the `{name}` hook ({}) runs `aida` (`{line}`) and is not a shipped AIDA hook",
+                    path.display()
+                )
+            })
             .collect::<Vec<_>>()
             .join("; ");
         problems.push(format!(
-            "{} git hook(s) run `aida` and are not a shipped AIDA hook: {list}. Git runs them while this \
+            "{} git hook(s) call aida: {list}. Git runs them while this \
              command holds the store write lock, so an aida write from one would wait for this command \
              until it times out. Use the shipped AIDA hook, limit the hook to `aida internal ...`, or move \
              the call out of the hook.",
@@ -7823,7 +7828,12 @@ mod tests {
         assert!(err.contains("`post-commit`"), "{err}");
         assert!(err.contains("`post-merge`"), "{err}");
         assert!(err.contains("aida edit TASK-1"), "{err}");
-        assert!(err.contains("2 git hook(s) run `aida`"), "{err}");
+        assert!(err.contains("2 git hook(s) call aida"), "{err}");
+        assert_eq!(
+            err.matches("is not a shipped AIDA hook").count(),
+            2,
+            "{err}"
+        );
         assert!(
             err.contains("aida scaffold upgrade --only git-hooks"),
             "{err}"
