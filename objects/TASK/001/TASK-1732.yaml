@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T10:17:40.588478794Z
+modified_at: 2026-10-15T10:18:15.658390320Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -76,6 +76,11 @@ comments:
   created_at: 2026-10-15T10:17:40.588478794Z
   modified_at: 2026-10-15T10:17:40.588478794Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13f11-d4ea-7fd0-bcaa-2d28edd0f33f
+  author: joe
+  content: 'Binding advisor collision ruling read (mail8b8f9b45, 03:18): hard error naming both mappings for a target that is a distinct source or a target shared by two mappings. Self-map is allowed and recorded as a no-op. Implementing before final verification.'
+  created_at: 2026-10-15T10:18:15.658390320Z
+  modified_at: 2026-10-15T10:18:15.658390320Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
