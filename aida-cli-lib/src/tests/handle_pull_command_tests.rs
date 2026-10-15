@@ -657,6 +657,10 @@ fn bug1625_followup_filed_in_store_recognises_existing_followups() {
 
 #[test]
 fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
     let store_path = project_root.join("requirements.yaml");
     let storage = Storage::new(store_path.clone());

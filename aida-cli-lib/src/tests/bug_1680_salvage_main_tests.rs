@@ -56,6 +56,7 @@ fn mock_lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 
@@ -73,6 +74,7 @@ fn mock_ps_row(id: &str, spec: &str, worktree: PathBuf) -> PsRow {
         locked_by: None,
         mail_identity: None,
         activity: None,
+        driver: None,
     }
 }
 
@@ -419,6 +421,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement_from: None,
     });
 
     let mut row2 = mock_ps_row("sess-2", "harness-worktree", repo.to_path_buf());
@@ -429,6 +432,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement_from: None,
     });
 
     let mut row3 = mock_ps_row("sess-3", "harness-worktree", repo.to_path_buf());
@@ -439,6 +443,7 @@ fn test_fixture_dead_harness_sessions_on_main_checkout_with_tool_dirs() {
         dirty: true,
         ahead_of_main: 0,
         untracked_only: true,
+        commit_movement_from: None,
     });
 
     let input = vec![&row1, &row2, &row3];

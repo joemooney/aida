@@ -565,6 +565,7 @@ mod usage_timeline_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -670,8 +671,12 @@ mod usage_timeline_tests {
     /// `usage::read_events()` → `filter_events()` → the timeline builders,
     /// covering a success row, a failure row, and the newest-first order.
     // trace:TASK-1481 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn timeline_reads_fixture_usage_log_not_real_home() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempdir().unwrap();
         let aida_dir = home.path().join(".aida");
         std::fs::create_dir_all(&aida_dir).unwrap();
@@ -733,6 +738,7 @@ mod usage_perf_lens_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -1648,6 +1654,7 @@ mod task_872_read_write_audit_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 

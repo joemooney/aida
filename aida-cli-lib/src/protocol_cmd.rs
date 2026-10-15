@@ -7,7 +7,7 @@ use aida_core::{
 
 use crate::cli::ProtocolCommand;
 
-const TYPES: &[&str] = &["spike", "bug", "story", "task", "decision", "doc"];
+const TYPES: &[&str] = &["spike", "bug", "story", "task", "decision", "doc", "faq"];
 
 // trace:STORY-1221 | ai:codex
 pub(crate) fn handle_protocol_command(cmd: &ProtocolCommand, storage: &Storage) -> Result<()> {

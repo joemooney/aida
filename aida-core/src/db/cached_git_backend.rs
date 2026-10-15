@@ -20,6 +20,24 @@ use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
 
+/// How long `aida cache rebuild` waits for the cache refresh lock before it
+/// reports that another process is refreshing.
+// trace:BUG-1940 | ai:claude
+const QUARANTINE_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Result of [`CachedGitBackend::rebuild_cache_recovering`].
+// trace:BUG-1940 | ai:claude
+#[derive(Debug, Clone)]
+pub struct CacheRebuildOutcome {
+    /// Requirements projected into the rebuilt cache.
+    pub count: usize,
+    /// Where a corrupt cache file and its sidecars were moved (empty when the
+    /// old file was healthy).
+    pub quarantined: Vec<std::path::PathBuf>,
+    /// The integrity-check finding that triggered the quarantine.
+    pub problem: Option<String>,
+}
+
 pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
@@ -449,6 +467,47 @@ impl CachedGitBackend {
         self.full_rebuild(true)
     }
 
+    /// A reader's inline refresh, bounded inside ADR-53's 5 s ceiling. With
+    /// a compatible committed snapshot it makes ONE attempt (no SQLite retry
+    /// ladder): a live writer holding the cache write lock degrades it to
+    /// `WriterBusy`, the same labelled stale serve BUG-1674 introduced, and
+    /// `None` means the cache is current. With no usable snapshot, or one a
+    /// pending migration makes incompatible, there is nothing to serve, so it
+    /// keeps the full refresh with the read wait allowance armed: an
+    /// explicitly budgeted read fails with a clear error when the writer
+    /// outlasts it, while a mutation's constructor keeps the full ladder.
+    // trace:BUG-1956 | ai:claude
+    fn bounded_inline_refresh(&self) -> Result<Option<super::cache_refresh::RefreshState>> {
+        use super::cache::{is_cache_lock_error, ReadLadderBudget, ReadRefreshAttempt};
+        if self.cache.recheck_migration() || !self.cache.has_usable_snapshot() {
+            let _armed = ReadLadderBudget::arm();
+            return self.ensure_cache_fresh().map(|()| None).map_err(|e| {
+                if is_cache_lock_error(&e) {
+                    e.context(
+                        "the cache has no compatible snapshot yet (first build or schema \
+                         upgrade) and another process holds its write lock; re-run shortly",
+                    )
+                } else {
+                    e
+                }
+            });
+        }
+        let attempt = ReadRefreshAttempt::new();
+        let result = self.ensure_cache_fresh();
+        drop(attempt);
+        match result {
+            Ok(()) => Ok(None),
+            Err(e) if is_cache_lock_error(&e) => {
+                Ok(if self.cache.is_stale(&self.current_head_sha())? {
+                    Some(super::cache_refresh::RefreshState::WriterBusy)
+                } else {
+                    None
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// A reader that cannot refresh inline files the durable request and
     /// spawns the detached worker (STORY-1484 slice C). Returns `None` when
     /// the cache was brought current on the spot (`AIDA_CACHE_NO_DETACH`, or
@@ -460,8 +519,8 @@ impl CachedGitBackend {
         use super::cache_refresh::RefreshState;
         use super::{refresh_request, refresh_worker};
         if refresh_worker::no_detach() {
-            self.ensure_cache_fresh()?;
-            return Ok(None);
+            // trace:BUG-1956 | ai:claude
+            return self.bounded_inline_refresh();
         }
         let cache_path = self.cache.path();
         let head = self.current_head_sha();
@@ -474,8 +533,8 @@ impl CachedGitBackend {
             }
         };
         if request.spawning_suppressed(chrono::Utc::now()) {
-            self.ensure_cache_fresh()?;
-            return Ok(None);
+            // trace:BUG-1956 | ai:claude
+            return self.bounded_inline_refresh();
         }
         match refresh_worker::spawn_detached_worker(self.inner.path(), cache_path) {
             Ok(_) => Ok(Some(RefreshState::Requested)),
@@ -499,6 +558,9 @@ impl CachedGitBackend {
     ) -> Result<Option<super::cache_refresh::RefreshState>> {
         use super::cache_refresh::{self, RefreshLock, RefreshState};
         use std::time::Duration;
+        // Backstop: an explicitly budgeted read never waits out the ladder.
+        // trace:BUG-1956 | ai:claude
+        let _armed = super::cache::ReadLadderBudget::arm();
         loop {
             let head = self.current_head_sha();
             let migration = self.cache.recheck_migration();
@@ -514,10 +576,8 @@ impl CachedGitBackend {
                 return Ok(None);
             }
             match RefreshLock::try_acquire(self.cache.path()) {
-                Err(_) => {
-                    self.ensure_cache_fresh()?;
-                    return Ok(None);
-                }
+                // trace:BUG-1956 | ai:claude
+                Err(_) => return self.bounded_inline_refresh(),
                 Ok(Some(guard)) => {
                     if guard.is_nested() {
                         return Ok(None);
@@ -527,14 +587,34 @@ impl CachedGitBackend {
                         return Ok(None);
                     }
                     if migration || !self.cache.has_usable_snapshot() {
-                        self.ensure_cache_fresh()?;
-                        return Ok(None);
+                        // Nothing compatible to serve: refresh inline, with
+                        // the read wait allowance armed.
+                        // trace:BUG-1956 | ai:claude
+                        return self.bounded_inline_refresh();
                     }
                     let head = self.current_head_sha();
                     let recorded = self.cache.source_head_sha()?;
                     if let Some(from) = recorded.filter(|s| !s.is_empty()) {
                         if !head.is_empty()
-                            && crate::git_ops::is_ancestor(self.inner.path(), &from, &head)?
+                            // trace:BUG-1809 | ai:antigravity
+                            && match crate::git_ops::is_ancestor_with_timeout(
+                                self.inner.path(),
+                                &from,
+                                &head,
+                                budget.0,
+                            ) {
+                                Ok(ancestor) => ancestor,
+                                // A timed-out check (a loaded host) reads as
+                                // "not an ancestor": the read hands off and
+                                // makes no write attempt. Count it so a test
+                                // can tell this branch apart.
+                                // trace:BUG-1965 | ai:claude
+                                Err(_) => {
+                                    #[cfg(test)]
+                                    cache_refresh::test_count("ancestor_check_failed");
+                                    false
+                                }
+                            }
                         {
                             let attempt = super::cache::ReadRefreshAttempt::new();
                             let result = self.try_incremental_update(&from, &head);
@@ -583,6 +663,12 @@ impl CachedGitBackend {
                     return self.file_and_spawn_refresh();
                 }
                 Ok(None) => {
+                    // Lets a test tell "another holder had the refresh lock"
+                    // (this reader then hands off and never makes a write
+                    // attempt) apart from the write-lock path it exercises.
+                    // trace:BUG-1965 | ai:claude
+                    #[cfg(test)]
+                    cache_refresh::test_count("refresh_lock_contended");
                     let limit = if migration && !budget.0.is_zero() {
                         cache_refresh::migration_wait_limit()
                     } else {
@@ -612,10 +698,11 @@ impl CachedGitBackend {
                                     Some(state) => state,
                                 }
                             }
-                            Err(_) => {
-                                self.ensure_cache_fresh()?;
-                                return Ok(None);
-                            }
+                            // trace:BUG-1956 | ai:claude
+                            Err(_) => match self.bounded_inline_refresh()? {
+                                None => return Ok(None),
+                                Some(state) => state,
+                            },
                         };
                         return Ok(if self.cache.is_stale(&self.current_head_sha())? {
                             Some(state)
@@ -698,8 +785,11 @@ impl CachedGitBackend {
                     Ok(Some(_)) => Some(cache_refresh::RefreshState::Deferred),
                     Err(_) => {
                         drop(snapshot);
-                        self.ensure_cache_fresh()?;
-                        continue;
+                        // trace:BUG-1956 | ai:claude
+                        match self.bounded_inline_refresh()? {
+                            None => continue,
+                            busy => busy,
+                        }
                     }
                 }
             } else {
@@ -811,16 +901,20 @@ impl CachedGitBackend {
     where
         F: FnMut() -> Result<T>,
     {
+        // trace:BUG-1940 | ai:claude — corruption from the cache file is
+        // tagged here, at the source, so the CLI's rebuild hint never fires for
+        // other sqlite files (history index, token ledger, ...).
+        let tag = |err| super::cache::tag_cache_corruption(self.cache.path(), err);
         match f() {
             Ok(value) => Ok(value),
             Err(err) if is_cache_schema_drift_error(&err) => {
                 eprintln!(
                     "warning: cache schema drift while trying to {action}; rebuilding cache and retrying once: {err}"
                 );
-                self.rebuild_after_cache_schema_drift()?;
-                f()
+                self.rebuild_after_cache_schema_drift().map_err(tag)?;
+                f().map_err(tag)
             }
-            Err(err) => Err(err),
+            Err(err) => Err(tag(err)),
         }
     }
 
@@ -1136,6 +1230,65 @@ impl CachedGitBackend {
         Ok(n)
     }
 
+    /// [`Self::rebuild_cache`] that does not depend on the old cache file being
+    /// readable. If the rebuild fails with a corruption-class error, or an
+    /// integrity check finds the file damaged, then under the cache refresh lock
+    /// (the same flock single-flight refresh uses, held across the re-check,
+    /// the move and the rebuild) the file and its `-wal` / `-shm` sidecars are
+    /// moved to a quarantine path and the cache is rebuilt from the git store
+    /// into a fresh file. A lock/busy failure is returned as-is: a healthy cache
+    /// that is merely locked by another process is never quarantined.
+    // trace:BUG-1940 | ai:claude
+    pub fn rebuild_cache_recovering(&self) -> Result<CacheRebuildOutcome> {
+        use super::cache::{is_cache_corruption_error, tag_cache_corruption};
+        let path = self.cache.path().to_path_buf();
+        // Check integrity BEFORE rebuilding. A rebuild rewrites rows inside the
+        // existing file, so page-level damage that ordinary reads never touch
+        // (2026-10-14: "2nd reference to page", "Rowid out of order") would
+        // survive a "successful" rebuild. A damaged file goes straight to the
+        // quarantine path below and the rebuild lands in a fresh file.
+        // trace:BUG-1940 | ai:claude
+        let err = if let Ok(Some(problem)) = self.cache.integrity_problem() {
+            anyhow::anyhow!("the cache failed its integrity check: {problem}")
+        } else {
+            match self.rebuild_cache() {
+                Ok(count) => {
+                    return Ok(CacheRebuildOutcome {
+                        count,
+                        quarantined: Vec::new(),
+                        problem: None,
+                    })
+                }
+                Err(err) => err,
+            }
+        };
+        let damaged = is_cache_corruption_error(&err)
+            || matches!(self.cache.integrity_problem(), Ok(Some(_)));
+        if !damaged {
+            return Err(err);
+        }
+        let Some(_guard) =
+            super::cache_refresh::RefreshLock::acquire_within(&path, QUARANTINE_LOCK_WAIT)?
+        else {
+            // Not tagged as corruption on purpose: the actionable part here is
+            // "wait for the other process", which the generic hint would hide.
+            return Err(anyhow::anyhow!(
+                "the AIDA cache at {} is corrupt, but another aida process is refreshing \
+                 it; retry `aida cache rebuild` when it finishes\n  cause: {err}",
+                path.display()
+            ));
+        };
+        let (quarantined, problem) = self.cache.quarantine_and_reopen()?;
+        let count = self
+            .rebuild_cache()
+            .map_err(|e| tag_cache_corruption(&path, e))?;
+        Ok(CacheRebuildOutcome {
+            count,
+            quarantined,
+            problem,
+        })
+    }
+
     /// Re-stamp the cache HEAD-SHA after a write so the next stale-check
     /// passes. Called from write paths after `upsert_requirement` /
     /// `delete_requirement` succeed. Best-effort: if git HEAD can't be read
@@ -1159,7 +1312,16 @@ impl CachedGitBackend {
     /// upsert failure — so the next read does a full rebuild from the store and
     /// picks up the pulled rows. This trades one extra rebuild for correctness.
     /// trace:TASK-712
-    fn restamp_head(&self, pre_write_head: &str) {
+    ///
+    /// BUG-1951: callers capture both heads while holding the store write
+    /// lock, so `pre_write_head` cannot predate a lock-respecting writer's
+    /// commit. `post_write_head` is stamped rather than the live HEAD, so a
+    /// commit that lands after the lock is released reads as stale. A writer
+    /// that skips the lock can still commit between the two captures, so the
+    /// stamp is also refused unless `post_write_head` is `pre_write_head` or
+    /// a single commit on top of it (our own commit).
+    // trace:BUG-1951 | ai:claude
+    fn restamp_head(&self, pre_write_head: &str, post_write_head: &str) {
         // TASK-1515: while a schema migration is pending, `source_head_sha()`
         // reads `None`, which the freshness match below would take for "just
         // rebuilt" and stamp the post-write HEAD on rows that never ingested
@@ -1172,8 +1334,22 @@ impl CachedGitBackend {
             let _ = self.cache.set_source_head_sha("");
             return;
         }
-        let head = self.current_head_sha();
+        let head = post_write_head;
         if head.is_empty() {
+            return;
+        }
+        // An empty `pre_write_head` means the store had no commit yet, so our
+        // write made the root commit (which has no parent).
+        // trace:BUG-1951 | ai:claude
+        let advanced_only_by_us = head == pre_write_head || {
+            let parent = crate::git_ops::first_parent_sha(self.inner.path(), head);
+            match parent.as_deref() {
+                Some(p) => p == pre_write_head,
+                None => pre_write_head.is_empty(),
+            }
+        };
+        if !advanced_only_by_us {
+            let _ = self.cache.set_source_head_sha("");
             return;
         }
         let recorded = self.cache.source_head_sha().ok().flatten();
@@ -1187,7 +1363,7 @@ impl CachedGitBackend {
             Some(s) => s == pre_write_head, // unchanged since we last freshened
         };
         if was_current {
-            let _ = self.cache.set_source_head_sha(&head);
+            let _ = self.cache.set_source_head_sha(head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1257,7 +1433,12 @@ impl CachedGitBackend {
     /// HEAD (every epic resolved) or mark the cache stale so the next read does
     /// an authoritative full rebuild (a targeted epic read missed).
     // trace:BUG-1606 | ai:claude
-    fn refresh_epics_then_restamp(&self, reqs: &[&Requirement], pre_write_head: &str) {
+    fn refresh_epics_then_restamp(
+        &self,
+        reqs: &[&Requirement],
+        pre_write_head: &str,
+        post_write_head: &str,
+    ) {
         // TASK-1515: a pending migration keeps the on-disk head empty; see
         // `restamp_head`. Skip the epic rollups too: the next read rebuilds.
         // trace:TASK-1515 | ai:claude
@@ -1270,7 +1451,7 @@ impl CachedGitBackend {
             all_resolved &= self.refresh_parent_epic_status(req);
         }
         if all_resolved {
-            self.restamp_head(pre_write_head);
+            self.restamp_head(pre_write_head, post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1286,8 +1467,15 @@ impl CachedGitBackend {
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
         // Capture HEAD BEFORE the write so restamp_head can tell our own commit
         // apart from an external pull that moved HEAD underneath us. trace:TASK-712
-        let pre_write_head = self.current_head_sha();
-        let n = self.inner.bulk_update(requirements, commit_subject)?;
+        // BUG-1951: capture both heads under the store lock (re-entrant; the
+        // inner write takes it again). Released before the cache upserts.
+        // trace:BUG-1951 | ai:claude
+        let (pre_write_head, n, post_write_head) = {
+            let _lock = self.inner.lock_store()?;
+            let pre = self.current_head_sha();
+            let n = self.inner.bulk_update(requirements, commit_subject)?;
+            (pre, n, self.current_head_sha())
+        };
         let mut cache_ok = true;
         for req in requirements {
             if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
@@ -1302,7 +1490,7 @@ impl CachedGitBackend {
         if cache_ok {
             // BUG-626: refresh each touched child's parent epic rollup status.
             let reqs: Vec<&Requirement> = requirements.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1330,10 +1518,18 @@ impl CachedGitBackend {
     {
         // Capture HEAD BEFORE the write so restamp_head can tell our own commit
         // apart from an external pull that moved HEAD underneath us.
-        let pre_write_head = self.current_head_sha();
-        let report = self
-            .inner
-            .bulk_update_atomically(targets, commit_subject, keep)?;
+        // BUG-1951: both heads are captured under the store lock (re-entrant;
+        // the inner write takes it again), which is released before the cache
+        // upserts as described above.
+        // trace:BUG-1951 | ai:claude
+        let (pre_write_head, report, post_write_head) = {
+            let _lock = self.inner.lock_store()?;
+            let pre = self.current_head_sha();
+            let report = self
+                .inner
+                .bulk_update_atomically(targets, commit_subject, keep)?;
+            (pre, report, self.current_head_sha())
+        };
         let mut cache_ok = true;
         for req in &report.written {
             if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
@@ -1348,7 +1544,7 @@ impl CachedGitBackend {
         }
         if cache_ok {
             let reqs: Vec<&Requirement> = report.written.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1377,11 +1573,12 @@ impl CachedGitBackend {
         else {
             return Ok(None);
         };
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(&updated) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
-            self.refresh_epics_then_restamp(&[&updated], &pre_write_head);
+            self.refresh_epics_then_restamp(&[&updated], &pre_write_head, &post_write_head);
         }
         Ok(Some(updated))
     }
@@ -1446,6 +1643,7 @@ impl DatabaseBackend for CachedGitBackend {
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let (store, summary) = self.inner.update_atomically_tracked(update_fn)?;
+        let post_write_head = self.current_head_sha();
         if summary.written.is_empty() && summary.deleted.is_empty() && !summary.metadata_changed {
             return Ok(store);
         }
@@ -1468,7 +1666,7 @@ impl DatabaseBackend for CachedGitBackend {
         }
         if cache_ok {
             let reqs: Vec<&Requirement> = summary.written.iter().collect();
-            self.refresh_epics_then_restamp(&reqs, &pre_write_head);
+            self.refresh_epics_then_restamp(&reqs, &pre_write_head, &post_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -1526,8 +1724,13 @@ impl DatabaseBackend for CachedGitBackend {
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(&added) {
             // Cache write failure is non-fatal — mark stale by clearing the
             // recorded SHA so the next read triggers a rebuild.
@@ -1535,37 +1738,47 @@ impl DatabaseBackend for CachedGitBackend {
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
             // BUG-626: a new child shifts its parent epic's rollup status.
-            self.refresh_epics_then_restamp(&[&added], &pre_write_head);
+            self.refresh_epics_then_restamp(&[&added], &pre_write_head, &post_write_head);
         }
         Ok(added)
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
             // BUG-626: a child's status (or hierarchy edge) change shifts its
             // parent epic's rollup status — refresh the parent epic's row.
-            self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
+            self.refresh_epics_then_restamp(&[requirement], &pre_write_head, &post_write_head);
         }
         Ok(())
     }
 
     fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<UpdateResult> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
+        let post_write_head = self.current_head_sha();
         if matches!(result, UpdateResult::Success) {
             if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
                 let _ = self.cache.set_source_head_sha("");
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
                 // BUG-626: refresh the parent epic's rollup status. trace:BUG-626
-                self.refresh_epics_then_restamp(&[requirement], &pre_write_head);
+                self.refresh_epics_then_restamp(&[requirement], &pre_write_head, &post_write_head);
             }
         }
         Ok(result)
@@ -1573,13 +1786,18 @@ impl DatabaseBackend for CachedGitBackend {
 
     fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        // BUG-1951: take the store lock (re-entrant) first, so no writer that
+        // respects it can commit between the capture and our own commit.
+        // trace:BUG-1951 | ai:claude
+        let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;
+        let post_write_head = self.current_head_sha();
         if let Err(e) = self.delete_requirement_with_schema_retry(id) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache delete failed, cache marked stale: {}", e);
         } else {
-            self.restamp_head(&pre_write_head);
+            self.restamp_head(&pre_write_head, &post_write_head);
         }
         Ok(())
     }
@@ -2003,6 +2221,100 @@ mod tests {
         let scope = super::super::cache_refresh::CacheReadScope::new();
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(scope.metadata()["refreshing"], "deferred");
+        assert!(backend.cache_snapshot_is_stale().unwrap());
+        let all = backend
+            .list_summaries_strict(&ListFilter::default())
+            .unwrap();
+        assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    /// Real git store with one row written through a long-lived cached
+    /// backend, so the cache is fresh at the store HEAD.
+    // trace:BUG-1951 | ai:claude
+    fn fresh_cached_store_with_one_row(dir: &Path) -> (PathBuf, CachedGitBackend) {
+        let store_root = dir.join("store");
+        let cache_path = dir.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        assert!(
+            !backend.cache_snapshot_is_stale().unwrap(),
+            "a plain local write must leave the cache fresh"
+        );
+        (store_root, backend)
+    }
+
+    // trace:BUG-1951 | ai:claude — an external commit that lands AFTER the
+    // pre-write HEAD capture but BEFORE our own commit (a store sync that does
+    // not take the writer lock) must not be absorbed by the restamp: the
+    // cache never ingested it.
+    #[test]
+    fn restamp_after_external_commit_between_capture_and_write_marks_stale() {
+        let dir = tempdir().unwrap();
+        let (store_root, backend) = fresh_cached_store_with_one_row(dir.path());
+
+        // (a) capture the pre-write HEAD, as the write paths do.
+        let pre_write_head = backend.current_head_sha();
+        // (b) an external commit lands in the window.
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("FR-1-002", "b (external)"))
+            .unwrap();
+        // (c) our own write commits on top of it, then restamps.
+        let added = backend
+            .inner
+            .add_requirement(sample_req("FR-1-003", "c"))
+            .unwrap();
+        let post_write_head = backend.current_head_sha();
+        backend
+            .upsert_requirement_with_schema_retry(&added)
+            .unwrap();
+        backend.restamp_head(&pre_write_head, &post_write_head);
+
+        assert!(
+            backend.cache_snapshot_is_stale().unwrap(),
+            "the post-write HEAD must not be stamped fresh over an unread commit"
+        );
+        let all = backend
+            .list_summaries_strict(&ListFilter::default())
+            .unwrap();
+        assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    // trace:BUG-1951 | ai:claude — the stamp is the HEAD captured right after
+    // our commit, not the live HEAD, so a commit that lands after the store
+    // lock is released still reads as stale.
+    #[test]
+    fn restamp_stamps_post_write_head_captured_under_lock() {
+        let dir = tempdir().unwrap();
+        let (store_root, backend) = fresh_cached_store_with_one_row(dir.path());
+
+        let pre_write_head = backend.current_head_sha();
+        let added = backend
+            .inner
+            .add_requirement(sample_req("FR-1-002", "b"))
+            .unwrap();
+        let post_write_head = backend.current_head_sha();
+        assert_ne!(pre_write_head, post_write_head);
+        // A commit lands after the lock would have been released.
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("FR-1-003", "c (external)"))
+            .unwrap();
+        backend
+            .upsert_requirement_with_schema_retry(&added)
+            .unwrap();
+        backend.restamp_head(&pre_write_head, &post_write_head);
+
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(post_write_head.as_str()),
+            "our own commit is ingested, so its HEAD is the stamp"
+        );
         assert!(backend.cache_snapshot_is_stale().unwrap());
         let all = backend
             .list_summaries_strict(&ListFilter::default())
@@ -2891,6 +3203,110 @@ mod tests {
         .unwrap()
     }
 
+    /// BUG-1956 fixture: a cache with one committed row whose schema stamp
+    /// is older than this binary (a migration is pending, so the snapshot is
+    /// incompatible), behind a store that has moved on.
+    // trace:BUG-1956 | ai:claude
+    fn bug_1956_migration_pending_fixture(root: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+        let store_root = root.join(".aida-store");
+        let cache_path = root.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        {
+            let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+            backend
+                .add_requirement(sample_req("BUG-1", "first"))
+                .unwrap();
+        }
+        rusqlite::Connection::open(&cache_path)
+            .unwrap()
+            .execute(
+                "UPDATE cache_meta SET value = '1' WHERE key = 'schema_version'",
+                [],
+            )
+            .unwrap();
+        GitBackend::new(&store_root)
+            .unwrap()
+            .add_requirement(sample_req("BUG-2", "second"))
+            .unwrap();
+        (store_root, cache_path)
+    }
+
+    /// BUG-1956: a pending migration makes the committed snapshot
+    /// incompatible, so a bounded read refresh must never degrade to a
+    /// `WriterBusy` stale serve of old-schema rows. Behind a live writer an
+    /// explicitly budgeted read fails inside the ceiling with a clear error.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn bug_1956_bounded_refresh_never_serves_a_pending_migration() {
+        use super::super::cache_refresh::{CacheReadScope, ReadBudget};
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        assert!(backend.cache.recheck_migration(), "fixture shape changed");
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        let started = std::time::Instant::now();
+        let err = backend
+            .bounded_inline_refresh()
+            .expect_err("an incompatible snapshot must not be served as WriterBusy");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "budgeted read waited {elapsed:?}"
+        );
+        assert!(is_cache_lock_error(&err), "{err:#}");
+        assert!(
+            format!("{err:#}").contains("no compatible snapshot yet"),
+            "{err:#}"
+        );
+        holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    /// BUG-1956: a mutation's constructor (no explicit read budget) keeps the
+    /// full ladder on the same no-compatible-snapshot path, so it succeeds
+    /// once a writer that outlasts the read cap (~4 s) releases.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn bug_1956_unbudgeted_refresh_outlasts_a_four_second_writer() {
+        use super::super::cache_refresh::CacheReadScope;
+        // The production ladder: no retry overrides from a sibling test.
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            holder.execute_batch("ROLLBACK").unwrap();
+        });
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, None);
+        let started = std::time::Instant::now();
+        let backend = CachedGitBackend::open(&store_root, &cache_path)
+            .expect("an unbudgeted open must wait out the writer");
+        let elapsed = started.elapsed();
+        release.join().unwrap();
+        assert!(
+            elapsed >= std::time::Duration::from_secs(3),
+            "the open must have waited for the writer: {elapsed:?}"
+        );
+        assert!(!backend.cache.recheck_migration());
+        assert!(!backend.cache_snapshot_is_stale().unwrap());
+    }
+
     /// BUG-1644 (SPIKE-90 case W): a reader in a sibling worktree whose
     /// `.aida/cache.db` symlinks to the main checkout's cache must see the
     /// main writer's live lock-info, and serve the last committed snapshot
@@ -3757,9 +4173,28 @@ mod tests {
     }
 
     // trace:TASK-1526 | ai:codex
+    //
+    // BUG-1965: the write-lock path is only reached by the refresh-lock
+    // WINNER that also proves the cache HEAD is an ancestor of the store HEAD.
+    // Two unrelated conditions skip it, and both hand the read off to the
+    // detached worker (`deferred` in tests, where the spawn is refused) with
+    // no write attempt — the `write_attempt == None` flake:
+    // - `refresh_lock_contended`: a `fork` on a sibling test thread while this
+    //   reader held the refresh flock leaves a child holding it until `exec`
+    //   (see `acquire_past_fork_window`), so the next read loses the lock.
+    // - `ancestor_check_failed`: the winner's ancestry check runs under the
+    //   read budget and can time out on a loaded host. The budget is pinned
+    //   well above any plausible `git merge-base` time so this is not
+    //   expected; a run that still reports it is retried like contention.
+    // A run reporting either says nothing about this path: it must still
+    // never full-rebuild, and at most `MAX_RETRIES` such runs are retried, so
+    // a regression that makes this reader skip its own path cannot hide.
+    // trace:BUG-1965 | ai:claude
     #[test]
     fn reader_incremental_lock_error_does_not_full_rebuild() {
         use super::super::cache_refresh::*;
+        const MAX_RETRIES: usize = 3;
+        const SKIPPED_PATH: [&str; 2] = ["refresh_lock_contended", "ancestor_check_failed"];
         for sidecar in [false, true] {
             let dir = tempdir().unwrap();
             let (backend, store_root, cache_path) = task_1515_backend(dir.path());
@@ -3772,35 +4207,68 @@ mod tests {
             let holder = rusqlite::Connection::open(&cache_path).unwrap();
             holder.execute_batch("BEGIN IMMEDIATE").unwrap();
             for constructor in [false, true] {
-                let scope = CacheReadScope::new();
-                test_counts();
-                if constructor {
-                    let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                let mut skipped_runs = Vec::new();
+                let asserted = (0..=MAX_RETRIES).any(|_| {
+                    let scope = CacheReadScope::new();
+                    scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
+                    test_counts();
+                    // `Some(counts)` when the read never reached this test's
+                    // path; that run is retried, not asserted on.
+                    let skipped = |counts: std::collections::HashMap<&'static str, usize>| {
+                        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+                        SKIPPED_PATH
+                            .iter()
+                            .any(|k| counts.contains_key(k))
+                            .then_some(counts)
+                    };
+                    if constructor {
+                        let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                        let counts = test_counts();
+                        if let Some(c) = skipped(counts.clone()) {
+                            skipped_runs.push(c);
+                            return false;
+                        }
+                        assert_eq!(counts.get("write_attempt"), Some(&1), "{counts:?}");
+                        assert!(!scope.touched(), "a constructor has not served rows");
+                        assert_eq!(
+                            opened.list_summaries(&ListFilter::default()).unwrap().len(),
+                            3
+                        );
+                    } else {
+                        assert_eq!(
+                            backend
+                                .list_summaries(&ListFilter::default())
+                                .unwrap()
+                                .len(),
+                            3
+                        );
+                    }
                     let counts = test_counts();
-                    assert_eq!(counts.get("write_attempt"), Some(&1));
-                    assert_eq!(counts.get("full_rebuild"), None);
-                    assert!(!scope.touched(), "a constructor has not served rows");
-                    assert_eq!(
-                        opened.list_summaries(&ListFilter::default()).unwrap().len(),
-                        3
-                    );
-                } else {
-                    assert_eq!(
-                        backend
-                            .list_summaries(&ListFilter::default())
-                            .unwrap()
-                            .len(),
-                        3
+                    if let Some(c) = skipped(counts.clone()) {
+                        skipped_runs.push(c);
+                        return false;
+                    }
+                    let m = scope.metadata();
+                    assert_eq!(counts.get("write_attempt"), Some(&1), "{counts:?} {m}");
+                    assert_eq!(counts.get("retry_sleep"), None, "{counts:?} {m}");
+                    assert_eq!(m["refreshing"], "writer_busy", "{counts:?} {m}");
+                    assert_eq!(m["cache_head"], from);
+                    assert_eq!(m["built_at"], serde_json::json!(built_at));
+                    true
+                });
+                assert!(
+                    asserted,
+                    "all {} reads skipped the write-lock path: {skipped_runs:?}; {}",
+                    MAX_RETRIES + 1,
+                    RefreshLock::diagnose_unavailable(&cache_path)
+                );
+                if !skipped_runs.is_empty() {
+                    eprintln!(
+                        "BUG-1965: {} read(s) skipped the write-lock path and were \
+                         retried: {skipped_runs:?}",
+                        skipped_runs.len()
                     );
                 }
-                let counts = test_counts();
-                assert_eq!(counts.get("write_attempt"), Some(&1));
-                assert_eq!(counts.get("retry_sleep"), None);
-                assert_eq!(counts.get("full_rebuild"), None);
-                let m = scope.metadata();
-                assert_eq!(m["refreshing"], "writer_busy");
-                assert_eq!(m["cache_head"], from);
-                assert_eq!(m["built_at"], serde_json::json!(built_at));
             }
             holder.execute_batch("ROLLBACK").unwrap();
             assert_eq!(
@@ -4398,6 +4866,26 @@ mod tests {
         );
     }
 
+    // Guards the counter the write-lock test relies on to discard a run whose
+    // ancestry check timed out: with a 1 ns read budget the lock winner's
+    // check cannot finish, the read hands off, and no write is attempted.
+    // trace:BUG-1965 | ai:claude
+    #[test]
+    fn reader_ancestor_check_timeout_is_counted_and_never_writes() {
+        use super::super::cache_refresh::*;
+        let dir = tempdir().unwrap();
+        let (backend, store, _path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::from_nanos(1))));
+        test_counts();
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        let counts = test_counts();
+        assert!(counts.contains_key("ancestor_check_failed"), "{counts:?}");
+        assert_eq!(counts.get("write_attempt"), None, "{counts:?}");
+        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+    }
+
     // trace:TASK-1526 | ai:codex
     #[test]
     fn reader_path_never_calls_with_cache_write() {
@@ -4414,7 +4902,12 @@ mod tests {
         test_counts();
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(scope.metadata()["refreshing"], "worker_running");
-        assert_eq!(test_counts().get("write_attempt"), None);
+        let counts = test_counts();
+        assert_eq!(counts.get("write_attempt"), None);
+        // The counter that lets a write-lock test discard a run where an
+        // unrelated holder took the refresh lock first.
+        // trace:BUG-1965 | ai:claude
+        assert!(counts.contains_key("refresh_lock_contended"), "{counts:?}");
         stop.send(()).unwrap();
         thread.join().unwrap();
     }

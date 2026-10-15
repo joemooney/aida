@@ -29,6 +29,7 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 
@@ -95,6 +96,7 @@ fn auto_release_review_lease_decides_by_pid_alone() {
     let cfg = orchestrator::OrchestratorConfig {
         auto_release_dormant_leases: false, // gate must not matter
         stale_lease_threshold_minutes: 10,
+        ..Default::default()
     };
 
     let alive = review_lease("rev005", "BUG-511", Some(std::process::id()));

@@ -240,6 +240,12 @@ pub struct AdvisorRegistration {
     /// liveness check verifies the PID is still in the process table; falls
     /// back to JSONL mtime when the PID is missing or stale.
     pub claude_pid: Option<u32>,
+    /// Kernel start time of `claude_pid` at registration, so a recycled pid
+    /// does not read as the live advisor. `None` on older registrations;
+    /// the check then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_pid_start: Option<String>,
 }
 
 /// Path to the per-user registration file (`~/.aida/advisor.toml`).
@@ -342,7 +348,7 @@ pub fn discover_live_advisor_session(
     if let Some(reg) = read_registration() {
         if let Some(advisor) = locate_session(&reg.uuid, &reg.project_slug, Discovery::Registration)
         {
-            if is_alive(&advisor, reg.claude_pid) {
+            if is_alive(&advisor, reg.claude_pid, reg.claude_pid_start.as_deref()) {
                 return Some(advisor);
             }
         }
@@ -354,7 +360,7 @@ pub fn discover_live_advisor_session(
             // Without a recorded slug we have to scan every project dir for
             // a matching JSONL — relatively cheap (one stat per project).
             if let Some(advisor) = locate_session_by_uuid(&uuid, Discovery::EnvVar) {
-                if is_alive(&advisor, None) {
+                if is_alive(&advisor, None, None) {
                     return Some(advisor);
                 }
             }
@@ -364,7 +370,7 @@ pub fn discover_live_advisor_session(
     if config.allow_mtime_fallback {
         if let Some(root) = fallback_project_root {
             if let Some(advisor) = latest_jsonl_under_project(root, Discovery::MtimeFallback) {
-                if is_alive(&advisor, None) {
+                if is_alive(&advisor, None, None) {
                     return Some(advisor);
                 }
             }
@@ -445,11 +451,16 @@ fn latest_jsonl_under_project(project_root: &Path, discovery: Discovery) -> Opti
 }
 
 /// Liveness check: the JSONL was touched recently OR the recorded `claude_pid`
-/// is still alive. Either signal alone is enough — claude can spend longer
+/// is still alive (pid plus its recorded start time, so a recycled pid does
+/// not count, TASK-1750). Either signal alone is enough — claude can spend longer
 /// than the mtime window inside a single tool call.
-pub fn is_alive(advisor: &LiveAdvisor, claude_pid: Option<u32>) -> bool {
+pub fn is_alive(
+    advisor: &LiveAdvisor,
+    claude_pid: Option<u32>,
+    claude_pid_start: Option<&str>,
+) -> bool {
     if let Some(pid) = claude_pid {
-        if process_probe::pid_is_alive(pid) {
+        if process_probe::process_identity_is_alive(pid, claude_pid_start) {
             return true;
         }
     }
@@ -650,8 +661,12 @@ max_source_size_mb = 50
         assert!(plan.is_none(), "fork_mode=never must never plan a fork");
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_returns_none_when_unregistered() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         // With no registration, no env var, no mtime fallback, discovery
         // returns None — the orchestrator's signal to cold-boot.
         // Sandbox HOME so we don't accidentally read the developer's real
@@ -664,8 +679,35 @@ max_source_size_mb = 50
         });
     }
 
+    /// TASK-1750: the recorded `claude_pid` counts as alive only while its
+    /// start time still matches; a recycled pid falls through to the (here
+    /// absent) JSONL mtime and reads dead.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_claude_pid_does_not_keep_the_advisor_alive() {
+        let pid = std::process::id();
+        let Some(ours) = process_probe::process_start_identity(pid) else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let a = LiveAdvisor {
+            uuid: "u".to_string(),
+            project_slug: "s".to_string(),
+            source_jsonl: tmp.path().join("missing.jsonl"),
+            jsonl_size_bytes: 0,
+            discovery: Discovery::Registration,
+        };
+        assert!(is_alive(&a, Some(pid), None), "legacy: bare pid probe");
+        assert!(is_alive(&a, Some(pid), Some(&ours)));
+        assert!(!is_alive(&a, Some(pid), Some("2000-01-01T00:00:00+00:00")));
+    }
+
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_picks_registered_session_when_alive() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-spec-worktree";
         let uuid = "019e0000-0000-7000-8000-000000000abc";
@@ -685,6 +727,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -697,8 +740,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_falls_through_when_registered_jsonl_missing() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let reg = AdvisorRegistration {
             uuid: "019e0000-0000-7000-8000-000000000def".to_string(),
@@ -706,6 +753,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -715,8 +763,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_treats_stale_jsonl_as_dead() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-stale";
         let uuid = "019e0000-0000-7000-8000-0000000staaa";
@@ -741,6 +793,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -753,8 +806,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn plan_fork_destination_uses_spec_worktree_slug_not_source_slug() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let source_slug = "-home-joe-ai-aida"; // the live advisor's project
         let spec_worktree = PathBuf::from("/home/joe/ai/aida-story-360");
@@ -776,6 +833,7 @@ max_source_size_mb = 50
             project_root: "/home/joe/ai/aida".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -796,8 +854,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn plan_fork_respects_size_ceiling() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let slug = "-test-too-big";
         let uuid = "019e0000-0000-7000-8000-0000000bigggg";
@@ -815,6 +877,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -830,8 +893,12 @@ max_source_size_mb = 50
         });
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn registration_roundtrip() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let reg = AdvisorRegistration {
             uuid: "019e1111-1111-7111-8111-111111111111".to_string(),
@@ -839,6 +906,7 @@ max_source_size_mb = 50
             project_root: "/home/joe/ai/aida".to_string(),
             registered_at: "2026-05-21T17:30:00Z".to_string(),
             claude_pid: Some(12345),
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {

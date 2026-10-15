@@ -55,7 +55,7 @@ impl BlockAllocationConfig {
 
     /// Built-in default — claim 100 IDs at a time, matching the per-type
     /// block size used by `auto_allocate_initial_blocks` for the
-    /// PHASE3_AUTO_ALLOC_TYPES list.
+    /// `RequirementType::auto_allocated_prefixes()` list.
     pub const DEFAULT_SIZE: u32 = 100;
 
     /// True when auto-claim is on for this type. A per-type explicit

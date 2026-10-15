@@ -1,0 +1,19 @@
+#!/bin/sh
+# Mirror fan-out pre-push hook — installed by `aida remote mirror`.
+# Fans each code ref pushed to origin out to every configured mirror hub
+# ([store.sync] mirror_remotes in .aida/config.toml). Best-effort: a
+# mirror failure warns and never blocks the push. Safe to delete;
+# reinstall with `aida remote mirror <name>`.
+unset GIT_DIR GIT_WORK_TREE
+# Git runs pre-push for dry-runs but omits the flag from the hook environment.
+git_args=$(ps -p "$PPID" -o args= 2>/dev/null) || { echo "mirror-push: could not inspect git arguments; skipped" >&2; exit 0; }
+case " $git_args " in *" --dry-run "*|*" -n "*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac
+# trace:BUG-1706 | ai:codex
+if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then
+  if [ -n "$mirror_dry_run" ]; then
+    aida remote mirror-push "$1" --dry-run || true
+  else
+    aida remote mirror-push "$1" || true
+  fi
+fi
+exit 0

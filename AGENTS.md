@@ -14,6 +14,61 @@ wiring still awaits fresh independent C7 approval; hard takeover stays disabled.
 See [the sketch addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements).
 <!-- trace:TASK-1607 | ai:codex -->
 
+Rework-only merge holds can release through a current-head, granted reviewer
+approval after older refusal rounds. Sensitive spec metadata, guided/operator
+mode, keystone class and any non-Rework composition retain human clear.
+Covered spec metadata and execution mode are re-read before clearance and
+again before releasing labels and the marker.
+See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:STORY-1687 | ai:codex -->
+
+Claude tool-only sessions receive informational grant expiry context at the
+2h, 30m and expired crossings. The hook skips the CLI without a grant and caps
+it below 2s; a grant-local locked ledger deduplicates notices. Ledger failures
+produce no context and leave SessionStart/statusline as fallback. See
+[expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
+
+An existing history index catches up through the inline maintenance job
+`cache refresh --history --if-behind`, with a 30-second chunk budget. It takes
+only IndexLock, skips missing/disabled/current/busy indexes and a checkout that is
+behind the shared index (or whose indexed tip is live on another checkout), and
+never spawns on commits. A replaced root or rewritten history exits non-zero with
+`cache rebuild --history` advice.
+<!-- trace:TASK-1753 | ai:claude -->
+See [cache commands](docs/cli/10-storage.md).
+<!-- trace:STORY-1661 | ai:codex -->
+
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
+`role expiry --refuse-within` validates through the shared `grant_check` verdict,
+including subject, roster and parent delegation. Expiry is the earlier of the
+validated grant and parent. The statusline's expired-record timestamp reader is
+informational and grants no authority.
+<!-- trace:BUG-2011 | ai:codex -->
+
+PATH-changing Rust tests run through `test_env::run_path_isolated_test` before
+fixtures or env guards. Writer-only locking cannot protect unlocked Git readers;
+the guards require an exact one-test child. The ignored 15-round PATH/history
+stress runs only in the scheduled or manually dispatched `weekly-linux.yml`, not
+per-PR CI. See [PATH isolation](docs/testing/bug-1994-path-isolation.md).
+<!-- trace:BUG-1994 | ai:codex -->
+
+GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
+GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
+entry errors) and strictly parses canonical objects before filing; read failures
+refuse creation without legacy fallback. Queue insertion must succeed
+before the CI checkpoint reports a handoff.
+The canonical-store fallback probe is inventoried in `scripts/config-trust.toml`;
+its existing mode/location checks introduce no new authority-bearing keys.
+See [CLI fixture coverage](tests/test_gitlab_review_handoff.py).
+<!-- trace:BUG-1807 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only
@@ -27,6 +82,14 @@ old merge evidence even if an automated bump subsequently overwrote status;
 a later deliberate decision or later commit permits progress. Queue views
 label old evidence as reopened work instead of recommending reconciliation.
 <!-- trace:TASK-1338 | ai:codex -->
+
+`db reconcile-status` reports each matched candidate's reason against a pinned
+default-branch tip. A required open-PR check that cannot answer (missing `gh`,
+failed exit, malformed/non-array rows, unsupported or unclassifiable forge) is
+an ordinary nonzero error naming the commit, in `--dry-run` too; the normal
+batch stays all-or-nothing. Forge discovery there never rewrites config. The
+write seam rechecks identity, reopen, closure and covers facts on the live store.
+<!-- trace:TASK-1335 | ai:claude -->
 
 `pr ship` preflights review/corpus, mergeability, stale-definition, and hold
 gates before CI, then checks again under the merge lease. `--wait <secs>`
@@ -53,6 +116,12 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 
 # AGENTS.md
 
+Shell role updates require a successful CLI exit and one complete pair of
+standalone eval markers. Failed diagnostics are preserved verbatim; unmarked
+legacy output is display-only. Existing shells need the updated shell-init
+helper loaded to receive this protection. See OVERVIEW.md.
+<!-- trace:BUG-1806 | ai:codex -->
+
 Drain run ownership is persisted before the phase-1 status bump and child
 launch. Missing/corrupt batch state or failed ownership writes stop the member
 before launch; pipelined parents leave the bump to the registered child.
@@ -75,14 +144,13 @@ workspace build so feature-disabled stubs stay buildable. This check-only guard
 uses the existing full-CI filter and skips docs-only changes.
 <!-- trace:TASK-1601 | ai:codex -->
 
-Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
-manual dispatches fail before validation. Selected-path Windows PR checks stay
-informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
-required. Product's 24h weekly-windows-triage reminder records the tracking issue
-or no-issue result without queuing implementation. Releases still require a green
-platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+AIDA is Linux-only (ADR-72, no expiry). Windows and macOS are unsupported:
+there are no Windows/macOS PR legs, schedules, release artifacts, cross-target
+checks, or triage reminders, and releases do not require any cross-platform run.
+`cross-platform.yml` is kept as a manual-only workflow so a future reversal is
+cheap. Ubuntu Build plus merge-hold-gate remain the required checks.
 See [CI policy](docs/agents/aida-repository-guide.md).
-<!-- trace:TASK-1588 | ai:codex -->
+<!-- trace:TASK-1723 | ai:claude -->
 
 Ship ownership refusals exit non-zero. Direct human terminals get owning
 wave/run/phase and member-scoped activity evidence; `pr ship --wait [secs]`

@@ -6,6 +6,21 @@ requests without a subject binding fail closed. Fresh independent review is
 still required before gateway activation.
 <!-- trace:TASK-1607 | ai:codex -->
 
+Rework-only merge holds can release through a current-head, granted reviewer
+approval after older refusal rounds. Sensitive spec metadata, guided/operator
+mode, keystone class and any non-Rework composition retain human clear.
+Covered spec metadata and execution mode are re-read before clearance and
+again before releasing labels and the marker.
+See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:STORY-1687 | ai:codex -->
+
+Model-side mail poll findings clear after a session is silent beyond
+`watchdog.window_minutes`, or no registry PID for the session is alive. Recent
+activity keeps an older setup observable for live or unregistered sessions.
+Existing night-shift watchdog failures age out of the two-hour quiet guard
+normally.
+<!-- trace:BUG-2120 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only
@@ -38,14 +53,13 @@ Wait release refreshes PR metadata; a drive merge takes the sync/cleanup path
 without CI or merge credit. Shared run identity is reported as uncorroborated.
 <!-- trace:TASK-1602 | ai:codex -->
 
-Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
-manual dispatches fail before validation. Selected-path Windows PR checks stay
-informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
-required. Product's 24h weekly-windows-triage reminder records the tracking issue
-or no-issue result without queuing implementation. Releases still require a green
-platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+AIDA is Linux-only (ADR-72, no expiry). Windows and macOS are unsupported:
+there are no Windows/macOS PR legs, schedules, release artifacts, cross-target
+checks, or triage reminders, and releases do not require any cross-platform run.
+`cross-platform.yml` is kept as a manual-only workflow so a future reversal is
+cheap. Ubuntu Build plus merge-hold-gate remain the required checks.
 See [CI policy](docs/agents/aida-repository-guide.md).
-<!-- trace:TASK-1588 | ai:codex -->
+<!-- trace:TASK-1723 | ai:claude -->
 
 
 Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
@@ -86,7 +100,7 @@ For day-to-day usage see the [CLI reference](docs/cli/README.md). For project co
 
 ## Vision
 
-The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA is the *durable index* on top of it. Its nearest competitor, GitHub Spec Kit, produces structured specs per feature and then freezes them — AIDA's delta is keeping them a maintained, cross-cutting graph (stable IDs + typed relationships + enforced traces + lifecycle, queryable via MCP, portable across vendors because it lives in git) that outlives any single feature. A small invisible kernel that captures what exists, plus optional layered modules for everything else. (See [docs/positioning/vs-spec-kit.md](docs/positioning/vs-spec-kit.md) and the current [competitive synthesis](docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md).)
+The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA is the *durable index* on top of it. Its nearest competitor, GitHub Spec Kit, produces structured specs per feature and then freezes them — AIDA's delta is keeping them a maintained, cross-cutting graph (stable IDs + typed relationships + enforced traces + lifecycle, queryable via MCP, portable across vendors because it lives in git) that outlives any single feature. A small invisible kernel that captures what exists, plus optional layered modules for everything else. (See [docs/archive/positioning/vs-spec-kit.md](docs/archive/positioning/vs-spec-kit.md) and the [2026-05-31 competitive synthesis](docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md), an archived dated snapshot.)
 
 ---
 
@@ -283,6 +297,16 @@ a partial-work PR with a neutral branch can ship without completing its owner.
 When a title is present, an older branch-head trailer cannot supply missing
 credits. When the title is empty, the branch-head subject supplies the title.
 
+One PR of a multi-PR spec can declare itself a non-completing slice —
+`aida pr ship --no-complete`, or a PR-body line `aida: no-complete` /
+`Non-completing slice` — and ship then writes no completing trailer from any
+source, so no spec is completed by that merge. The branch-name recovery
+is also skipped on its own for a spec that carries `closure:pending` or still
+has open slice children (Done children count as finished; an explicit title
+trailer remains a deliberate directive). Ship prints the derived trailer and
+its source — PR title, branch name, or none with the reason — before it
+merges, and `--dry-run` prints the same line.
+
 Status edits and CLI/MCP rework record the code-repository HEAD when a spec
 leaves Done or Completed for further work. Live auto-bump and manual
 `reconcile-status` reject commits equal to or ancestral to that reopen marker,
@@ -397,6 +421,17 @@ aida dev deactivate                    # the wrapper auto-evals this too
 
 `aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.
 
+The shell helper applies role/session/dev/worktree environment updates only
+after a successful CLI exit with one complete pair of standalone
+`#aida:eval:begin` / `#aida:eval:end` markers. Failed stdout is sent verbatim to
+stderr without evaluation; unmarked or malformed successful output is displayed.
+Older binaries emitting bare shell output must be updated for automatic shell
+mutations. Already-loaded helpers are not replaced by a binary upgrade: install
+the updated helper with `aida dev shell-init --install` and reload the shell
+configuration. The binary's existing bare-output behavior for absent or legacy
+helpers is unchanged. Isolated regression: `bash tests/test_role_wrapper_boundary.sh`.
+<!-- trace:BUG-1806 | ai:codex -->
+
 For project conventions (commit format, scaffold/template architecture, CLI reference) see [CLAUDE.md](CLAUDE.md).
 
 ---
@@ -483,3 +518,43 @@ claims. Hard takeover (`--kill`) remains disabled scaffolding. The
 [sketch C7 addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements)
 records the actual phase operations and unattended launcher dispositions.
 <!-- trace:TASK-1607 | ai:codex -->
+
+Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
+`PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
+existing canonical review story in distributed or legacy stores; an unreadable
+store or failed queue insertion cannot establish a successful handoff. The
+creation gate requires every canonical object to be readable and parseable,
+without changing tolerant readers elsewhere or falling back to legacy state
+when configured canonical storage is unavailable. The CI
+checkpoint confirms the queue operation even when resuming without a lease.
+<!-- trace:BUG-1807 | ai:codex -->
+
+Review-story creation uses strict fallible object enumeration; missing roots,
+iteration failures, symlinked type/shard directories, and invalid YAML filenames
+refuse handoff without authorizing absence. Tolerant bulk readers retain their
+existing behavior.
+<!-- trace:BUG-1807 | ai:codex -->
+
+The review-story config probe validates TOML before legacy fallback and refuses
+configured but unavailable canonical storage. Its mode policy and existing
+store-location checks are covered by `scripts/config-trust.toml`; the probe adds
+no executable, command, or credential selection.
+<!-- trace:BUG-1807 | ai:codex -->
+
+Claude Code tool hooks deliver informational seat-grant expiry notices once at
+the 2h, 30m and expired crossings, without requiring a user prompt. A local
+grant-id ledger uses a permanent flock sidecar and atomic replacement. No
+requirements graph or cache is initialized; the shared authority validator
+retains its local roster lookup. Failed ledger access emits no context and
+leaves SessionStart/statusline warnings as fallback. See
+[verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
+<!-- trace:BUG-2014 | ai:codex -->
+
+Existing history indexes also catch up through the inline `history-index-tick`
+maintenance job (`cache refresh --history --if-behind`). It uses only the index
+lock and a 30-second chunk budget, skips disabled/missing/current/busy indexes
+and a checkout that is behind the shared index (or whose indexed tip is live on
+another checkout), and preserves foreground stall behavior. A replaced root or
+rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
+See [cache commands](docs/cli/10-storage.md).
+<!-- trace:STORY-1661 | ai:codex -->

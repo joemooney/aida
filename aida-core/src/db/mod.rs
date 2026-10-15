@@ -6,6 +6,9 @@
 
 #[cfg(feature = "native")]
 mod cache;
+// trace:BUG-1984 | ai:claude
+#[cfg(feature = "native")]
+mod cache_binding;
 #[cfg(feature = "native")]
 mod cache_lock;
 #[cfg(feature = "native")]
@@ -35,9 +38,11 @@ mod yaml_backend;
 #[cfg(feature = "native")]
 pub use cache::{
     cache_lock_info_path, compute_blocked, compute_degrees, edge_weight, expected_cache_status,
-    fast_fail_cache_enabled, read_cache_lock_info, set_fast_fail_cache, status_divergences,
-    ArchiveFilter, Cache, CacheLockInfo, DeferFilter, Degrees, ListFilter, RequirementSummary,
-    SortOrder, StatusDivergence,
+    fast_fail_cache_enabled, is_cache_corruption_error, prune_quarantined_cache_files,
+    quarantine_cache_files, read_cache_lock_info, set_fast_fail_cache, sort_summaries_natural_id,
+    status_divergences, tag_cache_corruption, ArchiveFilter, Cache, CacheCorruption, CacheLockInfo,
+    DeferFilter, Degrees, ListFilter, RequirementSummary, SortOrder, StatusDivergence,
+    QUARANTINE_KEEP,
 };
 #[cfg(feature = "native")]
 pub use cache_lock::{
@@ -46,7 +51,7 @@ pub use cache_lock::{
     LockInfoReclaim, LockOwnerState,
 };
 #[cfg(feature = "native")]
-pub use cached_git_backend::CachedGitBackend;
+pub use cached_git_backend::{CacheRebuildOutcome, CachedGitBackend};
 #[cfg(feature = "native")]
 pub use git_backend::{BulkAtomicReport, GitBackend, StoreConflictError};
 // BUG-675: the queue-user case-fold resolver, exposed so the aida-cli statusline
@@ -63,6 +68,11 @@ pub use migration::{migrate_from_postgres, migrate_to_postgres};
 pub use postgres_backend::PostgresBackend;
 #[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
+// trace:TASK-1717 | ai:claude
+#[cfg(feature = "native")]
+pub use store_lock::{
+    any_store_write_lock_held, store_write_lock_held, store_write_lock_path, with_store_write_lock,
+};
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
 #[cfg(feature = "native")]
 pub use yaml_backend::YamlBackend;

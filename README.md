@@ -204,7 +204,7 @@ or read the autonomy ladder in [`docs/aida-power-features.md`](docs/aida-power-f
 
 ### Install
 
-Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain needed) or a **build from source** (for platforms outside the release matrix, or for local development).
+Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain needed) or a **build from source** (for local development).
 
 #### Prebuilt binary
 
@@ -221,9 +221,9 @@ curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --prefix /usr/local/bin
 ```
 
-Prefer to do it by hand? Download the asset for your platform straight from the [releases page](https://github.com/joemooney/aida/releases). Linux and macOS tarballs unpack to `aida` and `aida-server`; the Windows zip unpacks to `aida.exe` and `aida-server.exe`.
+Prefer to do it by hand? Download the asset straight from the [releases page](https://github.com/joemooney/aida/releases). Release tarballs unpack to `aida` and `aida-server`.
 
-**Linux** (Tier 1 — primary alpha target):
+**Linux** (the only supported platform):
 
 ```bash
 curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64.tar.gz | tar xz
@@ -233,27 +233,7 @@ mv aida ~/.local/bin/       # or: sudo mv aida /usr/local/bin/
 
 On arm64, swap `aida-linux-x86_64` → `aida-linux-arm64`.
 
-**macOS** (Tier 2 — nightly-validated):
-
-```bash
-curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64.tar.gz | tar xz
-./aida --version
-mv aida ~/.local/bin/
-```
-
-On Intel Macs, swap `aida-darwin-arm64` → `aida-darwin-x86_64`.
-
-**Windows** (Tier 2 — nightly-validated):
-
-Download `aida-windows-x86_64.zip` from the [latest release](https://github.com/joemooney/aida/releases/latest), unzip it, then run:
-
-```powershell
-.\aida.exe --version
-```
-
-From Git Bash or MSYS/Cygwin, `scripts/install.sh` can also install the Windows zip automatically. On WSL, use the Linux install path above.
-
-Tier 1 vs Tier 2 is the [platform support](#platform-support) story: Linux is exercised on every PR, macOS and Windows by a nightly cross-platform CI run. After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
+AIDA is Linux-only; see [platform support](#platform-support). After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
 
 #### Build from source
 
@@ -488,16 +468,16 @@ Run `aida` (no args) for the full CLI surface.
 
 <!-- trace:TASK-276 | ai:claude -->
 
-You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) carries one focused comparison per neighbouring tool, each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
+You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) indexes one focused comparison per neighbouring tool (dated snapshots, kept under [`docs/archive/positioning/`](docs/archive/positioning/)), each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
 
-- [**AIDA vs GitHub Spec Kit**](docs/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
-- [**AIDA vs AWS Kiro**](docs/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.
-- [**AIDA vs Claude Code Agent Teams**](docs/positioning/vs-agent-teams.md) — native *within-session* multi-agent coordination vs AIDA's *cross-session, cross-vendor* graph + lifecycle. The closest provider overlap yet — and why the gap persists on incentive, not capability.
-- [**AIDA vs Claude Code subagents / workflows**](docs/positioning/vs-claude-code-subagents.md) — within-conversation primitives vs AIDA's cross-conversation lifecycle layer; AIDA composes them inside its roles. <!-- trace:TASK-337 | ai:claude -->
-- [**AIDA vs `/ultraplan` & `/ultrareview`**](docs/positioning/vs-ultraplan.md) — AIDA layers persistent requirement structure on top of Claude's planning/review primitives, which it composes with rather than replaces.
-- [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
-- [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
-- **AI code-editor neighbors** — [Aider](docs/positioning/vs-aider.md), [Continue](docs/positioning/vs-continue.md) — a different layer entirely: they *edit*, AIDA is the spec graph + lifecycle *above* the editing.
+- [**AIDA vs GitHub Spec Kit**](docs/archive/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
+- [**AIDA vs AWS Kiro**](docs/archive/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.
+- [**AIDA vs Claude Code Agent Teams**](docs/archive/positioning/vs-agent-teams.md) — native *within-session* multi-agent coordination vs AIDA's *cross-session, cross-vendor* graph + lifecycle. The closest provider overlap yet — and why the gap persists on incentive, not capability.
+- [**AIDA vs Claude Code subagents / workflows**](docs/archive/positioning/vs-claude-code-subagents.md) — within-conversation primitives vs AIDA's cross-conversation lifecycle layer; AIDA composes them inside its roles. <!-- trace:TASK-337 | ai:claude -->
+- [**AIDA vs `/ultraplan` & `/ultrareview`**](docs/archive/positioning/vs-ultraplan.md) — AIDA layers persistent requirement structure on top of Claude's planning/review primitives, which it composes with rather than replaces.
+- [**AIDA vs Karpathy-style markdown**](docs/archive/positioning/vs-karpathy-md.md) — structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
+- [**AIDA vs SaaS PM tools**](docs/archive/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
+- **AI code-editor neighbors** — [Aider](docs/archive/positioning/vs-aider.md), [Continue](docs/archive/positioning/vs-continue.md) — a different layer entirely: they *edit*, AIDA is the spec graph + lifecycle *above* the editing.
 
 **Deciding whether to adopt at all?** Two cross-cutting guides cut through it:
 
@@ -512,7 +492,7 @@ Git is the canonical store: one YAML file per requirement on the orphan `aida-st
 
 ## Platform support
 
-Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Linux-only for a fast ~3-5 min cycle. macOS and Windows are **Tier 2**: supported, but validated by a nightly [cross-platform CI run](https://github.com/joemooney/aida/actions/workflows/cross-platform.yml) rather than on every change, so cross-platform regressions surface within ~24h. Pre-built Linux/macOS tarballs and a Windows x86_64 zip ship with each [release](https://github.com/joemooney/aida/releases). Releases are gated on a green cross-platform run.
+AIDA supports **Linux only**. Windows and macOS are unsupported: CI runs on Linux only, and each [release](https://github.com/joemooney/aida/releases) ships Linux x86_64 and arm64 tarballs only. Older releases that shipped macOS or Windows assets are not maintained.
 
 ## Documentation
 

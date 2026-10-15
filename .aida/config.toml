@@ -82,9 +82,9 @@ allowed_hosts = [
   "registry.npmjs.org",
 ]
 
-# BUG-1180/ADR-39 informational CI allow-list. The path-filtered Windows
-# matrix workflow is named "Cross-platform (weekly)"; the binary default
-# ("Cross-platform", exact) does not match it, so spell the glob here.
+# BUG-1180/ADR-39 informational CI allow-list. Under ADR-72 the
+# cross-platform workflow is manual-only and never runs on PRs; the glob stays
+# so a manual dispatch can never gate a merge. trace:TASK-1723 | ai:claude
 [ci]
 informational_workflows = ["Cross-platform*"]
 
@@ -133,6 +133,14 @@ show = { budget_ms = 1000, ceiling_ms = 5000 }
 [[schedule.jobs]]
 name = "cache-refresh-tick"
 command = "cache refresh --if-requested"
+every = "15m"
+enabled = true
+
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
 every = "15m"
 enabled = true
 
@@ -327,11 +335,16 @@ enabled = true
 [worktree_pool]
 worktree_parent = "../aida-worktrees"
 
-# ADR-65 daily Product triage; reminder only, never an implementation producer.
-# trace:TASK-1588 | ai:codex
-[[schedule.jobs]]
-name = "weekly-windows-triage"
-seats = ["product"]
-every = "24h"
-prompt = "Inspect the latest scheduled Windows result in cross-platform.yml on main and the open cross-platform-red tracking issue. Triage any red issue by this due check and before a release. Record the issue number and result, or explicitly record no open issue, with aida schedule done weekly-windows-triage --note <result>. Do not queue implementation or interrupt Linux work; Windows fixes remain behind Linux work unless the operator explicitly reprioritizes a security, data-loss, or release-blocking issue. ADR-47 release deferral until the queue is empty remains in force."
-enabled = true
+# ADR-72 removed the ADR-65 "weekly-windows-triage" Product reminder: AIDA is
+# Linux-only and agents do not triage Windows/macOS work. trace:TASK-1723 | ai:claude
+
+# STORY-1647: the pre-commit hook refuses commits made in the PRIMARY checkout
+# on main — in this repo every change lands from a sibling worktree
+# (`aida worktree add <SPEC>`). Merges, rebase replays, conflicted cherry-pick
+# / revert replays, and .aida-store commits stay exempt; git commit --amend and
+# git merge --squash + commit on main are refused without the operator
+# override AIDA_ALLOW_PRIMARY_COMMIT=1. Other projects get the gate only by
+# opting in with this same key.
+# trace:TASK-1728 | ai:antigravity
+[hooks]
+block_primary_commits = true

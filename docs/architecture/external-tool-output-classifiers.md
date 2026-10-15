@@ -15,6 +15,8 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `auto_complete::is_database_locked_message` |
 | `auto_complete::is_environmental_failure` |
 | `auto_complete::is_merge_conflict_failure` |
+| `cache::integrity_problem` |
+| `cache::is_broken_fts_vtable_error` |
 | `cache::is_cache_schema_drift_error` |
 | `claude_log_indicates_api_outage` |
 | `compete::parse_gate_result` |
@@ -22,10 +24,13 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `forge::gitlab_merge_response_is_stale_head` |
 | `forge::glab_stderr_is_transient` |
 | `gh_stderr_is_network_error` |
+| `git_ops::classify_push_failure` |
 | `git_ops::commit` |
 | `git_ops::looks_like_index_lock_failure` |
 | `git_ops::push` |
+| `git_ops::push_exact` |
 | `git_ops::restore_stranded_autostash` |
+| `gitlab_project_create::is_push_to_create_refusal` |
 | `network_retry::classify_transient` |
 | `overlay::ci_style` |
 | `pr_cmd::pr_fetch_failure_message` |

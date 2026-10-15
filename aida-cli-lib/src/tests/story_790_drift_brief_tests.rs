@@ -14,6 +14,7 @@ fn ended_entry(
         id: format!("{name}#1"),
         agent_type: "claude".into(),
         pid: 4_294_967_294,
+        pid_start: None,
         name: Some(name.to_string()),
         description: None,
         tty: None,

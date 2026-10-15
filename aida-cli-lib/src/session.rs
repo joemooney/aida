@@ -934,6 +934,37 @@ pub fn claude_session_args(
     args
 }
 
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_claude_exec_command(
+    permission_mode: Option<&str>,
+    name: Option<&str>,
+    initial_prompt: Option<&str>,
+    session_id: Option<&str>,
+    contained: bool,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> std::process::Command {
+    use std::process::Command;
+    let mut cmd = Command::new("claude");
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant);
+    }
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd.args(claude_session_args(
+        permission_mode,
+        name,
+        initial_prompt,
+        session_id,
+        contained,
+        model,
+    ));
+    cmd
+}
+
 // trace:TASK-1594 | ai:claude
 fn exec_claude(
     permission_mode: Option<&str>,
@@ -944,19 +975,15 @@ fn exec_claude(
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<()> {
-    use std::process::Command;
-    let mut cmd = Command::new("claude");
-    if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant);
-    }
-    cmd.args(claude_session_args(
+    let mut cmd = build_claude_exec_command(
         permission_mode,
         name,
         initial_prompt,
         session_id,
         contained,
         model,
-    ));
+        grant_id,
+    );
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -991,6 +1018,32 @@ impl Drop for TerminalTitleRestoreGuard {
     }
 }
 
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_run_claude_session_command(
+    permission_mode: Option<&str>,
+    name: Option<&str>,
+    initial_prompt: Option<&str>,
+    session_id: Option<&str>,
+    contained: bool,
+    model: Option<&str>,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new("claude");
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd.args(claude_session_args(
+        permission_mode,
+        name,
+        initial_prompt,
+        session_id,
+        contained,
+        model,
+    ));
+    cmd
+}
+
 // trace:STORY-994 | ai:codex
 fn run_claude_session(
     permission_mode: Option<&str>,
@@ -1002,15 +1055,14 @@ fn run_claude_session(
     title_restore: Option<crate::agent_registry::TerminalTitleRestore>,
 ) -> Result<()> {
     let mut title_restore = TerminalTitleRestoreGuard::new(title_restore);
-    let mut cmd = std::process::Command::new("claude");
-    cmd.args(claude_session_args(
+    let mut cmd = build_run_claude_session_command(
         permission_mode,
         name,
         initial_prompt,
         session_id,
         contained,
         model,
-    ));
+    );
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => {
@@ -1223,8 +1275,8 @@ pub fn spawn_vendor_headless_with_seat(
         seat.as_str(),
         &crate::current_user_id(None),
     )?;
-    let status = Command::new(program)
-        .args(args)
+    let mut cmd = Command::new(program);
+    cmd.args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
         .env(crate::seat_authority::GRANT_ENV, child_grant.id)
@@ -1235,7 +1287,14 @@ pub fn spawn_vendor_headless_with_seat(
         // BUG-806: phase agents hold the drive's own binary, not whatever the
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value)
+        .env(ceiling_key, ceiling_value);
+    // trace:BUG-2006 | ai:antigravity
+    if containment_applied(vendor, contained) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    let status = cmd
         .stdout(Stdio::from(log))
         .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -1247,12 +1306,121 @@ pub fn spawn_vendor_headless_with_seat(
 /// `.aida-store` sibling and the worktree itself are the rw surfaces the OS
 /// wrapper binds. Resolve the project root from cwd, falling back to cwd itself
 /// (and `.` if even that fails) so the wrapper never panics on a stray env.
+///
+/// BUG-1971: the contained WRITE boundary never reads this root, because its
+/// cwd fallback could be `$HOME`. It uses [`contained_session_write_roots`],
+/// which has no fallback.
 /// trace:STORY-612 | ai:claude
 fn headless_worktree_root() -> PathBuf {
     crate::find_project_root()
         .ok()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// BUG-1971: the write roots of a contained session launched from this
+/// process: the git root of cwd, which `queue work` has `set_current_dir`'d to
+/// the lease's worktree. Both the contained `--settings` rules
+/// ([`claude_contained_flags`]) and the `queue work` boundary announcement
+/// ([`contained_write_boundary_announcement`]) read this one list, so the two
+/// cannot disagree on a symlinked path. Outside a git repository there is no
+/// worktree, so there are no roots and `dontAsk` denies every edit: the
+/// boundary fails closed instead of widening to cwd (possibly `$HOME`).
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_session_write_roots() -> Vec<PathBuf> {
+    write_roots_for_git_root(contained_session_git_root().as_deref())
+}
+
+/// The write roots of a contained session whose process cwd is `cwd`: the git
+/// root `cwd` sits in, or none outside a git repository (no cwd fallback).
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_session_write_roots_from(cwd: &Path) -> Vec<PathBuf> {
+    write_roots_for_git_root(crate::find_project_root_from(cwd).ok().as_deref())
+}
+
+/// The git root a contained session launched from this process writes in:
+/// the git root of the process cwd, or `None` outside a git repository. Under
+/// `cfg(test)` a [`contained_cwd_seam`] cwd wins, then a pinned hermetic
+/// project root.
+// trace:BUG-1971 | ai:claude
+fn contained_session_git_root() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(cwd) = contained_cwd_seam::cwd() {
+        return crate::find_project_root_from(&cwd).ok();
+    }
+    #[cfg(test)]
+    if let Some(root) = crate::test_ambient::project_root() {
+        return Some(root);
+    }
+    let cwd = std::env::current_dir().ok()?;
+    crate::find_project_root_from(&cwd).ok()
+}
+
+/// BUG-1971: test-only, per-thread stand-in for the process cwd that
+/// [`contained_session_write_roots`] resolves from, so a test can drive the
+/// production function from a directory outside git without a process-global
+/// `chdir`. Takes precedence over the hermetic project-root pin.
+// trace:BUG-1971 | ai:claude
+#[cfg(test)]
+pub(crate) mod contained_cwd_seam {
+    use std::cell::RefCell;
+    use std::path::{Path, PathBuf};
+
+    thread_local! {
+        static CWD: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn cwd() -> Option<PathBuf> {
+        CWD.with(|c| c.borrow().clone())
+    }
+
+    /// Pins the cwd until the guard drops, restoring the previous pin.
+    pub(crate) struct CwdGuard(Option<PathBuf>);
+
+    pub(crate) fn pin(cwd: &Path) -> CwdGuard {
+        CwdGuard(CWD.with(|c| c.replace(Some(cwd.to_path_buf()))))
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            CWD.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+}
+
+/// The write roots for a discovered git root; none when there is no git root.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn write_roots_for_git_root(git_root: Option<&Path>) -> Vec<PathBuf> {
+    git_root
+        .map(crate::contained_boundary::contained_write_roots)
+        .unwrap_or_default()
+}
+
+/// BUG-1971: the `write boundary: …` line `queue work` prints for a contained
+/// claude launch, built from the same roots as the launch's settings.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_write_boundary_announcement() -> String {
+    // trace:BUG-1971 | ai:claude
+    if contained_session_git_root().is_none() {
+        return crate::contained_boundary::OUTSIDE_GIT_BOUNDARY_ANNOUNCEMENT.to_string();
+    }
+    crate::contained_boundary::write_boundary_announcement(&contained_session_write_roots())
+}
+
+/// BUG-1971: the write roots of a contained headless RESUME running in `cwd`.
+/// `cwd` must itself be a git root (the worktree being resumed in): a `cwd`
+/// that is a subdirectory of a checkout, or sits outside git (`$HOME`), grants
+/// nothing, so a caller passing the wrong directory fails closed.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn contained_resume_write_roots(cwd: &Path) -> Vec<PathBuf> {
+    let Ok(canonical) = std::fs::canonicalize(cwd) else {
+        return Vec::new();
+    };
+    let git_root = crate::find_project_root_from(&canonical)
+        .ok()
+        .filter(|root| *root == canonical);
+    write_roots_for_git_root(git_root.as_deref())
 }
 
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
@@ -1263,13 +1431,20 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
-    let mut cmd = std::process::Command::new("claude");
+    let prog = resolve_agent_program("claude");
+    let mut cmd = std::process::Command::new(prog);
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
     }
     if contained {
         cmd.args(claude_contained_flags());
+    }
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
     }
     cmd.status().context("failed to spawn claude")
 }
@@ -1302,6 +1477,22 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
 /// the AIDA TUI. The hosted `aida queue work` process is replaced by `codex`, so
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_codex_session_command(
+    initial_prompt: &str,
+    bypass: bool,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new("codex");
+    if let Some(id) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, id);
+    }
+    cmd.env_remove("AIDA_CONTAINED");
+    cmd.args(codex_session_args(initial_prompt, bypass, model));
+    cmd
+}
+
 // trace:TASK-895 | ai:claude
 // trace:TASK-1594 | ai:claude
 pub fn exec_codex_session(
@@ -1310,12 +1501,7 @@ pub fn exec_codex_session(
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<()> {
-    use std::process::Command;
-    let mut cmd = Command::new("codex");
-    if let Some(id) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, id);
-    }
-    cmd.args(codex_session_args(initial_prompt, bypass, model));
+    let mut cmd = build_codex_session_command(initial_prompt, bypass, model, grant_id);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1348,6 +1534,8 @@ pub(crate) struct ReviewerLaunchPlan {
     /// binary name, byte-identical to before this seam existed.
     pub(crate) program: String,
     pub(crate) args: Vec<String>,
+    // trace:BUG-2006 | ai:antigravity
+    pub(crate) contained: bool,
 }
 
 // trace:BUG-1607 | ai:claude
@@ -1371,6 +1559,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 contained,
                 None,
             ),
+            contained: containment_applied(vendor, contained),
         }),
         HeadlessVendor::Codex => {
             // Interactive queue-work's Codex-tab launch maps the uniform
@@ -1382,6 +1571,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 vendor,
                 program: resolve_agent_program(vendor.program()),
                 args: codex_session_args(prompt, bypass, None),
+                contained: containment_applied(vendor, contained),
             })
         }
         HeadlessVendor::Agy => anyhow::bail!(
@@ -1405,11 +1595,17 @@ pub(crate) fn spawn_reviewer_launch_plan(
         "reviewer",
         &crate::current_user_id(None),
     )?;
-    std::process::Command::new(&plan.program)
-        .args(&plan.args)
+    let mut cmd = std::process::Command::new(&plan.program);
+    cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, grant.id)
-        .env("AIDA_SESSION_ROLE", "reviewer")
-        .status_retrying_etxtbsy()
+        .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2006 | ai:antigravity
+    if plan.contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd.status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", plan.program))
 }
 
@@ -1471,6 +1667,14 @@ impl HeadlessVendor {
             _ => None,
         }
     }
+}
+
+/// Returns whether containment is actually supported and applied for `vendor`.
+/// Currently, only Claude sessions support containment; Codex and Antigravity
+/// run with their respective approval bypasses and do not apply containment.
+// trace:BUG-2006 | ai:antigravity
+pub fn containment_applied(vendor: HeadlessVendor, contained: bool) -> bool {
+    vendor == HeadlessVendor::Claude && contained
 }
 
 /// TASK-1116: per-invocation top-precedence override for the headless
@@ -1844,6 +2048,7 @@ pub(crate) fn guided_session_launch(
 /// `--dangerously-bypass-approvals-and-sandbox`; Agy via
 /// `--dangerously-skip-permissions`).
 // trace:STORY-683 TASK-1048 | ai:claude
+// trace:BUG-2006 | ai:antigravity
 pub fn headless_vendor_args(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -1852,9 +2057,14 @@ pub fn headless_vendor_args(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Vec<String> {
+    let actually_contained = containment_applied(vendor, contained);
     match vendor {
         HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
-            prompt, session_id, contained, model, effort,
+            prompt,
+            session_id,
+            actually_contained,
+            model,
+            effort,
         ),
         HeadlessVendor::Codex => codex_headless_args_with_model_and_effort(prompt, model, effort),
         HeadlessVendor::Agy => agy_headless_args_with_effort(prompt, effort),
@@ -2051,11 +2261,31 @@ pub fn claude_headless_args_with_posture_model_and_effort(
 /// trace:STORY-263 | ai:claude
 
 pub fn claude_contained_flags() -> Vec<String> {
+    // BUG-1928: the write boundary is the worktree this process runs in — the
+    // git root of cwd, which `queue work` has already `set_current_dir`'d to the
+    // lease's worktree (pool or named), and the same root the STORY-612 OS
+    // wrapper binds rw. Never the orchestrator's requested path, which the warm
+    // pool may have replaced. trace:BUG-1928 | ai:claude
+    // BUG-1971: no git root means no write roots (fail closed), never a cwd
+    // fallback. trace:BUG-1971 | ai:claude
+    claude_contained_flags_for_roots(&contained_session_write_roots())
+}
+
+/// BUG-1928: the contained launch flags with the write boundary scoped to
+/// `worktree` (see `crate::contained_boundary`).
+// trace:BUG-1928 | ai:claude
+pub fn claude_contained_flags_for(worktree: &Path) -> Vec<String> {
+    claude_contained_flags_for_roots(&crate::contained_boundary::contained_write_roots(worktree))
+}
+
+/// The contained launch flags for an explicit list of write roots.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Vec<String> {
     vec![
         "--setting-sources".to_string(),
         "project".to_string(),
         "--settings".to_string(),
-        claude_contained_settings_json(),
+        claude_contained_settings_json(write_roots),
     ]
 }
 
@@ -2144,7 +2374,7 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-fn claude_contained_settings_json() -> String {
+fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2157,7 +2387,8 @@ fn claude_contained_settings_json() -> String {
         .as_ref()
         .map(|r| contained_managed_domains_only(r))
         .unwrap_or(false);
-    contained_settings_json(&allowed_hosts, managed_only)
+    // trace:BUG-1928 | ai:claude
+    contained_settings_json(&allowed_hosts, managed_only, write_roots)
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2258,9 +2489,18 @@ pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
 /// without-prompt needs `network.allowManagedDomainsOnly` via MANAGED settings
 /// (not this project `--settings`) and is a follow-up — see STORY-605. Pure +
 /// total so the "empty → unchanged" invariant is unit-tested. trace:STORY-605
+///
+/// BUG-1928: `permissions.allow` is the WRITE boundary under `dontAsk` — one
+/// absolute `//<root>/**` rule per file-writing tool for each of `write_roots`
+/// (see `crate::contained_boundary`). It replaces `Edit(/**)`, whose single
+/// leading `/` Claude Code anchors at the project root, so it never covered the
+/// session's worktree and every contained edit was denied. Empty roots → no
+/// allow rule → every edit denied (fails closed).
+// trace:BUG-1928 | ai:claude
 pub(crate) fn contained_settings_json(
     allowed_hosts: &[String],
     managed_domains_only: bool,
+    write_roots: &[PathBuf],
 ) -> String {
     let mut sandbox = serde_json::json!({
         "enabled": true,
@@ -2289,9 +2529,7 @@ pub(crate) fn contained_settings_json(
     }
     serde_json::json!({
         "permissions": {
-            "allow": [
-                "Edit(/**)"
-            ],
+            "allow": crate::contained_boundary::write_allow_rules(write_roots),
             "deny": destructive_command_deny_rules()
         },
         "sandbox": sandbox
@@ -2766,6 +3004,40 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 /// vendor first and pass it here, avoiding a second late resolver that could
 /// silently fall back to a disabled default.
 // trace:BUG-898 | ai:codex
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_exec_vendor_headless_command(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Result<std::process::Command> {
+    use std::process::Command;
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+    // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
+    // path is the `--no-human` phase-1 implementer, which must not diverge.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
+    let mut child_cmd = Command::new(program);
+    child_cmd
+        .args(args)
+        .env("AIDA_HEADLESS", "1")
+        // BUG-802: same drive-root anchor as the spawn path — the two launch
+        // paths must never diverge on env.
+        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
+        // BUG-806: same PATH rule as the spawn path.
+        .env("PATH", drive_path_env().unwrap_or_default())
+        .env(ceiling_key, ceiling_value);
+    if containment_applied(vendor, contained) {
+        child_cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        child_cmd.env_remove("AIDA_CONTAINED");
+    }
+    Ok(child_cmd)
+}
+
 pub fn exec_vendor_headless(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -2775,7 +3047,7 @@ pub fn exec_vendor_headless(
     contained: bool,
     lease_id: Option<&str>,
 ) -> Result<()> {
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create {}", dir.display()))?;
@@ -2800,7 +3072,7 @@ pub fn exec_vendor_headless(
         vendor,
         aida_core::agents_config::AgentSeat::Implementer,
     );
-    let (program, args) = compose_headless_command(
+    let mut child_cmd = build_exec_vendor_headless_command(
         vendor,
         prompt,
         session_id,
@@ -2808,19 +3080,7 @@ pub fn exec_vendor_headless(
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
     )?;
-    // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
-    // path is the `--no-human` phase-1 implementer, which must not diverge.
-    // trace:TASK-1169 | ai:claude
-    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let mut child = Command::new(program)
-        .args(args)
-        .env("AIDA_HEADLESS", "1")
-        // BUG-802: same drive-root anchor as the spawn path — the two launch
-        // paths must never diverge on env.
-        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
-        // BUG-806: same PATH rule as the spawn path.
-        .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value)
+    let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -2883,15 +3143,19 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
 /// conversation with the working model it had already built. Pure — the flag
 /// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_resume_args_with_posture(prompt, session_id, false)
+    claude_headless_resume_args_with_posture(prompt, session_id, None)
 }
 
+/// `contained_in` is `Some(worktree)` for a contained resume: the write
+/// boundary is scoped to that worktree (the resumed session's cwd), not to the
+/// process cwd. `None` is the uncontained `bypassPermissions` posture.
+// trace:BUG-1971 | ai:claude
 pub fn claude_headless_resume_args_with_posture(
     prompt: &str,
     session_id: &str,
-    contained: bool,
+    contained_in: Option<&Path>,
 ) -> Vec<String> {
-    let permission_mode = if contained {
+    let permission_mode = if contained_in.is_some() {
         "dontAsk"
     } else {
         "bypassPermissions"
@@ -2901,8 +3165,12 @@ pub fn claude_headless_resume_args_with_posture(
         "--permission-mode".to_string(),
         permission_mode.to_string(),
     ];
-    if contained {
-        args.extend(claude_contained_flags());
+    if let Some(worktree) = contained_in {
+        // BUG-1971: only when `worktree` is itself a git root; otherwise no
+        // write roots. trace:BUG-1971 | ai:claude
+        args.extend(claude_contained_flags_for_roots(
+            &contained_resume_write_roots(worktree),
+        ));
     }
     args.extend([
         "--output-format".to_string(),
@@ -3054,15 +3322,17 @@ pub fn spawn_claude_headless_resume(
     // trace:STORY-612 | ai:claude
     let (program, args) = claude_program_and_args(
         cwd,
-        claude_headless_resume_args_with_posture(prompt, session_id, contained),
+        // BUG-1971: the write boundary is the worktree being resumed in.
+        // trace:BUG-1971 | ai:claude
+        claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd)),
     )?;
     // TASK-1169 / ADR-22: the resume path is a headless child too — same
     // bounded ceiling, so a resumed drain can't diverge from a fresh one.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     let child_grant = crate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
-    let status = Command::new(program)
-        .current_dir(cwd)
+    let mut cmd = Command::new(program);
+    cmd.current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat)
@@ -3070,7 +3340,14 @@ pub fn spawn_claude_headless_resume(
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
-        .env(ceiling_key, ceiling_value)
+        .env(ceiling_key, ceiling_value);
+    // trace:BUG-2006 | ai:antigravity
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    let status = cmd
         .stdout(Stdio::from(log))
         .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
@@ -4401,13 +4678,13 @@ fn exec_resume_command(
 /// + wait on platforms without exec semantics. `permission_mode`, when
 ///   given, is passed through so a resumed `aida queue work` session keeps
 ///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
-// trace:TASK-1594 | ai:claude
-pub fn exec_claude_resume(
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn build_claude_resume_exec_command(
     id: &str,
     permission_mode: Option<&str>,
     contained: bool,
     grant_id: Option<&str>,
-) -> Result<()> {
+) -> std::process::Command {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     if let Some(grant) = grant_id {
@@ -4420,6 +4697,22 @@ pub fn exec_claude_resume(
     if contained {
         cmd.args(claude_contained_flags());
     }
+    if contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
+}
+
+// trace:TASK-1594 | ai:claude
+pub fn exec_claude_resume(
+    id: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+    grant_id: Option<&str>,
+) -> Result<()> {
+    let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -4643,7 +4936,7 @@ mod tests {
     // trace:STORY-605 | ai:claude
     #[test]
     fn empty_egress_allowlist_omits_network_key_unchanged() {
-        let json = contained_settings_json(&[], false);
+        let json = contained_settings_json(&[], false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let sandbox = v.get("sandbox").and_then(|s| s.as_object()).unwrap();
         assert!(
@@ -4676,7 +4969,7 @@ mod tests {
     #[test]
     fn managed_domains_only_adds_allow_managed_flag() {
         // managed-only with NO allowlist → network carries only the flag.
-        let json = contained_settings_json(&[], true);
+        let json = contained_settings_json(&[], true, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             v.pointer("/sandbox/network/allowManagedDomainsOnly"),
@@ -4687,7 +4980,7 @@ mod tests {
             "no allowlist → no allowedDomains key: {json}"
         );
         // composes with an allowlist (both keys present).
-        let json = contained_settings_json(&["github.com".to_string()], true);
+        let json = contained_settings_json(&["github.com".to_string()], true, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             v.pointer("/sandbox/network/allowManagedDomainsOnly"),
@@ -4695,7 +4988,7 @@ mod tests {
         );
         assert!(v.pointer("/sandbox/network/allowedDomains").is_some());
         // default off + empty allowlist → network omitted (unchanged posture).
-        let json = contained_settings_json(&[], false);
+        let json = contained_settings_json(&[], false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(v.pointer("/sandbox/network").is_none());
     }
@@ -4742,6 +5035,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn run_claude_session_restores_terminal_title_after_child_exit() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         use std::os::unix::fs::PermissionsExt;
 
         fn write_executable(path: &std::path::Path, body: &str) {
@@ -4944,7 +5241,7 @@ mod tests {
     #[test]
     fn nonempty_egress_allowlist_adds_allowed_domains() {
         let hosts = vec!["github.com".to_string(), "*.crates.io".to_string()];
-        let json = contained_settings_json(&hosts, false);
+        let json = contained_settings_json(&hosts, false, &[]);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let domains = v
             .pointer("/sandbox/network/allowedDomains")
@@ -5995,10 +6292,30 @@ mod tests {
         assert_eq!(settings["sandbox"]["enabled"], true);
         assert_eq!(settings["sandbox"]["failIfUnavailable"], true);
         assert_eq!(settings["sandbox"]["allowUnsandboxedCommands"], false);
-        assert!(settings["permissions"]["allow"]
+        // BUG-1928: the allow list is the absolute rule set for the worktree
+        // this process runs in, not the project-relative `Edit(/**)`.
+        // trace:BUG-1928 | ai:claude
+        let allow: Vec<String> = settings["permissions"]["allow"]
             .as_array()
             .unwrap()
-            .contains(&serde_json::Value::String("Edit(/**)".to_string())));
+            .iter()
+            .filter_map(|r| r.as_str().map(str::to_string))
+            .collect();
+        assert!(!allow.contains(&"Edit(/**)".to_string()), "{allow:?}");
+        assert!(
+            !allow.is_empty(),
+            "the worktree must be writable: {allow:?}"
+        );
+        assert!(
+            allow
+                .iter()
+                .all(|r| r.contains("(//") && r.ends_with("/**)")),
+            "every write rule must be absolute: {allow:?}"
+        );
+        assert_eq!(
+            allow,
+            crate::contained_boundary::write_allow_rules(&contained_session_write_roots())
+        );
         assert!(settings["permissions"]["deny"]
             .as_array()
             .unwrap()
@@ -6279,8 +6596,12 @@ mod tests {
     // resolver fall through to the built-in Claude default. This preflight is
     // pure and runs before the queue-work worktree/lease mutation path.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_autopicks_single_enabled_profile() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6307,8 +6628,12 @@ mod tests {
     // BUG-898: an all-disabled profile is a launch configuration error and
     // must be reported before queue-work creates a worktree or lease.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_refuses_all_disabled_profile() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6340,8 +6665,12 @@ mod tests {
     // operator explicitly asks for disabled Claude in a codex-only project, we
     // refuse instead of silently launching Claude or mutating queue-work state.
     // trace:BUG-898 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn resolve_enabled_headless_vendor_refuses_explicit_disabled_vendor() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -6377,8 +6706,12 @@ mod tests {
     /// (`resolve_enabled_headless_vendor`) both the standalone reviewer launch
     /// and the implementer launch share.
     // trace:BUG-1607 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn reviewer_vendor_resolution_explicit_flag_wins_over_config_default() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().join("home");
         let project = tmp.path().join("project");
@@ -7276,5 +7609,605 @@ mod tests {
                 );
             }
         }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_reviewer_launch_plan_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-agent");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+
+        // 1. Contained = false with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["reviewer"],
+                &[("AIDA_CONTAINED", Some("1"))],
+            );
+            let plan = ReviewerLaunchPlan {
+                vendor: HeadlessVendor::Claude,
+                program: fake.to_string_lossy().to_string(),
+                args: vec![],
+                contained: false,
+            };
+            let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained reviewer launch must strip AIDA_CONTAINED from child: {env_contents}"
+            );
+        }
+
+        // 2. Contained = true without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["reviewer"],
+                &[("AIDA_CONTAINED", None)],
+            );
+            let plan = ReviewerLaunchPlan {
+                vendor: HeadlessVendor::Claude,
+                program: fake.to_string_lossy().to_string(),
+                args: vec![],
+                contained: true,
+            };
+            let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained reviewer launch must export AIDA_CONTAINED=1 to child: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_claude_resume_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", Some("1")),
+            ]);
+            let status = spawn_claude_resume("session-123", None, false).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_claude_resume must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", None),
+            ]);
+            let status = spawn_claude_resume("session-123", None, true).unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_claude_resume must export AIDA_CONTAINED=1: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_vendor_headless_with_seat_contained_exports_aida_contained_and_uncontained_strips_it()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+        let log_path = tmp.path().join("headless.log");
+        let tee_opts = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", Some("1")),
+                ],
+            );
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Claude,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                false,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_vendor_headless must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", None),
+                ],
+            );
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Claude,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                true,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_vendor_headless must export AIDA_CONTAINED=1: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_claude_headless_resume_contained_exports_aida_contained_and_uncontained_strips_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+        let log_path = tmp.path().join("headless.log");
+        let tee_opts = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+
+        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", Some("1")),
+                ],
+            );
+            let status = spawn_claude_headless_resume(
+                "prompt",
+                "sid",
+                &log_path,
+                &project,
+                &tee_opts,
+                false,
+                "implementer",
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents.lines().any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "uncontained spawn_claude_headless_resume must strip AIDA_CONTAINED: {env_contents}"
+            );
+        }
+
+        // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", None),
+                ],
+            );
+            let status = spawn_claude_headless_resume(
+                "prompt",
+                "sid",
+                &log_path,
+                &project,
+                &tee_opts,
+                true,
+                "implementer",
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "contained spawn_claude_headless_resume must export AIDA_CONTAINED=1: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn containment_applied_reports_only_claude_as_contained() {
+        assert!(containment_applied(HeadlessVendor::Claude, true));
+        assert!(!containment_applied(HeadlessVendor::Claude, false));
+        assert!(!containment_applied(HeadlessVendor::Codex, true));
+        assert!(!containment_applied(HeadlessVendor::Codex, false));
+        assert!(!containment_applied(HeadlessVendor::Agy, true));
+        assert!(!containment_applied(HeadlessVendor::Agy, false));
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn spawn_vendor_headless_with_seat_codex_and_agy_strip_contained_even_if_passed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-vendor");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+        let log_path = tmp.path().join("headless.log");
+        let tee_opts = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+
+        // Codex with contained = true -> AIDA_CONTAINED must be stripped
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", Some("1")),
+                ],
+            );
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Codex,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                true,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "Codex headless must strip AIDA_CONTAINED even when contained=true: {env_contents}"
+            );
+        }
+
+        // Agy with contained = true -> AIDA_CONTAINED must be stripped
+        {
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                &project,
+                "advisor",
+                &["implementer"],
+                &[
+                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", Some("1")),
+                ],
+            );
+            let status = spawn_vendor_headless_with_seat(
+                HeadlessVendor::Agy,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "prompt",
+                "sid",
+                &log_path,
+                &tee_opts,
+                true,
+            )
+            .unwrap();
+            assert!(status.success());
+            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            assert!(
+                !env_contents
+                    .lines()
+                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
+                "Agy headless must strip AIDA_CONTAINED even when contained=true: {env_contents}"
+            );
+        }
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn interactive_reviewer_launch_plan_for_codex_is_uncontained_and_strips_aida_contained() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-codex");
+        let env_out = tmp.path().join("env.txt");
+        crate::test_exec::write_executable(
+            &fake,
+            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+        );
+
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            Some("bypassPermissions"),
+            Some("codex-reviewer"),
+            "review prompt",
+            "sid-123",
+            true,
+        )
+        .unwrap();
+        assert!(
+            !plan.contained,
+            "Codex reviewer plan must never be marked contained"
+        );
+
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &project,
+            "advisor",
+            &["reviewer"],
+            &[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", Some("1")),
+            ],
+        );
+        let mut plan_with_fake = plan;
+        plan_with_fake.program = fake.to_string_lossy().to_string();
+        let status = spawn_reviewer_launch_plan(&plan_with_fake, &project).unwrap();
+        assert!(status.success());
+        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        assert!(
+            !env_contents
+                .lines()
+                .any(|l| l.starts_with("AIDA_CONTAINED=")),
+            "Codex reviewer launch must strip AIDA_CONTAINED from child: {env_contents}"
+        );
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn build_claude_exec_command_exports_when_contained_and_strips_when_uncontained() {
+        let cmd_contained =
+            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), true, None, None);
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_contained.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+            "contained build_claude_exec_command must export AIDA_CONTAINED=1: {envs:?}"
+        );
+
+        let cmd_uncontained =
+            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), false, None, None);
+        let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_uncontained.get_envs().collect();
+        assert!(
+            envs_uncontained
+                .iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "uncontained build_claude_exec_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
+        );
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn build_run_claude_session_command_exports_when_contained_and_strips_when_uncontained() {
+        let cmd_contained =
+            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), true, None);
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_contained.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+            "contained build_run_claude_session_command must export AIDA_CONTAINED=1: {envs:?}"
+        );
+
+        let cmd_uncontained =
+            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), false, None);
+        let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_uncontained.get_envs().collect();
+        assert!(
+            envs_uncontained
+                .iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "uncontained build_run_claude_session_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
+        );
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn build_claude_resume_exec_command_exports_when_contained_and_strips_when_uncontained() {
+        let cmd_contained = build_claude_resume_exec_command("session-123", None, true, None);
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_contained.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+            "contained build_claude_resume_exec_command must export AIDA_CONTAINED=1: {envs:?}"
+        );
+
+        let cmd_uncontained = build_claude_resume_exec_command("session-123", None, false, None);
+        let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_uncontained.get_envs().collect();
+        assert!(
+            envs_uncontained
+                .iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "uncontained build_claude_resume_exec_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
+        );
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn build_codex_session_command_strips_aida_contained() {
+        let cmd = build_codex_session_command("prompt", false, None, None);
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "build_codex_session_command must explicitly strip AIDA_CONTAINED: {envs:?}"
+        );
+    }
+
+    // trace:BUG-2006 | ai:antigravity
+    #[test]
+    fn build_exec_vendor_headless_command_exports_only_for_claude() {
+        // Claude contained -> exported
+        let cmd_claude_contained = build_exec_vendor_headless_command(
+            HeadlessVendor::Claude,
+            "prompt",
+            "sid",
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_claude_contained.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+            "contained Claude exec headless must export AIDA_CONTAINED=1: {envs:?}"
+        );
+
+        // Claude uncontained -> stripped
+        let cmd_claude_uncontained = build_exec_vendor_headless_command(
+            HeadlessVendor::Claude,
+            "prompt",
+            "sid",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_claude_uncontained.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "uncontained Claude exec headless must strip AIDA_CONTAINED: {envs:?}"
+        );
+
+        // Codex with contained=true -> stripped (fails safe)
+        let cmd_codex = build_exec_vendor_headless_command(
+            HeadlessVendor::Codex,
+            "prompt",
+            "sid",
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+            cmd_codex.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "Codex exec headless must strip AIDA_CONTAINED even when contained=true: {envs:?}"
+        );
+
+        // Agy with contained=true -> stripped (fails safe)
+        let cmd_agy = build_exec_vendor_headless_command(
+            HeadlessVendor::Agy,
+            "prompt",
+            "sid",
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd_agy.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+            "Agy exec headless must strip AIDA_CONTAINED even when contained=true: {envs:?}"
+        );
     }
 }

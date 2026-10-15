@@ -29,6 +29,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 
@@ -144,6 +145,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
             // trace:BUG-1656 | ai:claude
             dirty_newest_mtime_age_secs: None,
             untracked_only: false,
+            ..Default::default()
         },
         |_| None,
         |_| None,
@@ -397,6 +399,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             // trace:BUG-1656 | ai:claude
             dirty_newest_mtime_age_secs: None,
             untracked_only: false,
+            ..Default::default()
         },
         |_| None,
         |_| None,
@@ -447,6 +450,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             // trace:BUG-1656 | ai:claude
             dirty_newest_mtime_age_secs: None,
             untracked_only: false,
+            ..Default::default()
         },
         |_| None,
         |_| None,

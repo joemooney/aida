@@ -101,6 +101,23 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// The cwd the detached worker runs from: the project root that owns the
+/// store (the canonicalized store root's parent — the main checkout, not a
+/// session worktree, since a session's `.aida-store` resolves to the shared
+/// store), falling back to the store root itself. Never the spawner's cwd,
+/// which may be a removable session worktree.
+// trace:BUG-1947 | ai:claude
+pub fn worker_cwd_for(store_root: &Path) -> std::path::PathBuf {
+    let canonical = store_root
+        .canonicalize()
+        .unwrap_or_else(|_| store_root.to_path_buf());
+    canonical
+        .parent()
+        .filter(|p| p.is_dir())
+        .map(Path::to_path_buf)
+        .unwrap_or(canonical)
+}
+
 /// Spawn the detached worker for the store at `store_root`. Returns the child
 /// pid. The caller decides WHETHER to spawn (request filed, backoff clear,
 /// [`no_detach`] unset); this helper only refuses recursion: a worker never
@@ -143,14 +160,27 @@ pub fn spawn_detached_worker(store_root: &Path, cache_path: &Path) -> std::io::R
             .create(true)
             .append(true)
             .open(refresh_request::refresh_log_path(cache_path))?;
+        // The worker outlives its spawner, so it must not inherit the
+        // spawner's cwd: when that is a session worktree, the worker would
+        // show up as a live process using the tree and block its removal.
+        // Run it from the project root that owns the store (the canonical
+        // store root's parent, i.e. the main checkout, which session end
+        // never removes), with absolute paths so the move cannot change what
+        // the arguments refer to. The CLI dispatches `--worker` before any
+        // cwd-based discovery, so the cwd is only about what the process
+        // pins, never about finding the project. trace:BUG-1947 | ai:claude
+        let store_root = std::path::absolute(store_root)?;
+        let cache_path = std::path::absolute(cache_path)?;
+        let worker_cwd = worker_cwd_for(&store_root);
         let mut cmd = Command::new(std::env::current_exe()?);
         cmd.arg("cache")
             .arg("refresh")
             .arg("--worker")
             .arg("--store")
-            .arg(store_root)
+            .arg(&store_root)
             .arg("--cache")
-            .arg(cache_path)
+            .arg(&cache_path)
+            .current_dir(worker_cwd)
             .env("AIDA_CACHE_WORKER", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))
@@ -221,6 +251,24 @@ fn rotate_log(cache_path: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A session worktree's `.aida-store` is a symlink to the main checkout's
+    /// store: the worker must run from the main checkout, not the session
+    /// tree it was spawned from.
+    // trace:BUG-1947 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn worker_cwd_is_the_main_checkout_not_a_session_worktree() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        let main = base.join("main");
+        let session = base.join("session");
+        std::fs::create_dir_all(main.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(&session).unwrap();
+        std::os::unix::fs::symlink(main.join(".aida-store"), session.join(".aida-store")).unwrap();
+        assert_eq!(worker_cwd_for(&session.join(".aida-store")), main);
+        assert_eq!(worker_cwd_for(&main.join(".aida-store")), main);
+    }
 
     #[test]
     fn runtime_cap_floors_at_two_minutes_and_doubles_the_last_rebuild() {

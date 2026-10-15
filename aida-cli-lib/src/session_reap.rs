@@ -948,13 +948,16 @@ fn reap_one_with_clear_hooks(
                     .unwrap_or_default()
             );
         }
-        if aida_core::worktree_pool_destroy::teardown_worktree_path(
+        if let Err(e) = aida_core::worktree_pool_destroy::teardown_worktree_path(
             project_root,
             &lease.worktree_path,
             &worktree_pool_global_hooks("pre_destroy"),
-        )
-        .is_err()
-        {
+        ) {
+            // A live process inside the tree keeps the whole session: lease,
+            // worktree, and branch. trace:BUG-1947 | ai:claude
+            if let Some(in_use) = e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>() {
+                return format!("skipped — worktree {}", in_use.summary());
+            }
             return format!(
                 "failed — could not remove worktree {}",
                 lease.worktree_path.display()

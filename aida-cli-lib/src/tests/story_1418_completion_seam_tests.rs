@@ -83,6 +83,9 @@ fn allowed_direct_writes() -> BTreeMap<&'static str, usize> {
         // GitHub import creates a record born Completed from a closed issue:
         // not a transition, so no ship record.
         ("aida-cli-lib/tracker_cmd.rs", 1),
+        // `aida faq add` files an FAQ born Completed (FAQ is reference, not
+        // work): not a transition, so no ship record. trace:STORY-1642 | ai:claude
+        ("aida-cli-lib/git_backend_cmd.rs", 1),
     ])
 }
 
@@ -501,8 +504,20 @@ fn the_scan_sees_the_routed_paths() {
     let files: BTreeMap<String, String> = scanned_files().into_iter().collect();
     let stamp = concat!("completion::mark_", "completed(");
     let transition = concat!("transition_to_", "completed(");
-    assert!(files["aida-cli-lib/lib.rs"].contains(stamp));
-    assert!(files["aida-cli-lib/lib.rs"].contains(transition));
+    assert!(
+        files["aida-cli-lib/lib.rs"].contains(stamp)
+            || files
+                .iter()
+                .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(stamp))
+            || files["aida-cli-lib/db_reconcile.rs"].contains(stamp)
+    );
+    assert!(
+        files["aida-cli-lib/lib.rs"].contains(transition)
+            || files
+                .iter()
+                .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(transition))
+            || files["aida-cli-lib/punt_done.rs"].contains(transition)
+    );
     assert!(files["aida-cli-lib/queue_cmd.rs"].contains(transition));
     assert!(files["aida-cli-lib/git_backend_cmd.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));

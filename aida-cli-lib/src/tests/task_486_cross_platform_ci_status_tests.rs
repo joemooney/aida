@@ -211,3 +211,120 @@ fn newer_failed_main_dispatch_does_not_clear_nightly_red() {
 
     assert_eq!(red.run_id, Some(400));
 }
+
+// ADR-72: the cross-platform workflow is dispatch-only, so `aida awaiting` and
+// `aida doctor` must not surface a nightly red, even when an old cache entry
+// still holds one. Returns before any `gh` call, so this needs no network.
+// trace:TASK-1723 | ai:claude
+#[test]
+fn task_1723_nightly_red_is_silenced_while_cross_platform_is_unscheduled() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(!cross_platform_workflow_scheduled(dir.path()));
+    assert!(nightly_red_status(dir.path()).is_none());
+
+    let cache_dir = dir.path().join(".aida").join("cache");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    let stale = NightlyRedCache {
+        fetched_at: chrono::Utc::now(),
+        item: Some(crate::awaiting_you::NightlyRedItem {
+            summary: "cross-platform nightly red since 2026-09-23".into(),
+            run_id: Some(1),
+            nights: 3,
+        }),
+    };
+    std::fs::write(
+        cache_dir.join("awaiting-nightly-red.json"),
+        serde_json::to_vec(&stale).unwrap(),
+    )
+    .unwrap();
+    assert!(cached_nightly_red_status(dir.path()).is_none());
+}
+
+// trace:BUG-1943 | ai:claude
+fn write_cross_platform_workflow(root: &std::path::Path, body: &str) {
+    let workflows = root.join(".github").join("workflows");
+    std::fs::create_dir_all(&workflows).unwrap();
+    std::fs::write(workflows.join("cross-platform.yml"), body).unwrap();
+}
+
+// trace:BUG-1943 | ai:claude
+fn seed_red_nightly_cache(root: &std::path::Path) {
+    let cache_dir = root.join(".aida").join("cache");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    let red = NightlyRedCache {
+        fetched_at: chrono::Utc::now(),
+        item: Some(crate::awaiting_you::NightlyRedItem {
+            summary: "cross-platform nightly red since 2026-09-23".into(),
+            run_id: Some(37323717377),
+            nights: 13,
+        }),
+    };
+    std::fs::write(
+        cache_dir.join("awaiting-nightly-red.json"),
+        serde_json::to_vec(&red).unwrap(),
+    )
+    .unwrap();
+}
+
+// BUG-1943: a dispatch-only cross-platform workflow has no nightly, so a red
+// cached from its old scheduled runs must never reach awaiting or doctor.
+// trace:BUG-1943 | ai:claude
+#[test]
+fn bug_1943_dispatch_only_workflow_reports_no_nightly_red() {
+    let dir = tempfile::tempdir().unwrap();
+    write_cross_platform_workflow(
+        dir.path(),
+        "name: Cross-platform (manual)\non:\n  workflow_dispatch:\njobs: {}\n",
+    );
+    seed_red_nightly_cache(dir.path());
+    assert!(!cross_platform_workflow_scheduled(dir.path()));
+    assert!(cached_nightly_red_status(dir.path()).is_none());
+    // Returns before any `gh` call, so this stays offline.
+    assert!(nightly_red_status(dir.path()).is_none());
+}
+
+// BUG-1943: a missing workflow file means no nightly either.
+// trace:BUG-1943 | ai:claude
+#[test]
+fn bug_1943_missing_workflow_reports_no_nightly_red() {
+    let dir = tempfile::tempdir().unwrap();
+    seed_red_nightly_cache(dir.path());
+    assert!(!cross_platform_workflow_scheduled(dir.path()));
+    assert!(cached_nightly_red_status(dir.path()).is_none());
+}
+
+// BUG-1943: with a schedule trigger the existing behaviour holds — the fresh
+// cached red is surfaced (the cache hit keeps this offline).
+// trace:BUG-1943 | ai:claude
+#[test]
+fn bug_1943_scheduled_workflow_keeps_nightly_red() {
+    let dir = tempfile::tempdir().unwrap();
+    write_cross_platform_workflow(
+        dir.path(),
+        "name: Cross-platform\non:\n  schedule:\n    - cron: '0 6 * * *'\n  workflow_dispatch:\njobs: {}\n",
+    );
+    seed_red_nightly_cache(dir.path());
+    assert!(cross_platform_workflow_scheduled(dir.path()));
+    let red = cached_nightly_red_status(dir.path()).expect("scheduled workflow keeps red");
+    assert_eq!(red.run_id, Some(37323717377));
+    assert_eq!(red.nights, 13);
+}
+
+// trace:BUG-1943 | ai:claude
+#[test]
+fn bug_1943_schedule_detection_covers_every_on_shape() {
+    assert!(workflow_yaml_declares_schedule("on: schedule\n"));
+    assert!(workflow_yaml_declares_schedule("on: [push, schedule]\n"));
+    assert!(workflow_yaml_declares_schedule(
+        "on:\n  schedule:\n    - cron: '0 0 * * *'\n"
+    ));
+    assert!(!workflow_yaml_declares_schedule("on: workflow_dispatch\n"));
+    assert!(!workflow_yaml_declares_schedule(
+        "on: [push, pull_request]\n"
+    ));
+    assert!(!workflow_yaml_declares_schedule(
+        "on:\n  workflow_dispatch:\n# schedule:\n#   - cron: '0 0 * * *'\n"
+    ));
+    assert!(!workflow_yaml_declares_schedule("jobs: {}\n"));
+    assert!(!workflow_yaml_declares_schedule(": not yaml: ["));
+}

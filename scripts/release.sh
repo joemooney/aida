@@ -10,7 +10,7 @@
 #   ./scripts/release.sh 0.5.0       # explicit version
 #
 # Pushing the tag triggers .github/workflows/release.yml, which builds
-# binaries for linux-{x86_64,arm64} and darwin-{x86_64,arm64} and attaches
+# binaries for linux-{x86_64,arm64} (AIDA is Linux-only, ADR-72) and attaches
 # them to the GitHub release.
 #
 # Conventions enforced by this script:
@@ -37,12 +37,10 @@ set -euo pipefail
 # "cancelled" without ever pausing. trace:TASK-79 | ai:claude
 auto_yes=${AIDA_RELEASE_YES:-0}
 prepare_only=0
-# TASK-257: by default the release is gated on a recent, green cross-platform
-# CI run — PR CI is Linux-only during the alpha, so Windows is
-# validated by the weekly cross-platform.yml workflow. --skip-xplat-check /
-# AIDA_SKIP_XPLAT_CHECK=1 bypasses the gate (not recommended for a published
-# release). trace:TASK-257 | ai:claude
-skip_xplat=${AIDA_SKIP_XPLAT_CHECK:-0}
+# ADR-72: releases no longer require any cross-platform CI run. The former
+# --skip-xplat-check flag / AIDA_SKIP_XPLAT_CHECK env are still accepted (and
+# ignored) so existing callers such as `aida release` keep working.
+# trace:TASK-1723 | ai:claude
 # TASK-1149: gate documentation currency at RELEASE time (not per-PR).
 # Verifies the regenerated CHANGELOG is current + deterministic before the
 # tag. --skip-docs-check / AIDA_SKIP_DOCS_CHECK=1 bypasses (mirrors the
@@ -53,7 +51,7 @@ for arg in "$@"; do
     case "$arg" in
         --yes|-y) auto_yes=1 ;;
         --prepare-only) prepare_only=1 ;;
-        --skip-xplat-check) skip_xplat=1 ;;
+        --skip-xplat-check) ;;  # accepted, no-op (ADR-72)
         --skip-docs-check) skip_docs=1 ;;
         -h|--help)
             echo "usage: $0 [--prepare-only] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
@@ -350,36 +348,17 @@ echo
 
 # STORY-1125: queueable release prep stops at the publish boundary. This mode
 # produces the mechanical prep (version bump, Cargo.lock, CHANGELOG, docs gate,
-# tag notes) and the cross-platform gate verdict, then exits before commit,
+# tag notes), then exits before commit,
 # tag, or push. The operator can inspect the dirty tree and then publish
 # manually if they approve the prepared release. trace:STORY-1125 | ai:codex
 if [ "$prepare_only" = "1" ]; then
-    if [ "$skip_xplat" = "1" ]; then
-        echo "skipping cross-platform pre-release check (--skip-xplat-check / AIDA_SKIP_XPLAT_CHECK=1)."
-    else
-        echo
-        echo "─── Cross-platform pre-release check ───"
-        if ! "$(dirname "$0")/pre-release-check.sh"; then
-            cat <<EOM >&2
-
-error: cross-platform CI is not green — release prep stopped before tag/commit.
-
-The version bump is in your working tree but not committed. Once
-cross-platform CI is green, re-run this script. To prepare without the check
-(not recommended for a published release), pass --skip-xplat-check.
-
-Tag notes saved at: $notes_file
-EOM
-            exit 1
-        fi
-    fi
     cat <<EOM
 prepared v$new. No commit, tag, or push was performed.
 
 Next operator step:
   inspect the version bump and tag notes, then publish manually if approved:
     git add ${manifest_paths[*]}
-    git commit -m "chore: release v$new"
+    AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
     git tag -a v$new -F $notes_file
     git push origin HEAD
     git push origin v$new
@@ -427,7 +406,7 @@ Pick one:
 
   1. Proceed manually (use the auto-generated tag notes):
        git add ${manifest_paths[*]}
-       git commit -m "chore: release v$new"
+       AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
        git tag -a v$new -F $notes_file
        git push origin main
        git push origin v$new
@@ -443,38 +422,17 @@ EOM
         ;;
 esac
 
-# TASK-257: gate the tag on a recent, green cross-platform CI run. PR CI is
-# Linux-only during the alpha, so Windows is validated by the
-# weekly cross-platform.yml workflow — block the release until that's green
-# (pre-release-check.sh reuses a <24h green run or dispatches a fresh one and
-# blocks on it). Runs after the confirmation prompt so the user is not made to
-# wait on CI before deciding to release. trace:TASK-257 | ai:claude
-if [ "$skip_xplat" = "1" ]; then
-    echo "skipping cross-platform pre-release check (--skip-xplat-check / AIDA_SKIP_XPLAT_CHECK=1)."
-else
-    echo
-    echo "─── Cross-platform pre-release check ───"
-    if ! "$(dirname "$0")/pre-release-check.sh"; then
-        cat <<EOM >&2
-
-error: cross-platform CI is not green — refusing to tag v$new.
-
-The version bump is in your working tree but not committed. Once
-cross-platform CI is green, re-run this script. To tag without the check
-(not recommended for a published release), pass --skip-xplat-check.
-
-Tag notes saved at: $notes_file
-EOM
-        exit 1
-    fi
-fi
-
 # AIDA_RELEASE=1 signals the AIDA commit-msg hook (templates/hooks/aida-commit-msg)
 # to suppress AI-tag and trace-reference warnings on this mechanical version-bump
 # commit. The substrate-as-bouncer gitignored-file gate (templates/hooks/aida-pre-commit.sh)
 # is unaffected — release commits still can't sneak intermediate build products in.
 # trace:TASK-488 | ai:claude
 export AIDA_RELEASE=1
+# The release commit is the operator's version bump on main in the primary
+# checkout, which the STORY-1647 pre-commit gate refuses by default; this is the
+# documented operator override (until release moves to a PR, TASK-1721).
+# trace:STORY-1647 | ai:claude
+export AIDA_ALLOW_PRIMARY_COMMIT=1
 git add "${manifest_paths[@]}"
 git commit -m "chore: release v$new"
 git tag -a "v$new" -F "$notes_file"

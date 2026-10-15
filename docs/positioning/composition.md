@@ -22,7 +22,7 @@ recipe here depends on tooling that doesn't exist yet.
 
 ## Recipe 1 — Spec Kit scaffolds the feature, AIDA holds the graph
 
-[GitHub Spec Kit](vs-spec-kit.md) is excellent at going from a paragraph to a
+[GitHub Spec Kit](../archive/positioning/vs-spec-kit.md) is excellent at going from a paragraph to a
 structured `spec.md → plan.md → tasks.md` for *one* feature. AIDA is built for
 what happens *after*: keeping those features as a related, queryable, traced
 graph for the life of the project.
@@ -45,7 +45,7 @@ spec and reference the Spec Kit artifact by hand. An opt-in importer that ingest
 Spec Kit / OpenSpec / Kiro artifacts into AIDA records (preserving paths,
 assigning stable IDs, inferring relationships conservatively) is filed as
 **TASK-0416** and not yet shipped. Until it lands, the composition is real but
-hand-wired; the [vs-spec-kit](vs-spec-kit.md) page covers the division of labor
+hand-wired; the [vs-spec-kit](../archive/positioning/vs-spec-kit.md) page covers the division of labor
 in full.
 
 **Who this is for:** teams that adopted Spec Kit, shipped a handful of features,
@@ -56,7 +56,7 @@ relationships, rename stability, "what implements this?" across the whole repo.
 
 ## Recipe 2 — Agent Teams coordinates the burst, AIDA outlives the session
 
-Claude Code's [Agent Teams](vs-agent-teams.md) gives you native within-session
+Claude Code's [Agent Teams](../archive/positioning/vs-agent-teams.md) gives you native within-session
 parallelism: a mailbox, a shared self-claiming task list, dependency
 auto-unblocking. That is genuinely good *coordination* — for the duration of one
 session, in one vendor.
@@ -112,7 +112,7 @@ project's intent get locked inside one agent's proprietary memory.
 
 ## Recipe 4 — `/workflow` orchestrates the task, AIDA tracks the spec
 
-Claude Code [Workflows](vs-claude-code-workflows.md) deterministically orchestrate
+Claude Code [Workflows](../archive/positioning/vs-claude-code-workflows.md) deterministically orchestrate
 the fan-out *within* a single task — phases, parallel agents, verification gates.
 AIDA tracks the *spec* that task belongs to, across however many tasks and
 sessions it takes.
@@ -134,14 +134,14 @@ graph, run both and mirror between them.
 `aida github pull` imports Issues back as requirements; `aida github labels
 --create-missing` sets up the AIDA label taxonomy. Humans get the board they
 like; the durable, code-linked graph stays in AIDA. The full "when a SaaS PM tool
-is the right call" split is [vs-saas-pm.md](vs-saas-pm.md).
+is the right call" split is [vs-saas-pm.md](../archive/positioning/vs-saas-pm.md).
 
 ---
 
 ## Recipe 6 — Karpathy-style markdown is the floor; AIDA is the graph on top
 
 If you already keep a structured `REQUIREMENTS.md` an agent can read
-([the Karpathy approach](vs-karpathy-md.md)), you've done the hard part —
+([the Karpathy approach](../archive/positioning/vs-karpathy-md.md)), you've done the hard part —
 maintaining the discipline. AIDA doesn't ask you to throw it away; it adds stable
 IDs, typed edges, code traces, and an MCP server *on top of* that same habit. The
 markdown is the floor; the graph is what you get for keeping it.
@@ -157,7 +157,7 @@ work feeds it.
 **The recipe:** let your agents use A2A (or MCP, or plain git) to hand each other
 live tasks; land the durable result — what's being worked, by whom, in what
 state, which code traces back — in AIDA. The transport carries the in-flight
-handoff; the record survives it. Full division of labor: [vs-a2a.md](vs-a2a.md).
+handoff; the record survives it. Full division of labor: [vs-a2a.md](../archive/positioning/vs-a2a.md).
 
 **The seam, stated honestly:** there is no A2A surface in AIDA today — this is a
 stated posture, not a shipped feature. An A2A message landing as a mailbox item
@@ -189,5 +189,5 @@ of time; AIDA is the substrate that remembers across all of them.
   neighbor alone is enough.
 - [aida-mcp-install-matrix](../agents/aida-mcp-install-matrix.md) — per-client MCP
   setup for Recipe 3.
-- [vs-a2a.md](vs-a2a.md) — A2A/MCP are transports; AIDA is the record they leave
+- [vs-a2a.md](../archive/positioning/vs-a2a.md) — A2A/MCP are transports; AIDA is the record they leave
   open (Recipe 7).

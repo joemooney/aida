@@ -613,6 +613,37 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::Bool { default: false },
     },
+    // trace:STORY-1644 | ai:claude
+    KnobSpec {
+        section: "list",
+        key: "default_sort",
+        doc: "`aida list` order when no `--sort` is passed; `id` = natural numeric ID order (FAQ-2 before FAQ-11).",
+        default: "id",
+        edit: EditSafety::Enum {
+            allowed: crate::LIST_SORT_VALUES,
+        },
+    },
+    KnobSpec {
+        section: "list",
+        key: "agent_limit",
+        doc: "Agent-mode row cap for a bare `aida list`; 0 = unbounded; cuts are announced (env: AIDA_LIST_LIMIT).",
+        default: "100",
+        edit: EditSafety::Integer {
+            min: 0,
+            max: 100_000,
+        },
+    },
+    // --- [history]. trace:STORY-1644 | ai:claude ---
+    KnobSpec {
+        section: "history",
+        key: "limit",
+        doc: "Default row count for `aida history` when no `--limit` is passed (env: AIDA_HISTORY_LIMIT).",
+        default: "20",
+        edit: EditSafety::Integer {
+            min: 1,
+            max: 100_000,
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -2485,11 +2516,88 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             Some(false) => ("suppressed".to_string(), PolicySource::ProjectConfig),
             None => ("suppressed (default)".to_string(), PolicySource::Default),
         };
+        // STORY-1644: the default sort and the agent row cap.
+        // trace:STORY-1644 | ai:claude
+        let sort_cfg = config_lookup(cfg.as_ref(), "list", "default_sort")
+            .and_then(|v| v.as_str().map(str::to_string));
+        let (sort_value, sort_source) = match sort_cfg {
+            Some(v) => (v, PolicySource::ProjectConfig),
+            None => (
+                format!("{} (default)", crate::LIST_DEFAULT_SORT),
+                PolicySource::Default,
+            ),
+        };
+        let env_limit = std::env::var(crate::AGENT_LIST_LIMIT_ENV)
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok());
+        let cfg_limit =
+            config_lookup(cfg.as_ref(), "list", "agent_limit").and_then(|v| v.as_integer());
+        let render_cap = |n: usize| {
+            if n == 0 {
+                "unbounded".to_string()
+            } else {
+                format!("{n} rows")
+            }
+        };
+        let (limit_value, limit_source) = match (env_limit, cfg_limit) {
+            (Some(n), _) => (
+                render_cap(n),
+                PolicySource::Env(crate::AGENT_LIST_LIMIT_ENV),
+            ),
+            (None, Some(n)) if n >= 0 => (render_cap(n as usize), PolicySource::ProjectConfig),
+            _ => (
+                format!("{} (default)", render_cap(crate::AGENT_LIST_DEFAULT_LIMIT)),
+                PolicySource::Default,
+            ),
+        };
         PolicySection {
             section: "list",
             header: "[list]".to_string(),
+            rows: vec![
+                PolicyRow {
+                    key: "show_hidden_hints",
+                    value,
+                    source,
+                },
+                PolicyRow {
+                    key: "default_sort",
+                    value: sort_value,
+                    source: sort_source,
+                },
+                PolicyRow {
+                    key: "agent_limit",
+                    value: limit_value,
+                    source: limit_source,
+                },
+            ],
+        }
+    });
+
+    // --- History default row count. trace:STORY-1644 (env: AIDA_HISTORY_LIMIT) ---
+    sections.push({
+        let env_limit = std::env::var("AIDA_HISTORY_LIMIT")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .filter(|n| *n > 0);
+        let cfg_limit = config_lookup(cfg.as_ref(), "history", "limit")
+            .and_then(|v| v.as_integer())
+            .filter(|n| *n > 0);
+        let (value, source) = match (env_limit, cfg_limit) {
+            (Some(n), _) => (format!("{n} rows"), PolicySource::Env("AIDA_HISTORY_LIMIT")),
+            (None, Some(n)) => (format!("{n} rows"), PolicySource::ProjectConfig),
+            _ => (
+                format!(
+                    "{} rows (default)",
+                    crate::history_timeline::HISTORY_DEFAULT_LIMIT
+                ),
+                PolicySource::Default,
+            ),
+        };
+        PolicySection {
+            section: "history",
+            header: "[history]".to_string(),
             rows: vec![PolicyRow {
-                key: "show_hidden_hints",
+                key: "limit",
                 value,
                 source,
             }],
@@ -4916,9 +5024,19 @@ mod bug_1667_bypass_gate_tests {
             "the dedicated bypass writer must have one gate-owned caller"
         );
 
+        let lib_src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         for (name, source) in [
             ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
-            ("lib.rs", include_str!("lib.rs")),
+            ("lib.rs", lib_src.as_str()),
         ] {
             let mut rest = source;
             while let Some((_, after)) = rest.split_once("apply_permission_posture(") {

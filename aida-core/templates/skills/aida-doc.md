@@ -32,8 +32,8 @@ contract but not the journey.
   rationale that should be documented (why a guard exists, why an
   alternative was rejected).
 - **At session end** — last-chance prompt for the day's work; pairs
-  well with `/aida-capture` (which catches missed *requirements*; this
-  catches missed *narrative*).
+  well with `/aida-capture` (which catches missed *requirements* and
+  *FAQ candidates*; this catches missed *narrative*).
 - **Manually**, when the user says "this needs docs," "we should
   document the why," or "future-me won't remember this."
 
@@ -187,8 +187,10 @@ default since most doc entries serve both.
 - **`/aida-review`** — review surfaces rationale ("why this guard,"
   "why this exception"). Promote the load-bearing review notes to
   Doc entries instead of letting them rot in the PR thread.
-- **`/aida-capture`** — captures missed *requirements*. `/aida-doc`
-  captures missed *narrative*. Either or both at session end.
+- **`/aida-capture`** — captures missed *requirements* and *FAQ
+  candidates* (question + verified answer). `/aida-doc` captures missed
+  *narrative*. A Q&A worth keeping goes to `/aida-capture` as an FAQ, not
+  here. Either or both at session end.
 - **STORY-104** — the `aida doc` data model + add/list/show surface
   this skill drives.
 - **EPIC-24** — the living-documentation vision this fits into.

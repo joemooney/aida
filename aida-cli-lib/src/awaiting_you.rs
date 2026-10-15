@@ -150,6 +150,13 @@ pub(crate) struct AwaitingReport {
     /// (which must stay local and fast, no full-store load) leaves it empty.
     // trace:BUG-1564 | ai:claude
     pub orphaned_in_progress: Vec<OrphanedInProgressItem>,
+    /// STORY-1680: In Progress specs whose derived driver is `idle` and whose
+    /// idle age (newest branch commit, else last status change) exceeds
+    /// `[awaiting] idle_in_progress_hours` — "in progress, but nothing is
+    /// working it". A spec listed here is dropped from `orphaned_in_progress`
+    /// so it is reported once. Full report only, like the orphan channel.
+    // trace:STORY-1680 | ai:claude
+    pub idle_in_progress: Vec<crate::idle_in_progress::IdleInProgressItem>,
     /// TASK-1454: LIVE seats confirmed blocked on an unanswered permission
     /// prompt (BUG-1553's "the blocked state is the only one a human can
     /// fix"). Sourced from the `Notification(permission_prompt)` hook's
@@ -1305,6 +1312,7 @@ pub(crate) fn project_held_pr(
     record: &crate::merge_hold::MergeHoldRecord,
     title: &str,
     approved_at_head: Option<&str>,
+    is_draft: bool,
 ) -> HeldPrItem {
     use crate::merge_hold::HoldReasonKind;
     let pr = record.pr;
@@ -1312,7 +1320,13 @@ pub(crate) fn project_held_pr(
         HoldReasonKind::Rework => {
             if let Some(head) = approved_at_head {
                 let short = crate::review_verdict::short_sha(head);
-                format!("rework approved at {short}; awaiting human: aida merge-hold clear {pr}")
+                if is_draft {
+                    format!("rework checkpoint approved at {short}; PR is Draft — finish implementation and mark ready")
+                } else {
+                    format!(
+                        "rework approved at {short}; awaiting human: aida merge-hold clear {pr}"
+                    )
+                }
             } else {
                 "implementer: address the review findings; the hold lifts after approval"
                     .to_string()
@@ -1393,6 +1407,7 @@ pub(crate) struct CorpusHoldCandidate {
     pub spec_completed: bool,
     /// A `.aida/merge-holds/PR-<n>` marker already speaks for this PR.
     pub has_marker_hold: bool,
+    pub is_draft: bool,
 }
 
 /// Derive the rework holds the verdict corpus implies, for open PRs that have no
@@ -1647,6 +1662,8 @@ impl AwaitingReport {
                 self.pr_attribution_disagreements.len(),
             ),
             ("orphaned_in_progress", self.orphaned_in_progress.len()),
+            // trace:STORY-1680 | ai:claude
+            ("idle_in_progress", self.idle_in_progress.len()),
             // BUG-1288: a truncated unshipped-work scan is its own line — it
             // must count toward `total()` too, or a quiet-looking report (0
             // items found, scan incomplete) would hit the is_empty() fast path
@@ -1894,6 +1911,16 @@ impl AwaitingReport {
                 "orphaned_in_progress",
                 &["spec", "state", "since", "action"],
                 &orphaned_in_progress_toon_rows(&self.orphaned_in_progress),
+            )
+        );
+        // trace:STORY-1680 | ai:claude
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "idle_in_progress",
+                &["spec", "idle", "age_source", "branch", "threshold_hours"],
+                &crate::idle_in_progress::toon_rows(&self.idle_in_progress),
             )
         );
         let _ = writeln!(
@@ -2549,6 +2576,22 @@ impl AwaitingReport {
             )?;
             budget -= 1;
         }
+        // trace:STORY-1680 | ai:claude
+        for i in &self.idle_in_progress {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  {} in-progress but nothing is working it: {} — {} — `{}`",
+                "⚠️".yellow(),
+                i.spec_id.bold(),
+                i.age_label(),
+                "aida ps".cyan(),
+            )?;
+            budget -= 1;
+        }
 
         if overflow > 0 {
             writeln!(
@@ -2711,6 +2754,8 @@ impl AwaitingReport {
                 // trace:BUG-1656 | ai:claude
                 "possibly_subagent": o.possibly_subagent,
             })).collect::<Vec<_>>(),
+            // trace:STORY-1680 | ai:claude
+            "idle_in_progress": crate::idle_in_progress::json_rows(&self.idle_in_progress),
             // trace:TASK-1454 | ai:claude
             "blocked_seats": self.blocked_seats.iter().map(|b| serde_json::json!({
                 "session_id": b.session_id,
@@ -2889,6 +2934,14 @@ impl AwaitingReport {
                 "orphaned in-progress",
             ));
         }
+        // trace:STORY-1680 | ai:claude
+        if !self.idle_in_progress.is_empty() {
+            parts.push(pluralize(
+                self.idle_in_progress.len(),
+                "idle in-progress",
+                "idle in-progress",
+            ));
+        }
         // trace:BUG-1530 | ai:claude — PRIN-5: say what is hidden. Never
         // silently drop the advisor/implementer/reviewer-owned items folded
         // out of this seat's headline; name the count instead.
@@ -3004,6 +3057,7 @@ mod tests {
         verdict: Option<&str>,
     ) -> OpenPrItem {
         OpenPrItem {
+            is_draft: false,
             number,
             title: format!("PR {number}"),
             head_branch: format!("branch-{number}"),
@@ -3107,7 +3161,7 @@ mod tests {
             "STORY-1397 is marked guided — merge requires review",
             None,
         );
-        let item = project_held_pr(&record, "route typed recusals", None);
+        let item = project_held_pr(&record, "route typed recusals", None, false);
         assert_eq!(item.reason_kind, "supervision");
         assert!(item.action.contains("aida merge-hold clear 2103"));
         let report = AwaitingReport {
@@ -3138,6 +3192,7 @@ mod tests {
                 &crate::merge_hold::typed_hold(7, kind, "d", None),
                 "t",
                 None,
+                false,
             )
             .action
         };
@@ -3154,6 +3209,7 @@ mod tests {
             &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             None,
+            false,
         )
         .action;
         assert!(action_unapproved.contains("implementer"));
@@ -3162,6 +3218,7 @@ mod tests {
             &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             Some("48433c6b00000000000000000000000000000000"),
+            false,
         )
         .action;
         assert!(action_approved.contains("rework approved at 48433c6"));
@@ -3309,7 +3366,7 @@ mod tests {
         };
         let mut rendered = Vec::new();
         assert!(report.render(false, &mut rendered).unwrap());
-        let rendered = String::from_utf8(rendered).unwrap();
+        let rendered = strip_ansi(&String::from_utf8(rendered).unwrap());
         assert!(rendered.contains("PR-2035 CI failing with no owner or route"));
         assert!(rendered.contains("gh pr checks 2035"));
 
@@ -3886,7 +3943,7 @@ mod tests {
         assert_eq!(r.total(), 2);
         let mut buf = Vec::new();
         assert!(r.render(false, &mut buf).unwrap());
-        let out = String::from_utf8(buf).unwrap();
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
         assert!(out.contains("PR-2061") && out.contains("blocked"), "{out}");
         assert!(
             out.contains("PR-2060") && out.contains("TASK-1298"),
@@ -4486,7 +4543,7 @@ mod tests {
 
         let mut buf = Vec::new();
         assert!(r.render(false, &mut buf).unwrap());
-        let out = String::from_utf8(buf).unwrap();
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
         assert!(out.contains("PR-2014"), "{out}");
         assert!(out.contains("TASK-1298"), "{out}");
         assert!(
@@ -5148,6 +5205,18 @@ mod tests {
                     since_label: "64h 15m ago".into(),
                     possibly_subagent: false,
                 })
+            }),
+            // trace:STORY-1680 | ai:claude
+            ("idle_in_progress", |r| {
+                r.idle_in_progress
+                    .push(crate::idle_in_progress::IdleInProgressItem {
+                        spec_id: "TASK-1680".into(),
+                        title: "nothing works it".into(),
+                        idle_secs: 30 * 3600,
+                        age_source: crate::idle_in_progress::IdleAgeSource::StatusChange,
+                        branch: None,
+                        threshold_hours: 24,
+                    })
             }),
             ("unshipped_scan_incomplete", |r| {
                 r.unshipped_work_scan = Some(UnshippedScanStatus {

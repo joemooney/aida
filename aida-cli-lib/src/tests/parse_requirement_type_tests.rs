@@ -46,8 +46,9 @@ fn every_requirement_type_variant_round_trips() {
         Decision,
         Term,
         Doc,
+        Faq,
     ];
-    assert_eq!(all.len(), 19, "RequirementType is expected to have 19 variants; update docs (CLAUDE.md, --type help, MCP schema) and this guard when it changes");
+    assert_eq!(all.len(), 20, "RequirementType is expected to have 20 variants; update docs (CLAUDE.md, --type help, MCP schema) and this guard when it changes");
     // Exhaustiveness check: maps each variant to its canonical CLI token.
     // The compiler enforces every variant is covered.
     for variant in all {
@@ -71,6 +72,7 @@ fn every_requirement_type_variant_round_trips() {
             Decision => "decision",
             Term => "term",
             Doc => "doc",
+            Faq => "faq",
         };
         assert_eq!(
             parse_requirement_type(token).unwrap(),

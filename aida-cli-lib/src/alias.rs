@@ -242,6 +242,29 @@ pub fn registry() -> Vec<AliasGroup> {
         });
     }
 
+    // Installed git-style extensions (`aida-<name>` on PATH), marked
+    // `external` with the resolved path. Like user aliases they are shown to
+    // every caller; unlike user aliases every caller can run them.
+    // trace:STORY-1641 | ai:claude
+    let externals = crate::external_cmd::discover();
+    if !externals.is_empty() {
+        groups.push(AliasGroup {
+            surface: "External commands".to_string(),
+            about: "`aida-<name>` programs found on PATH; run as `aida <name>`".to_string(),
+            rows: externals
+                .iter()
+                .map(|e| {
+                    let path = e.path.display().to_string();
+                    row(
+                        &format!("aida {}", e.name),
+                        &path,
+                        &format!("[external] {path}"),
+                    )
+                })
+                .collect(),
+        });
+    }
+
     groups
 }
 
@@ -416,6 +439,25 @@ mod tests {
             crate::rewrite_personal_view_alias(&s(&["aida", "myqueue"])),
             s(&["aida", "queue", "list"]),
         );
+
+        // STORY-1050: type aliases
+        assert_eq!(
+            crate::rewrite_type_alias(&s(&["aida", "faq", "list"])),
+            s(&["aida", "list", "--type", "faq"]),
+        );
+        assert_eq!(
+            crate::rewrite_type_alias(&s(&["aida", "bug", "add", "title"])),
+            s(&["aida", "add", "--type", "bug", "title"]),
+        );
+        // `doc` is a real subcommand (`aida doc add/list`); the type-alias
+        // rewrite must leave it alone. trace:STORY-1642 | ai:claude
+        for argv in [
+            s(&["aida", "doc", "add", "--title", "x"]),
+            s(&["aida", "doc", "list"]),
+            s(&["aida", "doc"]),
+        ] {
+            assert_eq!(crate::rewrite_type_alias(&argv), argv);
+        }
     }
 
     /// `--json` output is valid JSON and round-trips the group shape.

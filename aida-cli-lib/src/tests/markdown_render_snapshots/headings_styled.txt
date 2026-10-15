@@ -1,0 +1,15 @@
+␛[1;4mTop␛[0m ␛[1;4mheading␛[0m
+␛[2m═══════════␛[0m
+
+Intro paragraph.
+
+␛[1mSecond␛[0m ␛[1mlevel␛[0m
+␛[2m────────────␛[0m
+
+Body text.
+
+␛[1mThird␛[0m ␛[1mlevel␛[0m
+
+More.
+
+␛[1;3mFourth␛[0m ␛[1;3mlevel␛[0m

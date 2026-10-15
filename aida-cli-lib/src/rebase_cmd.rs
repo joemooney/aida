@@ -23,10 +23,17 @@ pub(crate) fn handle_rebase_command(
 ) -> Result<()> {
     use aida_core::rebase::{self, DetectError};
 
-    let project_root = store_path
+    let store_root = store_path
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    // A dry run inspects the checkout it was invoked from; the mutating path
+    // keeps its existing target. trace:TASK-1321 | ai:claude
+    let project_root = if dry_run {
+        invoked_checkout_root(&store_root, std::env::current_dir().ok().as_deref())
+    } else {
+        store_root
+    };
 
     // trace:BUG-1622 | ai:claude
     if let Some(b) = branch {
@@ -188,6 +195,55 @@ pub(crate) fn handle_rebase_command(
     Ok(())
 }
 
+/// The checkout `aida rebase` inspects: the git worktree containing `cwd` when
+/// it belongs to the same repository as the store, else `store_root`.
+///
+/// Linked worktrees resolve the canonical store at the primary checkout, so the
+/// store's parent alone would report the primary checkout's branch and state
+/// instead of the worktree the command was run from. A `cwd` outside any git
+/// checkout, or inside an unrelated repository, keeps the store root.
+// trace:TASK-1321 | ai:claude
+fn invoked_checkout_root(
+    store_root: &std::path::Path,
+    cwd: Option<&std::path::Path>,
+) -> std::path::PathBuf {
+    fn git_path(dir: &std::path::Path, arg: &str) -> Option<std::path::PathBuf> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["rev-parse", arg])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
+        let raw = String::from_utf8(out.stdout).ok()?.trim().to_string();
+        if raw.is_empty() {
+            return None;
+        }
+        let p = std::path::PathBuf::from(raw);
+        let abs = if p.is_absolute() { p } else { dir.join(p) };
+        std::fs::canonicalize(&abs).ok().or(Some(abs))
+    }
+
+    let Some(cwd) = cwd else {
+        return store_root.to_path_buf();
+    };
+    let Some(toplevel) = git_path(cwd, "--show-toplevel") else {
+        return store_root.to_path_buf();
+    };
+    let same_repo = match (
+        git_path(cwd, "--git-common-dir"),
+        git_path(store_root, "--git-common-dir"),
+    ) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    };
+    if same_repo {
+        toplevel
+    } else {
+        store_root.to_path_buf()
+    }
+}
+
 /// TASK-103: yes/no confirmation for the rebase execute phase.
 fn rebase_confirm(question: &str) -> bool {
     use std::io::Write;
@@ -327,5 +383,98 @@ fn rebase_report(
         for f in &followups {
             println!("    {} {}", "·".dimmed(), f);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::invoked_checkout_root;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    fn repo(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        git(dir, &["init", "-q", "-b", "main"]);
+        git(
+            dir,
+            &[
+                "-c",
+                "user.email=t@t.t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "init",
+            ],
+        );
+    }
+
+    fn canon(p: &Path) -> std::path::PathBuf {
+        std::fs::canonicalize(p).unwrap()
+    }
+
+    // trace:TASK-1321 | ai:claude
+    #[test]
+    fn linked_worktree_cwd_resolves_to_the_linked_checkout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let primary = tmp.path().join("primary");
+        let linked = tmp.path().join("linked");
+        repo(&primary);
+        git(
+            &primary,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feature",
+                linked.to_str().unwrap(),
+            ],
+        );
+        let nested = linked.join("sub");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        assert_eq!(
+            invoked_checkout_root(&primary, Some(&linked)),
+            canon(&linked)
+        );
+        assert_eq!(
+            invoked_checkout_root(&primary, Some(&nested)),
+            canon(&linked)
+        );
+        assert_eq!(
+            invoked_checkout_root(&primary, Some(&primary)),
+            canon(&primary)
+        );
+    }
+
+    // trace:TASK-1321 | ai:claude
+    #[test]
+    fn unrelated_or_missing_cwd_keeps_the_store_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let primary = tmp.path().join("primary");
+        let other = tmp.path().join("other");
+        let plain = tmp.path().join("plain");
+        repo(&primary);
+        repo(&other);
+        std::fs::create_dir_all(&plain).unwrap();
+
+        assert_eq!(invoked_checkout_root(&primary, Some(&other)), primary);
+        assert_eq!(invoked_checkout_root(&primary, Some(&plain)), primary);
+        assert_eq!(invoked_checkout_root(&primary, None), primary);
     }
 }

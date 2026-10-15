@@ -755,11 +755,20 @@ fn process_identity_is_alive_with(
 /// treated as not-alive (fail-safe, matching the prior platform-degrade
 /// contract). `pid == 0` is rejected by the `pid_is_alive` wrapper before it
 /// reaches here, so `kill` never addresses the caller's whole process group.
+///
+/// A pid above `pid_t::MAX` would wrap negative under an `as` cast, and a
+/// negative pid makes `kill` address a process GROUP — `u32::MAX` becomes
+/// `kill(-1, 0)`, which probes every process the caller may signal and so
+/// reads as alive. No real process has such a pid, so it is dead.
 // trace:BUG-613 | ai:claude
+// trace:TASK-1750 | ai:claude
 #[cfg(unix)]
 fn pid_is_alive_impl(pid: u32) -> bool {
+    let Ok(raw_pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
     // SAFETY: `kill` with signal 0 only probes; it never delivers a signal.
-    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    let rc = unsafe { libc::kill(raw_pid, 0) };
     // errno == EPERM means the process exists but we may not signal it.
     let exists = rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
     // BUG-1741: `kill(pid, 0)` answers 0 for a defunct (zombie) process too —
@@ -1073,6 +1082,11 @@ pub struct SessionLeaseLite {
     // trace:STORY-711 | ai:claude
     #[serde(default)]
     pub authorized_by: Option<String>,
+    /// Driver that minted this lease (`relay:<run>` etc.), from
+    /// `AIDA_RELAY_RUN` / `AIDA_DRIVER`. Absent on older leases.
+    // trace:STORY-1653 | ai:claude
+    #[serde(default)]
+    pub driver: Option<String>,
 }
 
 /// One work-item spec projected for the liveness pass — the display id, the two
@@ -1521,6 +1535,15 @@ mod tests {
         assert!(!pid_is_alive(u32::MAX - 1));
     }
 
+    // A pid that wraps negative as pid_t must not become a process-group
+    // probe: `u32::MAX` would be `kill(-1, 0)`, which succeeds.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn pid_is_alive_false_for_pids_beyond_pid_t() {
+        assert!(!pid_is_alive(u32::MAX));
+        assert!(!pid_is_alive(i32::MAX as u32 + 1));
+    }
+
     // BUG-613: pid 0 must never read as alive. trace:BUG-613 | ai:claude
     #[test]
     fn pid_is_alive_false_for_pid_zero() {
@@ -1691,6 +1714,7 @@ mod tests {
             review_verb: false,
             claim_verb: false,
             authorized_by: None,
+            driver: None,
         }
     }
 

@@ -4,7 +4,7 @@
 # Include this job in a GitLab project's `.gitlab-ci.yml`. It FAILS a
 # merge-request pipeline while the MR carries the `aida:merge-hold` label.
 # AIDA also preserves `aida:merge-hold-recorded` across clearance and adds
-# `aida:merge-hold-cleared` through the human-gated clear path. Removing only
+# `aida:merge-hold-cleared` through the human-gated clear or eligible recorded Rework auto-release path. Removing only
 # the active label therefore cannot release a previously held MR.
 # Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
 # the most recent hold has a recorded clearance; this makes label-only gate logic sound.
@@ -41,7 +41,7 @@ aida-merge-hold-gate:
     - |
       has_label() { printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr ',' '\n' | grep -Fqx "$1"; }
       if has_label aida:merge-hold; then
-        echo "This MR has an active merge-hold; only the human-gated aida merge-hold clear path can release it."
+        echo "This MR has an active merge-hold; release requires human clear or an eligible recorded Rework auto-release."
         exit 1
       fi
       if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then

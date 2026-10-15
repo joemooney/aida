@@ -52,6 +52,17 @@ pub(crate) fn handle_statusline_command(
         .ok()
         .filter(|s| !s.trim().is_empty());
     let (effective_role_name, role_is_default) = resolve_effective_role(raw_role.as_deref());
+    // BUG-1924: the label above stays the routing key (queue depth, @SPEC),
+    // but the *displayed* role comes from the validated seat grant, so a
+    // shell that only carries the label can see it lacks the authority. With
+    // no label but a valid grant, the granted seat routes too.
+    // trace:BUG-1924 | ai:claude
+    let role_display = crate::seat_authority::role_display(&project_root, raw_role.as_deref());
+    let (effective_role_name, role_is_default) = routing_role(
+        &role_display,
+        raw_role.as_deref(),
+        (effective_role_name, role_is_default),
+    );
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.
@@ -199,13 +210,26 @@ pub(crate) fn handle_statusline_command(
         // `(default)` so the implicit role is visible but unalarming.
         let session_role = lease.as_ref().and_then(|l| l.role.as_deref());
         let warn_enabled = !role_is_default && statusline_role_mismatch_enabled(&project_root);
-        let (role_text, role_mismatch) = role_segment_text(r, session_role, warn_enabled);
-        let role_text = if role_is_default {
-            format!("{} (default)", role_text)
-        } else {
-            role_text
-        };
-        let role_segment = if role_mismatch {
+        let (role_text, role_warning) =
+            role_display_segment_text(&role_display, r, session_role, warn_enabled);
+        // TASK-1736: a held seat close to expiry says so, in the warning
+        // colour, before gated commands start refusing.
+        // trace:TASK-1736 | ai:claude
+        let (role_text, role_warning) =
+            match (&role_display, crate::seat_authority::session_grant_expiry()) {
+                (crate::seat_authority::RoleDisplay::Held(_), Some(expiry)) => {
+                    match crate::seat_authority::expiry_suffix(
+                        &expiry,
+                        chrono::Utc::now(),
+                        crate::seat_authority::EXPIRY_WARN_WITHIN,
+                    ) {
+                        Some(suffix) => (format!("{role_text} ({suffix})"), true),
+                        None => (role_text, role_warning),
+                    }
+                }
+                _ => (role_text, role_warning),
+            };
+        let role_segment = if role_warning {
             role_text.red().bold().to_string()
         } else {
             role_text.yellow().bold().to_string()
@@ -348,6 +372,19 @@ pub(crate) fn handle_statusline_command(
             }
         }
     }
+    // STORY-1648: compact marker while the primary checkout has drifted
+    // (uncommitted edits, untracked files, off main, or diverged from its
+    // upstream). One `git status` that takes no index lock; a clean checkout
+    // or any git failure renders nothing. Read-only.
+    // trace:TASK-1727 | ai:antigravity
+    // The colour decision is read once from the real setting (already forced
+    // by `apply_color_mode`) and passed in, so the segment builder never
+    // consults or toggles the process-wide override itself.
+    // trace:TASK-1727 | ai:claude
+    let drift_color = colored::control::SHOULD_COLORIZE.should_colorize();
+    if let Some(marker) = primary_checkout_drift_statusline_segment(&drain_root, drift_color) {
+        parts.push(marker);
+    }
     // sess:<scope> segment — emitted when cwd resolves into an active
     // session lease's worktree. TASK-282: this standalone segment now
     // renders only when there is NO @SPEC segment to fold into (no active
@@ -437,8 +474,88 @@ pub(crate) fn handle_statusline_command(
     Ok(())
 }
 
+/// The role that routes queue depth and @SPEC, plus whether it is the
+/// implicit default. The label (`label_role`, already resolved) routes when
+/// set; with no label, a validated grant's seat routes instead.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn routing_role(
+    display: &crate::seat_authority::RoleDisplay,
+    raw_label: Option<&str>,
+    label_role: (String, bool),
+) -> (String, bool) {
+    match (display, raw_label) {
+        (crate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
+        _ => label_role,
+    }
+}
+
+/// Plain text of the statusline role segment, plus whether it warrants the
+/// warning colour. The displayed name comes from the validated seat grant
+/// (`display`); `routing_role` is the label-derived role used only when no
+/// label or grant exists (the implicit default). A label without a valid
+/// grant renders `role:<label> (no grant)` in the warning colour.
+// trace:BUG-1924 | ai:claude
+pub(crate) fn role_display_segment_text(
+    display: &crate::seat_authority::RoleDisplay,
+    routing_role: &str,
+    session_role: Option<&str>,
+    warn_enabled: bool,
+) -> (String, bool) {
+    use crate::seat_authority::RoleDisplay;
+    match display {
+        RoleDisplay::Held(seat) => role_segment_text(seat, session_role, warn_enabled),
+        RoleDisplay::Ungranted(label) => {
+            // Tag the role itself, ahead of any session-mismatch suffix.
+            let (text, _) = role_segment_text(label, session_role, warn_enabled);
+            let head = format!("role:{label}");
+            (text.replacen(&head, &format!("{head} (no grant)"), 1), true)
+        }
+        RoleDisplay::Default => {
+            let (text, mismatch) = role_segment_text(routing_role, session_role, warn_enabled);
+            (format!("{text} (default)"), mismatch)
+        }
+    }
+}
+
 pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {
     (depth > 0).then(|| format!("drafts:{}", depth))
+}
+
+/// Compact marker segment rendered in the status line when the primary
+/// checkout has drifted (uncommitted edits, untracked files, off main, or
+/// diverged from its upstream). One `git status` that takes no index lock;
+/// returns `None` for a clean checkout, non-repository, or any git failure.
+/// `color` selects the bold-red rendering; the caller derives it from the
+/// effective colour setting.
+// trace:STORY-1648 | ai:claude
+// trace:TASK-1727 | ai:antigravity
+// trace:TASK-1727 | ai:claude
+pub(crate) fn primary_checkout_drift_statusline_segment(
+    drain_root: &std::path::Path,
+    color: bool,
+) -> Option<String> {
+    drift_statusline_segment(
+        crate::main_checkout_drift::probe(drain_root).as_ref(),
+        color,
+    )
+}
+
+/// Pure rendering of the drift segment from an already-probed state. The
+/// bold-red form is written as literal ANSI (`ESC[1;31m … ESC[0m`, the same
+/// bytes `colored` emits for `.red().bold()`) so rendering never depends on
+/// the process-wide `colored` override.
+// trace:TASK-1727 | ai:claude
+pub(crate) fn drift_statusline_segment(
+    drift: Option<&crate::main_checkout_drift::CheckoutDrift>,
+    color: bool,
+) -> Option<String> {
+    crate::main_checkout_drift::statusline_marker(drift).map(|marker| {
+        if color {
+            format!("\u{1b}[1;31m{marker}\u{1b}[0m")
+        } else {
+            marker.to_string()
+        }
+    })
 }
 
 /// Wrap a status line in an OSC 2 set-window-title escape sequence

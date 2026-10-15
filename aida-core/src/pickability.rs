@@ -62,6 +62,12 @@ pub enum BlockedReason {
     /// transient state (resumes after triage), whereas `HumanOnly` is the
     /// durable nature of the work. trace:TASK-131 | ai:claude
     NeedsTriage,
+    /// The spec is a knowledge-class type (FAQ, decision, vision, term,
+    /// principle — see [`crate::lifecycle::is_work_item_type`]): reference
+    /// material, never implementer work. Durable like `HumanOnly`; carries the
+    /// lowercase type name for the label.
+    // trace:STORY-1642 | ai:claude
+    KnowledgeType { req_type: String },
 }
 
 /// The result of a pickability check. `Pickable` is the only state in which
@@ -95,6 +101,14 @@ impl Pickability {
 ///    target) so the UI surfaces the louder failure mode.
 /// 4. Otherwise pickable.
 pub fn pickability(req: &Requirement, store: &RequirementsStore) -> Pickability {
+    // STORY-1642: knowledge is never pickable work, whatever its status or
+    // queue membership — checked first because it is the most durable reason.
+    // trace:STORY-1642 | ai:claude
+    if !crate::lifecycle::is_work_item_type(&req.req_type) {
+        return Pickability::Blocked(BlockedReason::KnowledgeType {
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+        });
+    }
     // A spike defaults to human-only at creation time, but once the advisor
     // explicitly grooms it into an agent harness the mode is authoritative.
     // `drain` runs the full research/report lifecycle; `drive` runs the same
@@ -460,6 +474,10 @@ pub fn pickability_reason_label(reason: &BlockedReason) -> String {
     match reason {
         BlockedReason::HumanOnly => "human-only".to_string(),
         BlockedReason::NeedsTriage => "needs-triage".to_string(),
+        // trace:STORY-1642 | ai:claude
+        BlockedReason::KnowledgeType { req_type } => {
+            format!("knowledge ({req_type}) — reference, not work")
+        }
         BlockedReason::PermanentlyBlocked { target_spec } => {
             format!("blocked-by {} (REJECTED — needs re-scoping)", target_spec)
         }
@@ -594,6 +612,42 @@ mod tests {
             }
             other => panic!("expected PermanentlyBlocked, got {other:?}"),
         }
+    }
+
+    /// STORY-1642: every knowledge type is unpickable at any status, even when
+    /// it would otherwise be a clean Approved head; Doc stays pickable work.
+    // trace:STORY-1642 | ai:claude
+    #[test]
+    fn pickability_refuses_knowledge_types() {
+        use crate::RequirementType as T;
+        for (t, name) in [
+            (T::Faq, "faq"),
+            (T::Decision, "decision"),
+            (T::Vision, "vision"),
+            (T::Term, "term"),
+            (T::Principle, "principle"),
+        ] {
+            for status in [RequirementStatus::Approved, RequirementStatus::Completed] {
+                let mut k = make_req("K-1", status.clone());
+                k.req_type = t.clone();
+                let store = store_with(vec![k.clone()]);
+                let got = pickability(&k, &store);
+                assert_eq!(
+                    got,
+                    Pickability::Blocked(BlockedReason::KnowledgeType {
+                        req_type: name.to_string()
+                    }),
+                    "{t:?} at {status:?} must not be pickable"
+                );
+                if let Pickability::Blocked(reason) = got {
+                    assert!(pickability_reason_label(&reason).contains("not work"));
+                }
+            }
+        }
+        let mut doc = make_req("DOC-1", RequirementStatus::Approved);
+        doc.req_type = T::Doc;
+        let store = store_with(vec![doc.clone()]);
+        assert_eq!(pickability(&doc, &store), Pickability::Pickable);
     }
 
     #[test]

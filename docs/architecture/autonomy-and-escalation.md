@@ -544,7 +544,7 @@ context, renders a verdict one-shot, terminates.
   fire — falls back to v1 (cold-boot) when not registered or when the
   source JSONL exceeds the cost ceiling.
 - **Status**: shipped (STORY-360, 2026-05-21). SPIKE-11
-  (`docs/spikes/2026-05-20-spike-11-session-forking.md`) validated the
+  (`docs/archive/spikes/2026-05-20-spike-11-session-forking.md`) validated the
   mechanic: 6.7s latency, source isolation byte-clean, project-slug
   agnostic. Off by default; opt in via `aida advisor register`.
 
@@ -942,7 +942,7 @@ that divergence is the point of a dated record.
 | Punt mechanics | `aida-cli/src/punt.rs`, `.claude/skills/aida-punt/SKILL.md`, STORY-332 |
 | Advisor tier | `aida-cli/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise/SKILL.md`, STORY-306 |
 | Type A/B/C calibration | `.claude/skills/aida-advise/SKILL.md`, STORY-347 |
-| Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/spikes/2026-05-20-spike-11-session-forking.md` |
+| Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/archive/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
 | Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |
 | Advisor autopilot envelope | `aida-cli-lib/src/autopilot.rs`, `aida autopilot inspect/audit/challenge`, EPIC-0428, TASK-0429, TASK-1007, TASK-1020, TASK-1147 |

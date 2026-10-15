@@ -5,6 +5,8 @@
 # With a module name: V2 multiset + V7 size cap for that module's PR.
 # Without: visibility PR (commit A) — V1 is run separately via check_v1_tokens.sh.
 # Always: fmt check, build, workspace tests w/ count, golden outputs vs base.
+# See also: verify_stack.py (whole-stack protocol checker: commit classes, move
+# purity, retarget/tooling scope, tag proofs; run it on a slice stack before review).
 set -uo pipefail
 BASE="$1"; MODULE="${2:-}"
 cd "$(git rev-parse --show-toplevel)"
@@ -18,11 +20,17 @@ gate() { # gate <label> <cmd...>
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 git show "$BASE:$LIB" > "$T/lib.old.rs"
+for p in 1 2 3 4 5 6; do
+  if git ls-tree -r "$BASE" | grep "aida-cli-lib/src/lib_part${p}.rs" > /dev/null; then
+    git show "$BASE:aida-cli-lib/src/lib_part${p}.rs" >> "$T/lib.old.rs"
+  fi
+done
 
 if [[ -n "$MODULE" ]]; then
   # V2 pure move
+  cat "$LIB" aida-cli-lib/src/lib_part*.rs > "$T/lib.new.rs"
   gate "V2 multiset ($MODULE)" python3 scripts/split-lib/check_v2_multiset.py \
-      "$T/lib.old.rs" "$LIB" "aida-cli-lib/src/$MODULE.rs" "$MODULE"
+      "$T/lib.old.rs" "$T/lib.new.rs" "aida-cli-lib/src/$MODULE.rs" "$MODULE"
   # V7 size caps: new file <= 6000 lines
   n=$(wc -l < "aida-cli-lib/src/$MODULE.rs")
   if (( n <= 6000 )); then note "PASS: V7 size cap ($MODULE.rs = $n lines)"; else note "FAIL: V7 size cap ($MODULE.rs = $n lines > 6000)"; FAIL=1; fi
@@ -32,6 +40,7 @@ fi
 
 # V3 fmt (the repo must already be fmt-clean; a pure move keeps column 0)
 gate "V3 cargo fmt --check" cargo fmt --all -- --check
+gate "V3 rustfmt --check lib_part*.rs" rustfmt --edition 2021 --check aida-cli-lib/src/lib_part*.rs
 
 # Build + V4 tests with count parity
 gate "build aida-cli" cargo build -p aida-cli

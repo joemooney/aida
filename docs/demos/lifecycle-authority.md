@@ -95,5 +95,5 @@ so you can poke around (`aida sandbox path --path <dir>` to inspect, then
 ## Related
 
 - `docs/lifecycle.md` — the full Draft -> Approved -> ... -> Completed state machine.
-- `docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — the moat / gap picture.
+- `docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` — the moat / gap picture.
 - `scripts/aida-demo.sh` — the first-user walkthrough with the full git round-trip.

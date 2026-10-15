@@ -364,8 +364,8 @@ struct DoctorRunOptions {
 pub(crate) struct DoctorHealResult {
     category: String,
     id: String,
-    action: String,
-    status: String,
+    pub(crate) action: String,
+    pub(crate) status: String,
     detail: Option<String>,
 }
 
@@ -555,6 +555,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1648: primary-checkout drift — one `git status` in the main
+    // worktree, plus lease reads for best-effort attribution. Report-only:
+    // it lists paths and never deletes. Kept off the hot
+    // `collect_doctor_findings` path like the other git-probing categories.
+    // trace:STORY-1648 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::main_checkout_drift::CATEGORY,
+    )? {
+        findings.extend(crate::main_checkout_drift::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
     // the same tip on every configured remote? Uses cheap `ls-remote` (refs
     // only, no object transfer), so it is kept OUT of the hot
@@ -701,6 +714,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:BUG-1738 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "mirror-hook-drift")? {
         findings.extend(scan_mirror_hook_drift(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // BUG-2009: an AIDA git hook without an executable bit is skipped by git
+    // with no signal (the TASK-917 bypass detector sat off for 9 days), and
+    // a stale generated one blocks store writes. One `git rev-parse` + a
+    // read per hook; the same dry run `aida scaffold upgrade --only
+    // git-hooks` prints. trace:BUG-2009 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "git-hooks")? {
+        findings.extend(scan_aida_git_hooks(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -1744,6 +1767,90 @@ fn cargo_slot_findings(
     findings
 }
 
+/// `git-hooks` doctor findings: one per AIDA git hook git would not run as
+/// this build ships it, from the dry run of the hook-only refresh. Silent
+/// outside a git repository.
+// trace:BUG-2009 | ai:claude
+fn scan_aida_git_hooks(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    if !aida_core::git_ops::is_git_repo(project_root) {
+        return Vec::new();
+    }
+    match aida_core::git_ops::refresh_stale_aida_hooks(project_root, true) {
+        Ok(report) => aida_git_hook_findings(&report, project_root),
+        Err(err) => vec![DoctorFinding {
+            category: "git-hooks".to_string(),
+            id: "git-hooks-unreadable".to_string(),
+            summary: format!("could not inspect the repository's git hooks: {err:#}"),
+            action: "check the hooks directory's permissions (`git rev-parse --git-path hooks`)"
+                .to_string(),
+            safe_heal: false,
+        }],
+    }
+}
+
+/// The pure core of [`scan_aida_git_hooks`].
+// trace:BUG-2009 | ai:claude
+fn aida_git_hook_findings(
+    report: &aida_core::git_ops::StaleHookReport,
+    project_root: &std::path::Path,
+) -> Vec<DoctorFinding> {
+    let remedy = format!(
+        "run `aida scaffold upgrade --only git-hooks --project-root {}` (add --dry-run to \
+         preview); it touches only AIDA's own hooks",
+        project_root.display()
+    );
+    let mut findings: Vec<DoctorFinding> = report
+        .refreshed
+        .iter()
+        .map(|hook| {
+            let (id, summary) = if hook.backup.is_none() {
+                (
+                    format!("aida-hook-not-executable-{}", hook.name),
+                    format!(
+                        "the AIDA `{}` git hook ({}) is not executable, so git silently skips \
+                         it on every commit",
+                        hook.name,
+                        hook.path.display()
+                    ),
+                )
+            } else {
+                let mode = if hook.not_executable {
+                    " and is not executable, so git silently skips it"
+                } else {
+                    "; store writes refuse it"
+                };
+                (
+                    format!("aida-hook-stale-{}", hook.name),
+                    format!(
+                        "the AIDA-generated `{}` git hook ({}) is not this build's hook{mode}",
+                        hook.name,
+                        hook.path.display()
+                    ),
+                )
+            };
+            DoctorFinding {
+                category: "git-hooks".to_string(),
+                id,
+                summary,
+                action: remedy.clone(),
+                safe_heal: false,
+            }
+        })
+        .collect();
+    findings.extend(report.manual.iter().map(|hook| DoctorFinding {
+        category: "git-hooks".to_string(),
+        id: format!("aida-hook-manual-{}", hook.name),
+        summary: format!(
+            "the AIDA `{}` git hook ({}) needs manual action",
+            hook.name,
+            hook.path.display()
+        ),
+        action: hook.reason.clone(),
+        safe_heal: false,
+    }));
+    findings
+}
+
 /// Compare the installed pre-push mirror hook against the current generator
 /// (`mirror_pre_push_hook_script`) and report when a re-install is needed.
 /// Resolves the hooks directory exactly as the installer does
@@ -1965,6 +2072,105 @@ mod task_1330_identity_hygiene_tests {
             Some(hook),
         );
         assert!(findings.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod bug_2009_git_hook_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// `aida doctor` reports a non-executable AIDA hook (and a stale one),
+    /// with the hook-only refresh as the remedy; a non-executable custom
+    /// hook and a healthy repository are silent; the category filter and
+    /// its aliases select it.
+    // trace:BUG-2009 | ai:claude
+    #[test]
+    fn non_executable_aida_hook_is_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let hooks = root.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        assert!(scan_aida_git_hooks(root).is_empty(), "healthy: silent");
+
+        let wrapped = |name: &str, key: &str| {
+            aida_core::scaffolding::wrap_with_aida_header(
+                std::path::Path::new(&format!(".git/hooks/{name}")),
+                aida_core::templates::EMBEDDED_TEMPLATES[key],
+            )
+        };
+        let put = |name: &str, body: &str, mode: u32| {
+            let path = hooks.join(name);
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        put(
+            "post-commit",
+            &wrapped("post-commit", "hooks/aida-post-commit.sh"),
+            0o644,
+        );
+        put(
+            "pre-commit",
+            &format!(
+                "{}\necho old\n",
+                wrapped("pre-commit", "hooks/aida-pre-commit.sh").trim_end()
+            ),
+            0o755,
+        );
+        put("post-merge", "#!/bin/sh\necho mine\n", 0o644);
+
+        let findings = scan_aida_git_hooks(root);
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "aida-hook-stale-pre-commit",
+                "aida-hook-not-executable-post-commit"
+            ],
+            "{findings:?}"
+        );
+        assert!(findings.iter().all(|f| f.category == "git-hooks"));
+        assert!(
+            findings[1].summary.contains("silently skips"),
+            "{findings:?}"
+        );
+        assert!(findings
+            .iter()
+            .all(|f| f.action.contains("aida scaffold upgrade --only git-hooks")));
+        assert!(findings.iter().all(|f| !f.safe_heal));
+        // Report-only: the doctor scan wrote nothing.
+        let mode = std::fs::metadata(hooks.join("post-commit"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o644);
+
+        for raw in [
+            "git-hooks",
+            "aida-hooks",
+            "hook-mode",
+            "non-executable-hooks",
+        ] {
+            assert!(
+                doctor_category_selected(Some(raw), "git-hooks").unwrap(),
+                "{raw}"
+            );
+        }
+        assert!(!doctor_category_selected(Some("mirror-hook-drift"), "git-hooks").unwrap());
+    }
+
+    /// Outside a git repository the scan is silent.
+    // trace:BUG-2009 | ai:claude
+    #[test]
+    fn non_git_directory_is_silent() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(scan_aida_git_hooks(tmp.path()).is_empty());
     }
 }
 
@@ -2572,8 +2778,12 @@ mod bug_1744_trust_breadth_tests {
     }
 
     // trace:BUG-1744 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn the_trust_scan_never_writes_the_claude_config() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fake_home = tempfile::tempdir().unwrap();
         let project_root = tempfile::tempdir().unwrap();
         let trusted_parent = project_root.path().parent().unwrap();
@@ -3286,6 +3496,7 @@ mod story_1422_performance_gate_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -3759,6 +3970,7 @@ mod bug_1572_binary_lineage_tests {
             role: None,
             scope: None,
             schedule_source: None,
+            phases: Vec::new(),
         }
     }
 
@@ -6167,7 +6379,18 @@ fn heal_doctor_merged_agent_worktree(
         &worktree,
         &worktree_pool_global_hooks("pre_destroy"),
     );
-    if removed.is_err() {
+    if let Err(e) = removed {
+        // A live process inside the tree: keep it and say who holds it.
+        // trace:BUG-1947 | ai:claude
+        if let Some(in_use) = e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "skipped".to_string(),
+                detail: Some(format!("worktree {} — NOT removed", in_use.summary())),
+            });
+        }
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -6416,13 +6639,18 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
                 &rows,
             ));
         }
-        if !c.still_active.is_empty() {
+        // trace:BUG-1962 | ai:antigravity
+        if !c.still_tripped.is_empty() {
             let rows = c
-                .still_active
+                .still_tripped
                 .iter()
                 .map(|v| vec![v.clone()])
                 .collect::<Vec<_>>();
-            blocks.push(table_raw("runaway_seats_still_active", &["finding"], &rows));
+            blocks.push(table_raw(
+                "runaway_seats_still_tripped",
+                &["finding"],
+                &rows,
+            ));
         }
     }
     if let Some(v) = &report.error {
@@ -7246,6 +7474,21 @@ fn heal_doctor_lease(
             detail: Some("lease already ended".to_string()),
         });
     };
+    // A worktree a live process is using (or one the scan could not verify)
+    // is skipped before the salvage step: nothing is salvaged, ended or
+    // removed. trace:BUG-1947 | ai:claude
+    if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&lease.worktree_path) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!(
+                "worktree {} — lease and worktree kept",
+                in_use.summary()
+            )),
+        });
+    }
     let salvage = salvage_worktree_patch(
         project_root,
         &lease.scope,
@@ -7291,20 +7534,33 @@ fn heal_doctor_brief(finding: &DoctorFinding) -> Result<DoctorHealResult> {
     })
 }
 
-fn heal_doctor_spec_status(
+pub(crate) fn heal_doctor_spec_status(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
+    // BUG-1944: the snapshot is read-only. Each write goes through the
+    // per-spec atomic update, which re-reads the spec under the store lock and
+    // re-checks its status there, so the live-work probes (which may wait on
+    // git and the forge) never hold a stale whole-store copy that a save would
+    // write back over concurrent changes.
+    // trace:BUG-1944 | ai:claude
     let storage = Storage::new(project_root.join(".aida-store"));
-    let mut store = storage.load()?;
-    let current_scope_lease = list_leases(project_root)
-        .iter()
-        .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id));
+    let store_root = project_root.join(".aida-store");
+    let matching: Vec<aida_core::Requirement> = storage
+        .load()?
+        .requirements
+        .into_iter()
+        .filter(|req| req.spec_id.as_deref() == Some(finding.id.as_str()))
+        .collect();
+    let scope_lease_held = || {
+        list_leases(project_root)
+            .iter()
+            .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id))
+    };
+    let current_scope_lease = scope_lease_held();
     let mut action = None;
-    for req in &mut store.requirements {
-        if req.spec_id.as_deref() != Some(finding.id.as_str()) {
-            continue;
-        }
+    let mut kept: Option<String> = None;
+    for req in &matching {
         if matches!(req.status, RequirementStatus::Approved)
             && finding.action.starts_with("bump spec to In Progress")
         {
@@ -7315,43 +7571,77 @@ fn heal_doctor_spec_status(
             if !current_scope_lease {
                 continue;
             }
-            // BUG-1637: an automated repair, recorded under the doctor's
-            // author so the BUG-1625 merge guard can see it.
-            // trace:BUG-1637 | ai:claude
-            aida_core::conflict::set_status_recorded(
-                req,
-                RequirementStatus::InProgress,
-                aida_core::conflict::DOCTOR_AUTHOR,
-            );
-            req.modified_at = chrono::Utc::now();
-            action = Some("bumped Approved spec to In Progress".to_string());
+            crate::status_write_race_seam(&store_root);
+            let mut applied = false;
+            storage.update_spec_atomically(req, |r| {
+                if matches!(r.status, RequirementStatus::Approved) {
+                    // BUG-1637: an automated repair, recorded under the
+                    // doctor's author so the BUG-1625 merge guard can see it.
+                    // trace:BUG-1637 | ai:claude
+                    aida_core::conflict::set_status_recorded(
+                        r,
+                        RequirementStatus::InProgress,
+                        aida_core::conflict::DOCTOR_AUTHOR,
+                    );
+                    r.modified_at = chrono::Utc::now();
+                    applied = true;
+                }
+            })?;
+            if applied {
+                action = Some("bumped Approved spec to In Progress".to_string());
+            }
         } else if matches!(req.status, RequirementStatus::InProgress)
             && finding.action.contains("no active lease")
         {
             if current_scope_lease {
                 continue;
             }
-            // trace:BUG-1637 | ai:claude
-            aida_core::conflict::set_status_recorded(
-                req,
-                RequirementStatus::Approved,
-                aida_core::conflict::DOCTOR_AUTHOR,
-            );
-            req.modified_at = chrono::Utc::now();
-            action = Some(format!(
-                "reverted {} from In Progress to Approved (no active lease found)",
-                finding.id
-            ));
+            // BUG-1944: a missing lease is not abandoned work. While a branch
+            // carrying the spec has an open PR or unmerged commits, or the
+            // forge can't say, the spec stays In Progress.
+            // trace:BUG-1944 | ai:claude
+            if let crate::live_work::LiveWorkVerdict::Keep(why) =
+                crate::live_work::spec_live_work(project_root, &finding.id)
+            {
+                kept = Some(why);
+                continue;
+            }
+            // The probes take time; a session may have taken the spec since.
+            if scope_lease_held() {
+                continue;
+            }
+            crate::status_write_race_seam(&store_root);
+            let mut applied = false;
+            storage.update_spec_atomically(req, |r| {
+                if matches!(r.status, RequirementStatus::InProgress) {
+                    // trace:BUG-1637 | ai:claude
+                    aida_core::conflict::set_status_recorded(
+                        r,
+                        RequirementStatus::Approved,
+                        aida_core::conflict::DOCTOR_AUTHOR,
+                    );
+                    r.modified_at = chrono::Utc::now();
+                    applied = true;
+                }
+            })?;
+            if applied {
+                action = Some(format!(
+                    "reverted {} from In Progress to Approved (no active lease found)",
+                    finding.id
+                ));
+            }
         }
     }
-    if action.is_some() {
-        storage.save(&store)?;
-    }
     let changed = action.is_some();
+    // trace:BUG-1944 | ai:claude
+    let default_action = match kept {
+        Some(why) => format!("kept {} In Progress: {why}", finding.id),
+        None => "no automatic status change applied".to_string(),
+    };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
-        action: action.unwrap_or_else(|| "no automatic status change applied".to_string()),
+        action: action.unwrap_or(default_action),
         status: if changed { "healed" } else { "skipped" }.to_string(),
         detail: None,
     })
@@ -7417,18 +7707,34 @@ fn heal_doctor_orphan_worktree(
     let salvage = salvage_worktree_patch(project_root, "orphan-worktree", None, &worktree)?;
     // STORY-714: route through the shared teardown so the pre_destroy
     // cargo-clean hook fires (TASK-0396) and a pooled tree is deregistered.
-    let healed = aida_core::worktree_pool_destroy::teardown_worktree_path(
+    let teardown = aida_core::worktree_pool_destroy::teardown_worktree_path(
         project_root,
         &worktree,
         &worktree_pool_global_hooks("pre_destroy"),
-    )
-    .is_ok();
+    );
+    // A live process inside the tree: keep it and say who holds it.
+    // trace:BUG-1947 | ai:claude
+    let in_use = teardown.as_ref().err().and_then(|e| {
+        e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>()
+            .map(|u| u.summary())
+    });
+    let status = match (&teardown, &in_use) {
+        (Ok(_), _) => "healed",
+        (Err(_), Some(_)) => "skipped",
+        (Err(_), None) => "failed",
+    };
+    let salvage_note = salvage.map(|p| format!("salvage patch: {}", p.display()));
+    let detail = match (in_use, salvage_note) {
+        (Some(u), Some(s)) => Some(format!("worktree {u} — NOT removed; {s}")),
+        (Some(u), None) => Some(format!("worktree {u} — NOT removed")),
+        (None, s) => s,
+    };
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: "removed orphan worktree".to_string(),
-        status: if healed { "healed" } else { "failed" }.to_string(),
-        detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
+        status: status.to_string(),
+        detail,
     })
 }
 
@@ -13027,9 +13333,30 @@ pub(crate) fn history_index_doctor_line(
     }
     let fresh = st.tip.is_some() && st.tip == st.head;
     if !fresh {
+        // trace:BUG-1923 | ai:claude
+        let by = st
+            .lag
+            .map(|n| format!(" by {n} commit(s)"))
+            .unwrap_or_default();
+        if st.head_behind_tip || st.tip_live_elsewhere {
+            // trace:BUG-1998 | ai:antigravity
+            // trace:BUG-1998 | ai:claude
+            // Before the stall flag: behind or elsewhere gets no rebuild advice.
+            return format!(
+                "history index behind the store{by}{running} — another checkout moved \
+                 the shared index on."
+            );
+        }
+        if st.catch_up_stalled {
+            return format!(
+                "history index behind the store{by}{running} and not catching up — \
+                 run `aida cache rebuild --history`."
+            );
+        }
         return format!(
-            "history index behind the store{running} — it catches up on the next \
-             `aida history` query."
+            // trace:STORY-1650 | ai:claude
+            "history index behind the store{by}{running} — it catches up on the next \
+             `aida history events` query."
         );
     }
     if st.complete {
@@ -13765,6 +14092,26 @@ mod bug_1505_review_verdict_doctor_tests {
         assert_eq!(
             normalize_doctor_category("verdicts").unwrap(),
             "review-verdicts"
+        );
+    }
+
+    // trace:BUG-1962 | ai:antigravity
+    #[test]
+    fn render_doctor_report_toon_includes_runaway_seats_still_tripped_table() {
+        let mut report = DoctorReport::default();
+        report.runaway_seats = Some(crate::runaway_seats::Coverage {
+            verdict: "tripped".to_string(),
+            still_tripped: vec!["compactions:sess-1".to_string()],
+            ..Default::default()
+        });
+        let rendered = render_doctor_report_toon(&report);
+        assert!(
+            rendered.contains("runaway_seats_still_tripped"),
+            "TOON output must include runaway_seats_still_tripped table: {rendered}"
+        );
+        assert!(
+            rendered.contains("compactions:sess-1"),
+            "TOON output must list still tripped finding: {rendered}"
         );
     }
 }

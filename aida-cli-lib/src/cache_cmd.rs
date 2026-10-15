@@ -39,7 +39,10 @@ pub(crate) fn handle_cache_command(
             }
         }
         CacheCommand::Rebuild { history: false } => {
-            let n = backend.rebuild_cache()?;
+            // trace:BUG-1940 | ai:claude
+            let outcome = backend.rebuild_cache_recovering()?;
+            print_quarantine_notice(&outcome);
+            let n = outcome.count;
             println!(
                 "{}: Cache rebuilt. {} requirement(s) projected from git store at {}.",
                 "OK".green(),
@@ -106,11 +109,31 @@ pub(crate) fn handle_cache_command(
             if_requested,
             store,
             cache,
+            ..
         } => {
             return handle_cache_refresh(backend, *worker, *if_requested, store, cache);
         }
     }
     Ok(())
+}
+
+/// Dispatch cache modes that must avoid requirements-cache initialization.
+// trace:STORY-1661 | ai:codex
+pub(crate) fn early_refresh(command: &crate::Command) -> Option<Result<()>> {
+    match command {
+        crate::Command::Cache(CacheCommand::Refresh {
+            history: true,
+            store,
+            ..
+        }) => Some(crate::history_indexer::handle_tick(store.as_deref())),
+        crate::Command::Cache(CacheCommand::Refresh {
+            worker: true,
+            store: Some(store),
+            cache: Some(cache),
+            ..
+        }) => Some(run_explicit_refresh_worker(store, cache)),
+        _ => None,
+    }
 }
 
 /// `aida cache refresh`: plain form refreshes strictly inline; `--worker` is
@@ -140,35 +163,7 @@ fn handle_cache_refresh(
     };
 
     if worker {
-        // The runtime cap (sketch: max(120 s, 2x the last full rebuild)) is a
-        // watchdog that exits nonzero: the transaction rolls back under WAL,
-        // the flock dies with the process, and the request file survives for
-        // the next reader or tick.
-        let cap = refresh_worker::worker_runtime_cap(backend);
-        std::thread::spawn(move || {
-            std::thread::sleep(cap);
-            eprintln!(
-                "refresh worker exceeded its runtime cap ({}s); exiting",
-                cap.as_secs()
-            );
-            std::process::exit(3);
-        });
-        let cache_path = backend.cache().path().to_path_buf();
-        return match refresh_worker::run_refresh_worker(backend) {
-            Ok(outcome) => {
-                eprintln!(
-                    "{}: refresh worker: {:?} at {}",
-                    chrono::Utc::now().to_rfc3339(),
-                    outcome,
-                    cache_path.display()
-                );
-                Ok(())
-            }
-            Err(e) => {
-                refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
-                Err(e)
-            }
-        };
+        return run_refresh_worker_on(backend);
     }
 
     if if_requested {
@@ -334,6 +329,23 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
     if st.indexer_running {
         out.push("History indexer:  running now".to_string());
     }
+    // trace:BUG-1923 | ai:claude
+    if let Some(lag) = st.lag {
+        out.push(format!("History lag:      {lag} commit(s) behind HEAD"));
+    }
+    // trace:BUG-1942 | ai:claude
+    if st.catch_up_stalled {
+        let since = st
+            .catch_up_stalled_at
+            .as_deref()
+            .map(|at| format!(" since {at}"))
+            .unwrap_or_default();
+        let retry = st.catch_up_next_retry_at.as_deref().map_or_else(
+            || "on the next `aida history events` query".to_string(),
+            |at| format!("after {at}"),
+        );
+        out.push(format!("History catch-up: paused{since}; retries {retry}"));
+    }
     let fresh = st.tip.is_some() && st.tip == st.head;
     out.push(if fresh && st.complete {
         format!("History status:   {}", "FRESH".green())
@@ -343,9 +355,25 @@ pub(crate) fn history_status_lines(st: &crate::history_cache::HistoryCacheStatus
              older queries read git directly until it finishes",
             "FILLING".yellow()
         )
+    } else if st.head_behind_tip || st.tip_live_elsewhere {
+        // trace:BUG-1998 | ai:antigravity
+        // trace:BUG-1998 | ai:claude
+        // Before the stall flag: behind or elsewhere gets no rebuild advice.
+        format!(
+            "History status:   {} — another checkout moved the shared index on",
+            "BEHIND".yellow()
+        )
+    } else if st.catch_up_stalled {
+        format!(
+            "History status:   {} — catching up stalled; `aida history` reads git \
+             directly until the next retry succeeds or `aida cache rebuild --history` \
+             brings it up to date",
+            "BEHIND".yellow()
+        )
     } else {
         format!(
-            "History status:   {} — it catches up on the next `aida history` query",
+            // trace:STORY-1650 | ai:claude
+            "History status:   {} — it catches up on the next `aida history events` query",
             "BEHIND".yellow()
         )
     });
@@ -373,12 +401,36 @@ fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: b
     use aida_core::db::status_divergences;
     use aida_core::DatabaseBackend;
 
+    // trace:BUG-1940 | ai:claude
+    // A damaged cache file is reported as corruption with the fix, not as the
+    // raw sqlite error the status comparison below would hit.
+    let mut rebuilt = false;
+    if let Some(problem) = backend.cache().integrity_problem()? {
+        if !fix {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "corrupt": true,
+                        "problem": problem,
+                        "fix": "aida cache rebuild",
+                    }))?
+                );
+            }
+            anyhow::bail!(cache_corruption_message(Some(&problem)));
+        }
+        let outcome = backend.rebuild_cache_recovering()?;
+        if !json {
+            print_quarantine_notice(&outcome);
+        }
+        rebuilt = true;
+    }
+
     let store = backend.inner().load()?;
     let mut divergences = status_divergences(backend.cache(), &store)?;
-    let mut rebuilt = false;
 
     if fix && !divergences.is_empty() {
-        backend.rebuild_cache()?;
+        backend.rebuild_cache_recovering()?;
         rebuilt = true;
         // Re-derive from a freshly-read store so the re-check compares against
         // the same canonical bytes the rebuild projected from.
@@ -441,5 +493,146 @@ fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: b
             "{} cached status(es) disagree with the git store",
             divergences.len()
         )
+    }
+}
+
+/// One-line, actionable description of a corrupt cache.
+// trace:BUG-1940 | ai:claude
+pub(crate) fn cache_corruption_message(problem: Option<&str>) -> String {
+    match problem {
+        Some(problem) => format!(
+            "the local AIDA cache (.aida/cache.db) is corrupt ({problem}). Fix: aida cache rebuild"
+        ),
+        None => {
+            "the local AIDA cache (.aida/cache.db) is corrupt. Fix: aida cache rebuild".to_string()
+        }
+    }
+}
+
+/// Replace an error tagged at its source as cache-database corruption
+/// ([`aida_core::db::CacheCorruption`]) with the one-line fix, keeping the
+/// original sqlite cause visible on a second line. Untagged errors — including
+/// corruption in other sqlite files such as the history index or token ledger,
+/// and every lock/busy error — pass through untouched.
+// trace:BUG-1940 | ai:claude
+pub(crate) fn with_cache_corruption_hint(err: anyhow::Error) -> anyhow::Error {
+    let Some(corruption) = err
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<aida_core::db::CacheCorruption>())
+    else {
+        return err;
+    };
+    let cause = err
+        .chain()
+        .find(|cause| cause.downcast_ref::<rusqlite::Error>().is_some())
+        .or_else(|| err.chain().last())
+        .map(|cause| cause.to_string())
+        .unwrap_or_default();
+    anyhow::anyhow!("{corruption}. Fix: aida cache rebuild\n  cause: {cause}")
+}
+
+// trace:BUG-1940 | ai:claude
+fn print_quarantine_notice(outcome: &aida_core::db::CacheRebuildOutcome) {
+    let Some(main) = outcome.quarantined.first() else {
+        return;
+    };
+    let problem = outcome
+        .problem
+        .as_deref()
+        .unwrap_or("integrity check failed");
+    println!(
+        "{}: the cache was corrupt ({}); moved it aside to {} (with any -wal/-shm files) and rebuilt it from the git store.",
+        "NOTE".yellow(),
+        problem,
+        main.display()
+    );
+}
+
+#[cfg(test)]
+mod bug_1940_tests {
+    use super::*;
+
+    fn corrupt() -> anyhow::Error {
+        anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            Some("database disk image is malformed".into()),
+        ))
+    }
+
+    // trace:BUG-1940 | ai:claude
+    #[test]
+    fn untagged_sqlite_corruption_from_another_db_is_not_rewritten() {
+        let err = corrupt().context("Failed to read history-v3.db");
+        let out = with_cache_corruption_hint(err);
+        assert!(!out.to_string().contains("aida cache rebuild"), "{out}");
+        assert!(out.to_string().contains("history-v3.db"));
+    }
+
+    // trace:BUG-1940 | ai:claude
+    #[test]
+    fn tagged_cache_corruption_gets_the_fix_and_keeps_the_cause() {
+        let err = aida_core::db::tag_cache_corruption(
+            std::path::Path::new("/p/.aida/cache.db"),
+            corrupt(),
+        )
+        .context("list requirements");
+        let out = with_cache_corruption_hint(err).to_string();
+        assert!(
+            out.contains("/p/.aida/cache.db is corrupt. Fix: aida cache rebuild"),
+            "{out}"
+        );
+        assert!(
+            out.contains("cause: database disk image is malformed"),
+            "{out}"
+        );
+    }
+}
+
+/// `aida cache refresh --worker --store <dir> --cache <file>` dispatched
+/// before project discovery. The detached worker runs from a neutral cwd
+/// (never a removable session worktree), so it must not depend on finding a
+/// project from its cwd: it trusts only its explicit paths (amendment A8).
+// trace:BUG-1947 | ai:claude
+pub(crate) fn run_explicit_refresh_worker(
+    store: &std::path::Path,
+    cache: &std::path::Path,
+) -> Result<()> {
+    let backend = aida_core::CachedGitBackend::open(store, cache)?;
+    run_refresh_worker_on(&backend)
+}
+
+/// The detached refresh worker body: run one single-flight refresh under the
+/// runtime-cap watchdog and record a failed attempt on error.
+// trace:TASK-1527 | ai:claude
+fn run_refresh_worker_on(backend: &aida_core::CachedGitBackend) -> Result<()> {
+    use aida_core::db::{refresh_request, refresh_worker};
+    // The runtime cap (sketch: max(120 s, 2x the last full rebuild)) is a
+    // watchdog that exits nonzero: the transaction rolls back under WAL,
+    // the flock dies with the process, and the request file survives for
+    // the next reader or tick.
+    let cap = refresh_worker::worker_runtime_cap(backend);
+    std::thread::spawn(move || {
+        std::thread::sleep(cap);
+        eprintln!(
+            "refresh worker exceeded its runtime cap ({}s); exiting",
+            cap.as_secs()
+        );
+        std::process::exit(3);
+    });
+    let cache_path = backend.cache().path().to_path_buf();
+    match refresh_worker::run_refresh_worker(backend) {
+        Ok(outcome) => {
+            eprintln!(
+                "{}: refresh worker: {:?} at {}",
+                chrono::Utc::now().to_rfc3339(),
+                outcome,
+                cache_path.display()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
+            Err(e)
+        }
     }
 }

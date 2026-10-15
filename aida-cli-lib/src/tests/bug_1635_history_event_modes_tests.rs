@@ -397,9 +397,13 @@ fn index_serves_the_same_answer_as_the_git_walk_for_every_new_mode() {
         if o.to_status.is_some() || o.from_status.is_some() || o.opened_only {
             assert!(!walked.is_empty(), "[{label}] fixture has no match");
         }
-        let served = history_cache::serve_at(&store, &db, o, Duration::from_secs(120))
-            .unwrap()
-            .unwrap_or_else(|| panic!("[{label}] index did not serve"));
+        // Retried until it holds the indexer lock: a forked child's
+        // inherited lock fd would otherwise make it fall back unindexed.
+        // trace:BUG-1987 | ai:claude
+        let served =
+            history_cache::test_support::serve_locked(&store, &db, o, Duration::from_secs(120))
+                .unwrap()
+                .unwrap_or_else(|| panic!("[{label}] index did not serve"));
         assert_eq!(served.events, walked, "[{label}] events differ");
         assert_eq!(served.hidden_archived, hidden, "[{label}] hidden differs");
         assert_eq!(

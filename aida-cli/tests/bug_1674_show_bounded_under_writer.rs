@@ -10,19 +10,183 @@
 //! The foreign writer is simulated the way TASK-1527's tests do it: a
 //! `BEGIN IMMEDIATE` transaction on the shared cache parks every cache
 //! writer while WAL readers keep flowing.
+//!
+//! How the bound is asserted (BUG-1967). A bare `elapsed < 5 s` measured the
+//! host as much as the code: at load ~60 on 6 cores a correct `show` (which
+//! never waits on the writer) still took 5-10 s just queueing for a CPU. So
+//! the 5 s figure is a reported *budget*, and what fails a run is structural:
+//!
+//! * every lock the `show` could wait on is held for the whole call, so a
+//!   `show` that waits for a holder never returns on its own; and
+//! * the measured call runs with the SQLite retry ladder stretched to
+//!   [`STRETCHED_LADDER_STEP_MS`] per step, so a `show` that rides the
+//!   uncapped ladder sleeps at least that long before its first retry.
+//!
+//! Either regression therefore runs into [`HARD_CEILING`], which kills the
+//! child and fails the test. A correct `show` sleeps only inside its bounded
+//! read waits (the zero refresh-flock budget plus BUG-1956's 3 s ladder
+//! allowance), so it can reach the ceiling only through an order-of-magnitude
+//! scheduler stall. That separation holds under any plausible host load.
 // trace:BUG-1674 | ai:claude
+// trace:BUG-1967 | ai:claude
+// trace:BUG-1995 | ai:antigravity
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
-/// ADR-53's interaction ceiling, the acceptance bound for every run here.
-const CEILING: Duration = Duration::from_secs(5);
+/// ADR-53's interaction ceiling. It is a performance budget, reported on
+/// stderr when missed, never fatal: no in-test signal can prove the host was
+/// quiet while the call ran (see `aida-cli-lib/src/test_timing.rs`).
+// trace:BUG-1967 | ai:claude
+const BUDGET: Duration = Duration::from_secs(5);
+
+/// The fatal bound. A correct `show` stays far below it even when the host
+/// is oversubscribed; a `show` that waits for a held lock or rides the
+/// stretched ladder cannot finish before it.
+// trace:BUG-1967 | ai:claude
+const HARD_CEILING: Duration = Duration::from_secs(60);
+
+/// Each step of the SQLite retry ladder during the measured `show`. It is
+/// twice [`HARD_CEILING`], so a single uncapped ladder sleep (the ~25 s
+/// shape BUG-1674 fixed) cannot finish before the ceiling.
+// trace:BUG-1967 | ai:claude
+const STRETCHED_LADDER_STEP_MS: u64 = 120_000;
 
 struct Fixture {
     _tmp: tempfile::TempDir,
+    /// The canonical temp dir: every path this fixture's processes see.
+    base: PathBuf,
     repo: PathBuf,
     home: PathBuf,
+}
+
+/// The measured `show` runs with [`STRETCHED_LADDER_STEP_MS`], and a refresh
+/// worker it detaches inherits that, so the worker can sleep ~120 s after the
+/// test is done. Reap only workers that name this fixture's own temp dir in
+/// their command line (found by scanning `/proc`, never by a PID read from a
+/// file, so a reused PID cannot be hit), then confirm they are gone.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let workers = fixture_workers(&self.base);
+        if workers.is_empty() {
+            return;
+        }
+        signal(&workers, "-TERM");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut alive = still_fixture_workers(&workers, &self.base);
+        while !alive.is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+            alive = still_fixture_workers(&workers, &self.base);
+        }
+        if !alive.is_empty() {
+            signal(&alive, "-KILL");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !alive.is_empty() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+                alive = still_fixture_workers(&workers, &self.base);
+            }
+        }
+        if !alive.is_empty() && !std::thread::panicking() {
+            panic!("refresh workers {alive:?} for this fixture survived SIGKILL");
+        }
+    }
+}
+
+/// `/proc/<pid>/cmdline` split on NUL, or `None` once the process is gone.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn cmdline(pid: u32) -> Option<Vec<String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    Some(
+        raw.split(|b| *b == 0)
+            .filter(|arg| !arg.is_empty())
+            .map(|arg| String::from_utf8_lossy(arg).into_owned())
+            .collect(),
+    )
+}
+
+/// The process state letter from `/proc/<pid>/stat` and its parent PID.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn stat(pid: u32) -> Option<(char, u32)> {
+    let raw = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The comm field may contain spaces or parens; the rest follows the last ')'.
+    let mut rest = raw[raw.rfind(')')? + 1..].split_whitespace();
+    let state = rest.next()?.chars().next()?;
+    let ppid = rest.next()?.parse().ok()?;
+    Some((state, ppid))
+}
+
+/// This process and every ancestor: never signalled.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn self_and_ancestors() -> Vec<u32> {
+    let mut chain = vec![std::process::id()];
+    let mut pid = std::process::id();
+    while let Some((_, ppid)) = stat(pid) {
+        if ppid <= 1 || chain.contains(&ppid) {
+            break;
+        }
+        chain.push(ppid);
+        pid = ppid;
+    }
+    chain
+}
+
+/// A live (not zombie) `cache refresh --worker` naming `base` in its args.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn is_fixture_worker(pid: u32, base: &str) -> bool {
+    if matches!(stat(pid), None | Some(('Z' | 'X', _))) {
+        return false;
+    }
+    cmdline(pid).is_some_and(|args| {
+        args.iter().any(|a| a == "refresh")
+            && args.iter().any(|a| a == "--worker")
+            && args.iter().any(|a| a.contains(base))
+    })
+}
+
+/// Every refresh worker of this fixture, by `/proc` scan.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn fixture_workers(base: &Path) -> Vec<u32> {
+    let base = base.to_string_lossy();
+    let protected = self_and_ancestors();
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|e| e.ok()?.file_name().to_str()?.parse::<u32>().ok())
+        .filter(|pid| *pid > 1 && !protected.contains(pid))
+        .filter(|pid| is_fixture_worker(*pid, &base))
+        .collect()
+}
+
+/// Of `pids`, those that are still this fixture's live workers.
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn still_fixture_workers(pids: &[u32], base: &Path) -> Vec<u32> {
+    let base = base.to_string_lossy();
+    pids.iter()
+        .copied()
+        .filter(|pid| is_fixture_worker(*pid, &base))
+        .collect()
+}
+
+// trace:BUG-1995 | ai:claude
+#[cfg(target_os = "linux")]
+fn signal(pids: &[u32], sig: &str) {
+    for pid in pids {
+        let _ = Command::new("kill")
+            .arg(sig)
+            .arg(pid.to_string())
+            .stderr(Stdio::null())
+            .status();
+    }
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
@@ -62,6 +226,7 @@ fn init_fixture() -> Fixture {
         .success());
     let fixture = Fixture {
         _tmp: tmp,
+        base,
         repo,
         home,
     };
@@ -127,18 +292,81 @@ fn make_store_rewritten(fixture: &Fixture) {
     .success());
 }
 
-/// Run `aida show TASK-1`, asserting the ceiling, exit 0, and the stale
-/// label on the machine (TOON) surface. Returns stdout.
-fn show_bounded_and_labelled(fixture: &Fixture, context: &str) -> String {
+/// The 1-minute load average, for the budget report only.
+#[cfg(target_os = "linux")]
+fn load_average() -> String {
+    std::fs::read_to_string("/proc/loadavg")
+        .ok()
+        .and_then(|s| s.split_whitespace().next().map(str::to_owned))
+        .unwrap_or_else(|| "unknown".to_owned())
+}
+
+/// Run `aida show TASK-1` with the retry ladder stretched, killing it at
+/// [`HARD_CEILING`]. Returns the output and the wall-clock it took.
+// trace:BUG-1967 | ai:claude
+fn timed_show(fixture: &Fixture, context: &str) -> (Output, Duration) {
+    let out_path = fixture.home.join("show.stdout");
+    let err_path = fixture.home.join("show.stderr");
     let start = Instant::now();
-    let out = aida(fixture, &["show", "TASK-1"]);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_aida"))
+        .current_dir(&fixture.repo)
+        .env("HOME", &fixture.home)
+        .env("AIDA_TELEMETRY", "0")
+        // The ladder must be the production one apart from its step length:
+        // an inherited retry count of 0 would hide a ladder regression.
+        .env_remove("AIDA_CACHE_RETRY_COUNT")
+        .env_remove("AIDA_CACHE_FAST_FAIL")
+        .env_remove("AIDA_CACHE_READ_WAIT_MS")
+        .env("AIDA_CACHE_RETRY_MS", STRETCHED_LADDER_STEP_MS.to_string())
+        .args(["show", "TASK-1"])
+        .stdout(Stdio::from(std::fs::File::create(&out_path).unwrap()))
+        .stderr(Stdio::from(std::fs::File::create(&err_path).unwrap()))
+        .spawn()
+        .expect("spawn aida show");
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("poll aida show") {
+            break status;
+        }
+        if start.elapsed() >= HARD_CEILING {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "{context}: show was still running after the {HARD_CEILING:?} hard \
+                 ceiling (1-minute load {}). It waited for a held lock or rode the \
+                 uncapped retry ladder; no host load explains this.\nstdout={}\nstderr={}",
+                load_average(),
+                std::fs::read_to_string(&out_path).unwrap_or_default(),
+                std::fs::read_to_string(&err_path).unwrap_or_default()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
     let elapsed = start.elapsed();
+    let output = Output {
+        status,
+        stdout: std::fs::read(&out_path).unwrap(),
+        stderr: std::fs::read(&err_path).unwrap(),
+    };
+    (output, elapsed)
+}
+
+/// Run `aida show TASK-1`, asserting the hard ceiling, exit 0, and the stale
+/// label on the machine (TOON) surface; report a missed [`BUDGET`]. Returns
+/// stdout.
+fn show_bounded_and_labelled(fixture: &Fixture, context: &str) -> String {
+    let (out, elapsed) = timed_show(fixture, context);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-    assert!(
-        elapsed < CEILING,
-        "{context}: show took {elapsed:?}, past the 5 s ceiling\nstdout={stdout}\nstderr={stderr}"
-    );
+    // trace:BUG-1967 | ai:claude
+    if elapsed >= BUDGET {
+        eprintln!(
+            "BUDGET-MISSED {context}: show took {elapsed:?}, over its {BUDGET:?} budget \
+             but inside the {HARD_CEILING:?} ceiling (1-minute load {}). Reported, not \
+             failed: a busy host explains this; a lock wait would have hit the ceiling. \
+             trace:BUG-1967",
+            load_average()
+        );
+    }
     assert!(
         out.status.success(),
         "{context}: show failed\nstdout={stdout}\nstderr={stderr}"

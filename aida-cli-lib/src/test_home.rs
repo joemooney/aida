@@ -354,7 +354,7 @@ fn create_test_home() -> std::io::Result<PathBuf> {
 unsafe fn set_home_vars(test_home: &Path) {
     #[allow(unused_unsafe)]
     unsafe {
-        std::env::set_var("HOME", test_home);
+        std::env::set_var("HOME", test_home); // allow-unisolated-home: pre-main ctor runs before threads exist
         #[cfg(windows)]
         {
             std::env::set_var("USERPROFILE", test_home);
@@ -399,6 +399,16 @@ pub(crate) fn test_home() -> &'static Path {
     &installed().test_home
 }
 
+/// BUG-1971: the operator's real home, the first entry of the
+/// `AIDA_LIB_TEST_REAL_HOMES` fence, for the ONE case that needs it: an
+/// env-gated test handing it to an external child (a real `claude`, which
+/// authenticates from its own home) via `Command::env("HOME", ..)` on that
+/// child only. Never set it on this process or resolve a test path under it.
+// trace:BUG-1971 | ai:claude
+pub(crate) fn operator_real_home() -> Option<&'static Path> {
+    installed().real_homes.first().map(PathBuf::as_path)
+}
+
 /// Panic if `path` is one of the operator's real homes or lies under a real
 /// `~/.aida`. Called by every global-dir resolver under `cfg(test)`.
 #[track_caller]
@@ -435,8 +445,12 @@ mod tests {
     /// The redirect is in effect before any test body runs: the process
     /// `HOME` is the temp home, not any real one, and the operator's
     /// overrides are gone.
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn redirect_is_installed_before_tests_run() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let _env = crate::test_env::EnvVarsGuard::snapshot(&["HOME"]);
         let r = installed();
         assert!(r.test_home.join(".gitconfig").is_file());

@@ -33,11 +33,11 @@ Hold that table in mind and every primitive below slots into place.
 
 ### Subagents (`/agents`, `.claude/agents/`)
 A subagent is a **callable** — a specialized prompt + tool allowlist + fresh context window, invoked inside one conversation, gone when it ends. AIDA's **roles** (`implementer`, `reviewer`, `advisor`) are **positions in a lifecycle** — full `claude` processes in their own git worktrees, holding leases, anchored to a SPEC-ID, with state that outlives every session. A subagent is a *thing you delegate to*; a role is a *seat in a system*. **They compose:** an AIDA role can spawn subagents inside it.
-→ deep dive: [vs-claude-code-subagents.md](positioning/vs-claude-code-subagents.md)
+→ deep dive: [vs-claude-code-subagents.md](archive/positioning/vs-claude-code-subagents.md)
 
 ### Workflows (`/workflows`)
 A Workflow is **within-task orchestration**: a JS script fans out dozens-to-hundreds of subagents, holds the plan in code, and ends with an answer/artifact. AIDA's `aida queue work --auto-complete` is a **spec-lifecycle** orchestrator: it drives one requirement through implement → CI → review → merge and *records the outcome in the persistent graph*. A Workflow produces a report; an AIDA drain produces a merged PR **and** a spec that now knows it's `Completed`. The orchestration *mechanism* overlaps — and Claude Code commoditizing it is good news: AIDA delegates to it rather than competing.
-→ deep dive: [vs-claude-code-workflows.md](positioning/vs-claude-code-workflows.md)
+→ deep dive: [vs-claude-code-workflows.md](archive/positioning/vs-claude-code-workflows.md)
 
 ### Agent teams (experimental)
 A lead agent splits a project into pieces across a shared task list with inter-agent messaging — within a session. AIDA provides the *durable* version of that coordination: the queue (`--for <role>`, `batch:` tags, scope routing), leases that prevent two agents touching the same scope, and a spec graph both agents query. Where agent teams coordinate *now*, AIDA coordinates *across sessions, agents, and vendors*.
@@ -78,7 +78,7 @@ The first two assume AIDA is *driving* (it delegates) or being *read*. But Claud
 
 The boundary that matters: hooks make the substrate **capture** any orchestrator's effects — they do **not** make the orchestrator *read the graph to decide* (that "decide-from-the-graph" role stays AIDA's drain alone). So this direction makes the substrate **antifragile to which orchestrator runs**: when AIDA's drain isn't driving — even when it's *unavailable* — the work still lands in the graph instead of leaking away.
 
-> The motivating case: a sibling project hit a drain bug (BUG-431), fell back to a Claude Code Workflow, shipped the code — and populated *zero* substrate (no lifecycle, no leases, no traces). The hook bundle is what would have kept that work in the graph. See [vs-claude-code-workflows.md → "Worked example: quizdom"](positioning/vs-claude-code-workflows.md).
+> The motivating case: a sibling project hit a drain bug (BUG-431), fell back to a Claude Code Workflow, shipped the code — and populated *zero* substrate (no lifecycle, no leases, no traces). The hook bundle is what would have kept that work in the graph. See [vs-claude-code-workflows.md → "Worked example: quizdom"](archive/positioning/vs-claude-code-workflows.md).
 
 > Net: **AIDA supplies the substrate and the lifecycle semantics; Claude Code supplies the orchestration and the raw model work — and the hooks keep the substrate populated even when Claude Code orchestrates alone.** Each is stronger because of the other.
 
@@ -126,9 +126,9 @@ AIDA owns the layer those tools structurally don't: the **persistent, vendor-neu
 
 ## See also
 
-- [vs-claude-code-subagents.md](positioning/vs-claude-code-subagents.md) — roles vs subagents (the *position* vs the *callable*).
-- [vs-claude-code-workflows.md](positioning/vs-claude-code-workflows.md) — the spec-lifecycle vs within-task distinction + the commoditization read.
+- [vs-claude-code-subagents.md](archive/positioning/vs-claude-code-subagents.md) — roles vs subagents (the *position* vs the *callable*).
+- [vs-claude-code-workflows.md](archive/positioning/vs-claude-code-workflows.md) — the spec-lifecycle vs within-task distinction + the commoditization read.
 - [docs/agents/aida-mcp-install-matrix.md](agents/aida-mcp-install-matrix.md) — connecting AIDA's MCP server to Claude Code, Codex, Cursor, Windsurf, and the rest.
 - [docs/agents/claude-plugin-package.md](agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
 - [OVERVIEW.md](../OVERVIEW.md) — the Trojan-horse framing and the full vision.
-- [docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.
+- [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the 2026-05-31 moat / commoditization synthesis (archived dated snapshot).

@@ -1505,6 +1505,9 @@ fn commit_init_scaffolding(
     }
     match git_ops::commit(root, "chore: scaffold AIDA") {
         Ok(true) => {
+            // Lets the end-of-init config refresh follow with its own commit
+            // instead of leaving the file dirty. trace:BUG-1938 | ai:claude
+            crate::config_commit::mark_init_scaffold_committed();
             println!(
                 "  {} saved your AIDA setup",
                 crate::glyph(crate::glyphs::Glyph::Check).green()
@@ -1812,7 +1815,9 @@ fn complete_init_scaffolding(
         // bit; without it git silently ignores commit-msg hooks and the
         // user gets a confusing "hook was ignored" warning on every
         // commit. trace:BUG-21 | ai:claude
-        ensure_executable_if_hook(&artifact.path, &full_path);
+        // trace:BUG-2009 | ai:claude
+        ensure_executable_if_hook(&artifact.path, &full_path)
+            .with_context(|| format!("making {} executable", full_path.display()))?;
 
         if exists {
             updated_count += 1;
@@ -2547,6 +2552,14 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
+every = "15m"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would
@@ -2737,6 +2750,7 @@ mod story_1226_init_schedule_section_tests {
             "shelf-triage",
             // trace:TASK-1527 | ai:claude
             "cache-refresh-tick",
+            "history-index-tick",
             "groom-drafts",
             "hub-drift-guard",
             "hub-drift-guard-route",
@@ -2758,8 +2772,9 @@ mod story_1226_init_schedule_section_tests {
         assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
         let parsed: toml::Value = toml::from_str(section).expect("defaults parse");
         let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
-        // TASK-1527 added cache-refresh-tick as the fourth enabled default.
-        assert_eq!(jobs.len(), 4);
+        // The history tick joins the four existing enabled defaults.
+        // trace:STORY-1661 | ai:codex
+        assert_eq!(jobs.len(), 5);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
@@ -2773,6 +2788,15 @@ mod story_1226_init_schedule_section_tests {
             Some("cache refresh --if-requested")
         );
         assert_eq!(tick["every"].as_str(), Some("15m"));
+        let history = jobs
+            .iter()
+            .find(|job| job["name"].as_str() == Some("history-index-tick"))
+            .expect("history-index-tick scaffolded");
+        assert_eq!(
+            history["command"].as_str(),
+            Some("cache refresh --history --if-behind")
+        );
+        assert_eq!(history["every"].as_str(), Some("15m"));
     }
 }
 
@@ -4375,12 +4399,41 @@ pub(crate) fn handle_init_distributed_worktree(
         );
     }
 
+    // STORY-1540: seed the initializer into the new store's team roster if at a direct human TTY.
+    let mut roster_seeded = false;
+    let mut seeded_user = String::new();
+    if crate::seat_authority::require_direct_human().is_ok() {
+        let current_user = crate::current_user_id(None);
+        seeded_user = current_user.clone();
+        std::fs::create_dir_all(store_path.join("registry")).ok();
+        // Seed default seats
+        for seat in &[
+            "advisor",
+            "implementer",
+            "product",
+            "reviewer",
+            "integrator",
+        ] {
+            let _ = crate::team::allow_seat_cas(&store_path, &current_user, seat);
+        }
+        roster_seeded = true;
+    }
+
     // Create initial commit on the orphan branch
     git_ops::add(&store_path, &["metadata.yaml"])?;
     std::fs::create_dir_all(store_path.join("objects"))?;
     std::fs::write(store_path.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_path, &["objects/.gitkeep"])?;
     git_ops::add(&store_path, &["objects"])?;
+    if roster_seeded {
+        let _ = git_ops::add(&store_path, &["registry"]);
+        println!(
+            "  {} Seeded {} into the team roster with default seats",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            seeded_user.bold()
+        );
+        println!("    (manage seats later with `aida team`)");
+    }
     git_ops::commit(&store_path, "chore: initialize AIDA distributed store")?;
 
     // Auto-push to origin/<branch_name> if origin exists, so subsequent
@@ -5903,5 +5956,47 @@ mod bug_1653_memory_lane_header_tests {
                 assert_eq!(&on_disk, expected, "{}", rel.display());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod init_roster_tests {
+    use super::*;
+
+    // trace:STORY-1540 | ai:antigravity
+    #[test]
+    fn init_at_non_tty_writes_no_team_roster() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("test-agent")),
+            ("AIDA_AGENT_TYPE", Some("test")),
+        ]);
+        let prev_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(root)
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "--allow-empty", "-m", "init"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+
+        super::handle_init_distributed_worktree(
+            false, false, None, false, false, false, None, false, false, None, None,
+        )
+        .expect("init should succeed");
+
+        let team_toml = root.join(".aida-store/registry/team.toml");
+        assert!(
+            !team_toml.exists(),
+            "no roster should be written without a direct TTY"
+        );
+
+        std::env::set_current_dir(prev_cwd).unwrap();
     }
 }

@@ -5,7 +5,7 @@ set -euo pipefail
 # lifecycle remains the acceptance test; these guards prevent a later workflow
 # edit from silently restoring readiness-only or literal-secret configuration.
 # trace:TASK-1425 trace:ADR-54 | ai:codex
-workflow=".github/workflows/cross-platform.yml"
+workflow=".github/workflows/weekly-linux.yml"
 
 grep -Fq 'GLAB_VERSION: 1.118.0' "$workflow"
 grep -Fq '"https://${AIDA_GITLAB_LIVE_HOST}/api/v4/version"' "$workflow"

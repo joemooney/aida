@@ -15,6 +15,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
+use super::cache_binding::CacheBinding;
 pub use super::cache_lock::{cache_lock_info_path, read_cache_lock_info, CacheLockInfo};
 use super::cache_lock::{
     clear_dead_owner_lock_info_at, enrich_cache_lock_error, observe_lock_info_file,
@@ -392,11 +393,15 @@ pub enum SortOrder {
     /// modified_at DESC; unweighted rows sort last).
     // trace:FR-283 | ai:claude
     WeightDesc,
+    /// Natural numeric order by requirement ID (`FAQ-2` before `FAQ-11`;
+    /// agreed ID when present; node-aware IDs after agreed IDs of their
+    /// type) — see [`crate::id_order::natural_id_cmp`]. Applied in Rust after
+    /// the query (SQLite has no natural collation), then `limit` truncates.
+    // trace:TASK-1587 | ai:antigravity
+    // trace:STORY-1644 | ai:claude
+    IdAsc,
     /// Newest-created first by `created_at` DESC.
     // trace:TASK-1464 | ai:claude
-    /// Alphabetical by requirement ID.
-    // trace:TASK-1587 | ai:antigravity
-    IdAsc,
     CreatedDesc,
     /// Most-recently-completed first, ordered on the real `completed_at`
     /// timestamp (STORY-86, stamped by the Done->Completed auto-bump) rather
@@ -407,6 +412,25 @@ pub enum SortOrder {
     /// (SQLite orders NULLs last in DESC). Ties broken by `modified_at` DESC.
     // trace:TASK-1464 trace:TASK-1474 | ai:claude
     CompletedDesc,
+}
+
+/// Sort list rows in natural numeric ID order — the one ordering `aida list
+/// --sort id` uses on every output surface. The key is the agreed ID when
+/// present, else the spec ID, else the UUID.
+// trace:STORY-1644 | ai:claude
+pub fn sort_summaries_natural_id(rows: &mut Vec<RequirementSummary>) {
+    let mut keyed: Vec<(String, RequirementSummary)> = std::mem::take(rows)
+        .into_iter()
+        .map(|r| {
+            let uuid = r.id.to_string();
+            let key =
+                crate::id_order::list_sort_key(r.agreed_id.as_deref(), r.spec_id.as_deref(), &uuid)
+                    .to_string();
+            (key, r)
+        })
+        .collect();
+    keyed.sort_by(|(a, _), (b, _)| crate::id_order::natural_id_cmp(a, b));
+    rows.extend(keyed.into_iter().map(|(_, r)| r));
 }
 
 /// Filter passed to cache list queries. All fields are AND'd together;
@@ -635,6 +659,57 @@ impl Drop for HoldingWrite {
     }
 }
 
+// BUG-1956: a reader-side backstop on the SQLite retry ladder. While a
+// `ReadLadderBudget` guard is alive on this thread AND the invocation is an
+// explicitly budgeted read (see `cache_refresh::read_ladder_allowance`), the
+// ladder's sleeps draw on one invocation-wide wait allowance. A reader that
+// still has to write (first build, pending migration) then fails with the
+// usual lock-holder error inside ADR-53's 5 s ceiling instead of riding the
+// full ~25.5 s ladder. Only time spent WAITING counts, so a slow store load
+// never spends it; mutations (no explicit read budget) keep the full ladder.
+// trace:BUG-1956 | ai:claude
+pub(super) const READ_LADDER_CAP: Duration = Duration::from_secs(3);
+
+thread_local! {
+    // trace:BUG-1956 | ai:claude
+    static READ_LADDER_ARMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Arms the read wait allowance for ladders on this thread until dropped.
+// trace:BUG-1956 | ai:claude
+pub(super) struct ReadLadderBudget(());
+impl ReadLadderBudget {
+    pub(super) fn arm() -> Self {
+        READ_LADDER_ARMED.with(|n| n.set(n.get() + 1));
+        Self(())
+    }
+}
+impl Drop for ReadLadderBudget {
+    fn drop(&mut self) {
+        READ_LADDER_ARMED.with(|n| n.set(n.get() - 1));
+    }
+}
+
+/// The armed read allowance left, or `None` when this ladder is uncapped.
+// trace:BUG-1956 | ai:claude
+fn read_ladder_allowance() -> Option<Duration> {
+    if READ_LADDER_ARMED.with(|n| n.get()) == 0 {
+        return None;
+    }
+    super::cache_refresh::read_ladder_allowance(READ_LADDER_CAP)
+}
+
+/// The sleep before retry `attempts`, or `None` when the ladder (or the
+/// reader's wait allowance) is spent.
+// trace:BUG-1956 | ai:claude
+fn ladder_delay(delays: &[Duration], attempts: usize) -> Option<Duration> {
+    let delay = *delays.get(attempts)?;
+    match read_ladder_allowance() {
+        None => Some(delay),
+        Some(left) => (!left.is_zero()).then(|| delay.min(left)),
+    }
+}
+
 thread_local! {
     // Armed by the `aida awaiting --notice` path before the cache is opened, so
     // BOTH the connection open and the summary reads honor the short ladder.
@@ -687,24 +762,31 @@ fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Conn
         // busy/lock error (the BUG-681 fast-fail path) and permissions errors
         // are NOT self-healed here; they keep their existing behavior.
         Err(err) if is_sqlite_corruption_error(&err) => {
-            remove_corrupt_cache_files(path);
+            // BUG-1940: quarantine (not delete) under the cache refresh lock, so
+            // a concurrent rebuild/refresh never has its fresh cache moved aside.
+            // The lock is re-entrant on this thread, so a caller already holding
+            // it does not deadlock; another holder makes us report instead.
+            // trace:BUG-1940 | ai:claude
+            let guard =
+                super::cache_refresh::RefreshLock::acquire_within(path, AUTO_HEAL_LOCK_WAIT)
+                    .ok()
+                    .flatten();
+            let Some(_guard) = guard else {
+                return Err(tag_cache_corruption(path, err));
+            };
+            // Re-check under the lock: another process may have replaced it.
+            match open_connection_inner(path, lock_info_path) {
+                Ok(conn) => return Ok(conn),
+                Err(again) if is_sqlite_corruption_error(&again) => {}
+                Err(again) => return Err(again),
+            }
+            quarantine_or_remove_with_note(path);
             // Re-open the now-absent file: sqlite creates a fresh empty db, the
             // WAL pragma succeeds, and Cache::open applies the schema. If the
-            // recreate ALSO fails (e.g. the file couldn't be removed — a
-            // permissions problem masquerading past the corruption class), fall
-            // back to an actionable message rather than the misleading
-            // WAL-mode wording.
-            open_connection_inner(path, lock_info_path).map_err(|second| {
-                if is_sqlite_corruption_error(&second) {
-                    anyhow::anyhow!(
-                        "cache database is unreadable (corrupt?) — delete it to \
-                         auto-rebuild: rm {}",
-                        path.display()
-                    )
-                } else {
-                    second
-                }
-            })
+            // recreate ALSO fails (the file could not be moved), report the
+            // corruption with its fix.
+            open_connection_inner(path, lock_info_path)
+                .map_err(|second| tag_cache_corruption(path, second))
         }
         Err(err) => Err(err),
     }
@@ -789,6 +871,205 @@ fn remove_corrupt_cache_files(path: &Path) {
     }
 }
 
+/// True when the error chain says the cache FILE is damaged, not merely busy:
+/// the SQLITE_CORRUPT / SQLITE_NOTADB codes (any extended variant, e.g.
+/// SQLITE_CORRUPT_VTAB for a broken FTS index), or an FTS5 table whose
+/// constructor fails because its shadow tables are gone or garbled
+/// ("vtable constructor failed", reported under the generic SQLITE_ERROR).
+/// Lock, busy, read-only and I/O errors are never corruption, so a healthy cache
+/// that is merely locked by another process is never quarantined.
+// trace:BUG-1940 | ai:claude
+pub fn is_cache_corruption_error(err: &anyhow::Error) -> bool {
+    if is_sqlite_lock_error(err) {
+        return false;
+    }
+    is_sqlite_corruption_error(err) || is_broken_fts_vtable_error(err)
+}
+
+/// SQLITE_ERROR whose message is SQLite's own "vtable constructor failed"
+/// (FTS5 shadow tables missing). SQLite reports this under the generic code
+/// with no extended code, so its message is the only discriminator.
+// trace:BUG-1940 | ai:claude
+fn is_broken_fts_vtable_error(err: &anyhow::Error) -> bool {
+    // external-prose-classifier: cache::is_broken_fts_vtable_error
+    err.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<rusqlite::Error>(),
+            Some(rusqlite::Error::SqliteFailure(code, Some(msg)))
+                if code.code == rusqlite::ErrorCode::Unknown
+                    && msg.starts_with("vtable constructor failed")
+        )
+    })
+}
+
+/// How many quarantined cache sets (`<cache>.corrupt-*{,-wal,-shm}`) to keep
+/// beside the cache; older sets are deleted after each quarantine.
+// trace:BUG-1940 | ai:claude
+pub const QUARANTINE_KEEP: usize = 2;
+
+/// Typed marker for an error that came from the cache database itself (not the
+/// history index, token ledger, or any other sqlite file) and is in the
+/// corruption class. The CLI keys its one-line `aida cache rebuild` fix on this
+/// type; the original error stays reachable as the source.
+// trace:BUG-1940 | ai:claude
+#[derive(Debug)]
+pub struct CacheCorruption {
+    pub path: PathBuf,
+    source: anyhow::Error,
+}
+
+impl std::fmt::Display for CacheCorruption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the local AIDA cache at {} is corrupt",
+            self.path.display()
+        )
+    }
+}
+
+impl std::error::Error for CacheCorruption {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // Deref to the original error object (not a boxed wrapper) so
+        // `chain().downcast_ref::<rusqlite::Error>()` still finds it.
+        let inner: &(dyn std::error::Error + Send + Sync + 'static) = self.source.as_ref();
+        Some(inner)
+    }
+}
+
+/// Wrap `err` in [`CacheCorruption`] when it is a corruption-class error from
+/// the cache at `path`; anything else (including an already-tagged error) is
+/// returned unchanged.
+// trace:BUG-1940 | ai:claude
+pub fn tag_cache_corruption(path: &Path, err: anyhow::Error) -> anyhow::Error {
+    let tagged = err
+        .chain()
+        .any(|cause| cause.downcast_ref::<CacheCorruption>().is_some());
+    if tagged || !is_cache_corruption_error(&err) {
+        return err;
+    }
+    anyhow::Error::new(CacheCorruption {
+        path: path.to_path_buf(),
+        source: err,
+    })
+}
+
+/// The quarantine destination base for `path`: `<path>.corrupt-<UTC>-<pid>`,
+/// plus `-<n>` until none of the main/`-wal`/`-shm` names exist, so a rename
+/// never overwrites an earlier quarantine.
+// trace:BUG-1940 | ai:claude
+fn unique_quarantine_base(path: &Path) -> String {
+    // Nanosecond stamp: names sort chronologically, so pruning keeps the
+    // newest sets even when a pruned name could otherwise be reused.
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
+    let stem = format!("{}.corrupt-{stamp}-{}", path.display(), std::process::id());
+    let taken = |base: &str| {
+        ["", "-wal", "-shm"]
+            .iter()
+            .any(|suffix| Path::new(&format!("{base}{suffix}")).exists())
+    };
+    if !taken(&stem) {
+        return stem;
+    }
+    (1u32..)
+        .map(|n| format!("{stem}-{n}"))
+        .find(|base| !taken(base))
+        .expect("an unbounded counter finds a free name")
+}
+
+/// Move `path` and its `-wal` / `-shm` sidecars to a unique
+/// `<path>.corrupt-<UTC>-<pid>{,-wal,-shm}` set, then prune older sets beyond
+/// [`QUARANTINE_KEEP`]. Returns the destinations (main file first). All or
+/// nothing: if a sidecar rename fails, the files already moved are renamed
+/// back, so a hot WAL is never left beside a missing database. The cache is a
+/// rebuildable projection, so moving it aside loses nothing canonical; keeping
+/// the bytes leaves evidence for diagnosing the corruption. Callers hold the
+/// cache refresh lock.
+// trace:BUG-1940 | ai:claude
+pub fn quarantine_cache_files(path: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let base = unique_quarantine_base(path);
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for suffix in ["", "-wal", "-shm"] {
+        let src = PathBuf::from(format!("{}{}", path.display(), suffix));
+        if !src.exists() {
+            continue;
+        }
+        let dst = PathBuf::from(format!("{base}{suffix}"));
+        if let Err(err) = std::fs::rename(&src, &dst) {
+            for (src, dst) in moved.iter().rev() {
+                let _ = std::fs::rename(dst, src);
+            }
+            return Err(err);
+        }
+        moved.push((src, dst));
+    }
+    prune_quarantined_cache_files(path, QUARANTINE_KEEP);
+    Ok(moved.into_iter().map(|(_, dst)| dst).collect())
+}
+
+/// Delete all but the newest `keep` quarantined sets for `path`. Set names sort
+/// chronologically (UTC timestamp prefix). Best-effort.
+// trace:BUG-1940 | ai:claude
+pub fn prune_quarantined_cache_files(path: &Path, keep: usize) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let prefix = format!("{}.corrupt-", name.to_string_lossy());
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(&prefix))
+        .collect();
+    let set_of = |n: &str| {
+        n.strip_suffix("-wal")
+            .or_else(|| n.strip_suffix("-shm"))
+            .unwrap_or(n)
+            .to_string()
+    };
+    let mut sets: Vec<String> = files.iter().map(|n| set_of(n)).collect();
+    sets.sort();
+    sets.dedup();
+    if sets.len() <= keep {
+        return;
+    }
+    let doomed: HashSet<String> = sets[..sets.len() - keep].iter().cloned().collect();
+    files.retain(|n| doomed.contains(&set_of(n)));
+    for n in files {
+        let _ = std::fs::remove_file(dir.join(n));
+    }
+}
+
+/// Quarantine (falling back to deleting, so the cache can still be recreated)
+/// and tell the user where the files went.
+// trace:BUG-1940 | ai:claude
+fn quarantine_or_remove_with_note(path: &Path) {
+    match quarantine_cache_files(path) {
+        Ok(moved) if !moved.is_empty() => note_cache_quarantined(path, &moved),
+        Ok(_) => {}
+        Err(_) => remove_corrupt_cache_files(path),
+    }
+}
+
+// trace:BUG-1940 | ai:claude
+fn note_cache_quarantined(path: &Path, moved: &[PathBuf]) {
+    eprintln!(
+        "note: the AIDA cache at {} was corrupt; moved it aside to {} and started a fresh one",
+        path.display(),
+        moved
+            .first()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
+    );
+}
+
+/// How long the open-time auto-heal waits for the cache refresh lock before
+/// giving up and reporting the corruption instead.
+// trace:BUG-1940 | ai:claude
+const AUTO_HEAL_LOCK_WAIT: Duration = Duration::from_secs(2);
+
 /// Run a cache write under the lock-info sidecar.
 ///
 /// TASK-1484: the sidecar is claimed before the write (first writer wins, as
@@ -864,7 +1145,12 @@ where
         }
         match f() {
             Ok(value) => return Ok(value),
-            Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+            Err(err) if is_sqlite_lock_error(&err) => {
+                // trace:BUG-1956 | ai:claude
+                let Some(delay) = ladder_delay(&delays, attempts) else {
+                    let observation = observe_lock_info_file(lock_info_path).ok().flatten();
+                    return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
+                };
                 if owns_sidecar {
                     touch_own_lock_info_at(
                         lock_info_path,
@@ -873,12 +1159,12 @@ where
                 }
                 #[cfg(test)]
                 super::cache_refresh::test_count("retry_sleep");
-                std::thread::sleep(delays[attempts]);
+                std::thread::sleep(delay);
+                // trace:BUG-1956 | ai:claude
+                if READ_LADDER_ARMED.with(|n| n.get()) > 0 {
+                    super::cache_refresh::record_ladder_wait(delay);
+                }
                 attempts += 1;
-            }
-            Err(err) if is_sqlite_lock_error(&err) => {
-                let observation = observe_lock_info_file(lock_info_path).ok().flatten();
-                return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
         }
@@ -1049,6 +1335,10 @@ pub struct Cache {
     migration_pending: AtomicBool,
     usable_snapshot: AtomicBool,
     read_only: bool,
+    /// The file identities this handle's connection bound, re-checked during
+    /// use so a holder follows a cache another process replaced on disk.
+    // trace:BUG-1984 | ai:claude
+    binding: Mutex<CacheBinding>,
 }
 
 // trace:BUG-1752 | ai:codex
@@ -1164,7 +1454,8 @@ impl Cache {
     // trace:TASK-1478 | ai:claude
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        Self::open_at(path, true)
+        // trace:BUG-1940 | ai:claude
+        Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))
     }
 
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
@@ -1353,6 +1644,7 @@ impl Cache {
                 },
             )?;
         }
+        let binding = Mutex::new(CacheBinding::capture(&path)); // trace:BUG-1984 | ai:claude
         let cache = Cache {
             conn: Mutex::new(conn),
             lock_info_path,
@@ -1360,6 +1652,7 @@ impl Cache {
             migration_pending: AtomicBool::new(migration_pending),
             usable_snapshot: AtomicBool::new(tables_present),
             read_only,
+            binding,
         };
         // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
@@ -1379,10 +1672,200 @@ impl Cache {
                 .unwrap_or(current_version_num)
                 .to_string();
             if on_disk_version.as_deref() != Some(target_version.as_str()) {
-                cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                if tables_present {
+                    // BUG-1956: the tables are already usable, so the stamp
+                    // is bookkeeping (a missing stamp never forces a
+                    // migration). One attempt only: a live writer must not
+                    // park this open in the ~25 s ladder; a later open
+                    // stamps it.
+                    // trace:BUG-1956 | ai:claude
+                    let attempt = ReadRefreshAttempt::new();
+                    let stamped = cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version);
+                    drop(attempt);
+                    match stamped {
+                        Err(err) if !is_cache_lock_error(&err) => return Err(err),
+                        _ => {}
+                    }
+                } else {
+                    cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+                }
             }
         }
         Ok(cache)
+    }
+
+    /// Run `PRAGMA integrity_check` on a separate read-only connection.
+    /// `Ok(None)` means the file is healthy; `Ok(Some(detail))` means it is
+    /// damaged (including a check that itself fails with a corruption-class
+    /// error, e.g. an FTS table whose constructor fails). Any other failure —
+    /// notably a lock or busy error — is returned as `Err`, never as damage.
+    // trace:BUG-1940 | ai:claude
+    pub fn integrity_problem(&self) -> Result<Option<String>> {
+        // FTS5's integrity hook needs a writable handle (on a read-only one it
+        // reports "unable to validate the inverted index ... attempt to write a
+        // readonly database" even for a healthy index), so open read-write
+        // unless this handle is read-only.
+        let flags = if self.read_only {
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+        } else {
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+        };
+        let check = || -> Result<String> {
+            let conn = Connection::open_with_flags(&self.path, flags)?;
+            // A short wait rides out a brief writer; a longer lock surfaces
+            // as "unable to validate" (unknown) below, never as damage.
+            conn.busy_timeout(Duration::from_millis(500))?;
+            Ok(conn.query_row("PRAGMA integrity_check(1)", [], |row| row.get(0))?)
+        };
+        match check() {
+            Ok(result) if result.eq_ignore_ascii_case("ok") => Ok(None),
+            // FTS5 reports "unable to validate the inverted index ...: <why>"
+            // when its check could not run at all — e.g. "database is locked"
+            // while another process writes, or "attempt to write a readonly
+            // database". That is "unknown", never damage: a healthy cache that
+            // is merely busy must not be quarantined.
+            // external-prose-classifier: cache::integrity_problem
+            Ok(result) if result.starts_with("unable to validate") => Ok(None),
+            Ok(result) => Ok(Some(result)),
+            Err(err) if is_cache_corruption_error(&err) => Ok(Some(err.to_string())),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Recovery step of `aida cache rebuild`; the caller holds the cache
+    /// refresh lock. Closes this handle's connection, re-checks integrity by
+    /// path (another process may already have replaced the file), moves a
+    /// still-damaged file set aside ([`quarantine_cache_files`]), and reopens a
+    /// connection at the same path. Closing first matters: an open handle on the
+    /// old inode would unlink `<path>-wal` by name when it closed later. Returns
+    /// where the files went (empty when the file was healthy) and the finding.
+    // trace:BUG-1940 | ai:claude
+    pub fn quarantine_and_reopen(&self) -> Result<(Vec<PathBuf>, Option<String>)> {
+        if self.read_only {
+            anyhow::bail!(
+                "the AIDA cache at {} is corrupt but not writable here; move it aside by hand \
+                 (mv {p} {p}.corrupt; rm -f {p}-wal {p}-shm) and run `aida cache rebuild`",
+                self.path.display(),
+                p = self.path.display()
+            );
+        }
+        let mut guard = self.conn.lock().unwrap();
+        let old = std::mem::replace(&mut *guard, Connection::open_in_memory()?);
+        let _ = old.close();
+        let mut result = self
+            .integrity_problem()
+            .map(|problem| (Vec::new(), problem));
+        if let Ok((moved, Some(_))) = &mut result {
+            match quarantine_cache_files(&self.path) {
+                Ok(paths) => *moved = paths,
+                Err(err) => {
+                    result = Err(anyhow::Error::from(err).context(format!(
+                        "Failed to move the corrupt cache at {} aside",
+                        self.path.display()
+                    )))
+                }
+            }
+        }
+        // Reopen whatever is at the path now, even on error, so this handle
+        // never keeps the in-memory placeholder.
+        let fresh = Cache::open_at(self.path.clone(), false)?;
+        self.adopt_connection(&mut guard, fresh);
+        result
+    }
+
+    /// Move a freshly opened handle's connection and state into this one.
+    // trace:BUG-1984 | ai:claude
+    fn adopt_connection(&self, guard: &mut Connection, fresh: Cache) {
+        let Cache {
+            conn,
+            migration_pending,
+            usable_snapshot,
+            binding,
+            ..
+        } = fresh;
+        *guard = conn.into_inner().unwrap_or_else(|p| p.into_inner());
+        self.migration_pending
+            .store(migration_pending.into_inner(), Ordering::SeqCst);
+        self.usable_snapshot
+            .store(usable_snapshot.into_inner(), Ordering::SeqCst);
+        *self.binding.lock().unwrap_or_else(|p| p.into_inner()) =
+            binding.into_inner().unwrap_or_else(|p| p.into_inner());
+    }
+
+    /// This handle's connection. About once a minute it first checks that
+    /// the files the connection bound are still the ones their paths name,
+    /// and re-opens the cache when another process replaced or deleted them.
+    // trace:BUG-1984 | ai:claude
+    fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        // Never inside a cache write: re-opening may itself need to write.
+        let due = !holding_write()
+            && self
+                .binding
+                .lock()
+                .is_ok_and(|mut binding| binding.due(std::time::Instant::now()));
+        if due {
+            // A failed re-open is retried at the next use; until then reads
+            // fail and callers fall back to the canonical store.
+            let _ = self.rebind_if_replaced();
+        }
+        self.conn.lock().unwrap()
+    }
+
+    /// Check now (not rate-limited) whether the cache files this handle's
+    /// connection bound were deleted or replaced on disk, and if so close the
+    /// connection and re-open the cache at its path. Returns why it re-bound,
+    /// or `None` when the binding is still current. The cache is derived
+    /// data, so following the path is always safe.
+    // trace:BUG-1984 | ai:claude
+    pub fn rebind_if_replaced(&self) -> Result<Option<String>> {
+        let reason = self
+            .binding
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .stale_reason();
+        let Some(reason) = reason else {
+            return Ok(None);
+        };
+        let mut guard = self.conn.lock().unwrap();
+        let old = std::mem::replace(&mut *guard, Connection::open_in_memory()?);
+        // The stale connection must not checkpoint on close: as the last user
+        // of the old files it would fold its WAL into whatever database it
+        // holds and delete the WAL and shm by NAME, which now name the files
+        // every other process is using.
+        let _ = old.set_db_config(
+            rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+            true,
+        );
+        // Close before re-opening: SQLite shares one shm mapping per database
+        // inode within a process, so a new connection opened while the old
+        // one lives would join the stale shm.
+        let _ = old.close();
+        match Cache::open_at(self.path.clone(), false) {
+            Ok(fresh) => {
+                self.adopt_connection(&mut guard, fresh);
+                eprintln!(
+                    "note: the AIDA cache at {} changed on disk ({reason}); re-opened it",
+                    self.path.display()
+                );
+                Ok(Some(reason))
+            }
+            Err(err) => {
+                self.binding
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .expire();
+                Err(err.context(format!(
+                    "the AIDA cache at {} changed on disk ({reason}) and could not be re-opened",
+                    self.path.display()
+                )))
+            }
+        }
+    }
+
+    /// Make the next cache use run the binding check.
+    #[cfg(test)]
+    pub(crate) fn expire_binding_check(&self) {
+        self.binding.lock().unwrap().expire();
     }
 
     // Read-only connection, pinned before reading either metadata or rows.
@@ -1407,6 +1890,7 @@ impl Cache {
             migration_pending: AtomicBool::new(false),
             usable_snapshot: AtomicBool::new(true),
             read_only: self.read_only,
+            binding: Mutex::new(CacheBinding::capture(&self.path)), // trace:BUG-1984 | ai:claude
         })
     }
 
@@ -1418,7 +1902,7 @@ impl Cache {
     // Another process can finish a pending migration while this handle waits.
     // trace:TASK-1526 | ai:codex
     pub(crate) fn recheck_migration(&self) -> bool {
-        if self.migration_pending() && !schema_migration_needed(&self.conn.lock().unwrap()) {
+        if self.migration_pending() && !schema_migration_needed(&self.conn()) {
             self.migration_pending.store(false, Ordering::SeqCst);
         }
         self.migration_pending()
@@ -1439,7 +1923,7 @@ impl Cache {
     // ------------------------------------------------------------------ meta
 
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1451,7 +1935,7 @@ impl Cache {
     }
 
     fn get_meta(&self, key: &str) -> Result<Option<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let r = conn
             .query_row(
                 "SELECT value FROM cache_meta WHERE key = ?1",
@@ -1517,7 +2001,7 @@ impl Cache {
 
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1620,7 +2104,7 @@ impl Cache {
             }
         }
         let count = {
-            let conn = self.conn.lock().unwrap();
+            let conn = self.conn();
             let migration_pending = self.migration_pending();
             with_cache_write(
                 &self.path,
@@ -1778,7 +2262,7 @@ impl Cache {
         if self.migration_pending() {
             return Ok(false);
         }
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1821,7 +2305,7 @@ impl Cache {
     /// no view of who depends on it) — that's recovered on the next full rebuild,
     /// the same contract as the inbound-degree axis. trace:TASK-902 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1859,7 +2343,7 @@ impl Cache {
         epic_id: &Uuid,
         stored_status: &crate::models::RequirementStatus,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let Some(status_str) = epic_status_to_stamp(&conn, epic_id, stored_status) else {
             return Ok(());
         };
@@ -1881,13 +2365,13 @@ impl Cache {
     /// shifted, whichever endpoint recorded the hierarchy edge.
     // trace:BUG-764 | ai:claude
     pub fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         ancestor_epic_ids_on(&conn, id)
     }
 
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         with_cache_write(
             &self.path,
             &self.lock_info_path,
@@ -1960,9 +2444,20 @@ impl Cache {
                 args.extend(normalized);
             }
         }
+        // A comma-separated type spec is a logical OR within the type axis
+        // (`faq,decision` → Faq OR Decision), mirroring the status axis above.
+        // trace:STORY-1642 | ai:claude
         if let Some(t) = &filter.req_type {
-            sql.push_str(" AND LOWER(req_type) = LOWER(?)");
-            args.push(t.clone());
+            let types: Vec<String> = t
+                .split(',')
+                .map(|w| w.trim().to_string())
+                .filter(|w| !w.is_empty())
+                .collect();
+            if !types.is_empty() {
+                let ored = vec!["LOWER(req_type) = LOWER(?)"; types.len()].join(" OR ");
+                sql.push_str(&format!(" AND ({})", ored));
+                args.extend(types);
+            }
         }
         // trace:TASK-1-107 | ai:claude — priority filter that was
         // missing before.
@@ -2061,7 +2556,9 @@ impl Cache {
             // trace:TASK-1464 | ai:claude
             SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
             // trace:TASK-1587 | ai:antigravity
-            SortOrder::IdAsc => sql.push_str(" ORDER BY COALESCE(spec_id, id) ASC"),
+            // trace:STORY-1644 | ai:claude — natural order is applied in Rust
+            // below; the SQL order is only a stable starting point.
+            SortOrder::IdAsc => sql.push_str(" ORDER BY COALESCE(agreed_id, spec_id, id) ASC"),
             // trace:TASK-1474 | ai:claude — order on the real `completed_at`
             // timestamp (STORY-86); a Completed row that predates STORY-86
             // (completed_at never stamped) falls back to modified_at, same as
@@ -2073,17 +2570,27 @@ impl Cache {
                 " ORDER BY COALESCE(completed_at, CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
             ),
         }
-        if let Some(n) = filter.limit {
+        // STORY-1644: a natural ID sort must see every row before the limit
+        // cuts, so the LIMIT moves into Rust for that order.
+        let natural_id = matches!(filter.sort, SortOrder::IdAsc);
+        if let Some(n) = filter.limit.filter(|_| !natural_id) {
             sql.push_str(&format!(" LIMIT {}", n));
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(&sql)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> =
             args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        let rows = stmt
+        let mut rows = stmt
             .query_map(param_refs.as_slice(), row_to_summary)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        if natural_id {
+            // trace:STORY-1644 | ai:claude
+            sort_summaries_natural_id(&mut rows);
+            if let Some(n) = filter.limit {
+                rows.truncate(n);
+            }
+        }
         Ok(rows)
     }
 
@@ -2118,7 +2625,7 @@ impl Cache {
             DeferFilter::DeferredOnly => format!(" AND (c.deferred = 1 OR c.{DEFER_TAG_LIKE})"),
             DeferFilter::Both => String::new(),
         };
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         // FTS5 requires the MATCH clause to use the bare table name, not an
         // alias — hence no `f` alias on requirements_fts.
         let sql = format!(
@@ -2146,7 +2653,7 @@ impl Cache {
     // ----------------------------------------------------------------- stats
 
     pub fn requirement_count(&self) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))?;
         Ok(n as usize)
     }
@@ -2158,7 +2665,7 @@ impl Cache {
     /// old predicate exactly: `!archived && decision_request.is_pending()`.
     // trace:TASK-1065 | ai:claude
     pub fn pending_decision_count(&self) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let n: i64 = conn.query_row(
             "SELECT COUNT(*) FROM requirements_cache WHERE has_pending_decision = 1 AND archived = 0",
             [],
@@ -2171,7 +2678,7 @@ impl Cache {
     /// UUID. Returns `Degrees::default()` (all-zero) when the spec isn't in the
     /// cache yet. trace:STORY-632 | ai:claude
     pub fn degrees_for_id(&self, id: &Uuid) -> Result<Degrees> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let d = conn
             .query_row(
                 "SELECT in_degree, out_degree, heft FROM requirements_cache WHERE id = ?1",
@@ -2198,7 +2705,7 @@ impl Cache {
     /// `Ok(None)` when the uuid isn't in the cache (stale/never-ingested).
     // trace:BUG-634 | ai:claude
     pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         spec_id_for_uuid_on(&conn, id)
     }
 
@@ -2215,7 +2722,7 @@ impl Cache {
     /// trusting an empty result.
     // trace:BUG-701 | ai:claude
     pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT UPPER(spec_id) AS sid, id, title \
              FROM requirements_cache \
@@ -2270,7 +2777,7 @@ impl Cache {
         sql: &str,
         id: Option<&str>,
     ) -> Result<Vec<crate::id_collisions::IdRow>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(sql)?;
         let params: Vec<&dyn rusqlite::ToSql> = match &id {
             Some(id) => vec![id as &dyn rusqlite::ToSql],
@@ -2311,7 +2818,7 @@ impl Cache {
     /// `canonical_spec_id` (stored spec_ids are upper-cased).
     // trace:BUG-636
     pub fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         uuid_for_spec_id_on(&conn, spec_id)
     }
 
@@ -2325,7 +2832,7 @@ impl Cache {
     /// looping.
     // trace:TASK-955 | ai:claude
     pub fn descendant_ids(&self, root: &Uuid) -> Result<HashSet<Uuid>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn.prepare(
             "WITH RECURSIVE subtree(id) AS (
                  SELECT ?1
@@ -5817,6 +6324,78 @@ mod tests {
         remove_cache_lock_info(&cache_path);
     }
 
+    fn busy_ladder(cache_path: &Path) -> anyhow::Error {
+        with_cache_retry(cache_path, "read-side cache write", || -> Result<()> {
+            Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error {
+                    code: rusqlite::ErrorCode::DatabaseBusy,
+                    extended_code: 5,
+                },
+                None,
+            )))
+        })
+        .expect_err("a held lock must exhaust the ladder")
+    }
+
+    /// BUG-1956: an armed, explicitly budgeted read caps the whole retry
+    /// ladder at what is left of the invocation's wait allowance, and the
+    /// terminal error still names the lock.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn read_ladder_budget_caps_the_retry_ladder() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        // An earlier refresh in this invocation already waited most of it.
+        record_ladder_wait(READ_LADDER_CAP - Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        let err = {
+            let _armed = ReadLadderBudget::arm();
+            busy_ladder(&cache_path)
+        };
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_secs(2), "ladder ran {elapsed:?}");
+        assert!(is_cache_lock_error(&err), "{err:#}");
+        assert!(err.to_string().contains("database is locked"), "{err}");
+        // The allowance is spent for the rest of this invocation.
+        let _armed = ReadLadderBudget::arm();
+        assert_eq!(read_ladder_allowance(), Some(Duration::ZERO));
+        assert_eq!(ladder_delay(&[Duration::from_millis(100)], 0), None);
+    }
+
+    /// BUG-1956: without an explicit read budget (a mutation's invocation)
+    /// or without an armed guard, the ladder is never capped.
+    // trace:BUG-1956 | ai:claude
+    #[test]
+    fn read_ladder_budget_leaves_unbudgeted_ladders_alone() {
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        let full = [Duration::from_millis(100)];
+        let scope = CacheReadScope::new();
+        scope.configure(false, None);
+        record_ladder_wait(READ_LADDER_CAP);
+        {
+            let _armed = ReadLadderBudget::arm();
+            assert_eq!(read_ladder_allowance(), None);
+            assert_eq!(ladder_delay(&full, 0), Some(full[0]));
+        }
+        scope.configure(false, Some(ReadBudget(Duration::ZERO)));
+        assert_eq!(read_ladder_allowance(), None, "not armed");
+        assert_eq!(ladder_delay(&full, 0), Some(full[0]));
+    }
+
+    // trace:BUG-1995 | ai:antigravity
+    #[test]
+    fn read_ladder_cap_stays_well_under_five_second_budget() {
+        assert!(
+            READ_LADDER_CAP <= Duration::from_secs(3),
+            "READ_LADDER_CAP ({:?}) must stay well under ADR-53's 5 s budget",
+            READ_LADDER_CAP
+        );
+        assert!(READ_LADDER_CAP > Duration::ZERO);
+    }
+
     #[test]
     fn cache_retry_exhaustion_keeps_lock_holder_hint() {
         let _env = crate::test_env::EnvVarsGuard::set(&[
@@ -6623,6 +7202,152 @@ mod tests {
         );
     }
 
+    // BUG-1940: the broader classifier used by rebuild/verify/read hints
+    // accepts the broken-FTS shape and never a lock.
+    #[test]
+    fn cache_corruption_classifier_accepts_broken_fts_and_rejects_locks() {
+        for code in [rusqlite::ffi::SQLITE_BUSY, rusqlite::ffi::SQLITE_LOCKED] {
+            let lock = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(code),
+                Some("database is locked".to_string()),
+            ));
+            assert!(
+                !is_cache_corruption_error(&lock),
+                "code {code} is not corruption"
+            );
+        }
+        let vtab = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
+            Some("vtable constructor failed: requirements_fts".to_string()),
+        ));
+        assert!(is_cache_corruption_error(&vtab));
+        let corrupt_vtab = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(267), // SQLITE_CORRUPT_VTAB
+            None,
+        ));
+        assert!(is_cache_corruption_error(&corrupt_vtab));
+    }
+
+    // BUG-1940: integrity_problem finds a broken FTS table, quarantine moves
+    // the files aside, and the reopened handle is a usable fresh cache.
+    #[test]
+    fn integrity_problem_then_quarantine_and_reopen_recovers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1940-A", "fts row"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(cache.integrity_problem().unwrap(), None, "healthy cache");
+
+        let breaker = Connection::open(&path).unwrap();
+        breaker
+            .execute_batch("DROP TABLE requirements_fts_config")
+            .unwrap();
+        drop(breaker);
+        let problem = cache.integrity_problem().unwrap().expect("damage found");
+        assert!(problem.contains("requirements_fts"), "{problem}");
+
+        let (moved, found) = cache.quarantine_and_reopen().unwrap();
+        assert!(
+            found.is_some(),
+            "re-check under the lock still finds damage"
+        );
+        assert!(!moved.is_empty());
+        assert!(moved[0]
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("cache.db.corrupt-"));
+        assert!(moved[0].exists());
+        assert_eq!(
+            cache.rebuild_from_store(&store, "head").unwrap(),
+            1,
+            "the reopened handle rebuilds into a fresh file"
+        );
+        assert_eq!(cache.integrity_problem().unwrap(), None);
+    }
+
+    // BUG-1940: quarantine names never collide (main, -wal and -shm are all
+    // checked) and only the newest QUARANTINE_KEEP sets are retained.
+    #[test]
+    fn quarantine_names_are_unique_and_old_sets_are_pruned() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let mut bases = Vec::new();
+        for round in 0..4 {
+            std::fs::write(&path, format!("bad {round}")).unwrap();
+            std::fs::write(format!("{}-wal", path.display()), "wal").unwrap();
+            let moved = quarantine_cache_files(&path).unwrap();
+            assert_eq!(moved.len(), 2, "main + wal moved");
+            assert!(!path.exists());
+            assert!(!Path::new(&format!("{}-wal", path.display())).exists());
+            bases.push(moved[0].clone());
+        }
+        let unique: HashSet<_> = bases.iter().collect();
+        assert_eq!(unique.len(), 4, "every round got its own name: {bases:?}");
+        let left: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with("cache.db.corrupt-"))
+            .collect();
+        assert_eq!(left.len(), QUARANTINE_KEEP * 2, "{left:?}");
+        for kept in &bases[bases.len() - QUARANTINE_KEEP..] {
+            assert!(kept.exists(), "newest sets survive: {kept:?}");
+        }
+        assert!(!bases[0].exists(), "oldest set pruned");
+        // The newest set holds the latest bytes.
+        assert_eq!(std::fs::read_to_string(&bases[3]).unwrap(), "bad 3");
+    }
+
+    // BUG-1940: the CLI hint keys on the CacheCorruption tag, applied only to
+    // errors from the cache file; lock errors are never tagged.
+    #[test]
+    fn tag_cache_corruption_tags_only_corruption() {
+        let path = Path::new("project/.aida/cache.db");
+        let corrupt = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            None,
+        ));
+        let tagged = tag_cache_corruption(path, corrupt);
+        assert!(tagged
+            .chain()
+            .any(|c| c.downcast_ref::<CacheCorruption>().is_some()));
+        assert!(
+            is_cache_corruption_error(&tagged),
+            "the sqlite cause stays reachable"
+        );
+        let busy = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            None,
+        ));
+        let busy = tag_cache_corruption(path, busy);
+        assert!(!busy
+            .chain()
+            .any(|c| c.downcast_ref::<CacheCorruption>().is_some()));
+    }
+
+    // BUG-1940: a healthy cache under another connection's write lock is not
+    // reported as damaged (BUSY is not corruption).
+    #[test]
+    fn integrity_problem_on_a_locked_healthy_cache_is_not_damage() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1940-B", "locked"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let holder = Connection::open(&path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let got = cache.integrity_problem();
+        assert!(
+            !matches!(got, Ok(Some(_))),
+            "a lock is never reported as damage: {got:?}"
+        );
+        holder.execute_batch("ROLLBACK").unwrap();
+        assert!(path.exists());
+    }
+
     // trace:BUG-1752 | ai:codex
     #[cfg(unix)]
     #[test]
@@ -7152,5 +7877,69 @@ mod tests {
         assert_eq!(rows[0].spec_id.as_deref(), Some("A-1"));
         assert_eq!(rows[1].spec_id.as_deref(), Some("B-2"));
         assert_eq!(rows[2].spec_id.as_deref(), Some("C-3"));
+    }
+
+    // trace:STORY-1644 | ai:claude — natural numeric order, agreed ID as the
+    // key, node-aware IDs after agreed IDs of their type, and the limit
+    // applied AFTER the natural sort (not to SQLite's text order).
+    #[test]
+    fn list_summaries_id_sort_is_natural_and_limit_follows_sort() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        for id in [
+            "FAQ-11",
+            "FAQ-2",
+            "TASK-1000",
+            "FAQ-1-232",
+            "TASK-2",
+            "BUG-9",
+        ] {
+            store.requirements.push(sample_req(id, id));
+        }
+        // A promoted spec: node-aware spec_id, agreed FAQ-10 is the sort key.
+        let mut promoted = sample_req("FAQ-1-7", "promoted");
+        promoted.agreed_id = Some("FAQ-10".into());
+        store.requirements.push(promoted);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let display = |rows: &[RequirementSummary]| -> Vec<String> {
+            rows.iter()
+                .map(|r| {
+                    r.agreed_id
+                        .clone()
+                        .or_else(|| r.spec_id.clone())
+                        .unwrap_or_default()
+                })
+                .collect()
+        };
+        let all = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::IdAsc,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            display(&all),
+            [
+                "BUG-9",
+                "FAQ-2",
+                "FAQ-10",
+                "FAQ-11",
+                "FAQ-1-232",
+                "TASK-2",
+                "TASK-1000"
+            ]
+        );
+
+        let limited = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::IdAsc,
+                limit: Some(3),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(display(&limited), ["BUG-9", "FAQ-2", "FAQ-10"]);
     }
 }

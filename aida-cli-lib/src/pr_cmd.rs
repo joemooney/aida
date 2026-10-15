@@ -39,6 +39,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             override_stale_check,
             override_stale_approval,
             wait,
+            no_complete,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -51,10 +52,11 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *override_stale_check,
             *override_stale_approval,
             *wait,
+            *no_complete,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
-        PrCommand::List { json } => pr_list_handler(*json),
+        PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
     }
 }
 
@@ -1424,6 +1426,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 false,                 // override_stale_check — not exposed on `aida ship` yet
                 false, // override_stale_approval — not exposed on `aida ship` (TASK-1448)
                 None,  // wait — not exposed on `aida ship`
+                false, // no_complete — not exposed on `aida ship` (BUG-1919)
             )
         }
     }
@@ -1750,6 +1753,7 @@ pub(crate) fn pr_ship_handler(
     override_stale_check: bool,
     override_stale_approval: bool,
     wait: Option<u64>,
+    no_complete: bool,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -2027,7 +2031,11 @@ pub(crate) fn pr_ship_handler(
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
         let plan = format_dry_run_plan(&opts, &steps, forge_kind);
-        print!("{}", plan);
+        // trace:BUG-1957 | ai:claude
+        print!(
+            "{}",
+            pr_ship_dry_run_output(plan, &project_root, pr_number, &ship_branch, no_complete)
+        );
         eprintln!(
             "  → PR target: {}",
             if pr_number == 0 {
@@ -2480,8 +2488,16 @@ pub(crate) fn pr_ship_handler(
             pr_number,
             if delete_branch { ", delete-branch" } else { "" }
         );
-        let explicit_squash_subject =
-            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch)?;
+        // BUG-1919: say which ids the squash subject will carry and where
+        // they came from (title / branch / none) BEFORE the merge, so a
+        // branch-name fallback can never complete a spec silently.
+        // trace:BUG-1919 | ai:claude
+        let (explicit_squash_subject, completion_trailer) =
+            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch, no_complete)?;
+        eprintln!(
+            "  step 3: {}",
+            pr_ship::format_trailer_provenance(&completion_trailer)
+        );
         if let Some(subject) = &explicit_squash_subject {
             eprintln!(
                 "  step 3: preserving spec ID in squash subject: {}",
@@ -2817,14 +2833,16 @@ pub(crate) fn pr_ship_handler(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
-        // Use the same store-qualified completion intent as the squash subject.
+        // Use the same store-qualified completion intent as the squash subject
+        // — including BUG-1919's non-completing / closure-held suppression, so
+        // a slice PR is not credited as a ship of its parent either.
         // trace:TASK-1600 | ai:codex
+        // trace:BUG-1919 | ai:claude
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
-                pr_ship::derive_squash_subject_spec_ids_resolving(&pr_meta.title, &branch, |id| {
-                    matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
-                })
+                ship_completion_trailer(&store, &pr_meta.title, &branch, &pr_meta.body, no_complete)
+                    .ids
             })
             .unwrap_or_default();
         pr_merged_spec_ids = spec_ids.clone();
@@ -2956,9 +2974,13 @@ pub(crate) fn pr_ship_handler(
             &StepOutcome::Skipped("--no-cleanup".into()),
         );
     } else {
+        // BUG-1953: match the PR head branch, not the cwd branch — shipping
+        // by number from `main` must still end the shipped branch's lease.
+        // `ship_branch` already falls back to `branch` when no PR branch
+        // resolved. trace:BUG-1953 | ai:claude
         let lease_for_branch = list_leases(&main_worktree)
             .into_iter()
-            .find(|l| l.branch == branch);
+            .find(|l| l.branch == ship_branch);
         match lease_for_branch {
             Some(lease) => {
                 // If our cwd is inside the worktree we're about to
@@ -3031,15 +3053,13 @@ pub(crate) fn pr_ship_handler(
                 }
             }
             None => {
-                eprintln!(
-                    "  step 5: no AIDA lease for branch {} — nothing to clean up",
-                    branch
-                );
+                let (line, detail) = pr_ship::step5_no_lease_messages(&ship_branch);
+                eprintln!("{line}");
                 log_ship_activity(
                     &main_worktree,
                     Some(pr_number),
                     &ShipStep::EndLease,
-                    &StepOutcome::Skipped(format!("no lease for branch {}", branch)),
+                    &StepOutcome::Skipped(detail),
                 );
             }
         }
@@ -3605,17 +3625,38 @@ pub(crate) fn branch_head_commit_message(
 /// Return an explicit `gh pr merge --subject` value when GitHub's default
 /// branch-head squash subject would drop spec IDs or a better PR title.
 // trace:SPEC-410 TASK-142 | ai:codex
+///
+/// BUG-1919: also returns the completing trailer with its provenance, so the
+/// caller can print where it came from (title / branch / withheld) before the
+/// merge. `no_complete` is the `--no-complete` flag; the PR body's
+/// non-completing marker and a closure-held spec (`closure:pending` or open
+/// slice children) withhold the branch-name fallback inside the derivation.
+// trace:BUG-1919 | ai:claude
 pub(crate) fn derive_pr_ship_squash_subject(
     project_root: &std::path::Path,
     pr_number: u64,
     branch: &str,
-) -> Result<Option<String>> {
+    no_complete: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
     // TASK-140: compare against the PR BRANCH's head commit, NOT the local cwd
     // HEAD. `aida pr ship` frequently runs from the main worktree, where HEAD is
     // main's tip. TASK-142: prefer the PR title as the explicit squash subject
     // base because the branch head may itself be a merge commit.
     // trace:TASK-140 TASK-142 | ai:codex
     let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    derive_pr_ship_squash_subject_from(project_root, &pr, branch, no_complete)
+}
+
+/// The derivation behind [`derive_pr_ship_squash_subject`], given the PR's
+/// title and body already fetched, so tests drive it without a fake `gh` on
+/// the process-wide PATH.
+// trace:BUG-1997 | ai:claude
+pub(crate) fn derive_pr_ship_squash_subject_from(
+    project_root: &std::path::Path,
+    pr: &PrShipMetadata,
+    branch: &str,
+    no_complete: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
     let commit_msg = branch_head_commit_message(project_root, branch).ok_or_else(|| {
         anyhow::anyhow!(
             "could not read the head commit of branch `{branch}` (tried local and origin/) \
@@ -3625,21 +3666,92 @@ pub(crate) fn derive_pr_ship_squash_subject(
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
     // A store read is required before granting an ID completion authority.
     // trace:TASK-1600 | ai:codex
+    // This deliberately does NOT use `load_store_for_lookup` (the best-effort
+    // loader the calibration and rework credit paths use, which yields `None`
+    // on an unreadable store): here the store decides which specs the merge
+    // completes, so an unreadable store must fail closed and stop the merge
+    // rather than silently skipping id resolution and the closure hold.
+    // trace:BUG-1957 | ai:claude
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
-    let normalized =
-        pr_ship::derive_squash_subject_resolving(&pr.title, branch, &pr.body, &commit_msg, |id| {
-            matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
-        })
-        .unwrap_or_default();
-    if normalized.is_empty() {
-        return Ok(None);
+    let (normalized, trailer) = pr_ship::derive_squash_subject_with_trailer(
+        &pr.title,
+        branch,
+        &pr.body,
+        &commit_msg,
+        no_complete,
+        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| pr_ship::spec_completion_hold_reason(&store, id),
+    )
+    .unwrap_or_else(|| {
+        (
+            String::new(),
+            pr_ship::SquashTrailer {
+                ids: Vec::new(),
+                source: pr_ship::TrailerSource::None,
+                notes: Vec::new(),
+            },
+        )
+    });
+    // BUG-1997: never return None when spec IDs are withheld (via --no-complete,
+    // a PR-body marker, or closure hold, or when the PR title carried an ID that
+    // was stripped). Otherwise, gh pr merge defaults to the PR title on multi-commit
+    // PRs and can carry the withheld ID into the squash subject on main.
+    // trace:BUG-1997 | ai:antigravity
+    let raw_title_ids = pr_ship::extract_trailing_spec_ids_from_subject(&pr.title);
+    let title_ids_withheld = raw_title_ids.iter().any(|id| !trailer.ids.contains(id));
+    let ids_withheld = no_complete || !trailer.notes.is_empty() || title_ids_withheld;
+    if normalized.is_empty() || (normalized == current_subject && !ids_withheld) {
+        return Ok((None, trailer));
     }
-    if normalized == current_subject {
-        Ok(None)
+    Ok((Some(normalized), trailer))
+}
+
+/// The `aida pr ship --dry-run` output: the step plan followed by the
+/// completion-trailer provenance line, so the operator sees which specs the
+/// merge would complete, and why, without merging. `pr_number == 0` means
+/// the PR would be created, so there is no title to derive from yet.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn pr_ship_dry_run_output(
+    plan: String,
+    project_root: &std::path::Path,
+    pr_number: u64,
+    ship_branch: &str,
+    no_complete: bool,
+) -> String {
+    let provenance = if pr_number == 0 {
+        pr_ship::format_dry_run_trailer_provenance(Err(
+            "the PR does not exist yet; it is derived from the PR title or branch name at merge time",
+        ))
     } else {
-        Ok(Some(normalized))
-    }
+        match derive_pr_ship_squash_subject(project_root, pr_number, ship_branch, no_complete) {
+            Ok((_, trailer)) => pr_ship::format_dry_run_trailer_provenance(Ok(&trailer)),
+            Err(e) => pr_ship::format_dry_run_trailer_provenance(Err(&e.to_string())),
+        }
+    };
+    plan + &provenance
+}
+
+/// BUG-1919: the one store-qualified completion-trailer derivation the ship
+/// path uses for the post-merge credit (calibration slots, the `PrMerged`
+/// event), so it cannot disagree with the squash subject about which specs
+/// the PR completed. Resolution and closure-hold both read `store`.
+// trace:BUG-1919 | ai:claude
+pub(crate) fn ship_completion_trailer(
+    store: &aida_core::RequirementsStore,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    no_complete: bool,
+) -> pr_ship::SquashTrailer {
+    pr_ship::derive_squash_trailer(
+        pr_title,
+        branch,
+        pr_body,
+        no_complete,
+        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| pr_ship::spec_completion_hold_reason(store, id),
+    )
 }
 
 #[cfg(test)]
@@ -4679,6 +4791,10 @@ mod pr_ship_environment_tests {
 
     #[test]
     fn recover_open_change_uses_github_origin_even_with_stale_pure_git_config() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
@@ -4928,7 +5044,7 @@ mod pr_ship_environment_tests {
     #[test]
     fn emit_ship_pr_merged_writes_one_event_per_credited_spec_with_seat() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
 
         emit_ship_pr_merged(
             tmp.path(),
@@ -5029,6 +5145,20 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
                 let _ = std::fs::remove_file(&marker);
             }
         }
+        // BUG-1944: `try_auto_queue_pr_review` already moved the branch's and
+        // covered specs to In Progress; the session scope is known only here.
+        // trace:BUG-1944 | ai:claude
+        if let Some(spec) = lease_scope
+            .as_deref()
+            .and_then(crate::worktree_lease::spec_id_from_branch)
+        {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            crate::live_work::bump_spec_in_progress(
+                &main_root,
+                &spec,
+                aida_core::conflict::PR_OPEN_AUTHOR,
+            );
+        }
     }
 
     // BUG-86: on every non-success outcome (needs-attention OR by-design
@@ -5065,6 +5195,33 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
         }
         _ => Ok(()),
     }
+}
+
+/// BUG-1944: the specs an opened PR starts work on — the session's spec scope,
+/// the spec named by the branch, and the specs the PR covers — deduplicated,
+/// upper-cased, non-spec scopes dropped.
+// trace:BUG-1944 | ai:claude
+pub(crate) fn pr_open_bump_targets(
+    lease_scope: Option<&str>,
+    branch: &str,
+    covered_specs: &[String],
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let candidates = lease_scope
+        .and_then(crate::worktree_lease::spec_id_from_branch)
+        .into_iter()
+        .chain(crate::worktree_lease::spec_id_from_branch(branch))
+        .chain(
+            covered_specs
+                .iter()
+                .filter_map(|s| crate::worktree_lease::spec_id_from_branch(s)),
+        );
+    for id in candidates {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    out
 }
 
 /// True when the forge could not answer (as opposed to answering "no PR"):

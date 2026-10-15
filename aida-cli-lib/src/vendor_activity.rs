@@ -131,15 +131,13 @@ fn shared_log_activity(ctx: &VendorActivityContext) -> Option<(SystemTime, u64)>
 }
 
 fn lease_pid_alive(ctx: &VendorActivityContext) -> bool {
-    let Some((_, _, _, creator_pid)) =
-        crate::find_orchestrated_lease(&ctx.project_root, &ctx.session_id)
-    else {
-        return false;
-    };
     // BUG-1741: the canonical predicate, not a local `kill(pid, 0)` — a
-    // defunct (zombie) creator must not count as vendor activity.
+    // defunct (zombie) creator must not count as vendor activity. TASK-1750:
+    // checked against the lease's recorded start time, so a recycled pid
+    // does not count either.
     // trace:BUG-1741 | ai:claude
-    creator_pid.is_some_and(aida_core::liveness::pid_is_alive)
+    // trace:TASK-1750 | ai:claude
+    crate::orchestrated_lease_owner_alive(&ctx.project_root, &ctx.session_id)
 }
 
 struct ClaudeActivity;

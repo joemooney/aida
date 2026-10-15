@@ -504,58 +504,71 @@ pub(crate) fn advance_dispatch(
                 );
                 return Ok(());
             }
-            let backend = advance_backend(store_path)?;
-            let mut req = backend
-                .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
-                .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
-            // Completing is an advisor-authority act (same gate as approve/
-            // reject); an interactive operator clears it via the TTY branch of
-            // `has_advisor_authority`. trace:BUG-543
-            if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
-                && !has_advisor_authority()
-            {
-                println!(
-                    "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display.bold(),
-                    roleless_recovery_sentence()
-                );
-                return Ok(());
-            }
-            // BUG-1286 F1: the queue's completion path reaches Completed without
-            // going through auto-bump or reconcile, so it must emit the ship
-            // record itself. STORY-1418: stamp + persist + emit via the seam.
-            // trace:BUG-1286 trace:STORY-1418 | ai:claude
-            crate::completion::transition_to_completed(
-                &mut req,
-                store_path.parent(),
-                display,
-                "",
-                "queue-done",
-                |req, prior| {
-                    // BUG-1637: through the one shared history helper, under
-                    // the caller. trace:BUG-1637 | ai:claude
-                    aida_core::conflict::record_status_transition(
-                        req,
-                        &current_user_id(None),
-                        prior,
-                    );
-                    req.modified_at = chrono::Utc::now();
-                    backend.update_requirement(req)?;
-                    Ok(())
-                },
-            )?;
-            println!(
-                "  {} closed {} — all children were completed.",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                display.bold()
-            );
+            advance_dispatch_close(display, store_path)?;
         }
         AdvanceAction::None => {
             println!(
                 "  {} nothing to do — it resolves through normal flow.",
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
+        }
+    }
+    Ok(())
+}
+
+/// BUG-1996: execute the Close action for `display` in `store_path`, transitioning
+/// it to Completed and printing the completion-linkage warning if no commit was shipped.
+// trace:BUG-1996 | ai:antigravity
+pub(crate) fn advance_dispatch_close(display: &str, store_path: &std::path::Path) -> Result<()> {
+    let backend = advance_backend(store_path)?;
+    let mut req = backend
+        .get_requirement_unambiguous(display)? // trace:TASK-1468 | ai:claude
+        .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
+    // Completing is an advisor-authority act (same gate as approve/
+    // reject); an interactive operator clears it via the TTY branch of
+    // `has_advisor_authority`. trace:BUG-543
+    if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
+        && !has_advisor_authority()
+    {
+        println!(
+            "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            display.bold(),
+            roleless_recovery_sentence()
+        );
+        return Ok(());
+    }
+    // BUG-1286 F1: the queue's completion path reaches Completed without
+    // going through auto-bump or reconcile, so it must emit the ship
+    // record itself. STORY-1418: stamp + persist + emit via the seam.
+    // trace:BUG-1286 trace:STORY-1418 | ai:claude
+    let into_completed = crate::completion::transition_to_completed(
+        &mut req,
+        store_path.parent(),
+        display,
+        "",
+        "queue-done",
+        |req, prior| {
+            // BUG-1637: through the one shared history helper, under
+            // the caller. trace:BUG-1637 | ai:claude
+            aida_core::conflict::record_status_transition(req, &current_user_id(None), prior);
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(req)?;
+            Ok(())
+        },
+    )?;
+    println!(
+        "  {} closed {} — all children were completed.",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        display.bold()
+    );
+    // BUG-1996: warn if completed without a shipped commit on the
+    // default branch (same check as `aida edit --status completed` and
+    // `aida done`).
+    // trace:BUG-1996 | ai:antigravity
+    if into_completed {
+        if let Some(root) = store_path.parent() {
+            crate::shipped_linkage::warn_if_completed_without_shipped_commit(root, &req);
         }
     }
     Ok(())
@@ -3007,6 +3020,11 @@ pub(crate) fn handle_queue_command(
                         // here" in both surfaces. trace:TASK-131 | ai:claude
                         aida_core::pickability::BlockedReason::NeedsTriage => {
                             reason_label.magenta().bold().to_string()
+                        }
+                        // trace:STORY-1642 | ai:claude — knowledge rows
+                        // are reference material; dim, not alarming.
+                        aida_core::pickability::BlockedReason::KnowledgeType { .. } => {
+                            reason_label.dimmed().to_string()
                         }
                         aida_core::pickability::BlockedReason::UnsatisfiedBlocker { .. } => {
                             reason_label.yellow().to_string()
@@ -7655,6 +7673,11 @@ mod time_bound_flags_tests;
 #[path = "tests/headless_hint_tests.rs"]
 mod headless_hint_tests;
 
+// trace:BUG-1808 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1808_delegation_preflight_tests.rs"]
+mod bug_1808_delegation_preflight_tests;
+
 /// The project root whose `.aida/` holds the leases, drain lock and event
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
@@ -8690,6 +8713,12 @@ pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<Stri
     }
 }
 
+/// `completion_held` is the store-backed closure-hold check
+/// ([`pr_ship::spec_completion_hold_reason`]). For rework matching it is
+/// Match a spec against a candidate rework PR: an ID in the branch name takes
+/// precedence; otherwise the PR title/body completion derivation is consulted.
+// trace:BUG-1957 | ai:claude
+// trace:BUG-1997 | ai:antigravity
 pub(crate) fn rework_pr_head_matches_spec(
     spec: &str,
     head_branch: &str,
@@ -10609,6 +10638,89 @@ pub(crate) fn queue_work_role_mismatch(
         format!("shell role `{shell}` differs from pickup role `{role}`; {origin} wins before setup (use --role {shell} to choose the shell role)"))
 }
 
+/// A standalone `aida queue work <PR-N> --role reviewer`: a reviewer pickup on
+/// a PR scope that no `--auto-complete` orchestrator spawned (the orchestrator
+/// sets `AIDA_REVIEW_VERDICT_FILE` on its reviewer child). Launches through
+/// `run_standalone_reviewer`, which mints a `reviewer` child grant on both the
+/// interactive and the `--no-human` path.
+// trace:BUG-226, BUG-1808 | ai:claude
+pub(crate) fn is_standalone_reviewer(role: &str, has_review_target: bool) -> bool {
+    has_review_target
+        && role.eq_ignore_ascii_case("reviewer")
+        && std::env::var("AIDA_REVIEW_VERDICT_FILE")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_none()
+}
+
+/// Whether this `queue work` invocation will later mint a child seat grant
+/// via `seat_authority::issue_child`, and so must preflight delegation before
+/// any mutation. Mirrors the launch arms of `handle_queue_work`:
+/// - `--no-launch` launches nothing, so no child grant;
+/// - every interactive launch mints one for the pickup role;
+/// - `--no-human` mints one on a resume (`spawn_claude_headless_resume`) and
+///   on a standalone reviewer (`run_standalone_reviewer`); a fresh headless
+///   pickup execs the vendor without a child grant.
+// trace:BUG-1808 | ai:claude
+pub(crate) fn queue_work_issues_child_grant(
+    no_launch: bool,
+    no_human: bool,
+    resume: bool,
+    standalone_reviewer: bool,
+) -> bool {
+    !no_launch && (!no_human || resume || standalone_reviewer)
+}
+
+/// The refusal printed when the launcher's grant cannot delegate the child
+/// seat the pickup would launch. It names the decision that failed (child
+/// delegation) separately from the one that succeeded (queue selection), and
+/// tells a coordinating launcher (advisor / product / integrator) to choose a
+/// seat its grant delegates with an explicit `--role`.
+// trace:BUG-1808 | ai:claude
+pub(crate) fn queue_work_delegation_refusal(
+    child_seat: &str,
+    role_origin: &str,
+    launcher: Option<(&str, &[String])>,
+    cause: &str,
+) -> String {
+    // One line: agent-mode error rendering keeps only the first line.
+    let mut message = format!(
+        "child-seat delegation refused before any pickup state changed: queue selection \
+         succeeded ({role_origin} chose role `{child_seat}`), but this launcher may not start a \
+         `{child_seat}` child session: {cause}"
+    );
+    let Some((seat, delegable)) = launcher else {
+        return message;
+    };
+    let coordinator = matches!(
+        crate::canonical_role_name(seat).as_str(),
+        "advisor" | "product" | "integrator"
+    );
+    if !coordinator {
+        return message;
+    }
+    let choices: Vec<&str> = delegable
+        .iter()
+        .map(String::as_str)
+        .filter(|s| *s != child_seat)
+        .collect();
+    if choices.is_empty() {
+        message.push_str(&format!(
+            "; the `{seat}` grant delegates no seat, so re-enter it with `--delegate-seat {child_seat}`"
+        ));
+    } else {
+        message.push_str(&format!(
+            "; choose a seat the `{seat}` grant delegates with an explicit role selector: {}",
+            choices
+                .iter()
+                .map(|s| format!("`--role {s}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    message
+}
+
 // trace:TASK-1337 | ai:codex
 fn queue_work_manual_continuation(id: &str, guided: bool) -> String {
     let skill = if guided {
@@ -10671,6 +10783,15 @@ pub(crate) fn preflight_queue_work_branch(
         );
     }
     Ok(())
+}
+
+// trace:BUG-2006 | ai:antigravity
+pub(crate) fn apply_queue_work_contained_env(contained: bool) {
+    if contained {
+        std::env::set_var("AIDA_CONTAINED", "1");
+    } else {
+        std::env::remove_var("AIDA_CONTAINED");
+    }
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -10964,11 +11085,32 @@ pub(crate) fn handle_queue_work(
                 &project_root,
                 session_branch_override.or(review_branch.as_deref()),
             )?;
-            if !no_launch && !no_human {
-                crate::seat_authority::validate_child_delegation(
-                    &project_root,
-                    &crate::canonical_role_name(&role),
-                )?;
+            // trace:BUG-1808 | ai:claude
+            // Preflight every launch path that later mints a child grant —
+            // including the `--no-human` resume and standalone-reviewer
+            // launches, which used to skip this check and refuse in
+            // `issue_child` only after the status bump, queue row, worktree,
+            // lease and manifest had landed.
+            if queue_work_issues_child_grant(
+                no_launch,
+                no_human,
+                matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                is_standalone_reviewer(&role, plan.review_target.is_some()),
+            ) {
+                let child_seat = crate::canonical_role_name(&role);
+                if let Err(cause) =
+                    crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
+                {
+                    let launcher = crate::seat_authority::current_grant(&project_root);
+                    anyhow::bail!(queue_work_delegation_refusal(
+                        &child_seat,
+                        role_origin,
+                        launcher
+                            .as_ref()
+                            .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
+                        &format!("{cause:#}"),
+                    ));
+                }
             }
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
@@ -11088,9 +11230,7 @@ pub(crate) fn handle_queue_work(
     if contained && bypass_knob {
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
-    if contained {
-        std::env::set_var("AIDA_CONTAINED", "1");
-    }
+    apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;
     let (mut permission_mode, permission_mode_origin) = if contained {
@@ -11872,6 +12012,11 @@ pub(crate) fn handle_queue_work(
                 // (a pooled tree is returned + reset clean, not deleted).
                 /* remove */
                 false,
+                // A live process inside the stolen tree still refuses the
+                // teardown; --steal never implies --include-in-use.
+                // trace:BUG-1986 | ai:claude
+                /* include_in_use */
+                false,
             )
             // BUG-311: collapse the internal session_end error into the
             // primary message so it surfaces specifically as "--steal could
@@ -11882,12 +12027,13 @@ pub(crate) fn handle_queue_work(
             .map_err(|e| {
                 anyhow::anyhow!(
                     "--steal could not end lease {}: {:#} \
-                     (resolve manually with `aida session end {} --force` to discard, \
-                     or commit/stash the worktree's changes first, then re-run)",
+                     (resolve manually: `aida session end {} --force` discards uncommitted \
+                     changes and `--include-in-use` overrides a live process in the worktree; \
+                     or commit/stash the changes or stop the process first, then re-run)",
                     short_id,
                     e,
                     short_id,
-                )
+                ) // trace:BUG-1986 | ai:claude
             })?;
             remaining -= 1;
             if remaining == 0 {
@@ -12362,25 +12508,20 @@ pub(crate) fn handle_queue_work(
         // end-of-command summary) instead of `exec`'ing claude — so the
         // command no longer exits silently to the shell prompt.
         // trace:BUG-226 | ai:claude
-        let standalone_reviewer: Option<(u64, std::path::PathBuf)> = if role
-            .eq_ignore_ascii_case("reviewer")
-            && std::env::var("AIDA_REVIEW_VERDICT_FILE")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .is_none()
-        {
-            plan.review_target.map(|(_, n)| {
-                (
-                    n,
-                    project_root
-                        .join(".aida")
-                        .join("review-verdicts")
-                        .join(format!("PR-{n}.json")),
-                )
-            })
-        } else {
-            None
-        };
+        let standalone_reviewer: Option<(u64, std::path::PathBuf)> =
+            if is_standalone_reviewer(&role, plan.review_target.is_some()) {
+                plan.review_target.map(|(_, n)| {
+                    (
+                        n,
+                        project_root
+                            .join(".aida")
+                            .join("review-verdicts")
+                            .join(format!("PR-{n}.json")),
+                    )
+                })
+            } else {
+                None
+            };
         if let Some((_, verdict_path)) = &standalone_reviewer {
             if let Some(dir) = verdict_path.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -12508,7 +12649,8 @@ pub(crate) fn handle_queue_work(
                         &lease.worktree_path,
                         &tee_opts,
                         contained,
-                        &role,
+                        // trace:BUG-1808 | ai:claude — the seat the preflight validated.
+                        &crate::canonical_role_name(&role),
                     )?;
                     std::process::exit(status.code().unwrap_or(1));
                 }
@@ -12572,6 +12714,27 @@ pub(crate) fn handle_queue_work(
                         )
                         .cyan()
                     );
+                    // BUG-1928: name the tree the session ACTUALLY runs in (the
+                    // lease's worktree — a warm-pool tree when the pool served
+                    // one) and the contained write boundary derived from it, so
+                    // the operator never sees only the orchestrator's requested
+                    // path. trace:BUG-1928 | ai:claude
+                    // BUG-1971: both lines come from one helper, so the
+                    // boundary line reads the launch's own roots.
+                    // trace:BUG-1971 | ai:claude
+                    let phase_env = std::env::var(crate::orchestrator::PHASE_ENV).ok();
+                    for line in crate::contained_boundary::queue_work_launch_lines(
+                        phase_env.as_deref(),
+                        &lease.worktree_path,
+                        &lease.branch,
+                        contained && headless_vendor == crate::session::HeadlessVendor::Claude,
+                    ) {
+                        eprintln!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            line
+                        );
+                    }
                     eprintln!(
                         "  {} headless output → {}",
                         crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
@@ -12626,6 +12789,34 @@ pub(crate) fn handle_queue_work(
         );
     }
     setup_result
+}
+
+/// The specs a reviewed PR credits for calibration: the same title / branch
+/// derivation `aida pr ship` uses, including its store-backed closure hold, so
+/// a held spec ship would not complete is not credited either. The hold reads
+/// `project_root`'s store; with no readable store nothing is known to be held.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn review_calibration_spec_ids(
+    project_root: &std::path::Path,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+) -> Vec<String> {
+    let store = crate::load_store_for_lookup(project_root);
+    review_calibration_spec_ids_in(store.as_ref(), pr_title, branch, pr_body)
+}
+
+/// [`review_calibration_spec_ids`] over an already-loaded store.
+// trace:BUG-1957 | ai:claude
+pub(crate) fn review_calibration_spec_ids_in(
+    store: Option<&aida_core::RequirementsStore>,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+) -> Vec<String> {
+    pr_ship::derive_squash_subject_spec_ids_held(pr_title, branch, pr_body, |id| {
+        store.and_then(|s| pr_ship::spec_completion_hold_reason(s, id))
+    })
 }
 
 /// BUG-226: drive a standalone `aida queue work <PR-N> --role reviewer`
@@ -12842,7 +13033,7 @@ pub(crate) fn run_standalone_reviewer(
     // slot per spec. Best-effort; never blocks the summary print.
     // trace:STORY-439 | ai:claude
     if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
-        for spec in pr_ship::derive_squash_subject_spec_ids(&meta.title, branch, &meta.body) {
+        for spec in review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body) {
             capture_review_calibration_for_spec(project_root, verdict_path, &spec);
         }
     }
@@ -12900,6 +13091,13 @@ pub(crate) struct LeasePeek {
     // trace:STORY-1054 | ai:codex
     #[serde(default)]
     pub(crate) active_pid: Option<u32>,
+    /// Kernel start times recorded beside the pids, so a liveness check can
+    /// reject a recycled pid. Absent on older leases.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default)]
+    pub(crate) creator_pid_start_time: Option<String>,
+    #[serde(default)]
+    pub(crate) active_pid_start_time: Option<String>,
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without
@@ -14185,6 +14383,7 @@ mod bug_1581_integration_probe_tests {
                 head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
                 labels: Vec::new(),
                 created_at: None,
+                is_draft: false,
             },
         );
         snapshot

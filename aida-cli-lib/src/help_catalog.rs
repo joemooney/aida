@@ -705,7 +705,8 @@ fn clean_snippet(snippet: String) -> String {
     }
 }
 
-fn levenshtein(a: &str, b: &str) -> usize {
+// Shared with the external-command near-match hint. trace:STORY-1641 | ai:claude
+pub(crate) fn levenshtein(a: &str, b: &str) -> usize {
     let mut costs: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.bytes().enumerate() {
         let mut last = i;

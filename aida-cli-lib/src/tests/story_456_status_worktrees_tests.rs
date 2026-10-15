@@ -29,11 +29,13 @@ fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 
 fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
     status_cleanup::OpenPrItem {
+        is_draft: false,
         number,
         title: format!("PR {number}"),
         head_branch: branch.to_string(),

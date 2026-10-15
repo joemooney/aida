@@ -311,6 +311,53 @@ pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
     Ok(results)
 }
 
+/// Enumerate a complete inventory for creation gates. Unlike `list_objects`,
+/// missing storage is an error. Never use metadata predicates as absence proof.
+// trace:BUG-1807 | ai:codex
+#[cfg(feature = "native")]
+pub fn list_objects_strict(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    let mut results = Vec::new();
+    list_objects_strict_dir(objects_root, 0, &mut results)?;
+    Ok(results)
+}
+
+#[cfg(feature = "native")]
+fn list_objects_strict_dir(
+    dir: &Path,
+    depth: usize,
+    results: &mut Vec<(String, PathBuf)>,
+) -> Result<()> {
+    // Consume the fallibly opened iterator itself; no preflight/exists gap.
+    for entry in
+        std::fs::read_dir(dir).with_context(|| format!("Cannot enumerate {}", dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("Cannot read entry in {}", dir.display()))?;
+        let path = entry.path();
+        if depth < 2 {
+            let kind = entry
+                .file_type()
+                .with_context(|| format!("Cannot inspect {}", path.display()))?;
+            // Tolerant readers skip symlinked type/shard directories. A strict
+            // inventory cannot silently omit their potentially hidden objects.
+            anyhow::ensure!(
+                !kind.is_symlink(),
+                "Cannot enumerate symlink directory {}",
+                path.display()
+            );
+            if kind.is_dir() {
+                list_objects_strict_dir(&path, depth + 1, results)?;
+            }
+        } else if path.extension() == Some(std::ffi::OsStr::new("yaml")) {
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .with_context(|| format!("Invalid object filename {}", path.display()))?;
+            results.push((stem.to_owned(), path));
+        }
+    }
+    Ok(())
+}
+
 /// Count requirement YAML files in the object store WITHOUT parsing them.
 ///
 /// Walks `objects/TYPE/SHARD/*.yaml` and counts files — the same directory walk
@@ -939,6 +986,47 @@ mod tests {
         for spec in &specs {
             assert!(spec_ids.contains(spec), "Missing {}", spec);
         }
+    }
+
+    // trace:BUG-1807 | ai:codex
+    #[cfg(feature = "native")]
+    #[test]
+    fn strict_enumeration_missing_after_preliminary_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("objects");
+        std::fs::create_dir(&root).unwrap();
+        let preliminary = std::fs::read_dir(&root).unwrap();
+        drop(preliminary);
+        std::fs::remove_dir(&root).unwrap();
+        let err = list_objects_strict(&root).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
+        assert!(list_objects(&root).unwrap().is_empty());
+    }
+
+    // trace:BUG-1807 | ai:codex
+    #[cfg(all(feature = "native", unix))]
+    #[test]
+    fn strict_enumeration_rejects_hidden_shard_and_invalid_filename() {
+        use std::os::unix::{ffi::OsStringExt, fs::symlink};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("objects");
+        std::fs::create_dir_all(root.join("STORY")).unwrap();
+        symlink(dir.path().join("missing"), root.join("STORY/000")).unwrap();
+        assert!(list_objects_strict(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("symlink"));
+        std::fs::remove_file(root.join("STORY/000")).unwrap();
+        std::fs::create_dir(root.join("STORY/000")).unwrap();
+        let name = std::ffi::OsString::from_vec(b"STORY-\xff.yaml".to_vec());
+        std::fs::write(root.join("STORY/000").join(name), b"bad").unwrap();
+        assert!(list_objects_strict(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("filename"));
     }
 
     // BUG-664: `count_objects` reports the same total as `list_objects` /

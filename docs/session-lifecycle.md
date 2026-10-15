@@ -249,7 +249,7 @@ The historical model treats a per-spec worktree as disposable: create a sibling 
 
 ```bash
 aida worktree pool acquire [--json] [--lease-holder NAME]   # reuse an idle warm tree (reset) or create one
-aida worktree pool return [PATH]                            # reset + mark idle; DIRECTORY PERSISTS (cache kept)
+aida worktree pool return [PATH] [--include-in-use]         # reset + mark idle; DIRECTORY PERSISTS (cache kept)
 aida worktree pool status [--json]                          # available / in-use / leased / dirty / here + HEAD
 aida worktree pool adopt [--all | PATH...] [--no-dry-run]   # register EXISTING worktrees; dry-run by default
         [--include-unlanded] [--json]
@@ -261,7 +261,7 @@ aida session end                                            # returns a pooled t
 
 **Acquire-on-start (ON by default — TASK-985).** `aida session start` (and the `aida agent new` / `aida queue work` / orchestrator paths that route through it) acquire a recycled warm tree instead of `git worktree add`: the pool hands out a detached tree at the furthest-ahead default, and the session's branch is created *on* it. The tree is held by a **durable lease** keyed on the branch, so the short-lived `session start` process exiting doesn't let a concurrent acquire grab the live session's tree. `aida session end` then **returns it by default** (reset to a clean base, idle, directory kept).
 
-**Default is ON.** The build-delta measurement ([`docs/research/2026-06-29-warm-pool-build-delta.md`](research/2026-06-29-warm-pool-build-delta.md)) showed ~**30× faster** per-spec builds on fan-out (5497 ms cold-per-spec under destroy-and-recreate → 182 ms per warm reuse), so pooling is the default. **Escape hatches:** `[worktree_pool] enabled = false` in `.aida/config.toml`, `--no-pool` on a single `aida session start`, or `--remove` on `aida session end` to delete the worktree instead of returning it. Only the default new-branch flow pools (`--reuse-branch` and PR-review checkouts always `git worktree add`); an explicit `--base` falls back to a fresh worktree.
+**Default is ON.** The build-delta measurement ([`docs/archive/research/2026-06-29-warm-pool-build-delta.md`](archive/research/2026-06-29-warm-pool-build-delta.md)) showed ~**30× faster** per-spec builds on fan-out (5497 ms cold-per-spec under destroy-and-recreate → 182 ms per warm reuse), so pooling is the default. **Escape hatches:** `[worktree_pool] enabled = false` in `.aida/config.toml`, `--no-pool` on a single `aida session start`, or `--remove` on `aida session end` to delete the worktree instead of returning it. Only the default new-branch flow pools (`--reuse-branch` and PR-review checkouts always `git worktree add`); an explicit `--base` falls back to a fresh worktree.
 
 State lives under `.aida/worktree-pool/` (per-clone runtime state, already covered by the deny-by-default `.aida/*` gitignore). Every mutation runs under an advisory file lock (`pool.lock`) so parallel fan-out implementers can't be handed the same idle tree.
 
@@ -286,7 +286,7 @@ Three properties make it safe to run against a live workspace:
 
 - **It never touches a worktree** — no reset, no checkout, no removal, no hooks. Only `pool.json` changes, so a mis-adoption is undone by dropping the entry.
 - **Preview by default**, like its sibling `destroy`; `--no-dry-run` applies.
-- **Unlanded work is adopted RESERVED, never idle.** A tree with uncommitted changes or unmerged commits is registered with a durable lease carrying **no timestamp**, so `acquire` skips it *and* the lease-TTL backstop can never judge it stale and reclaim it. It shows as `leased` in `pool status` until you release it deliberately with `pool return <path>` (which salvages the dirty diff first) or `pool destroy --include-unlanded`. Without `--include-unlanded` such a tree is simply skipped, naming the flag.
+- **Unlanded work is adopted RESERVED, never idle.** A tree with uncommitted changes or unmerged commits is registered with a durable lease carrying **no timestamp**, so `acquire` skips it *and* the lease-TTL backstop can never judge it stale and reclaim it. It shows as `leased` in `pool status` until you release it deliberately with `pool return <path>` (which salvages the dirty diff first, keeps the tree untouched if that salvage fails, and refuses while a live process uses the tree unless you pass `--include-in-use`) or `pool destroy --include-unlanded`. Without `--include-unlanded` such a tree is simply skipped, naming the flag.
 
 Ambiguous cases are **refused, not guessed**: the main checkout, any worktree nested inside it (e.g. the `.aida-store` worktree), a path that isn't a registered worktree of this repo, a missing directory, and a tree a **live session lease** is holding are each skipped with a reason. Adoption also stops at `[worktree_pool] max_trees` rather than silently growing the pool past the cap, and re-running is a no-op (already-pooled trees report `already-pooled`).
 
@@ -363,7 +363,7 @@ Patterns 1 and 2 are about *one item's lifecycle*; patterns 4 and 5 are about *h
 
 A natural question when working through the implementer → reviewer → fixup loop: why end the Claude session at each role boundary? Couldn't a single Claude session switch roles in place — `/aida-end-implementer` then `/aida-start-reviewer` — preserving the conversation history across transitions?
 
-**No.** Role boundaries are session boundaries by design. The reason is the same insight that makes [Ultraplan's three-explorer plus one-critic architecture](positioning/vs-ultraplan.md) work: a critic agent that shares context with the agents whose work it's reviewing is doing self-review with extra steps. Anchoring bias propagates through shared context.
+**No.** Role boundaries are session boundaries by design. The reason is the same insight that makes [Ultraplan's three-explorer plus one-critic architecture](archive/positioning/vs-ultraplan.md) work: a critic agent that shares context with the agents whose work it's reviewing is doing self-review with extra steps. Anchoring bias propagates through shared context.
 
 Apply that to AIDA: if the same Claude session handles both implementer work and reviewer work, the reviewer agent has the implementer's mental model already in its context window. It's reviewing from inside the implementer's reasoning, not from cold. The separate-session boundary is what *enforces* independent review.
 

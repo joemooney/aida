@@ -22,6 +22,25 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             release,
             auto,
         } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
+        // trace:STORY-1646 | ai:claude
+        DevCommand::Build {
+            clean,
+            no_promote,
+            allow_dirty,
+            install_links,
+            yes,
+            after_wave,
+        } => crate::dev_build::handle_dev_build(&crate::dev_build::DevBuildOptions {
+            clean: *clean,
+            no_promote: *no_promote,
+            allow_dirty: *allow_dirty,
+            install_links: *install_links,
+            yes: *yes,
+            after_wave: *after_wave,
+        }),
+        DevCommand::Rollback { after_wave, force } => {
+            crate::dev_build::handle_dev_rollback(*after_wave, *force)
+        }
         DevCommand::BuildGuard {
             profile,
             after_wave,
@@ -261,7 +280,7 @@ fn pick_dev_binary_dir(
             "agent" => {
                 if agent_mtime.is_none() {
                     anyhow::bail!(
-                        "No agent build at {}.\nRun `make build-fast` first.",
+                        "No agent build at {}.\nRun `aida dev build --no-promote` (or `make build-fast`) first.",
                         agent.display()
                     );
                 }
@@ -285,7 +304,7 @@ fn pick_dev_binary_dir(
         Some((DevProfile::Agent, reason)) => Ok((repo.join("target/agent"), "agent", reason)),
         None => anyhow::bail!(
             "No aida binary found at {}, {}, or {}.\n\
-             Run `make build-fast` (or `cargo build`) first.",
+             Run `aida dev build --no-promote` (or `cargo build`) first.",
             release.display(),
             debug.display(),
             agent.display()
@@ -603,9 +622,9 @@ pub(crate) fn activate_marker_hint(marker: &str, other_profile: Option<&str>) ->
                 switch
             ))
         }
-        "↻" => Some(
-            "prompt marker ↻ — no build matches HEAD; `make build-fast` to rebuild".to_string(),
-        ),
+        "↻" => {
+            Some("prompt marker ↻ — no build matches HEAD; `aida dev build` to rebuild".to_string())
+        }
         _ => None,
     }
 }
@@ -869,7 +888,7 @@ fn handle_dev_activate(
 /// Refuse replacing the binary pinned by a live wave, or
 /// park on the event stream until that wave emits QueueDrained.
 // trace:TASK-1285 | ai:codex
-fn guard_binary_change(
+pub(crate) fn guard_binary_change(
     repo: &std::path::Path,
     target: &std::path::Path,
     after_wave: bool,
@@ -964,6 +983,8 @@ fn handle_dev_status() -> Result<()> {
     let resolved_binary = resolve_aida_on_path();
     let activation =
         classify_dev_activation(active, pinned_binary.as_deref(), resolved_binary.as_deref());
+    // trace:STORY-1646 | ai:claude — live / prev / latest-built SHAs first.
+    crate::dev_build::print_live_status();
     // trace:TASK-1285 | ai:codex
     if let Ok(root) = crate::find_main_worktree_root() {
         if let Some(lock) = crate::drain_lock::read_pid_live_lock(&root) {
@@ -995,7 +1016,7 @@ fn handle_dev_status() -> Result<()> {
         }
     );
     if activation == DevActivationState::Missing {
-        println!("Recommended:  rebuild the pinned dev binary with `make build-fast`");
+        println!("Recommended:  rebuild the pinned dev binary with `aida dev build --no-promote`");
     }
     if active {
         if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
@@ -1050,7 +1071,7 @@ fn handle_dev_status() -> Result<()> {
                 // trace:TASK-188 | ai:claude
                 if matches!(kind, ShaMatch::Ancestor) {
                     eprintln!(
-                        "{} your dev aida binary (build {}) is behind HEAD ({}) — run `make build-fast`",
+                        "{} your dev aida binary (build {}) is behind HEAD ({}) — run `aida dev build`",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         bin_short,
                         head_short
@@ -1274,10 +1295,16 @@ pub(crate) enum WrapperState {
 /// (`None` when unset) and whether the on-disk helpers file already carries the
 /// current protocol. Pure so the reporting is testable without a real shell.
 // trace:TASK-1171 | ai:claude
+// trace:BUG-2005 | ai:antigravity
 pub(crate) fn classify_wrapper(marker: Option<&str>) -> WrapperState {
     match marker {
         None => WrapperState::Absent,
-        Some(m) if crate::shell_eval::marker_speaks_eval_block(Some(m)) => WrapperState::Current,
+        Some(m)
+            if crate::shell_eval::marker_speaks_eval_block(Some(m))
+                && crate::shell_eval::marker_speaks_zsh_localopts(Some(m)) =>
+        {
+            WrapperState::Current
+        }
         Some(_) => WrapperState::Stale,
     }
 }
@@ -1286,10 +1313,55 @@ pub(crate) fn classify_wrapper(marker: Option<&str>) -> WrapperState {
 /// protocol? `false` for a missing/unreadable file — the caller only uses this
 /// to decide whether re-running `--install` would actually change anything.
 // trace:TASK-1171 | ai:claude
-fn installed_helpers_are_current(path: &std::path::Path) -> bool {
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn installed_helpers_are_current(path: &std::path::Path) -> bool {
     std::fs::read_to_string(path)
-        .map(|body| body.contains(crate::shell_eval::EVAL_BLOCK_CAP))
+        .map(|body| {
+            body.contains(crate::shell_eval::EVAL_BLOCK_CAP)
+                && body.contains(crate::shell_eval::ZSH_LOCALOPTS_CAP)
+                && body.contains("setopt localoptions")
+        })
         .unwrap_or(false)
+}
+
+// trace:TASK-1171 | ai:claude
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn format_shell_wrapper_status(
+    state: WrapperState,
+    helpers_current: bool,
+) -> Vec<String> {
+    match state {
+        WrapperState::Current => {
+            vec![format!("Shell wrapper: {}", "current".green())]
+        }
+        WrapperState::Stale if helpers_current => {
+            vec![format!(
+                "Shell wrapper: {} — the installed helpers are already up to date; open a new shell (or re-source them) to pick them up.",
+                "stale in this shell".yellow()
+            )]
+        }
+        WrapperState::Stale => {
+            vec![
+                format!(
+                    "Shell wrapper: {} — run `{}`, then open a new shell.",
+                    "stale".yellow(),
+                    "aida dev shell-init --install".cyan()
+                ),
+                format!(
+                    "               {}",
+                    "(everything still works; the shell-modifying verbs just use the older contract)"
+                        .dimmed()
+                ),
+            ]
+        }
+        WrapperState::Absent => {
+            vec![format!(
+                "Shell wrapper: {} — install with `{}` so `role enter` / `dev activate` / `worktree enter` mutate this shell.",
+                "not installed".yellow(),
+                "aida dev shell-init --install".cyan()
+            )]
+        }
+    }
 }
 
 /// Report the wrapper's protocol state, and — when this shell's wrapper is
@@ -1301,35 +1373,8 @@ fn print_shell_wrapper_status() {
         .map(|h| h.join(".aida").join("shell-init.sh"))
         .map(|p| installed_helpers_are_current(&p))
         .unwrap_or(false);
-    match state {
-        WrapperState::Current => {
-            println!("Shell wrapper: {}", "current".green());
-        }
-        WrapperState::Stale if helpers_current => {
-            println!(
-                "Shell wrapper: {} — the installed helpers are already up to date; open a new shell (or re-source them) to pick them up.",
-                "stale in this shell".yellow()
-            );
-        }
-        WrapperState::Stale => {
-            println!(
-                "Shell wrapper: {} — run `{}`, then open a new shell.",
-                "stale".yellow(),
-                "aida dev shell-init --install".cyan()
-            );
-            println!(
-                "               {}",
-                "(everything still works; the shell-modifying verbs just use the older contract)"
-                    .dimmed()
-            );
-        }
-        WrapperState::Absent => {
-            println!(
-                "Shell wrapper: {} — install with `{}` so `role enter` / `dev activate` / `worktree enter` mutate this shell.",
-                "not installed".yellow(),
-                "aida dev shell-init --install".cyan()
-            );
-        }
+    for line in format_shell_wrapper_status(state, helpers_current) {
+        println!("{line}");
     }
 }
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
@@ -1352,6 +1397,7 @@ fn print_shell_wrapper_status() {
 // trace:BUG-780 | ai:claude
 // trace:BUG-779 | ai:claude
 // trace:TASK-1171 | ai:claude
+// trace:BUG-0445 | ai:claude
 pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to
@@ -1372,9 +1418,33 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # block, so ordinary stdout is never an eval candidate. A binary that does not
 # see this token keeps emitting the legacy bare payload, so upgrading the binary
 # under an older wrapper changes nothing. (trace:TASK-1171)
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd'
+#
+# `init-cd-file` says the `init` arm below reads its `cd` block from a private
+# SIDE-CHANNEL FILE (handed to the binary in AIDA_INIT_CD_FILE) rather than by
+# capturing stdout. The older `init-cd` token meant "slice the block out of
+# captured stdout"; this wrapper deliberately does not advertise it, so a
+# binary that knows only that token prints a plain copy-paste `cd` hint here
+# instead of markers nobody is reading.
+#
+# `zsh-localopts` says the wrapper scopes options with `setopt localoptions`
+# under zsh rather than bare `local -` (which leaked every parameter/API key).
+# (trace:BUG-2005)
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts'
 
 aida() {
+    # trace:BUG-1811 | ai:antigravity
+    # Suppress set -x trace for wrapper internals
+    # trace:BUG-2000 | ai:claude
+    # trace:BUG-1960 | ai:claude
+    # zsh has no `local -`: there it is a bare `local`, which prints every
+    # shell parameter to stdout on each call. zsh scopes options with
+    # `localoptions` instead.
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        setopt localoptions
+    else
+        local - 2>/dev/null || true
+    fi
+    set +x 2>/dev/null
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
@@ -1394,88 +1464,170 @@ aida() {
             # lines. Both markers are shell comments, so an older wrapper (or a
             # hand-rolled `eval "$(aida …)"`) that evals the lot is inert.
             #
-            # No markers in the output = an OLDER BINARY that predates the
-            # channel: fall back to the legacy "all of stdout is shell" reading
-            # so a new wrapper keeps driving an old aida.
-            #
-            # Eval still happens ONLY on exit 0 — belt and braces, and it keeps
-            # a half-emitted payload from a failing command out of the shell.
-            # A failure's output is printed to stderr with the markers stripped,
-            # and the status propagates so callers can branch on it.
-            # (trace:BUG-779)
-            local _aida_out _aida_rc _aida_pre _aida_post _aida_eval _aida_rest _aida_part
+            # trace:BUG-1806 | ai:codex
+            # Failed output is diagnostic data, including any apparent markers.
+            # Keep a sentinel through capture to preserve trailing newlines.
+            # Old binaries without markers are display-only: never guess that
+            # unmarked stdout is shell code. Validate the entire block before
+            # eval, requiring exactly one pair of standalone marker lines.
+            local _aida_out _aida_rc _aida_pre='' _aida_post='' _aida_eval=''
+            local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            _aida_out=$(command aida "$@")
-            _aida_rc=$?
-            case "$_aida_out" in
-                *"$_aida_b"*)
-                    _aida_pre="${_aida_out%%"$_aida_b"*}"
-                    _aida_rest="${_aida_out#*"$_aida_b"}"
-                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
-                    _aida_post="${_aida_rest#*"$_aida_e"}"
-                    # Drop the newlines that abutted the markers so the prose
-                    # doesn't gain blank lines it never had.
-                    _aida_pre="${_aida_pre%"$_aida_nl"}"
-                    _aida_eval="${_aida_eval#"$_aida_nl"}"
-                    _aida_eval="${_aida_eval%"$_aida_nl"}"
-                    _aida_post="${_aida_post#"$_aida_nl"}"
-                    ;;
-                *)
-                    _aida_pre=''
-                    _aida_eval="$_aida_out"
-                    _aida_post=''
-                    ;;
-            esac
-            if [ "$_aida_rc" -eq 0 ]; then
-                [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
-                [ -n "$_aida_eval" ] && eval "$_aida_eval"
-                [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
-                return 0
+            if _aida_out=$(command aida "$@"; _aida_rc=$?; printf '.'; exit "$_aida_rc"); then
+                _aida_rc=0
             else
-                for _aida_part in "$_aida_pre" "$_aida_eval" "$_aida_post"; do
-                    [ -n "$_aida_part" ] && printf '%s\n' "$_aida_part" >&2
-                done
+                _aida_rc=$?
+            fi
+            _aida_out=${_aida_out%.}
+            if [ "$_aida_rc" -ne 0 ]; then
+                printf '%s' "$_aida_out" >&2
                 return "$_aida_rc"
             fi
+            while IFS= read -r _aida_line; do
+                case "$_aida_line" in
+                    "$_aida_b")
+                        [ "$_aida_state" -eq 0 ] || _aida_valid=0
+                        _aida_state=1 ;;
+                    "$_aida_e")
+                        [ "$_aida_state" -eq 1 ] || _aida_valid=0
+                        _aida_state=2 ;;
+                    *)
+                        case "$_aida_state" in
+                            0) _aida_pre="$_aida_pre$_aida_line$_aida_nl" ;;
+                            1) _aida_eval="$_aida_eval$_aida_line$_aida_nl" ;;
+                            2) _aida_post="$_aida_post$_aida_line$_aida_nl" ;;
+                        esac ;;
+                esac
+            done <<AIDA_WRAPPER_OUTPUT
+${_aida_out%"$_aida_nl"}
+AIDA_WRAPPER_OUTPUT
+            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ]; then
+                printf '%s' "$_aida_pre"
+                [ -n "$_aida_eval" ] && eval "$_aida_eval"
+                printf '%s' "$_aida_post"
+            else
+                printf '%s' "$_aida_out"
+            fi
+            return 0
             ;;
         "init"|"init "*)
             # STORY-780: `aida init <DIR>` finishes by handing this shell a
-            # `cd` into the new project, through the same marker-delimited
-            # eval channel as the verbs above. One deliberate difference:
-            # there is NO bare-payload fallback here. A markerless init
-            # (bare in-place init, or an older binary) has only prose on
-            # stdout, which must never be eval'd — it prints as-is. The
-            # binary only emits the marker block when AIDA_SHELL_WRAPPER
-            # advertises `init-cd`, so older wrappers never see markers.
-            local _aida_out _aida_rc _aida_pre _aida_eval _aida_rest _aida_post
+            # `cd` into the new project. The block travels on a SIDE CHANNEL,
+            # not stdout: we hand the binary a private file in
+            # AIDA_INIT_CD_FILE and it writes the same marker-delimited block
+            # there. The child's stdout, stderr and stdin stay attached to the
+            # terminal, so an interactive init renders human output and shows
+            # its prompts live. Capturing stdout here used to make the child
+            # see a pipe (auto-selecting the agent format) and buffered every
+            # prompt invisibly until exit, so a prompt waiting on stdin looked
+            # like a hang.
+            #
+            # Nothing on stdout is EVER an eval candidate in this arm, and
+            # there is no bare-payload fallback: only a file holding exactly
+            # one marker pair and nothing else is eval'd. A failing init, an
+            # empty file (older binary, in-place init) or a malformed file all
+            # leave the shell where it was. The env assignment is a per-command
+            # prefix, so it never leaks into this shell.
+            local _aida_cd_file='' _aida_rc=0 _aida_eval=''
+            local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            _aida_out=$(command aida "$@")
-            _aida_rc=$?
-            case "$_aida_out" in
-                *"$_aida_b"*)
-                    _aida_pre="${_aida_out%%"$_aida_b"*}"
-                    _aida_rest="${_aida_out#*"$_aida_b"}"
-                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
-                    _aida_post="${_aida_rest#*"$_aida_e"}"
-                    _aida_pre="${_aida_pre%"$_aida_nl"}"
-                    _aida_eval="${_aida_eval#"$_aida_nl"}"
-                    _aida_eval="${_aida_eval%"$_aida_nl"}"
-                    _aida_post="${_aida_post#"$_aida_nl"}"
-                    [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
-                    [ "$_aida_rc" -eq 0 ] && [ -n "$_aida_eval" ] && eval "$_aida_eval"
-                    [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
-                    ;;
-                *)
-                    [ -n "$_aida_out" ] && printf '%s\n' "$_aida_out"
-                    ;;
-            esac
-            return "$_aida_rc"
+            # trace:BUG-1960 | ai:claude
+            # An interrupt (Ctrl-C) or TERM while init runs must not strand
+            # the private file in TMPDIR, and must still interrupt. The
+            # handlers only remove the file and record which signal arrived;
+            # they never end the shell themselves. Once the child is done the
+            # caller's own INT/TERM traps are back in place and the recorded
+            # signal is re-raised at THIS shell process, so the caller's trap
+            # (or the default disposition) decides what happens, as if the
+            # wrapper were not there. `$$` names the top-level shell even
+            # inside a subshell, background job or pipeline, so the re-raise
+            # goes through `sh -c`, whose $PPID is this process. The helper
+            # then dies of the same signal: bash ignores a SIGINT that arrives
+            # while it waits for a foreground child unless that child was
+            # also killed by it (the child is presumed to have handled it).
+            # zsh: TRAPINT/TRAPTERM live in a helper under localtraps, so
+            # zsh restores the caller's traps when the helper returns.
+            # bash: traps are global, so save the caller's and restore them.
+            # trace:TASK-1343 | ai:claude
+            # The handlers are installed BEFORE mktemp creates the file, so
+            # there is no window in which an interrupt strands it; a signal
+            # that lands during mktemp skips the child, and the re-raise leg
+            # below removes whatever file was created. No private file means
+            # a plain pass-through: the binary prints the copy-paste `cd` hint.
+            local _aida_traps='' _aida_sig=''
+            if [ -n "${ZSH_VERSION:-}" ]; then
+                _aida_init_zsh() {
+                    setopt localoptions localtraps
+                    TRAPINT() { rm -f "$_aida_cd_file"; _aida_sig=INT; return 0; }
+                    TRAPTERM() { rm -f "$_aida_cd_file"; _aida_sig=TERM; return 0; }
+                    _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
+                    [ -z "$_aida_sig" ] || return 130
+                    if [ -n "$_aida_cd_file" ]; then
+                        AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                    else
+                        command aida "$@"
+                    fi
+                }
+                _aida_init_zsh "$@"
+                _aida_rc=$?
+                # trace:TASK-1344 | ai:claude
+                # Do not leave the helper defined in the caller's shell.
+                unfunction _aida_init_zsh 2>/dev/null
+            else
+                _aida_traps=$(trap -p INT TERM)
+                trap 'rm -f "$_aida_cd_file"; _aida_sig=INT' INT
+                trap 'rm -f "$_aida_cd_file"; _aida_sig=TERM' TERM
+                _aida_cd_file=$(mktemp -t aida-init-cd.XXXXXX 2>/dev/null) || _aida_cd_file=''
+                if [ -n "$_aida_sig" ]; then
+                    _aida_rc=130
+                elif [ -n "$_aida_cd_file" ]; then
+                    AIDA_INIT_CD_FILE="$_aida_cd_file" command aida "$@"
+                    _aida_rc=$?
+                else
+                    command aida "$@"
+                    _aida_rc=$?
+                fi
+                trap - INT TERM
+                eval "$_aida_traps"
+            fi
+            if [ -n "$_aida_sig" ]; then
+                rm -f "$_aida_cd_file"
+                command sh -c 'kill -s "$1" "$PPID"; kill -s "$1" "$$"' aida "$_aida_sig"
+                return "$_aida_rc"
+            fi
+            if [ -z "$_aida_cd_file" ]; then
+                return "$_aida_rc"
+            fi
+            if [ "$_aida_rc" -ne 0 ] || ! [ -s "$_aida_cd_file" ]; then
+                rm -f "$_aida_cd_file"
+                return "$_aida_rc"
+            fi
+            while IFS= read -r _aida_line; do
+                case "$_aida_line" in
+                    "$_aida_b")
+                        [ "$_aida_state" -eq 0 ] || _aida_valid=0
+                        _aida_state=1 ;;
+                    "$_aida_e")
+                        [ "$_aida_state" -eq 1 ] || _aida_valid=0
+                        _aida_state=2 ;;
+                    *)
+                        case "$_aida_state" in
+                            1) _aida_eval="$_aida_eval$_aida_line$_aida_nl" ;;
+                            *) _aida_valid=0 ;;
+                        esac ;;
+                esac
+            done < "$_aida_cd_file"
+            rm -f "$_aida_cd_file"
+            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ] && [ -n "$_aida_eval" ]; then
+                eval "$_aida_eval"
+            fi
+            return 0
             ;;
         "tui"|"tui "*)
             # STORY-681: `aida tui` is now self-sufficient — it dispatches

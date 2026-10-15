@@ -31,6 +31,11 @@ pub(crate) struct ForgeProfile {
     pub(crate) protocol: ForgeProtocol,
     #[serde(default = "default_visibility")]
     pub(crate) visibility: ForgeVisibility,
+    /// Other profiles `aida init` also creates the repo on (a GitHub profile
+    /// listing a GitLab profile).
+    // trace:STORY-1656 | ai:claude
+    #[serde(default)]
+    pub(crate) mirrors: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +133,22 @@ impl ForgeProfile {
         match self.protocol {
             ForgeProtocol::Ssh => Ok(format!("git@{host}:{}/{repo}.git", self.namespace)),
             ForgeProtocol::Https => Ok(format!("https://{host}/{}/{repo}.git", self.namespace)),
+        }
+    }
+
+    /// This GitLab profile as an init hub target.
+    // trace:STORY-1656 | ai:claude
+    pub(crate) fn gitlab_hub(&self) -> crate::gitlab_project_create::GitLabHub {
+        crate::gitlab_project_create::GitLabHub {
+            host: self
+                .host
+                .as_deref()
+                .map(str::trim)
+                .filter(|h| !h.is_empty())
+                .unwrap_or("gitlab.com")
+                .to_string(),
+            namespace: self.namespace.clone(),
+            https: self.protocol == ForgeProtocol::Https,
         }
     }
 

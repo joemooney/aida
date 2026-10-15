@@ -637,6 +637,15 @@ pub(crate) fn derived_status_annotation(
 mod tests {
     use super::*;
 
+    /// Pin the Unicode glyph profile under the shared env lock. Tests that
+    /// assert Unicode glyphs from the profile-resolving renderers must hold
+    /// this, or a parallel test that sets `AIDA_GLYPHS=ascii` (under the
+    /// lock) flips their output.
+    // trace:BUG-1979 | ai:claude
+    fn pin_unicode_glyphs() -> crate::test_env::EnvVarsGuard {
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_GLYPHS", Some("unicode"))])
+    }
+
     #[test]
     fn profile_glyph_unicode_matches_literal_ascii_downgrades() {
         use crate::glyphs::GlyphProfile;
@@ -762,6 +771,7 @@ mod tests {
 
     #[test]
     fn badge_contains_glyph_and_label() {
+        let _glyphs = pin_unicode_glyphs();
         let badge = status_badge("Done");
         assert!(badge.contains('◉'), "badge missing glyph: {badge:?}");
         assert!(badge.contains("Done"), "badge missing label: {badge:?}");
@@ -771,6 +781,7 @@ mod tests {
     /// width is `label_width + 2`. Asserted under NO_COLOR for an exact compare.
     #[test]
     fn status_cell_is_glyph_space_padded_label() {
+        let _glyphs = pin_unicode_glyphs();
         colored::control::set_override(false);
         let cell = status_cell("Approved", 11);
         colored::control::unset_override();
@@ -789,6 +800,7 @@ mod tests {
     /// (column stays aligned) when nothing applies.
     #[test]
     fn flow_glyph_priority_and_idle() {
+        let _glyphs = pin_unicode_glyphs();
         // Idle: no routing state.
         assert_eq!(flow_glyph(false, false, false, false), " ");
         // Each state alone.
@@ -835,6 +847,7 @@ mod tests {
     // trace:BUG-781 | ai:claude
     #[test]
     fn accepted_decision_relabels_and_repaints() {
+        let _glyphs = pin_unicode_glyphs();
         // The relabel itself, tolerant of the spellings the cache hands in.
         assert_eq!(display_status_for_type("Decision", "Approved"), "Accepted");
         assert_eq!(display_status_for_type("decision", "approved"), "Accepted");

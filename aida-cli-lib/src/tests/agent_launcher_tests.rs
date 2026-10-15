@@ -326,6 +326,7 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
             "--ask-for-approval=never".to_string(),
         ],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -410,6 +411,7 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -478,6 +480,7 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
         binary: "codex",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -562,6 +565,7 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -577,6 +581,11 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
     let prompt = AgentPromptOptions::new(None, false);
     let prompt_args = vec!["generated prompt text".to_string()];
 
+    // BUG-1948: both renders read AIDA_OUTPUT_FORMAT into their
+    // presentation_env line; hold the shared env lock across the pair so a
+    // parallel EnvVarsGuard setter cannot change it between them.
+    // trace:BUG-1948 | ai:claude
+    let _env = crate::test_env::env_lock();
     let diagnostics = render_agent_launch_diagnostics(
         std::path::Path::new("/usr/bin/claude"),
         &config,
@@ -669,6 +678,7 @@ fn verbose_diagnostics_never_print_the_full_prompt_text() {
         binary: "claude",
         default_args: vec![],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -727,6 +737,7 @@ fn verbose_diagnostics_redact_secret_looking_argv_values() {
             "ghp_abcdefghijklmnopqrstuvwxyz012345".to_string(),
         ],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -932,6 +943,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
         binary: "codex",
         default_args: vec!["--built-in".to_string()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut codex,
@@ -950,6 +962,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
         binary: "agy",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
     };
     apply_agent_default_flags(
         &mut antigravity,
@@ -965,6 +978,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), "acceptEdits".to_string()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut claude,
@@ -1003,6 +1017,7 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut codex,
@@ -1018,6 +1033,7 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut explicit,
@@ -1348,6 +1364,7 @@ fn apply_agent_default_flags_knob_injects_when_native() {
         binary: "claude",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut claude,
@@ -1387,6 +1404,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
         binary: "claude",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut claude,
@@ -1403,6 +1421,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut codex,
@@ -1470,6 +1489,7 @@ fn apply_agent_default_flags_rejects_bypass_and_contained() {
         binary: "claude",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let err = apply_agent_default_flags(
         &mut claude,
@@ -1502,6 +1522,7 @@ fn apply_agent_default_flags_explicit_skips_knob() {
         binary: "claude",
         default_args: vec!["--permission-mode".to_string(), "plan".to_string()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut claude,
@@ -1540,6 +1561,7 @@ fn apply_agent_default_flags_per_tool_flags_override_knob() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut codex,
@@ -1574,6 +1596,7 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
         binary: "claude",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     apply_agent_default_flags(
         &mut claude,
@@ -1585,8 +1608,12 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
     assert!(claude.default_args.is_empty());
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     // STORY-1471: keep a user's `~/.aida/roles/` launch-prompt override out.
     let home = TempDir::new().unwrap();
@@ -1609,18 +1636,21 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         binary: "claude",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let codex = AgentLaunchConfig {
         agent_type: "codex",
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let antigravity = AgentLaunchConfig {
         agent_type: "antigravity",
         binary: "agy",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
     };
 
     let claude_args = agent_initial_prompt_args(
@@ -1812,8 +1842,12 @@ fn role_file_launch_prompts_override_the_embedded_defaults() {
 // STORY-1471: --show-prompt prints exactly the generated text that the
 // launch injects, for a no-spec launch too.
 // trace:STORY-1471 | ai:claude
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn show_prompt_prints_the_exact_injected_role_prompt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     // Point the global role dir at an empty tempdir so a user's
     // `~/.aida/roles/product.toml` override cannot shadow the embedded prompt.
@@ -1826,6 +1860,7 @@ fn show_prompt_prints_the_exact_injected_role_prompt() {
         binary: "agy",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
     };
     for spec in [Some("TASK-7".to_string()), None] {
         let plan = AgentLaunchPlan {
@@ -1866,7 +1901,7 @@ fn agent_resume_adapter_args_are_vendor_specific() {
     );
     assert_eq!(
         agent_resume_args("codex", "sid-1", "read context").unwrap(),
-        vec!["resume", "sid-1", "read context"]
+        vec!["resume", "sid-1", "--no-daemon", "read context"]
     );
     assert_eq!(
         agent_resume_args("antigravity", "sid-1", "read context").unwrap(),
@@ -2573,6 +2608,7 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         binary: "codex",
         default_args: vec!["--dangerously-bypass-approvals-and-sandbox".to_string()],
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -2686,6 +2722,7 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         binary: "agy",
         default_args: vec!["--dangerously-skip-permissions".to_string()],
         prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -2789,6 +2826,7 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -2881,6 +2919,7 @@ fn cold_advisor_launch_context_names_gate_prohibition_and_next_command() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -2964,6 +3003,7 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
         binary: "antigravity",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -3056,6 +3096,7 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -3124,6 +3165,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         binary: "codex",
         default_args: Vec::new(),
         prompt_style: AgentPromptStyle::Positional,
+        contained: false,
     };
     let plan = AgentLaunchPlan {
         project_root: project.clone(),
@@ -3585,4 +3627,581 @@ fn terminate_reports_survivors_and_live_pids_tracks_real_processes() {
     // Terminating something already gone is a no-op that reports no survivors, which is what
     // lets `agent stop` distinguish "already gone" from "stopped it".
     assert!(terminate_pids_with_grace(&[u32::MAX], 0).is_empty());
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn is_contained_launch_detection() {
+    // Claude with contained: true is contained
+    let claude_contained = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    assert!(is_contained_launch(&claude_contained));
+
+    // Claude with contained: false is uncontained
+    let claude_uncontained = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    assert!(!is_contained_launch(&claude_uncontained));
+
+    // Codex is never contained even if contained field is true
+    let codex_config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    assert!(!is_contained_launch(&codex_config));
+
+    // Antigravity is never contained
+    let agy_config = AgentLaunchConfig {
+        agent_type: "antigravity",
+        binary: "agy",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: true,
+    };
+    assert!(!is_contained_launch(&agy_config));
+
+    // Unknown agent type is never contained
+    let unknown_config = AgentLaunchConfig {
+        agent_type: "other",
+        binary: "other",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    assert!(!is_contained_launch(&unknown_config));
+
+    // agent_launch_env_inputs
+    let plan = AgentLaunchPlan {
+        project_root: std::env::temp_dir(),
+        launch_cwd: std::env::temp_dir(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let contained_env = agent_launch_env_inputs(&claude_contained, &plan, None);
+    assert!(contained_env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_CONTAINED" && v == "1"));
+
+    let uncontained_env = agent_launch_env_inputs(&claude_uncontained, &plan, None);
+    assert!(!uncontained_env.iter().any(|(k, _)| *k == "AIDA_CONTAINED"));
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["implementer"],
+    );
+    let fake_agent = tmp.path().join("agent");
+    let env_out = tmp.path().join("env.txt");
+    crate::test_exec::write_executable(
+        &fake_agent,
+        format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display(),),
+    );
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let prompt_opts = AgentPromptOptions::new(None, false);
+
+    // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ("AIDA_CONTAINED", Some("1")),
+        ]);
+        let config = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: vec![
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
+        run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        assert!(
+            !env_contents
+                .lines()
+                .any(|l| l.starts_with("AIDA_CONTAINED=")),
+            "uncontained run_tracked_agent must strip AIDA_CONTAINED: {env_contents}"
+        );
+    }
+
+    // 2. Contained without ambient AIDA_CONTAINED -> exported in child
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ("AIDA_CONTAINED", None),
+        ]);
+        let config = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: vec![],
+            prompt_style: AgentPromptStyle::Positional,
+            contained: true,
+        };
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
+        run_tracked_agent(
+            &fake_agent,
+            &config,
+            &plan,
+            None,
+            &prompt_args,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        assert!(
+            env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+            "contained run_tracked_agent must export AIDA_CONTAINED=1: {env_contents}"
+        );
+    }
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn agent_launch_env_inputs_contained_and_uncontained() {
+    let plan = AgentLaunchPlan {
+        project_root: std::path::PathBuf::from("/repo"),
+        launch_cwd: std::path::PathBuf::from("/repo"),
+        role: Some("implementer".into()),
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let inputs = agent_launch_env_inputs(&uncontained_config, &plan, None);
+    assert!(
+        !inputs.iter().any(|(k, _)| *k == "AIDA_CONTAINED"),
+        "uncontained launch inputs must not include AIDA_CONTAINED"
+    );
+
+    let contained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    let inputs = agent_launch_env_inputs(&contained_config, &plan, None);
+    assert!(
+        inputs
+            .iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && v == "1"),
+        "contained launch inputs must include AIDA_CONTAINED=1"
+    );
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn apply_agent_default_flags_sets_contained_flag_for_claude() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // 1. Contained mode active
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n",
+    )
+    .unwrap();
+    let mut claude = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    apply_agent_default_flags(
+        &mut claude,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert!(claude.contained);
+
+    let mut codex = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    apply_agent_default_flags(
+        &mut codex,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert!(!codex.contained);
+
+    // 2. Bypass mode active
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\nbypass = true\n",
+    )
+    .unwrap();
+    let mut claude_bypass = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    apply_agent_default_flags(
+        &mut claude_bypass,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert!(!claude_bypass.contained);
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "test-bg-agent".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+
+    let fake_binary = std::path::Path::new("/bin/echo");
+
+    // Contained Claude config
+    let contained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec!["--settings=test.json".to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    let cmd_contained =
+        build_agent_new_bg_command(fake_binary, &contained_config, &plan, &[], None).unwrap();
+    let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+        cmd_contained.get_envs().collect();
+    assert!(
+        envs.iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == Some(std::ffi::OsStr::new("1"))),
+        "contained build_agent_new_bg_command must export AIDA_CONTAINED=1: {envs:?}"
+    );
+
+    // Uncontained Claude config (with --permission-mode bypass)
+    let uncontained_config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: vec![
+            "--settings=test.json".to_string(),
+            "--permission-mode=bypass".to_string(),
+        ],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let cmd_uncontained =
+        build_agent_new_bg_command(fake_binary, &uncontained_config, &plan, &[], None).unwrap();
+    let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
+        cmd_uncontained.get_envs().collect();
+    assert!(
+        envs_uncontained
+            .iter()
+            .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
+        "uncontained build_agent_new_bg_command must strip AIDA_CONTAINED: {envs_uncontained:?}"
+    );
+}
+
+// trace:BUG-2124 | ai:antigravity
+#[test]
+fn uncontained_launchers_strip_inherited_aida_contained() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+
+    // 1. phase_driver advisor
+    let advisor_cmd = crate::phase_driver::build_phase_driver_advisor_command(
+        &project,
+        "claude",
+        &[],
+        &project.join("req"),
+        &project.join("resp"),
+        "CEILING",
+        "10",
+        session::HeadlessVendor::Claude,
+    );
+    assert!(
+        advisor_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "phase_driver advisor command must strip AIDA_CONTAINED"
+    );
+
+    // 2. phase_driver ci fix
+    let ci_fix_cmd = crate::phase_driver_trait::build_phase_driver_ci_fix_command(
+        &project,
+        "claude",
+        &[],
+        "CEILING",
+        "10",
+        session::HeadlessVendor::Claude,
+    );
+    assert!(
+        ci_fix_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "phase_driver ci fix command must strip AIDA_CONTAINED"
+    );
+
+    // 3. burndown quiet
+    let burndown_quiet_cmd =
+        crate::burndown_run::build_burndown_quiet_command("prompt", "mode", "CEILING", "10");
+    assert!(
+        burndown_quiet_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "burndown quiet command must strip AIDA_CONTAINED"
+    );
+
+    // 4. burndown verbose
+    let burndown_verbose_cmd = crate::burndown_run::build_burndown_verbose_command(
+        "prompt",
+        "mode",
+        "child-grant-id",
+        "CEILING",
+        "10",
+    );
+    assert!(
+        burndown_verbose_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "burndown verbose command must strip AIDA_CONTAINED"
+    );
+
+    // 5. autopilot intake
+    let cfg = crate::intake::IntakeConfig::default();
+    let intake_cmd = crate::autopilot_intake::build_autopilot_intake_command(
+        "prompt",
+        "mode",
+        "child-grant-id",
+        false,
+        &[],
+        &[],
+        &cfg,
+        "none",
+        crate::backlog::RiskLevel::Low,
+        None,
+    );
+    assert!(
+        intake_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "autopilot intake command must strip AIDA_CONTAINED"
+    );
+
+    // 6. questions clarify
+    let clarify_cmd = crate::questions::build_questions_clarify_command("prompt", "child-grant-id");
+    assert!(
+        clarify_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "questions clarify command must strip AIDA_CONTAINED"
+    );
+
+    // 7. compete judge
+    let judge_cmd = crate::compete_cmd::build_compete_judge_command(
+        &project,
+        "claude",
+        &[],
+        crate::compete::JudgeVendor::Claude,
+    );
+    assert!(
+        judge_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "compete judge command must strip AIDA_CONTAINED"
+    );
+
+    // 8. compete arm
+    let arm_cmd = crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude");
+    assert!(
+        arm_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
+        "compete arm command must strip AIDA_CONTAINED"
+    );
+}
+
+// trace:BUG-2006 | ai:antigravity
+#[test]
+fn apply_queue_work_contained_env_sets_and_removes() {
+    let _guard = crate::test_env::EnvVarsGuard::snapshot(&["AIDA_CONTAINED"]);
+
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert_eq!(
+        std::env::var("AIDA_CONTAINED").as_deref(),
+        Ok("1"),
+        "apply_queue_work_contained_env(true) must set AIDA_CONTAINED=1"
+    );
+
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+    assert!(
+        std::env::var("AIDA_CONTAINED").is_err(),
+        "apply_queue_work_contained_env(false) must remove AIDA_CONTAINED"
+    );
+}
+
+/// BUG-2007 S1: codex rejects a repeated `--no-daemon`, so the injected copy
+/// must not double an operator-supplied one (config default or extra flag).
+// trace:BUG-2007 | ai:claude
+#[test]
+fn codex_fresh_launch_does_not_double_no_daemon() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents.codex]\ndefault_flags = [\"--no-daemon\", \"--project-codex\"]\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+    let launcher = || AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+
+    // Config default carries it.
+    let mut from_config = launcher();
+    apply_agent_default_flags(
+        &mut from_config,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        from_config.default_args,
+        vec!["--no-daemon", "--project-codex"]
+    );
+
+    // `--extra-flag=--no-daemon` with config defaults skipped.
+    let mut from_extra = launcher();
+    apply_agent_default_flags(
+        &mut from_extra,
+        &project,
+        AgentDefaultFlagOptions::new(false, vec!["--no-daemon".to_string()], None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(from_extra.default_args, vec!["--no-daemon"]);
+
+    // Fresh launch with nothing extra still gets exactly one injected copy.
+    let mut plain = launcher();
+    apply_agent_default_flags(
+        &mut plain,
+        &project,
+        AgentDefaultFlagOptions::new(false, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(plain.default_args, vec!["--no-daemon"]);
+}
+
+// trace:BUG-2007 | ai:claude
+#[test]
+fn codex_resume_carries_exactly_one_no_daemon() {
+    let args = agent_resume_args("codex", "sid-1", "read context").unwrap();
+    assert_eq!(
+        args.iter().filter(|a| *a == CODEX_NO_DAEMON_FLAG).count(),
+        1,
+        "{args:?}"
+    );
+    // A resume argv that already carries the flag is collapsed, not doubled.
+    let mut resume = vec![
+        "resume".to_string(),
+        "sid-1".to_string(),
+        "--no-daemon".to_string(),
+        "--no-daemon".to_string(),
+    ];
+    dedupe_codex_no_daemon("codex", &mut resume);
+    assert_eq!(resume, vec!["resume", "sid-1", "--no-daemon"]);
+    // Other agents' argv is never touched.
+    let mut claude = vec!["--no-daemon".to_string(), "--no-daemon".to_string()];
+    dedupe_codex_no_daemon("claude", &mut claude);
+    assert_eq!(claude.len(), 2);
 }

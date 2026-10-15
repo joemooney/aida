@@ -169,6 +169,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida ps` | JSON honoured | ps |
 | `aida merge-lock` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida merge-hold` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida merge-hold auto-release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida merge-hold labels` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida merge-hold list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida merge-hold add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -285,6 +286,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida intent` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida dev` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev activate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida dev build` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida dev rollback` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev build-guard` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev deactivate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev serve` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -293,6 +296,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida dev shell-init` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida dev patch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida driver` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida driver register` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida driver deregister` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida driver list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor shell-substitution-holes` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -329,6 +336,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida role repair` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role active` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role current` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida role expiry` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida role expiry-notice` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role end` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role delete` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida role scaffold` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -611,6 +620,11 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida history events` | JSON honoured | history events |
 | `aida history templates` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida history templates rm` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida history opened` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida history completed` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida history rejected` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida history approved` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida history closed` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida lint` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida lifecycle` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida plan` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

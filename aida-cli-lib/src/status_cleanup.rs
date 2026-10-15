@@ -146,7 +146,9 @@ pub(crate) struct OpenPrItem {
     /// surfaced, so a normal push-fix-repush cycle doesn't alarm. `None` when
     /// the forge omitted the field or the value failed to parse.
     // trace:BUG-1514 | ai:claude
+    // trace:BUG-1812 | ai:antigravity
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub is_draft: bool,
 }
 
 /// A dormant lease (worktree present, no live process, <24h old).
@@ -1165,6 +1167,7 @@ mod tests {
             head_sha: None,
             labels: Vec::new(),
             created_at: None,
+            is_draft: false,
         });
         report.dormant_leases.push(DormantLeaseItem {
             lease_id: "abc".into(),
@@ -1212,6 +1215,7 @@ mod tests {
             head_sha: None,
             labels: Vec::new(),
             created_at: None,
+            is_draft: false,
         });
 
         report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
@@ -1676,6 +1680,7 @@ mod tests {
                 head_sha: None,
                 labels: Vec::new(),
                 created_at: None,
+                is_draft: false,
             }],
             missed_auto_bump: vec![MissedAutoBumpItem {
                 spec_id: "TASK-2".to_string(),

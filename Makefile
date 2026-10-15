@@ -5,7 +5,7 @@
         cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
-        docs docs-build book book-glossary book-serve proto fmt lint check \
+        docs docs-build book book-glossary check-book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
@@ -114,7 +114,10 @@ build-release: ## Build all packages (release mode, optimized)
 # sccache rejects incremental compilation, including when configured globally
 # through Cargo's build.rustc-wrapper. Disable the wrapper for this target.
 # trace:BUG-1684 | ai:codex
-build-fast: ensure-agent-skill-hooks ## Build all packages (release + incremental — for iteration, NOT shipping)
+# Build-only: it never changes the live binary in ~/.local/share/aida/live.
+# `aida dev build` runs this same build, smoke-tests it, and promotes it.
+# trace:STORY-1646 | ai:claude
+build-fast: ensure-agent-skill-hooks ## Build target/agent only (incremental; never promotes). Live binary: `aida dev build`
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
 		aida dev build-guard agent $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
@@ -295,6 +298,11 @@ docs-build: ## Generate documentation without opening
 book-glossary: ## Regenerate the AIDA Book's Glossary chapter from `aida docs glossary`
 	bash docs/cli/generate-glossary.sh
 
+# trace:BUG-1950 | ai:claude — fail when the committed page differs from the
+# generator's output (CI runs this against the freshly built binary).
+check-book-glossary: ## Fail if docs/cli/12-glossary.md differs from `aida docs glossary`
+	bash docs/cli/generate-glossary.sh --check
+
 book: book-glossary ## Build the AIDA Book (mdBook) — regenerates the Glossary chapter first
 	mdbook build docs/cli
 
@@ -421,6 +429,8 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
 	done
 	@$(MAKE) --no-print-directory sync-agent-skills
+	@# trace:BUG-2014 | ai:codex
+	@python3 scripts/check-template-hooks.py --sync
 	@echo "Template sync complete!"
 
 # trace:TASK-1520 | ai:codex
@@ -494,6 +504,8 @@ check-ci-list: ## Show which CI gates run locally, which are skipped, and why
 # trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
+	@# trace:BUG-2014 | ai:codex
+	@python3 scripts/check-template-hooks.py
 	@test -f aida-core/templates/hooks/aida-sync-agent-skills.sh || { echo "MISSING: portable-pack hook master"; exit 1; }
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \
@@ -693,3 +705,6 @@ serve: ## Start aida-server for multi-user access (PostgreSQL backend)
 	@echo "  aida --file '$(DEV_PG_URL)' list"
 	@echo ""
 	./target/debug/aida-server --host 0.0.0.0 --port 50051 --rest-port $(REST_PORT) --database "$(DEV_PG_URL)"
+
+verify-slice-stack: ## Verify the pure-move slice stack
+	@python3 scripts/split-lib/verify_stack.py $(BASE) $(HEAD)

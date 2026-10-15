@@ -65,10 +65,12 @@ pub(crate) struct CiGateConfig {
 impl Default for CiGateConfig {
     fn default() -> Self {
         Self {
-            // TASK-1205's path-filtered Windows/macOS matrix. Its jobs are named
-            // `Build (<os>)` exactly like PR CI's Linux job, so the workflow
-            // name is the only reliable discriminator.
-            // trace:BUG-1191 | ai:codex
+            // The cross-platform workflow's jobs are named `Build (<os>)`
+            // exactly like PR CI's Linux job, so the workflow name is the only
+            // reliable discriminator. trace:BUG-1191 | ai:codex
+            // ADR-72: that workflow is manual-only and never runs on PRs; the
+            // default stays so a manual dispatch can never gate a merge.
+            // trace:TASK-1723 | ai:claude
             informational_workflows: vec!["Cross-platform*".to_string()],
             informational_checks: Vec::new(),
         }

@@ -200,18 +200,69 @@ impl Fixture {
     }
 }
 
-fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
+/// The real `git` binary, resolved once from a PATH stripped of temp-dir
+/// entries.
+///
+/// Defensive hardening; the CI root cause is unconfirmed. The lib test binary
+/// runs thousands of tests in one process, and some tests prepend a temp-dir
+/// `git` shim to the process-wide PATH. A bare `Command::new("git")` resolves
+/// through whatever PATH is live at spawn time, so the fixture could otherwise
+/// run a sibling's shim (or fail with 127 if that shim's tempdir is gone).
+///
+/// Assumption: every PATH-shim directory lives under `std::env::temp_dir()`
+/// (they are all `tempfile` roots), so stripping those entries leaves only
+/// real install dirs. Nothing in the lib mutates TMPDIR, so `temp_dir()` is
+/// stable for the process lifetime.
+// trace:BUG-1955 | ai:claude
+fn real_git() -> &'static Path {
+    static GIT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    GIT.get_or_init(|| {
+        let exe = format!("git{}", std::env::consts::EXE_SUFFIX);
+        let tmp = std::env::temp_dir();
+        let tmp = tmp.canonicalize().unwrap_or(tmp);
+        std::env::var_os("PATH")
+            .into_iter()
+            .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+            .filter(|dir| {
+                let dir = dir.canonicalize().unwrap_or_else(|_| dir.clone());
+                !dir.starts_with(&tmp)
+            })
+            .map(|dir| dir.join(&exe))
+            .find(|p| p.is_file())
+            // No pinnable binary: fall back to ordinary PATH lookup.
+            .unwrap_or_else(|| PathBuf::from("git"))
+    })
+}
+
+/// A hermetic fixture `git` command: pinned binary, no system/global config,
+/// no inherited repo-locating env, no background auto-maintenance.
+// trace:BUG-1955 | ai:claude
+fn fixture_git(dir: &Path, clock: i64) -> Command {
     let date = format!("@{clock} +0000");
-    let out = Command::new("git")
+    let mut cmd = Command::new(real_git());
+    cmd.args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .arg("-C")
         .arg(dir)
-        .args(args)
         .env("GIT_AUTHOR_DATE", &date)
         .env("GIT_COMMITTER_DATE", &date)
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("HOME", dir)
-        .output()
-        .unwrap();
+        .env("HOME", dir);
+    for var in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CEILING_DIRECTORIES",
+    ] {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
+fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
+    let out = fixture_git(dir, clock).args(args).output().unwrap();
     assert!(
         out.status.success(),
         "git {args:?} failed: {}",
@@ -376,15 +427,10 @@ fn build_merged(fx: &mut Fixture) -> Vec<String> {
 
     // Conflicting merge, resolved by hand.
     fx.clock += 60;
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(&fx.store)
+    // Same isolation as `git_in`. trace:BUG-1648 | ai:claude
+    // Pinned binary, insulated from PATH-shim swaps. trace:BUG-1955 | ai:claude
+    let out = fixture_git(&fx.store, fx.clock)
         .args(["merge", "--no-ff", "--no-edit", "side"])
-        .env("GIT_AUTHOR_DATE", format!("@{} +0000", fx.clock))
-        .env("GIT_COMMITTER_DATE", format!("@{} +0000", fx.clock))
-        // Same isolation as `git_in`. trace:BUG-1648 | ai:claude
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("HOME", &fx.store)
         .output()
         .unwrap();
     assert!(!out.status.success(), "fixture merge should conflict");
@@ -413,8 +459,9 @@ fn build_merged(fx: &mut Fixture) -> Vec<String> {
         .collect()
 }
 
+// trace:BUG-1974 | ai:claude
 fn serve(fx: &Fixture, o: &HistoryOpts) -> Option<history_cache::CacheAnswer> {
-    history_cache::serve_at(&fx.store, &fx.db, o, GENEROUS).unwrap()
+    test_support::serve_locked(&fx.store, &fx.db, o, GENEROUS).unwrap()
 }
 
 fn assert_parity(fx: &Fixture, o: &HistoryOpts, label: &str) {
@@ -662,8 +709,11 @@ fn history_cache_budgeted_catch_up_commits_only_an_ancestor_closed_prefix() {
         fx.put(&s);
         added.push(fx.commit("update STORY-12"));
     }
-    // A zero budget indexes one commit, then must stop at a valid boundary.
+    // A zero budget keeps one chunk (here one commit), then must stop at a
+    // valid boundary.
+    history_cache::set_catch_up_chunk(Some(1));
     test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+    history_cache::set_catch_up_chunk(None);
     let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
     assert_ne!(tip, fx.head(), "a zero budget cannot reach HEAD");
     assert_ne!(tip, old_tip, "the first commit is kept, not rolled back");
@@ -749,7 +799,7 @@ fn history_cache_rebuilds_on_foreign_store_root() {
     // Point store B at store A's index file.
     let o = opts();
     let (walk, _, _) = collect_filtered_events_git(&b.store, &o).unwrap();
-    let got = history_cache::serve_at(&b.store, &a.db, &o, GENEROUS)
+    let got = test_support::serve_locked(&b.store, &a.db, &o, GENEROUS)
         .unwrap()
         .expect("served after reset");
     assert_eq!(got.events, walk);
@@ -850,7 +900,7 @@ fn history_cache_corrupt_file_self_heals_and_falls_back() {
     let mut fx = Fixture::new();
     build_linear(&mut fx);
     std::fs::write(&fx.db, "this is not a sqlite database\n".repeat(200)).unwrap();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(first.is_err(), "a corrupt index must not serve");
     assert!(!fx.db.exists(), "the corrupt file is removed");
     assert_parity(&fx, &opts(), "after self-heal");
@@ -947,7 +997,7 @@ fn history_cache_ignores_requirements_cache_and_store_locks() {
     // Index once, then move HEAD so the call under the locks has to write
     // (catch up) as well as read. A path that waited on any of these locks
     // would block for their whole multi-second timeout ladder, or fail.
-    history_cache::serve_at(&fx.store, &db, &opts(), GENEROUS)
+    test_support::serve_locked(&fx.store, &db, &opts(), GENEROUS)
         .unwrap()
         .expect("initial build");
     let s = Spec::new("STORY-16", "Story", "Written while locked");
@@ -955,7 +1005,7 @@ fn history_cache_ignores_requirements_cache_and_store_locks() {
     fx.commit("add STORY-16");
     let (walk, _, _) = collect_filtered_events_git(&fx.store, &opts()).unwrap();
     let started = Instant::now();
-    let got = history_cache::serve_at(&fx.store, &db, &opts(), GENEROUS)
+    let got = test_support::serve_locked(&fx.store, &db, &opts(), GENEROUS)
         .unwrap()
         .expect("served while other locks are held");
     // Load-bearing, so the original 5s literal stays fatal as the ceiling:
@@ -982,19 +1032,30 @@ fn history_cache_concurrent_indexer_serves_snapshot_or_falls_back() {
     build_linear(&mut fx);
     assert_parity(&fx, &opts(), "initial");
     let lock = test_support::hold_lock(&fx.db);
+    // The lock is held on purpose: bare `serve_at`, not the retrying `serve`.
+    // trace:BUG-1974 | ai:claude
     // Another process is indexing, and the snapshot is current: serve it.
     let started = Instant::now();
-    assert!(serve(&fx, &opts()).is_some());
+    assert!(
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS)
+            .unwrap()
+            .is_some()
+    );
     // HEAD moved and this reader cannot index: fall back, without waiting.
     let s = Spec::new("STORY-14", "Story", "While locked");
     fx.put(&s);
     fx.commit("add STORY-14");
-    assert!(serve(&fx, &opts()).is_none());
-    // Load-bearing for the same reason as above: `serve` returning None is
-    // the fallback, and only the clock shows it fell back *without waiting*
+    assert!(
+        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS)
+            .unwrap()
+            .is_none()
+    );
+    // Load-bearing for the same reason as above: `serve_at` returning None
+    // is the fallback, and only the clock shows it fell back *without waiting*
     // on the held indexer lock. Original 5s literal kept as the ceiling, at
     // ~250x the 20ms measured in a debug build on a quiet host.
     // trace:BUG-1731 | ai:claude
+    // trace:BUG-1987 | ai:claude
     crate::test_timing::assert_within_budget(
         started,
         Duration::from_secs(1),
@@ -1171,6 +1232,7 @@ fn history_decoder_version_matches_event_kind_shape() {
             title: "t".into(),
             req_type: "r".into(),
             priority: "p".into(),
+            status: "s".into(),
         },
         EventKind::Deleted { title: "t".into() },
         EventKind::StatusChange {
@@ -1219,10 +1281,10 @@ fn history_decoder_version_matches_event_kind_shape() {
     ];
     let snapshot = serde_json::to_string(&kinds).unwrap();
     // trace:BUG-1631 | ai:claude
-    const V4: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
+    const V5: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p","status":"s"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
     assert_eq!(
         (history_cache::HISTORY_DECODER_VERSION, snapshot.as_str()),
-        (4, V4),
+        (5, V5),
         "EventKind's serialized shape changed: bump HISTORY_DECODER_VERSION \
          and record the new shape here"
     );
@@ -1702,7 +1764,7 @@ fn task_1507_stale_or_diverged_reader_falls_back_without_reset() {
         );
     };
     // Behind the tip.
-    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+    assert!(test_support::serve_locked(&old, &fx.db, &opts(), GENEROUS)
         .unwrap()
         .is_none());
     unchanged("behind");
@@ -1713,7 +1775,7 @@ fn task_1507_stale_or_diverged_reader_falls_back_without_reset() {
     std::fs::write(old.join(&rel), s.yaml()).unwrap();
     git_in(&old, &["add", "-A"], fx.clock + 60);
     git_in(&old, &["commit", "-q", "-m", "diverge"], fx.clock + 60);
-    assert!(history_cache::serve_at(&old, &fx.db, &opts(), GENEROUS)
+    assert!(test_support::serve_locked(&old, &fx.db, &opts(), GENEROUS)
         .unwrap()
         .is_none());
     unchanged("diverged");
@@ -2168,12 +2230,12 @@ fn task_1507_budgeted_catch_up_never_moves_the_tip_onto_a_side_branch() {
     let old_tip = fx.head();
     history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
     fx.git(&["checkout", "-q", "aida-store"]);
+    history_cache::set_catch_up_chunk(Some(1));
     test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
+    history_cache::set_catch_up_chunk(None);
     let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
     let is_anc = |a: &str, b: &str| {
-        Command::new("git")
-            .arg("-C")
-            .arg(&fx.store)
+        fixture_git(&fx.store, fx.clock) // trace:BUG-1955 | ai:claude
             .args(["merge-base", "--is-ancestor", a, b])
             .status()
             .unwrap()
@@ -2224,12 +2286,12 @@ fn task_1507_inconsistent_index_resets_instead_of_wedging() {
         .to_string();
     // Plant the wedged state: side1 indexed as the tip, beside merge^1.
     fx.git(&["checkout", "-q", "--detach", &side1]);
-    let one = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let one = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(one.is_ok(), "reader at side1 does not error: {one:?}");
     test_support::set_meta(&fx.db, "tip_sha", &side1);
     fx.git(&["checkout", "-q", "aida-store"]);
     let o = opts();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &o, GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &o, GENEROUS);
     assert!(first.is_err(), "the inconsistent catch-up falls back");
     assert_eq!(
         test_support::meta(&fx.db, "last_reset_reason").as_deref(),
@@ -2347,7 +2409,7 @@ fn task_1507_failed_reset_deletes_an_inconsistent_index() {
         .to_string();
     test_support::set_meta(&fx.db, "tip_sha", &side1);
     history_cache::fail_next_reset();
-    let first = history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS);
+    let first = test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS);
     assert!(first.is_err(), "the inconsistent catch-up falls back");
     assert!(!fx.db.exists(), "the unrepairable index is deleted");
     assert_parity(&fx, &opts(), "rebuilt");
@@ -2966,7 +3028,7 @@ mod sweep {
     }
 
     /// Slow (about 100 s of git processes): run with `--ignored`. CI runs it
-    /// nightly in cross-platform.yml.
+    /// weekly in weekly-linux.yml.
     #[test]
     #[ignore = "slow random sweep; run with --ignored (nightly CI)"]
     fn task_1507_random_dag_sweep_fixed_seeds() {
@@ -3091,9 +3153,10 @@ mod sweep {
         }
         assert!(reached.is_some(), "a zero budget still reaches HEAD");
         let (walk, _, x) = collect_filtered_events_git(&d.fx.store, &opts()).unwrap();
-        let got = history_cache::serve_at(&d.fx.store, &d.fx.db, &opts(), Duration::from_millis(1))
-            .unwrap()
-            .expect("served once caught up");
+        let got =
+            test_support::serve_locked(&d.fx.store, &d.fx.db, &opts(), Duration::from_millis(1))
+                .unwrap()
+                .expect("served once caught up");
         assert_same(&got, &(walk, x), "after the long side branch");
     }
 
@@ -3177,7 +3240,7 @@ mod sweep {
         d.set_head(&a1);
         history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
         d.set_head(&z1);
-        history_cache::serve_at(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
+        test_support::serve_locked(&fx.store, &fx.db, &opts(), GENEROUS).unwrap();
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
             Some(z1.as_str())
@@ -3275,9 +3338,11 @@ mod sweep {
 
     #[test]
     fn task_1507_long_side_branch_commits_at_the_merge_before_head() {
-        // T4: the N6 path's own commit: the first zero-budget call must
-        // stop AT the merge (not roll back, not only reach HEAD).
+        // T4: with one-commit chunks, the first zero-budget call must stop
+        // AT the merge (the first boundary; not roll back, not only reach
+        // HEAD).
         let (d, m, h) = long_side_then_more(60, 5);
+        history_cache::set_catch_up_chunk(Some(1));
         test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
         assert_eq!(
             test_support::meta(&d.fx.db, "tip_sha").as_deref(),
@@ -3288,6 +3353,7 @@ mod sweep {
             test_support::index(&d.fx.store, &d.fx.db, Budget::for_duration(Duration::ZERO))
                 .unwrap();
         }
+        history_cache::set_catch_up_chunk(None);
         assert_eq!(
             test_support::meta(&d.fx.db, "tip_sha").as_deref(),
             Some(h.as_str())
@@ -3295,11 +3361,9 @@ mod sweep {
         assert_parity(&d.fx, &opts(), "after the long side branch");
     }
 
-    fn fast_import(store: &Path, stream: &str) {
+    pub(super) fn fast_import(store: &Path, stream: &str) {
         use std::io::Write;
-        let mut ch = Command::new("git")
-            .arg("-C")
-            .arg(store)
+        let mut ch = super::fixture_git(store, 0) // trace:BUG-1955 | ai:claude
             .args(["fast-import", "--quiet", "--force"])
             .stdin(std::process::Stdio::piped())
             .spawn()
@@ -3316,8 +3380,8 @@ mod sweep {
     fn task_1507_catch_up_past_the_probe_cap_probes_only_merges() {
         // B6: HEAD fast-forwards to another hub's merge whose FIRST parent
         // forked before our tip. Reverse topo lists that foreign line, then
-        // K of our descendants that can never be a boundary. Past the probe
-        // cap only merges are probed, so the cost stays bounded.
+        // K of our descendants that can never be a boundary. The boundary
+        // rule needs no git probe, so this is one pass to HEAD.
         const K: usize = 500;
         let fx = Fixture::new();
         let mut s = String::new();
@@ -3368,17 +3432,11 @@ mod sweep {
         fx.git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
         history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
         fx.git(&["update-ref", "refs/heads/aida-store", &head]);
-        history_cache::take_boundary_probes();
         test_support::index(&fx.store, &fx.db, Budget::for_duration(Duration::ZERO)).unwrap();
-        let probes = history_cache::take_boundary_probes();
         assert_eq!(
             test_support::meta(&fx.db, "tip_sha").as_deref(),
             Some(head.as_str()),
             "one zero-budget call reaches HEAD"
-        );
-        assert!(
-            probes <= 40,
-            "{probes} boundary probes for {K} non-boundary descendants"
         );
     }
 }
@@ -3463,4 +3521,881 @@ fn spec_441_far_future_until_parity() {
     assert_eq!(events_since.len(), 1);
     assert_eq!(events_since[0].spec_id, "FR-2");
     assert_parity(&fx, &o_since, "since exact 2026 timestamp");
+}
+
+/// BUG-1923: a history index thousands of commits behind HEAD must catch
+/// up in bounded, durable steps under a budget, report its lag, and stop
+/// paying for inline catch-up that keeps failing.
+// trace:BUG-1923 | ai:claude
+mod bug_1923 {
+    use super::*;
+
+    const SPEC_IDS: [&str; 5] = ["FR-1", "FR-2", "STORY-3", "BUG-4", "EPIC-5"];
+
+    /// A fast-import stream builder: every commit edits one spec (so it
+    /// decodes to an event) at a unique, increasing time (no ties, no skew,
+    /// so the index serves every window once it is fresh).
+    struct Stream {
+        s: String,
+        mark: usize,
+        t: i64,
+        specs: BTreeMap<&'static str, Spec>,
+    }
+
+    impl Stream {
+        fn new() -> Self {
+            let specs = SPEC_IDS
+                .iter()
+                .zip(["Functional", "Functional", "Story", "Bug", "Epic"])
+                .map(|(id, ty)| (*id, Spec::new(id, ty, "synthetic")))
+                .collect();
+            Stream {
+                s: String::new(),
+                mark: 0,
+                t: BASE_TS,
+                specs,
+            }
+        }
+
+        fn blob(&mut self, id: &'static str) -> String {
+            let rel = aida_core::object_store::relative_object_path(id).unwrap();
+            let y = self.specs[id].yaml();
+            format!("M 644 inline {}\ndata {}\n{y}\n", rel, y.len())
+        }
+
+        /// A commit on `branch` with `parents`, editing spec `id` (and
+        /// writing `carry` unchanged, so a merge keeps the side's version).
+        fn commit(
+            &mut self,
+            branch: &str,
+            parents: &[usize],
+            id: &'static str,
+            carry: &[&'static str],
+        ) -> usize {
+            self.mark += 1;
+            self.t += 1;
+            let n = self.mark;
+            self.specs.get_mut(id).unwrap().description = format!("v{n}");
+            self.s.push_str(&format!(
+                "commit refs/heads/{branch}\nmark :{n}\ncommitter a <a@b> {} +0000\ndata 3\nc{}\n",
+                self.t,
+                n % 10
+            ));
+            if let Some(p) = parents.first() {
+                self.s.push_str(&format!("from :{p}\n"));
+            }
+            for p in parents.iter().skip(1) {
+                self.s.push_str(&format!("merge :{p}\n"));
+            }
+            for c in carry.iter().chain([&id]) {
+                let b = self.blob(c);
+                self.s.push_str(&b);
+            }
+            n
+        }
+    }
+
+    /// A store whose HEAD is more than 3,000 commits past an indexed tip,
+    /// with merges in the gap: short side branches forked after the tip,
+    /// and one side forked BEFORE the tip (the shape that has no chunk
+    /// boundary until its merge). Returns (fixture, old tip, head).
+    fn far_behind() -> (Fixture, String, String) {
+        let fx = Fixture::new();
+        let mut st = Stream::new();
+        let mut main = 0usize;
+        let mut fork_before = 0usize;
+        for i in 0..20 {
+            let parents: Vec<usize> = if main == 0 { vec![] } else { vec![main] };
+            // The root commit adds every spec, so later edits are changes.
+            let carry: Vec<&'static str> = if i == 0 {
+                SPEC_IDS[1..].to_vec()
+            } else {
+                vec![]
+            };
+            main = st.commit("aida-store", &parents, "FR-1", &carry);
+            if i == 10 {
+                fork_before = main;
+            }
+        }
+        let old_tip_mark = main;
+        st.s.push_str(&format!("reset refs/tags/OLD\nfrom :{old_tip_mark}\n"));
+        // The side forked before the old tip, committed now (later times).
+        let mut early = fork_before;
+        for _ in 0..5 {
+            early = st.commit("early", &[early], "EPIC-5", &[]);
+        }
+        let mut n = 0usize;
+        while n < 3_100 {
+            main = st.commit("aida-store", &[main], SPEC_IDS[n % 3], &[]);
+            n += 1;
+            if n % 400 == 0 {
+                // A short side branch merged two main commits later.
+                let mut side = main;
+                for _ in 0..3 {
+                    side = st.commit("side", &[side], "BUG-4", &[]);
+                }
+                for _ in 0..2 {
+                    main = st.commit("aida-store", &[main], "FR-1", &[]);
+                    n += 1;
+                }
+                main = st.commit("aida-store", &[main, side], "FR-2", &["BUG-4"]);
+                n += 1;
+            }
+            if n == 1_500 {
+                main = st.commit("aida-store", &[main, early], "FR-2", &["EPIC-5"]);
+                n += 1;
+            }
+        }
+        sweep::fast_import(&fx.store, &st.s);
+        fx.git(&["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+        let head = fx.git(&["rev-parse", "aida-store"]).trim().to_string();
+        let old = fx.git(&["rev-parse", "OLD"]).trim().to_string();
+        (fx, old, head)
+    }
+
+    fn is_ancestor(fx: &Fixture, a: &str, b: &str) -> bool {
+        super::fixture_git(&fx.store, fx.clock) // trace:BUG-1955 | ai:claude
+            .args(["merge-base", "--is-ancestor", a, b])
+            .status()
+            .unwrap()
+            .success()
+    }
+
+    #[test]
+    fn bug_1923_far_behind_index_reaches_head_in_bounded_budgeted_queries() {
+        let (fx, old, head) = far_behind();
+        let gap: usize = fx
+            .git(&["rev-list", "--count", &format!("{old}..{head}")])
+            .trim()
+            .parse()
+            .unwrap();
+        let merges: usize = fx
+            .git(&["rev-list", "--merges", "--count", &format!("{old}..{head}")])
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(gap >= 3_000, "fixture gap {gap}");
+        assert!(merges >= 5, "fixture merges {merges}");
+
+        // A complete index at the old tip, then HEAD moves on.
+        fx.git(&["update-ref", "refs/heads/aida-store", &old]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        fx.git(&["update-ref", "refs/heads/aida-store", &head]);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert_eq!(st.lag, Some(gap), "status reports the lag");
+
+        // Budgeted queries (a zero budget: everything past start-up is
+        // over budget) must each keep durable progress and reach HEAD in
+        // a bounded number of calls. The old code kept one commit per call.
+        let bound = gap.div_ceil(256) + 3;
+        let mut prev_tip = old.clone();
+        let mut prev_commits = test_support::commit_count(&fx.db);
+        let mut calls = 0;
+        while test_support::meta(&fx.db, "tip_sha").as_deref() != Some(head.as_str()) {
+            calls += 1;
+            assert!(calls <= bound, "not at HEAD after {bound} budgeted queries");
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            let tip = test_support::meta(&fx.db, "tip_sha").unwrap();
+            let commits = test_support::commit_count(&fx.db);
+            assert!(
+                commits > prev_commits && tip != prev_tip,
+                "query {calls} kept no progress ({prev_commits} -> {commits} commits)"
+            );
+            assert!(
+                is_ancestor(&fx, &prev_tip, &tip),
+                "query {calls}: the tip moved off its line"
+            );
+            let lag = history_cache::status_at(&fx.store, &fx.db).lag;
+            assert!(lag.is_none_or(|l| l < gap), "lag shrinks: {lag:?}");
+            // trace:BUG-1942 | ai:claude
+            // Ancestor-complete after every call: the index holds exactly
+            // the commits reachable from its tip.
+            let reachable: i64 = fx
+                .git(&["rev-list", "--count", &tip])
+                .trim()
+                .parse()
+                .unwrap();
+            assert_eq!(
+                commits, reachable,
+                "query {calls}: indexed commits match `rev-list --count` of the tip"
+            );
+            prev_tip = tip;
+            prev_commits = commits;
+        }
+        assert!(calls >= 2, "the fixture should need more than one query");
+        assert_eq!(history_cache::status_at(&fx.store, &fx.db).lag, None);
+        assert_parity(&fx, &opts(), "caught up from far behind");
+    }
+
+    #[test]
+    fn bug_1923_repeated_catch_up_failures_pause_inline_catch_up_until_rebuild() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Stall");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let old = fx.head();
+        for st in ["Approved", "Done", "Draft"] {
+            s.status = st.into();
+            fx.put(&s);
+            fx.commit("update STORY-1");
+        }
+        let failures = || test_support::meta(&fx.db, "catch_up_failures");
+
+        // Three failed attempts in a row pause inline catch-up.
+        for n in 1..=3 {
+            history_cache::fail_next_catch_up();
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
+            assert_eq!(failures(), Some(n.to_string()));
+        }
+        assert_eq!(failures().as_deref(), Some("3"));
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled);
+        assert_eq!(st.lag, Some(3));
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(
+            lines.contains("History lag:      3 commit(s) behind HEAD"),
+            "{lines}"
+        );
+        assert!(lines.contains("stalled"), "{lines}");
+        assert!(lines.contains("aida cache rebuild --history"), "{lines}");
+        assert!(!lines.contains("BUG-1923"), "{lines}");
+        let doctor = crate::doctor_cmd::history_index_doctor_line(&st, true);
+        assert!(doctor.contains("by 3 commit(s)"), "{doctor}");
+        assert!(doctor.contains("not catching up"), "{doctor}");
+
+        // Paused: a budgeted query no longer tries (no failure injected,
+        // yet nothing moves) and falls back to the walk.
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_none());
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(failures().as_deref(), Some("3"));
+
+        // A rebuild clears the pause and the index serves again.
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        assert_eq!(failures(), None);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(!st.catch_up_stalled && st.lag.is_none());
+        assert_parity(&fx, &opts(), "after the rebuild");
+    }
+
+    /// An index at `old` with HEAD three commits on, paused by three failed
+    /// inline catch-ups in a row. Returns (fixture, old tip).
+    // trace:BUG-1942 | ai:claude
+    // trace:BUG-1974 | ai:claude
+    fn stalled_three_behind() -> (Fixture, String) {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Cool-down");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let old = fx.head();
+        for st in ["Approved", "Done", "Draft"] {
+            s.status = st.into();
+            fx.put(&s);
+            fx.commit("update STORY-1");
+        }
+        for _ in 0..3 {
+            history_cache::fail_next_catch_up();
+            assert!(
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err()
+            );
+        }
+        assert!(history_cache::status_at(&fx.store, &fx.db).catch_up_stalled);
+        (fx, old)
+    }
+
+    /// The BUG-1974 flake: a copy of the lock fd held by a child another
+    /// thread is forking makes `serve_at` read the lock as held, skip the
+    /// injected catch-up failure and answer `Ok` from the fall-back.
+    // trace:BUG-1974 | ai:claude
+    #[test]
+    fn bug_1974_an_inherited_lock_fd_skips_indexing_until_released() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Inherited lock");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        s.status = "Approved".into();
+        fx.put(&s);
+        fx.commit("update STORY-1");
+
+        let copy = test_support::inherited_lock_copy(&fx.db);
+        history_cache::fail_next_catch_up();
+        let got = history_cache::serve_at(&fx.store, &fx.db, &opts(), Duration::ZERO);
+        assert!(got.unwrap().is_none(), "unlocked: falls back, no attempt");
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+
+        // Once the copy is gone, the still-pending injection is consumed.
+        drop(copy);
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("1")
+        );
+    }
+
+    /// `serve_locked` returns an error raised before the lock is tried at
+    /// once, instead of spinning and then panicking that it never held it.
+    // trace:BUG-1987 | ai:claude
+    #[test]
+    fn bug_1987_serve_locked_returns_a_pre_lock_error_at_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let not_a_repo = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&not_a_repo).unwrap();
+        let db = tmp.path().join("history.db");
+        let started = Instant::now();
+        let got = test_support::serve_locked(&not_a_repo, &db, &opts(), Duration::ZERO);
+        assert!(got.is_err(), "no HEAD: an error, not a panic");
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "returned at once, not after 1000 retries ({:?})",
+            started.elapsed()
+        );
+    }
+
+    fn rfc3339_ago(secs: i64) -> String {
+        (chrono::Utc::now() - chrono::Duration::seconds(secs))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_catch_up_skips_inside_cooldown() {
+        let (fx, old) = stalled_three_behind();
+        let stalled_at = test_support::meta(&fx.db, "catch_up_stalled_at");
+        assert!(stalled_at.is_some(), "the third failure stamps the pause");
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert_eq!(st.catch_up_stalled_at, stalled_at);
+        assert!(st.catch_up_next_retry_at.is_some());
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(lines.contains("History catch-up: paused since"), "{lines}");
+        assert!(lines.contains("retries after"), "{lines}");
+
+        let commits = test_support::commit_count(&fx.db);
+        for _ in 0..2 {
+            let got =
+                test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+            assert!(got.is_none(), "paused: the git walk answers");
+        }
+        // No attempt ran and nothing was written.
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(test_support::commit_count(&fx.db), commits);
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("3")
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_stalled_at"),
+            stalled_at
+        );
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_catch_up_retries_after_cooldown() {
+        let (fx, _old) = stalled_three_behind();
+        test_support::set_meta(&fx.db, "catch_up_stalled_at", &rfc3339_ago(2 * 3600));
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled, "still paused until a query retries");
+
+        // No rebuild: the next budgeted query retries, keeps the gap and
+        // clears the pause.
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_some(), "served from the caught-up index");
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(fx.head().as_str())
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+        assert_eq!(test_support::meta(&fx.db, "catch_up_stalled_at"), None);
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(!st.catch_up_stalled && st.lag.is_none());
+        assert_eq!(st.catch_up_stalled_at, None);
+        assert_eq!(st.catch_up_next_retry_at, None);
+        assert_parity(&fx, &opts(), "after the cool-down retry");
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_a_failed_retry_restarts_the_cooldown() {
+        let (fx, old) = stalled_three_behind();
+        let stale = rfc3339_ago(2 * 3600);
+        test_support::set_meta(&fx.db, "catch_up_stalled_at", &stale);
+
+        history_cache::fail_next_catch_up();
+        assert!(test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).is_err());
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("4")
+        );
+        let restamped = test_support::meta(&fx.db, "catch_up_stalled_at").unwrap();
+        assert_ne!(restamped, stale, "the failed retry restarts the cool-down");
+
+        // Inside the new cool-down: no attempt.
+        let got = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO).unwrap();
+        assert!(got.is_none());
+        assert_eq!(
+            test_support::meta(&fx.db, "tip_sha").as_deref(),
+            Some(old.as_str())
+        );
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("4")
+        );
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_paused_index_without_a_stamp_retries_on_the_next_query() {
+        // An index paused before the cool-down existed has a count but no
+        // stamp; it must not stay paused until a rebuild.
+        let (fx, _old) = stalled_three_behind();
+        assert!(test_support::meta(&fx.db, "catch_up_stalled_at").is_some());
+        test_support::delete_meta(&fx.db, "catch_up_stalled_at");
+        let st = history_cache::status_at(&fx.store, &fx.db);
+        assert!(st.catch_up_stalled && st.catch_up_next_retry_at.is_none());
+        let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+        assert!(lines.contains("retries on the next"), "{lines}");
+        assert!(
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+    }
+
+    // trace:BUG-1942 | ai:claude
+    #[test]
+    fn bug_1942_stalled_hint_is_silent_off_a_terminal() {
+        assert_eq!(history_cache::stalled_hint_message(false), None);
+        let hint = history_cache::stalled_hint_message(true).unwrap();
+        assert!(hint.contains("aida cache rebuild --history"), "{hint}");
+        assert!(hint.contains("retries"), "{hint}");
+        assert!(!hint.contains("BUG-"), "{hint}");
+    }
+
+    #[test]
+    fn bug_1923_a_kept_chunk_clears_the_failure_count() {
+        let mut fx = Fixture::new();
+        let mut s = Spec::new("STORY-1", "Story", "Clear");
+        fx.put(&s);
+        fx.commit("add STORY-1");
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        s.status = "Approved".into();
+        fx.put(&s);
+        fx.commit("update STORY-1");
+        for _ in 0..2 {
+            history_cache::fail_next_catch_up();
+            let _ = test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO);
+        }
+        assert_eq!(
+            test_support::meta(&fx.db, "catch_up_failures").as_deref(),
+            Some("2")
+        );
+        assert!(
+            test_support::serve_locked(&fx.store, &fx.db, &opts(), Duration::ZERO)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(test_support::meta(&fx.db, "catch_up_failures"), None);
+    }
+
+    #[test]
+    fn bug_1923_capped_since_query_ignores_a_merge_tie_below_the_cut() {
+        // A same-second tie inside a merge's region (B2/B3) at +300, newer
+        // commits above it, and `--since` below the tie. A cut window that
+        // ends above the tie must be served: the tie cannot reorder it.
+        let mut fx = Fixture::new();
+        build_dated_merge(&mut fx, &[300], &[300], 600, &[700, 800, 900]);
+        history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+        let since = Some(rfc3339(BASE_TS + 100));
+        let check = |o: &HistoryOpts, label: &str| {
+            let (walk, _, x) = collect_filtered_events_git(&fx.store, o).unwrap();
+            let got = test_support::query_only(&fx.store, &fx.db, o)
+                .unwrap()
+                .unwrap_or_else(|| panic!("[{label}] did not serve"));
+            assert_same(&got, &(walk, x), label);
+        };
+        let mut o = opts();
+        o.since = since.clone();
+        o.max_commits = 2;
+        check(&o, "--max-commits cut above the tie, --since below it");
+        let mut o = opts();
+        o.since = since.clone();
+        o.limit = 1;
+        check(&o, "-n cut above the tie, --since below it");
+        // Uncut, the window reaches the tie, which still falls back.
+        let mut o = opts();
+        o.since = since;
+        assert!(test_support::query_only(&fx.store, &fx.db, &o)
+            .unwrap()
+            .is_none());
+    }
+
+    // trace:BUG-1998 | ai:antigravity
+    mod bug_1998 {
+        use super::*;
+        use crate::history_cache::{HistoryCacheStatus, IndexMiss};
+
+        #[test]
+        fn head_behind_tip_formatters_neither_say_catches_up_nor_suggest_rebuild() {
+            let st = HistoryCacheStatus {
+                exists: true,
+                head: Some("1111111".into()),
+                tip: Some("2222222".into()),
+                head_behind_tip: true,
+                tip_live_elsewhere: false,
+                complete: true,
+                events: 42,
+                commits: 10,
+                ..Default::default()
+            };
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                lines.contains("another checkout moved the shared index on"),
+                "status lines must state another checkout moved shared index on:\n{lines}"
+            );
+            assert!(
+                !lines.contains("catches up"),
+                "status lines must NOT say catches up:\n{lines}"
+            );
+            assert!(
+                !lines.contains("rebuild"),
+                "status lines must NOT suggest rebuild:\n{lines}"
+            );
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                doc.contains("another checkout moved the shared index on"),
+                "doctor line must state another checkout moved shared index on:\n{doc}"
+            );
+            assert!(
+                !doc.contains("catches up"),
+                "doctor line must NOT say catches up:\n{doc}"
+            );
+            assert!(
+                !doc.contains("rebuild"),
+                "doctor line must NOT suggest rebuild:\n{doc}"
+            );
+        }
+
+        #[test]
+        fn tip_live_elsewhere_formatters_neither_say_catches_up_nor_suggest_rebuild() {
+            let st = HistoryCacheStatus {
+                exists: true,
+                head: Some("1111111".into()),
+                tip: Some("2222222".into()),
+                head_behind_tip: false,
+                tip_live_elsewhere: true,
+                complete: true,
+                events: 42,
+                commits: 10,
+                ..Default::default()
+            };
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                lines.contains("another checkout moved the shared index on"),
+                "status lines must state another checkout moved shared index on:\n{lines}"
+            );
+            assert!(
+                !lines.contains("catches up"),
+                "status lines must NOT say catches up:\n{lines}"
+            );
+            assert!(
+                !lines.contains("rebuild"),
+                "status lines must NOT suggest rebuild:\n{lines}"
+            );
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                doc.contains("another checkout moved the shared index on"),
+                "doctor line must state another checkout moved shared index on:\n{doc}"
+            );
+            assert!(
+                !doc.contains("catches up"),
+                "doctor line must NOT say catches up:\n{doc}"
+            );
+            assert!(
+                !doc.contains("rebuild"),
+                "doctor line must NOT suggest rebuild:\n{doc}"
+            );
+        }
+
+        #[test]
+        fn diverged_head_with_tip_live_elsewhere_gets_no_rebuild_miss_and_note() {
+            let mut st_live = HistoryCacheStatus {
+                exists: true,
+                head: Some("aaaaaaa".into()),
+                tip: Some("bbbbbbb".into()),
+                head_behind_tip: false,
+                tip_live_elsewhere: true,
+                complete: true,
+                ..Default::default()
+            };
+            let miss = history_cache::classify_miss(&st_live);
+            assert_eq!(
+                miss,
+                IndexMiss::CheckoutBehind,
+                "tip live elsewhere must classify as CheckoutBehind"
+            );
+            let note = crate::history_flow::fallback_note(miss);
+            assert!(
+                !note.contains("rebuild"),
+                "CheckoutBehind fallback note must not suggest rebuild:\n{note}"
+            );
+
+            // Without tip live elsewhere, diverged head must classify as Stuck
+            st_live.tip_live_elsewhere = false;
+            let stuck_miss = history_cache::classify_miss(&st_live);
+            assert_eq!(
+                stuck_miss,
+                IndexMiss::Stuck,
+                "diverged tip not live elsewhere must classify as Stuck"
+            );
+            let stuck_note = crate::history_flow::fallback_note(stuck_miss);
+            assert!(
+                stuck_note.contains("rebuild"),
+                "Stuck fallback note must suggest rebuild:\n{stuck_note}"
+            );
+        }
+
+        #[test]
+        fn diverged_tip_is_live_elsewhere_detected_by_status_at() {
+            let mut fx = Fixture::new();
+            let mut s = Spec::new("STORY-1", "Story", "Live elsewhere");
+            fx.put(&s);
+            fx.commit("commit 1 on main");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+
+            // Create branch "other" at current tip
+            fx.git(&["branch", "other"]);
+
+            // Advance main with a new commit
+            s.status = "Approved".into();
+            fx.put(&s);
+            fx.commit("commit 2 on other path");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+
+            let st_after_rebuild = history_cache::status_at(&fx.store, &fx.db);
+            let indexed_tip = st_after_rebuild.tip.clone().unwrap();
+
+            // Create a diverged history on branch "diverged" starting from commit 1
+            fx.git(&["checkout", "-b", "diverged", "HEAD~1"]);
+            s.title = "Diverged story".into();
+            fx.put(&s);
+            fx.commit("commit 2 on diverged");
+
+            // HEAD and indexed_tip have diverged. Because branch "main" (or "other")
+            // still contains indexed_tip, tip_is_live_elsewhere is true!
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert_eq!(st.tip, Some(indexed_tip.clone()));
+            assert_ne!(st.head, st.tip);
+            assert!(!st.head_behind_tip);
+            assert!(
+                st.tip_live_elsewhere,
+                "tip must be recognized as live on other branch"
+            );
+
+            let miss = history_cache::classify_miss(&st);
+            assert_eq!(miss, IndexMiss::CheckoutBehind);
+
+            let lines = crate::cache_cmd::history_status_lines(&st);
+            let status_line = lines
+                .iter()
+                .find(|l| l.contains("History status:"))
+                .expect("must have History status line");
+            assert!(status_line.contains("another checkout moved the shared index on"));
+            assert!(!status_line.contains("catches up"));
+            assert!(!status_line.contains("rebuild"));
+
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(doc.contains("another checkout moved the shared index on"));
+            assert!(!doc.contains("catches up"));
+            assert!(!doc.contains("rebuild"));
+
+            // Now delete all refs pointing to or containing indexed_tip
+            fx.git(&["branch", "-D", "aida-store"]);
+            fx.git(&["branch", "-D", "other"]);
+
+            let st_orphaned = history_cache::status_at(&fx.store, &fx.db);
+            assert!(
+                !st_orphaned.tip_live_elsewhere,
+                "orphaned tip is not live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st_orphaned), IndexMiss::Stuck);
+        }
+
+        /// The diverged + live-elsewhere setup of
+        /// `diverged_tip_is_live_elsewhere_detected_by_status_at`: HEAD has
+        /// diverged from the indexed tip, which another branch still holds.
+        // trace:BUG-1998 | ai:claude
+        fn diverged_live_elsewhere_fixture() -> Fixture {
+            let mut fx = Fixture::new();
+            let mut s = Spec::new("STORY-1", "Story", "Live elsewhere");
+            fx.put(&s);
+            fx.commit("commit 1 on main");
+            fx.git(&["branch", "other"]);
+            s.status = "Approved".into();
+            fx.put(&s);
+            fx.commit("commit 2 on other path");
+            history_cache::rebuild_full_at(&fx.store, &fx.db).unwrap();
+            fx.git(&["checkout", "-b", "diverged", "HEAD~1"]);
+            s.title = "Diverged story".into();
+            fx.put(&s);
+            fx.commit("commit 2 on diverged");
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(st.error.is_none(), "{:?}", st.error);
+            assert!(!st.head_behind_tip);
+            assert!(st.tip_live_elsewhere, "fixture must start live elsewhere");
+            fx
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn unreadable_store_root_sha_reports_unreadable_not_live_elsewhere() {
+            let fx = diverged_live_elsewhere_fixture();
+            let conn = rusqlite::Connection::open(&fx.db).unwrap();
+            let n = conn
+                .execute(
+                    "UPDATE meta SET value = x'00ff' WHERE key = 'store_root_sha'",
+                    [],
+                )
+                .unwrap();
+            assert_eq!(n, 1, "store_root_sha row must exist");
+            drop(conn);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(
+                st.error.is_some(),
+                "a corrupt store_root_sha must surface as a read error"
+            );
+            assert!(
+                !st.tip_live_elsewhere,
+                "a corrupt store_root_sha must not fail open to live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st), IndexMiss::Unreadable);
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn missing_store_root_sha_row_reads_as_replaced_root_and_stays_stuck() {
+            let fx = diverged_live_elsewhere_fixture();
+            let conn = rusqlite::Connection::open(&fx.db).unwrap();
+            let n = conn
+                .execute("DELETE FROM meta WHERE key = 'store_root_sha'", [])
+                .unwrap();
+            assert_eq!(n, 1, "store_root_sha row must exist");
+            drop(conn);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert!(st.error.is_none(), "{:?}", st.error);
+            assert!(
+                !st.tip_live_elsewhere,
+                "no recorded root reads as a replaced root, not live elsewhere"
+            );
+            assert_eq!(history_cache::classify_miss(&st), IndexMiss::Stuck);
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn behind_or_elsewhere_with_a_stalled_index_gets_no_rebuild_advice() {
+            for (behind, elsewhere) in [(true, false), (false, true)] {
+                let st = HistoryCacheStatus {
+                    exists: true,
+                    head: Some("1111111".into()),
+                    tip: Some("2222222".into()),
+                    head_behind_tip: behind,
+                    tip_live_elsewhere: elsewhere,
+                    catch_up_stalled: true,
+                    complete: true,
+                    ..Default::default()
+                };
+                let label = format!("behind={behind} elsewhere={elsewhere}");
+                let lines = crate::cache_cmd::history_status_lines(&st);
+                let status_line = lines
+                    .iter()
+                    .find(|l| l.contains("History status:"))
+                    .expect("must have History status line");
+                assert!(
+                    status_line.contains("another checkout moved the shared index on"),
+                    "{label}: {status_line}"
+                );
+                assert!(!status_line.contains("rebuild"), "{label}: {status_line}");
+                assert!(!status_line.contains("stalled"), "{label}: {status_line}");
+
+                let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+                assert!(
+                    doc.contains("another checkout moved the shared index on"),
+                    "{label}: {doc}"
+                );
+                assert!(!doc.contains("rebuild"), "{label}: {doc}");
+                assert!(!doc.contains("not catching up"), "{label}: {doc}");
+
+                assert_eq!(
+                    history_cache::classify_miss(&st),
+                    IndexMiss::CheckoutBehind,
+                    "{label}"
+                );
+            }
+        }
+
+        // trace:BUG-1998 | ai:claude
+        #[test]
+        fn replaced_root_with_a_branch_on_the_old_tip_stays_stuck() {
+            // The task_1507 root-change setup: a branch keeps the old tip
+            // and the store is soft-reset onto a squashed root. The next
+            // query resets the index, so status must not call it live
+            // elsewhere.
+            let mut fx = Fixture::new();
+            build_linear(&mut fx);
+            assert_parity(&fx, &opts(), "initial");
+            fx.git(&["branch", "keep-old", "HEAD"]);
+            let squashed = fx
+                .git(&["commit-tree", "HEAD^{tree}", "-m", "squashed"])
+                .trim()
+                .to_string();
+            fx.git(&["reset", "-q", "--soft", &squashed]);
+
+            let st = history_cache::status_at(&fx.store, &fx.db);
+            assert_ne!(st.head, st.tip);
+            assert!(!st.head_behind_tip);
+            assert!(
+                !st.tip_live_elsewhere,
+                "a replaced root is not live elsewhere"
+            );
+            let miss = history_cache::classify_miss(&st);
+            assert_eq!(miss, IndexMiss::Stuck);
+            let note = crate::history_flow::fallback_note(miss);
+            assert!(note.contains("aida cache rebuild --history"), "{note}");
+
+            let lines = crate::cache_cmd::history_status_lines(&st).join("\n");
+            assert!(
+                !lines.contains("another checkout moved"),
+                "cache status must not blame another checkout:\n{lines}"
+            );
+            let doc = crate::doctor_cmd::history_index_doctor_line(&st, true);
+            assert!(
+                !doc.contains("another checkout moved"),
+                "doctor must not blame another checkout:\n{doc}"
+            );
+
+            // The query really does reset, as ensure_fresh always did.
+            assert_parity(&fx, &opts(), "after compact");
+            assert!(test_support::meta(&fx.db, "last_reset_reason")
+                .unwrap()
+                .contains("root commit changed"));
+        }
+    }
 }

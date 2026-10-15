@@ -514,6 +514,12 @@ pub(crate) enum FailureKind {
     /// lease/worktree that blocked retry and auto-draft suppresses duplicates.
     // trace:BUG-908 | ai:codex
     LeaseConflict,
+    /// BUG-1930: the phase's headless stream recorded permission denials and
+    /// the phase produced no commit or PR. The agent stopped because its
+    /// writes were refused (sandbox / permission mode), an environmental
+    /// cause: never transient-retried, and not a reason to draft a BUG.
+    // trace:BUG-1930 | ai:claude
+    PermissionDenied,
     /// BUG-826: the headless vendor process exited non-zero after creating a
     /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
     /// the implementer attempted the work and failed.
@@ -632,6 +638,7 @@ impl FailureKind {
                 | Self::Watchdog
                 | Self::CacheLocked
                 | Self::LeaseConflict
+                | Self::PermissionDenied
                 // trace:BUG-826 | ai:codex
                 | Self::LaunchNoOutput
                 // trace:BUG-1063 | ai:codex
@@ -667,6 +674,7 @@ impl FailureKind {
             Self::Watchdog | Self::CiTimeout => "watchdog",
             Self::CacheLocked => "cache-locked",
             Self::LeaseConflict => "lease-conflict",
+            Self::PermissionDenied => "permission-denied",
             Self::Internal => "internal",
             Self::Spawn
             | Self::MissingTool
@@ -686,6 +694,41 @@ impl FailureKind {
             // trace:TASK-1459 | ai:claude
             Self::ReviewInProgress => "review-in-progress",
         }
+    }
+
+    /// BUG-1930: the inverse of [`Self::cause_slug`], used where a failure
+    /// crosses a process boundary as its slug (the pipelined child sidecar).
+    /// Shared slugs map to one representative kind with the same slug, so
+    /// `from_cause_slug(k.cause_slug()).cause_slug() == k.cause_slug()` for
+    /// every kind. An unknown slug is `None`.
+    // trace:BUG-1930 | ai:claude
+    pub(crate) fn from_cause_slug(slug: &str) -> Option<Self> {
+        Some(match slug {
+            "verdict:request-changes" => Self::VerdictRequestChanges,
+            "verdict:reject" => Self::VerdictReject,
+            "reviewer-wrote" => Self::ReviewerWrote,
+            "rework-no-op" => Self::ReworkNoOp,
+            "ci-red" => Self::CiRed,
+            "ci-unavailable" => Self::CiUnavailable,
+            "no-verdict" => Self::NoVerdict,
+            "no-pr" => Self::NoPr,
+            "watchdog" => Self::Watchdog,
+            "cache-locked" => Self::CacheLocked,
+            "lease-conflict" => Self::LeaseConflict,
+            "permission-denied" => Self::PermissionDenied,
+            "internal" => Self::Internal,
+            "environmental" => Self::LaunchNoOutput,
+            "headless-wait" => Self::HeadlessWait,
+            "stale-base-refused" => Self::StaleBaseRefused,
+            "stale-base-conflict" => Self::StaleBaseConflict,
+            "merge-hold" => Self::MergeHold,
+            "stale-approval" => Self::StaleApproval,
+            "launch-refused" => Self::LaunchRefused,
+            "tool-exit" => Self::Failed,
+            "shipped-mismatch" => Self::ShippedMismatch,
+            "review-in-progress" => Self::ReviewInProgress,
+            _ => return None,
+        })
     }
 }
 
@@ -1212,6 +1255,21 @@ pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
     )
 }
 
+/// BUG-1930: the failure for a phase that stopped on permission denials
+/// (`tools`, as [`crate::questions::headless_log_permission_denied_tools`]
+/// lists them) without producing a commit or PR.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn permission_denied_failure(tools: &[String]) -> PhaseFailure {
+    PhaseFailure::of(
+        FailureKind::PermissionDenied,
+        format!(
+            "the agent stopped after permission denials ({}) and produced no commit or PR — \
+             its writes were refused, so this is an environment problem, not the spec",
+            tools.join(", ")
+        ),
+    )
+}
+
 /// STORY-975: clamp `[drain] retry_transient` to the supported retry budget.
 /// The value is retries, not total attempts: default `1` means attempt `2/2`.
 // trace:STORY-975 | ai:codex
@@ -1525,6 +1583,13 @@ pub(crate) trait PhaseDriver {
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
+    /// Confirm the reviewer queue before reporting the through-CI handoff,
+    /// including a resume or lifecycle tag that bypassed session teardown.
+    // trace:BUG-1807 | ai:codex
+    fn confirm_review_handoff(&mut self) -> Result<(), PhaseFailure> {
+        Ok(())
+    }
+
     /// Prove phase 2's terminal result belongs to the head phase 3 would
     /// review. This boundary hook runs before PhaseEntered(reviewer).
     // trace:BUG-1460 | ai:codex
@@ -2031,6 +2096,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
     // [`FailureKind::Failed`] default (the spawned work ran and reported
     // failure) — the pre-BUG-218 behaviour for that phase.
     match (phase, kind) {
+        // BUG-1930: writes were refused, so re-running changes nothing until
+        // the permission boundary does. trace:BUG-1930 | ai:claude
+        (_, FailureKind::PermissionDenied) => format!(
+            "The agent's writes were denied — check the sandbox / permission mode \
+             (`[agents] contained` in ~/.aida/agents.toml, `aida doctor`), then re-drive: \
+             `aida queue work {spec}`"
+        ),
         (Phase::Implementer, FailureKind::NoPr) => {
             let resume = ctx
                 .implementer_session
@@ -2370,9 +2442,9 @@ fn render_through_ci_checkpoint(
         .map(|n| format!("{noun}-{n}"))
         .unwrap_or_else(|| format!("{noun}-N"));
     let review_cmd = if let Some(n) = pr_number {
-        format!("aida queue work {noun}-{n} --for reviewer")
+        format!("aida queue work {noun}-{n} --role reviewer")
     } else {
-        format!("aida queue work {noun}-N --for reviewer")
+        format!("aida queue work {noun}-N --role reviewer")
     };
     // The spec's worktree still holds the PR branch here, so a suggested
     // `--delete-branch` is guaranteed to fail its local-cleanup step — and an
@@ -2423,7 +2495,8 @@ fn finish_through_ci_success(
         }
         extra.push(("variant", "through-ci".to_string()));
         if let Some(pr) = ctx.pr_number {
-            extra.push(("pr", format!("PR-{pr}")));
+            // trace:BUG-1807 | ai:codex
+            extra.push(("pr", format!("{}-{pr}", ctx.forge.change_noun())));
         }
         let borrowed: Vec<(&str, &str)> = extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
         println!(
@@ -3823,8 +3896,12 @@ pub(crate) fn orchestrate_with_resume(
         };
         if let Some((worktree, branch)) = workspace {
             if !json {
+                // BUG-1928: this is the REQUESTED workspace. The child's session
+                // start may serve a warm-pool tree instead; the child announces
+                // the tree it actually runs in (`phase 1 workspace: …`) and the
+                // contained write boundary derived from it. trace:BUG-1928 | ai:claude
                 eprintln!(
-                    "  {} phase 1 workspace: {} [{}]",
+                    "  {} phase 1 workspace requested: {} [{}]",
                     "↳".cyan(),
                     worktree,
                     branch
@@ -4188,6 +4265,18 @@ pub(crate) fn orchestrate_with_resume(
         emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     }
     if variant.last_phase() <= 2 {
+        // trace:BUG-1807 | ai:codex
+        if let Err(failure) = driver.confirm_review_handoff() {
+            return resolve_phase_failure(
+                driver,
+                Phase::Ci,
+                spec,
+                json,
+                &start,
+                &failure,
+                durations,
+            );
+        }
         let ctx = driver.hint_context();
         return finish_through_ci_success(spec, &credited, json, &start, durations, &ctx);
     }
@@ -4677,6 +4766,12 @@ pub(crate) enum BatchDrainOutcome {
     /// failure, so the batch summary must not crash with a false "shipped 0".
     /// trace:BUG-250 | ai:claude
     Held,
+    /// BUG-1930: consecutive specs failed with the same environmental cause
+    /// (see [`environmental_failure_class`]), so the drain halted before
+    /// dispatching another one. The rest of the queue is untouched; the
+    /// operator fixes the environment and re-runs. `cause` is the class slug.
+    // trace:BUG-1930 | ai:claude
+    EnvironmentBlocked { cause: &'static str },
 }
 
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
@@ -4803,6 +4898,21 @@ pub(crate) trait BatchDriver {
     fn cumulative_tokens(&mut self) -> u64 {
         0
     }
+    /// STORY-1130: has a cooperative `aida drain stop` been requested? The
+    /// drain loop asks the driver instead of reading the process-wide
+    /// `AIDA_DRAIN_STOP_FILE` env var itself, so a test driver cannot observe
+    /// another (parallel) test's stop request. Required — no default — so a
+    /// new production driver cannot silently ignore `aida drain stop`; real
+    /// drivers delegate to [`crate::drain_cmd::stop_requested_from_env`].
+    // trace:BUG-1980 | ai:claude
+    fn stop_requested(&mut self) -> bool;
+    /// BUG-1930: how many consecutive same-cause environmental failures halt
+    /// the drain (`0` = never). Real drivers read `[orchestrator]
+    /// environment_halt_after`.
+    // trace:BUG-1930 | ai:claude
+    fn environment_halt_after(&self) -> usize {
+        DEFAULT_ENVIRONMENT_HALT_AFTER
+    }
 }
 
 /// Handle for one pipelined implementer/CI child.
@@ -4857,6 +4967,75 @@ fn failure_budget_exhausted(shelve_events: usize, max_failures: Option<usize>) -
     max_failures.is_some_and(|cap| shelve_events >= cap)
 }
 
+/// BUG-1930: default for `[orchestrator] environment_halt_after`.
+pub(crate) const DEFAULT_ENVIRONMENT_HALT_AFTER: usize = 2;
+
+/// BUG-1930: the environmental class of a failed run, or `None` when the
+/// failure (if any) is about the spec itself. These causes are properties of
+/// the machine, so the next spec would hit them too.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn environmental_failure_class(result: &OrchestrationResult) -> Option<&'static str> {
+    if result.exit_code == 0 {
+        return None;
+    }
+    let failure = result.failure.as_ref()?;
+    if failure.kind == FailureKind::PermissionDenied {
+        return Some(FailureKind::PermissionDenied.cause_slug());
+    }
+    is_environmental_failure(&failure.reason).then_some("resource-exhaustion")
+}
+
+/// BUG-1930: the one-line halt message for an environment-blocked drain:
+/// what happened and what the operator should do about it.
+// trace:BUG-1930 | ai:claude
+pub(crate) fn environment_blocked_message(cause: &str) -> String {
+    let fix = match cause {
+        "permission-denied" => {
+            "the agent's tool calls were denied; allow writes for the drain \
+             (permission mode or agent sandbox settings), then re-run the drain"
+        }
+        "resource-exhaustion" => "free disk space or memory, then re-run the drain",
+        _ => "fix the environment, then re-run the drain",
+    };
+    format!("environment blocked: consecutive specs failed with {cause}; {fix}")
+}
+
+/// BUG-1930: counts consecutive finished specs that failed with the same
+/// environmental class. Any other result resets it.
+// trace:BUG-1930 | ai:claude
+#[derive(Debug, Default)]
+struct EnvironmentStreak {
+    class: Option<&'static str>,
+    count: usize,
+}
+
+impl EnvironmentStreak {
+    /// Record one finished spec. Returns the class once `halt_after`
+    /// consecutive failures share it (`halt_after == 0` never halts).
+    fn observe(&mut self, result: &OrchestrationResult, halt_after: usize) -> Option<&'static str> {
+        let Some(class) = environmental_failure_class(result) else {
+            *self = Self::default();
+            return None;
+        };
+        if self.class == Some(class) {
+            self.count += 1;
+        } else {
+            self.class = Some(class);
+            self.count = 1;
+        }
+        (halt_after > 0 && self.count >= halt_after).then_some(class)
+    }
+
+    /// Should the pipelined scheduler hold off launching another spec? Yes
+    /// while a streak is open and the `in_flight` members alone could bring
+    /// it to `halt_after`. With nothing in flight this is always `false`
+    /// (an open streak is below `halt_after`), so the scheduler never stalls.
+    // trace:BUG-1930 | ai:claude
+    fn defers_launch(&self, in_flight: usize, halt_after: usize) -> bool {
+        halt_after > 0 && self.count > 0 && self.count + in_flight >= halt_after
+    }
+}
+
 // why: the drain's disposition buckets are threaded through as separate
 // `&mut` lists (the same shape `forget_batch_disposition` takes); STORY-1429
 // adds the shelve-event counter alongside them.
@@ -4871,6 +5050,7 @@ fn apply_batch_result(
     skipped: &mut Vec<(String, String)>,
     max_failures: Option<usize>,
     shelve_events: &mut usize,
+    env_halt: Option<&'static str>,
 ) -> Option<BatchDrainResult> {
     if result.exit_code != 0 {
         let phase = result.failed_phase.unwrap_or(Phase::Implementer);
@@ -4882,6 +5062,21 @@ fn apply_batch_result(
             forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
             shelved.push(head.clone());
             *shelve_events += 1;
+            if let Some(cause) = env_halt {
+                // BUG-1930: the same environmental failure again — keep this
+                // spec's disposition, then halt instead of failing the next
+                // one the same way. trace:BUG-1930 | ai:claude
+                return Some(BatchDrainResult {
+                    shipped: shipped.clone(),
+                    punted: punted.clone(),
+                    escalated: escalated.clone(),
+                    shelved: shelved.clone(),
+                    skipped: skipped.clone(),
+                    stopped_at: Some(head),
+                    outcome: BatchDrainOutcome::EnvironmentBlocked { cause },
+                    exit_code: DRIVE_EXIT_HARD_FAIL,
+                });
+            }
             // BUG-1608: the budget is spent the moment the Nth shelve lands —
             // stop here, before the scheduler launches another member.
             // trace:BUG-1608 | ai:claude
@@ -4906,7 +5101,11 @@ fn apply_batch_result(
             shelved: shelved.clone(),
             skipped: skipped.clone(),
             stopped_at: Some(head),
-            outcome: BatchDrainOutcome::Failed(phase),
+            // BUG-1930: an un-shelvable stop that completes an environmental
+            // streak still reports the environment. trace:BUG-1930 | ai:claude
+            outcome: env_halt.map_or(BatchDrainOutcome::Failed(phase), |cause| {
+                BatchDrainOutcome::EnvironmentBlocked { cause }
+            }),
             exit_code: DRIVE_EXIT_HARD_FAIL,
         });
     }
@@ -4988,6 +5187,8 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     // STORY-1429: monotonic shelve-event count for the failure budget.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
+    let mut env_streak = EnvironmentStreak::default(); // trace:BUG-1930 | ai:claude
+    let env_halt_after = driver.environment_halt_after();
     let mut in_flight: std::collections::VecDeque<InFlightMember> =
         std::collections::VecDeque::new();
     let mut launched = 0usize;
@@ -4995,7 +5196,14 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
     loop {
         while !no_more_heads && in_flight.len() < depth {
-            if crate::drain_cmd::stop_requested_from_env() {
+            if driver.stop_requested() {
+                break;
+            }
+            // BUG-1930: an environmental streak is open and the members
+            // already in flight could complete it. Let them finish first
+            // rather than launch another spec into the same broken machine.
+            // trace:BUG-1930 | ai:claude
+            if env_streak.defers_launch(in_flight.len(), env_halt_after) {
                 break;
             }
             if let Some(limit) = max {
@@ -5050,7 +5258,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
         let Some(member) = in_flight.pop_front() else {
             if cap_stop_out.is_some()
-                || crate::drain_cmd::stop_requested_from_env()
+                || driver.stop_requested()
                 || (max.is_some()
                     && launched >= max.unwrap()
                     && !no_more_heads
@@ -5099,6 +5307,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             && through_ci.punt_reason.is_none()
             && through_ci.escalation.is_none();
         if !should_finish_serial {
+            let env_halt = env_streak.observe(&through_ci, env_halt_after);
             if let Some(done) = apply_batch_result(
                 member.spec,
                 through_ci,
@@ -5109,12 +5318,14 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut skipped,
                 max_failures,
                 &mut shelve_events,
+                env_halt,
             ) {
                 return done;
             }
             continue;
         }
         let final_result = driver.finish_spec_after_ci(&member.spec);
+        let env_halt = env_streak.observe(&final_result, env_halt_after);
         if let Some(done) = apply_batch_result(
             member.spec,
             final_result,
@@ -5125,6 +5336,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             &mut skipped,
             max_failures,
             &mut shelve_events,
+            env_halt,
         ) {
             return done;
         }
@@ -5181,6 +5393,30 @@ pub(crate) fn drain_batch_with_caps(
     start: std::time::Instant,
     cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
 ) -> BatchDrainResult {
+    drain_batch_with_caps_streak(
+        driver,
+        max,
+        max_failures,
+        caps,
+        start,
+        cap_stop_out,
+        &mut EnvironmentStreak::default(),
+    )
+}
+
+/// BUG-1930: [`drain_batch_with_caps`] with a caller-owned environment streak,
+/// so a `--batches` chain counts consecutive environmental failures across
+/// batch boundaries instead of restarting the count in every batch.
+// trace:BUG-1930 | ai:claude
+fn drain_batch_with_caps_streak(
+    driver: &mut dyn BatchDriver,
+    max: Option<usize>,
+    max_failures: Option<usize>,
+    caps: &crate::drain_caps::DrainCaps,
+    start: std::time::Instant,
+    cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
+    env_streak: &mut EnvironmentStreak,
+) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
     let mut escalated: Vec<String> = Vec::new();
@@ -5191,6 +5427,7 @@ pub(crate) fn drain_batch_with_caps(
     // `shelved` list keeps reporting final dispositions only.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
+    let env_halt_after = driver.environment_halt_after();
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -5224,7 +5461,7 @@ pub(crate) fn drain_batch_with_caps(
         };
         // STORY-1130: `aida drain stop` is cooperative: let the in-flight spec
         // land, then stop before picking up another head.
-        if crate::drain_cmd::stop_requested_from_env() {
+        if driver.stop_requested() {
             return BatchDrainResult {
                 shipped,
                 punted,
@@ -5307,6 +5544,7 @@ pub(crate) fn drain_batch_with_caps(
         }
         let result = driver.run_spec(&head);
         acted += 1;
+        let env_halt = env_streak.observe(&result, env_halt_after);
         if result.exit_code != 0 {
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
             // EPIC-28: a shelvable failure parks the spec and the drain
@@ -5328,6 +5566,19 @@ pub(crate) fn drain_batch_with_caps(
                 );
                 shelved.push(head.clone());
                 shelve_events += 1;
+                if let Some(cause) = env_halt {
+                    // trace:BUG-1930 | ai:claude
+                    return BatchDrainResult {
+                        shipped,
+                        punted,
+                        escalated,
+                        shelved,
+                        skipped,
+                        stopped_at: Some(head),
+                        outcome: BatchDrainOutcome::EnvironmentBlocked { cause },
+                        exit_code: DRIVE_EXIT_HARD_FAIL,
+                    };
+                }
                 // BUG-1608: stop as soon as the Nth shelve lands — never pick
                 // (let alone run) another head on a spent failure budget.
                 // trace:BUG-1608 | ai:claude
@@ -5352,7 +5603,12 @@ pub(crate) fn drain_batch_with_caps(
                 shelved,
                 skipped,
                 stopped_at: Some(head),
-                outcome: BatchDrainOutcome::Failed(phase),
+                // BUG-1930: an un-shelvable stop that completes an
+                // environmental streak still reports the environment.
+                // trace:BUG-1930 | ai:claude
+                outcome: env_halt.map_or(BatchDrainOutcome::Failed(phase), |cause| {
+                    BatchDrainOutcome::EnvironmentBlocked { cause }
+                }),
                 // TASK-1054: a batch that hard-stopped on a failure (un-shelvable,
                 // or over the `--max-failures` budget) is the canonical hard
                 // failure — `3`, NOT the failed-phase index (which collided with
@@ -5793,6 +6049,10 @@ where
     let mut escalated = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
+    // BUG-1930: one streak for the whole chain — a denied spec at the end of
+    // one batch and another at the start of the next are still consecutive.
+    // trace:BUG-1930 | ai:claude
+    let mut env_streak = EnvironmentStreak::default();
 
     for batch_name in batch_names {
         let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
@@ -5810,13 +6070,14 @@ where
         };
         let mut batch_cap_stop = None;
         let mut driver = make_driver(batch_name);
-        let result = drain_batch_with_caps(
+        let result = drain_batch_with_caps_streak(
             driver.as_mut(),
             remaining,
             max_failures,
             &batch_caps,
             start,
             &mut batch_cap_stop,
+            &mut env_streak,
         );
 
         for spec in &result.shipped {
@@ -5916,6 +6177,21 @@ where
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
                     outcome: BatchDrainOutcome::Failed(phase),
+                    exit_code: result.exit_code,
+                };
+            }
+            // trace:BUG-1930 | ai:claude
+            outcome @ BatchDrainOutcome::EnvironmentBlocked { .. } => {
+                return BatchChainDrainResult {
+                    steps,
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_batch: Some(batch_name.clone()),
+                    stopped_at: result.stopped_at,
+                    outcome,
                     exit_code: result.exit_code,
                 };
             }
@@ -6471,6 +6747,7 @@ mod tests {
         /// to drive a specific typed failure (e.g. `LaunchRefused`) through
         /// the orchestrator without inventing a bespoke mock method per kind.
         fail_kind: Option<FailureKind>,
+        handoff_fails: bool,
         verdict: Verdict,
         /// BUG-241: what [`PhaseDriver::reconcile_failure`] returns. Defaults
         /// to `GenuineFailure` so every pre-BUG-241 failure test is unchanged.
@@ -6637,6 +6914,7 @@ mod tests {
                 calls: Vec::new(),
                 fail_at: None,
                 fail_kind: None,
+                handoff_fails: false,
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
@@ -7038,6 +7316,13 @@ mod tests {
                 ));
             }
             Ok(())
+        }
+        fn confirm_review_handoff(&mut self) -> Result<(), PhaseFailure> {
+            if self.handoff_fails {
+                Err(PhaseFailure::new("MR-35 reviewer queue insertion failed"))
+            } else {
+                Ok(())
+            }
         }
         fn verify_ci_for_review(&mut self) -> Result<(), PhaseFailure> {
             if self.ci_no_checks_head_advance {
@@ -7725,6 +8010,8 @@ mod tests {
             "verdict:reject",
             "ci-red",
             "lease-conflict",
+            // trace:BUG-1930 | ai:claude
+            "permission-denied",
             "merge-hold",
             "environmental",
             "internal",
@@ -9179,6 +9466,9 @@ mod tests {
             fn next_head(&mut self) -> Option<String> {
                 self.queue.first().cloned()
             }
+            fn stop_requested(&mut self) -> bool {
+                false
+            }
             fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
                 self.ran.push(spec.to_string());
                 OrchestrationResult {
@@ -9222,6 +9512,9 @@ mod tests {
         impl BatchDriver for OneInconclusiveDriver {
             fn next_head(&mut self) -> Option<String> {
                 self.queue.first().cloned()
+            }
+            fn stop_requested(&mut self) -> bool {
+                false
             }
             fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
                 self.ran.push(spec.to_string());
@@ -10172,6 +10465,46 @@ mod tests {
         );
     }
 
+    /// BUG-1930: a synthetic headless stream whose implementer stopped on
+    /// permission denials classifies as PermissionDenied (not LeaseConflict,
+    /// not a transient NoPr): never retried, the reason names the denied
+    /// tools, and the hint points at the permission boundary.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn permission_denied_stream_is_a_distinct_unretried_failure() {
+        let stream = concat!(
+            "{\"type\":\"system\",\"subtype\":\"init\"}\n",
+            "not json\n",
+            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,",
+            "\"permission_denials\":[{\"tool_name\":\"Edit\"},{\"tool_name\":\"Edit\"},",
+            "{\"tool_name\":\"Write\"},{\"tool\":\"Bash\"}]}\n",
+        );
+        let tools = crate::questions::headless_log_permission_denied_tools(stream);
+        assert_eq!(tools, vec!["Edit", "Write", "Bash"]);
+        assert!(crate::questions::headless_log_permission_denied_tools(
+            "{\"type\":\"result\",\"permission_denials\":[]}\n"
+        )
+        .is_empty());
+
+        let failure = permission_denied_failure(&tools);
+        assert_eq!(failure.kind, FailureKind::PermissionDenied);
+        assert!(
+            failure.reason.contains("(Edit, Write, Bash)"),
+            "{}",
+            failure.reason
+        );
+        assert!(failure.kind.is_shelvable());
+        assert_eq!(failure.kind.cause_slug(), "permission-denied");
+        assert!(!should_retry_transient_failure(failure.kind, 0, 3));
+        assert_eq!(
+            failure.clone().reclassify_transient().kind,
+            FailureKind::PermissionDenied
+        );
+        let hint = recovery_hint(Phase::Implementer, failure.kind, &ctx());
+        assert!(hint.contains("writes were denied"), "{hint}");
+        assert!(hint.contains("aida queue work TASK-247"), "{hint}");
+    }
+
     // --- Recovery hints: per phase, per failure kind ----------------------
 
     fn ctx() -> HintContext {
@@ -10717,6 +11050,30 @@ mod tests {
         assert_eq!(phases, vec![Phase::Implementer, Phase::Ci]);
     }
 
+    // trace:BUG-1807 | ai:codex
+    #[test]
+    fn bug_1807_through_ci_refuses_success_when_handoff_fails() {
+        for skip_ci in [false, true] {
+            let mut driver = MockPhaseDriver::all_ok();
+            driver.handoff_fails = true;
+            let result = orchestrate_with_lifecycle_skip(
+                &mut driver,
+                "BUG-1807",
+                AutoCompleteVariant::ThroughCi,
+                false,
+                EscalateMode::Blocks,
+                LifecycleSkip {
+                    no_ci_wait: skip_ci,
+                    ..Default::default()
+                },
+                false,
+            );
+            assert_ne!(result.exit_code, 0);
+            assert_eq!(result.failed_phase, Some(Phase::Ci));
+            assert!(!driver.calls.contains(&Phase::Reviewer));
+        }
+    }
+
     // trace:TASK-1155 trace:ADR-11 | ai:codex
     #[test]
     fn through_ci_checkpoint_names_pr_ci_review_and_merge_next_steps() {
@@ -10726,7 +11083,7 @@ mod tests {
         assert!(rendered.contains("PR: PR-123"));
         assert!(rendered.contains("CI: green"));
         assert!(rendered.contains("Review: routed to reviewer queue"));
-        assert!(rendered.contains("Next: aida queue work PR-123 --for reviewer"));
+        assert!(rendered.contains("Next: aida queue work PR-123 --role reviewer"));
         // trace:BUG-758 | ai:claude — no --delete-branch (worktree holds the
         // branch), and ';' not '&&' so the pull leg cannot be dropped.
         assert!(rendered.contains("After review: gh pr merge 123 --squash; aida pull"));
@@ -10737,7 +11094,7 @@ mod tests {
             render_through_ci_checkpoint("TASK-1155", Some(123), crate::forge::ForgeKind::GitLab);
         assert!(gitlab.contains("TASK-1155 MR checkpoint"));
         assert!(gitlab.contains("MR: MR-123"));
-        assert!(gitlab.contains("Next: aida queue work MR-123 --for reviewer"));
+        assert!(gitlab.contains("Next: aida queue work MR-123 --role reviewer"));
         assert!(gitlab.contains("After review: glab mr merge 123 --squash; aida pull"));
         assert!(!gitlab.contains("gh pr"));
     }
@@ -11258,6 +11615,9 @@ mod tests {
     /// like a real `NeedsAttention` punt — leaves the queue.
     struct MockBatchDriver {
         heads: Vec<String>,
+        /// BUG-1930: a shelved spec whose failure carries this kind/reason
+        /// instead of the generic mock failure.
+        shelve_failure: Vec<(String, PhaseFailure)>,
         fail_at: Option<(String, Phase)>,
         stall_spec: Option<String>,
         punt_spec: Option<String>,
@@ -11289,12 +11649,19 @@ mod tests {
         /// TASK-966: reported tokens each `run_spec` adds to the running total,
         /// so a `--max-tokens` cap test can drive the accumulator deterministically.
         tokens_each: u64,
+        /// BUG-1980: this driver's own cooperative stop-request file. The
+        /// drain sees a stop only when *this* path exists — never through the
+        /// process-wide env var a parallel test may have set.
+        // trace:BUG-1980 | ai:claude
+        stop_file: Option<std::path::PathBuf>,
     }
 
     impl MockBatchDriver {
         fn new(heads: &[&str]) -> Self {
             Self {
+                stop_file: None,
                 heads: heads.iter().map(|s| s.to_string()).collect(),
+                shelve_failure: Vec::new(),
                 fail_at: None,
                 stall_spec: None,
                 punt_spec: None,
@@ -11315,8 +11682,22 @@ mod tests {
             self
         }
 
+        /// BUG-1980: stop cooperatively once `path` exists.
+        fn stop_file(mut self, path: &std::path::Path) -> Self {
+            self.stop_file = Some(path.to_path_buf());
+            self
+        }
+
         fn failing(mut self, spec: &str, phase: Phase) -> Self {
             self.fail_at = Some((spec.to_string(), phase));
+            self
+        }
+
+        /// BUG-1930: shelve `spec` at phase 1 with this failure kind/reason.
+        fn shelving_with(mut self, spec: &str, kind: FailureKind, reason: &str) -> Self {
+            self.shelve_at.push((spec.to_string(), Phase::Implementer));
+            self.shelve_failure
+                .push((spec.to_string(), PhaseFailure::of(kind, reason)));
             self
         }
 
@@ -11379,6 +11760,11 @@ mod tests {
             self.heads.first().cloned()
         }
 
+        // trace:BUG-1980 | ai:claude
+        fn stop_requested(&mut self) -> bool {
+            self.stop_file.as_deref().is_some_and(|p| p.exists())
+        }
+
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
             self.runs.push(spec.to_string());
             if let Some((fail_spec, phase)) = &self.fail_at {
@@ -11414,7 +11800,12 @@ mod tests {
                             self.skipped.push((dep, reason));
                         }
                     }
-                    return shelve_result(phase);
+                    let mut result = shelve_result(phase);
+                    if let Some((_, failure)) = self.shelve_failure.iter().find(|(s, _)| s == spec)
+                    {
+                        result.failure = Some(failure.clone());
+                    }
+                    return result;
                 }
             }
             if self.stall_spec.as_deref() == Some(spec) {
@@ -11466,6 +11857,9 @@ mod tests {
         reshelve: std::collections::HashMap<String, usize>,
         handle_spec: std::collections::HashMap<usize, String>,
         delayed_child: bool,
+        /// BUG-1930: pass each child result through the real sidecar JSON,
+        /// as the production child/parent process boundary does.
+        via_sidecar: bool,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11481,7 +11875,17 @@ mod tests {
                 reshelve: std::collections::HashMap::new(),
                 handle_spec: std::collections::HashMap::new(),
                 delayed_child: false,
+                via_sidecar: false,
             }
+        }
+
+        /// BUG-1930: `spec` stops in phase 1 with this failure kind/reason.
+        // trace:BUG-1930 | ai:claude
+        fn failing_through_ci_with(mut self, spec: &str, kind: FailureKind, reason: &str) -> Self {
+            let mut result = shelve_result(Phase::Implementer);
+            result.failure = Some(PhaseFailure::of(kind, reason));
+            self.through_ci_by_spec.insert(spec.to_string(), result);
+            self
         }
 
         /// STORY-1429: `spec` shelves through CI `times` times, and each
@@ -11507,6 +11911,11 @@ mod tests {
     impl BatchDriver for MockPipelinedBatchDriver {
         fn next_head(&mut self) -> Option<String> {
             self.heads.first().cloned()
+        }
+
+        // trace:BUG-1980 | ai:claude
+        fn stop_requested(&mut self) -> bool {
+            false
         }
 
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
@@ -11553,6 +11962,13 @@ mod tests {
                 .through_ci_results
                 .remove(&handle.0)
                 .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci));
+            // BUG-1930: cross the same JSON boundary a real child does.
+            let result = if self.via_sidecar {
+                let json = crate::pipelined_child_result_sidecar_json(&result);
+                crate::parse_pipelined_child_result_sidecar(&json).expect("sidecar parses")
+            } else {
+                result
+            };
             // STORY-1429: a shelved spec with a pending requeue goes back to
             // the head, as `aida rework` would put it.
             if result.shelved_reason.is_some() {
@@ -11727,11 +12143,9 @@ mod tests {
     fn drain_stop_request_stops_before_next_spec() {
         let dir = tempfile::tempdir().unwrap();
         let stop_file = dir.path().join("drain-stop.json");
-        let _env = crate::test_env::EnvVarsGuard::apply(&[(
-            "AIDA_DRAIN_STOP_FILE",
-            Some(stop_file.to_string_lossy().as_ref()),
-        )]);
-        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+        // BUG-1980: the stop path belongs to this driver, not the process env,
+        // so no parallel drain test can observe it.
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stop_file(&stop_file);
 
         let first = drain_batch(&mut driver, Some(1), None);
         assert_eq!(first.shipped, vec!["TASK-1"]);
@@ -11787,6 +12201,28 @@ mod tests {
                 cap: 25_000
             })
         );
+    }
+
+    #[test]
+    fn drain_ignores_stop_request_for_a_different_project_root() {
+        // BUG-1980 regression: a stop request for another project's drain
+        // (published through the process-wide `AIDA_DRAIN_STOP_FILE`, as a
+        // sibling test or `aida drain start` would) must not stop this drain.
+        // trace:BUG-1980 | ai:claude
+        let other_root = tempfile::tempdir().unwrap();
+        let other_stop = crate::drain_cmd::drain_stop_path(other_root.path());
+        std::fs::create_dir_all(other_stop.parent().unwrap()).unwrap();
+        std::fs::write(&other_stop, "{}").unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(
+            "AIDA_DRAIN_STOP_FILE",
+            Some(other_stop.to_string_lossy().as_ref()),
+        )]);
+        let own_root = tempfile::tempdir().unwrap();
+        let own_stop = crate::drain_cmd::drain_stop_path(own_root.path());
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).stop_file(&own_stop);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
     }
 
     /// TASK-966: inactive caps leave the drain behaving exactly like the
@@ -12130,6 +12566,235 @@ mod tests {
                 "blocked-by TASK-B (Needs Attention)".to_string()
             )]
         );
+    }
+
+    /// BUG-1930: two consecutive specs fail phase 1 on permission denials,
+    /// so the drain halts before dispatching the third, exits non-zero, and
+    /// reports the environment rather than a per-spec failure.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_halts_after_consecutive_environmental_failures() {
+        let denied = "phase 1 stopped: permission denied for Edit, Write";
+        let mut driver = MockBatchDriver::new(&["A", "B", "C"])
+            .shelving_with("A", FailureKind::PermissionDenied, denied)
+            .shelving_with("B", FailureKind::PermissionDenied, denied);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        assert_eq!(driver.runs, vec!["A", "B"], "C must never be dispatched");
+        assert_eq!(
+            driver.heads,
+            vec!["C"],
+            "the rest of the queue is untouched"
+        );
+    }
+
+    /// BUG-1930: a `--batches` chain shares one streak, so one denied spec
+    /// per single-spec batch still halts the chain instead of shelving every
+    /// batch in turn.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_streak_spans_chain_batches() {
+        let names = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
+        let result = drain_batch_chain(&names, None, None, |name| match name {
+            "alpha" => Box::new(MockBatchDriver::new(&["A"]).shelving_with(
+                "A",
+                FailureKind::PermissionDenied,
+                "denied",
+            )),
+            "beta" => Box::new(MockBatchDriver::new(&["B"]).shelving_with(
+                "B",
+                FailureKind::PermissionDenied,
+                "denied",
+            )),
+            "gamma" => Box::new(MockBatchDriver::new(&["C"])),
+            other => panic!("unexpected batch {other}"),
+        });
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.stopped_batch.as_deref(), Some("beta"));
+        assert_eq!(result.steps.len(), 2, "gamma should never start");
+    }
+
+    /// BUG-1930: the streak only counts CONSECUTIVE same-cause failures — a
+    /// different failure in between resets it, and so does a ship.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_streak_needs_consecutive_same_cause_failures() {
+        let mut driver = MockBatchDriver::new(&["A", "B", "C", "D"])
+            .shelving_with("A", FailureKind::PermissionDenied, "denied")
+            .shelving_with("B", FailureKind::NoPr, "no PR opened")
+            .shelving_with("C", FailureKind::PermissionDenied, "denied");
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(driver.runs, vec!["A", "B", "C", "D"]);
+
+        let mut disk = MockBatchDriver::new(&["A", "B", "C"])
+            .shelving_with("A", FailureKind::Internal, "No space left on device")
+            .shelving_with("B", FailureKind::PermissionDenied, "denied");
+        let result = drain_batch(&mut disk, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(disk.runs, vec!["A", "B", "C"]);
+    }
+
+    /// BUG-1930: at pipeline depth 2, two members that stop on permission
+    /// denials halt the drain, and the third member is never launched. The
+    /// child results cross the real sidecar JSON, so a sidecar that drops the
+    /// failure fails this test.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_halts_after_consecutive_environmental_failures() {
+        let denied = "phase 1 stopped: permission denied for Edit, Write";
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2)
+            .failing_through_ci_with("A", FailureKind::PermissionDenied, denied)
+            .failing_through_ci_with("B", FailureKind::PermissionDenied, denied);
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        assert_eq!(
+            driver.events,
+            vec!["start:A", "start:B", "wait:1", "wait:2"],
+            "C must never be launched"
+        );
+        assert_eq!(
+            driver.heads,
+            vec!["C"],
+            "the rest of the queue is untouched"
+        );
+    }
+
+    /// BUG-1930: resource exhaustion travels the same pipelined path (its
+    /// class comes from the failure reason, which the sidecar must carry).
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_halts_on_resource_exhaustion_via_sidecar() {
+        let disk = "No space left on device";
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2)
+            .failing_through_ci_with("A", FailureKind::Internal, disk)
+            .failing_through_ci_with("B", FailureKind::Failed, disk);
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "resource-exhaustion"
+            }
+        );
+        assert!(!driver.events.iter().any(|e| e == "start:C"));
+    }
+
+    /// BUG-1930: an environmental failure only defers launches while the
+    /// in-flight members could complete the streak; a ship in between
+    /// reopens the pipeline and every member still runs.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_environment_gate_reopens_after_a_ship() {
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D"], 2)
+            .failing_through_ci_with("A", FailureKind::PermissionDenied, "denied");
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shelved, vec!["A"]);
+        assert_eq!(result.shipped, vec!["B", "C", "D"]);
+
+        let streak = EnvironmentStreak {
+            class: Some("permission-denied"),
+            count: 1,
+        };
+        assert!(streak.defers_launch(1, 2));
+        assert!(
+            !streak.defers_launch(0, 2),
+            "never stall with nothing in flight"
+        );
+        assert!(!streak.defers_launch(1, 3));
+        assert!(!streak.defers_launch(1, 0), "halt disabled, no gate");
+        assert!(!EnvironmentStreak::default().defers_launch(2, 2));
+    }
+
+    /// BUG-1930: `environment_halt_after = 0` disables the halt; the drain
+    /// falls back to shelving every failure.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_halt_disabled_by_zero() {
+        let mut streak = EnvironmentStreak::default();
+        let mut denied = shelve_result(Phase::Implementer);
+        denied.failure = Some(PhaseFailure::of(FailureKind::PermissionDenied, "denied"));
+        assert_eq!(streak.observe(&denied, 0), None);
+        assert_eq!(streak.observe(&denied, 0), None);
+        assert_eq!(streak.observe(&denied, 2), Some("permission-denied"));
+        assert_eq!(streak.observe(&ok_result(), 2), None);
+        assert_eq!(streak.observe(&denied, 2), None, "a ship resets the streak");
+    }
+
+    /// BUG-1930: the machine summary carries `halt_reason`, and the halt
+    /// threshold is configurable under `[orchestrator]`.
+    // trace:BUG-1930 | ai:claude
+    #[test]
+    fn environment_halt_reason_and_config_key() {
+        let blocked = BatchDrainOutcome::EnvironmentBlocked {
+            cause: "permission-denied",
+        };
+        assert_eq!(
+            crate::drain_next_n::batch_halt_reason(&blocked),
+            serde_json::json!("permission-denied")
+        );
+        assert_eq!(
+            crate::drain_next_n::batch_outcome_label(&blocked),
+            "environment-blocked"
+        );
+        assert!(crate::drain_next_n::batch_halt_reason(&BatchDrainOutcome::Drained).is_null());
+        assert!(environment_blocked_message("permission-denied").contains("re-run the drain"));
+
+        let default = crate::orchestrator::OrchestratorConfig::from_toml_str("");
+        assert_eq!(
+            default.environment_halt_after,
+            DEFAULT_ENVIRONMENT_HALT_AFTER
+        );
+        let cfg = crate::orchestrator::OrchestratorConfig::from_toml_str(
+            "[orchestrator]\nenvironment_halt_after = 3\n",
+        );
+        assert_eq!(cfg.environment_halt_after, 3);
     }
 
     /// EPIC-28: the `max_failures` safety cap stops the drain when too
@@ -13152,6 +13817,9 @@ mod tests {
     impl BatchDriver for ScenarioBatchDriver {
         fn next_head(&mut self) -> Option<String> {
             self.heads.first().map(|m| m.spec.clone())
+        }
+        fn stop_requested(&mut self) -> bool {
+            false
         }
         fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
             let scenario = self

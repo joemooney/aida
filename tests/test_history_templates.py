@@ -251,7 +251,9 @@ def main():
             local = stamp.astimezone(ZoneInfo(zone))
             crossed_boundary |= local.date() != stamp.date()
             expected_timestamp = local.strftime("%Y-%m-%d %H:%M")
-            baseline = json.loads(run(*base, "--json", extra=zone_env).stdout)
+            # Bare `history --json` is the status flow; the per-event feed is
+            # `--full`. trace:STORY-1650 | ai:claude
+            baseline = json.loads(run(*base, "--full", "--json", extra=zone_env).stdout)
             assert baseline.keys() == full_json.keys()
             assert baseline["count"] == full_json["count"] > 0
             for actual, original_row in zip(baseline["events"], full_json["events"]):
@@ -262,7 +264,7 @@ def main():
                 cache.unlink()
             for mode in ["1", "1", "0"]:  # cold cache, warm cache, disabled git walk
                 options = {**zone_env, "AIDA_HISTORY_CACHE": mode}
-                selected_dates = json.loads(run(*base, "--since", "2h", "--json", extra=options).stdout)
+                selected_dates = json.loads(run(*base, "--since", "2h", "--full", "--json", extra=options).stdout)
                 assert selected_dates["events"] == baseline["events"]
                 assert selected_dates["source"] == ("history-cache" if mode == "1" else "git-walk"), selected_dates
                 # Exact acceptance command uses default visibility and limits,

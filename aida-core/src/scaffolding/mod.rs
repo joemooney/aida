@@ -2346,6 +2346,7 @@ aida show <SPEC-ID>
             // prepare-commit-msg hook — pins the orphan store SHA into
             // every code commit's `Aida-Store:` trailer. Pairs with
             // `aida store status`. trace:EPIC-21 | ai:claude
+            // trace:BUG-1810 | ai:antigravity
             if self.config.include_store_pair_hook {
                 let body = crate::templates::EMBEDDED_TEMPLATES
                     .get("hooks/aida-store-pair.sh")
@@ -4711,6 +4712,50 @@ mod tests {
             "--no-human",
         ] {
             assert!(body.contains(gate), "portable body lost `{gate}`");
+        }
+    }
+
+    /// Both orchestrate bodies cap child concurrency, budget each child, make
+    /// the child model explicit instead of assumed, and ask for targeted reads.
+    // trace:BUG-1816 | ai:claude
+    #[test]
+    fn orchestrate_bodies_cap_concurrency_and_budget_children() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        for key in [
+            "skills/aida-orchestrate.md",
+            "skills-portable/aida-orchestrate.md",
+        ] {
+            let body = EMBEDDED_TEMPLATES
+                .get(key)
+                .expect("orchestrate body embedded");
+            for guidance in [
+                "Dispatch implementers (bounded parallel)",
+                "at most 3 live child sessions",
+                "Per-child budget.",
+                "retry silently",
+                "--max-runtime",
+                "--max-tokens",
+                "parent's model explicitly to inherit it",
+                "`aida agent new codex`",
+                "time budget is the one you enforce live",
+                "Bounded check-ins.",
+                "rg -n <term> <file>",
+                "sed -n '<a>,<b>p' <file>",
+            ] {
+                assert!(body.contains(guidance), "{key} lacks `{guidance}`");
+            }
+        }
+        // The command summary carries the same cap and budget sentence.
+        let command = EMBEDDED_TEMPLATES
+            .get("commands/aida-orchestrate.md")
+            .expect("orchestrate command embedded");
+        for guidance in [
+            "Keep at most 3 child sessions live",
+            "wall-clock and token budget",
+            "state the\n   child's model explicitly",
+            "never retried silently",
+        ] {
+            assert!(command.contains(guidance), "command lacks `{guidance}`");
         }
     }
 

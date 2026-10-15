@@ -20,7 +20,7 @@ other way.
 Every row is grounded in trade-offs already documented in the migration material,
 not in aspiration. The source documents are:
 
-- `docs/agents/porting-claude-code-to-codex.md` — the conceptual Claude-to-Codex
+- `docs/archive/audits/porting-claude-code-to-codex.md` — the conceptual Claude-to-Codex
   migration analysis (what ports cleanly, what does not, and why).
 - `docs/agents/claude-surfaces-codex-parity.md` — the ground-truth surface-by-
   surface inventory (file and symbol references for every Claude-specific hook,
@@ -286,7 +286,7 @@ to change.
 
 ## See also
 
-- `docs/agents/porting-claude-code-to-codex.md` — the full conceptual migration
+- `docs/archive/audits/porting-claude-code-to-codex.md` — the full conceptual migration
   analysis this page distils, including the worked before/after examples.
 - `docs/agents/claude-surfaces-codex-parity.md` — the surface-by-surface inventory
   with file/symbol references and per-axis coverage.

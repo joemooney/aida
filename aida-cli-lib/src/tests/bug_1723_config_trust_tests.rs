@@ -145,12 +145,15 @@ fn detected_sites(root: &Path, crates: &[&str]) -> BTreeMap<String, usize> {
                 .filter(|(_, l)| is_config_toml_site(l))
                 .count();
             if count > 0 {
-                let rel = file
+                let mut rel = file
                     .strip_prefix(root)
                     .expect("file is under root")
                     .to_string_lossy()
                     .replace('\\', "/");
-                sites.insert(rel, count);
+                if rel.starts_with("aida-cli-lib/src/lib_part") {
+                    rel = "aida-cli-lib/src/lib.rs".to_string();
+                }
+                *sites.entry(rel).or_insert(0) += count;
             }
         }
     }
@@ -165,7 +168,7 @@ fn rs_files(dir: &Path) -> Vec<PathBuf> {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            // src/tests/ holds #[path]-included test modules: never production.
+            // src/tests/ holds test modules: never production.
             if path.file_name().is_some_and(|n| n == "tests") {
                 continue;
             }

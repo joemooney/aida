@@ -44,7 +44,7 @@
 //! | wrapper | binary | behaviour |
 //! |---------|--------|-----------|
 //! | old (no `eval-block`) | new | bare payload — byte-identical to today |
-//! | new (`eval-block`)    | old | no markers found → wrapper evals whole stdout (legacy path) |
+//! | new (`eval-block`)    | old | no markers found → display only; update the binary for shell mutations |
 //! | new                   | new | marked block: payload eval'd, prose displayed |
 //! | none (raw `eval "$(aida …)"`) | new | bare payload — unchanged |
 //!
@@ -73,6 +73,67 @@ pub(crate) const EVAL_BLOCK_CAP: &str = "eval-block";
 // trace:STORY-780 | ai:claude
 pub(crate) const INIT_CD_CAP: &str = "init-cd";
 
+/// The capability token a wrapper advertises when its `init` case branch reads
+/// the `cd` block from the SIDE-CHANNEL FILE named by [`INIT_CD_FILE_ENV`]
+/// instead of capturing stdout. Distinct from `init-cd`, and the two are not
+/// advertised together: a wrapper speaking this token leaves the child's
+/// stdout attached to the terminal, so stdout markers aimed at it would print
+/// as inert comment noise and the `cd` would be lost. A binary that predates
+/// the file channel sees neither `init-cd` nor a meaningful env var and prints
+/// the plain copy-paste hint, which is the correct degradation.
+// trace:BUG-0445 | ai:claude
+pub(crate) const INIT_CD_FILE_CAP: &str = "init-cd-file";
+
+/// The capability token a wrapper advertises in `AIDA_SHELL_WRAPPER` when its
+/// option scoping is safe for zsh (`setopt localoptions` rather than the
+/// leaking bare `local -`).
+// trace:BUG-2005 | ai:antigravity
+pub(crate) const ZSH_LOCALOPTS_CAP: &str = "zsh-localopts";
+
+/// Environment variable the wrapper sets on the `aida init` child, naming the
+/// private file that receives the marker-delimited `cd` block. Set per
+/// invocation (never exported into the shell), so the child's stdout stays its
+/// own: an interactive init renders human output and shows its prompts live
+/// instead of being buffered inside a command substitution.
+// trace:BUG-0445 | ai:claude
+pub(crate) const INIT_CD_FILE_ENV: &str = "AIDA_INIT_CD_FILE";
+
+/// The side-channel path the wrapper handed THIS process, captured once by
+/// [`take_init_cd_file_from_env`]. `None` until captured or when unset.
+// trace:BUG-1960 | ai:claude
+static INIT_CD_FILE: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+
+/// Read [`INIT_CD_FILE_ENV`] once and remove it from the process environment,
+/// so no process this one spawns (git, forge CLIs, extensions, a nested
+/// `aida`) inherits it. A nested `aida init` that saw the outer wrapper's path
+/// would overwrite the outer `cd` block with its own. Must run at a
+/// single-threaded point (the top of `main_entry`), because mutating the
+/// environment while other threads read it is unsound.
+// trace:BUG-1960 | ai:claude
+pub(crate) fn take_init_cd_file_from_env() {
+    let value = std::env::var_os(INIT_CD_FILE_ENV);
+    if value.is_some() {
+        std::env::remove_var(INIT_CD_FILE_ENV);
+    }
+    let _ = INIT_CD_FILE.set(value);
+}
+
+/// The side-channel path captured at process entry, if the wrapper set one.
+// trace:BUG-1960 | ai:claude
+pub(crate) fn init_cd_file() -> Option<&'static std::ffi::OsStr> {
+    INIT_CD_FILE.get().and_then(|v| v.as_deref())
+}
+
+/// Write `payload` to the side-channel file at `path` as a marker-delimited
+/// block. The wrapper applies the same exactly-one-marker-pair validation to
+/// the file that it applies to stdout for the legacy verbs, so a file that was
+/// never written, was truncated mid-write, or holds anything outside the
+/// markers is never eval'd.
+// trace:BUG-0445 | ai:claude
+pub(crate) fn write_init_cd_file(path: &std::path::Path, payload: &str) -> std::io::Result<()> {
+    std::fs::write(path, format!("{EVAL_BEGIN}\n{payload}\n{EVAL_END}\n"))
+}
+
 /// Nesting depth, so an outer emitter that internally calls another one still
 /// produces exactly ONE block (a nested pair of markers would end the block
 /// early and leak the tail into ordinary stdout).
@@ -94,6 +155,12 @@ pub(crate) fn marker_has_cap(marker: Option<&str>, cap: &str) -> bool {
 // trace:TASK-1171 | ai:claude
 pub(crate) fn marker_speaks_eval_block(marker: Option<&str>) -> bool {
     marker_has_cap(marker, EVAL_BLOCK_CAP)
+}
+
+/// Pure decision for whether the caller's wrapper advertises `zsh-localopts`.
+// trace:BUG-2005 | ai:antigravity
+pub(crate) fn marker_speaks_zsh_localopts(marker: Option<&str>) -> bool {
+    marker_has_cap(marker, ZSH_LOCALOPTS_CAP)
 }
 
 /// Does the wrapper in the CALLER's shell speak the dedicated-channel protocol?
@@ -199,5 +266,38 @@ mod tests {
         }
         drop(outer);
         assert_eq!(DEPTH.load(Ordering::SeqCst), 0, "depth unwinds on drop");
+    }
+
+    /// The side-channel file carries exactly one marker pair around the
+    /// payload and nothing else, so the wrapper's strict validation accepts it.
+    // trace:BUG-0445 | ai:claude
+    #[test]
+    fn init_cd_file_holds_exactly_one_marked_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cd-file");
+        write_init_cd_file(&path, "cd '/srv/proj'").unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(body, format!("{EVAL_BEGIN}\ncd '/srv/proj'\n{EVAL_END}\n"));
+        assert_eq!(body.matches(EVAL_BEGIN).count(), 1);
+        assert_eq!(body.matches(EVAL_END).count(), 1);
+    }
+
+    /// The file channel and the stdout channel are different capabilities and
+    /// neither token is a substring match for the other.
+    // trace:BUG-0445 | ai:claude
+    #[test]
+    fn init_cd_file_cap_is_distinct_from_init_cd() {
+        assert!(marker_has_cap(
+            Some("eval-block,init-cd-file"),
+            INIT_CD_FILE_CAP
+        ));
+        assert!(!marker_has_cap(
+            Some("eval-block,init-cd-file"),
+            INIT_CD_CAP
+        ));
+        assert!(!marker_has_cap(
+            Some("eval-block,init-cd"),
+            INIT_CD_FILE_CAP
+        ));
     }
 }

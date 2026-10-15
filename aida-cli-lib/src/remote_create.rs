@@ -854,12 +854,19 @@ pub(crate) fn gitlab_release_api_url(remote_url: &str, tag: &str) -> Option<Stri
     ))
 }
 
-fn gitlab_release_token_from_env() -> Option<String> {
-    std::env::var("AIDA_GITLAB_TOKEN")
-        .ok()
-        .or_else(|| std::env::var("GITLAB_TOKEN").ok())
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty())
+/// `AIDA_GITLAB_TOKEN`, else `GITLAB_TOKEN`, with the variable it came from.
+/// Neither is tied to a host, so callers try glab's host-scoped token first.
+// trace:BUG-1972 | ai:claude
+fn gitlab_release_token_from_env() -> Option<(&'static str, String)> {
+    ["AIDA_GITLAB_TOKEN", "GITLAB_TOKEN"]
+        .into_iter()
+        .find_map(|var| {
+            std::env::var(var)
+                .ok()
+                .map(|token| token.trim().to_string())
+                .filter(|token| !token.is_empty())
+                .map(|token| (var, token))
+        })
 }
 
 fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
@@ -892,6 +899,10 @@ fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> 
     gitlab_release_token_from_glab_config_body(host, &body)
 }
 
+/// The token a glab `config.yml` body stores for `host`. Keys compare
+/// case-insensitively with any `:port` and trailing dot dropped, so a key
+/// `host:port` matches every port on that host; the first matching key wins.
+// trace:BUG-1972 | ai:claude
 fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<String> {
     let yaml: serde_yaml::Value = serde_yaml::from_str(body).ok()?;
     let host_key = host.to_ascii_lowercase();
@@ -900,7 +911,13 @@ fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<
         let Some(config_host) = key.as_str() else {
             continue;
         };
-        if config_host.trim().to_ascii_lowercase() != host_key {
+        // A key may carry a port or a trailing dot; the host never does.
+        // trace:BUG-1972 | ai:claude
+        let config_host = config_host.trim().to_ascii_lowercase();
+        let config_host = config_host
+            .split_once(':')
+            .map_or(config_host.as_str(), |(h, _)| h);
+        if config_host.trim_end_matches('.') != host_key.trim_end_matches('.') {
             continue;
         }
         return value
@@ -913,14 +930,43 @@ fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<
     None
 }
 
+/// Where a GitLab token came from.
+// trace:BUG-1972 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GitlabTokenSource {
+    /// The token `glab auth login --hostname <host>` stored for this host.
+    GlabHost,
+    /// An env var (`AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`) that names no host.
+    Env(&'static str),
+}
+
+/// The GitLab token for `host`: the host-scoped token `glab auth login`
+/// stored, else `AIDA_GITLAB_TOKEN` / `GITLAB_TOKEN`. The host-scoped token
+/// wins so an env token minted for one GitLab (say gitlab.com) is never sent
+/// to another host that has its own login; the env token is only a fallback,
+/// and [`GitlabTokenSource::Env`] lets the caller say so. Backs the
+/// create-if-missing project fallback.
+// trace:STORY-1656 | ai:claude
+// trace:BUG-1972 | ai:claude
+pub(crate) fn gitlab_token_for_host(host: &str) -> Option<(String, GitlabTokenSource)> {
+    if let Some(token) = gitlab_release_token_from_glab_config_for_host(&host.to_ascii_lowercase())
+    {
+        return Some((token, GitlabTokenSource::GlabHost));
+    }
+    gitlab_release_token_from_env().map(|(var, token)| (token, GitlabTokenSource::Env(var)))
+}
+
+/// The token for a GitLab release-API read, by the same host-scoped-first
+/// order as [`gitlab_token_for_host`]. A URL with no parsable host can only
+/// use the env token. The probe is a silent background read, so the env
+/// fallback is not announced here.
+// trace:TASK-1223 | ai:codex
+// trace:BUG-1972 | ai:claude
 fn gitlab_release_token_for_api_url(api_url: &str) -> Option<String> {
-    gitlab_release_token_from_env().or_else(|| {
-        // trace:TASK-1223 | ai:codex
-        // Private GitLab mirrors often rely on `glab auth login`; reuse glab's
-        // host-scoped token when no AIDA/GitLab env token is present.
-        let host = gitlab_host_from_api_url(api_url)?;
-        gitlab_release_token_from_glab_config_for_host(&host)
-    })
+    match gitlab_host_from_api_url(api_url) {
+        Some(host) => gitlab_token_for_host(&host).map(|(token, _)| token),
+        None => gitlab_release_token_from_env().map(|(_, token)| token),
+    }
 }
 
 fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
@@ -952,7 +998,8 @@ fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
     None
 }
 
-fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
+// trace:BUG-2004 | ai:antigravity
+pub(crate) fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
     let mut cmd = Command::new("curl");
     cmd.args([
         "--silent",
@@ -962,15 +1009,33 @@ fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         "--write-out",
         "\n%{http_code}",
     ]);
-    if let Some(token) = gitlab_release_token_for_api_url(api_url) {
-        cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
-    }
-    let out = cmd.arg(api_url).output().ok()?;
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let token = gitlab_release_token_for_api_url(api_url);
+    let out = if let Some(token) = token {
+        cmd.args(["-H", "@-"]);
+        cmd.stdin(std::process::Stdio::piped());
+        let mut child = cmd.arg(api_url).spawn().ok()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            let header = format!("PRIVATE-TOKEN: {token}\n");
+            if stdin.write_all(header.as_bytes()).is_err() {
+                drop(stdin);
+                let _ = child.wait();
+                return None;
+            }
+            drop(stdin);
+        }
+        child.wait_with_output().ok()?
+    } else {
+        cmd.stdin(std::process::Stdio::null());
+        cmd.arg(api_url).output().ok()?
+    };
     if !out.status.success() {
         return None;
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let (body, status) = stdout.rsplit_once('\n')?;
+    let (body, status) = stdout.trim_end().rsplit_once('\n')?;
     let status_code = status.trim().parse::<u16>().ok()?;
     if (200..300).contains(&status_code) {
         Some(gitlab_release_body_exists(tag, body).unwrap_or(true))
@@ -1986,6 +2051,10 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
                 std::fs::write(&target, &script)
                     .with_context(|| format!("failed to refresh {}", target.display()))?;
             }
+            // BUG-2009: an AIDA hook is always 0755; git skips it otherwise.
+            // trace:BUG-2009 | ai:claude
+            aida_core::git_ops::set_hook_mode(&target)
+                .with_context(|| format!("failed to make {} executable", target.display()))?;
             println!("{check} pre-push mirror hook already installed");
             return Ok(());
         }
@@ -2018,6 +2087,22 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
 /// the git remote, list it for store-leg fan-out, install the code-leg
 /// pre-push hook. Idempotent — safe to re-run.
 pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) -> Result<()> {
+    use std::io::IsTerminal;
+    // A config change is committed (non-TTY / accepted prompt) or announced,
+    // never left silently dirty. trace:BUG-1938 | ai:claude
+    let mode = crate::config_commit::mode_for_terminal(std::io::stdin().is_terminal());
+    run_remote_mirror(project_root, name, url, mode).map(|_| ())
+}
+
+/// [`handle_remote_mirror`] with the config-commit decision injected, so
+/// tests can drive both the commit and the hint path without a terminal.
+// trace:BUG-1938 | ai:claude
+pub(crate) fn run_remote_mirror(
+    project_root: &Path,
+    name: &str,
+    url: Option<&str>,
+    mode: crate::config_commit::CommitMode,
+) -> Result<crate::config_commit::ConfigChangeOutcome> {
     if name == "origin" {
         anyhow::bail!(
             "`origin` is the primary hub — name the extra hub to mirror to (e.g. `aida remote mirror gitlab --url <clone-url>`)"
@@ -2028,17 +2113,36 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
 
     // 1. The git remote itself.
     if aida_core::git_ops::has_remote(project_root, name) {
-        if let Some(u) = url {
-            let existing = git_out(project_root, &["remote", "get-url", name])
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default();
-            if !existing.is_empty() && existing != u {
+        let existing = git_out(project_root, &["remote", "get-url", name])
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        println!("{check} remote `{name}` already configured");
+        // A re-run with --url (say after `glab auth login`) must still
+        // create a missing project, or fan-out is wired to a project that
+        // does not exist. Only when the remote already names the same
+        // project as --url: a different URL is kept, never probed, so no
+        // project is created at a URL the operator did not name. Without
+        // --url the re-run stays offline.
+        // trace:BUG-1972 | ai:claude
+        // An empty `existing` means `git remote get-url` failed: nothing to probe.
+        if let Some(u) = url.filter(|_| !existing.is_empty()) {
+            if crate::doctor_cmd::same_remote(&existing, u) {
+                // trace:BUG-2004 | ai:antigravity
+                crate::gitlab_project_create::ensure_gitlab_project_exists(
+                    project_root,
+                    name,
+                    &existing,
+                    false,
+                )?;
+            } else {
                 eprintln!(
-                    "{warn} remote `{name}` already points at {existing} — keeping it (re-point with `git remote set-url {name} <url>`)"
+                    "{warn} remote `{name}` already points at {} — keeping it and not \
+                     checking for a missing project there (re-point with \
+                     `git remote set-url {name} <url>`)",
+                    crate::gitlab_project_create::redact_url_userinfo(&existing)
                 );
             }
         }
-        println!("{check} remote `{name}` already configured");
     } else {
         let Some(u) = url else {
             anyhow::bail!("remote `{name}` does not exist — pass --url <clone-url> to add it");
@@ -2050,12 +2154,26 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
             .status()
             .context("invoking git remote add")?;
         if !add.success() {
-            anyhow::bail!("`git remote add {name} {u}` failed");
+            anyhow::bail!(
+                "`git remote add {name} {}` failed",
+                crate::gitlab_project_create::redact_url_userinfo(u)
+            );
         }
-        println!("{check} added remote `{name}` → {u}");
+        // trace:BUG-1972 | ai:claude
+        println!(
+            "{check} added remote `{name}` → {}",
+            crate::gitlab_project_create::redact_url_userinfo(u)
+        );
+        // A GitLab group that refuses push-to-create gets the project made
+        // through the API (private), so the first mirror push lands. A
+        // missing token leaves the remote wired and exits non-zero with the
+        // manual recipe. trace:STORY-1656 | ai:claude
+        // trace:BUG-2004 | ai:antigravity
+        crate::gitlab_project_create::ensure_gitlab_project_exists(project_root, name, u, false)?;
     }
 
     // 2. Store-leg fan-out config.
+    let config_was_clean = crate::config_commit::config_is_clean(project_root);
     if add_mirror_remote_to_config(project_root, name)? {
         println!(
             "{check} listed `{name}` in [store.sync] mirror_remotes — store pushes now fan out"
@@ -2067,11 +2185,32 @@ pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) 
     // 3. Code-leg pre-push hook.
     install_mirror_pre_push_hook(project_root)?;
 
+    // 4. Settle the config change. trace:BUG-1938 | ai:claude
+    let outcome = crate::config_commit::finish_config_change(
+        project_root,
+        config_was_clean,
+        mode,
+        &format!("[AI:aida] chore(remote): list {name} as a store mirror"),
+    );
+
     println!();
     println!("Every `git push origin …` now mirrors the pushed code refs to `{name}`");
     println!("(best-effort — a mirror failure warns without blocking the push).");
-    println!("Check hub drift anytime with: aida remote status");
-    Ok(())
+    println!();
+    println!("{}", mirror_next_steps(name));
+    Ok(outcome)
+}
+
+/// The block every `aida remote mirror` run ends with: the first push skips
+/// a mirror origin has not confirmed yet, so bring every hub level now and
+/// check it.
+// trace:BUG-1938 | ai:claude
+fn mirror_next_steps(name: &str) -> String {
+    format!(
+        "Next steps:\n  \
+         aida remote mirror-sync    # bring `{name}` level with origin now\n  \
+         aida remote status         # confirm every hub is in sync"
+    )
 }
 
 // ───────────────────────── multi-hub store reconcile ─────────────────────
@@ -2084,6 +2223,7 @@ fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(repo)
+        .args(aida_core::git_ops::transaction_git_config())
         .args(args)
         .output()
         .ok()?;
@@ -2318,177 +2458,72 @@ pub fn handle_remote_reconcile(
     }
 
     // ── execute ──
-    if !needs_action {
+    // trace:TASK-1717 | ai:claude — discovery above ran without the store
+    // write lock (network reads only). Everything that touches the local store
+    // runs under it, against the CURRENT head: the dirty check, the preimage,
+    // the frontier and the decision whether anything needs doing (a local
+    // commit made after discovery counts), every fast-forward or union merge,
+    // the validation, and the rollback of any failure after the first merge.
+    // The pushes run after release and name the union commit.
+    let reconciled = aida_core::db::with_store_write_lock(&store_dir, || {
+        if git_ops::has_changes_checked(&store_dir)? {
+            anyhow::bail!(
+                "the store worktree at {} has uncommitted changes — commit or clean them first",
+                store_dir.display()
+            );
+        }
+        let pre = git_ops::head_sha(&store_dir)?;
+        let mut tips: Vec<String> = vec![pre.clone()];
+        for h in &hubs {
+            if let Some(s) = &h.sha {
+                if !tips.contains(s) {
+                    tips.push(s.clone());
+                }
+            }
+        }
+        let frontier: Vec<String> = tips
+            .iter()
+            .filter(|t| {
+                !tips.iter().any(|other| {
+                    *t != other && git_ops::is_ancestor(&store_dir, t, other).unwrap_or(false)
+                })
+            })
+            .cloned()
+            .collect();
+        let target = if frontier.len() > 1 {
+            None
+        } else {
+            frontier.first().cloned()
+        };
+        let hub_behind = hubs.iter().any(|h| match (&h.sha, &target) {
+            (Some(s), Some(u)) => s != u,
+            _ => true,
+        });
+        let local_behind = target.as_ref().is_some_and(|u| *u != pre);
+        if frontier.len() <= 1 && !hub_behind && !local_behind {
+            return Ok(None);
+        }
+        let mut merge_notes: Vec<String> = Vec::new();
+        match merge_and_validate(
+            &store_dir,
+            project_root,
+            &hubs,
+            &tips,
+            &frontier,
+            yes,
+            &mut merge_notes,
+        ) {
+            Ok(union) => Ok(Some((union, frontier, merge_notes))),
+            Err(e) => Err(rollback_to_preimage(&store_dir, &pre, e)),
+        }
+    })?;
+    let Some((union, frontier, merge_notes)) = reconciled else {
         println!(
             "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
             crate::glyph(crate::glyphs::Glyph::Check)
         );
         return Ok(());
-    }
-    if git_ops::worktree_is_dirty(&store_dir) {
-        anyhow::bail!(
-            "the store worktree at {} has uncommitted changes — commit or clean them first",
-            store_dir.display()
-        );
-    }
-
-    let pre = local.clone();
-    let reset_to_pre = || {
-        let _ = Command::new("git")
-            .arg("-C")
-            .arg(&store_dir)
-            .args(["reset", "--hard", &pre])
-            .status();
     };
-
-    // Merge every frontier tip not already contained in HEAD. Fast-forward
-    // when possible; otherwise the structural union merge.
-    let mut merge_notes: Vec<String> = Vec::new();
-    for tip in &frontier {
-        let head = git_ops::head_sha(&store_dir)?;
-        if *tip == head || git_ops::is_ancestor(&store_dir, tip, &head).unwrap_or(false) {
-            continue;
-        }
-        if git_ops::is_ancestor(&store_dir, &head, tip).unwrap_or(false) {
-            if git_out(&store_dir, &["merge", "--ff-only", tip]).is_none() {
-                reset_to_pre();
-                anyhow::bail!("fast-forward to {} failed", short(tip));
-            }
-            continue;
-        }
-        match git_ops::merge_union_auto(
-            &store_dir,
-            tip,
-            "reconcile multi-hub aida-store (union merge)",
-        ) {
-            Ok(aida_core::git_ops::StorePullOutcome::Clean) => {}
-            Ok(aida_core::git_ops::StorePullOutcome::AutoMerged { notes }) => {
-                merge_notes.extend(notes)
-            }
-            Err(e) => {
-                reset_to_pre();
-                return Err(e.context(format!(
-                    "union merge of {} failed — nothing was pushed; the local store is unchanged",
-                    short(tip)
-                )));
-            }
-        }
-    }
-    let union = git_ops::head_sha(&store_dir)?;
-
-    // Verify: no spec present on any tip may be lost by the union.
-    let ls_objects = |rev: &str| -> std::collections::BTreeSet<String> {
-        git_out(
-            &store_dir,
-            &["ls-tree", "-r", "--name-only", rev, "--", "objects/"],
-        )
-        .map(|out| out.lines().map(str::to_string).collect())
-        .unwrap_or_default()
-    };
-    let union_objects = ls_objects(&union);
-    for tip in &tips {
-        let lost: Vec<String> = ls_objects(tip)
-            .difference(&union_objects)
-            .cloned()
-            .collect();
-        if !lost.is_empty() {
-            reset_to_pre();
-            anyhow::bail!(
-                "union would lose {} spec file(s) present on {} (e.g. {}) — refusing; reconcile manually",
-                lost.len(),
-                short(tip),
-                lost[0]
-            );
-        }
-    }
-
-    // Verify: the unioned block registry must stay collision-free even when
-    // the merge itself was textually clean.
-    let blocks_path = store_dir.join("registry").join("blocks.yaml");
-    if blocks_path.exists() {
-        let registry = aida_core::node::BlockRegistry::load(&blocks_path)?;
-        let collisions = registry.overlapping_ranges();
-        if !collisions.is_empty() {
-            reset_to_pre();
-            anyhow::bail!(
-                "unioned block registry has range collision(s): {} — refusing to publish; resolve the allocation conflict first",
-                collisions.join("; ")
-            );
-        }
-    }
-
-    // Scrub guard (same contract as the canonical store write path): never
-    // publish hub-only content that the identity redaction would have caught.
-    // (1) this machine's raw identity must not appear in anything newly
-    // published; (2) email-bearing registry lines new to some hub need
-    // explicit consent (--yes).
-    let mut newly_published = String::new();
-    let mut newly_published_registry = String::new();
-    for h in &hubs {
-        match &h.sha {
-            Some(s) if *s == union => {}
-            Some(s) => {
-                if let Some(diff) = git_out(&store_dir, &["diff", &format!("{s}..{union}")]) {
-                    for line in diff.lines() {
-                        if line.starts_with('+') && !line.starts_with("+++") {
-                            newly_published.push_str(line);
-                            newly_published.push('\n');
-                        }
-                    }
-                }
-                if let Some(diff) = git_out(
-                    &store_dir,
-                    &["diff", &format!("{s}..{union}"), "--", "registry/"],
-                ) {
-                    for line in diff.lines() {
-                        if line.starts_with('+') && !line.starts_with("+++") {
-                            newly_published_registry.push_str(line);
-                            newly_published_registry.push('\n');
-                        }
-                    }
-                }
-            }
-            None => {
-                // A hub without the branch receives everything — treat the
-                // identity-bearing registry files as newly published.
-                for f in ["registry/nodes.toml", "registry/blocks.yaml", "oplog.yaml"] {
-                    if let Ok(text) = std::fs::read_to_string(store_dir.join(f)) {
-                        newly_published.push_str(&text);
-                        newly_published_registry.push_str(&text);
-                    }
-                }
-            }
-        }
-    }
-    let (pub_host, pub_email) = git_ops::public_identity();
-    let raw_host = crate::hostname();
-    let raw_email = crate::git_config_value(project_root, "user.email");
-    let leaks = git_ops::detect_identity_leaks(
-        &newly_published,
-        (!raw_host.is_empty()).then_some(raw_host.as_str()),
-        raw_email.as_deref(),
-        pub_host.as_deref(),
-        pub_email.as_deref(),
-    );
-    if !leaks.is_empty() {
-        reset_to_pre();
-        anyhow::bail!(
-            "reconcile would publish this machine's raw identity to another hub — {} — scrub it first (`aida store scrub-preview`, docs/security/); nothing was pushed",
-            leaks.join("; ")
-        );
-    }
-    let suspicious: Vec<String> = emails_in(&newly_published_registry)
-        .into_iter()
-        .filter(|e| e != aida_core::git_ops::REDACTED_EMAIL_PLACEHOLDER)
-        .filter(|e| pub_email.as_deref() != Some(e.as_str()))
-        .collect();
-    if !suspicious.is_empty() && !yes {
-        reset_to_pre();
-        anyhow::bail!(
-            "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/security/); nothing was pushed",
-            suspicious.join(", ")
-        );
-    }
 
     // Push the union everywhere. Every hub's old tip is an ancestor of the
     // union, so each push fast-forwards — no force needed, ever.
@@ -2499,7 +2534,7 @@ pub fn handle_remote_reconcile(
         if h.sha.as_deref() == Some(union.as_str()) {
             continue;
         }
-        match git_ops::push(&store_dir, &h.remote, STORE_BRANCH) {
+        match git_ops::push_exact(&store_dir, &h.remote, &union, STORE_BRANCH) {
             Ok(true) => pushed.push(h.remote.clone()),
             Ok(false) => {
                 push_failures.push(format!(
@@ -2547,6 +2582,212 @@ pub fn handle_remote_reconcile(
         );
     }
     Ok(())
+}
+
+fn short(s: &str) -> String {
+    s.chars().take(12).collect()
+}
+
+/// Merge every frontier tip into the store HEAD, then validate the union.
+/// Runs under the caller's store write lock; any error leaves the rollback to
+/// the caller. Returns the union commit.
+// trace:TASK-1717 | ai:claude
+fn merge_and_validate(
+    store_dir: &Path,
+    project_root: &Path,
+    hubs: &[HubStanding],
+    tips: &[String],
+    frontier: &[String],
+    yes: bool,
+    merge_notes: &mut Vec<String>,
+) -> Result<String> {
+    use aida_core::git_ops;
+    // Merge every frontier tip not already contained in HEAD. Fast-forward
+    // when possible; otherwise the structural union merge.
+    for tip in frontier {
+        let head = git_ops::head_sha(store_dir)?;
+        if *tip == head || git_ops::is_ancestor(store_dir, tip, &head).unwrap_or(false) {
+            continue;
+        }
+        if git_ops::is_ancestor(store_dir, &head, tip).unwrap_or(false) {
+            if git_out(store_dir, &["merge", "--ff-only", tip]).is_none() {
+                anyhow::bail!("fast-forward to {} failed", short(tip));
+            }
+            continue;
+        }
+        match git_ops::merge_union_auto(
+            store_dir,
+            tip,
+            "reconcile multi-hub aida-store (union merge)",
+        ) {
+            Ok(aida_core::git_ops::StorePullOutcome::Clean) => {}
+            Ok(aida_core::git_ops::StorePullOutcome::AutoMerged { notes }) => {
+                merge_notes.extend(notes)
+            }
+            Err(e) => {
+                return Err(e.context(format!("union merge of {} failed", short(tip))));
+            }
+        }
+    }
+    let union = git_ops::head_sha(store_dir)?;
+
+    // Verify: no spec present on any tip may be lost by the union.
+    // trace:TASK-1717 | ai:claude — a tree that cannot be listed fails
+    // the check; it is never read as "no objects".
+    let ls_objects = |rev: &str| -> Result<std::collections::BTreeSet<String>> {
+        let out = git_out(
+            store_dir,
+            &["ls-tree", "-r", "--name-only", rev, "--", "objects/"],
+        )
+        .ok_or_else(|| anyhow::anyhow!("cannot list the objects of {}", short(rev)))?;
+        Ok(out.lines().map(str::to_string).collect())
+    };
+    let union_objects = ls_objects(&union)?;
+    for tip in tips {
+        let lost: Vec<String> = ls_objects(tip)?
+            .difference(&union_objects)
+            .cloned()
+            .collect();
+        if !lost.is_empty() {
+            anyhow::bail!(
+            "union would lose {} spec file(s) present on {} (e.g. {}) — refusing; reconcile manually",
+            lost.len(),
+            short(tip),
+            lost[0]
+        );
+        }
+    }
+
+    // Verify: the unioned block registry must stay collision-free even when
+    // the merge itself was textually clean.
+    let blocks_path = store_dir.join("registry").join("blocks.yaml");
+    if blocks_path.exists() {
+        let registry = aida_core::node::BlockRegistry::load(&blocks_path)?;
+        let collisions = registry.overlapping_ranges();
+        if !collisions.is_empty() {
+            anyhow::bail!(
+            "unioned block registry has range collision(s): {} — refusing to publish; resolve the allocation conflict first",
+            collisions.join("; ")
+        );
+        }
+    }
+
+    // Scrub guard (same contract as the canonical store write path): never
+    // publish hub-only content that the identity redaction would have caught.
+    // (1) this machine's raw identity must not appear in anything newly
+    // published; (2) email-bearing registry lines new to some hub need
+    // explicit consent (--yes).
+    let mut newly_published = String::new();
+    let mut newly_published_registry = String::new();
+    for h in hubs {
+        match &h.sha {
+            Some(s) if *s == union => {}
+            Some(s) => {
+                if let Some(diff) = git_out(store_dir, &["diff", &format!("{s}..{union}")]) {
+                    for line in diff.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            newly_published.push_str(line);
+                            newly_published.push('\n');
+                        }
+                    }
+                }
+                if let Some(diff) = git_out(
+                    store_dir,
+                    &["diff", &format!("{s}..{union}"), "--", "registry/"],
+                ) {
+                    for line in diff.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            newly_published_registry.push_str(line);
+                            newly_published_registry.push('\n');
+                        }
+                    }
+                }
+            }
+            None => {
+                // A hub without the branch receives everything — treat the
+                // identity-bearing registry files as newly published.
+                for f in ["registry/nodes.toml", "registry/blocks.yaml", "oplog.yaml"] {
+                    if let Ok(text) = std::fs::read_to_string(store_dir.join(f)) {
+                        newly_published.push_str(&text);
+                        newly_published_registry.push_str(&text);
+                    }
+                }
+            }
+        }
+    }
+    let (pub_host, pub_email) = git_ops::public_identity();
+    let raw_host = crate::hostname();
+    let raw_email = crate::git_config_value(project_root, "user.email");
+    let leaks = git_ops::detect_identity_leaks(
+        &newly_published,
+        (!raw_host.is_empty()).then_some(raw_host.as_str()),
+        raw_email.as_deref(),
+        pub_host.as_deref(),
+        pub_email.as_deref(),
+    );
+    if !leaks.is_empty() {
+        anyhow::bail!(
+        "reconcile would publish this machine's raw identity to another hub — {} — scrub it first (`aida store scrub-preview`, docs/security/); nothing was pushed",
+        leaks.join("; ")
+    );
+    }
+    let suspicious: Vec<String> = emails_in(&newly_published_registry)
+        .into_iter()
+        .filter(|e| e != aida_core::git_ops::REDACTED_EMAIL_PLACEHOLDER)
+        .filter(|e| pub_email.as_deref() != Some(e.as_str()))
+        .collect();
+    if !suspicious.is_empty() && !yes {
+        anyhow::bail!(
+        "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/security/); nothing was pushed",
+        suspicious.join(", ")
+    );
+    }
+
+    Ok(union)
+}
+
+/// Undo an invocation's own partial reconcile: reset the store to the
+/// preimage captured under the same store write lock, then say what is TRUE
+/// afterwards. The original error stays the cause; a failed or incomplete
+/// rollback is reported, never presented as "unchanged".
+// trace:TASK-1717 | ai:claude
+fn rollback_to_preimage(store_dir: &Path, pre: &str, err: anyhow::Error) -> anyhow::Error {
+    use aida_core::git_ops;
+    let reset = Command::new("git")
+        .arg("-C")
+        .arg(store_dir)
+        .args(git_ops::transaction_git_config())
+        .args(["reset", "--hard", pre])
+        .output();
+    let state = match reset {
+        Ok(out) if out.status.success() => match git_ops::head_sha(store_dir) {
+            Ok(head) if head == pre && matches!(git_ops::has_changes_checked(store_dir), Ok(false)) => {
+                format!("the local store is back at {}", short(pre))
+            }
+            Ok(head) => format!(
+                "rollback ran but the local store (at {}, expected {}) is not verifiably clean; inspect {}",
+                short(&head),
+                short(pre),
+                store_dir.display()
+            ),
+            Err(e) => format!(
+                "rollback ran but HEAD could not be read ({e}); inspect {}",
+                store_dir.display()
+            ),
+        },
+        Ok(out) => format!(
+            "rollback to {} FAILED ({}); the local store may be partially merged — inspect {}",
+            short(pre),
+            String::from_utf8_lossy(&out.stderr).trim(),
+            store_dir.display()
+        ),
+        Err(e) => format!(
+            "rollback to {} could not run ({e}); the local store may be partially merged — inspect {}",
+            short(pre),
+            store_dir.display()
+        ),
+    };
+    err.context(format!("reconcile refused; nothing was pushed; {state}"))
 }
 
 #[cfg(test)]
@@ -2813,12 +3054,62 @@ hosts:
         );
     }
 
+    // trace:BUG-1972 | ai:claude
     #[test]
-    fn gitlab_release_token_env_wins_before_glab_config() {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_GITLAB_TOKEN", Some("env-token")),
-            ("GITLAB_TOKEN", Some("secondary-token")),
-        ]);
+    fn glab_config_host_key_matches_through_port_and_trailing_dot() {
+        let body = "hosts:\n  gitlab.corp.example:8443:\n    token: with-port\n  other.example.:\n    token: with-dot\n";
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("gitlab.corp.example", body).as_deref(),
+            Some("with-port")
+        );
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("other.example", body).as_deref(),
+            Some("with-dot")
+        );
+    }
+
+    /// Point the config dir at a temp home and write a glab config there
+    /// holding one token per `(host, token)`.
+    // trace:BUG-1972 | ai:claude
+    fn glab_login_fixture(
+        hosts: &[(&str, &str)],
+        env: &[(&'static str, Option<&str>)],
+    ) -> (tempfile::TempDir, crate::test_env::EnvVarsGuard) {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().display().to_string();
+        let xdg = tmp.path().join(".config").display().to_string();
+        let mut vars: Vec<(&'static str, Option<&str>)> = vec![
+            ("HOME", Some(home.as_str())),
+            ("XDG_CONFIG_HOME", Some(xdg.as_str())),
+        ];
+        vars.extend_from_slice(env);
+        let guard = crate::test_env::EnvVarsGuard::apply(&vars);
+        let mut body = String::from("hosts:\n");
+        for (host, token) in hosts {
+            body.push_str(&format!("  {host}:\n    token: {token}\n"));
+        }
+        let path = glab_config_path().expect("config dir under the temp home");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body).unwrap();
+        (tmp, guard)
+    }
+
+    /// The env tokens are only a fallback: with no glab login for the host,
+    /// `AIDA_GITLAB_TOKEN` beats `GITLAB_TOKEN` and the source says Env.
+    // trace:BUG-1972 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
+    #[test]
+    fn gitlab_token_falls_back_to_env_without_a_glab_login_for_the_host() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let (_tmp, _env) = glab_login_fixture(
+            &[("gitlab.com", "glab-gitlab-com")],
+            &[
+                ("AIDA_GITLAB_TOKEN", Some("env-token")),
+                ("GITLAB_TOKEN", Some("secondary-token")),
+            ],
+        );
 
         assert_eq!(
             gitlab_release_token_for_api_url(
@@ -2826,6 +3117,58 @@ hosts:
             )
             .as_deref(),
             Some("env-token")
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.joemooney.com"),
+            Some((
+                "env-token".to_string(),
+                GitlabTokenSource::Env("AIDA_GITLAB_TOKEN")
+            ))
+        );
+    }
+
+    /// BUG-1972: with an env token AND a glab login for a different host
+    /// present, each host gets its own glab token, never the env one.
+    // trace:BUG-1972 | ai:claude
+    // trace:TASK-1748 | ai:antigravity
+    #[test]
+    fn gitlab_token_prefers_the_host_scoped_glab_login_over_env() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let (_tmp, _env) = glab_login_fixture(
+            &[
+                ("gitlab.com", "glab-gitlab-com"),
+                ("gitlab.joemooney.com", "glab-self-hosted"),
+            ],
+            &[
+                ("AIDA_GITLAB_TOKEN", None),
+                ("GITLAB_TOKEN", Some("env-gitlab-com-token")),
+            ],
+        );
+
+        assert_eq!(
+            gitlab_token_for_host("GITLAB.joemooney.com"),
+            Some(("glab-self-hosted".to_string(), GitlabTokenSource::GlabHost))
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.com"),
+            Some(("glab-gitlab-com".to_string(), GitlabTokenSource::GlabHost))
+        );
+        assert_eq!(
+            gitlab_release_token_for_api_url(
+                "https://gitlab.joemooney.com:8443/api/v4/projects/ai%2Faida/releases/v0.15.0"
+            )
+            .as_deref(),
+            Some("glab-self-hosted")
+        );
+        assert_eq!(
+            gitlab_token_for_host("gitlab.example.test"),
+            Some((
+                "env-gitlab-com-token".to_string(),
+                GitlabTokenSource::Env("GITLAB_TOKEN")
+            )),
+            "a host with no glab login still falls back to the env token"
         );
     }
 
@@ -3835,5 +4178,104 @@ host = \"should.not.count\"
             err.to_string().contains("--url"),
             "error must point at --url: {err}"
         );
+    }
+
+    /// A repo with a local identity and a committed `.aida/config.toml`.
+    // trace:BUG-1938 | ai:claude
+    fn repo_with_committed_config(project: &Path) {
+        init_repo_with_commit(project);
+        git(project, &["config", "user.name", "Test"]);
+        git(project, &["config", "user.email", "test@example.invalid"]);
+        git(project, &["config", "commit.gpgsign", "false"]);
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(project.join(".aida/config.toml"), "[store]\n").unwrap();
+        git(project, &["add", ".aida/config.toml"]);
+        git(project, &["commit", "-q", "-m", "add config"]);
+    }
+
+    // The mirror's config edit is never silent: declined/never-commit runs
+    // print the "config changed; commit it" hint and leave HEAD alone.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_reports_config_change() {
+        use crate::config_commit::{config_change_hint, CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Never).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+        let hint = config_change_hint();
+        assert!(
+            hint.contains("config changed: .aida/config.toml")
+                && hint.contains("commit it with: git add .aida/config.toml && git commit"),
+            "hint must name the file and the commit command: {hint}"
+        );
+        let next = mirror_next_steps("mirror");
+        assert!(next.contains("aida remote mirror-sync"), "{next}");
+        assert!(next.contains("aida remote status"), "{next}");
+    }
+
+    // Non-interactive: the config edit lands as its own chore commit and
+    // the file is clean afterwards.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_commits_config_change_when_clean() {
+        use crate::config_commit::{config_is_clean, CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Auto).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::Committed);
+        assert_eq!(config_is_clean(&project), Some(true));
+        assert_eq!(
+            git_out(&project, &["log", "-1", "--format=%s"])
+                .unwrap()
+                .trim(),
+            "[AI:aida] chore(remote): list mirror as a store mirror"
+        );
+        // Re-running changes nothing and commits nothing.
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+        let again = run_remote_mirror(&project, "mirror", None, CommitMode::Auto).unwrap();
+        assert_eq!(again, ConfigChangeOutcome::Unchanged);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+    }
+
+    // Pre-existing edits to the config are never swept into an automated
+    // commit, even non-interactively.
+    // trace:BUG-1938 | ai:claude
+    #[test]
+    fn handle_remote_mirror_never_commits_a_dirty_config() {
+        use crate::config_commit::{CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "# operator wip\n[store]\n",
+        )
+        .unwrap();
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Auto).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+        let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
+        assert!(body.contains("# operator wip") && body.contains("mirror"));
     }
 }

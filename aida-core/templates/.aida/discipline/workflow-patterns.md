@@ -738,7 +738,7 @@ We missed **Beads (~24.5k★) and Gas Town (~15.9k★)** — AIDA's *nearest* su
 - **Star-velocity / trending / HN front page**; the "X vs Y vs Z 2026" blog genre.
 - **YouTube/podcast** (titles, descriptions' "tools mentioned", comments — readable without watching) + **snowball** from each found tool's README and comparison posts.
 
-Fold this into `docs/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
+Fold this into `docs/archive/competitive-analysis/research-brief.md` so it's structural, not memory-dependent. The standing roster lives in `docs/competitive-analysis/marketplace-roster.md`. Relates to [[feedback_competitive_analysis_is_living_doc]] (this is the *discovery* half; that is the *maintenance* half).
 
 ### feedback_confirming_a_mechanism_is_not_explaining_an_event
 
@@ -933,7 +933,7 @@ Related: [[feedback_absent_is_not_matching]],
 
 **RE-CAUGHT 2026-06-26:** I idled with 11 actionable items, rationalizing it as "don't infinitely chase self-filed follow-ups / leave the healthy backlog for the operator." That is the SAME invent-a-blocker pattern wearing a new hat. A follow-up you filed an hour ago is not exempt: if `aida why` says it's actionable, DRIVE it. The ONLY non-drive items are real operator-strategic-parks (a spec the operator explicitly parked, e.g. GitLab behind stabilization), containers (epics), and genuinely-blocked. "It's a fresh follow-up" / "it's low-priority" / "the operator should prioritize" are NOT on that list.
 
-**Related (BUG-623): in-flight ≠ progressing.** A lease held by a hung/idle session — process alive but the spec hasn't moved in hours — is NOT being worked; `aida why` falsely calls it "being worked now." Check the spec's last-modified + the holder's actual progress, not just that a lease/process exists. Release the stale lease (`aida session end <id> --force` SIGTERMs a hung holder — but a process-kill is destructive, so confirm with the operator first) and re-drive.
+**Related (BUG-623): in-flight ≠ progressing.** A lease held by a hung/idle session — process alive but the spec hasn't moved in hours — is NOT being worked; `aida why` falsely calls it "being worked now." Check the spec's last-modified + the holder's actual progress, not just that a lease/process exists. Release the stale lease (`aida session end <id> --include-in-use` SIGTERMs a hung holder; `--force` alone does not — a process-kill is destructive, so confirm with the operator first) and re-drive.
 
 **How to apply:** (1) Run `aida why`/`burndown plan` and DRIVE every actionable item — fan it; groom every to-groom draft (advisor disposition). (2) The operator already decided by APPROVING the spec; don't re-litigate approved work. (3) Reserve genuine operator-asks for real forks, and even then surface each with a DEFAULT + a one-line flag ("I'll proceed unless you say otherwise"), never a hard park. (4) Architecture/security specs (e.g. a substrate gate) get sketch-first review — but you still DRIVE them (sketch → review → implement), never indefinite park. (5) "Supervised/keyboard-not-headless" applies to UNATTENDED drain of the autonomy keystone itself — not to fanning a worktree-isolated implementer on an approved spec while the operator is present. Related: [[feedback_dont_declare_drained_from_filtered_view]], [[feedback_charge_forward_autonomously]], [[feedback_advocate_not_be_passive]], [[feedback_pushback_on_overengineering]] (capture-vs-build judgment is about NEW ideas, not approved ready-set work).
 
@@ -2702,7 +2702,7 @@ also loud). See [[feedback_prove_a_test_fails_without_the_fix]] and
 
 ### feedback_token_usage_optimization_agent_fleet_economics
 
-Running agent fleets, **token spend is the dominant cost** — and this session (2026-06-29) surfaced three concrete levers. Pair with the warm-pool **compute** finding (30x build saving, `docs/research/2026-06-29-warm-pool-build-delta.md`): that's compute economics; these are token economics.
+Running agent fleets, **token spend is the dominant cost** — and this session (2026-06-29) surfaced three concrete levers. Pair with the warm-pool **compute** finding (30x build saving, `docs/archive/research/2026-06-29-warm-pool-build-delta.md`): that's compute economics; these are token economics.
 
 1. **Supervise EVENT-DRIVEN, not timer-poll.** Waking an LLM on a timer to check "is the drain done yet?" burns tokens on NON-events. Measured: an 8-spec overnight drive paid ~$6 (cold-boot forks) to **$20+** (fork-from-live cache tax) in idle-check wakes that mostly found nothing actionable. The fix (STORY-712): the drain emits state-change events to `.aida/events.jsonl`; a CHEAP non-LLM classifier (`aida watch`) absorbs the benign majority at $0 and emits a wake line ONLY on an actionable verb (CI-terminal, PR-done, punt, shelve, merged, drained); the supervisor consumes it via Monitor (zero tokens while silent). **Supervision cost drops from O(time) to O(real events).** This is firstmate's biggest lever, and the enabler for `aida integrator` (leave it running all day for ~free).
 

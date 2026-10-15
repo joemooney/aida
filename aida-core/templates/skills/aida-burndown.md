@@ -191,7 +191,7 @@ recovery, not license to end the turn early.)
 
 **A wait longer than your foreground budget is the LAUNCHER's job, not yours
 (TASK-1169).** A foreground poll is capped at about ten minutes per call, so a
-slow cross-platform run cannot be covered by one. Keep polling in the
+slow CI run cannot be covered by one. Keep polling in the
 foreground while you are working the wave — that is still the fast path — but
 if a PR's CI genuinely outlasts your turn, **do not background it and do not
 claim a watch**: end the turn having said plainly which PRs are still
