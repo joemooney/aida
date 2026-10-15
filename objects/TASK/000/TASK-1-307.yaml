@@ -1,5 +1,6 @@
 id: 01a14047-4c1f-7833-8671-693286cf0fc1
 spec_id: TASK-1-307
+agreed_id: TASK-1377
 title: aida show near or over the 1s budget; the trip coincides with IO saturation, so re-measure at idle
 description: 'performance-guard trip 2026-10-15 12:47Z: aida show p-over-1000ms was 20.6% (tolerance 10%), worst 11.4s. At 08:40 local, aida show measured 0.94-1.62s while IO PSI some sat at 99% with 10 cargo builds queued on 2 slots. Unproven whether this is load or a regression. Re-measure at idle (no cargo running) before deciding. If idle p50 is above 700ms, profile aida show (cache open and projection read).'
 status: Draft
