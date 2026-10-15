@@ -7,12 +7,12 @@ description: |-
   (1) git_ops.rs ~3813-3821: the refusal for a custom hook that calls aida still returns at the first such hook, so a stale pre-commit next to a custom post-commit is reported only on a second attempt. Collect custom-hook problems too and report everything together.
   (2) hooks_dir ~3872: the refresh follows core.hooksPath without saying so. A shared global hooks directory gets changed for every repo that uses it, and a tracked in-repo hooks directory gets untracked backup files. Print a note, or require confirmation, when the hooks directory is outside the repo's git directory.
   Nits: the header checksum is unused; no fsync before the rename; the output ignores --format json/toon; --only handling is duplicated in lib_part1.rs and scaffold_cmd.rs.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:20:11.259964808Z
-modified_at: 2026-10-14T23:13:56.134865492Z
+modified_at: 2026-10-15T02:34:55.439111522Z
 req_type: Bug
 tags:
 - follow-up
@@ -49,6 +49,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13d69-a249-7b53-92b5-53600649c435
+  author: aida-auto-bump
+  timestamp: 2026-10-15T02:34:55.433788062Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13d69-a24f-7e62-98bb-214753ffaf13
+  timestamp: 2026-10-15T02:34:55.439109372Z
+  agent: advisor
+  commit_sha: 9e9c09c093d998d2f1694a6d75dc54deb82a0254
+  summary: Completed via merge 9e9c09c0
 execution_mode: guided
 filed_at:
   code_sha: 8dc1ae63c31d234d60665b5ec0a24fc01d29741c
@@ -58,3 +71,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T02:34:55.433783412Z
+  completion_sha: 9e9c09c093d998d2f1694a6d75dc54deb82a0254
