@@ -52,6 +52,7 @@ const ATOMIC_FIELDS: &[&str] = &[
     "interface_changes",
     "ai_evaluation",
     "filed_at",
+    "hypothesis_lock", // trace:STORY-1675 | ai:codex
     "origin",
 ];
 
@@ -813,5 +814,54 @@ mod tests {
         let disk = on_disk(&f, "TASK-1");
         assert_eq!(disk.title, "title");
         assert!(disk.tags.contains("protected"));
+    }
+    // trace:STORY-1675 | ai:codex
+    #[test]
+    fn hypothesis_cli_edit_shared_seam_refuses_description_but_allows_title() {
+        let f = fixture();
+        let mut h = spec();
+        h.req_type = aida_core::RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        let mut result = aida_core::Requirement::new("result".into(), "data".into());
+        result.spec_id = Some("TASK-998".into());
+        result.status = aida_core::RequirementStatus::Completed;
+        h.relationships.push(aida_core::models::Relationship {
+            rel_type: aida_core::RelationshipType::References,
+            target_id: result.id,
+            created_at: None,
+            created_by: None,
+        });
+        f.backend.add_requirement(result).unwrap();
+        let read = f.backend.add_requirement(h).unwrap();
+        assert!(read.hypothesis_lock.is_some());
+        let mut planned = read.clone();
+        planned.description = "post hoc".into();
+        let error = write_edit_atomically(
+            &f.backend,
+            "hypothesis",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("aida comment add"), "{error}");
+        planned.description = read.description.clone();
+        planned.title = "retitled".into();
+        let updated = write_edit_atomically(
+            &f.backend,
+            "hypothesis",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap();
+        assert_eq!(updated.title, "retitled");
+        assert_eq!(updated.hypothesis_lock, read.hypothesis_lock);
     }
 }

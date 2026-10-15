@@ -434,6 +434,7 @@ impl PostgresBackend {
             // trace:STORY-634 | ai:claude — origin not carried by legacy backend
             origin: None,
             filed_at: None,
+            hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
             custom_status,
             custom_priority,
             custom_fields,

@@ -289,3 +289,35 @@ You can now shape, query, and groom the graph. Next:
 - **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: turning approved, well-shaped specs into queued work agents can drain.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: where `trace` provenance and the `done → completed` auto-bump live.
 - **[Chapter 1 — Getting started](01-getting-started.md)**: the `add` / `list` / `show` / `edit` floor these graph commands build on.
+
+### Pre-registering a hypothesis
+
+Use an existing spike or decision with the `hypothesis` tag. Write the prediction
+before running the experiment; a useful description skeleton is:
+
+```markdown
+## Prediction
+The outcome I expect, stated so an experiment can test it.
+
+## Refuted if
+The observable result that would refute this prediction.
+
+## Experiments
+The linked specs that will record results.
+```
+
+Create a `references` or `verified-by` relationship to each experiment. Either
+edge direction counts. In the canonical git store, the first mutation that
+links a Completed spec or completes an already-linked experiment permanently
+locks the hypothesis description. The same transaction records
+`hypothesis_lock.locked_at` and a SHA-256 of the UTF-8 description. A description
+rewrite combined with the first result is refused before any rows are written.
+
+After locking, append amendments with `aida comment add <ID> "..."`. Title,
+tags, comments, and relationships can still change. Removing the tag or link,
+reopening or deleting the experiment, and stale saves never clear the lock.
+Deleting or replacing the locked hypothesis itself is refused; archive it to
+hide it. There is no unlock flag. Untagged legacy rows keep their normal edit
+behavior. Archived SQLite/Postgres backends do not store this lock; use the
+canonical git store for pre-registration.
+<!-- trace:STORY-1675 | ai:codex -->

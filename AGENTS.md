@@ -1,3 +1,9 @@
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.

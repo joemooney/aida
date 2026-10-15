@@ -4,7 +4,7 @@
 
 // It is used to keep Rust and TypeScript types in sync.
 
-export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "NeedsAttention";
+export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "Superseded" | "NeedsAttention";
 
 export type PuntCategory = "design-fork" | "ambiguous-spec" | "missing-context" | "blocked-dependency" | "other";
 
@@ -127,11 +127,11 @@ answered_at?: string | null, };
 
 export type RequirementPriority = "High" | "Medium" | "Low";
 
-export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc";
+export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc" | "Faq";
 
 export type MetaSubtype = "Prompt" | "Skill" | "Command" | "Template" | "Config";
 
-export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | "BlockedBy" | "Blocks" | { "Custom": string };
+export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | "BlockedBy" | "Blocks" | "SupersededBy" | "Supersedes" | { "Custom": string };
 
 export type CustomFieldType = "text" | "textarea" | "select" | "boolean" | "date" | "user" | "requirement" | "number";
 
@@ -700,7 +700,23 @@ completed_at?: string | null,
  * Stamped alongside `completed_at`.
  * trace:STORY-86 | ai:claude
  */
-completion_sha?: string | null, };
+completion_sha?: string | null, 
+/**
+ * The workspace repo slug the `completion_sha` commit landed in — the
+ * sibling qualifier that makes a bare SHA resolvable in a multi-repo
+ * shared-store workspace (ADR-12: qualify the record, not the SHA).
+ * Stamped alongside `completion_sha` by the auto-bump path when a
+ * workspace manifest is present. `None` = single-repo / legacy: resolve
+ * against the sole repo, the current behavior.
+ */
+completion_repo?: string | null, 
+/**
+ * Code-repo HEAD when this spec was deliberately reopened from Done or
+ * Completed. Landing and completion scans ignore evidence at or before
+ * this SHA; a genuinely later commit may still land or complete it.
+ * Separate from completion_sha, which retains the last completion evidence.
+ */
+reopened_at_sha?: string | null, };
 
 export type Comment = { 
 /**
@@ -734,7 +750,25 @@ replies?: Array<Comment>,
 /**
  * Reactions on this comment
  */
-reactions?: Array<CommentReaction>, };
+reactions?: Array<CommentReaction>, 
+/**
+ * Claude/AIDA session id that produced this comment, when known.
+ * Best-effort: comments added outside a tracked session (and every
+ * comment written before this field existed) carry `None`. Stamping
+ * it lets tooling correlate a comment back to the session that wrote
+ * it (`aida session list`). Optional + `skip_serializing_if` keeps the
+ * on-disk YAML unchanged for comments that have no session id.
+ */
+session_id?: string | null, 
+/**
+ * The seat whose claim this comment RELAYS (`aida comment add
+ * --relayed-from <seat>`), when the author is recording another seat's
+ * measurement, finding or argument rather than something it verified
+ * itself. `None` = the author's own claim. Structured so the original
+ * author survives into anything built on the comment; older comments
+ * deserialize as `None` (marked by absence, never retro-attributed).
+ */
+relayed_from?: string | null, };
 
 export type User = { 
 /**
@@ -882,6 +916,58 @@ source_hash: string,
  */
 model: string, };
 
+export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
+
+export type Origin = { 
+/**
+ * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
+ * repo entry in the workspace manifest (`.aida-workspace`); validated as
+ * a lowercase slug so it is stable as a map key and a filter value.
+ */
+repo: string, 
+/**
+ * Optional finer-grained component within the repo (e.g. "orchestrator").
+ * Free-form within the repo; `None` = the whole repo.
+ */
+component?: string | null, };
+
+export type FilingProvenance = { 
+/**
+ * HEAD of the CODE repo the spec was filed from (full SHA; not the
+ * `aida-store` branch).
+ */
+code_sha?: string | null, 
+/**
+ * Checked-out branch; omitted on a detached HEAD.
+ */
+branch?: string | null, 
+/**
+ * Whether the working tree had uncommitted changes to tracked files.
+ */
+dirty?: boolean | null, 
+/**
+ * Package version of the filing `aida` binary.
+ */
+aida_version?: string | null, 
+/**
+ * Git SHA the filing `aida` binary was built from.
+ */
+aida_build_sha?: string | null, 
+/**
+ * Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
+ */
+vendor?: string | null, 
+/**
+ * Filing session id, when known.
+ */
+session?: string | null, };
+
+export type HypothesisLock = { locked_at: string, 
+/**
+ * SHA-256 of the UTF-8 description before the first completed result.
+ */
+description_sha256: string, };
+
 export type Requirement = { 
 /**
  * Unique identifier for the requirement (UUID)
@@ -1024,6 +1110,58 @@ deferred_at?: string | null,
  */
 deferred_until?: string | null, 
 /**
+ * Operator's reason for parking this requirement. Unlike the revisit
+ * trigger, this explains why the hold exists and is retained with the
+ * deferred state. Legacy deferred rows deserialize without a reason.
+ */
+deferred_reason?: string | null, 
+/**
+ * Narrative risk notes — the residual risk / blast-radius call an
+ * implementer recorded that is NOT derivable from git, status, or trace
+ * (the narrowed remnant of the retired `ImplementationInfo`). Optional and
+ * serde-default so pre-existing YAML deserializes unchanged.
+ */
+risk_notes?: string | null, 
+/**
+ * Narrative test-coverage notes — what was (and was not) covered, and why,
+ * beyond what CI status alone conveys. Optional, serde-default.
+ */
+test_coverage_notes?: string | null, 
+/**
+ * Narrative implementation summary — the human-readable "what shipped and
+ * why it was done this way" that a commit prefix / diff does not capture.
+ * Optional, serde-default.
+ */
+implementation_summary?: string | null, 
+/**
+ * The advisor's bless-time classification of HOW this spec runs when
+ * dispatched (`aida do`). `None` = ungroomed. Written through the
+ * advisor-authority path only (groom, `aida edit --mode`, or the TTY
+ * micro-groom confirm). Optional, serde-default.
+ */
+execution_mode?: ExecutionMode | null, 
+/**
+ * Where this requirement's code lives in a multi-repo shared-store
+ * workspace (ADR-12): a workspace repo slug plus an optional component
+ * within it. `None` = single-repo store (the default; existing stores
+ * round-trip unchanged). The `repo` slug is the canonical join key
+ * qualifying this spec's linkage artifacts. Optional, serde-default.
+ */
+origin?: Origin | null, 
+/**
+ * Filing provenance: the code state and tooling this spec was filed
+ * against (code HEAD SHA, branch, dirty flag, aida version + build SHA,
+ * filing agent/session). WRITE-ONCE — stamped at creation, never changed
+ * by edits (the store write paths preserve the on-disk value). Every
+ * sub-field is best-effort. `None` = filed before provenance existed;
+ * existing stores round-trip unchanged. Optional, serde-default.
+ */
+filed_at?: FilingProvenance | null, 
+/**
+ * Sticky pre-registration lock; tag, relationship and status edits never clear it.
+ */
+hypothesis_lock?: HypothesisLock | null, 
+/**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field
  */
@@ -1131,7 +1269,11 @@ relationships?: Array<Relationship>,
 /**
  * Retained (light): drives sprint metadata (number/goal/dates).
  */
-custom_fields?: { [key in string]?: string }, custom_status?: string | null, custom_priority?: string | null, archived?: boolean, archived_at?: string | null, deferred?: boolean, deferred_at?: string | null, deferred_until?: string | null, };
+custom_fields?: { [key in string]?: string }, custom_status?: string | null, custom_priority?: string | null, archived?: boolean, archived_at?: string | null, deferred?: boolean, deferred_at?: string | null, deferred_until?: string | null, 
+/**
+ * Why the requirement is parked, when the defer is an operator hold.
+ */
+deferred_reason?: string | null, };
 
 export type RequirementSnapshot = { 
 /**
