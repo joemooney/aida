@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:10:01.221147663Z
-modified_at: 2026-10-12T15:10:23.749482901Z
+modified_at: 2026-10-15T07:42:48.620103752Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,6 +22,12 @@ relationships:
   target_id: 01a130a9-290a-79a3-876b-e184099da9ae
   created_at: 2026-10-12T15:10:23.749479815Z
   created_by: joe
+comments:
+- id: 01a13e83-832c-72f0-88e8-554420d2204e
+  author: joe
+  content: 'IMPLEMENTER SKETCH for surfacing after #2660 and controls (no code yet). Proposed shared regen reader returns latest valid scored ordinary trial with discriminating aggregate (control records excluded), ordered by completed_at then trial UUID; same canonical-store host Git reads as regen. Statusline appends compact regen percentage + age; digest renders that same percentage/age, and its JSON adds an optional regeneration object. Omit all regen text/fields when no ordinary score exists, matching this spec acceptance. Non-clean/flagged trials retain a visible flag rather than silently presenting a clean headline; invalid records fail softly as unavailable, with statusline avoiding rebuild/network. No stale threshold config is added because this spec acceptance does not require one. This touches the statusline/digest display contract, so please sign off on the reader/optional JSON shape and flag policy before code. TASK-1730 final merged-base compile is still waiting in shared cargo queue.'
+  created_at: 2026-10-15T07:42:48.620103752Z
+  modified_at: 2026-10-15T07:42:48.620103752Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
