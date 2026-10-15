@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:37:59.657634312Z
+modified_at: 2026-10-15T08:43:01.131123774Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -184,6 +184,11 @@ comments:
   created_at: 2026-10-15T08:37:59.657634312Z
   modified_at: 2026-10-15T08:37:59.657634312Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13eba-a28b-7e81-aefc-aef831b1d4da
+  author: joe
+  content: 'Snapshot-ruling implementation probe (no production rework code yet): inherited descriptors DO reach commands through the unmodified strict helper; /tmp/aida-session3-1730-fd-probe.json proves a child wrote to an AIDA-owned pipe with no extra bwrap flags. One exact path-compatibility decision remains before snapshot implementation: the helper only binds source==destination. Copying installed system/PREFIX into a new host path leaves valid installer-generated absolute wrapper paths/symlinks pointing at now-hidden install roots. Concrete reproduction: PREFIX/bin/tool execs <install-system>/lib/tool; installed execution succeeds, byte-for-byte copied snapshot execution fails 127 when only the snapshot is mounted. Evidence /tmp/aida-session3-1730-relocation.json. Is a relocatable-installer prerequisite acceptable (fail closed for absolute old-root references), or should a containment lane supply source/destination remapping so snapshots appear at the original logical system/PREFIX paths? I will not append custom mounts or silently change the own-installer contract. Snapshot rule also requires copying mutable install inputs without following raced symlinks; the current TASK-1731 trial-input copier is not yet a hardened concurrent snapshot primitive.'
+  created_at: 2026-10-15T08:43:01.131123774Z
+  modified_at: 2026-10-15T08:43:01.131123774Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
