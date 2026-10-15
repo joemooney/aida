@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:27:24.964625799Z
+modified_at: 2026-10-15T08:27:26.904878830Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -147,6 +147,11 @@ comments:
   content: Commit efd3bba8de references this requirement
   created_at: 2026-10-15T08:27:09.779713053Z
   modified_at: 2026-10-15T08:27:09.779713053Z
+- id: 01a13eac-6138-7a82-abc5-79c10d4f7e96
+  author: joe
+  content: 'Advisor confirmed the GNU env --chdir prerequisite. Added an explicit prerequisite message to oracle launch/parse failures and documented fail-closed behavior; pushed f7d6768d6d396b8b5d42e82f72a3e1aa56000c07 to existing #2660. All 24 regen tests passed again and final make check-ci-fast passed 28/28. Formatting was fixed before the successful fast retry. PR is now Ready for independent review; implementation marked Done, not Completed. No review verdict or merge. TASK-1731 controls work is stacked on this branch.'
+  created_at: 2026-10-15T08:27:26.904878830Z
+  modified_at: 2026-10-15T08:27:26.904878830Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
