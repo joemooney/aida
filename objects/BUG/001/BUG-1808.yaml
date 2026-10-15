@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-15T00:46:26.898646162Z
+modified_at: 2026-10-15T00:52:22.445730111Z
 req_type: Bug
 tags:
 - atomicity
@@ -4164,6 +4164,12 @@ comments:
   content: 'ADVISOR SIGNOFF (STRICT) on the comment-29 sketch AS NARROWED by #2645. The sketch''s ''gate every mutating path'' stood in for ''no half-mutated state on refusal''. A refusal only happens where a child grant is minted (issue_child: interactive :12562, headless --resume, the standalone reviewer), and every such arm is now preflighted before queue_add/calibration/pull/force_cleanup_lease/session_start/manifest. The fresh headless --no-human pickup (the drain path) mints NO grant: exec_vendor_headless neither sets nor clears AIDA_SESSION_GRANT, so the child inherits the launcher''s own grant, and AIDA_SESSION_ROLE is display and routing only. Preflighting it would refuse grantless drains for no safety gain. --no-launch writes a lease role but no grant, and every later launch re-enters the preflight. STRICT review: APPROVE, the mutation witness is real, and the 3 e2e tests pass. Required before merge: (a) a positive test showing an allowed grant passing the headless-resume preflight; (b) a byte-identical snapshot test for ''queue work PR-N --role reviewer --no-human'' with a grant that does not delegate reviewer. Follow-up filed for the headless child inheriting the launcher''s full grant.'
   created_at: 2026-10-15T00:46:26.898646162Z
   modified_at: 2026-10-15T00:46:26.898646162Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a13d0b-bf2d-7db2-b286-1a5b5f863622
+  author: joe
+  content: 'OPERATOR (relayed by advisor, 2026-10-14 17:52): the advisor may ship #2645 once the two required tests land and Build is green. This replaces the sketch''s ''operator merges'' gate for this PR.'
+  created_at: 2026-10-15T00:52:22.445730111Z
+  modified_at: 2026-10-15T00:52:22.445730111Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
