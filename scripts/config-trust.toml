@@ -769,6 +769,13 @@ acceptance_command_allow = "policy"
 # Regeneration commands come only from the trusted default-branch config.
 # trace:TASK-1730 | ai:codex
 [keys.trusted.regen]
+oracle_paths = "policy" # frozen held-out inputs, read at the same trusted SHA
 oracle_command = "command"
 install_command = "command"
 required_tools = "policy"
+
+# Pin once for both configuration and the immutable oracle input bundle.
+# trace:TASK-1730 | ai:codex
+[readers."aida-cli-lib/src/regen/score.rs"]
+channels = ["trusted"]
+sites = 1

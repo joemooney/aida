@@ -12,10 +12,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
+mod oracle; // trace:TASK-1730 | ai:codex
+use oracle::OracleBundle;
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RegenConfig {
     oracle_command: Vec<String>,
+    oracle_paths: Vec<String>,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -30,6 +34,10 @@ impl RegenConfig {
             .clone()
             .try_into()?;
         validate_argv(&config.oracle_command)?;
+        anyhow::ensure!(
+            !config.oracle_paths.is_empty(),
+            "oracle_paths must not be empty"
+        );
         if let Some(argv) = &config.install_command {
             validate_argv(argv)?;
         }
@@ -49,10 +57,13 @@ impl RegenConfig {
     }
 }
 
-fn load_config(project: &Path) -> Result<RegenConfig> {
-    let body = crate::trusted_config::read_trusted_config_toml(project)
-        .context("cannot read trusted default-branch project config for regen")?;
-    RegenConfig::parse(&body)
+fn load_config(project: &Path) -> Result<(RegenConfig, String)> {
+    // Resolve once: config and held-out input bytes must share this commit.
+    let sha = crate::trusted_config::trusted_default_branch_sha(project)
+        .context("cannot resolve trusted default-branch commit for regen")?;
+    let bytes = super::git(project, &["show", &format!("{sha}:.aida/config.toml")])?;
+    let body = std::str::from_utf8(&bytes).context("trusted config must be UTF-8")?;
+    Ok((RegenConfig::parse(body)?, sha))
 }
 
 fn validate_argv(argv: &[String]) -> Result<()> {
@@ -113,6 +124,8 @@ pub(super) struct TrialRecord {
     pub(super) trial_id: Uuid,
     pub(super) content_sha256: String,
     pub(super) store_sha: String,
+    pub(super) oracle_sha: String,
+    pub(super) oracle_bundle_sha256: String,
     pub(super) model: String,
     pub(super) vendor: String,
     pub(super) harness: String,
@@ -242,6 +255,20 @@ impl ScoreEnv {
     }
 
     fn run(&self, dir: &Path, argv: &[String]) -> Result<Output> {
+        self.run_with_bundle(dir, argv, None)
+    }
+
+    fn run_with_bundle(
+        &self,
+        dir: &Path,
+        argv: &[String],
+        bundle: Option<&OracleBundle>,
+    ) -> Result<Output> {
+        let mut reads = vec![self.root.to_string_lossy().into_owned()];
+        if let Some(bundle) = bundle {
+            bundle.verify()?;
+            reads.push(bundle.root.to_string_lossy().into_owned());
+        }
         let mut cmd = if let Some(bwrap) = &self.bwrap {
             let mut cmd = Command::new(bwrap);
             // Reuse the existing strict-read arm, rather than the convenience
@@ -250,7 +277,7 @@ impl ScoreEnv {
             cmd.args(crate::session::bwrap_confinement_args_inner(
                 dir,
                 std::slice::from_ref(&self.root),
-                &[self.root.to_string_lossy().into_owned()],
+                &reads,
             ));
             cmd.arg("--").arg(&argv[0]);
             cmd
@@ -270,6 +297,8 @@ impl ScoreEnv {
             .env("TMPDIR", &self.root)
             .env("PREFIX", &self.prefix)
             .env("AIDA_REGEN_GUARD_LOG", &self.guard_log)
+            .env("AIDA_REGEN_TRIAL_ROOT", dir)
+            .env("AIDA_REGEN_PREFIX", &self.prefix)
             .env("LANG", "C.UTF-8")
             .output()
             .with_context(|| format!("run regen command {}", argv[0]))
@@ -309,7 +338,9 @@ fn execute(
     config: &RegenConfig,
     dir: &Path,
     env: &ScoreEnv,
+    bundle: &OracleBundle,
 ) -> Result<()> {
+    bundle.verify()?;
     let installer = config.install_command.clone().or_else(|| {
         dir.join("install.sh")
             .is_file()
@@ -332,14 +363,23 @@ fn execute(
         }
     }
     let oracle = env
-        .run(dir, &config.oracle_command)
+        .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
         .context("oracle launch failed")?;
     record.oracle_exit = oracle.status.code();
     if !oracle.status.success() {
         record.flags.push("oracle_nonzero_exit".into());
     }
     record.checks =
-        parse_checks(std::str::from_utf8(&oracle.stdout).context("oracle output is not UTF-8")?)?;
+        parse_checks(std::str::from_utf8(&oracle.stdout).context("oracle output is not UTF-8")?)
+            .with_context(|| {
+                format!(
+                    "oracle stderr: {}",
+                    String::from_utf8_lossy(&oracle.stderr)
+                        .chars()
+                        .take(4096)
+                        .collect::<String>()
+                )
+            })?;
     let passed = record.checks.iter().filter(|c| c.passed).count();
     let total = record.checks.len();
     record.aggregate = Some(Aggregate {
@@ -361,9 +401,41 @@ fn run_trial(
     harness: &str,
     unconfined: bool,
 ) -> Result<TrialRecord> {
-    let env = ScoreEnv::new(config, unconfined)?;
+    // Legacy execution-policy fixtures become an actual committed executable
+    // oracle, exercising the same bundle path as production.
+    let repo = tempfile::TempDir::new()?;
+    super::git(repo.path(), &["init", "-b", "main"])?;
+    super::git(repo.path(), &["config", "user.name", "Test"])?;
+    super::git(repo.path(), &["config", "user.email", "test@example.com"])?;
+    let quote = |s: &str| format!("'{}'", s.replace('\'', "'\"'\"'"));
+    let script = format!(
+        "#!/bin/sh\nexec {}\n",
+        config
+            .oracle_command
+            .iter()
+            .map(|s| quote(s))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    std::fs::write(repo.path().join("oracle.sh"), script)?;
+    std::fs::set_permissions(
+        repo.path().join("oracle.sh"),
+        std::fs::Permissions::from_mode(0o755),
+    )?;
+    super::git(repo.path(), &["add", "."])?;
+    super::git(repo.path(), &["commit", "-m", "trusted oracle"])?;
+    let sha = String::from_utf8(super::git(repo.path(), &["rev-parse", "HEAD"])?)?
+        .trim()
+        .to_owned();
+    let mut config = config.clone();
+    config.oracle_command = vec!["oracle.sh".into()];
+    config.oracle_paths = vec!["oracle.sh".into()];
+    let cache = tempfile::tempdir_in("/var/tmp")?;
+    let bundle =
+        OracleBundle::freeze_in_cache(repo.path(), sha, &config.oracle_paths, dir, cache.path())?;
+    let env = ScoreEnv::new(&config, unconfined)?;
     run_trial_in_env(
-        config, dir, manifest, model, vendor, harness, unconfined, env,
+        &config, dir, manifest, model, vendor, harness, unconfined, env, &bundle,
     )
 }
 
@@ -377,6 +449,7 @@ fn run_trial_in_env(
     harness: &str,
     unconfined: bool,
     env: ScoreEnv,
+    bundle: &OracleBundle,
 ) -> Result<TrialRecord> {
     let mut flags = Vec::new();
     if unconfined {
@@ -390,6 +463,8 @@ fn run_trial_in_env(
         trial_id: Uuid::new_v4(),
         content_sha256: manifest.content_sha256,
         store_sha: manifest.store_sha,
+        oracle_sha: bundle.sha.clone(),
+        oracle_bundle_sha256: bundle.hash.clone(),
         model: model.into(),
         vendor: vendor.into(),
         harness: harness.into(),
@@ -406,7 +481,7 @@ fn run_trial_in_env(
         flags,
         error: None,
     };
-    if let Err(error) = execute(&mut record, config, dir, &env) {
+    if let Err(error) = execute(&mut record, config, dir, &env, bundle) {
         record.error = Some(format!("{error:#}"));
     }
     match env.guard_hits() {
@@ -463,10 +538,11 @@ pub(super) fn handle_score(
     unconfined: bool,
 ) -> Result<()> {
     let project = crate::project_root_from_store_hint(store);
-    let config = load_config(&project)?;
+    let (config, oracle_sha) = load_config(&project)?;
     let manifest = read_manifest(corpus)?;
     let environment = ScoreEnv::new(&config, unconfined)?;
     let dir = dir.canonicalize()?;
+    let bundle = OracleBundle::freeze(&project, oracle_sha, &config.oracle_paths, &dir)?;
     environment.require_source_hidden(&dir, &project.canonicalize()?)?;
     let record = run_trial_in_env(
         &config,
@@ -477,6 +553,7 @@ pub(super) fn handle_score(
         harness,
         unconfined,
         environment,
+        &bundle,
     )?;
     persist(store, &record)?;
     println!("{}", serde_json::to_string_pretty(&record)?);
@@ -498,12 +575,13 @@ mod tests {
     fn config(oracle: &[&str]) -> RegenConfig {
         RegenConfig {
             oracle_command: oracle.iter().map(|s| (*s).into()).collect(),
+            oracle_paths: vec!["oracle.sh".into()],
             install_command: None,
             required_tools: vec!["regen-fixture-tool".into()],
         }
     }
 
-    fn manifest() -> Manifest {
+    pub(super) fn manifest() -> Manifest {
         Manifest {
             format_version: 1,
             store_sha: "a".repeat(40),
@@ -549,7 +627,7 @@ mod tests {
         )
         .is_err());
         assert!(RegenConfig::parse(
-            "[regen]\noracle_command = ['sh', '-c', 'echo ok']\nrequired_tools = ['tool']\n"
+            "[regen]\noracle_command = ['sh', '-c', 'echo ok']\noracle_paths = ['oracle.sh']\nrequired_tools = ['tool']\n"
         )
         .is_ok());
     }
@@ -728,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn command_config_comes_from_default_branch_not_trial_branch() {
+    fn config_and_oracle_share_pinned_default_branch_commit_not_trial_branch() {
         let repo = TempDir::new().unwrap();
         let git = |args: &[&str]| super::super::git(repo.path(), args).unwrap();
         git(&["init", "-b", "main"]);
@@ -736,14 +814,39 @@ mod tests {
         git(&["config", "user.email", "test@example.com"]);
         std::fs::create_dir(repo.path().join(".aida")).unwrap();
         let path = repo.path().join(".aida/config.toml");
-        std::fs::write(&path, "[regen]\noracle_command = ['/bin/true']\n").unwrap();
-        git(&["add", ".aida/config.toml"]);
+        std::fs::write(
+            &path,
+            "[regen]\noracle_command = ['oracle.sh']\noracle_paths = ['oracle.sh']\n",
+        )
+        .unwrap();
+        git(&["add", "."]);
+        std::fs::write(repo.path().join("oracle.sh"), "trusted bytes").unwrap();
+        git(&["add", "."]);
         git(&["commit", "-m", "trusted config"]);
         git(&["checkout", "-b", "trial"]);
         std::fs::write(path, "[regen]\noracle_command = ['/bin/false']\n").unwrap();
+        let (cfg, sha) = load_config(repo.path()).unwrap();
+        assert_eq!(cfg.oracle_command, ["oracle.sh"]);
+        std::fs::write(repo.path().join("oracle.sh"), "trial replacement").unwrap();
+        // Even if the default branch advances after config load, the bundle
+        // stays pinned to the config's commit.
+        git(&["add", "."]);
+        git(&["commit", "-m", "trial config and oracle"]);
+        git(&["branch", "-f", "main", "HEAD"]);
+        let trial = TempDir::new().unwrap();
+        let cache = tempfile::tempdir_in("/var/tmp").unwrap();
+        let bundle = OracleBundle::freeze_in_cache(
+            repo.path(),
+            sha.clone(),
+            &cfg.oracle_paths,
+            trial.path(),
+            cache.path(),
+        )
+        .unwrap();
+        assert_eq!(bundle.sha, sha);
         assert_eq!(
-            load_config(repo.path()).unwrap().oracle_command,
-            ["/bin/true"]
+            std::fs::read(bundle.root.join("oracle.sh")).unwrap(),
+            b"trusted bytes"
         );
     }
 

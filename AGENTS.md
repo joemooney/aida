@@ -1,6 +1,8 @@
 `aida regen score <dir> --corpus <dir> --model <name> --vendor <name>
 --harness <name>` runs trusted-config argv commands via existing bubblewrap
 confinement and records raw R1 trial JSON under `regen/trials/` in the store.
+Required `oracle_paths` freezes held-out inputs at the trusted config commit;
+the hashed external bundle is verified before runs and mounted read-only.
 Exact v1 check markers, fallback guards, private HOME/XDG and explicit
 `--unconfined` flags govern score cleanliness. See OVERVIEW.md.
 <!-- trace:TASK-1730 | ai:codex -->

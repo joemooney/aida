@@ -394,8 +394,21 @@ count as dirty. The override still exports committed HEAD and adds
 `regen/trials/<uuid>.json` in the canonical store. Configure `[regen]` on the
 trusted default branch with `oracle_command` (required argv array), optional
 `install_command` (argv array; defaults to `./install.sh` when present), and
-`required_tools` (tool names guarded against fallback). Commands run relative to
-the selected system directory. The installer receives a private `PREFIX`, whose
+`required_tools` (tool names guarded against fallback). Required nonempty
+`oracle_paths` lists repo-relative files/subtrees for the held-out oracle. Inputs
+are frozen via git from the same pinned trusted commit as config; worktree files
+are never used. Absolute paths, `..`, escaping/cyclic symlinks, omitted or directory link
+targets and submodules are refused. The content-addressed bundle lives under
+`$XDG_CACHE_HOME/aida/regen/oracle/<hash>` (default `~/.cache`), outside `/tmp`, `/dev`, `/proc`,
+project worktrees and the trial root. Its hash (sorted, length-framed paths,
+modes and bytes) is rechecked before execution; tampering refuses scoring.
+
+`oracle_command[0]` must name an executable inside the bundle (for example
+`tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
+never through PATH or the trial. The oracle runs from the read-only bundle via
+coreutils `/usr/bin/env --chdir`, using `AIDA_REGEN_TRIAL_ROOT` and
+`AIDA_REGEN_PREFIX` to locate the regenerated system and private install prefix.
+The installer runs from the selected system directory and receives `PREFIX`, whose
 `bin/` precedes guards and system directories on PATH. The environment has private
 HOME/XDG directories and no inherited Cargo/Rustup settings. Existing bubblewrap strict-read
 confinement is reused, and scoring refuses if its source-visibility probe can
@@ -406,7 +419,8 @@ The oracle emits exact LF-delimited `ok   - <name>` and `FAIL - <name>` lines on
 stdout. Duplicate/conflicting names or no exact checks are scoring errors.
 Installer failures have no score; nonzero oracle exits with parsed checks retain
 the score and an exit flag. Guard hits, dirty corpus provenance and unconfined
-execution are recorded and forbid a clean result. Trial timestamps support age
+execution are recorded and forbid a clean result. Records include the trusted
+`oracle_sha` and `oracle_bundle_sha256`. Trial timestamps support age
 reporting; per-check outcomes are retained for later controls and comparisons.
 Raw cleanliness describes execution conditions, not the pass rate or completed
 controls validation. Control gating is a subsequent slice.
