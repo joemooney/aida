@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T15:14:44.296156759Z
+modified_at: 2026-10-15T16:21:47.050441538Z
 req_type: Story
 tags:
 - from:aida-host
@@ -71,6 +71,12 @@ comments:
   content: Commit dcc46d8298 references this requirement
   created_at: 2026-10-15T15:14:44.296156759Z
   modified_at: 2026-10-15T15:14:44.296156759Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a1405e-a5aa-7021-a932-b047041351ff
+  author: ai:codex:joe
+  content: 'Signed consensus implementation published as DRAFT PR #2678 atddbecc4d7cf18224612be645e1c2e02f97705475, base #2667/codex/task-1733 at0f68c8ac6ef3be8ca3e7d18533ba654ac3b9ae6e. All74 final-source regen tests and all29 check-ci-fast gates passed (/tmp/regen-relay3-1679-tests.log and -fast.log). PR maps actual named fixtures to consensus separation, diversity, provenance/check-set refusal, committed-only CLI exclusivity and default-no-write/idempotent opt-in filing. Mapping-missing fallback per signoff; adapter remains TASK-0446. Separate strict-float investigation is SPEC-447, not a gate-policy change in this story. Ready for separate review; no author verdict, hold clear, merge, Completed or CLI activation.'
+  created_at: 2026-10-15T16:21:47.050441538Z
+  modified_at: 2026-10-15T16:21:47.050441538Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
