@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1731",
+  "publishes": [
+    {
+      "at": "2026-10-15T22:09:39.443462624Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T21:05:42.613808177Z",
+      "spec": "TASK-1731",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2664,
+        "verdict": "APPROVED",
+        "reviewed_sha": "42aac84a65aca7be94de6e8f529531afffd92391"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:05:45.967796813Z",
+      "spec": "TASK-1731",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T22:06:00.065107453Z",
+      "spec": "TASK-1731",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2664
+      }
+    },
+    {
+      "ts": "2026-10-15T22:09:39.427432872Z",
+      "spec": "TASK-1731",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:09:39.427961393Z",
+      "spec": "TASK-1731",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
