@@ -171,3 +171,112 @@ fn auto_complete_sandbox_with_permission_mode_is_refused() {
         "a refused combination must not leave the env half-applied"
     );
 }
+
+// ── #2665 review round 2 ────────────────────────────────────────────────────
+
+#[test]
+fn wrong_typed_contained_knob_is_a_hard_error_naming_file_and_key() {
+    for bad in ["contained = \"true\"", "contained = 1"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let root = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida/agents.toml"), format!("[agents]\n{bad}\n")).unwrap();
+        let home_s = home.to_string_lossy().into_owned();
+        let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
+        let err = crate::agent_config::load_agents_contained(&root)
+            .expect_err("a wrong-typed contained knob must not read as false");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("`[agents] contained`"), "{bad}: {msg}");
+        assert!(msg.contains("must be a boolean"), "{bad}: {msg}");
+        assert!(
+            msg.contains(&root.join(".aida/agents.toml").display().to_string()),
+            "{bad}: {msg}"
+        );
+        assert!(session::drain_contained(&root).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn wrong_typed_contained_enable_in_config_toml_is_a_hard_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[contained]\nenable = \"yes\"\n",
+    )
+    .unwrap();
+    let home_s = home.to_string_lossy().into_owned();
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
+    let err = crate::agent_config::load_agents_contained(&root).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("`[contained] enable`"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn aida_contained_env_is_case_insensitive_and_rejects_unknown_values() {
+    for on in ["1", "true", "TRUE", "Yes", "on", "ON", " true "] {
+        assert!(session::parse_aida_contained(on).unwrap(), "{on:?}");
+    }
+    for off in ["", "0", "false", "False", "no", "OFF"] {
+        assert!(!session::parse_aida_contained(off).unwrap(), "{off:?}");
+    }
+    for bad in ["ture", "2", "enabled", "y"] {
+        let err = session::parse_aida_contained(bad).expect_err(bad);
+        assert!(format!("{err:#}").contains("not recognised"), "{err:#}");
+    }
+    let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("ture"))]);
+    assert!(session::aida_contained_env().is_err());
+    assert!(session::drain_contained(std::path::Path::new("/nonexistent")).is_err());
+}
+
+#[test]
+fn contained_agent_new_refuses_codex_agy_and_unknown_tools_even_with_per_tool_flags() {
+    for tool in ["codex", "antigravity", "agy", "something-else"] {
+        let err = crate::refuse_uncontainable_agent_tool(tool).expect_err(tool);
+        assert!(
+            format!("{err:#}").contains("refusing to launch it"),
+            "{err:#}"
+        );
+    }
+    crate::refuse_uncontainable_agent_tool("claude").unwrap();
+
+    // Per-tool default_flags (e.g. agy's --dangerously-skip-permissions) must
+    // not slip a contained project past the refusal.
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n\n[agents.antigravity]\ndefault_flags = [\"--dangerously-skip-permissions\"]\n",
+    )
+    .unwrap();
+    let home_s = home.to_string_lossy().into_owned();
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
+    let mut cfg = crate::AgentLaunchConfig {
+        agent_type: "antigravity",
+        binary: "agy",
+        default_args: Vec::new(),
+        prompt_style: crate::AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let err = crate::apply_agent_default_flags(
+        &mut cfg,
+        &root,
+        crate::AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .expect_err("contained agy with per-tool flags is refused");
+    assert!(
+        format!("{err:#}").contains("refusing to launch it"),
+        "{err:#}"
+    );
+}

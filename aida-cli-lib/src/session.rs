@@ -2122,16 +2122,38 @@ pub(crate) fn headless_vendor_args_contained_in(
 /// failing open.
 // trace:BUG-2146 | ai:claude
 pub(crate) fn drain_contained(project_root: &Path) -> Result<bool> {
-    let env = std::env::var("AIDA_CONTAINED")
-        .ok()
-        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
-    if env {
+    if aida_contained_env()? {
         return Ok(true);
     }
     crate::agent_config::load_agents_contained(project_root).context(
         "[contained] could not read the contained posture — refusing to launch rather than \
          run uncontained. Fix the file named below and retry",
     )
+}
+
+/// BUG-2146 (#2665 review): parse `AIDA_CONTAINED`. Case-insensitive
+/// `1`/`true`/`yes`/`on` is contained; unset, empty, or `0`/`false`/`no`/`off`
+/// is not. Any other value is an ERROR: a typo such as `AIDA_CONTAINED=ture`
+/// must not read as "uncontained" (fail closed, never open).
+// trace:BUG-2146 | ai:claude
+pub(crate) fn aida_contained_env() -> Result<bool> {
+    let Some(raw) = std::env::var_os("AIDA_CONTAINED") else {
+        return Ok(false);
+    };
+    parse_aida_contained(&raw.to_string_lossy())
+}
+
+/// The pure parse behind [`aida_contained_env`].
+// trace:BUG-2146 | ai:claude
+pub(crate) fn parse_aida_contained(raw: &str) -> Result<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        other => anyhow::bail!(
+            "[contained] AIDA_CONTAINED={other:?} is not recognised — refusing to launch \
+             rather than guess. Use 1/true/yes/on to contain, or 0/false/no/off (or unset it)."
+        ),
+    }
 }
 
 /// BUG-2144: the vendor half of [`child_containment_preflight`] for a launch
