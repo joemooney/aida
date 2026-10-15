@@ -3,12 +3,12 @@ spec_id: BUG-2136
 agreed_id: BUG-2136
 title: 'aida review record prints an ambiguous ''Already on record for PR #N:'' line, so the caller can''t tell whether the new verdict was recorded'
 description: 'Observed 2026-10-14: recording APPROVED for PR-2641 at a new head after a merge printed only ''Already on record for PR #2641:'' (the verdict file did update to the new sha). Recording request-changes for BUG-1929/#2541 printed the same line, with no confirmation either way. Print an explicit outcome: recorded new round at <sha>, or unchanged (identical verdict at the same sha).'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:01.592614197Z
-modified_at: 2026-10-15T01:59:47.917958234Z
+modified_at: 2026-10-15T05:58:10.179714529Z
 req_type: Bug
 tags:
 - capture
@@ -21,6 +21,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13e23-b5f6-71f2-bc2f-57208a923f1d
+  author: aida-auto-bump
+  timestamp: 2026-10-15T05:58:10.166826190Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13e23-b603-7c42-b5b3-ccd76b03820d
+  timestamp: 2026-10-15T05:58:10.179710665Z
+  agent: advisor
+  commit_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
+  summary: Completed via merge 732db496
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
@@ -29,3 +42,7 @@ filed_at:
   aida_build_sha: 84a4942786
   vendor: claude
   session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T05:58:10.166811573Z
+  completion_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
