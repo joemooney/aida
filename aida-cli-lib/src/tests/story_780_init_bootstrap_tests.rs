@@ -75,8 +75,12 @@ fn forge_profile_github_uses_existing_repo_create_shape() {
     assert!(argv.contains(&"--push".to_string()));
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn headless_bootstrap_uses_default_forge_profile() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".aida")).unwrap();
     std::fs::write(
@@ -110,8 +114,12 @@ fn headless_bootstrap_uses_default_forge_profile() {
     );
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn explicit_unknown_forge_lists_configured_profiles() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".aida")).unwrap();
     std::fs::write(

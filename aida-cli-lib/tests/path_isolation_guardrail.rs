@@ -1,5 +1,6 @@
 //! Raw PATH setters must enforce single-test process isolation.
 // trace:BUG-1994 | ai:codex
+// trace:TASK-1748 | ai:antigravity
 use std::collections::HashSet;
 use std::path::Path;
 use syn::visit::{self, Visit};
@@ -15,7 +16,9 @@ struct Guard {
 impl Guard {
     fn is_path(&self, expr: &syn::Expr) -> bool {
         match expr {
-            syn::Expr::Lit(lit) => matches!(&lit.lit, syn::Lit::Str(s) if s.value() == "PATH"),
+            syn::Expr::Lit(lit) => {
+                matches!(&lit.lit, syn::Lit::Str(s) if s.value() == "PATH" || s.value() == "HOME")
+            }
             syn::Expr::Path(p) => p
                 .path
                 .get_ident()
@@ -55,7 +58,7 @@ impl Guard {
                     self.import(tree);
                 }
             }
-            syn::UseTree::Rename(r) if r.ident == "set_var" => {
+            syn::UseTree::Rename(r) if r.ident == "set_var" || r.ident == "remove_var" => {
                 self.setter_aliases.insert(r.rename.to_string());
             }
             _ => {}
@@ -68,7 +71,9 @@ impl Guard {
             if let (proc_macro2::TokenTree::Ident(name), proc_macro2::TokenTree::Group(args)) =
                 (&pair[0], &pair[1])
             {
-                if (name == "set_var" || self.setter_aliases.contains(&name.to_string()))
+                if (name == "set_var"
+                    || name == "remove_var"
+                    || self.setter_aliases.contains(&name.to_string()))
                     && args.delimiter() == proc_macro2::Delimiter::Parenthesis
                 {
                     let parser =
@@ -138,6 +143,7 @@ impl<'ast> Visit<'ast> for Guard {
                     self.scope_checked = true;
                 }
                 let setter = last.ident == "set_var"
+                    || last.ident == "remove_var"
                     || (path.path.segments.len() == 1
                         && self.setter_aliases.contains(&last.ident.to_string()));
                 if setter
@@ -155,8 +161,21 @@ impl<'ast> Visit<'ast> for Guard {
     }
 }
 
+const ALLOW_UNISOLATED_HOME: &str = concat!("// allow", "-unisolated-home");
+
 fn count(src: &str) -> usize {
-    let file = syn::parse_file(src).expect("source must parse");
+    let sanitized: String = src
+        .lines()
+        .map(|line| {
+            if line.contains(ALLOW_UNISOLATED_HOME) {
+                ""
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let file = syn::parse_file(&sanitized).expect("source must parse");
     let mut guard = Guard::default();
     guard.visit_file(&file);
     guard.offenders
@@ -180,11 +199,13 @@ fn scan(dir: &Path, offenders: &mut Vec<String>) {
 #[test]
 fn raw_path_setters_require_process_isolation() {
     let mut offenders = Vec::new();
-    for directory in ["src", "tests"] {
-        scan(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join(directory),
-            &mut offenders,
-        );
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for dir in [
+        manifest_dir.join("src"),
+        manifest_dir.join("tests"),
+        manifest_dir.parent().unwrap().join("aida-cli/tests"),
+    ] {
+        scan(&dir, &mut offenders);
     }
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
 }
@@ -202,6 +223,13 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
         r#"fn t() { if false { crate::test_env::require_path_mutation_scope("PATH"); } std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { let unused = || { crate::test_env::require_path_mutation_scope("PATH"); }; std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); } fn unguarded() { std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"const KEY: &str = "HOME"; fn t() { std::env::set_var(KEY, "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _g = lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::remove_var("HOME"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed allow-direct-home-dir
+        r#"fn t() { std::env::remove_var("PATH"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
     ] {
         assert_eq!(count(src), 1, "{src}");
     }
@@ -212,7 +240,36 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
         0
     );
     assert_eq!(
+        count(
+            r#"fn t() { crate::test_env::require_path_mutation_scope("HOME"); unsafe { std::env::set_var("HOME", "fake"); } }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        ),
+        0
+    );
+    assert_eq!(
+        count(
+            r#"fn t() { crate::test_env::require_path_mutation_scope("HOME"); std::env::remove_var("HOME"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed allow-direct-home-dir
+        ),
+        0
+    );
+    assert_eq!(
+        count(
+            r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); std::env::remove_var("PATH"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        ),
+        0
+    );
+    assert_eq!(
+        count(&format!(
+            "fn t() {{ std::env::set_var(\"HOME\", \"fake\"); {} }}", // allow-raw-env-write: inert source fixture parsed by syn, never executed
+            ALLOW_UNISOLATED_HOME
+        )),
+        0
+    );
+    assert_eq!(
         count(r#"fn t() { std::process::Command::new("git").env("PATH", "fake"); }"#),
+        0
+    );
+    assert_eq!(
+        count(r#"fn t() { std::process::Command::new("git").env("HOME", "fake"); }"#),
         0
     );
 }
