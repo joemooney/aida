@@ -615,45 +615,30 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
 
     let prev_cwd = std::env::current_dir().unwrap();
 
-    // 1. With launch (no_launch: false) - calling lane A runs queue work for TASK-2000
+    // 1. Launch case at the session_start(self_claim=false) level (as queue work passes when no_launch: false)
     std::env::set_current_dir(&root).unwrap();
-    let _ = crate::queue_cmd::handle_queue_work(
-        &storage,
-        crate::test_env::HERMETIC_TEST_USER,
-        Some("TASK-2000"),
-        None,
-        false,
-        /* no_launch */ false,
-        Some("implementer"),
-        true,
+    let res1 = crate::session_start::session_start(
+        "TASK-2000",
         None,
         None,
+        /* reuse_branch */ false,
+        None,
+        /* forge_override */ None,
+        /* branch_style */ "auto",
+        /* launch_claude */ false,
         None,
         false,
         None,
-        false,
-        false,
-        false,
-        false,
         None,
         false,
-        false,
-        None,
-        "codex",
-        false,
-        crate::phase_driver::AutonomyMode::Default,
-        None,
-        false,
-        false,
-        false,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        None,
+        Some("implementer".to_string()),
+        /* force_claim */ true,
+        /* use_pool */ None,
+        /* self_claim */ false,
+    );
+    assert!(
+        res1.is_ok(),
+        "session_start(self_claim=false) should succeed: {res1:?}"
     );
 
     // Assert 1: Calling lane A's registry entry is completely UNCHANGED
