@@ -1,0 +1,24 @@
+id: 01a13f13-ed68-7192-94df-ad2b1a04c5cd
+spec_id: TASK-1777
+agreed_id: TASK-1777
+title: Non-drain agent launchers hard-code contained=false, stripping a contained parent's AIDA_CONTAINED (advisor_watch, reconstitute, harvest, questions)
+description: 'From the #2665 STRICT review: advisor_watch.rs:269, reconstitute.rs:928, harvest.rs:1218 and questions.rs:1699 launch agent children with a hard-coded contained=false. They run outside the drain, but when invoked from a contained parent they strip AIDA_CONTAINED and run uncontained, against the BUG-2133 monotonic-containment ruling. Thread the parent''s containment (or refuse when it''s requested and unavailable), with tests.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T10:20:33.000399689Z
+modified_at: 2026-10-15T10:20:33.000399689Z
+req_type: Task
+tags:
+- contained
+- sandbox
+- security
+filed_at:
+  code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
