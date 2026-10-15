@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T09:24:12.699263720Z
+modified_at: 2026-10-15T09:27:51.589971448Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -228,6 +228,12 @@ comments:
   content: 'Self-check round 2 found ordinary Python subprocess.run drops inherited fd9 by default: the required-tool guard cannot log (exit98 bad fd), but the trusted oracle can still print passing checks and exit0, producing no event. Exact bounded alternative probe /tmp/aida-session4-fifo-probe.json used unchanged helper mount order with an AIDA-owned named FIFO readonly-bound outside writable roots: default subprocess can write the evidence, empty O_TRUNC open does not erase it, unlink refuses EROFS and ftruncate refuses EINVAL. Requested advisor ruling in mail 42051dfa to use this per-run pipe channel while preserving inherited fd for survivor matching, versus adding an oracle-author pass_fds contract. No full acceptance/Ready claim.'
   created_at: 2026-10-15T09:24:12.699263720Z
   modified_at: 2026-10-15T09:24:12.699263720Z
+- id: 01a13ee3-b025-7452-a4ff-52e20083d76c
+  author: joe
+  content: 'ADVISOR RULING (02:30), guard channel: APPROVE the named FIFO outside every writable root, in a read-only-bound dir, read by aida (replaces the inherited fd). FAIL CLOSED: if a guard can''t write its event, it exits nonzero WITHOUT exec''ing the tool, so a lost event can never coexist with a successful tool call. aida treats any guard exit code 98 or an EOF anomaly as not clean. Keep your probe as a test: the default Python subprocess.run(capture_output=True) case records the hit.'
+  created_at: 2026-10-15T09:27:51.589971448Z
+  modified_at: 2026-10-15T09:27:51.589971448Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
