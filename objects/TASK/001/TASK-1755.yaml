@@ -8,12 +8,12 @@ description: |-
   2) agent_registry.rs:569 touch_session_start_agent records its own short-lived PID when the claude parent isn't found, so a live session could read as dead and its poll finding clear. Pre-existing; consider recording no PID instead.
   3) Pin how untimed transcript lines affect last_activity_minute (mutant M13 survives, but only makes the check stricter), or make them count on purpose.
   4) Mutants M8/M9 (rank tiebreak) are equivalent for trip/clear; only the seat label can differ. Optionally pin the label.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T10:04:08.637526333Z
-modified_at: 2026-10-14T18:57:21.863636740Z
+modified_at: 2026-10-15T06:23:04.957823275Z
 req_type: Task
 tags:
 - review-follow-up
@@ -37,6 +37,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a13e3a-84f9-7501-8252-f59ce401e331
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:23:04.953925913Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-84fd-71c3-901e-f72becf33354
+  timestamp: 2026-10-15T06:23:04.957820491Z
+  agent: aida
+  commit_sha: b6d97f11e5d019661d9586660ce04e7acfffaafc
+  summary: Completed via merge b6d97f11
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
@@ -45,3 +58,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:23:04.953920915Z
+  completion_sha: b6d97f11e5d019661d9586660ce04e7acfffaafc
