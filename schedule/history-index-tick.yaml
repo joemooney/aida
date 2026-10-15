@@ -1,0 +1,6 @@
+job: history-index-tick
+last_run: 2026-10-15T04:01:02.687533890Z
+last_by:
+  seat: substrate
+  vendor: tick
+result: ok
