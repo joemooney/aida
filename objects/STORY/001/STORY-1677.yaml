@@ -17,7 +17,7 @@ description: |
   Depends on STORY-1669 slices 1-2 and the project regen config (list of required tools/components).
 
   - [ ] Before scoring, `aida regen score` runs a completeness check over every required component in the project regen config: it exists, is executable, is not a stub (non-trivial size and no placeholder markers such as `TODO: implement`/`NotImplemented`/`placeholder`), and `--help` exits 0 with non-empty output.
-  - [ ] Every harness launched by `aida regen trial` receives the same continuation policy text ("continue until all required files are complete") and, for harnesses with a turn limit or print mode, is re-invoked until the completeness check passes or a configurable attempt cap is hit; the attempt count is recorded on the trial.
+  - Harness continuation/re-invocation and attempt recording are moved to TASK-1778 by the signed 2026-10-15 advisor ruling; they are out of scope here.
   - [ ] A trial that fails the completeness check is reported as `incomplete`, listing missing/stub components. Its score is reported in two parts: overall, and restricted to components that passed the completeness check. An incomplete trial is never used as the headline regenerability score.
   - [ ] Tests: fixture with a placeholder tool is flagged incomplete; a complete fixture passes; split scores are computed correctly.
 
@@ -29,12 +29,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-15T14:55:12.078622710Z
+modified_at: 2026-10-15T15:02:35.217774325Z
 req_type: Story
 tags:
 - from:aida-host
 - groom:approve
 - groomed:night
+- needs-docs
 - regenerability
 relationships:
 - rel_type: Child
