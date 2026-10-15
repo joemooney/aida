@@ -3,12 +3,12 @@ spec_id: BUG-2127
 agreed_id: BUG-2127
 title: 'Flake: cached_git_backend reader_ancestor_check_timeout_is_counted_and_never_writes fails on CI'
 description: 'CI run 38590162114 (PR #2600, head bdd646e004, 2026-10-14 15:45 UTC) failed at aida-core/src/db/cached_git_backend.rs:4874 in tests::reader_ancestor_check_timeout_is_counted_and_never_writes (1398 passed, 1 failed). The PR touches only story_1656_multi_forge_init_tests.rs, so this is unrelated and looks timing-dependent (a timeout-counting assertion under CI load). Acceptance: the test''s outcome does not depend on wall-clock load, e.g. it injects the timeout via a seam rather than racing a real subprocess; 50 consecutive runs at full parallelism pass. Related: BUG-1809.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:50:54.373553135Z
-modified_at: 2026-10-14T18:20:04.681693591Z
+modified_at: 2026-10-15T06:22:53.814068349Z
 req_type: Bug
 comments:
 - id: 01a13b69-ede7-7c90-a698-e78d10015fb5
@@ -36,6 +36,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a13e3a-5972-7da0-a313-d8b3b2b1b2f8
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:22:53.810327316Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-5976-7e81-8dc6-95ccfb84fdad
+  timestamp: 2026-10-15T06:22:53.814065618Z
+  agent: aida
+  commit_sha: ffab18d692185cd981e74c10b9256886dc47f886
+  summary: Completed via merge ffab18d6
 filed_at:
   code_sha: 278ff0b09857793951b477ef891e07212a53f833
   branch: main
@@ -44,3 +57,7 @@ filed_at:
   aida_build_sha: f8b0ad8c1c
   vendor: claude
   session: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:22:53.810321889Z
+  completion_sha: ffab18d692185cd981e74c10b9256886dc47f886
