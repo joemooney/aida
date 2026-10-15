@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-15T04:02:10.942598752Z
+last_run: 2026-10-15T07:06:06.711496649Z
 last_by:
   seat: advisor
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
   vendor: claude
 result: done
-note: runaway-seats recheck clean (0 findings); trip was stale from 09:19
-due_since: 2026-10-15T07:05:23.976903720Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-10-15T07:00:54.366944465Z
-  job: watchdog
-  error: 'exit 1: '
+note: 'trip = mail-poll-setup on advisor session 20233459: a single 10-min sweep cron the OPERATOR explicitly requested at 23:47 (''check your email every 10-15m at least''). Not a runaway; kept deliberately. Session-only; dies with the session.'
