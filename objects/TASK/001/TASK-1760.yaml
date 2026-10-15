@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:12:27.194542143Z
-modified_at: 2026-10-15T00:12:27.194542143Z
+modified_at: 2026-10-15T00:13:30.735812507Z
 req_type: Task
+comments:
+- id: 01a13ce8-2aef-71c3-be2f-adf6c183610c
+  author: joe
+  content: 'Added from the #2644 review: (a) init/scaffold apply/scaffold upgrade/mirror pre-push write hooks with a bare fs::write then chmod. Use the refresh''s staged create_new+fsync+0755+rename path everywhere. (b) remote_create.rs:2054-2058 silently re-enables a chmod -x''d mirror pre-push hook; it should name the mode change, and full scaffold upgrade should say ''made executable''. (c) Add a test for the mirror set_hook_mode path.'
+  created_at: 2026-10-15T00:13:30.735812507Z
+  modified_at: 2026-10-15T00:13:30.735812507Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 filed_at:
   code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
   branch: main
