@@ -1,0 +1,24 @@
+id: 01a13ee8-2b06-7380-b59b-f36b8da48166
+spec_id: TASK-1775
+agreed_id: TASK-1775
+title: 'BUG-2131 hardening: write the contained-store marker before the git version check; route git_backend''s raw diff --cached through host_git_command'
+description: 'From the #2663 STRICT review, non-blocking: (1) session.rs:2417-2427 skips writing the aida-contained-store marker on old git, and the comment claims the session then has no store write access, but with the primary checkout as write root .aida-store stays writable. Write the marker BEFORE the version check. (2) db/git_backend.rs:636 runs a raw ''git -C <store> diff --cached --quiet'' bypassing host_git_command (empirically didn''t trigger a planted clean filter on 2.43, but route it anyway). (3) Optional: don''t cache the git version forever in long-running servers.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T09:32:45.190070035Z
+modified_at: 2026-10-15T09:32:45.190070035Z
+req_type: Task
+tags:
+- contained
+- security
+- store
+filed_at:
+  code_sha: 0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
