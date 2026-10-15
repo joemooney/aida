@@ -8,11 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T05:33:11.382382783Z
-modified_at: 2026-10-15T05:33:29.782003195Z
+modified_at: 2026-10-15T11:05:10.744850862Z
 req_type: Bug
 tags:
 - sandbox
 - security
+comments:
+- id: 01a13f3c-c958-7df0-b6dc-3d795224ece2
+  author: joe
+  content: 'Advisor cap ruling on #2665: merge with follow-up BUG-2151 (agent new must honour a contained parent''s AIDA_CONTAINED; --bg is not a posture flag). BUG-2151 goes first in the launcher-file queue, before BUG-2139.'
+  created_at: 2026-10-15T11:05:10.744850862Z
+  modified_at: 2026-10-15T11:05:10.744850862Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e0d-1f35-7072-8a0c-e2720159b060
   author: joe
