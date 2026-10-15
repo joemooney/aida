@@ -1,0 +1,24 @@
+id: 01a13f3c-9f02-7bb1-8070-20e0c8d86eed
+spec_id: BUG-2151
+agreed_id: BUG-2151
+title: aida agent new ignores a contained parent (AIDA_CONTAINED) and treats --bg as an explicit posture, launching children uncontained
+description: 'From the #2665 final STRICT review (pre-existing; not introduced by #2665): (1) lib_part2.rs:713 checks only the [agents] contained knob, never aida_contained_env(); with AIDA_CONTAINED=1 and the knob off, agent new launches codex, agy and claude uncontained (claude without its sandbox --settings), and agent_launch.rs:4403 strips AIDA_CONTAINED from the child; AIDA_CONTAINED=ture also launches, so the new hard error is bypassed on this path. (2) agent_launch.rs:1940 treats --bg as an explicit posture, so ''agent new claude --bg'' with contained=true launches with bypassPermissions. RULING (BUG-2133, monotonic): a contained parent''s env ALWAYS wins and no flag can override it; parse AIDA_CONTAINED with the same strict parser here; only real posture flags typed by an operator (--bypass-sandbox, --permission-mode) may override the CONFIG knob, never the env; --bg is not a posture flag. STRICT + functional.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T11:04:59.906801750Z
+modified_at: 2026-10-15T11:04:59.906801750Z
+req_type: Bug
+tags:
+- contained
+- sandbox
+- security
+filed_at:
+  code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6ddf336ddd
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
