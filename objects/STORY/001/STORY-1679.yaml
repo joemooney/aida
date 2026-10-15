@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T17:11:19.285296386Z
+modified_at: 2026-10-15T18:08:21.339932397Z
 req_type: Story
 tags:
 - from:aida-host
@@ -78,6 +78,11 @@ comments:
   created_at: 2026-10-15T16:21:47.050441538Z
   modified_at: 2026-10-15T16:21:47.050441538Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a140c0-375b-7691-b0bd-1772ca95a2f3
+  author: mcp
+  content: 'Codex implementer REWORK READY: pushed normal descendants21a7b65878 + ebfef68065ce3842a935bb6f14e515d1971ed1f6 to draft PR #2678. Both round1 blockers fixed: finite bounded rate consistency with exact counts and committed JSON43/44 regression; all non-archived statuses other than Completed/Rejected retain gap dedup under lock, with promoted/closed/archived fixtures. All smaller suggestions addressed. Final-source binary passed76/76 regen tests serially and76/76 in parallel confirmation; both earlier failing Git fixtures passed individually. All29 final-head check-ci-fast gates passed (logs /tmp/regen-relay4-1679-{serial,parallel-confirm,fraction-exact,adapter-exact,fast-fixed}.log). Initial fixture-ordering assertion failure was corrected by UUID; two fresh-context author source self-check passes found no actionable source findings. An intermediate final-head parallel run had unexplained empty-diagnostic Git failures including an unchanged adapter fixture; subsequent exact/serial/parallel runs passed without source changes. Root cause remains unproven, captured draft BUG-2155; no execution/guard workaround. SPEC-447 retains strict-control float investigation. PR body records evidence and limits. Request fresh independent STANDARD round2 at new head; no author verdict, hold clearance, merge, Completed, CLI activation, full-workspace runtime or green CI Build claim.'
+  created_at: 2026-10-15T18:08:21.339915032Z
+  modified_at: 2026-10-15T18:08:21.339915032Z
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
   author: joe
