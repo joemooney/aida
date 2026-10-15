@@ -1,0 +1,23 @@
+id: 01a13f03-f4ba-7790-ac21-f3088029c7ee
+spec_id: TASK-1776
+agreed_id: TASK-1776
+title: 'Regen scorer hardening follow-ups from #2660: guard pipe path is trial-redirectable; survivor detection evadable; no timeouts; bwrap tests silently skip'
+description: 'From the #2660 round-2 adversarial review (non-blocking): (1) guards write to $AIDA_REGEN_GUARD_PIPE, so trial code the oracle invokes can redirect it to /dev/null and drop events: pin the FIFO path into the frozen guard scripts at freeze time and verify it is a FIFO (S_ISFIFO). Document that guards detect accidental fallback, not a hostile trial (same class as absolute-path calls). (2) A daemon that chdirs to / and closes fds evades survivor detection; the quarantine still isolates the filesystem, but pid/net namespaces are shared (depends on TASK-1774 --unshare-pid). (3) Add install and oracle timeouts; bound snapshot copy depth and size. (4) bwrap-dependent tests return early when bwrap is absent: make CI provide bwrap or mark them explicitly skipped-with-reason.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T10:03:06.298261864Z
+modified_at: 2026-10-15T10:03:06.298261864Z
+req_type: Task
+tags:
+- regen
+- security
+filed_at:
+  code_sha: 0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
