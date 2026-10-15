@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T06:58:13.774970978Z
+modified_at: 2026-10-15T06:59:31.425295584Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -95,6 +95,18 @@ comments:
   created_at: 2026-10-15T06:58:13.774970978Z
   modified_at: 2026-10-15T06:58:13.774970978Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e5b-e1e1-7523-a779-3532559183ad
+  author: ai:codex:joe
+  content: |
+    STOP: the amended immutable-oracle contract is clear, but the existing confinement helper cannot express its fixed second read-only mount plus oracle cwd unmodified.
+
+    Exact API: session.rs::bwrap_confinement_args_inner(worktree: &Path, rw_paths: &[PathBuf], read_allowlist: &[String]). Every allow-list entry emits `--ro-bind-try <p> <p>` (source and destination identical). The helper then always adds `--bind <worktree> <worktree>` and `--chdir <worktree>`. Its convenience wrapper supplies an empty read allow-list. There is no read-only source/destination mapping for `<frozen-bundle> -> /oracle`, nor a separate oracle-cwd parameter. Supplying the oracle as worktree makes it writable; staging under /tmp also loses an earlier allow-list bind to the helper's later --tmpfs /tmp.
+
+    I have not changed session.rs, appended custom mounts, or built a second sandbox. Draft PR #2660 preserves the tested prototype, explicitly not ready; TASK-1730 remains NeedsAttention. The new oracle_paths/oracle_sha/bundle-hash contract is not yet implemented because the amended ruling explicitly says STOP on this capability gap.
+
+    Advisor options: assign/authorize an existing-helper API extension in a containment lane, or explicitly approve the narrower existing capability: freeze the bundle outside /tmp, bind it read-only at its identical canonical host path through read_allowlist, and use an ordinary executable cwd wrapper to run the oracle there while the trial remains the helper's writable worktree. That alternative preserves immutability but changes the ruling's fixed namespace-root semantics; I will not infer that exception. TASK-1729 rework verification continues independently.
+  created_at: 2026-10-15T06:59:31.425295584Z
+  modified_at: 2026-10-15T06:59:31.425295584Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
