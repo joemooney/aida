@@ -31,8 +31,8 @@ sources:
 
 Before a filtered run the script lists the package's unit tests. A derived
 filter that matches 0 tests exits 3 when the derivation is suspect (the file
-holds `#[test]`/`mod tests`, or was mapped through `#[path]`/`include!`), so a
-wrong filter never reads as a green run; a module with no unit tests of its own
+holds `#[test]`/`mod tests`), so a wrong filter never reads as a green run; a
+mapping that fails to resolve already runs unfiltered; a module with no unit tests of its own
 falls back to the package's unit tests unfiltered, with a note. A change to a
 package's build-script inputs (aida-core's templates) also runs, in other
 packages, the modules that use a symbol that build script generates (e.g.
@@ -284,9 +284,10 @@ def is_test_module(mod: list[str] | None) -> bool:
 
 
 def is_suspect(f: str, idx: SourceIndex) -> bool:
-    """A filter from `f` that matches 0 tests is a mapping bug, not an untested module."""
-    if f in idx.path_mods or f in idx.includes:
-        return True
+    """A filter from `f` matching 0 tests is a mapping bug only if `f` holds tests.
+
+    A cleanly resolved `#[path]` file with no tests is just an untested module.
+    """
     return TEST_CODE_RE.search(idx.texts.get(f, "")) is not None
 
 
@@ -464,7 +465,7 @@ def execute(p: Plan, extra: list[str], dry: bool,
             if suspect:
                 print(
                     f"test-touched: filter(s) {', '.join(suspect)} match 0 of {len(names)} unit tests in {pkg}, "
-                    "but the source holds tests or was mapped through #[path]/include!, so the mapping is "
+                    "but the source holds tests, so the mapping is "
                     "wrong; a filtered run would pass vacuously. This is a failure, not a green run; "
                     f"run the package's unit tests unfiltered ({' '.join(head)}) and fix the mapping",
                     file=sys.stderr,

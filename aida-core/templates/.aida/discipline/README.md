@@ -44,7 +44,7 @@ The full workspace suite runs only in CI, at the PR head. Never run
 
 `make check-ci-fast` runs before every push; `make check-ci-compile` after every
 merge from main. `make test-touched` exits nonzero (script exit 3) when a suspect filter (the file
-holds tests, or was mapped through `#[path]`/`include!`) matches 0 tests; a module
+holds `#[test]`/`mod tests`) matches 0 tests; a module (including a `#[path]` one)
 with no unit tests of its own falls back to its package's unfiltered unit tests.
 It also exits nonzero (script exit 4) when workspace-root build config
 (`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain*`) changed. make reports

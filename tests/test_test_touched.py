@@ -47,7 +47,9 @@ SYNTH_FILES = {
         '  code.push_str("pub static EMBEDDED_TEMPLATES: X = Y;"); }\n'
     ),
     "aida-core/templates/skills/x.md": "x\n",
-    "aida-core/src/lib.rs": 'pub mod db;\npub mod ai;\npub mod embed;\n#[path = "tests/x_tests.rs"]\nmod x_tests;\n',
+    "aida-core/src/lib.rs": 'pub mod db;\npub mod ai;\npub mod embed;\n#[path = "tests/x_tests.rs"]\nmod x_tests;\n'
+                            '#[path = "tests/y_tests.rs"]\nmod y_tests;\n',
+    "aida-core/src/tests/y_tests.rs": "#[test]\nfn t() {}\n",
     "aida-core/src/tests/x_tests.rs": "// tests went missing\n",
     "aida-core/src/db/mod.rs": "pub mod cache;\n",
     "aida-core/src/db/cache.rs": "#[cfg(test)]\nmod tests {}\n",
@@ -201,9 +203,19 @@ class SynthTest(unittest.TestCase):
         p = self.run_plan(["aida-core/src/db/cache.rs"])
         self.assertEqual(tt.execute(p, [], False, self.fail_run, self.listing("other::t")), 3)
 
-    def test_zero_match_on_a_path_mapped_file_fails(self):
+    def test_untested_path_mapped_file_falls_back_to_unfiltered(self):
+        # Cleanly resolved #[path] file holding no tests: an untested module, not suspect.
         p = self.run_plan(["aida-core/src/tests/x_tests.rs"])
         self.assertEqual(p.commands, [BASE + ["-p", "aida-core", "--lib", "--", "x_tests"]])
+        self.assertEqual(p.suspect, {})
+        ran = []
+        rc = tt.execute(p, [], False, lambda c: ran.append(c) or 0, self.listing("other::t"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(ran, [BASE + ["-p", "aida-core", "--lib"]])
+
+    def test_zero_match_on_a_path_mapped_file_holding_tests_fails(self):
+        p = self.run_plan(["aida-core/src/tests/y_tests.rs"])
+        self.assertEqual(p.suspect, {"aida-core": {"y_tests"}})
         self.assertEqual(tt.execute(p, [], False, self.fail_run, self.listing("other::t")), 3)
 
     def test_untested_consumer_is_dropped(self):
