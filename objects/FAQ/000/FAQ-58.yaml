@@ -1,0 +1,44 @@
+id: 01a13d04-08cf-7a80-92d6-14c2b058add3
+spec_id: FAQ-58
+agreed_id: FAQ-58
+title: How do I mark a needs-attention spec done after its work has shipped?
+description: |
+  **Go through in-progress: run `aida edit <ID> --status in-progress`, then `aida edit <ID> --status done`.**
+
+  ## Why
+  A needs-attention spec can only be triaged to Approved, In Progress or Rejected. A direct change to done or completed is refused. Normally a merged PR whose trailer names the spec completes it on `aida pull`. As of 2026-10-14 that did not happen for a needs-attention spec (BUG-2134), so a spec whose work has fully shipped can stay needs-attention.
+
+  ## How
+  ```bash
+  aida comment add <ID> "Closing: <PRs that shipped it>; follow-ups: <IDs>"
+  aida edit <ID> --status in-progress
+  aida edit <ID> --status done
+  ```
+  Leave the comment first so the closure has a recorded reason.
+
+  ## Caveat
+  Depends on BUG-2134. Once a merged trailer completes needs-attention specs, this manual route is only needed for work shipped without a trailer.
+
+  ## See also
+  BUG-2134, BUG-1797, BUG-1994
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:57.007559920Z
+modified_at: 2026-10-15T00:43:57.007559920Z
+req_type: Faq
+tags:
+- audience:user
+- topic:completion
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T00:43:57.007608533Z
