@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T13:14:34.521672701Z
-modified_at: 2026-10-15T06:04:28.941334785Z
+modified_at: 2026-10-15T06:26:36.046144379Z
 req_type: Bug
 tags:
 - agent-new
@@ -77,6 +77,16 @@ comments:
   content: 'FACTORY DRAFT: PR #2657 at 434cc3076f'
   created_at: 2026-10-15T06:04:28.941334785Z
   modified_at: 2026-10-15T06:04:28.941334785Z
+- id: 01a13e3d-bd8e-7f83-8409-97c09eaf3bc0
+  author: joe
+  content: |-
+    ADVISOR RULING AT TWO-ROUND CAP (fire mode 2026-10-14, #2657): bounded fix-up, then ship. Round 2 verified round-1 items 2, 3, 4 and the optional items resolved; the only blocker is round-1 #1 recurring on a third path. Merging as-is would trade a false-dead for a false-live on the commonest lane launch path, so not merge-with-follow-up. But the fix is fully specified and mechanical, so not park either.
+    Allowed delta (exactly this, one commit on top of 2c31de5a8c): queue_cmd.rs:12249 pass self_claim = no_launch (covers queue rework --work via :8599); plus a lane-A test through 'queue work' (mirroring test_agent_new_does_not_attribute_lease_to_calling_lane) asserting A's registry entry is unchanged and lease X is not A's when launching, and that --no-launch DOES attribute.
+    Advisor gate on the fix-up (not a new review round): range-diff shows only that delta; the new test fails with self_claim=true; Build green. Anything beyond that delta => park.
+    Non-blocking follow-up: ensure_spec_worktree (worktree_gc.rs:1633) passes false though the caller works the lease (attribution lost, harmless).
+  created_at: 2026-10-15T06:26:36.046144379Z
+  modified_at: 2026-10-15T06:26:36.046144379Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13675-1839-7372-b72a-7efad9df7e6f
   author: joe
