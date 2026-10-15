@@ -1,0 +1,23 @@
+id: 01a13d46-31e5-7920-871f-4f4aab04789e
+spec_id: BUG-2140
+agreed_id: BUG-2140
+title: 'Contained store writes have no automatic host commit: session end doesn''t sweep pending store changes under default sync config'
+description: 'Follow-up from the #2541 (BUG-1929) STRICT r5 review, under the two-round cap. Contained sessions defer store commits to the host (''store change queued for host commit''), but under the default [store.sync] auto_push=manual nothing on the host commits them automatically: auto_commit_paths stages only its listed paths (plus oplog.yaml, so contained oplog entries get committed WITHOUT their objects), and host ''aida session end'' sweeps only in the session-end mode. Pickup happens only via aida db sync/pull/push or the next ''queue work'' pre-pickup pull. Fix: (1) host-side session end, and the phase driver after a contained child exits, unconditionally commit pending store changes through the hardened add_all/commit (host_git_command; the gitlink/nested-.git refusal surfaced loudly, not as a warning); (2) apply the deferral check in pull_store_before_id_allocation (store_sync.rs ~1118), so ''aida add'' inside a sandbox with an origin remote doesn''t fail; (3) reword the deferral notice to ''cannot write <path>: store change queued for host commit'', with no ''sandboxed session'' wording when it fires on the host, and add a doctor check; (4) fix the oplog-without-objects partial commit. Tests: a contained write is committed by host session end with default config; aida add works inside the sandbox; a plant blocks the commit with a loud error.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T01:56:12.901973172Z
+modified_at: 2026-10-15T01:56:12.901973172Z
+req_type: Bug
+tags:
+- contained
+- store
+filed_at:
+  code_sha: 3aecafedfb5f1a75cec4dcfd8573d88018b65dca
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
