@@ -7,12 +7,12 @@ description: |
 
   Expected: every launch path routes through `containment_applied(vendor, contained)` (session.rs:1676), which sets or strips the variable. Acceptance: one production-builder test per launcher asserting that the uncontained child has no AIDA_CONTAINED.
   Also from that review: `is_contained_args` (agent_launch.rs:4366) infers containment from argv (`--settings x.json` from agents.toml reads as contained). Replace it with the launch's real containment decision.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:14:56.022070526Z
-modified_at: 2026-10-15T00:16:43.374960376Z
+modified_at: 2026-10-15T01:43:23.519551311Z
 req_type: Bug
 tags:
 - contained
@@ -64,6 +64,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a13d3a-7479-78c0-8828-ff485df5c842
+  author: aida-auto-bump
+  timestamp: 2026-10-15T01:43:23.513282015Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13d3a-747f-7973-a72c-f3915c07fe15
+  timestamp: 2026-10-15T01:43:23.519548986Z
+  agent: aida
+  commit_sha: 3aecafedfb5f1a75cec4dcfd8573d88018b65dca
+  summary: Completed via merge 3aecafed
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
@@ -72,3 +85,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 3d8fc102-1166-4ecc-afbc-275650aca76e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T01:43:23.513276811Z
+  completion_sha: 3aecafedfb5f1a75cec4dcfd8573d88018b65dca
