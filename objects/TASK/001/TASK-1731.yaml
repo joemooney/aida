@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T08:52:07.960335461Z
+modified_at: 2026-10-15T08:54:01.879096420Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -71,6 +71,11 @@ comments:
   content: Commit 672c12158b references this requirement
   created_at: 2026-10-15T08:52:07.960335461Z
   modified_at: 2026-10-15T08:52:07.960335461Z
+- id: 01a13ec4-b797-7861-8f77-bace149ba17a
+  author: joe
+  content: 'Paused DRAFT checkpoint pushed: #2664 https://github.com/joemooney/aida/pull/2664 at 6fab57a55c4935fe13c4a02dbad4ec155feaf5eb, stacked on #2660. All 40 regen tests pass, including actual bwrap reference/stub/trial runs, all refusal paths and the signed ordinary-nonzero-exit policy; config-trust and shared-home guards each pass; final make check-ci-fast 28/28 (production no-default-features included). Fresh-root tempfile dependency was promoted from dev-only before the successful gate retry. TASK-1730 round-1 environment/quarantine rework is not implemented; this checkpoint must be adapted before Ready, and its old execution-cleanliness assumptions do not satisfy that rework. No review verdict, Ready, Done, Completed or merge claim. Further work is paused behind the exact root/mount-layout ruling on TASK-1730; see quarantine probe mail 89d4176b.'
+  created_at: 2026-10-15T08:54:01.879096420Z
+  modified_at: 2026-10-15T08:54:01.879096420Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
