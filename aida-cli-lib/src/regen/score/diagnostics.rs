@@ -327,8 +327,18 @@ mod tests {
         }
         super::super::super::git(store.path(), &["commit", "--allow-empty", "-m", "fixture"])
             .unwrap();
-        let legacy = row();
-        super::persist(store.path(), &legacy).unwrap();
+        let mut legacy = row();
+        legacy.aggregate = Some(Aggregate {
+            passed: 1,
+            total: 5,
+            pass_rate: 0.2,
+        });
+        legacy.discriminating = Some(Aggregate {
+            passed: 1,
+            total: 5,
+            pass_rate: 0.2,
+        });
+        super::super::persist(store.path(), &legacy).unwrap();
         let sha = super::super::super::head(store.path()).unwrap();
         let rows = controls::read_records(store.path()).unwrap();
         assert!(!rows[0].clean);

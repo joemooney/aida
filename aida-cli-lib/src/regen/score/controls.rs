@@ -1126,7 +1126,7 @@ mod execution_tests {
         let r = run_trial_in_env(
             &cfg,
             root.path(),
-            manifest,
+            manifest.clone(),
             "m",
             "v",
             "h",
@@ -1141,9 +1141,40 @@ mod execution_tests {
             }),
         )
         .unwrap();
-        assert_eq!(r.status, "error");
-        assert!(r.install_exit.is_none());
+        assert_eq!(r.status, "install_failed");
+        assert!(r
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("no declared installer"));
+        assert!(r.install_exit.is_none() && r.oracle_exit.is_none() && r.aggregate.is_none());
         assert!(r.guard_hits.is_empty());
         assert!(r.stub_tools.is_none());
+        // Preserve the original no-generated-tools oracle regression too:
+        // a declared no-op installer succeeds, but no tool is silently provided.
+        let mut noop = cfg.clone();
+        noop.install_command = Some(vec!["/bin/true".into()]);
+        let r = run_trial_in_env(
+            &noop,
+            root.path(),
+            manifest,
+            "m",
+            "v",
+            "h",
+            false,
+            ScoreEnv::new(&noop, false).unwrap(),
+            &bundle,
+            Some(RunSetup {
+                kind: "trial",
+                run_id: None,
+                repeat: None,
+                repeats: None,
+            }),
+        )
+        .unwrap();
+        assert_eq!(r.status, "error");
+        assert_eq!(r.install_exit, Some(0));
+        assert_eq!(r.oracle_exit, Some(127));
+        assert!(r.aggregate.is_none() && r.guard_hits.is_empty() && r.stub_tools.is_none());
     }
 }
