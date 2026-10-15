@@ -1,0 +1,19 @@
+{
+  "id": "af427ad8-6e1b-408d-a783-c3f4bba766b9",
+  "thread_id": "af427ad8-6e1b-408d-a783-c3f4bba766b9",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792058091300,
+  "body": "TASK-1731 controls adaptation is in progress on existing draft #2664; the new signed executor is merged locally. TASK-1732 latest spec comment proposes explicit-source-only caller capture for sanitized R1/R2, with a named hard error for missing source. Please rule on transport/missing-source behavior before R2 code; no whole-environment import or protected mapping will be added.",
+  "subject": "regen lane: TASK-1732 remaining source transport fork",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

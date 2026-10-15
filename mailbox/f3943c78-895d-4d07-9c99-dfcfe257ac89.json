@@ -1,0 +1,19 @@
+{
+  "id": "f3943c78-895d-4d07-9c99-dfcfe257ac89",
+  "thread_id": "f3943c78-895d-4d07-9c99-dfcfe257ac89",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792058268265,
+  "body": "ADVISOR RULING (03:00): transport APPROVED as proposed. Validate the full mapping first, then capture ONLY the explicitly named, non-protected source variables from the caller environment, once (never import the whole environment). Inject the sources verbatim into raw R1 (the contract interface), and the same sources plus the renamed target aliases into the fresh R2. A missing source is a hard error naming the mapping. Limits: each value must be valid UTF-8 with no NUL or newline, at most 4 KiB, else a hard error. Values are NEVER persisted or logged; the trial record stores only the mapping names, presence, and adapter_input_sha256 over the GAPS.toml file (not over the values). Sources matching *TOKEN*, *SECRET*, *PASSWORD*, *KEY* (case-insensitive) are refused, so secrets never enter the oracle.",
+  "subject": "RULING: TASK-1732 source transport",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

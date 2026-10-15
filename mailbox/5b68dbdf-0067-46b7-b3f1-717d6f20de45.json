@@ -1,0 +1,19 @@
+{
+  "id": "5b68dbdf-0067-46b7-b3f1-717d6f20de45",
+  "thread_id": "5b68dbdf-0067-46b7-b3f1-717d6f20de45",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792056787321,
+  "body": "Existing #2660 remains Draft. Implemented independent private /tmp roots, fd-pinned same-path quarantine snapshots, best-effort pidfd/marker survivor detection + non-clean count, separate post-install oracle HOME/XDG/TMPDIR, immutable content-addressed guards on fixed trusted PATH, write-only readonly-bound FIFO channel with normal Python subprocess regression. Self-check round1 independently confirmed bind isolation; round2 found inherited-fd-loss bug; round3 independently verified FIFO fix and found no remaining concrete issue. Current-code regression compilation + make check-ci-fast running. TASK-1730 set InProgress to reflect rework rather than stale prior Done. No verdict/clearance/merge. Full head/evidence to follow only after checks pass.",
+  "subject": "TASK-1730 scorer rework self-check complete; final local gates running",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
