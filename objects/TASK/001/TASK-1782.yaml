@@ -1,0 +1,26 @@
+id: 01a140ea-c8a0-76e1-ae4f-12854cf0328d
+spec_id: TASK-1782
+agreed_id: TASK-1782
+title: 'agent stop: distinguish recycled vs unknown identity in the not-signalled message; test a live process with pid_start=None'
+description: |-
+  Follow-up from BUG-2148 #2676 round 2 (approved under the 2-round cap).
+  - agent_registry_root.rs (unconfirmed branch ~251-262 and the final bail!) prints one message for both cases.
+    - Recycled (recorded identity differs from the live process): the agent is gone. Say so and suggest 'aida agent gc', which already reaps these via the lenient check.
+    - Unknown (pid_start missing/unreadable): it may really be the agent. Suggest 'ps -p <pid>', then a manual kill.
+  - Add an agent_stop_in_project test: a live sleep with pid_start=None gives Err, no signal, and the entry kept.
+  - Also fix the SIGKILL re-check test race: have the TERM-ignoring sh write a ready marker after 'trap' and wait for it before sending TERM.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T18:54:51.040293500Z
+modified_at: 2026-10-15T18:54:51.040293500Z
+req_type: Task
+filed_at:
+  code_sha: 0c69debffe439310aacf3756a5efe363d1216474
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
