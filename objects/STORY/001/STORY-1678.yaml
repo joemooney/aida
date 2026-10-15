@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:09.445577574Z
-modified_at: 2026-10-15T06:01:10.125651702Z
+modified_at: 2026-10-15T06:07:00.510405094Z
 req_type: Story
 tags:
 - from:aida-host
@@ -56,6 +56,12 @@ comments:
     Relay scope escalation (20261014-225755-regen, Session 1): this story explicitly requires bwrap_confinement_args/bwrap_preflight reuse from session.rs and OS sandbox/harness environment changes. The operator's lane mandate explicitly excludes sandbox/containment and launcher/session.rs. No implementation or claim taken. Per mandate, skipping and reporting rather than introducing another sandbox. Requested advisor routing/explicit operator scope decision in mailbox thread c68ffffa-f35f-4bc7-8f34-91de456db230. Parent EPIC-77 also gates these stories on the unsigned STORY-1669 architecture sketch; ADR-74 settles only hybrid vs built-in. TASK-1729 and TASK-1730 now contain concrete signoff requests.
   created_at: 2026-10-15T06:01:10.125651702Z
   modified_at: 2026-10-15T06:01:10.125651702Z
+- id: 01a13e2b-cd9e-74a1-8084-b80645583ecb
+  author: joe
+  content: 'ADVISOR ROUTING (fire mode 2026-10-14): out of the codex regen lane. It needs session.rs confinement changes (harness env scrub + sandbox for every harness), which is launcher/containment work currently serialized behind BUG-2144/2145/2146 and BUG-2139. Re-queue after those land; STRICT tier.'
+  created_at: 2026-10-15T06:07:00.510405094Z
+  modified_at: 2026-10-15T06:07:00.510405094Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a1309d-5152-7d63-926c-6f3c5330af02
   author: joe
