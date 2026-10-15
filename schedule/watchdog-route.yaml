@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-11T22:41:53.850919073Z
+last_run: 2026-10-15T04:02:10.942598752Z
 last_by:
   seat: advisor
-  session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
   vendor: claude
 result: done
-note: 'Advisor triage 2026-10-11 15:45. Four of the five findings are carry-overs already handled at the 16:21 triage (session ac2268c9 mail-poll cron fixed; sessions acdb011f, d28185fc and fe2e54bf rotated or finished; their ''still active'' flag is stale). New: session 0a74bb87, a Claude transcript, is the night relay (STORY-1652 to STORY-1653). It has compacted twice in about 7h (09:55 to 15:32), was still productive (pushed #2542 head 6c38cc2fd9 at 15:31), and is not looping. Action: no poll added; the operator will be asked to rotate it via handoff once STORY-1653 (#2542) lands.'
-due_since: 2026-10-12T23:32:31.389443854Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-10-14T09:19:16.738506877Z
-  job: watchdog
-  error: 'exit 1: '
+note: runaway-seats recheck clean (0 findings); trip was stale from 09:19
