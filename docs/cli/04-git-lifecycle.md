@@ -79,10 +79,26 @@ or forced completion is needed for an ID remapping.
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
+- `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".
 
 **Don't reach for it when** — the work has not been **reviewed** yet. `aida pr ship` does not run a reviewer phase; it merges only when an approval of the PR head has already been recorded by a session that did not author the work, and refuses otherwise. For work that still needs review, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
+
+**Non-completing slices.** The squash subject's trailing `(SPEC-ID)` group is
+what completes a spec at merge time. Ship derives it from an explicit title
+trailer first, then from the branch name — so a slice PR with no id in its
+title but a `<spec-id>-…` branch would complete `<spec-id>` after one of many
+PRs. Three things stop that: `aida pr ship --no-complete`, a PR-body line
+reading `aida: no-complete` or `Non-completing slice` (either one withholds
+the trailer from every source, so the merge completes no spec), and, with no
+declaration at all, the branch-name fallback is skipped when the spec carries
+`closure:pending` or still has open slice children (a Done child counts as
+finished). An explicit title trailer is always honoured. Before merging, ship
+prints the trailer it derived and its source — `from the PR title`, `from the
+branch name`, or `none` with the reason it was withheld; `--dry-run` prints
+the same line.
+<!-- trace:BUG-1919 | ai:claude -->
 
 **Drive-owned PRs.** A live drive's PR remains protected by its independent
 reviewer. A direct human terminal invocation reports the owning wave/PID
@@ -282,7 +298,7 @@ The marker is best-effort when the code repository cannot be read.
 
 **Gotchas.** Non-interactive (no TTY, no route flag) it prints the manual recipe and exits cleanly rather than hanging — so it's CI-safe. Pre-select a route (`--github` / `--gitlab <host>` / `--attach <url>`) to stay scriptable.
 
-**Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It fetches and pushes origin's observed SHA, ignoring and reporting local-only commits even if a protected origin has rejected them. The pre-push hook only mirrors a proposed ref when origin already advertises that exact SHA; pending or rejected updates are skipped. A later mirror-sync catches up the default branch and store; `aida push` fans out code branches after origin accepts them. Raw `git push` of feature branches or tags requires retrying the mirror hook plumbing once origin confirms the ref. <!-- trace:BUG-1803 | ai:codex --> It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook. The hook itself is generated once, at `aida remote mirror` time: `aida doctor` (category `mirror-hook-drift`) compares the installed hook against the current script and reports when a re-run of `aida remote mirror <name>` is needed to pick up hook fixes — it recognizes only AIDA's own hook and never flags a custom pre-push hook. <!-- trace:BUG-1738 | ai:claude -->
+**Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It fetches and pushes origin's observed SHA, ignoring and reporting local-only commits even if a protected origin has rejected them. The pre-push hook only mirrors a proposed ref when origin already advertises that exact SHA; pending or rejected updates are skipped. A later mirror-sync catches up the default branch and store; `aida push` fans out code branches after origin accepts them. Raw `git push` of feature branches or tags requires retrying the mirror hook plumbing once origin confirms the ref. <!-- trace:BUG-1803 | ai:codex --> It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook. The hook itself is generated once, at `aida remote mirror` time: `aida doctor` (category `mirror-hook-drift`) compares the installed hook against the current script and reports when a re-run of `aida remote mirror <name>` is needed to pick up hook fixes — it recognizes only AIDA's own hook and never flags a custom pre-push hook. <!-- trace:BUG-1738 | ai:claude --> `aida remote mirror <name>` lists the hub in `.aida/config.toml` and then settles that change: run non-interactively it commits only that file (`[AI:aida] chore(remote): list <name> as a store mirror`); on a terminal it asks first. If you decline, or the file already had uncommitted edits, nothing is committed and it prints `config changed: .aida/config.toml — commit it with: …`. It ends with next steps: run `aida remote mirror-sync` to bring the new hub level now, since the first push skips a mirror until origin confirms the ref, then `aida remote status` to confirm every hub is in sync. `aida init` handles its end-of-run config refresh (forge provider, project capabilities) the same way: committed when you accepted the scaffold commit, otherwise announced. <!-- trace:BUG-1938 | ai:claude -->
 
 **Chains with** — typically right after `aida init` on a project with no remote; then `aida push` works.
 
@@ -298,7 +314,7 @@ The marker is best-effort when the code repository cannot be read.
 
 **Don't reach for it when** — no allowlist is configured: every check is silent, so there is nothing to bypass or tune. The gate is opt-in per project.
 
-**Gotchas.** The installer never clobbers a custom pre-push hook — it prints the lines to paste instead. Repos running the mirror fan-out hook get the gate embedded in that same hook (git only runs one pre-push hook); re-running `aida identity install-hook` or `aida remote mirror <name>` refreshes an older gate-less install in place. `aida doctor` (category `identity`) reports a git identity outside the allowlist and a pre-push hook that does not run the gate. A deliberate bypass is `git push --no-verify` — loud, explicit, and on you.
+**Gotchas.** The installer never clobbers a custom pre-push hook — it prints the lines to paste instead. Repos running the mirror fan-out hook get the gate embedded in that same hook (git only runs one pre-push hook); re-running `aida identity install-hook` or `aida remote mirror <name>` refreshes an older gate-less install in place. `aida doctor` (category `identity`) reports a git identity outside the allowlist and a pre-push hook that does not run the gate. A deliberate bypass is `git push --no-verify` — loud, explicit, and on you. Pushes from the `.aida-store` worktree (the spec store) are gated by the owning project's allowlist — the store's own `.aida/config.toml` is never consulted. A store checkout whose owning project cannot be resolved (for example a standalone clone of the `aida-store` branch outside `<project>/.aida-store`) is refused; attach the store as a linked worktree at `<project>/.aida-store` (as `aida init` does) or bypass deliberately with `git push --no-verify`. A linked code worktree without its own `.aida/config.toml` uses the main worktree's allowlist. <!-- trace:BUG-1926 | ai:claude -->
 
 **Chains with** — `aida commit` (commit-time enforcement point), `aida remote mirror` (shared pre-push hook), `aida doctor` (drift reporting), `aida pr ship` (squash-body sanitizer).
 
@@ -326,3 +342,16 @@ You now own the back half of the lifecycle and the two-leg sync model. Next:
 - **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: the front half — queue, pickup, and letting agents drain work (where Done comes *from*).
 - **[Chapter 8 — Reporting](08-reporting.md)**: `history` / `metrics` to *see* the lifecycle you just drove.
 - The full state machine, with every edge and edge-case, is [`docs/lifecycle.md`](../lifecycle.md).
+
+
+### `aida merge-hold auto-release`
+
+Release an eligible Rework-only hold from a fresh recorded approval at the
+current PR head. Omit the PR number to inspect every local hold, or use
+`aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
+it has no override flag and never merges. Refused candidates remain held and
+produce a nonzero exit with a reason. The review-record handler runs the same
+release after a verified APPROVED write. Sensitive or composed holds retain
+the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+for grant, arming-round, metadata and audit requirements.
+<!-- trace:STORY-1687 | ai:codex -->

@@ -151,7 +151,7 @@ pub(crate) fn has_transition_filter(opts: &HistoryOpts) -> bool {
 /// A status spelling reduced to its letters, lowercased, so the stored
 /// `In Progress` / `InProgress` / `in_progress` forms all compare equal.
 // trace:TASK-1512 | ai:claude
-fn status_key(s: &str) -> String {
+pub(crate) fn status_key(s: &str) -> String {
     s.chars()
         .filter(|c| !matches!(c, ' ' | '-' | '_'))
         .flat_map(char::to_lowercase)
@@ -237,6 +237,11 @@ pub(crate) enum EventKind {
         title: String,
         req_type: String,
         priority: String,
+        /// The status the spec was filed at, so the status flow can show a
+        /// creation as `(new) → <status>`. Not rendered by the events feed.
+        // trace:STORY-1650 | ai:claude
+        #[serde(default)]
+        status: String,
     },
     Deleted {
         title: String,
@@ -519,7 +524,7 @@ type ResolvedWindow = (
 /// are injectable so tests get deterministic output regardless of the wall
 /// clock or system timezone; production passes `chrono::Local`.
 // trace:TASK-1502 | ai:claude
-fn resolve_history_window<Tz>(
+pub(crate) fn resolve_history_window<Tz>(
     opts: &HistoryOpts,
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
@@ -605,7 +610,7 @@ where
 /// even when the caller typed a relative duration or a bare date. `None`
 /// when neither bound was given (nothing to show).
 // trace:TASK-1502 | ai:claude
-fn format_resolved_window<Tz>(
+pub(crate) fn format_resolved_window<Tz>(
     since_at: Option<chrono::DateTime<chrono::Utc>>,
     until_at: Option<chrono::DateTime<chrono::Utc>>,
     tz: &Tz,
@@ -632,10 +637,24 @@ where
     }
 }
 
-/// `json` selects the JSON projection of the events feed (`--json` /
-/// `--format json`); the caller also sets `opts.events_mode` for it.
+/// What a query with no SPEC-ID and no events mode shows.
+// trace:STORY-1650 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BareView {
+    /// The status flow (the default): one line per status change, served
+    /// only from the history index; the digest plus a note when the index
+    /// cannot answer.
+    Flow,
+    /// `--digest`: one row per requirement, sorted by last touch.
+    Digest,
+}
+
+/// `json` selects the JSON projection of the chosen view (`--json` /
+/// `--format json`). `bare` picks what a query with no SPEC-ID and no
+/// events mode shows.
 // trace:BUG-1631 | ai:claude
-pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
+// trace:STORY-1650 | ai:claude
+pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool, bare: BareView) -> Result<()> {
     if !store_path.is_dir() {
         anyhow::bail!(
             "Not a git-canonical AIDA store: {}\n\
@@ -669,8 +688,12 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
         return run_single_spec_progress(store_path, opts, output);
     }
 
+    // trace:STORY-1650 | ai:claude
     if !opts.events_mode {
-        return run_digest(store_path, opts);
+        return match bare {
+            BareView::Flow => crate::history_flow::run(store_path, opts, output),
+            BareView::Digest => run_digest_view(store_path, opts, output),
+        };
     }
 
     let (filtered, hidden_archived, window_exhausted, source) =
@@ -828,7 +851,11 @@ fn print_fallback_footer(source: &HistorySource) {
 /// Prints to stderr like the other `(...)` hints in this module, so it
 /// never pollutes stdout for a caller piping the event lines themselves.
 // trace:BUG-1617 | ai:claude
-fn print_window_exhausted_notice(opts: &HistoryOpts, window_exhausted: bool, shown: usize) {
+pub(crate) fn print_window_exhausted_notice(
+    opts: &HistoryOpts,
+    window_exhausted: bool,
+    shown: usize,
+) {
     // Agent/piped output is script-parsed; `window_exhausted` in the
     // JSON/MCP surface is the machine-readable equivalent there, and a
     // prose line would just be noise a script has to filter back out.
@@ -1355,6 +1382,20 @@ fn collect_filtered_events_unresolved(
     ))
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread ran the per-commit git walk, so tests can
+    /// assert structurally that a path never takes it.
+    static GIT_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The number of per-commit git walks this thread has run.
+// trace:STORY-1650 | ai:claude
+#[cfg(test)]
+pub(crate) fn git_walk_count() -> usize {
+    GIT_WALKS.with(|c| c.get())
+}
+
 /// Parse an RFC3339 string, unix timestamp, or ISO datetime into a unix epoch
 /// timestamp in seconds. Used so git log --since/--until commands receive
 /// unambiguous numeric timestamps, avoiding Git approxidate parser bugs
@@ -1404,6 +1445,8 @@ pub(crate) fn collect_filtered_events_git(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool)> {
+    #[cfg(test)]
+    GIT_WALKS.with(|c| c.set(c.get() + 1));
     // Build a `git log` command bounded by --since / --until / --max_commits.
     // BUG-1617 review fix: over-fetch by one commit. `-n<max_commits>` alone
     // can't distinguish "history is exactly max_commits commits long" (not
@@ -1770,6 +1813,67 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     Ok(())
 }
 
+/// The digest in the selected output: `--digest`, and the status flow's
+/// fallback when the history index cannot answer.
+///
+/// JSON is [`digest_json`], the TOON digest's fields as JSON, for both
+/// `--digest --json` and the flow's JSON fallback. Before the status flow
+/// the digest had no JSON (a bare `--json` printed the events feed); that
+/// change is intentional and noted in the changelog.
+// trace:STORY-1650 | ai:claude
+pub(crate) fn run_digest_view(
+    store_path: &Path,
+    opts: &HistoryOpts,
+    output: HistoryOutput,
+) -> Result<()> {
+    if output == HistoryOutput::Json {
+        let doc = digest_json(store_path, opts)?;
+        println!("{}", crate::cache_output::json_pretty(&doc)?);
+        return Ok(());
+    }
+    run_digest(store_path, opts)
+}
+
+/// The digest as JSON: `view: "history"`, `count`, the hidden counts, and
+/// one `history` row per requirement with the TOON digest's fields (`id`,
+/// `type`, `status`, `when`, `change`, `title`).
+// trace:STORY-1650 | ai:claude
+pub(crate) fn digest_json(store_path: &Path, opts: &HistoryOpts) -> Result<JsonValue> {
+    let (entries, archived_hidden, deferred_hidden) = build_digest_rows(store_path, opts)?;
+    let rows: Vec<JsonValue> = entries
+        .iter()
+        .map(|e| {
+            json!({
+                "id": e.spec_id,
+                "type": display_type_name(&e.req_type),
+                "status": e.status,
+                "when": short_clock(&e.last_ts_iso),
+                "change": digest_change(e.had_add, e.had_delete),
+                "title": e.title,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "view": "history",
+        "count": rows.len(),
+        "archived_hidden": archived_hidden,
+        "deferred_hidden": deferred_hidden,
+        "history": rows,
+    }))
+}
+
+/// The digest's `change` cell: `del`, `add` or `edit`.
+// trace:STORY-1650 | ai:claude
+fn digest_change(had_add: bool, had_delete: bool) -> &'static str {
+    if had_delete {
+        "del"
+    } else if had_add {
+        "add"
+    } else {
+        "edit"
+    }
+}
+
 /// Builds the sorted, filtered digest rows for `run_digest` (extracted so the
 /// shard-resolution fix — BUG-1596 — can be exercised directly by tests
 /// without capturing stdout). Returns (rows, archived_hidden_count,
@@ -1957,11 +2061,37 @@ fn build_digest_rows(
         entries.retain(|e| only.contains(&e.spec_id));
     }
 
-    // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
-    entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
+    // Sort newest-first by instant (not by string: the timestamps mix YAML
+    // `...Z` with git `%aI` offsets). trace:BUG-1945 | ai:claude
+    sort_digest_rows(&mut entries);
     entries.truncate(opts.limit);
 
     Ok((entries, archived_hidden, deferred_hidden))
+}
+
+/// Orders digest rows newest-first by the UTC instant of `last_ts_iso`.
+///
+/// A live spec's timestamp comes from YAML `modified_at` (`...Z`); a deleted
+/// spec's comes from git `%aI`, which prints UTC as `+00:00` or `Z` depending
+/// on the git version, or a local offset. Comparing those strings orders
+/// equal instants by format and non-UTC offsets wrongly, so parse first.
+/// Ties break by spec id ascending, so the order never depends on which
+/// string form produced the instant. Unparseable timestamps sort after every
+/// parseable one (newest string first among themselves, then spec id). The
+/// rendered string is left untouched.
+// trace:BUG-1945 | ai:claude
+fn sort_digest_rows(entries: &mut [DigestRow]) {
+    entries.sort_by(|a, b| {
+        let ta = chrono::DateTime::parse_from_rfc3339(&a.last_ts_iso).ok();
+        let tb = chrono::DateTime::parse_from_rfc3339(&b.last_ts_iso).ok();
+        let by_time = match (ta, tb) {
+            (Some(x), Some(y)) => y.cmp(&x),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => b.last_ts_iso.cmp(&a.last_ts_iso),
+        };
+        by_time.then_with(|| a.spec_id.cmp(&b.spec_id))
+    });
 }
 
 /// In-flight commit metadata while parsing `git log --name-status`.
@@ -2007,7 +2137,7 @@ struct DigestRow {
 /// Returns (status, title, modified_at). `modified_at` is None for
 /// deleted requirements or when the field is missing — the caller then
 /// falls back to the git commit timestamp.
-fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
+pub(crate) fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
     let Ok(text) = std::fs::read_to_string(yaml_path) else {
         return ("(deleted)".to_string(), String::new(), None);
     };
@@ -2190,6 +2320,8 @@ pub(crate) fn decode_into_events(
                         .or_else(|| yaml_string(v, "type"))
                         .unwrap_or_else(|| req_type.clone()),
                     priority: effective(v, "priority", "custom_priority").unwrap_or_default(),
+                    // trace:STORY-1650 | ai:claude
+                    status: effective(v, "status", "custom_status").unwrap_or_default(),
                 }));
             }
         }
@@ -2636,6 +2768,7 @@ fn event_kind_record(kind: &EventKind, spec_id: &str) -> (String, String, JsonVa
             title,
             req_type,
             priority,
+            ..
         } => (
             "added".to_string(),
             format!("added ({req_type}, {priority}) {}", shorten(title, 80)),
@@ -2763,6 +2896,7 @@ fn format_event_body(e: &Event) -> String {
             title,
             req_type,
             priority,
+            ..
         } => format!(
             "{} ({}, {}) {}",
             "added".green(),
@@ -2885,7 +3019,7 @@ fn maybe_dash(s: &str) -> String {
 
 // Char-boundary-safe truncation: titles carry emoji/unicode, so slicing by raw
 // byte index panics mid-codepoint (BUG-424). Truncate by chars. trace:BUG-424
-fn shorten(s: &str, max: usize) -> String {
+pub(crate) fn shorten(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
@@ -2898,6 +3032,79 @@ fn shorten(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // BUG-1945: digest ordering is by instant, not by timestamp string.
+    // trace:BUG-1945 | ai:claude
+    fn digest_row(spec_id: &str, ts: &str) -> DigestRow {
+        DigestRow {
+            spec_id: spec_id.to_string(),
+            req_type: "BUG".to_string(),
+            status: "Approved".to_string(),
+            title: String::new(),
+            last_ts_iso: ts.to_string(),
+            last_author: String::new(),
+            had_add: false,
+            had_delete: false,
+        }
+    }
+
+    fn digest_ids(rows: &[DigestRow]) -> Vec<&str> {
+        rows.iter().map(|r| r.spec_id.as_str()).collect()
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_orders_by_instant_not_string() {
+        // 06:00-07:00 is 13:00Z: later than 12:00Z, though it sorts first as
+        // a string.
+        let mut rows = vec![
+            digest_row("BUG-1", "2025-03-04T12:00:00Z"),
+            digest_row("BUG-2", "2025-03-04T06:00:00-07:00"),
+        ];
+        sort_digest_rows(&mut rows);
+        assert_eq!(digest_ids(&rows), vec!["BUG-2", "BUG-1"]);
+        // Rendering is untouched: the original strings survive the sort.
+        assert_eq!(rows[0].last_ts_iso, "2025-03-04T06:00:00-07:00");
+        assert_eq!(rows[1].last_ts_iso, "2025-03-04T12:00:00Z");
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_tie_breaks_by_spec_id() {
+        // A live spec (YAML `...Z`) and a deleted spec (git `+00:00` from
+        // older git, `Z` from newer) at the same instant order by spec id,
+        // whatever the input order and whichever form git printed.
+        for deleted_ts in ["2025-03-04T12:00:00+00:00", "2025-03-04T12:00:00Z"] {
+            for flip in [false, true] {
+                let live = digest_row("BUG-20", "2025-03-04T12:00:00Z");
+                let deleted = digest_row("BUG-10", deleted_ts);
+                let mut rows = if flip {
+                    vec![deleted, live]
+                } else {
+                    vec![live, deleted]
+                };
+                sort_digest_rows(&mut rows);
+                assert_eq!(
+                    digest_ids(&rows),
+                    vec!["BUG-10", "BUG-20"],
+                    "deleted_ts={deleted_ts} flip={flip}"
+                );
+            }
+        }
+    }
+
+    // trace:BUG-1945 | ai:claude
+    #[test]
+    fn digest_unparseable_timestamp_sorts_last() {
+        let mut rows = vec![
+            digest_row("BUG-3", "not-a-timestamp"),
+            digest_row("BUG-1", "2025-03-04T12:00:00Z"),
+            digest_row("BUG-4", ""),
+            digest_row("BUG-2", "2025-03-05T12:00:00+00:00"),
+        ];
+        sort_digest_rows(&mut rows);
+        assert_eq!(digest_ids(&rows), vec!["BUG-2", "BUG-1", "BUG-3", "BUG-4"]);
+    }
 
     /// TASK-1055: a path-scoped `--id` walk only visits the spec's own commits,
     /// not the whole orphan-branch history. Builds a tiny store with three

@@ -509,12 +509,14 @@ fn the_scan_sees_the_routed_paths() {
             || files
                 .iter()
                 .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(stamp))
+            || files["aida-cli-lib/db_reconcile.rs"].contains(stamp)
     );
     assert!(
         files["aida-cli-lib/lib.rs"].contains(transition)
             || files
                 .iter()
                 .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(transition))
+            || files["aida-cli-lib/punt_done.rs"].contains(transition)
     );
     assert!(files["aida-cli-lib/queue_cmd.rs"].contains(transition));
     assert!(files["aida-cli-lib/git_backend_cmd.rs"].contains(stamp));

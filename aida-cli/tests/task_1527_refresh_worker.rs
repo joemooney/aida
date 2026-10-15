@@ -315,3 +315,109 @@ fn suppressed_request_makes_the_tick_stand_down() {
         "standing down must not clear the request"
     );
 }
+
+/// BUG-1947 regression: the detached worker runs from a cwd that is never a
+/// removable session worktree, so `cache refresh --worker --store --cache`
+/// must work from a directory outside any AIDA project. It used to run
+/// cwd-based project discovery first and exit non-zero, which killed
+/// background refresh for everyone.
+// trace:BUG-1947 | ai:claude
+#[test]
+fn worker_with_explicit_paths_runs_from_a_cwd_outside_any_project() {
+    let fixture = seeded_fixture();
+    let store = store_path(&fixture);
+    let cache = cache_path(&fixture);
+    make_store_stale(&fixture);
+    aida_core::db::refresh_request::file_request(&cache, &store_head(&fixture)).unwrap();
+    let outside = tempfile::tempdir().expect("tempdir outside any project");
+    let out = aida_command(
+        &fixture,
+        &[
+            "cache",
+            "refresh",
+            "--worker",
+            "--store",
+            store.to_str().unwrap(),
+            "--cache",
+            cache.to_str().unwrap(),
+        ],
+    )
+    .current_dir(outside.path())
+    .env("AIDA_CACHE_WORKER", "1")
+    .output()
+    .expect("run worker");
+    assert!(
+        out.status.success(),
+        "a worker outside any project must still refresh its explicit store:\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        aida_core::db::refresh_request::load(&cache).is_none(),
+        "the worker's refresh must clear the request"
+    );
+    let status_out = aida(&fixture, &["cache", "status"]);
+    assert!(
+        String::from_utf8_lossy(&status_out.stdout).contains("FRESH"),
+        "cache must be fresh after the worker:\n{}",
+        String::from_utf8_lossy(&status_out.stdout)
+    );
+}
+
+/// BUG-1947 regression, end to end through the REAL detached spawn: a reader
+/// that finds the cache needing a full rebuild behind a held write lock
+/// spawns the worker, which must complete the refresh once the lock is
+/// released (it never reaches the cwd-based discovery that failed before).
+// trace:BUG-1947 | ai:claude
+#[test]
+fn reader_spawned_worker_completes_the_refresh() {
+    let fixture = seeded_fixture();
+    let cache = cache_path(&fixture);
+    // Rewrite the store head so no incremental refresh exists: the reader
+    // must hand the full rebuild to the detached worker (BUG-1674's shape).
+    assert!(git(
+        &store_path(&fixture),
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "--amend",
+            "-m",
+            "rewritten"
+        ]
+    )
+    .status
+    .success());
+    let conn = rusqlite::Connection::open(&cache).unwrap();
+    conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let show = aida(&fixture, &["show", "TASK-1"]);
+    assert!(
+        show.status.success(),
+        "show behind a held lock must still serve:\n{}",
+        String::from_utf8_lossy(&show.stderr)
+    );
+    conn.execute_batch("ROLLBACK").unwrap();
+    drop(conn);
+
+    let log = aida_core::db::refresh_request::refresh_log_path(&cache);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        assert!(
+            !text.contains("No AIDA project found"),
+            "the spawned worker ran project discovery from its cwd:\n{text}"
+        );
+        if aida_core::db::refresh_request::load(&cache).is_none()
+            && text.contains("refresh worker:")
+        {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the spawned worker never completed the refresh; request={:?}\nlog:\n{text}",
+            aida_core::db::refresh_request::load(&cache)
+                .map(|r| r.last_error().map(str::to_string))
+        );
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}

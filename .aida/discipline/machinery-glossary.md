@@ -61,7 +61,11 @@ non-integrity phases during `aida queue work --auto-complete`:
 - `lifecycle:no-review` — skip the phase-3 reviewer model session. The merge
   still requires an independent approval at head; no tag waives it.
 - `lifecycle:no-build` — skip the final local build verification.
-- `lifecycle:trivial` — shorthand for all three skips.
+- `lifecycle:no-preflight` — skip the local CI-parity guards before the
+  implementer branch is published. Use only when the change is genuinely
+  unrelated to those guards; the drain banner names this opt-out.
+- `lifecycle:trivial` — shorthand for the CI-wait, review, and build skips
+  (it does not skip preflight).
 
 Merge and pull/auto-bump never short-circuit. These tags are for small,
 low-blast-radius specs where the saved latency is worth the reduced
@@ -78,7 +82,7 @@ implements one iteration of it.
 
 ### batch
 
-A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --tags
+A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --add-tag
 batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
 head queued member of that batch; `--batch NAME --auto-complete` drains
 the whole batch sequentially.
@@ -211,20 +215,24 @@ idle Claude Code process. The sentinel is the explicit "I'm done" signal.
 
 ### NeedsAttention
 
-An off-mainline spec status (distinct from the seven primary lifecycle
+An off-mainline stored spec status (distinct from the primary lifecycle
 states: Draft → Approved → Planned → InProgress → Done → Completed /
-Rejected). A spec moves to NeedsAttention when a phase failure isn't
-shelvable (the implementer punted on a design-fork it couldn't resolve;
-the headless advisor escalated; CI red persists past retry budget; a
-session left dangling state nobody owns). The drain *continues* past it
-(the dependent specs skip via the pickability gate); the parked spec
-waits for human-or-advisor triage.
+Rejected). The display layer splits this status by its recorded reason:
 
-Distinguishes "I'm working on this" (InProgress) from "this work
-needs a decision before it can move" (NeedsAttention). Triage:
+- **Shelved** — mechanically parked with a `FailureReason` such as stale
+  base, CI red, reviewer tool exit, or merge/pull failure. The retry or
+  rework path is recorded; no decision is implied.
+- **Needs Decision** — parked with an `AttentionReason` from a punt,
+  advisor escalation, or other design/human fork. A person or advisor must
+  decide before it moves.
 
-- `aida findings list` surfaces the parked punt + the reason (when
-  the orchestrator recorded one).
+This keeps the storage value stable (`NeedsAttention`) while making lists,
+cards, `why`, and awaiting surfaces distinguish "known recovery path" from
+"human decision needed". The drain *continues* past a parked spec (the
+dependent specs skip via the pickability gate). Triage:
+
+- `aida findings list` surfaces parked punts and shelved failures with their
+  recorded reason.
 - `aida queue work <SPEC> --resume` retries from where the prior
   phase failed.
 - `aida edit <SPEC> --status approved` resets to Approved (clears
@@ -235,7 +243,7 @@ needs a decision before it can move" (NeedsAttention). Triage:
 NeedsAttention is **not** the same as `human_only` (a typed boolean
 field marking specs no agent should ever pick). NeedsAttention is a
 transient parking state; `human_only` is a permanent classification.
-trace:STORY-332 trace:STORY-333 trace:TASK-350 | ai:claude
+trace:STORY-332 trace:STORY-333 trace:TASK-350 trace:STORY-1023 trace:BUG-1950 | ai:claude
 
 ### complexity (tag convention)
 
@@ -411,6 +419,6 @@ machinery concept:
 5. **Keep it terse.** One paragraph plus optional bullets. Long-form
    discussion belongs in a dedicated doc, not the glossary.
 
-The master template is `aida-core/templates/docs/aida/discipline/machinery-glossary.md`
+The master template is `aida-core/templates/.aida/discipline/machinery-glossary.md`
 (embedded via `build.rs`, scaffolded by `aida init`). Edit the master, not
 a project-local copy — the latter is yours to tailor after init.

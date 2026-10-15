@@ -5,6 +5,8 @@
 # With a module name: V2 multiset + V7 size cap for that module's PR.
 # Without: visibility PR (commit A) — V1 is run separately via check_v1_tokens.sh.
 # Always: fmt check, build, workspace tests w/ count, golden outputs vs base.
+# See also: verify_stack.py (whole-stack protocol checker: commit classes, move
+# purity, retarget/tooling scope, tag proofs; run it on a slice stack before review).
 set -uo pipefail
 BASE="$1"; MODULE="${2:-}"
 cd "$(git rev-parse --show-toplevel)"

@@ -44,6 +44,8 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 **Keeping every agent pack current.** `aida scaffold refresh` (equivalently `aida init --refresh`) brings every *installed* pack level with the binary's embedded templates — `.claude/skills/`, `.claude/commands/`, `.codex/skills/`, `.antigravity/skills/`, `~/.codex/prompts/`, and starter roles under `~/.aida/roles/` — while preserving your edits. A pack file whose body still hashes to the scaffold checksum it was written with is overlaid; a file you edited, a file with no scaffold marker, and a symlinked destination are left exactly as they are; a pack you never installed is not created. For an installed starter role, refresh only appends shipped guidance when `system_prompt` is absent; it preserves all existing text and never replaces a user-supplied prompt. This is the no-`--force` delivery path for a template or starter-guidance fix, and it is the same contract the starter memory pack has always had — so a fix reaches existing Claude, Codex and Antigravity seats through one mechanism instead of one per vendor. A skill AIDA started shipping after a skill pack was installed is added to that pack on refresh. Each skill pack directory keeps a `.aida-delivered` manifest of the skills AIDA has put there; a skill you delete from a pack is recorded there as an opt-out, and neither refresh, `aida scaffold upgrade`, nor a re-run of `aida init` brings it back (remove its line from the manifest to get it back). A pack installed before the manifest existed is seeded from the skills on disk and refresh adds nothing to it, because a missing skill may be one you deleted; an explicit `aida scaffold upgrade` (or `aida init`) installs the missing skills once, and from then on deletions are honoured. To decline such a skill instead, move its line under the manifest's `# opted-out` heading. A project on the `minimal` or `memory-lane` footprint never receives new skills from a refresh. <!-- trace:TASK-1503 | ai:claude --> A memory-lane project created before the footprint was saved is recognised from its skill packs (only the memory-lane skills present), so refresh and `aida doctor` do not push it toward the full skill set. Init, apply, upgrade and refresh never write a skill file through a symlinked directory (the vendor directory, skill pack, skill directory or a folder inside a skill); they skip it and say so, and `aida doctor` treats those files as yours rather than as drift. <!-- trace:BUG-1645 | ai:claude -->
 
+**Refreshing stale git hooks only.** A store write refuses to run while an AIDA-generated git hook (one with the `# AIDA Generated` header) is not this build's shipped hook, because git runs it while the write holds the store lock. The refusal lists every such hook and names `aida scaffold upgrade --only git-hooks`, which copies each stale hook beside itself as `<name>.aida-stale-<seconds>` and replaces it with this build's hook. It touches no other file: custom hooks without the header, symlinked hooks, README.md, CLAUDE.md, AGENTS.md and drifted skills are left alone. Add `--dry-run` to see what it would replace. A refused hook it cannot replace (a symlink, which is never written through, or an AIDA-headed hook under a name AIDA ships no hook for) is listed with what to do instead, and the command exits non-zero. It needs no AIDA store, so it runs from anywhere with `--project-root`. <!-- trace:BUG-1977 | ai:claude --> The same command fixes an AIDA hook that has lost its executable bit: git silently skips such a hook, so it counts as stale even when its content is current, and the refresh sets it to 0755 (no backup is needed when only the mode changes). `aida doctor` (category `git-hooks`) reports both kinds. Every command that writes AIDA hooks (`aida init`, `aida scaffold apply`, `aida scaffold upgrade`) sets 0755 explicitly. <!-- trace:BUG-2009 | ai:claude --> If `core.hooksPath` points the hooks outside the repository's git directory, the command says so first: a shared hooks directory serves every repository that uses it, and a tracked one shows the backups as untracked files. A custom hook that runs `aida` is refused in the same message as the stale generated hooks, so one attempt lists everything to fix. <!-- trace:BUG-2003 | ai:claude -->
+
 ### `aida config`
 
 **One line** — set the project's ID scheme (prefix format, numbering, digits) and a couple of user-level preferences.
@@ -191,7 +193,10 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - the focused subcommands (`verify-relationships`, `validate-trace-comments`, `shell-substitution-holes`, `scrub-collisions`, `repair-stale-blocks`, `migrate-counter-scope`, `convention-check`) — run *one* category when you know what you're chasing, instead of the full `fsck` sweep. `shell-substitution-holes` reports only the high-signal, same-line syntactic anomalies known to remain after shell substitution; use `--exclude <SPEC-ID>` when the detector's own discussion quotes examples. It never repairs or guesses the lost text.
 - `doctor check <category> --fail-on-findings` — the opt-in gate: exits non-zero when that one category has any finding, so a CI step or scheduled job can key off it. Off by default.
 
-**Gotchas.** Focused doctor verbs have their *own* destructive opt-ins (`validate-trace-comments --strip-dangling`, plus the top-level `--heal` / `--category` repair path) — read the relevant `--help` before turning a diagnostic into a write. Bare `aida doctor` and `aida doctor check <category>` are **report-only**: exit code `0` means "ran successfully," not "found nothing" — findings print either way, but nothing about the exit code tells you whether any were found. `fsck` is the one exception and exits non-zero if any check found a problem, so it's CI-suitable as a gate as-is; every other check needs `--fail-on-findings` to get the same signal. Its cache-freshness section also prints one informational line about the history index behind `aida history` (switched off with `AIDA_HISTORY_CACHE=0`, not built yet, up to date, still filling in older history, behind the store, or unreadable). That line never fails `fsck`: a missing or stale history index only makes `aida history` slower, never wrong. <!-- trace:TASK-1508 | ai:claude -->
+**Gotchas.** Focused doctor verbs have their *own* destructive opt-ins (`validate-trace-comments --strip-dangling`, plus the top-level `--heal` / `--category` repair path) — read the relevant `--help` before turning a diagnostic into a write. Bare `aida doctor` and `aida doctor check <category>` are **report-only**: exit code `0` means "ran successfully," not "found nothing" — findings print either way, but nothing about the exit code tells you whether any were found. `fsck` is the one exception and exits non-zero if any check found a problem, so it's CI-suitable as a gate as-is; every other check needs `--fail-on-findings` to get the same signal. Its cache-freshness section also prints one informational line about the history index behind `aida history` (switched off with `AIDA_HISTORY_CACHE=0`, not built yet, up to date, still filling in older history, behind the store, or unreadable). That line never fails `fsck`: a missing or stale history index never makes `aida history` wrong. It only makes the event views slower, and (when it is missing or far behind) makes bare `aida history` show the per-spec digest (with a note) instead of the status flow. <!-- trace:TASK-1508 | ai:claude -->
+
+
+**Primary-checkout drift.** `aida doctor check main-checkout-drift` reports when the primary checkout (the main worktree that linked worktrees hang off) has uncommitted tracked edits, untracked files, a branch other than `main`, or commits ahead of or behind its upstream. It lists the drifting paths. Where an untracked file's modification time falls inside a live session's window, it names that session as the likely owner so you know whom to ask. It only reads: nothing is deleted or moved. The same condition adds one `main checkout: …` line to the session-start context (set `AIDA_MAIN_CHECKOUT_DRIFT=off` to silence it) and shows a `⌂!` marker in `aida statusline`. <!-- trace:STORY-1648 | ai:claude -->
 
 **Chains with** — the structural counterpart to the content lenses; pairs with `db` (Ch.10) for store-level repair.
 
@@ -231,6 +236,34 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 ### `aida docs`
 
 *(Covered in [Chapter 9 — Integrations & servers](09-integrations.md).)* Projects the requirements graph into a layered docs tree (`docs build`, `docs check`, the embedded `docs glossary`). It's setup-adjacent — you wire `docs check` into CI at project-setup time so the docs projection can't drift from the graph — but the command family lives with the other projection/server surfaces.
+
+---
+
+## Extending aida with external commands
+
+<!-- trace:STORY-1641 | ai:claude -->
+Like `git`, `aida` runs an executable named `aida-<name>` from your `PATH` when `<name>` is not one of its own commands. Drop a script called `aida-deploy` somewhere on `PATH`, mark it executable, and `aida deploy --dry-run` runs it with `--dry-run` passed through unchanged. Its stdout, stderr and exit code are the command's; on Unix the extension replaces the `aida` process outright.
+
+Names resolve in a fixed order, and the first match wins:
+1. a built-in command (an extension can never shadow one),
+2. a built-in alias,
+3. your own alias from `~/.aida/aliases.toml` (expanded for interactive use only),
+4. an `aida-<name>` executable, first match on `PATH`.
+
+If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
+
+The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+
+The extension receives its context in the environment:
+- `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
+- `AIDA_STORE_PATH` — the project's requirements store directory (unset outside a project).
+- `AIDA_OUTPUT_FORMAT` — the output format aida would use here: `human`, `json` or `toon`.
+- `AIDA_CALLER_KIND` — `human`, `agent` or `headless`.
+- `AIDA_BIN` — the path of the `aida` binary that dispatched it.
+
+Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
+
+Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
 
 ---
 

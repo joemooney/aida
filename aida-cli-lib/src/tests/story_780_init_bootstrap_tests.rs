@@ -9,6 +9,7 @@ fn plain_plan(dir: std::path::PathBuf) -> BootstrapPlan {
         remote: None,
         forge: None,
         github_repo: None,
+        gitlab: None,
     }
 }
 
@@ -74,8 +75,12 @@ fn forge_profile_github_uses_existing_repo_create_shape() {
     assert!(argv.contains(&"--push".to_string()));
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn headless_bootstrap_uses_default_forge_profile() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".aida")).unwrap();
     std::fs::write(
@@ -109,8 +114,12 @@ fn headless_bootstrap_uses_default_forge_profile() {
     );
 }
 
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn explicit_unknown_forge_lists_configured_profiles() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".aida")).unwrap();
     std::fs::write(
@@ -270,16 +279,126 @@ fn init_cd_capability_gates_on_the_wrapper_token() {
 
 #[test]
 fn the_scaffolded_wrapper_routes_init_and_advertises_init_cd() {
-    // Pin the wrapper template: the init case branch exists, the capability
-    // token is advertised, and — the safety property — the init branch has no
-    // bare-payload fallback (a markerless init prints, never evals).
+    // Pin the wrapper template: the init case branch exists and the capability
+    // the binary negotiates on is advertised. The channel is the side-channel
+    // FILE (`init-cd-file`), never the stdout-capturing `init-cd` token: the
+    // two are mutually exclusive, because a binary that sees `init-cd` prints
+    // markers to a stdout this wrapper no longer reads.
+    // trace:BUG-0445 | ai:claude
+    use crate::shell_eval::{marker_has_cap, INIT_CD_CAP, INIT_CD_FILE_CAP, INIT_CD_FILE_ENV};
     let script = crate::dev_cmd::SHELL_HELPERS;
     assert!(
         script.contains(r#""init"|"init "*)"#),
         "wrapper must route init through its own case branch"
     );
+    let advertised = script
+        .lines()
+        .find_map(|l| l.strip_prefix("export AIDA_SHELL_WRAPPER="))
+        .expect("the wrapper exports its capability list")
+        .trim_matches('\'');
     assert!(
-        script.contains("eval-block,init-cd"),
-        "wrapper must advertise the init-cd capability"
+        marker_has_cap(Some(advertised), INIT_CD_FILE_CAP),
+        "wrapper must advertise the init-cd-file capability: {advertised}"
     );
+    assert!(
+        !marker_has_cap(Some(advertised), INIT_CD_CAP),
+        "wrapper must NOT advertise stdout-capturing init-cd alongside the file channel: {advertised}"
+    );
+    assert!(
+        script.contains(&format!(
+            "{INIT_CD_FILE_ENV}=\"$_aida_cd_file\" command aida \"$@\""
+        )),
+        "the init arm must hand the binary the side-channel file by the env var the binary reads"
+    );
+}
+
+/// The regression itself: the init arm must run the binary with stdout
+/// ATTACHED. A `$(command aida ...)` capture is what made the child see a pipe
+/// (auto-selecting the agent format) and buffered its prompts invisibly.
+// trace:BUG-0445 | ai:claude
+#[test]
+fn the_init_arm_never_captures_the_childs_stdout() {
+    let script = crate::dev_cmd::SHELL_HELPERS;
+    let start = script
+        .find(r#""init"|"init "*)"#)
+        .expect("init arm present");
+    let end = script[start..]
+        .find(r#""tui"|"tui "*)"#)
+        .map(|i| start + i)
+        .expect("tui arm follows init");
+    let init_arm = &script[start..end];
+    assert!(
+        !init_arm.contains("$(command aida"),
+        "init arm must not wrap the binary in a command substitution:\n{init_arm}"
+    );
+    assert!(
+        !init_arm.contains("_aida_out"),
+        "init arm must not hold the child's stdout in a variable:\n{init_arm}"
+    );
+    assert!(
+        init_arm.contains("rm -f \"$_aida_cd_file\""),
+        "init arm must clean up its side-channel file:\n{init_arm}"
+    );
+    // trace:BUG-1960 | ai:claude
+    // An interrupt must not strand the file: the handlers remove it on
+    // INT/TERM and record the signal, scoped to the call (zsh: a helper under
+    // localtraps; bash: save and restore), then the signal is re-raised at
+    // this shell process. `$$` would target the top-level shell from inside a
+    // subshell, so the re-raise must not use it.
+    assert!(
+        init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=INT' INT")
+            && init_arm.contains("trap 'rm -f \"$_aida_cd_file\"; _aida_sig=TERM' TERM")
+            && init_arm
+                .contains("TRAPINT() { rm -f \"$_aida_cd_file\"; _aida_sig=INT; return 0; }")
+            && init_arm
+                .contains("TRAPTERM() { rm -f \"$_aida_cd_file\"; _aida_sig=TERM; return 0; }"),
+        "init arm must remove its side-channel file on INT/TERM in bash and zsh:\n{init_arm}"
+    );
+    assert!(
+        init_arm.contains("_aida_init_zsh() {")
+            && init_arm.contains("setopt localoptions localtraps")
+            && init_arm.contains("_aida_init_zsh \"$@\"")
+            // trace:TASK-1344 | ai:claude
+            && init_arm.contains("unfunction _aida_init_zsh 2>/dev/null")
+            && init_arm.contains("_aida_traps=$(trap -p INT TERM)")
+            && init_arm.contains("eval \"$_aida_traps\"")
+            && init_arm.contains(
+                "command sh -c 'kill -s \"$1\" \"$PPID\"; kill -s \"$1\" \"$$\"' aida \"$_aida_sig\""
+            ),
+        "the init arm's trap must be scoped to the call and the caller's traps restored:\n{init_arm}"
+    );
+    assert!(
+        !init_arm.contains("kill -s \"$_aida_sig\" $$"),
+        "the re-raise must target this shell process, not the top-level `$$`:\n{init_arm}"
+    );
+}
+
+/// Pure channel choice on the binary's side of the negotiation.
+// trace:BUG-0445 | ai:claude
+#[test]
+fn enter_dir_channel_prefers_the_side_channel_file() {
+    use crate::init_bootstrap::{enter_dir_channel, EnterDirChannel};
+    use std::ffi::OsStr;
+    let file = OsStr::new("/run/user/1000/aida-init-cd.abc123");
+    // A named file wins regardless of what the wrapper advertises.
+    assert_eq!(
+        enter_dir_channel(Some(file), Some("eval-block,init-cd-file")),
+        EnterDirChannel::File(file.into())
+    );
+    assert_eq!(
+        enter_dir_channel(Some(file), None),
+        EnterDirChannel::File(file.into())
+    );
+    // An old wrapper that still captures stdout gets the stdout block.
+    assert_eq!(
+        enter_dir_channel(None, Some("eval-block,init-cd")),
+        EnterDirChannel::StdoutMarkers
+    );
+    // An empty env var is "not set"; the new wrapper token alone is NOT a
+    // request for stdout markers (nobody would read them).
+    assert_eq!(
+        enter_dir_channel(Some(OsStr::new("")), Some("eval-block,init-cd-file")),
+        EnterDirChannel::Hint
+    );
+    assert_eq!(enter_dir_channel(None, None), EnterDirChannel::Hint);
 }

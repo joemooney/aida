@@ -130,7 +130,7 @@ measured on this repo's live store (~945 specs); tokens estimated at ~4 chars/to
 | `aida list` (default, TOON also caps to 30) | ~37,500 | ~845 | 98%† |
 
 †The default-`list` row conflates two effects — TOON's encoding *and* the
-TASK-970 agent default row-cap (30 rows). The honest TOON-format-only number is
+TASK-970 agent default row-cap (30 rows when measured; STORY-1644 raised the default to 100). The honest TOON-format-only number is
 the `list --all` row (both render the same 945 rows): **~21%** purely from
 dropping the table chrome, padding, and per-row glyphs. The focused single-task
 reads (`show` / `queue list` / `status`) — which are what each SPIKE-73 agent

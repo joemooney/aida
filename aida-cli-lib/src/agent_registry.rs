@@ -81,6 +81,12 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) id: String,
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
+    /// Kernel start time of `pid`, so a recycled pid does not read as the
+    /// live agent. Missing on entries written by older binaries; liveness
+    /// then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_start: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -507,6 +513,7 @@ pub(crate) fn touch_mcp_agent(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
+            pid_start: crate::process_probe::process_start_identity(pid),
             name: None,
             description: None,
             tty: current_tty(),
@@ -533,6 +540,9 @@ pub(crate) fn touch_mcp_agent(
     if entry.source != "agent-launcher" {
         entry.id = id;
         entry.agent_type = agent_type;
+        if entry.pid != pid || entry.pid_start.is_none() {
+            entry.pid_start = crate::process_probe::process_start_identity(pid);
+        }
         entry.pid = pid;
     }
     entry.last_active_at = now;
@@ -576,6 +586,7 @@ pub(crate) fn touch_session_start_agent(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
+            pid_start: crate::process_probe::process_start_identity(pid),
             name: env_nonempty("AIDA_AGENT_NAME"),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -601,6 +612,9 @@ pub(crate) fn touch_session_start_agent(
 
     entry.id = id;
     entry.agent_type = agent_type;
+    if entry.pid != pid || entry.pid_start.is_none() {
+        entry.pid_start = crate::process_probe::process_start_identity(pid);
+    }
     entry.pid = pid;
     entry.last_active_at = now;
     entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
@@ -652,6 +666,7 @@ pub(crate) fn register_spawned_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name,
         description,
         tty: current_tty(),
@@ -697,6 +712,7 @@ pub(crate) fn register_role_enter_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name: Some(format!("role:{role}")),
         description: Some("aida role enter shell".to_string()),
         tty,
@@ -927,6 +943,7 @@ pub(crate) fn register_existing_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name,
         description,
         tty,
@@ -1562,9 +1579,16 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
     seen.then_some(false)
 }
 
+/// The entry's process is still running: pid plus recorded start time, so a
+/// recycled pid reads dead.
+// trace:TASK-1750 | ai:claude
+fn entry_process_alive(entry: &AgentRegistryEntry) -> bool {
+    crate::process_probe::process_identity_is_alive(entry.pid, entry.pid_start.as_deref())
+}
+
 // trace:BUG-1156 | ai:codex
 fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
-    if entry.ended_at.is_some() || !crate::process_probe::pid_is_alive(entry.pid) {
+    if entry.ended_at.is_some() || !entry_process_alive(entry) {
         return false;
     }
     if entry.source == "role-enter" {
@@ -1582,7 +1606,7 @@ fn role_enter_has_live_session(project_root: &Path, role_entry: &AgentRegistryEn
             entry.id != role_entry.id
                 && entry.source != "role-enter"
                 && entry.ended_at.is_none()
-                && crate::process_probe::pid_is_alive(entry.pid)
+                && entry_process_alive(&entry)
                 && role_entry
                     .role
                     .as_deref()
@@ -1774,20 +1798,85 @@ pub(crate) fn humanize_elapsed(secs: i64) -> String {
     }
 }
 
+/// Detect which agent tool this process runs under, from the process env.
+///
+/// See [`detect_agent_type_from_env`] for the precedence rule.
 pub(crate) fn detect_agent_type() -> String {
-    if let Some(v) = env_nonempty("AIDA_AGENT_TYPE").map(normalize_agent_type) {
-        return v;
+    detect_agent_type_from_env(std::env::vars())
+}
+
+/// Pure agent-type detection over an explicit env snapshot.
+///
+/// Precedence (strongest signal wins):
+/// 1. explicit override: a non-empty `AIDA_AGENT_TYPE`;
+/// 2. live session/tool markers set by the running tool itself:
+///    `CODEX_*`, then `ANTIGRAVITY_*`, then `CLAUDECODE` / `CLAUDE_CODE_*`;
+/// 3. weak vendor prefixes that may be stale shell config: `GEMINI_*`, then
+///    `CLAUDE*`;
+/// 4. otherwise `"other"`.
+///
+/// Credential variable names (`*_KEY`, `*_TOKEN`, e.g. `GEMINI_API_KEY`) are
+/// excluded from the scan: an exported API key says nothing about which tool
+/// is live, so it must never decide attribution.
+// trace:BUG-1920 | ai:claude
+pub(crate) fn detect_agent_type_from_env<I, K, V>(vars: I) -> String
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    let mut override_type: Option<String> = None;
+    let names: Vec<String> = vars
+        .into_iter()
+        .filter_map(|(k, v)| {
+            let key = k.as_ref();
+            if key == "AIDA_AGENT_TYPE" {
+                let value = v.as_ref().trim();
+                if !value.is_empty() {
+                    override_type = Some(value.to_string());
+                }
+                return None;
+            }
+            if is_credential_var(key) {
+                return None;
+            }
+            Some(key.to_string())
+        })
+        .collect();
+    if let Some(v) = override_type {
+        return normalize_agent_type(v);
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("CODEX_")) {
+    // Tier 2: live session markers.
+    if any_name(&names, |k| k.starts_with("CODEX_")) {
         return "codex".to_string();
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("ANTIGRAVITY_") || k.starts_with("GEMINI_")) {
+    if any_name(&names, |k| k.starts_with("ANTIGRAVITY_")) {
         return "antigravity".to_string();
     }
-    if std::env::vars().any(|(k, _)| k.starts_with("CLAUDE")) {
+    if any_name(&names, |k| {
+        k == "CLAUDECODE" || k.starts_with("CLAUDE_CODE_")
+    }) {
+        return "claude".to_string();
+    }
+    // Tier 3: weak vendor prefixes.
+    if any_name(&names, |k| k.starts_with("GEMINI_")) {
+        return "antigravity".to_string();
+    }
+    if any_name(&names, |k| k.starts_with("CLAUDE")) {
         return "claude".to_string();
     }
     "other".to_string()
+}
+
+fn any_name(names: &[String], pred: impl Fn(&str) -> bool) -> bool {
+    names.iter().any(|k| pred(k.as_str()))
+}
+
+/// Credential-shaped env var names (`GEMINI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`)
+/// are configuration, not evidence of a live tool session.
+// trace:BUG-1920 | ai:claude
+fn is_credential_var(key: &str) -> bool {
+    key.ends_with("_KEY") || key.ends_with("_TOKEN")
 }
 
 pub(crate) fn normalize_agent_type(raw: String) -> String {
@@ -2236,6 +2325,7 @@ mod tests {
             id: agent_id("codex", pid),
             agent_type: "codex".to_string(),
             pid,
+            pid_start: None,
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
@@ -2630,6 +2720,31 @@ mod tests {
             ended_resumable_agent_views(tmp.path(), &ctx(Utc::now(), 30, vec![tmp.path().into()]));
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].native_session_id.as_deref(), Some("018f-session"));
+    }
+
+    /// TASK-1750: an entry whose live pid carries a different recorded start
+    /// time is a recycled pid and reads dead; the matching start time (and a
+    /// legacy entry with none) reads live.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_pid_entry_is_not_live() {
+        let Some(ours) = crate::process_probe::process_start_identity(std::process::id()) else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut e = entry_with(std::process::id(), Utc::now());
+        e.source = "mcp".to_string();
+        assert!(
+            registry_entry_is_live(tmp.path(), &e),
+            "legacy entry: bare pid probe"
+        );
+        e.pid_start = Some(ours);
+        assert!(registry_entry_is_live(tmp.path(), &e));
+        e.pid_start = Some("2000-01-01T00:00:00+00:00".to_string());
+        assert!(
+            !registry_entry_is_live(tmp.path(), &e),
+            "recycled pid must read dead"
+        );
     }
 
     // trace:STORY-790 | ai:codex
@@ -3425,5 +3540,80 @@ source = "mcp"
         assert!(looks_like_spec_id("TASK-498"));
         assert!(!looks_like_spec_id("story-431"));
         assert!(!looks_like_spec_id("branch-name"));
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_prefers_live_session_over_api_key() {
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_API_KEY", "x"), ("CLAUDECODE", "1")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("GEMINI_API_KEY", "x"),
+                ("CLAUDE_CODE_ENTRYPOINT", "cli"),
+            ]),
+            "claude"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_api_key_never_decides() {
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("ANTHROPIC_API_KEY", "x"),
+                ("ANTIGRAVITY_SESSION_ID", "s1"),
+            ]),
+            "antigravity"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_API_KEY", "x")]),
+            "other"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("CLAUDE_CODE_OAUTH_TOKEN", "x")]),
+            "other"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_live_marker_beats_stale_weak_prefix() {
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_MODEL", "pro"), ("CLAUDECODE", "1")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("GEMINI_CLI", "1")]),
+            "antigravity"
+        );
+        assert_eq!(
+            detect_agent_type_from_env([("CLAUDE_CONFIG_DIR", "/x")]),
+            "claude"
+        );
+        assert_eq!(
+            detect_agent_type_from_env(Vec::<(String, String)>::new()),
+            "other"
+        );
+    }
+
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn detect_agent_type_explicit_override_wins() {
+        assert_eq!(
+            detect_agent_type_from_env([
+                ("CLAUDECODE", "1"),
+                ("GEMINI_API_KEY", "x"),
+                ("AIDA_AGENT_TYPE", "codex"),
+            ]),
+            "codex"
+        );
+        // A blank override is ignored rather than forcing "other".
+        assert_eq!(
+            detect_agent_type_from_env([("AIDA_AGENT_TYPE", "  "), ("CLAUDECODE", "1")]),
+            "claude"
+        );
     }
 }

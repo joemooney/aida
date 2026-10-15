@@ -27,7 +27,9 @@ jobs:
     # BUG-611: a flaky hang in the test step used to run to GitHub's 6h default,
     # blocking the single runner (and every PR queued behind it) for hours. Fail
     # fast instead — a normal run is ~7 min. trace:BUG-611 | ai:claude
-    timeout-minutes: 25
+    # 2026-10-14: green runs now take 17-25 min, so a 25-min cap was cancelling
+    # healthy builds (e.g. #2541 at 25m18s). 40 keeps the hang guard with headroom.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -100,6 +102,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
 
+      # The shell-wrapper tests run every case under bash AND zsh when zsh is
+      # on PATH (`wrapper_shells()`); without it the zsh leg silently skips.
+      # trace:BUG-1960 | ai:claude
+      - name: Install zsh (shell-wrapper test matrix)
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y zsh
+          zsh --version
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -137,6 +148,10 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
+        # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
+        # must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude
+        env:
+          AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
         run: cargo test --workspace --no-fail-fast < /dev/null
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
@@ -230,6 +245,22 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_git_guardrails_parse.sh
 
+      # trace:STORY-1648 | ai:claude
+      # Primary-checkout drift line in the session-context hook: clean,
+      # tracked-dirty, untracked-only, off-main, behind-origin, linked
+      # worktree, and the timing cost budget. Stub `aida`; no build.
+      - name: Run session-context drift test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_session_context_drift.sh
+
+      # trace:BUG-1924 | ai:claude
+      # SessionStart banners derive the shown role from the validated seat
+      # grant: a role label without a grant reads "(no grant)", a granted
+      # seat reads as before. Stub `aida`; no build.
+      - name: Run session role grant banner test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_session_role_grant.sh
+
       # trace:BUG-1688 | ai:claude
       # The five shipped scripts with no legitimate unattended caller
       # must refuse a direct full-access vendor launch. The fixture puts
@@ -270,6 +301,20 @@ jobs:
       - name: Run pre-commit provenance perf and merge-delta test
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_perf.sh
+
+      # BUG-1933: the provenance gate fails closed: a crashed or truncated awk
+      # scan, or a merge parent whose diff fails, refuses the commit.
+      - name: Run pre-commit provenance fail-closed tests
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          bash tests/test_precommit_provenance_awk_failure.sh
+          bash tests/test_precommit_provenance_parent_diff_failure.sh
+
+      # STORY-1647: the opt-in primary-checkout gate refuses commits on main in
+      # the primary checkout and exempts merges, rebases, .aida-store, worktrees.
+      - name: Run pre-commit primary-checkout gate test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_precommit_primary_checkout.sh
 
       # BUG-1762: the agent-skill-hook installer behind the build prerequisite
       # must install idempotently, never clobber a foreign hook, and skip
@@ -405,6 +450,14 @@ jobs:
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
 
+      # No-build slice of the drift guard above: fails on a manual citation of
+      # a flag that clap hides from --help, read from the Rust source, so the
+      # pre-push tier catches it without a binary. trace:BUG-1937 | ai:claude
+      - name: CLI-manual hidden-flag guard (static, no build)
+        run: |
+          python3 -m unittest tests/test_verify_manual.py
+          python3 docs/cli/verify-manual.py --static
+
       # trace:STORY-1352 | ai:codex
       #
       # TASK-1447: NOT gated on full_ci — same "Minimal aida-cli build" step
@@ -414,6 +467,39 @@ jobs:
         run: |
           BASE="origin/${{ github.base_ref }}"
           python3 docs/monitor-contract-fixtures/verify.py "$BASE"
+
+      # BUG-1922: every fenced `aida ...` line in a skill/command template must
+      # name a real command and only flags its `--help` lists, so an invented
+      # flag (`aida list --search`) fails here instead of at every skill run.
+      # NOT gated on full_ci: the "Minimal aida-cli build" step above covers
+      # the target/debug/aida binary on docs-only PRs. trace:BUG-1922 | ai:claude
+      - name: Template command lint
+        run: |
+          export AIDA_BIN="$PWD/target/debug/aida"
+          python3 scripts/check-template-commands.py
+          python3 -m unittest tests/test_check_template_commands.py
+
+      # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
+      # trace:BUG-2014 | ai:codex
+      - name: Grant expiry hook protocol
+        run: python3 tests/test_grant_expiry_notice_hook.py
+
+      # BUG-1950: docs/cli/12-glossary.md is GENERATED from `aida docs
+      # glossary` (ADR-5), but nothing compared the committed page with the
+      # generator, so it drifted for a month. Re-render it with the binary just
+      # built from this tree and fail on any difference. NOT gated on full_ci:
+      # the "Minimal aida-cli build" step above covers target/debug/aida on
+      # docs-only PRs, and a docs-only PR is exactly where a hand edit lands.
+      # trace:BUG-1950 | ai:claude
+      - name: Book glossary drift guard
+        run: |
+          AIDA_BIN="$PWD/target/debug/aida" bash docs/cli/generate-glossary.sh --check
+
+      # No-build slice of the guard above: fixture tests for `--check`, plus a
+      # stub-binary comparison of the committed page with the template
+      # masters. trace:BUG-1950 | ai:claude
+      - name: Book glossary generator tests (stub binary, no build)
+        run: bash tests/test_generate_glossary_check.sh
 
       - name: Performance profile guard
         run: ./tests/test_performance_profile_opt_level.sh
@@ -466,6 +552,9 @@ jobs:
       # BUG-1689: test fake_gh fixtures must use the ETXTBSY-safe shared writer.
       - name: Executable fixture ratchet
         run: python3 -m unittest tests/test_executable_fixture_ratchet.py
+
+      - name: Verify pure-move slice stack fixtures
+        run: python3 -m unittest discover scripts/split-lib/tests/
 
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'

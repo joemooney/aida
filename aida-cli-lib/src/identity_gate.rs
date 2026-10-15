@@ -22,11 +22,26 @@
 //! project). Once configured, push-time checks are fail-closed: an error
 //! inspecting the commits refuses the push rather than letting it through.
 //!
+//! BUG-1926 — the governing allowlist is the OWNING PROJECT's. A push from
+//! the linked `.aida-store` worktree (the coordination branch TASK-1330
+//! exists to protect) used to read `<store>/.aida/config.toml`, which never
+//! exists, and so passed unchecked. [`resolve_governing_config_root`] maps a
+//! store worktree to its owning project and never consults the store's own
+//! config; when the owner cannot be determined the push is refused
+//! (fail-closed), because a project allowlist could exist.
+//!
+//! No-config policy (explicit, BUG-1926): when the governing project's
+//! `.aida/config.toml` is absent, or has no / an empty
+//! `[identity] allowed_emails`, the push gate is OFF and every push passes —
+//! the gate is opt-in per project. This is a deliberate decision, not a
+//! fallthrough: it is pinned by a test and applies identically to code-branch
+//! and store-worktree pushes.
+//!
 //! trace:TASK-1330 | ai:claude
 
 use anyhow::{bail, Context, Result};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// First comment line of the standalone identity pre-push hook — the
@@ -73,6 +88,135 @@ pub(crate) fn read_allowed_emails(project_root: &Path) -> Result<Vec<String>> {
         _ => Vec::new(),
     };
     Ok(emails)
+}
+
+/// The project whose `.aida/config.toml` governs the identity gate for a
+/// push from `repo`, plus a human-readable provenance line naming where the
+/// allowlist comes from (shown in refusals and under `AIDA_DEBUG_IDENTITY=1`).
+// trace:BUG-1926 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GoverningConfig {
+    pub(crate) root: PathBuf,
+    pub(crate) provenance: String,
+}
+
+/// The AIDA coordination branch checked out in the store worktree.
+const STORE_BRANCH: &str = "aida-store";
+/// The store worktree's directory name under the owning project.
+const STORE_DIR: &str = ".aida-store";
+
+/// Run a read-only git probe in `repo`, ignoring any inherited
+/// `GIT_DIR`/`GIT_WORK_TREE` so the answer describes `repo` itself.
+// trace:BUG-1926 | ai:claude
+fn git_probe(repo: &Path, args: &[&str]) -> Option<String> {
+    Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    canon(a) == canon(b)
+}
+
+/// Resolve which project's allowlist governs a push from `repo`.
+///
+/// The owning project of a LINKED worktree is always the repository's main
+/// worktree (the parent of `--git-common-dir`), never the directory the
+/// worktree happens to sit in — a code worktree of some other repository
+/// checked out at `/tmp/x/.aida-store` is governed by that repository, not by
+/// `/tmp/x`.
+///
+/// - Store worktree (a checkout named `.aida-store`, or any checkout of the
+///   `aida-store` branch): linked → the main worktree; a standalone clone
+///   named `.aida-store` → its parent directory (the `<project>/.aida-store`
+///   layout). The store's own `.aida/config.toml` is never read.
+/// - Any other linked worktree with no `.aida/config.toml` of its own (for
+///   example a store worktree on a detached HEAD outside
+///   `<project>/.aida-store`, which cannot be recognized as a store) → the
+///   main worktree, so a missing local config never silently disables a
+///   project allowlist.
+/// - Otherwise (a main checkout, or a linked worktree carrying its own
+///   config) the checkout governs itself — unchanged.
+/// - A store worktree whose owner cannot be determined (a standalone clone
+///   on `aida-store` not named `.aida-store`, or a bare main repository) is
+///   an `Err`: a project allowlist could exist, so the caller refuses
+///   (fail-closed).
+// trace:BUG-1926 | ai:claude
+pub(crate) fn resolve_governing_config_root(repo: &Path) -> Result<GoverningConfig> {
+    let named_store = repo.file_name() == Some(std::ffi::OsStr::new(STORE_DIR));
+    let on_store_branch = git_probe(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .is_some_and(|b| b == STORE_BRANCH);
+    let git_dir = git_probe(repo, &["rev-parse", "--absolute-git-dir"]).map(PathBuf::from);
+    let common_dir = git_probe(
+        repo,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+    .map(PathBuf::from);
+    let linked = matches!((&git_dir, &common_dir), (Some(g), Some(c)) if !same_path(g, c));
+    // The main worktree of a non-bare repository; `None` when it is `repo`
+    // itself or the repository is bare.
+    let main_worktree = common_dir
+        .as_deref()
+        .filter(|c| c.file_name() == Some(std::ffi::OsStr::new(".git")))
+        .and_then(Path::parent)
+        .filter(|m| !same_path(m, repo))
+        .map(Path::to_path_buf);
+    let owned_by = |owner: &Path, how: &str| GoverningConfig {
+        root: owner.to_path_buf(),
+        provenance: format!(
+            "{} (owning project of the store worktree {}, {how})",
+            crate::config_path_for_project(owner).display(),
+            repo.display()
+        ),
+    };
+
+    if named_store || on_store_branch {
+        if linked {
+            if let Some(main) = &main_worktree {
+                return Ok(owned_by(main, "the repository's main worktree"));
+            }
+        } else if named_store {
+            if let Some(parent) = repo.parent().filter(|p| !p.as_os_str().is_empty()) {
+                return Ok(owned_by(parent, "its parent directory"));
+            }
+        }
+        bail!(
+            "identity gate: {} is an AIDA store worktree but its owning project could not \
+             be determined, so the project's [identity] allowed_emails cannot be read — \
+             refusing the push (fail-closed). Attach the store as a linked worktree at \
+             <project>/{STORE_DIR} (`aida init` does this), or bypass deliberately with \
+             `git push --no-verify`.",
+            repo.display()
+        );
+    }
+
+    if linked && !crate::config_path_for_project(repo).is_file() {
+        if let Some(main) = &main_worktree {
+            return Ok(GoverningConfig {
+                root: main.clone(),
+                provenance: format!(
+                    "{} (main worktree; the linked worktree {} has no config of its own)",
+                    crate::config_path_for_project(main).display(),
+                    repo.display()
+                ),
+            });
+        }
+    }
+    let cfg = crate::config_path_for_project(repo);
+    Ok(GoverningConfig {
+        root: repo.to_path_buf(),
+        provenance: format!("{} (this checkout)", cfg.display()),
+    })
 }
 
 /// Case-insensitive allowlist membership (emails are case-insensitive in
@@ -288,15 +432,47 @@ pub(crate) fn commits_for_pushed_ref(
 /// allowlist with no working `aida identity check-push` refuses the push.
 // trace:TASK-1330 | ai:claude
 pub(crate) fn identity_gate_hook_lines() -> String {
-    "# trace:TASK-1330 | ai:claude\n\
+    // BUG-1926: the no-`aida` fallback must read the OWNING project's config.
+    // From the `.aida-store` worktree a cwd-relative `.aida/config.toml` is
+    // the store's (absent), which silently disabled the fallback; resolve the
+    // owner the same way `resolve_governing_config_root` does, and refuse when
+    // a store worktree's owner cannot be determined (fail-closed).
+    // trace:BUG-1926 | ai:claude
+    "# trace:TASK-1330 trace:BUG-1926 | ai:claude\n\
      # Identity hygiene gate (refuses a push that introduces a non-allowlisted\n\
      # author/committer/Co-authored-by email when [identity] allowed_emails is\n\
-     # configured in .aida/config.toml). Fail-closed; bypass deliberately with\n\
-     # `git push --no-verify`.\n\
+     # configured in the owning project's .aida/config.toml - for the .aida-store\n\
+     # worktree that is the project it belongs to, never the store itself).\n\
+     # Fail-closed; bypass deliberately with `git push --no-verify`.\n\
+     aida_id_cfg=.aida/config.toml\n\
+     aida_id_top=$(git rev-parse --show-toplevel 2>/dev/null) || aida_id_top=\n\
+     aida_id_gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) || aida_id_gitdir=\n\
+     aida_id_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || aida_id_common=\n\
+     aida_id_linked=\n\
+     [ -n \"$aida_id_gitdir\" ] && [ -n \"$aida_id_common\" ] && [ \"$aida_id_gitdir\" != \"$aida_id_common\" ] && aida_id_linked=1\n\
+     aida_id_main=\n\
+     case \"$aida_id_common\" in */.git) aida_id_main=\"${aida_id_common%/.git}\" ;; esac\n\
+     [ \"$aida_id_main\" = \"$aida_id_top\" ] && aida_id_main=\n\
+     aida_id_store=\n\
+     case \"$aida_id_top\" in */.aida-store) aida_id_store=1 ;; esac\n\
+     [ \"$(git symbolic-ref --quiet --short HEAD 2>/dev/null)\" = aida-store ] && aida_id_store=1\n\
+     if [ -n \"$aida_id_store\" ]; then\n\
+     \u{20} aida_id_cfg=\n\
+     \u{20} if [ -n \"$aida_id_linked\" ]; then\n\
+     \u{20} \u{20} [ -n \"$aida_id_main\" ] && aida_id_cfg=\"$aida_id_main/.aida/config.toml\"\n\
+     \u{20} else\n\
+     \u{20} \u{20} case \"$aida_id_top\" in */.aida-store) aida_id_cfg=\"${aida_id_top%/.aida-store}/.aida/config.toml\" ;; esac\n\
+     \u{20} fi\n\
+     elif [ -n \"$aida_id_linked\" ] && [ -n \"$aida_id_main\" ] && [ ! -f .aida/config.toml ]; then\n\
+     \u{20} aida_id_cfg=\"$aida_id_main/.aida/config.toml\"\n\
+     fi\n\
      if command -v aida >/dev/null 2>&1 && aida identity check-push --help >/dev/null 2>&1; then\n\
      \u{20} printf '%s\\n' \"$refs\" | aida identity check-push \"$1\" || exit 1\n\
-     elif [ -f .aida/config.toml ] && grep -q allowed_emails .aida/config.toml 2>/dev/null; then\n\
-     \u{20} echo \"identity gate: [identity] allowed_emails is configured but 'aida identity check-push' is unavailable - refusing the push (fail-closed). Install/upgrade aida, or bypass deliberately with git push --no-verify.\" >&2\n\
+     elif [ -z \"$aida_id_cfg\" ]; then\n\
+     \u{20} echo \"identity gate: pushing from an AIDA store worktree whose owning project could not be determined and 'aida identity check-push' is unavailable - refusing the push (fail-closed). Install/upgrade aida, or bypass deliberately with git push --no-verify.\" >&2\n\
+     \u{20} exit 1\n\
+     elif [ -f \"$aida_id_cfg\" ] && grep -q allowed_emails \"$aida_id_cfg\" 2>/dev/null; then\n\
+     \u{20} echo \"identity gate: [identity] allowed_emails is configured in $aida_id_cfg but 'aida identity check-push' is unavailable - refusing the push (fail-closed). Install/upgrade aida, or bypass deliberately with git push --no-verify.\" >&2\n\
      \u{20} exit 1\n\
      fi\n"
         .to_string()
@@ -396,9 +572,30 @@ pub(crate) fn handle_identity_check(project_root: &Path) -> Result<()> {
 /// author, committer, or Co-authored-by email. Fail-closed: a config or git
 /// failure refuses the push rather than waving it through.
 // trace:TASK-1330 | ai:claude
-pub(crate) fn handle_identity_check_push(project_root: &Path, pushed_remote: &str) -> Result<()> {
-    let allowlist = read_allowed_emails(project_root)
-        .context("identity gate: could not read [identity] allowed_emails — refusing the push")?;
+//
+// BUG-1926: `repo` is the checkout git is pushing from (it may be the
+// `.aida-store` worktree); the allowlist comes from the governing project
+// resolved by `resolve_governing_config_root`, never from the store itself.
+// trace:BUG-1926 | ai:claude
+pub(crate) fn handle_identity_check_push(repo: &Path, pushed_remote: &str) -> Result<()> {
+    let governing = resolve_governing_config_root(repo)?;
+    let debug = std::env::var("AIDA_DEBUG_IDENTITY").is_ok_and(|v| !v.is_empty() && v != "0");
+    let allowlist = read_allowed_emails(&governing.root).with_context(|| {
+        format!(
+            "identity gate: could not read [identity] allowed_emails from {} — refusing the push",
+            governing.provenance
+        )
+    })?;
+    if debug {
+        eprintln!(
+            "identity gate: allowlist from {} ({} entr{})",
+            governing.provenance,
+            allowlist.len(),
+            if allowlist.len() == 1 { "y" } else { "ies" }
+        );
+    }
+    // No-config policy (see module docs): no allowlist in the governing
+    // project = the gate is off for this project. Deliberate, not a fallthrough.
     if allowlist.is_empty() {
         return Ok(());
     }
@@ -408,14 +605,13 @@ pub(crate) fn handle_identity_check_push(project_root: &Path, pushed_remote: &st
         .context("identity gate: could not read the pre-push ref lines from stdin")?;
     let mut violations = Vec::new();
     for pushed in parse_pre_push_ref_lines(&input) {
-        let commits =
-            commits_for_pushed_ref(project_root, pushed_remote, &pushed).with_context(|| {
-                format!(
-                    "identity gate: could not inspect the commits {} would push — \
+        let commits = commits_for_pushed_ref(repo, pushed_remote, &pushed).with_context(|| {
+            format!(
+                "identity gate: could not inspect the commits {} would push — \
                      refusing the push",
-                    pushed.local_ref
-                )
-            })?;
+                pushed.local_ref
+            )
+        })?;
         for v in commit_identity_violations(&commits, &allowlist) {
             violations.push((pushed.local_ref.clone(), v));
         }
@@ -436,11 +632,12 @@ pub(crate) fn handle_identity_check_push(project_root: &Path, pushed_remote: &st
     lines.dedup();
     bail!(
         "identity gate: this push introduces commits carrying emails outside \
-         [identity] allowed_emails ({allow}):\n{list}\n  \
+         [identity] allowed_emails ({allow}; allowlist from {prov}):\n{list}\n  \
          Fix the identity (git config user.email), rewrite the offending commits \
          (git commit --amend --reset-author / git rebase -i), or bypass deliberately \
          with `git push --no-verify`.",
         allow = allowlist.join(", "),
+        prov = governing.provenance,
         list = lines.join("\n")
     );
 }
@@ -907,5 +1104,108 @@ mod task_1330_identity_gate_tests {
         let v = commit_identity_violations(&commits, &allow(&["good@example.org"]));
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].role, "author");
+    }
+
+    // BUG-1926: the governing-config resolver. The `<project>/.aida-store`
+    // layout is covered end to end in aida-cli/tests/bug_1926_*; these pin the
+    // other branches. trace:BUG-1926 | ai:claude
+    fn git_in(dir: &Path, args: &[&str]) {
+        let st = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            st.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&st.stderr)
+        );
+    }
+
+    #[test]
+    fn bug_1926_ordinary_checkout_governs_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        let g = resolve_governing_config_root(tmp.path()).unwrap();
+        assert_eq!(g.root, tmp.path());
+        assert!(g.provenance.contains("this checkout"), "{}", g.provenance);
+    }
+
+    #[test]
+    fn bug_1926_store_branch_worktree_elsewhere_is_governed_by_main_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let project = root.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo(&project);
+        git_in(&project, &["branch", "aida-store"]);
+        git_in(
+            &project,
+            &["worktree", "add", "-q", "../elsewhere", "aida-store"],
+        );
+        let store = root.join("elsewhere");
+        let g = resolve_governing_config_root(&store).unwrap();
+        assert_eq!(g.root, project);
+        assert!(
+            g.provenance
+                .contains("owning project of the store worktree"),
+            "{}",
+            g.provenance
+        );
+    }
+
+    #[test]
+    fn bug_1926_store_with_undeterminable_owner_fails_closed() {
+        // A standalone repository on the store branch, not attached under a
+        // project: a project allowlist could exist, so refuse.
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        git_in(tmp.path(), &["checkout", "-q", "-b", "aida-store"]);
+        let err = resolve_governing_config_root(tmp.path()).unwrap_err();
+        assert!(err.to_string().contains("fail-closed"), "{err}");
+    }
+
+    #[test]
+    fn bug_1926_decoy_aida_store_dir_is_governed_by_its_own_repository() {
+        // A code worktree of repository R checked out at /tmp/x/.aida-store
+        // must read R's config, not /tmp/x/.aida/config.toml.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let repo = root.join("real-repo");
+        let decoy_parent = root.join("x");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&decoy_parent).unwrap();
+        init_repo(&repo);
+        git_in(&repo, &["branch", "feature"]);
+        git_in(
+            &repo,
+            &["worktree", "add", "-q", "../x/.aida-store", "feature"],
+        );
+        let g = resolve_governing_config_root(&decoy_parent.join(".aida-store")).unwrap();
+        assert_eq!(g.root, repo, "{}", g.provenance);
+    }
+
+    #[test]
+    fn bug_1926_linked_worktree_without_own_config_uses_main_worktree() {
+        // Covers a store worktree on a detached HEAD outside
+        // <project>/.aida-store: not recognizable as a store, but it carries
+        // no config, so the main worktree's allowlist governs.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let project = root.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo(&project);
+        git_in(
+            &project,
+            &["worktree", "add", "-q", "--detach", "../detached"],
+        );
+        let g = resolve_governing_config_root(&root.join("detached")).unwrap();
+        assert_eq!(g.root, project, "{}", g.provenance);
+        // A linked worktree WITH its own config still governs itself.
+        let wt = root.join("detached");
+        std::fs::create_dir_all(wt.join(".aida")).unwrap();
+        std::fs::write(wt.join(".aida/config.toml"), "[hints]\n").unwrap();
+        assert_eq!(resolve_governing_config_root(&wt).unwrap().root, wt);
     }
 }

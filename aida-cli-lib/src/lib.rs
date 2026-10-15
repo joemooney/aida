@@ -11,11 +11,36 @@
 // trace:STORY-639 | ai:claude
 #![recursion_limit = "256"]
 
+// Crate-local `print!` / `println!` shadow the prelude macros for every module
+// declared below (textual macro scope), so each stdout write through them is
+// tracked: the dispatcher's agent-mode `cache:` footer then starts on its own
+// line even when a command body ended mid-line. Both delegate to std's own
+// macros, so locking, line buffering, test capture and the panic on a failed
+// write are unchanged. trace:BUG-1975 | ai:claude
+macro_rules! print {
+    ($($arg:tt)*) => {
+        $crate::cache_output::print_tracked(::std::format_args!($($arg)*))
+    };
+}
+// trace:BUG-1975 | ai:claude
+macro_rules! println {
+    () => {
+        $crate::cache_output::println_tracked(::std::format_args!(""))
+    };
+    ($($arg:tt)*) => {
+        $crate::cache_output::println_tracked(::std::format_args!($($arg)*))
+    };
+}
+
 mod advisor;
+mod advisor_cmd_root;
 mod advisor_code_gate;
 mod advisor_watch;
+mod agent_config;
+mod agent_launch;
 mod agent_launch_prompt;
 mod agent_registry;
+mod agent_registry_root;
 mod aida_bin;
 mod alias;
 mod archive_cmd;
@@ -26,11 +51,14 @@ mod autonomy_cmd;
 mod autopilot;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
+mod autopilot_intake;
 mod awaiting_you;
 mod backlog;
+mod brief;
 mod brief_cmd;
 mod burndown;
 // trace:TASK-1500 | ai:codex
+mod burndown_run;
 mod bypass_confirm;
 mod cache_cmd;
 mod cache_output;
@@ -38,6 +66,7 @@ mod calibration;
 mod changelog;
 mod changelog_cmd;
 mod ci_idle_timeout;
+mod ci_probe;
 mod claim;
 mod claude_agents;
 mod cli;
@@ -49,7 +78,12 @@ mod compete;
 mod compete_cmd;
 mod complexity_calibration;
 mod config_cmd;
+// trace:BUG-1938 | ai:claude
+mod config_commit;
 mod config_edit;
+mod config_init;
+// trace:BUG-1928 | ai:claude — contained-posture write boundary (absolute allowed roots).
+mod contained_boundary;
 mod context_prompt;
 mod coordination;
 mod criteria;
@@ -59,22 +93,56 @@ mod criteria_gate;
 mod criteria_red_run;
 mod db_block;
 mod db_cmd;
+mod db_reconcile;
 mod decide_cmd;
 mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
+// Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
+mod drain_next_n;
+mod driver_cmd;
+mod driver_view;
+// Idle in-progress specs in `aida awaiting`. trace:STORY-1680 | ai:claude
+mod idle_in_progress;
+// trace:STORY-1646 | ai:claude
+mod dev_build;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
+mod doctor_root;
+mod drain_batch;
 mod drain_failure_note;
+mod drain_gate;
+mod findings_gate;
 mod gitlab_mirror_link;
 mod graph_cmd;
+mod help;
+mod human;
 mod kernel;
+// trace:STORY-1645 | ai:claude
+mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
+// trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+mod leases;
+mod live_work;
+pub(crate) use live_work::try_auto_queue_pr_review;
 mod mailbox_root;
+// trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
+mod markdown_render;
+mod memory_doc;
+mod merge_hold_cmd;
+mod orchestrator_leases;
 mod output_format;
+mod phase_driver;
+mod phase_driver_trait;
+mod phase_gates;
+mod plan_followups;
+mod plan_intent;
+mod plan_report;
+mod pr_lookup;
+mod pr_merge_gate;
 mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -105,39 +173,117 @@ mod orchestrator_cmd;
 mod pr_cmd;
 pub(crate) mod pr_list;
 mod protocol_cmd;
+mod ps_integrate;
+mod punt_done;
+mod questions;
 mod queue_cmd;
+mod queue_misc;
+mod rel_cards;
+mod requirements_cli;
+mod review_gates;
 mod role;
 mod runaway_seats;
+mod scaffold_init;
+mod session_end;
+mod session_misc;
+mod session_start;
 mod solo_cmd;
+mod stakeholder_role;
+mod status_awaiting;
 mod status_cmd;
+mod status_prs;
+mod status_sections;
 mod statusline_root;
+mod store_push_pull;
+mod store_sync;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
 mod schedule_driver;
 mod shift;
+// trace:STORY-1649 | ai:claude
+mod shipped_linkage;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
+mod trace;
 mod tui_entry;
+mod upgrade_release;
+mod usage_mcp_helpers;
+mod worktree_gc;
 mod zen_cmd;
+use advisor_cmd_root::*;
+use agent_config::*;
+use agent_launch::*;
+use agent_registry_root::*;
+use autopilot_intake::*;
+use brief::*;
+use burndown_run::*;
+use ci_probe::*;
 use claim::*;
+use config_init::*;
+pub use config_init::{validate_priority_input, validate_status_input};
 use db_block::*;
+use db_reconcile::*;
+use doctor_root::*;
+use drain_batch::*;
 use drain_cmd::*;
+use drain_gate::*;
+use drain_next_n::*;
+use findings_gate::*;
+use help::*;
+use human::*;
+pub use kernel::is_terminal_status_str;
 use kernel::*;
+use leases::*;
 use mailbox_root::*;
 use mcp_cmd::*;
+use memory_doc::*;
+use merge_hold_cmd::*;
 use orchestrator_cmd::*;
+use orchestrator_leases::*;
 use output_format::*;
+use phase_driver::*;
+use phase_driver_trait::*;
+use phase_gates::*;
+use plan_followups::*;
+use plan_intent::*;
+use plan_report::*;
 use pr_cmd::*;
 use pr_list::*;
+use pr_lookup::*;
+pub use pr_lookup::{parse_pr_arg, resolve_pr_to_spec};
+use pr_merge_gate::*;
+use ps_integrate::*;
+use punt_done::*;
+use questions::*;
 use queue_cmd::*;
+use queue_misc::*;
+use rel_cards::*;
+use requirements_cli::*;
+use review_gates::*;
+pub use role::AGENT_ROLES;
 use role::*;
+use scaffold_init::*;
+use session_end::*;
+use session_misc::*;
+use session_start::*;
 use solo_cmd::*;
+use stakeholder_role::*;
+use status_awaiting::*;
 use status_cmd::*;
+use status_prs::*;
+use status_sections::*;
 use statusline_root::*;
+use store_push_pull::*;
+use store_sync::*;
+use trace::*;
 use tui_entry::*;
+use upgrade_release::*;
+use usage_mcp_helpers::*;
+use worktree_gc::*;
 use zen_cmd::*;
+use zen_drive_root::*;
 // trace:TASK-967 | ai:claude
 mod drain_summary;
 // trace:STORY-1415 | ai:claude
@@ -181,6 +327,8 @@ mod focus_cmd;
 mod forge;
 mod forge_profiles;
 mod gate_cmd;
+// trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.
+mod gitlab_project_create;
 mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
@@ -195,6 +343,8 @@ mod monitor_contract;
 mod help_next;
 // trace:TASK-1098 | ai:claude — clap-derived `aida help commands` catalog.
 mod help_catalog;
+// trace:STORY-1641 | ai:claude — git-style external `aida-<name>` subcommands.
+mod external_cmd;
 mod import_export_cmd;
 mod import_plan_cmd;
 mod interview;
@@ -217,8 +367,13 @@ mod history;
 mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
+mod history_indexer;
+// trace:STORY-1650 | ai:claude — bare `aida history`: the status flow.
+mod history_flow;
 // trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
 mod history_timeline;
+// trace:STORY-1664 | ai:claude — opened/completed/rejected/approved/closed list views.
+mod history_views;
 // trace:STORY-1479 | ai:claude — aggregate cycle-time breakdown over completed specs.
 mod human_audit;
 mod human_cmd;
@@ -240,6 +395,8 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
+mod main_checkout_drift;
 mod maintenance_schedule;
 mod manual;
 mod mcp;
@@ -253,7 +410,9 @@ mod network_retry;
 mod node_cmd;
 mod not_found;
 mod pr_claim_surface;
+mod reconcile_evidence;
 mod reconstitute;
+mod rework_hold_release;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
@@ -337,6 +496,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2014 | ai:codex
+mod grant_expiry_notice;
 mod seat_rotation;
 mod seats;
 mod server_cmd;
@@ -413,6 +574,7 @@ mod worktree_scope_gate;
 mod zen;
 // trace:STORY-721 | ai:claude — `aida zen <spec>` autonomous implement+ship drive.
 mod zen_drive;
+mod zen_drive_root;
 
 use anyhow::{Context, Result};
 use clap::Parser;

@@ -44,8 +44,13 @@ DOCS_GUARDS = [
     "External-prose classifier inventory",
     "Doc-intent gate (surface changes mark doc-impact)",
     "CLI-manual drift-guard (every command documented)",
+    # trace:BUG-1937 | ai:claude
+    "CLI-manual hidden-flag guard (static, no build)",
     "Monitor contract drift guard",
     "Trace/doc-header stranding gate",
+    # trace:BUG-1950 | ai:claude
+    "Book glossary drift guard",
+    "Book glossary generator tests (stub binary, no build)",
 ]
 
 EXEMPT_MARKER = "DOCS-GUARD-EXEMPT"

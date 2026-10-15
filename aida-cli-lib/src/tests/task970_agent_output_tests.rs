@@ -528,7 +528,15 @@ fn extract_aida_suggestion_finds_first_command_or_none() {
 #[test]
 fn list_default_cap_applies_to_bare_agent_table() {
     assert_eq!(
-        agent_list_default_cap(None, false, false, false, false, true),
+        agent_list_default_cap(
+            None,
+            false,
+            false,
+            false,
+            false,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         Some(AGENT_LIST_DEFAULT_LIMIT)
     );
 }
@@ -537,7 +545,15 @@ fn list_default_cap_applies_to_bare_agent_table() {
 fn list_default_cap_off_for_human_tty() {
     // agent_mode = false → never cap (human path is byte-identical).
     assert_eq!(
-        agent_list_default_cap(None, false, false, false, false, false),
+        agent_list_default_cap(
+            None,
+            false,
+            false,
+            false,
+            false,
+            false,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
 }
@@ -546,12 +562,28 @@ fn list_default_cap_off_for_human_tty() {
 fn list_default_cap_explicit_limit_and_all_override() {
     // An explicit --limit wins (the caller's value is applied elsewhere).
     assert_eq!(
-        agent_list_default_cap(Some(5), false, false, false, false, true),
+        agent_list_default_cap(
+            Some(5),
+            false,
+            false,
+            false,
+            false,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
     // --all opts out of any cap.
     assert_eq!(
-        agent_list_default_cap(None, true, false, false, false, true),
+        agent_list_default_cap(
+            None,
+            true,
+            false,
+            false,
+            false,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
 }
@@ -561,15 +593,39 @@ fn list_default_cap_skips_machine_and_tree_shapes() {
     // --short and --json stay unbounded so existing enumerating consumers
     // keep working; --tree is the grouped view, also unbounded.
     assert_eq!(
-        agent_list_default_cap(None, false, true, false, false, true),
+        agent_list_default_cap(
+            None,
+            false,
+            true,
+            false,
+            false,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
     assert_eq!(
-        agent_list_default_cap(None, false, false, true, false, true),
+        agent_list_default_cap(
+            None,
+            false,
+            false,
+            true,
+            false,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
     assert_eq!(
-        agent_list_default_cap(None, false, false, false, true, true),
+        agent_list_default_cap(
+            None,
+            false,
+            false,
+            false,
+            true,
+            true,
+            AGENT_LIST_DEFAULT_LIMIT
+        ),
         None
     );
 }

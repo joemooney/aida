@@ -204,3 +204,26 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - name: Run the ignored random DAG sweep
         run: cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored --nocapture
+
+  # BUG-1994: the 15-round, 16-thread history/PATH concurrency stress takes
+  # about 18 minutes, too slow for every PR Build. It is #[ignore]d in the
+  # default suite and runs here weekly or on manual dispatch
+  # (`gh workflow run weekly-linux.yml`). The guardrail test
+  # `stress_runs_only_in_its_bounded_scheduled_job` pins this job's command and
+  # timeout bounds. trace:BUG-1994 | ai:claude
+  path-history-stress:
+    name: PATH and history concurrency stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Run the ignored PATH and history stress
+        timeout-minutes: 40
+        run: >-
+          cargo test -p aida-cli-lib --lib
+          test_env::bug_1994_path_isolation_tests::history_and_path_mutators_pass_15_rounds_at_16_threads
+          -- --ignored --exact --nocapture < /dev/null

@@ -342,7 +342,7 @@ pub(crate) fn expand(args: &[String]) -> Vec<String> {
 /// detected cycle prints to stderr (suppressed under unit tests). Returns the
 /// rewritten argv, or the input unchanged if there is nothing to expand or a
 /// cycle is detected. trace:TASK-877 | ai:claude
-fn expand_inner(args: &[String], emit_cycle_warning: bool) -> Vec<String> {
+pub(crate) fn expand_inner(args: &[String], emit_cycle_warning: bool) -> Vec<String> {
     if args.len() < 2 {
         return args.to_vec();
     }

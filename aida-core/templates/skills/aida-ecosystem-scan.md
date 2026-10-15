@@ -61,8 +61,7 @@ If the analyzed competitor has a corresponding positioning paper under `docs/pos
 Market intelligence is useless without engineering action. For every action-required finding:
 1. File a spec in AIDA's database:
    ```bash
-   aida queue add --for advisor --title "Assess integration gap with X" --desc "Description of features..."
-   # OR
-   aida req add --title "support native compilation to format Y"
+   aida add --type task --title "Assess integration gap with X" --description "Description of features..."
+   aida queue add <NEW-ID> --for advisor --note "ecosystem scan finding"
    ```
 2. Link the generated Spec or Task ID directly inside the [ecosystem-watch.md](../../docs/competitive-analysis/ecosystem-watch.md) backlog loop section to ensure a perfect audit trail.

@@ -80,7 +80,9 @@ pub mod db;
 pub mod deps_sweep;
 pub mod dispatch_routing;
 pub mod dispenser;
+// Driver registry + derived per-spec driver. trace:STORY-1653 | ai:claude
 pub mod docs_review;
+pub mod driver_registry;
 // trace:TASK-0417 | ai:claude
 pub mod ears_lint;
 // trace:STORY-1427 | ai:claude
@@ -99,6 +101,8 @@ pub mod graph_walk;
 pub mod home;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
+// trace:STORY-1644 | ai:claude — natural numeric requirement-ID ordering.
+pub mod id_order;
 pub mod idle;
 pub mod import;
 pub mod integrations;
@@ -155,6 +159,8 @@ pub mod user_prefs;
 #[cfg(feature = "native")]
 pub mod workspace;
 // Worktree warm-pool (STORY-714): registry + tiered destroy + lifecycle hooks.
+// Live-process guard before any worktree removal (BUG-1947).
+pub mod worktree_holders;
 pub mod worktree_hooks;
 pub mod worktree_pool;
 // Migration of pre-pool sibling worktrees into the registry (TASK-1009).
@@ -189,9 +195,9 @@ pub use db::{
     compute_degrees, create_backend, edge_weight, export_to_json, import_from_json,
     migrate_sqlite_to_yaml, migrate_yaml_to_sqlite, observe_cache_lock, observe_lock_info_file,
     open_or_create, read_cache_lock_info, reclaim_dead_lock_info, shared_cache_path,
-    stray_cache_lock_info_path, ArchiveFilter, BulkAtomicReport, Cache, CacheLockInfo,
-    CacheLockObservation, CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter,
-    LockInfoReclaim, LockOwnerState, RequirementSummary, SortOrder, SqliteBackend,
+    sort_summaries_natural_id, stray_cache_lock_info_path, ArchiveFilter, BulkAtomicReport, Cache,
+    CacheLockInfo, CacheLockObservation, CachedGitBackend, DeferFilter, Degrees, GitBackend,
+    ListFilter, LockInfoReclaim, LockOwnerState, RequirementSummary, SortOrder, SqliteBackend,
     StoreConflictError, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]

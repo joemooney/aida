@@ -162,6 +162,10 @@ struct ListTableOptions {
     no_glyph: bool,
     flow_header: String,
     terminal_width: Option<usize>,
+    /// Derived driver label per in-progress row (`relay:lib-split`,
+    /// `idle 26h`), shown beside the status. Empty → no driver column.
+    // trace:STORY-1653 | ai:claude
+    drivers: std::collections::HashMap<Uuid, String>,
 }
 
 /// Resolve the two whole-store facts used by `aida show` from the cache.
@@ -354,14 +358,23 @@ where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
 {
     let flow_width = options.flow_header.chars().count();
+    // trace:STORY-1653 | ai:claude — the status column widens by the driver
+    // suffix (` · relay:lib-split`) only when some row resolved a driver.
+    let drv_w = options
+        .drivers
+        .values()
+        .map(|l| l.chars().count() + 3)
+        .max()
+        .unwrap_or(0);
+    let status_w = 13 + drv_w;
     let header_prefix = if options.show_origin {
         format!(
-            "{}{:<12} {:<14} {:<12} {:<13} ",
+            "{}{:<12} {:<14} {:<12} {:<status_w$} ",
             options.flow_header, "ID", "Origin ID", "Type", "Status"
         )
     } else {
         format!(
-            "{}{:<14} {:<12} {:<13} {:<10} ",
+            "{}{:<14} {:<12} {:<status_w$} {:<10} ",
             options.flow_header, "ID", "Type", "Status", "Priority"
         )
     };
@@ -400,6 +413,7 @@ where
                 (false, true) => 111,
                 (false, false) => 77,
             }
+            + drv_w
     });
 
     let render_status = |r: &aida_core::RequirementSummary| -> String {
@@ -412,11 +426,29 @@ where
         } else {
             status_display::display_status_for_type(&r.req_type, &r.status).to_string()
         };
-        if options.no_glyph {
-            status_display::status_cell_no_glyph(&label, 13)
+        // trace:STORY-1653 | ai:claude — `◐ InProgress · relay:lib-split`:
+        // the label is padded AFTER the driver suffix so the two read as one
+        // phrase, and the column stays `13 + drv_w` wide.
+        let suffix = options
+            .drivers
+            .get(&r.id)
+            .map(|l| format!(" · {l}"))
+            .unwrap_or_default();
+        let label_w = if suffix.is_empty() {
+            13
         } else {
-            status_display::status_cell(&label, 11)
+            label.chars().count() + if options.no_glyph { 0 } else { 2 }
+        };
+        let cell = if options.no_glyph {
+            status_display::status_cell_no_glyph(&label, label_w)
+        } else {
+            status_display::status_cell(&label, label_w.saturating_sub(2))
+        };
+        if drv_w == 0 {
+            return cell;
         }
+        let pad = (13 + drv_w).saturating_sub(label_w + suffix.chars().count());
+        format!("{cell}{}{}", suffix.dimmed(), " ".repeat(pad))
     };
     let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
         if flow_width == 0 {
@@ -577,6 +609,7 @@ mod list_title_width_tests {
                         no_glyph: true,
                         flow_header: String::new(),
                         terminal_width: Some(width),
+                        drivers: Default::default(),
                     };
                     let lines = render_list_table(&reqs, &options, |_| (false, false, false));
                     assert_eq!(
@@ -604,6 +637,7 @@ mod list_title_width_tests {
             no_glyph: true,
             flow_header: String::new(),
             terminal_width: None,
+            drivers: Default::default(),
         };
         let lines = render_list_table(std::slice::from_ref(&req), &options, |_| {
             (false, false, false)
@@ -1143,6 +1177,126 @@ mod task_1450_edit_event_tests {
     }
 }
 
+/// What `aida db sync`'s locked local window produced.
+// trace:TASK-1717 | ai:claude
+struct DbSyncWindow {
+    branch: String,
+    /// The store commit to push: HEAD as the window closed.
+    head: Option<String>,
+    /// Conflicts with what the pull brought in; `None` when nothing was pulled.
+    conflicts: Option<Vec<aida_core::conflict::RequirementConflict>>,
+}
+
+/// `aida db sync`'s local transaction: commit pending changes, then pull
+/// --rebase, then scan the result. The caller holds the store write lock for
+/// the whole call, so reads here are canonical and strict (the object files,
+/// never the cache; a bad object is an error) and a failed rebase is cleaned
+/// up by `pull_rebase` before the lock is released.
+// trace:TASK-1717 | ai:claude
+fn db_sync_local_window(
+    store_path: &std::path::Path,
+    pull: bool,
+    push: bool,
+    message: Option<&str>,
+) -> Result<DbSyncWindow> {
+    let branch =
+        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "main".to_string());
+
+    // ── Order matters: commit local first, THEN pull --rebase ──
+    // Rebase requires a clean working tree, so we have to commit
+    // any pending edits (typically from `aida edit` paths that
+    // didn't auto-commit, or manual file edits) before pulling.
+    // Old order was pull → commit, which failed when there were
+    // unstaged changes — git rebase refuses, and the follow-up
+    // commit ran on a partial-rebase state with a confusing
+    // empty error. trace:BUG-1-051 | ai:claude
+
+    // Step 1: stage and commit any pending changes.
+    //
+    // Stage everything in the worktree (`git add -A .`) instead
+    // of cherry-picking specific subdirs like `objects/`. The
+    // orphan branch's own .gitignore already excludes runtime
+    // artifacts (cache.db, lock files); whatever's left modified
+    // is canonical state — including `.aida/dispenser.toml`,
+    // which gets dirtied by ID dispensing and would otherwise be
+    // skipped by an objects-only stage. Without this, has_changes
+    // could report "yes" while nothing gets staged, and the
+    // follow-up `git commit` would fail with an empty error.
+    // trace:BUG-1-051 | ai:claude
+    // trace:TASK-1717 | ai:claude — a failing `git status` is an error,
+    // never "clean".
+    let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
+    if has_changes {
+        let msg = message.unwrap_or("chore: sync pending changes");
+        aida_core::git_ops::add_all(store_path, ".")?;
+        if aida_core::git_ops::commit(store_path, msg)? {
+            println!("Committed: {}", msg);
+        }
+    } else if !pull && !push {
+        println!("Nothing to commit.");
+    }
+
+    // Step 2: pull --rebase. Bare `git pull` fails on divergent
+    // branches when the user has no `pull.rebase` / `pull.ff`
+    // config — the orphan-store model wants linear history
+    // anyway (replay local commits on top of remote), so
+    // rebase is the right default.
+    let mut conflicts = None;
+    if pull && !aida_core::git_ops::has_remote(store_path, "origin") {
+        // BUG-432: local-only / fresh-init projects have no `origin`
+        // yet (the aida-demo + pre-remote flow). The pull is a graceful
+        // skip, not a fatal — otherwise `aida queue work`'s startup sync
+        // (and a standalone `aida db sync --pull`) die before a remote
+        // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
+        // trace:BUG-432 | ai:claude
+        println!("  No `origin` remote — skipping pull (local-only project).");
+    } else if pull {
+        // Snapshot local state before pull for conflict detection.
+        // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable
+        // object is an error, not silently left out of the comparison.
+        let local_reqs = aida_core::git_ops::load_requirements_strict(store_path)
+            .context("cannot sync: the local store did not read completely")?;
+
+        println!("Pulling from origin/{}...", branch);
+        if let Err(e) = aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
+            // A failed rebase leaves the repo in a partial
+            // state — but only advise `git rebase --abort`
+            // when a rebase is actually in progress; a
+            // transient failure (e.g. a network 502) with no
+            // rebase in flight is a different situation.
+            // Reuses the same check as `aida pull`'s
+            // store-leg hint so both emission sites agree.
+            // trace:BUG-1500 | ai:claude
+            anyhow::bail!(
+                "Pull failed: {}",
+                crate::store_pull_failure_hint(store_path, &e.to_string())
+            );
+        }
+        println!("  Pull complete.");
+        let mut remote = RequirementsStore::default();
+        remote.requirements = aida_core::git_ops::load_requirements_strict(store_path)
+            .context("the pulled store did not read completely; nothing was pushed")?;
+        let collisions = crate::find_spec_id_collisions(&remote);
+        if !collisions.is_empty() {
+            anyhow::bail!(
+                "{}",
+                crate::spec_id_collision_recovery_message(&collisions, store_path)
+            );
+        }
+        // Detect conflicts with remote changes
+        conflicts = Some(aida_core::conflict::detect_store_conflicts(
+            &local_reqs,
+            &remote.requirements,
+        ));
+    }
+
+    Ok(DbSyncWindow {
+        branch,
+        head: aida_core::git_ops::head_sha(store_path).ok(),
+        conflicts,
+    })
+}
+
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
@@ -1176,6 +1330,13 @@ pub(crate) fn handle_git_backend_command(
         eprintln!();
     }
 
+    // BUG-1993: `show` records per-phase timings into its usage event, so a
+    // latency regression can be attributed to cache open, lookup, or git
+    // linkage instead of only the total. trace:BUG-1993 | ai:claude
+    if matches!(command, Command::Show { .. }) {
+        crate::usage::arm_phases();
+    }
+    let open_phase = crate::usage::phase("open");
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
@@ -1191,7 +1352,15 @@ pub(crate) fn handle_git_backend_command(
     if notice_fast_fail {
         aida_core::db::set_fast_fail_cache(true);
     }
-    let backend_result = if notice_fast_fail {
+    // `aida cache rebuild` must not depend on the old cache being readable: the
+    // ordinary open refreshes a stale cache first, and page-level damage fails
+    // that refresh before the rebuild's own quarantine can run (2026-10-14).
+    // Open the bare snapshot; the rebuild replaces it. trace:BUG-1940 | ai:claude
+    let cache_rebuild = matches!(
+        command,
+        Command::Cache(CacheCommand::Rebuild { history: false })
+    );
+    let backend_result = if notice_fast_fail || cache_rebuild {
         // BUG-1569: even a non-contended normal open may refresh a stale cache
         // by scanning every canonical object before dispatch reaches the
         // targeted notice lookup. The advisory path instead consumes the last
@@ -1209,10 +1378,14 @@ pub(crate) fn handle_git_backend_command(
         }
         Err(e) => return Err(e),
     };
+    drop(open_phase);
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
-    if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
+    if !notice_fast_fail
+        && !cache_rebuild
+        && !matches!(command, Command::Report { recheck: true, .. })
+    {
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
@@ -1743,6 +1916,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Driver(_) => unreachable!("driver is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
@@ -1878,6 +2052,8 @@ pub(crate) fn handle_git_backend_command(
             priority,
             feature,
             tags,
+            // trace:STORY-1653 | ai:claude
+            driver,
             machine_drafts,
             no_scope,
             show_origin,
@@ -1907,6 +2083,8 @@ pub(crate) fn handle_git_backend_command(
             limit,
             no_focus,
             fields,
+            // trace:STORY-1645 | ai:claude
+            topics,
             ..
         } => {
             // STORY-764: the global `--format json` pin reaches list the same way
@@ -1929,6 +2107,22 @@ pub(crate) fn handle_git_backend_command(
                 (None, None) => None,
             };
             let r#type: &Option<String> = &type_filter;
+            // STORY-1645: `aida faq topics` (== `aida list --type faq
+            // --topics`) lists the tags on live FAQs with counts. It reads the
+            // whole live FAQ set itself, so no other list lens applies.
+            // trace:STORY-1645 | ai:claude
+            if *topics {
+                if !crate::knowledge_list::type_filter_is_faq(r#type.as_deref()) {
+                    anyhow::bail!(
+                        "`--topics` lists FAQ topics: run `aida faq topics` \
+                         (or `aida list --type faq --topics`)."
+                    );
+                }
+                if *sync {
+                    maybe_sync_pull(store_path)?;
+                }
+                return crate::faq_topics::run_faq_topics(&backend, effective_json);
+            }
             let shortcut: Option<String> = if positional_type.is_some() {
                 None
             } else {
@@ -2230,9 +2424,25 @@ pub(crate) fn handle_git_backend_command(
                 effective_status
             };
             // STORY-632: resolve the --sort order. Unknown values fall back to
-            // the default (freshest-first) with a stderr note rather than
-            // erroring the listing. trace:STORY-632 | ai:claude
-            let sort_order = match sort.to_ascii_lowercase().as_str() {
+            // the default with a stderr note rather than erroring the listing.
+            // trace:STORY-632 | ai:claude
+            //
+            // STORY-1644: the default is natural numeric `id` order for humans
+            // and agents alike; `[list] default_sort` overrides it and an
+            // explicit `--sort` always wins. trace:STORY-1644 | ai:claude
+            let list_project_root = find_project_root().ok();
+            let (sort_key, sort_config_warning) = crate::resolve_list_sort(
+                sort.as_deref(),
+                list_project_root
+                    .as_deref()
+                    .and_then(crate::read_list_default_sort)
+                    .as_deref(),
+            );
+            if let Some(w) = sort_config_warning {
+                eprintln!("{w}");
+            }
+            let mut sort_key = sort_key.to_ascii_lowercase();
+            let sort_order = match sort_key.as_str() {
                 "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
                 // trace:FR-283 | ai:claude — heaviest user-set weight first.
                 "weight" => aida_core::SortOrder::WeightDesc,
@@ -2240,13 +2450,16 @@ pub(crate) fn handle_git_backend_command(
                 "created" => aida_core::SortOrder::CreatedDesc,
                 "completed" => aida_core::SortOrder::CompletedDesc,
                 // trace:TASK-1587 | ai:antigravity
-                "id" => aida_core::SortOrder::IdAsc,
-                "modified" | "" => aida_core::SortOrder::ModifiedDesc,
+                "id" | "" => aida_core::SortOrder::IdAsc,
+                "modified" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', 'completed', or 'id'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected one of: {}); using '{}'",
+                        crate::LIST_SORT_VALUES.join(", "),
+                        crate::LIST_DEFAULT_SORT
                     );
-                    aida_core::SortOrder::ModifiedDesc
+                    sort_key = crate::LIST_DEFAULT_SORT.to_string();
+                    aida_core::SortOrder::IdAsc
                 }
             };
             // STORY-639: `--mine` resolves to the shell identity (the same
@@ -2347,8 +2560,14 @@ pub(crate) fn handle_git_backend_command(
                 let done_rows = backend.list_summaries(&done_filter)?;
                 let (rework_rows, ids) =
                     queue_cmd::select_done_rework_rows(done_rows, store_path.parent());
+                let folded_in = !rework_rows.is_empty();
                 reqs.extend(rework_rows);
                 rework_ids = ids;
+                // STORY-1644: keep the folded-in rows in natural ID order
+                // rather than appended at the end. trace:STORY-1644 | ai:claude
+                if folded_in && sort_order == aida_core::SortOrder::IdAsc {
+                    aida_core::sort_summaries_natural_id(&mut reqs);
+                }
             }
             // BUG-1535: never two rows under one id. A row whose displayed
             // (agreed) id also names another spec is shown by its native id
@@ -2547,9 +2766,9 @@ pub(crate) fn handle_git_backend_command(
 
             // TASK-900: cap the result at the first N rows AFTER the sort
             // (list_summaries already ordered by --sort; default is
-            // recency-first) and after the parent / meta / standing-type
-            // retain passes — so `--limit N` is the N most-recent of the
-            // fully-filtered set. Applied here, before the --short early
+            // natural ID order per STORY-1644) and after the parent / meta /
+            // standing-type retain passes — so `--limit N` is the first N of
+            // the fully-filtered set in the chosen order. Applied here, before the --short early
             // return and the json / table / tree rendering, so every output
             // shape sees the same bounded row set.
             // trace:TASK-900 | ai:claude
@@ -2563,7 +2782,26 @@ pub(crate) fn handle_git_backend_command(
             // enumerate every spec keep working, and the human TTY path is
             // untouched. An explicit `--limit`/`--all` always overrides.
             // trace:TASK-970
+            //
+            // STORY-1644: the agent cap is configurable — `--limit`/`--all`
+            // beat env `AIDA_LIST_LIMIT`, which beats `[list] agent_limit`,
+            // which beats the built-in 100 (0 = unbounded). `--limit 0` also
+            // means "no cap". trace:STORY-1644 | ai:claude
+            // The derived driver of every in-progress row (never stored on
+            // the spec), and the `--driver <kind>` filter over it.
+            // trace:STORY-1653 | ai:claude
+            let list_drivers =
+                crate::driver_view::list_driver_map(list_project_root.as_deref(), &reqs);
+            if let Some(want) = driver.as_deref() {
+                crate::driver_view::retain_by_driver(&mut reqs, &list_drivers, want)?;
+            }
             let total_after_filters = reqs.len();
+            let agent_cap = crate::resolve_agent_list_limit(
+                std::env::var(crate::AGENT_LIST_LIMIT_ENV).ok().as_deref(),
+                list_project_root
+                    .as_deref()
+                    .and_then(crate::read_list_agent_limit),
+            );
             let agent_default_cap = agent_list_default_cap(
                 *limit,
                 *all,
@@ -2571,9 +2809,20 @@ pub(crate) fn handle_git_backend_command(
                 effective_json,
                 *tree,
                 agent_output_mode(),
+                agent_cap,
             );
-            if let Some(n) = limit.or(agent_default_cap) {
+            if let Some(n) = limit.filter(|n| *n > 0).or(agent_default_cap) {
                 reqs.truncate(n);
+            }
+            let rows_truncated = total_after_filters > reqs.len();
+            // STORY-1644: the machine JSON shape is a bare array (STORY-1352
+            // contract) and the agent cap never applies to it, so an explicit
+            // `--limit` cut is announced on stderr instead of reshaping stdout.
+            if effective_json && rows_truncated {
+                eprintln!(
+                    "note: truncated: true, total: {total_after_filters} — showing first {} by {sort_key}; `--limit 0` for all",
+                    reqs.len()
+                );
             }
 
             // TASK-743: --short emits one bare canonical spec ID per line —
@@ -2860,6 +3109,14 @@ pub(crate) fn handle_git_backend_command(
                     // unset stays drainable. trace:TASK-1231 | ai:claude
                     #[serde(skip_serializing_if = "Option::is_none")]
                     execution_mode: Option<&'a str>,
+                    // The derived driver of an in-progress row, e.g.
+                    // `relay:lib-split` / `idle 26h`, and its kind (relay /
+                    // drain / agent / queued / idle). Omitted otherwise.
+                    // trace:STORY-1653 | ai:claude
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    driver: Option<String>,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    driver_kind: Option<&'static str>,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
@@ -2899,6 +3156,8 @@ pub(crate) fn handle_git_backend_command(
                             assignee: r.assignee.as_deref(),
                             deferred_until: r.deferred_until.as_deref(),
                             execution_mode: r.execution_mode.as_deref(),
+                            driver: list_drivers.get(&r.id).map(|d| d.label()),
+                            driver_kind: list_drivers.get(&r.id).map(|d| d.kind()),
                         }
                     })
                     .collect();
@@ -2981,13 +3240,22 @@ pub(crate) fn handle_git_backend_command(
                     Some(faq_fields) => toon_list_fields(Some(faq_fields))?,
                     None => selected_fields.clone(),
                 };
+                // trace:STORY-1653 | ai:claude — `driver`, `driver_kind`
+                let selected = crate::driver_view::with_driver_columns(
+                    selected,
+                    fields.is_some(),
+                    &list_drivers,
+                );
                 let rows: Vec<Vec<String>> = reqs
                     .iter()
                     .map(|r| {
                         let routing = row_routing(r);
                         selected
                             .iter()
-                            .map(|f| toon_list_cell(r, routing, f))
+                            .map(|f| {
+                                crate::driver_view::list_cell(&list_drivers, r, f)
+                                    .unwrap_or_else(|| toon_list_cell(r, routing, f))
+                            })
                             .collect()
                     })
                     .collect();
@@ -2998,16 +3266,34 @@ pub(crate) fn handle_git_backend_command(
                 // explicit status filter relabels to plain "matched".
                 // trace:STORY-723 | ai:claude
                 let denom_label = list_count_denom_label(default_open_lens);
-                println!(
-                    "count: {} of {} {}",
-                    reqs.len(),
-                    total_after_filters,
-                    denom_label
-                );
+                // STORY-1644: truncation is never silent — when rows were cut
+                // the header names the order, what was hidden, and how to
+                // see it. trace:STORY-1644 | ai:claude
+                if rows_truncated {
+                    println!(
+                        "{}",
+                        crate::agent_list_truncation_header(
+                            reqs.len(),
+                            total_after_filters,
+                            denom_label,
+                            &sort_key,
+                        )
+                    );
+                } else {
+                    println!(
+                        "count: {} of {} {}",
+                        reqs.len(),
+                        total_after_filters,
+                        denom_label
+                    );
+                }
                 let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
                 println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
-                if agent_default_cap.is_some() && total_after_filters > reqs.len() {
-                    println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                if agent_default_cap.is_some() && rows_truncated {
+                    println!(
+                        "note: agent default cap {agent_cap} — set [list] agent_limit or {} (0 = unbounded), or pass `--all`",
+                        crate::AGENT_LIST_LIMIT_ENV
+                    );
                 }
                 // BUG-1737: the notes below enumerate what this view withheld,
                 // which made them read as the complete account — they were not.
@@ -3092,11 +3378,16 @@ pub(crate) fn handle_git_backend_command(
             // knows it's seeing a bounded slice and how to widen. Only fires on
             // the default table path (agent_default_cap is None for explicit
             // shapes and when nothing was trimmed). trace:TASK-970
-            if agent_default_cap.is_some() && total_after_filters > reqs.len() {
+            if agent_default_cap.is_some() && rows_truncated {
+                // trace:STORY-1644 | ai:claude
                 println!(
-                    "count: {} of {} (agent default cap — `aida list --all` or `--limit N` to widen)",
-                    reqs.len(),
-                    total_after_filters
+                    "{}",
+                    crate::agent_list_truncation_header(
+                        reqs.len(),
+                        total_after_filters,
+                        list_count_denom_label(default_open_lens),
+                        &sort_key,
+                    )
                 );
             }
 
@@ -3354,6 +3645,8 @@ pub(crate) fn handle_git_backend_command(
                     no_glyph: *no_glyph,
                     flow_header: flow_header.to_string(),
                     terminal_width: terminal_list_width(),
+                    // trace:STORY-1653 | ai:claude
+                    drivers: list_drivers.iter().map(|(k, d)| (*k, d.label())).collect(),
                 };
                 for line in render_list_table(&reqs, &options, row_routing) {
                     println!("{line}");
@@ -4519,6 +4812,7 @@ pub(crate) fn handle_git_backend_command(
             full,
             rels,
             json,
+            raw,
         } => {
             // trace:TASK-518 | ai:antigravity
             let mut resolved_id = id.clone();
@@ -4587,6 +4881,7 @@ pub(crate) fn handle_git_backend_command(
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
             // Read-only: the tolerant resolver keeps `show` off the cache
             // write lock. trace:BUG-1670 | ai:claude
+            let lookup_phase = crate::usage::phase("lookup");
             let lookup = backend
                 .get_requirement_unambiguous_for_read(id)
                 .map_err(|e| {
@@ -4602,6 +4897,7 @@ pub(crate) fn handle_git_backend_command(
                         aida_core::object_store::parse_failure_hint(None),
                     )
                 });
+            drop(lookup_phase);
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -4626,9 +4922,11 @@ pub(crate) fn handle_git_backend_command(
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
+                    let context_phase = crate::usage::phase("context");
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
                     let (cached_epic_status, serialize_cluster_command) =
                         show_cached_context(&backend, &req);
+                    drop(context_phase);
                     // BUG-626: the cache projects an EPIC's read-only child
                     // rollup. Using that projection avoids loading every YAML
                     // object merely to render one spec. trace:BUG-626
@@ -4696,7 +4994,10 @@ pub(crate) fn handle_git_backend_command(
                         struct GitLinkageJson {
                             commits: Vec<GitCommitJson>,
                             files: Vec<GitFileJson>,
-                            shipped: bool,
+                            // BUG-1993: `null` when a bounded scan timed
+                            // out before the shipped state was known — never
+                            // a false "not shipped". trace:BUG-1993 | ai:claude
+                            shipped: Option<bool>,
                             branch: Option<String>,
                             worktree: Option<String>,
                             shipped_pr: Option<u64>,
@@ -4745,7 +5046,10 @@ pub(crate) fn handle_git_backend_command(
                                     ids.push(origin.to_string());
                                 }
                             }
-                            let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            let linkage = {
+                                let _phase = crate::usage::phase("linkage");
+                                crate::collect_git_linkage(&project_root, &ids)
+                            };
                             // TASK-1475: compute before `linkage.{files,commits}`
                             // are moved into the JSON payload below.
                             // trace:TASK-1475 | ai:claude
@@ -4755,16 +5059,8 @@ pub(crate) fn handle_git_backend_command(
                                 &linkage.files,
                                 &linkage.commits,
                             );
-                            // trace:BUG-1594 | ai:claude
-                            let mut incomplete = Vec::new();
-                            if let Some((scanned, total)) = linkage.branch_scan_truncated {
-                                incomplete
-                                    .push(crate::format_branch_scan_truncated_note(scanned, total));
-                            }
-                            if linkage.files_scan_incomplete {
-                                incomplete
-                                    .push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
-                            }
+                            // trace:BUG-1594 trace:BUG-1993 | ai:claude
+                            let incomplete = linkage.incomplete_notes();
                             Some(GitLinkageJson {
                                 complete: incomplete.is_empty(),
                                 incomplete,
@@ -4782,7 +5078,11 @@ pub(crate) fn handle_git_backend_command(
                                     .into_iter()
                                     .map(|(file, symbol)| GitFileJson { file, symbol })
                                     .collect(),
-                                shipped: linkage.shipped,
+                                shipped: if linkage.shipped_unknown {
+                                    None
+                                } else {
+                                    Some(linkage.shipped)
+                                },
                                 branch: linkage.branch,
                                 worktree: linkage.worktree,
                                 shipped_pr: linkage.shipped_pr,
@@ -5070,6 +5370,17 @@ pub(crate) fn handle_git_backend_command(
                             lines.push(crate::toon::scalar("filed_at", &p.summary_line()));
                         }
                         lines.extend(toon_show_comment_lines(&req.comments, *comments));
+                        // STORY-1649: one cheap default-branch linkage scalar;
+                        // `--no-git` turns it off. trace:STORY-1649 | ai:claude
+                        if !*no_git {
+                            if let Some(root) = store_path.parent() {
+                                let ids = crate::shipped_linkage::spec_lookup_ids(&req);
+                                let _phase = crate::usage::phase("linkage");
+                                lines.push(crate::shipped_linkage::toon_show_linkage_line(
+                                    root, &ids,
+                                ));
+                            }
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -5602,8 +5913,24 @@ pub(crate) fn handle_git_backend_command(
                             crate::do_dispatch::human_contract(m).dimmed()
                         );
                     }
+                    // Human output at an interactive terminal renders the
+                    // markdown in the description (the knowledge body for
+                    // FAQs and other knowledge types) and in comment bodies.
+                    // `--raw` / AIDA_MARKDOWN=raw and piped output print the
+                    // source exactly as before. trace:STORY-1652 | ai:claude
+                    let markdown_width = crate::markdown_render::show_renders_markdown(*raw)
+                        .then(crate::markdown_render::terminal_width);
                     if !req.description.is_empty() {
-                        println!("\n{}", req.description);
+                        match markdown_width {
+                            Some(width) => println!(
+                                "\n{}",
+                                crate::markdown_render::render_markdown_for_terminal(
+                                    &req.description,
+                                    width
+                                )
+                            ),
+                            None => println!("\n{}", req.description),
+                        }
                     }
                     // STORY-1434: corrections and carve-outs recorded as
                     // comments must be visible in the DEFAULT view (no
@@ -5622,7 +5949,7 @@ pub(crate) fn handle_git_backend_command(
                         if !visible_comments.is_empty() {
                             println!("\n{}:", "Corrections / carve-outs".yellow().bold());
                             for c in &visible_comments {
-                                print_comment(c, 0);
+                                crate::print_comment_with(c, 0, markdown_width);
                             }
                         }
                     }
@@ -5654,7 +5981,7 @@ pub(crate) fn handle_git_backend_command(
                     {
                         println!("\n{}:", "Comments".green().bold());
                         for c in &req.comments {
-                            print_comment(c, 0);
+                            crate::print_comment_with(c, 0, markdown_width);
                         }
                     }
                     // STORY-582: surface the durable processing record — the
@@ -5701,6 +6028,7 @@ pub(crate) fn handle_git_backend_command(
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let _phase = crate::usage::phase("linkage");
                         print_git_linkage(&project_root, &ids, *verbose, req.filed_at.as_ref());
                     }
                     // TASK-269: `aida show` output runs 50-150 lines, so the
@@ -6720,6 +7048,16 @@ pub(crate) fn handle_git_backend_command(
                         render_completion_crescendo(display_id, &req.title);
                     }
                     EditCompletionRender::Updated => println!("Updated: {}", id),
+                }
+                // STORY-1649: a code spec completed with nothing shipped on the
+                // default branch (local or origin) gets a warning, never a
+                // refusal. trace:STORY-1649 | ai:claude
+                if into_completed {
+                    if let Some(root) = store_path.parent() {
+                        crate::shipped_linkage::warn_if_completed_without_shipped_commit(
+                            root, &req,
+                        );
+                    }
                 }
 
                 // BUG-1770: say what the tag flags actually did, on the success
@@ -7889,155 +8227,110 @@ pub(crate) fn handle_git_backend_command(
                 anyhow::bail!("Not a git repository: {}", store_path.display());
             }
 
-            let branch = aida_core::git_ops::current_branch(store_path)
-                .unwrap_or_else(|_| "main".to_string());
+            // trace:TASK-1717 | ai:claude — the pending commit, the pull
+            // --rebase and its own cleanup, the collision scan and the
+            // capture of the commit to push are ONE store-writer transaction
+            // under the store write lock, so no spec edit, queue write,
+            // mailbox digest or second sync can touch the index/HEAD between
+            // them. The push, mirrors, auto-bump and maintenance run after
+            // the lock is released.
+            let window = aida_core::db::with_store_write_lock(store_path, || {
+                db_sync_local_window(store_path, *pull, *push, message.as_deref())
+            })?;
+            let branch = window.branch.clone();
+            let mut push_sha = window.head;
 
-            // ── Order matters: commit local first, THEN pull --rebase ──
-            // Rebase requires a clean working tree, so we have to commit
-            // any pending edits (typically from `aida edit` paths that
-            // didn't auto-commit, or manual file edits) before pulling.
-            // Old order was pull → commit, which failed when there were
-            // unstaged changes — git rebase refuses, and the follow-up
-            // commit ran on a partial-rebase state with a confusing
-            // empty error. trace:BUG-1-051 | ai:claude
-
-            // Step 1: stage and commit any pending changes.
-            //
-            // Stage everything in the worktree (`git add -A .`) instead
-            // of cherry-picking specific subdirs like `objects/`. The
-            // orphan branch's own .gitignore already excludes runtime
-            // artifacts (cache.db, lock files); whatever's left modified
-            // is canonical state — including `.aida/dispenser.toml`,
-            // which gets dirtied by ID dispensing and would otherwise be
-            // skipped by an objects-only stage. Without this, has_changes
-            // could report "yes" while nothing gets staged, and the
-            // follow-up `git commit` would fail with an empty error.
-            // trace:BUG-1-051 | ai:claude
-            let has_changes = aida_core::git_ops::has_changes(store_path)?;
-            if has_changes {
-                let msg = message.as_deref().unwrap_or("chore: sync pending changes");
-                aida_core::git_ops::add_all(store_path, ".")?;
-                aida_core::git_ops::commit(store_path, msg)?;
-                println!("Committed: {}", msg);
-            } else if !*pull && !*push {
-                println!("Nothing to commit.");
-            }
-
-            // Step 2: pull --rebase. Bare `git pull` fails on divergent
-            // branches when the user has no `pull.rebase` / `pull.ff`
-            // config — the orphan-store model wants linear history
-            // anyway (replay local commits on top of remote), so
-            // rebase is the right default.
-            if *pull && !aida_core::git_ops::has_remote(store_path, "origin") {
-                // BUG-432: local-only / fresh-init projects have no `origin`
-                // yet (the aida-demo + pre-remote flow). The pull is a graceful
-                // skip, not a fatal — otherwise `aida queue work`'s startup sync
-                // (and a standalone `aida db sync --pull`) die before a remote
-                // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
-                // trace:BUG-432 | ai:claude
-                println!("  No `origin` remote — skipping pull (local-only project).");
-            } else if *pull {
-                // Snapshot local state before pull for conflict detection
-                let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
-
-                println!("Pulling from origin/{}...", branch);
-                match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
-                    Ok(()) => {
-                        println!("  Pull complete.");
-                        ensure_no_spec_id_collisions(store_path)?;
-
-                        // Detect conflicts with remote changes
-                        let remote_reqs =
-                            backend.load().map(|s| s.requirements).unwrap_or_default();
-
-                        let conflicts =
-                            aida_core::conflict::detect_store_conflicts(&local_reqs, &remote_reqs);
-
-                        if !conflicts.is_empty() {
-                            println!();
-                            println!("{}", "Conflicts detected:".red().bold());
-                            for conflict in &conflicts {
-                                println!();
-                                print!("{}", conflict);
-                            }
-                            println!();
-                            println!(
-                                "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
-                            );
-                        }
-
-                        // STORY-86: also scan the code repo's default
-                        // branch for any spec-referencing commits that
-                        // arrived (possibly via a separate `git pull`)
-                        // and bump matching Done specs. `db sync --pull`
-                        // is decoupled from `git pull`, so we don't know
-                        // a pre_sha here — fall back to HEAD~50. The
-                        // `status == Done` guard inside the helper keeps
-                        // this idempotent. trace:STORY-86 | ai:claude
-                        if auto_bump_enabled() {
-                            if let Some(project_root) = store_path.parent() {
-                                let storage = Storage::new(store_path);
-                                match auto_bump_done_to_completed(
-                                    project_root,
-                                    store_path,
-                                    None,
-                                    &storage,
-                                ) {
-                                    Ok(flips) => print_auto_bump_summary(&flips),
-                                    Err(e) => {
-                                        eprintln!(
-                                            "  {} auto-bump failed: {}",
-                                            "Warning:".yellow().bold(),
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
+            if let Some(conflicts) = &window.conflicts {
+                if !conflicts.is_empty() {
+                    println!();
+                    println!("{}", "Conflicts detected:".red().bold());
+                    for conflict in conflicts {
+                        println!();
+                        print!("{}", conflict);
                     }
-                    Err(e) => {
-                        // A failed rebase leaves the repo in a partial
-                        // state — but only advise `git rebase --abort`
-                        // when a rebase is actually in progress; a
-                        // transient failure (e.g. a network 502) with no
-                        // rebase in flight is a different situation.
-                        // Reuses the same check as `aida pull`'s
-                        // store-leg hint so both emission sites agree.
-                        // trace:BUG-1500 | ai:claude
-                        anyhow::bail!(
-                            "Pull failed: {}",
-                            crate::store_pull_failure_hint(store_path, &e.to_string())
-                        );
+                    println!();
+                    println!(
+                        "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
+                    );
+                }
+
+                // STORY-86: also scan the code repo's default
+                // branch for any spec-referencing commits that
+                // arrived (possibly via a separate `git pull`)
+                // and bump matching Done specs. `db sync --pull`
+                // is decoupled from `git pull`, so we don't know
+                // a pre_sha here — fall back to HEAD~50. The
+                // `status == Done` guard inside the helper keeps
+                // this idempotent. trace:STORY-86 | ai:claude
+                if auto_bump_enabled() {
+                    if let Some(project_root) = store_path.parent() {
+                        let storage = Storage::new(store_path);
+                        match auto_bump_done_to_completed(project_root, store_path, None, &storage)
+                        {
+                            Ok(flips) => print_auto_bump_summary(&flips),
+                            Err(e) => {
+                                eprintln!(
+                                    "  {} auto-bump failed: {}",
+                                    "Warning:".yellow().bold(),
+                                    e
+                                );
+                            }
+                        }
                     }
                 }
             }
 
             if *push {
                 println!("Pushing to origin/{}...", branch);
-                let origin_ok = match aida_core::git_ops::push(store_path, "origin", &branch) {
+                // trace:TASK-1717 | ai:claude — push the commit captured under
+                // the lock, by SHA. A rejection retakes the lock, rebases the
+                // CURRENT store (keeping any commit another writer made since)
+                // and pushes the new head once; a second rejection fails.
+                let pushed = match push_sha.as_deref() {
+                    None => Err(anyhow::anyhow!("store has no commit to push")),
+                    Some(sha) => aida_core::git_ops::push_exact(store_path, "origin", sha, &branch),
+                };
+                let origin_sha = match pushed {
                     Ok(true) => {
                         println!("  Push complete.");
-                        true
+                        push_sha.clone()
                     }
                     Ok(false) => {
                         println!("  Push rejected. Pulling and retrying...");
-                        aida_core::git_ops::pull_rebase(store_path, "origin", &branch)?;
-                        aida_core::git_ops::push(store_path, "origin", &branch)?;
+                        let sha = aida_core::db::with_store_write_lock(store_path, || {
+                            aida_core::git_ops::pull_rebase(store_path, "origin", &branch)
+                                .map_err(|e| {
+                                    anyhow::anyhow!(
+                                        "Pull failed: {}",
+                                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                                    )
+                                })?;
+                            crate::ensure_no_spec_id_collisions_canonical(store_path)?;
+                            aida_core::git_ops::head_sha(store_path)
+                        })?;
+                        if !aida_core::git_ops::push_exact(store_path, "origin", &sha, &branch)? {
+                            anyhow::bail!(
+                                "Push rejected again after rebasing onto origin/{branch}; \
+                                 your commits are kept locally. Re-run `aida db sync --pull --push`."
+                            );
+                        }
                         println!("  Push complete after rebase.");
-                        true
+                        push_sha = Some(sha);
+                        push_sha.clone()
                     }
                     Err(e) => {
                         eprintln!("  Push failed: {}", e);
-                        false
+                        None
                     }
                 };
 
                 // TASK-1096: fan out the store push to every configured mirror
                 // remote so a clone can't silently leave one hub behind — the
                 // drift-prevention leg. trace:TASK-1096 | ai:claude
-                if origin_ok {
+                // trace:TASK-1717 | ai:claude — only the commit origin accepted.
+                if let Some(sha) = origin_sha {
                     if let Some(project_root) = store_path.parent() {
-                        fan_out_mirror_push(store_path, &branch, project_root);
+                        crate::fan_out_store_mirror_push(store_path, &branch, &sha, project_root);
                     }
                 }
             }
@@ -8381,6 +8674,7 @@ pub(crate) fn handle_git_backend_command(
             max_commits,
             events,
             full,
+            digest,
             id,
             r#type,
             author,
@@ -8402,6 +8696,11 @@ pub(crate) fn handle_git_backend_command(
             timeline,
             cmd,
         } => {
+            // STORY-1644: `--limit` beats env `AIDA_HISTORY_LIMIT`, which beats
+            // `[history] limit`, which beats the built-in 20.
+            // trace:STORY-1644 | ai:claude
+            let limit_flag = *limit;
+            let limit = &crate::effective_history_limit(limit_flag);
             // trace:STORY-1477 | ai:codex
             use crate::history_layout::{Layout, Templates};
             // Reject even a parent-position --json before loading or mutating config.
@@ -8431,6 +8730,72 @@ pub(crate) fn handle_git_backend_command(
                     None => print!("{}", templates.list()),
                 }
                 return Ok(());
+            }
+            // STORY-1664: the list-shaped views share only the window, type,
+            // limit, author and archive flags with the rest of `history`;
+            // a flag that picks a different view is refused, not ignored.
+            // trace:STORY-1664 | ai:claude
+            if let Some((view, args)) = cmd.as_ref().and_then(HistoryCommand::view) {
+                let other_view_flags = [
+                    ("a SPEC-ID", spec.is_some() || id.is_some()),
+                    ("--template", template.is_some()),
+                    ("--fields", fields.is_some()),
+                    ("--full", *full || *events),
+                    ("--digest", *digest),
+                    ("--status-changes", *status_changes),
+                    ("--kind", kind.is_some()),
+                    ("--shipped", *shipped),
+                    ("--to", to.is_some()),
+                    ("--from", from.is_some()),
+                    ("--opened", *opened),
+                    ("--comments", *comments),
+                    ("--oneline", *oneline),
+                    ("--timeline", *timeline),
+                ];
+                if let Some((flag, _)) = other_view_flags.iter().find(|(_, set)| *set) {
+                    anyhow::bail!(
+                        "`aida history {}` is its own view; {flag} selects a different one. \
+                         Drop {flag}, or run plain `aida history` with it",
+                        view.name()
+                    );
+                }
+                let status = args
+                    .status
+                    .as_deref()
+                    .map(|raw| history::resolve_status_filter("--status", raw))
+                    .transpose()?;
+                let query = crate::history_views::ViewQuery {
+                    since: since.clone(),
+                    until: until.clone(),
+                    author: author.clone(),
+                    max_commits: *max_commits,
+                    limit: limit_flag,
+                    all_events: args.all_events,
+                    oldest_first: args.oldest_first,
+                    filters: crate::history_views::ViewFilters {
+                        req_type: r#type.clone(),
+                        priority: args.priority.clone(),
+                        tags: args.tags.clone(),
+                        status,
+                        archive: if *all {
+                            aida_core::ArchiveFilter::Both
+                        } else if *archived {
+                            aida_core::ArchiveFilter::ArchivedOnly
+                        } else {
+                            aida_core::ArchiveFilter::NonArchivedOnly
+                        },
+                        defer: if *all || *archived {
+                            aida_core::DeferFilter::Both
+                        } else if *deferred {
+                            aida_core::DeferFilter::DeferredOnly
+                        } else {
+                            aida_core::DeferFilter::NonDeferredOnly
+                        },
+                        include_meta: *include_meta,
+                    },
+                };
+                let json = *json || args.json || crate::output_format_is_json();
+                return crate::history_views::run(&backend, store_path, view, &query, json);
             }
             if template.is_some()
                 && (*json
@@ -8486,6 +8851,8 @@ pub(crate) fn handle_git_backend_command(
             let explicit_events = match cmd {
                 Some(HistoryCommand::Events { .. }) => true,
                 Some(HistoryCommand::Templates { .. }) => unreachable!(),
+                // trace:STORY-1664 | ai:claude — the list views returned above.
+                Some(_) => unreachable!(),
                 None => {
                     if *events {
                         note_hidden_alias(
@@ -8519,31 +8886,58 @@ pub(crate) fn handle_git_backend_command(
             )?;
             let event_selector =
                 *shipped || *opened || to_status.is_some() || from_status.is_some();
+            // STORY-1650: a query with no SPEC-ID, no feed (`events`,
+            // `--full`, a custom layout) and no per-event flag (`--shipped`,
+            // `--status-changes`, `--comments`, `--oneline`) is the bare
+            // view: the status flow, or the digest with `--digest`.
+            // `--to`/`--from`/`--opened` narrow the flow as they narrow the
+            // feed; `--json` picks the flow's JSON.
+            // trace:STORY-1650 | ai:claude
+            if *digest && explicit_events {
+                anyhow::bail!(
+                    "invalid combination: --digest is the per-requirement view and the \
+                     `events` feed is the per-event view; pass one or the other"
+                );
+            }
+            let bare = requested_id.is_none()
+                && !explicit_events
+                && !*shipped
+                && !*status_changes
+                && !*comments
+                && !*oneline;
+            let bare_view = if *digest {
+                history::BareView::Digest
+            } else {
+                history::BareView::Flow
+            };
             // BUG-1635: per-event flags (`--status-changes`, `--comments`,
             // `--oneline`, `--json`) switch a multi-spec query to the events
             // feed instead of being silently ignored by the digest; with a
             // SPEC-ID they shape the status-progression view instead.
             // trace:BUG-1635 | ai:claude
-            let events = history::resolve_events_mode(
-                explicit_events,
-                requested_id.is_some(),
-                event_selector,
-                *status_changes,
-                *comments,
-                *oneline,
-                json,
-            );
+            let events = !bare
+                && history::resolve_events_mode(
+                    explicit_events,
+                    requested_id.is_some(),
+                    event_selector,
+                    *status_changes,
+                    *comments,
+                    *oneline,
+                    json,
+                );
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
             // BUG-1635: chosen by mode, not output format; see
             // `history::default_max_commits`. trace:BUG-1635 | ai:claude
+            // STORY-1650: the bare view's JSON (flow or digest) walks the
+            // same 250-commit window as its human and TOON output.
             let default_max = history::default_max_commits(
                 *limit,
                 explicit_events,
                 requested_id.is_some(),
-                json,
+                json && !bare,
                 event_selector,
                 *status_changes,
                 *comments,
@@ -8672,7 +9066,7 @@ pub(crate) fn handle_git_backend_command(
                     );
                 }
                 // A narrowed window would still print totals that look whole.
-                if *limit != history_timeline::HISTORY_DEFAULT_LIMIT {
+                if limit_flag.is_some_and(|n| n != history_timeline::HISTORY_DEFAULT_LIMIT) {
                     anyhow::bail!(
                         "`--timeline` covers a requirement's whole recorded life, so `--limit` \
                          does not apply to it"
@@ -8756,7 +9150,7 @@ pub(crate) fn handle_git_backend_command(
                 }
                 print!("{output}");
             } else {
-                history::run(store_path, &opts, json)?;
+                history::run(store_path, &opts, json, bare_view)?;
             }
         }
         Command::StateSnapshot {

@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:BUG-2014 | ai:codex
+"Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
 # Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
 "Check aida-cli without default features" = "fast"
@@ -60,6 +62,8 @@
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
+"Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
+"Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"
 "Run no-origin pull warning fixture" = "full"
 "Run normal two-remote pull byte identical fixture" = "full"
@@ -67,18 +71,30 @@
 "Run pre-commit provenance move-detection test" = "fast"
 # trace:BUG-1925 | ai:claude
 "Run pre-commit provenance perf and merge-delta test" = "fast"
+"Run pre-commit provenance fail-closed tests" = "fast"
+"Run pre-commit primary-checkout gate test" = "fast"
 "Run agent-skill-hook installer fixtures" = "fast"
 "Run distributed / sibling-store integration tests" = "full"
 "Run ~/.aida home-guard self-test" = "fast"
 "Minimal aida-cli build for docs-only guards" = "full"
 "CLI-manual drift-guard (every command documented)" = "full"
+# The drift guard needs a built binary; this static slice parses clap attributes
+# from source, so the pre-push tier still catches a hidden-flag doc citation.
+# trace:BUG-1937 | ai:claude
+"CLI-manual hidden-flag guard (static, no build)" = "fast"
 "Monitor contract drift guard" = "full"
+# Runs target/debug/aida --help per template command. trace:BUG-1922 | ai:claude
+"Template command lint" = "full"
+# trace:BUG-1950 | ai:claude — real-binary check vs. stub-binary fixture tests.
+"Book glossary drift guard" = "full"
+"Book glossary generator tests (stub binary, no build)" = "fast"
 "Performance profile guard" = "fast"
 "Check formatting" = "fast"
 "Removed mode-flag spelling guard" = "fast"
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Verify pure-move slice stack fixtures" = "fast"
 "Run clippy" = "full"
 "Glyph-literal lint (block new raw glyphs)" = "fast"
 "Trace/doc-header stranding gate" = "fast"
@@ -92,6 +108,7 @@
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"
 "Pin stable toolchain & verify cargo" = "runs `rustup default stable`, which would mutate this machine's toolchain"
 "Install Linux dependencies" = "`sudo apt-get` against the runner image"
+"Install zsh (shell-wrapper test matrix)" = "`sudo apt-get` against the runner image; the wrapper tests pick zsh up from PATH when present"
 "Live bwrap OS-wrap confinement gate" = "needs `sudo sysctl` to change the kernel's unprivileged-userns flag"
 "Report diff trace coverage (report-only)" = "report-only by its own name"
 "Validate commit SPEC-ID references (trace gate)" = "fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate"

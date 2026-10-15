@@ -30,6 +30,7 @@ fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLe
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     }
 }
 

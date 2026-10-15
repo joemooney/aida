@@ -61,8 +61,10 @@ dependencies = [
  "hostname",
  "inquire",
  "libc",
+ "proc-macro2",
  "prost",
  "protox",
+ "pulldown-cmark 0.9.6",
  "regex",
  "reqwest",
  "rusqlite",
@@ -72,6 +74,7 @@ dependencies = [
  "sha2",
  "signal-hook",
  "similar",
+ "syn 2.0.117",
  "sysinfo",
  "tempfile",
  "tokio",
@@ -80,6 +83,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "ts-rs-forge",
+ "unicode-width 0.2.2",
  "uuid",
 ]
 

@@ -90,12 +90,12 @@ SPEC_RE = re.compile(r'trace:([A-Za-z0-9][A-Za-z0-9-]*)')
 # convention. Keyed by "path:item_name" so a fix elsewhere in the same file
 # doesn't accidentally suppress a NEW violation on a different item.
 ALLOW_LIST = {
-    # lib.rs: run_do_drive carries trace:TASK-1155 + trace:ADR-11 (its
+    # zen_drive_root.rs: run_do_drive carries trace:TASK-1155 + trace:ADR-11 (its
     # original design), then a doc paragraph describing `aida do <spec>`,
     # then trace:STORY-776 (the shipped dispatcher). Read in full: the doc
     # covers the whole design across all three specs, not a different
     # function. No bare sibling in this file claims any part of it.
-    "aida-cli-lib/src/lib_part6.rs:run_do_drive",
+    "aida-cli-lib/src/zen_drive_root.rs:run_do_drive",
     # lock_cmd.rs: handle_lock_command carries trace:TASK-661 (the
     # per-scope disposition lease design), then a doc paragraph describing
     # the `aida lock` dispatcher itself, then trace:STORY-711 (the slice

@@ -136,6 +136,14 @@ command = "cache refresh --if-requested"
 every = "15m"
 enabled = true
 
+# Catch up an existing enabled history index; disabled/missing/busy is a no-op.
+# trace:STORY-1661 | ai:codex
+[[schedule.jobs]]
+name = "history-index-tick"
+command = "cache refresh --history --if-behind"
+every = "15m"
+enabled = true
+
 [[schedule.jobs]]
 name = "performance-guard"
 command = "doctor check performance --fail-on-findings"
@@ -329,3 +337,14 @@ worktree_parent = "../aida-worktrees"
 
 # ADR-72 removed the ADR-65 "weekly-windows-triage" Product reminder: AIDA is
 # Linux-only and agents do not triage Windows/macOS work. trace:TASK-1723 | ai:claude
+
+# STORY-1647: the pre-commit hook refuses commits made in the PRIMARY checkout
+# on main — in this repo every change lands from a sibling worktree
+# (`aida worktree add <SPEC>`). Merges, rebase replays, conflicted cherry-pick
+# / revert replays, and .aida-store commits stay exempt; git commit --amend and
+# git merge --squash + commit on main are refused without the operator
+# override AIDA_ALLOW_PRIMARY_COMMIT=1. Other projects get the gate only by
+# opting in with this same key.
+# trace:TASK-1728 | ai:antigravity
+[hooks]
+block_primary_commits = true

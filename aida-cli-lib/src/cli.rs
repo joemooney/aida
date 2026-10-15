@@ -30,6 +30,18 @@ pub enum OutputFormat {
     Json,
 }
 
+/// What `aida scaffold upgrade --only <SCOPE>` limits the upgrade to.
+// trace:BUG-1977 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScaffoldUpgradeOnly {
+    /// Only the AIDA git hooks git would not run as this build ships them:
+    /// a stale AIDA-generated body is backed up beside itself and replaced,
+    /// and a hook without an executable bit is set to 0755. Custom hooks
+    /// and every other file are left alone.
+    // trace:BUG-2009 | ai:claude
+    GitHooks,
+}
+
 // trace:STORY-830 | ai:codex
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitFootprint {
@@ -40,6 +52,16 @@ pub enum InitFootprint {
     /// Entry memory lane: store, config, cache, gitignore, reflex skills, guidance.
     // trace:STORY-1093 | ai:codex
     MemoryLane,
+}
+
+/// What `aida dev build --clean[=MODE]` deletes before building.
+// trace:STORY-1646 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DevCleanMode {
+    /// Delete only `target/agent/incremental`; keep compiled dependencies.
+    Incremental,
+    /// Run `cargo clean --profile agent`.
+    Full,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -181,6 +203,13 @@ pub enum InternalCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Release eligible Rework-only holds using a fresh recorded approval.
+    /// Sensitive or composed holds still require a human clear.
+    // trace:STORY-1687 | ai:codex
+    AutoRelease {
+        /// PR to inspect; omit to inspect all local hold markers.
+        pr: Option<u64>,
+    },
     /// Inspect or provision the three repository-level merge-hold label definitions.
     // trace:BUG-1747 | ai:codex
     Labels {
@@ -860,6 +889,14 @@ pub enum ScaffoldCommand {
         /// files are never touched.
         #[clap(long)]
         prune: bool,
+
+        /// Limit the upgrade to one scope. `git-hooks` replaces only the
+        /// stale AIDA-generated git hooks a store write refuses (backing
+        /// each up beside itself), makes non-executable AIDA hooks 0755,
+        /// and touches no other file.
+        // trace:BUG-1977 trace:BUG-2009 | ai:claude
+        #[clap(long, value_enum, conflicts_with_all = ["force", "prune"])]
+        only: Option<ScaffoldUpgradeOnly>,
     },
 
     /// Show a unified diff between embedded templates and on-disk files
@@ -1630,22 +1667,33 @@ pub enum SessionCommand {
         #[clap(long, short = 'y')]
         yes: bool,
 
-        /// Force through safety checks. Two effects:
-        ///   1. Force-terminate any live `claude` processes inside the
-        ///      worktree (SIGTERM, 5s grace, then SIGKILL). Without this,
-        ///      `session end` refuses to remove a worktree with live
-        ///      claudes inside (prevents orphaned-claude-with-dangling-
-        ///      cwd leak).
-        ///   2. Discard uncommitted tracked/untracked-but-not-ignored
-        ///      changes in the worktree. Without this, `session end`
-        ///      refuses and prints the dirty file list. Gitignored
-        ///      differences — `target/`, `.aida/cache.db`, etc. — never
-        ///      require `--force` and are always discarded.
-        // trace:BUG-61 | ai:claude
+        /// Discard uncommitted work and skip the confirmation. Discards
+        /// tracked and untracked-but-not-ignored changes in the worktree;
+        /// without this, `session end` refuses and prints the dirty file
+        /// list. Gitignored differences (`target/`, `.aida/cache.db`, etc.)
+        /// never require `--force` and are always discarded. `--force` does
+        /// NOT override the live-process check; that is `--include-in-use`.
         // trace:BUG-67 | ai:claude
         // trace:TASK-487 | ai:claude
+        // trace:BUG-1986 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// Remove the worktree, or reset it back into the warm pool, even
+        /// while live processes use it. Without this, `session end` refuses
+        /// and names each pid and command: a live `claude` inside the
+        /// worktree, or any other process with its working directory, an
+        /// open or memory-mapped file, or its program inside it (a cargo
+        /// build, for example). With it, live `claude` processes inside the
+        /// worktree are terminated (SIGTERM, 5s grace, then SIGKILL); other
+        /// processes are not killed. Your own shell, its parents and
+        /// background jobs, and the helpers of the agent you are ending
+        /// from (such as its MCP server) are never counted.
+        // trace:BUG-61 | ai:claude
+        // trace:BUG-1947 | ai:claude
+        // trace:BUG-1986 | ai:claude
+        #[clap(long)]
+        include_in_use: bool,
 
         /// After removing the worktree, also delete the corresponding
         /// `~/.claude/projects/<encoded-cwd>/` directory so `claude
@@ -1721,11 +1769,12 @@ pub enum SessionCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
-        /// Include stale leases in the listing. Default hides leases
-        /// whose worktree no longer exists OR which have no live
-        /// claude AND are >24h old. With --all, every lease renders
-        /// with a state column (live ● / dormant ◐ / stale ⚠).
+        /// Include stale harness leases in the listing. Every view has a
+        /// state column (live ● / dormant ◐ / stale ⚠). The default view
+        /// keeps every spec-scoped lease, even a stale one, because it
+        /// still blocks dispatch; it hides only stale harness leases.
         // trace:TASK-55 | ai:claude
+        // trace:TASK-1743 | ai:claude
         #[clap(long)]
         all: bool,
         /// Emit the lease list as JSON for machine consumers. Each lease
@@ -2039,12 +2088,17 @@ pub enum PrCommand {
         branch: Option<String>,
     },
 
-    /// List open PRs/MRs with their mapped spec IDs and rebase status.
+    /// List every open PR/MR with its spec ID (when one can be found),
+    /// CI state and rebase status.
     #[clap(visible_alias = "mr")]
     List {
         /// Emit the list as a JSON array.
         #[clap(long)]
         json: bool,
+        /// Only show PRs that map to a spec ID; hide the unmapped ones.
+        // trace:BUG-1927 | ai:claude
+        #[clap(long)]
+        mapped_only: bool,
     },
 
     /// Rebase a PR onto its base in a temporary worktree, then
@@ -2206,6 +2260,17 @@ pub enum PrCommand {
         // trace:TASK-1448 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_approval: bool,
+
+        /// Ship this PR as a non-completing slice: write no completing
+        /// `(SPEC-ID)` trailer into the squash subject from any source
+        /// (title trailer or branch name), so the merge completes no spec.
+        /// Use for one PR of a multi-PR spec. A PR body line reading
+        /// `aida: no-complete` or `Non-completing slice` has the same
+        /// effect; and the branch-name fallback is skipped on its own when
+        /// the spec carries `closure:pending` or has open slice children.
+        // trace:BUG-1919 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_complete: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
@@ -2338,6 +2403,30 @@ pub enum RoleCommand {
         #[clap(long)]
         check: bool,
     },
+
+    /// Report how close this session's seat grant is to expiry. By default
+    /// prints a one-line warning on stdout when the grant expires within
+    /// `--warn-within` (or has expired), and nothing otherwise; always exits
+    /// 0. With `--refuse-within`, prints the refusal on stderr and exits 3
+    /// when less than that is left: a relay runs it before launching each
+    /// seat session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its
+    /// grant can't be used (missing, malformed, or revoked). No grant at all,
+    /// or an implementer grant, is never refused.
+    // trace:TASK-1736 | ai:claude
+    Expiry {
+        /// Warn when the grant expires within this span (e.g. `2h`, `90m`).
+        #[clap(long, default_value = "2h")]
+        warn_within: String,
+
+        /// Exit 3 with a refusal when less than this span is left.
+        #[clap(long)]
+        refuse_within: Option<String>,
+    },
+
+    /// Emit a deduplicated informational tool-hook expiry notice.
+    // trace:BUG-2014 | ai:codex
+    #[clap(hide = true)]
+    ExpiryNotice,
 
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
@@ -2818,6 +2907,68 @@ pub enum DevCommand {
         auto: bool,
     },
 
+    /// Build, smoke-test and promote the live dev binary. The one build
+    /// command: an incremental `--profile agent` workspace build, then a
+    /// smoke test of the new `aida` / `aida-server`, then an atomic promote
+    /// into the live directory (default `~/.local/share/aida/live`, outside
+    /// target/), keeping the previous pair in `live/prev/`. Promotes only from
+    /// the primary checkout on a clean `main` that matches `origin/main` (the
+    /// local remote-tracking ref; it does not fetch, so run `git fetch`
+    /// first); in a worktree it builds and smoke-tests only.
+    // trace:STORY-1646 | ai:claude
+    Build {
+        /// Clear the incremental cache first. Bare `--clean` deletes only
+        /// `target/agent/incremental` (keeps compiled dependencies);
+        /// `--clean=full` runs `cargo clean --profile agent`.
+        #[clap(
+            long,
+            value_enum,
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "incremental"
+        )]
+        clean: Option<DevCleanMode>,
+
+        /// Build and smoke-test only; never promote.
+        #[clap(long)]
+        no_promote: bool,
+
+        /// Promote even when the checkout is dirty, off `main`, or not at
+        /// `origin/main` (`aida dev status` then shows the dirty SHA).
+        #[clap(long)]
+        allow_dirty: bool,
+
+        /// Point `~/.local/bin/aida` and `~/.local/bin/aida-server` at the
+        /// live directory, showing anything it replaces first.
+        #[clap(long)]
+        install_links: bool,
+
+        /// With --install-links: replace existing files/links without
+        /// asking (required when stdin is not a terminal).
+        #[clap(long, requires = "install_links")]
+        yes: bool,
+
+        /// Wait for a live drain wave pinned to the current binary to finish
+        /// instead of refusing.
+        #[clap(long)]
+        after_wave: bool,
+    },
+
+    /// Swap the previous live binaries (`live/prev/`) back in, in one step.
+    /// Running it again rolls forward. Refuses while a live drain wave is
+    /// pinned to the live binary unless --after-wave or --force.
+    // trace:STORY-1646 | ai:claude
+    Rollback {
+        /// Wait for a live drain wave pinned to the live binary to finish
+        /// instead of refusing.
+        #[clap(long)]
+        after_wave: bool,
+
+        /// Swap even while a live drain wave is pinned to the live binary.
+        #[clap(long, conflicts_with = "after_wave")]
+        force: bool,
+    },
+
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]
     BuildGuard {
@@ -2902,6 +3053,15 @@ pub enum CacheCommand {
     /// Bring the cache current now; worker/scheduler forms drive the detached refresh protocol
     // trace:TASK-1527 | ai:claude
     Refresh {
+        /// Catch up the existing history index inline, without refreshing the requirements cache
+        // trace:STORY-1661 | ai:codex
+        #[clap(long, conflicts_with_all = ["worker", "if_requested", "cache"])]
+        history: bool,
+
+        /// Maintenance tick: catch up the existing history index only when it is behind
+        #[clap(long, requires = "history")]
+        if_behind: bool,
+
         /// Run as the detached refresh worker (internal; spawned automatically)
         #[clap(long, hide = true)]
         worker: bool,
@@ -3124,6 +3284,14 @@ pub enum WorktreePoolCommand {
     Return {
         /// Worktree path to return (default: the pool tree at the cwd).
         path: Option<String>,
+
+        /// Reset the tree even while live processes use it (a working
+        /// directory, open or memory-mapped file, or program inside it).
+        /// Without this, the return refuses and names each pid and command,
+        /// and also refuses when the process list cannot be fully checked.
+        // trace:BUG-1986 | ai:claude
+        #[clap(long)]
+        include_in_use: bool,
     },
 
     /// Register EXISTING worktrees into the warm-pool — the migration path for
@@ -6125,9 +6293,9 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
-    /// Mark a requirement as completed AND remove it from your queue in one
+    /// Mark a requirement as done AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
-    /// loop. Equivalent to: `aida edit <id> --status completed && aida queue remove <id>`.
+    /// loop. Equivalent to: `aida edit <id> --status done && aida queue remove <id>`.
     Done {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
@@ -6352,8 +6520,11 @@ pub enum QueueCommand {
         /// refuses and names the holding lease. With --steal, the holding
         /// session is ended first (`aida session end <id>` — clean exit;
         /// uncommitted work still blocks, exit those manually or use
-        /// `aida session end --force`) and the new session takes over.
+        /// `aida session end --force`; a live process using the worktree
+        /// also blocks, stop it or use `aida session end --include-in-use`)
+        /// and the new session takes over.
         // trace:TASK-81 | ai:claude
+        // trace:BUG-1986 | ai:claude
         #[clap(long)]
         steal: bool,
         /// Claim a spec whose status is ambiguous: already In Progress with
@@ -8352,6 +8523,86 @@ pub enum HistoryCommand {
         #[clap(subcommand)]
         cmd: Option<HistoryTemplatesCommand>,
     },
+    /// Specs filed in the window, one row each: when it was filed, then
+    /// its `aida list` row with its CURRENT status.
+    ///
+    /// Example: `aida history opened --since 2w --type bug`
+    // trace:STORY-1664 | ai:claude
+    Opened(HistoryViewArgs),
+    /// Specs that entered Completed in the window, one row each: when,
+    /// then its `aida list` row with its CURRENT status (a spec reopened
+    /// since shows its status now).
+    ///
+    /// Example: `aida history completed --since 2w --type bug`
+    // trace:STORY-1664 | ai:claude
+    Completed(HistoryViewArgs),
+    /// Specs that entered Rejected in the window, one row each, with
+    /// their CURRENT status.
+    ///
+    /// Example: `aida history rejected --since 30d`
+    // trace:STORY-1664 | ai:claude
+    Rejected(HistoryViewArgs),
+    /// Specs that entered Approved in the window, one row each, with
+    /// their CURRENT status.
+    ///
+    /// Example: `aida history approved --since 3d --priority high`
+    // trace:STORY-1664 | ai:claude
+    Approved(HistoryViewArgs),
+    /// Specs that entered a terminal status in the window: Completed,
+    /// Rejected or Superseded. Archiving is housekeeping, not an outcome,
+    /// so it does not count. One row each, with their CURRENT status.
+    ///
+    /// Example: `aida history closed --since 7d --tags cli`
+    // trace:STORY-1664 | ai:claude
+    Closed(HistoryViewArgs),
+}
+
+/// Options shared by the `aida history opened|completed|rejected|approved|closed`
+/// views. The window is `--since` (default 7d) to `--until` (default now),
+/// in the forms `aida history` accepts (`7d`, `2w`, an ISO date, RFC3339).
+/// `--type`, `--limit`, `--max-commits`, `--author`, `--all`, `--archived`
+/// and `--deferred` work as they do on `aida history`; `--type` matches the
+/// spec's current type. Rows are newest first.
+// trace:STORY-1664 | ai:claude
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct HistoryViewArgs {
+    /// Only specs whose CURRENT priority is this.
+    #[clap(long)]
+    pub priority: Option<String>,
+    /// Only specs carrying every one of these tags (comma-separated).
+    #[clap(long, value_delimiter = ',')]
+    pub tags: Vec<String>,
+    /// Only specs whose CURRENT status is this. The status column is
+    /// always the current status, not the status at the event.
+    #[clap(long, value_name = "STATUS")]
+    pub status: Option<String>,
+    /// One row per matching event instead of one per spec: a spec
+    /// completed, reopened and completed again appears twice.
+    #[clap(long)]
+    pub all_events: bool,
+    /// Oldest first instead of newest first.
+    #[clap(long)]
+    pub oldest_first: bool,
+    /// Output JSON (same as `--format json`).
+    #[clap(long)]
+    pub json: bool,
+}
+
+// trace:STORY-1664 | ai:claude
+impl HistoryCommand {
+    /// The list view this subcommand selects, with its options; `None` for
+    /// `events` and `templates`.
+    pub(crate) fn view(&self) -> Option<(crate::history_views::HistoryView, &HistoryViewArgs)> {
+        use crate::history_views::HistoryView;
+        match self {
+            HistoryCommand::Opened(a) => Some((HistoryView::Opened, a)),
+            HistoryCommand::Completed(a) => Some((HistoryView::Completed, a)),
+            HistoryCommand::Rejected(a) => Some((HistoryView::Rejected, a)),
+            HistoryCommand::Approved(a) => Some((HistoryView::Approved, a)),
+            HistoryCommand::Closed(a) => Some((HistoryView::Closed, a)),
+            HistoryCommand::Events { .. } | HistoryCommand::Templates { .. } => None,
+        }
+    }
 }
 
 // trace:STORY-1477 | ai:codex
@@ -8737,6 +8988,13 @@ pub enum AgentNewCommand {
         /// also passed, AIDA records the captured sessionId on the
         /// lease so the cross-substrate view links them automatically.
         /// Without `--bg`, the foreground launch path is unchanged.
+        /// For non-interactive dispatch, first set `[agents] confirm_bypass = false`
+        /// in `~/.aida/config.toml`; trusted project config can still require consent.
+        /// Then use: `aida agent new claude --bg --role implementer
+        /// --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume
+        /// --permission-mode bypassPermissions`. An explicit owning cwd reuses
+        /// its inactive same-role lease; it never takes over a live agent.
+        // trace:BUG-2002 | ai:codex
         // trace:SPIKE-34 | ai:claude
         #[clap(long = "bg")]
         bg: bool,
@@ -9458,10 +9716,18 @@ pub enum Command {
 
         /// Filter by tags (comma separated). A trailing `*` is a prefix-glob:
         /// `aida:queue:*` matches every tag under that surface (and an exact
-        /// `aida:queue`). e.g. `--tags 'aida:queue:*'`.
+        /// `aida:queue`). e.g. `--tags 'aida:queue:*'`. `--tag` is accepted too.
         // trace:TASK-527 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(long)]
+        // trace:STORY-1645 | ai:claude — `--tag` alias (`aida faq list --tag <topic>`).
+        #[clap(long, alias = "tag")]
         tags: Option<String>,
+
+        /// Show only in-progress specs whose derived driver is this kind:
+        /// relay, drain, agent, queued or idle. The driver is shown beside
+        /// the status of every in-progress row.
+        // trace:STORY-1653 | ai:claude
+        #[clap(long, value_name = "KIND")]
+        driver: Option<String>,
 
         /// Show only machine-filed auto-complete failure drafts. Plain
         /// `aida list --status draft` shows human-filed drafts so advisor
@@ -9629,19 +9895,26 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["json", "tree", "status"])]
         human: bool,
 
-        /// Order the results. `modified` (default) = freshest first; `heft` =
-        /// most graph-connected first (the deterministic in+out-degree weight),
-        /// so load-bearing specs surface at the top; `weight` = heaviest
-        /// user-set numeric weight/score first (unweighted specs sort last);
-        /// `created` = newest-created first; `completed` = most-recently-
-        /// completed first (specs with no completion date sort last);
-        /// `id` = alphabetical by requirement ID.
+        /// Order the results. `id` (default) = natural numeric ID order:
+        /// type prefix first (ADR, BUG, EPIC, FAQ, STORY, TASK, …), then each
+        /// number as an integer, so number 2 comes before 11 and 2 before
+        /// 1000 within a type; the agreed ID is the key when a spec has one,
+        /// and unpromoted node-aware IDs (prefix-node-seq) follow the agreed
+        /// IDs of their type. `modified` = freshest first; `heft` = most
+        /// graph-connected first (the deterministic in+out-degree weight), so
+        /// load-bearing specs surface at the top; `weight` = heaviest user-set
+        /// numeric weight/score first (unweighted specs sort last); `created`
+        /// = newest-created first; `completed` = most-recently-completed first
+        /// (specs with no completion date sort last). The default is
+        /// configurable via `[list] default_sort` in `.aida/config.toml`; an
+        /// explicit `--sort` always wins. Same order for humans and agents.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
         // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
         // trace:TASK-1587 | ai:antigravity — adds the `id` order.
-        #[clap(long, value_name = "ORDER", default_value = "modified")]
-        sort: String,
+        // trace:STORY-1644 | ai:claude — natural `id` default, configurable.
+        #[clap(long, value_name = "ORDER")]
+        sort: Option<String>,
 
         /// Only specs whose numeric weight/score is >= N. Specs with no
         /// weight set are excluded. Composes with every other filter.
@@ -9656,11 +9929,17 @@ pub enum Command {
         max_weight: Option<f64>,
 
         /// Cap the output at the first N rows, applied AFTER sorting — so
-        /// `--limit N` returns the N most-recent (with the default
-        /// `--sort modified`) or the N most-connected (`--sort heft`).
-        /// Composes with every filter; applies to both the human table and
-        /// `--json`. Omit for the full (filtered) listing.
+        /// `--limit N` returns the first N by ID (the default `--sort id`),
+        /// the N most-recent (`--sort modified`) or the N most-connected
+        /// (`--sort heft`). `--limit 0` = no cap. Composes with every filter;
+        /// applies to both the human table and `--json`. Omit for the full
+        /// (filtered) listing — except in agent mode (piped / non-TTY), where
+        /// the default table is capped at 100 rows with a notice naming what
+        /// was cut. That agent cap is configurable via `[list] agent_limit`
+        /// in `.aida/config.toml` (0 = unbounded) or env `AIDA_LIST_LIMIT`;
+        /// `--limit` / `--all` beat env, which beats config.
         // trace:TASK-900 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:STORY-1644 | ai:claude
         #[clap(long, value_name = "N")]
         limit: Option<usize>,
 
@@ -9705,6 +9984,14 @@ pub enum Command {
         // trace:STORY-734 | ai:claude — now drives the human table too.
         #[clap(long, value_name = "CSV")]
         fields: Option<String>,
+
+        /// List the topics (tags) in use on live FAQs, with how many FAQs
+        /// carry each, most-used first. Requires the FAQ type: `aida faq
+        /// topics` (== `aida list --type faq --topics`). Browse one topic
+        /// with `aida faq list --tags <topic>`.
+        // trace:STORY-1645 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        topics: bool,
     },
 
     /// Show details for a specific requirement
@@ -9789,6 +10076,15 @@ pub enum Command {
         // trace:BUG-1502 | ai:codex
         #[clap(long, conflicts_with_all = ["tree", "card"])]
         json: bool,
+
+        /// Print the description and comments as raw markdown source instead
+        /// of rendering headings, emphasis, lists and tables for the terminal.
+        /// Rendering only happens in human output at an interactive terminal;
+        /// piped, TOON and JSON output are always raw. `AIDA_MARKDOWN=raw`
+        /// sets this for every invocation.
+        // trace:STORY-1652 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        raw: bool,
     },
 
     /// List or write proxy-approval ledger comments.
@@ -10036,7 +10332,8 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// New type: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
+        /// New type: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq
+        // trace:BUG-1920 | ai:claude
         #[clap(long)]
         r#type: Option<String>,
 
@@ -11246,10 +11543,12 @@ pub enum Command {
     /// `AIDA_PUSH_DEFAULT=code|store` to flip the default scope.
     // trace:FR-264 TASK-106 | ai:claude
     Push {
-        /// Skip the code push (only sync the orphan store).
+        /// Push only the code branch (skip the orphan-store sync).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "store_only")]
         code_only: bool,
-        /// Skip the orphan-store sync (only `git push`).
+        /// Sync only the orphan store (skip the code push).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
         /// Commit any pending orphan-store changes with this message
@@ -11363,10 +11662,12 @@ pub enum Command {
     /// remote).
     // trace:TASK-43 TASK-106 | ai:claude
     Pull {
-        /// Skip the code pull (only sync the orphan store).
+        /// Pull only the code branch (skip the orphan-store sync).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "store_only")]
         code_only: bool,
-        /// Skip the orphan-store sync (only `git pull`).
+        /// Sync only the orphan store (skip the code pull).
+        // trace:BUG-1917 | ai:claude
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
         /// Suppress the per-commit change summary printed after the
@@ -11721,6 +12022,14 @@ pub enum Command {
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
+
+    /// Register, refresh, deregister and list drivers — long-running relays,
+    /// drains and agents that work in-progress specs. `aida ps` and
+    /// `aida list` show the driver beside each in-progress spec's status.
+    /// Operator/developer surface.
+    // trace:STORY-1653 | ai:claude
+    #[clap(subcommand)]
+    Driver(crate::driver_cmd::DriverCommand),
 
     /// Diagnose and heal AIDA multi-agent state drift. Report-only by
     /// design: exit 0 means the scan RAN, not that it found nothing —
@@ -12624,8 +12933,8 @@ pub enum Command {
     ))]
     #[clap(group(
         ArgGroup::new("init_visibility_target")
-            .args(["github", "forge"])
-            .multiple(false)
+            .args(["github", "forge", "gitlab"])
+            .multiple(true)
     ))]
     Init {
         /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
@@ -12741,6 +13050,21 @@ pub enum Command {
         // trace:STORY-823 | ai:codex
         #[clap(long, value_name = "NAME", requires = "dir")]
         forge: Option<String>,
+
+        /// Also create the project on this GitLab host and group
+        /// (HOST or HOST/GROUP; PRIVATE unless --public) and publish both
+        /// legs there. With --github it becomes a mirror hub; alone it is
+        /// origin. When the group refuses push-to-create, the project is
+        /// created through the GitLab API (needs a `glab` login for the
+        /// host, else GITLAB_TOKEN).
+        // trace:STORY-1656 | ai:claude
+        #[clap(
+            long,
+            value_name = "HOST[/GROUP]",
+            requires = "dir",
+            conflicts_with = "remote"
+        )]
+        gitlab: Option<String>,
 
         /// (deprecated, accepted for backwards compat) Initialize in
         /// distributed mode. Distributed is now the default, so this
@@ -13170,20 +13494,26 @@ pub enum Command {
     },
 
     /// Project activity — what's been touched and how it stands now.
-    /// Default mode (no SPEC-ID) is a per-requirement digest sorted by
-    /// last-touch time, intended for "what was I up to last session?" Pass
-    /// a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
+    /// Default mode (no SPEC-ID) is the status flow: one line per status
+    /// change, newest first, each with its time, SPEC-ID, old → new status
+    /// and title (a spec filed in the window shows as `(new) → <status>`).
+    /// It reads the history index; when the index can't answer, you get the
+    /// per-spec digest instead, with a one-line note naming the cause and
+    /// the fix. `--digest` asks for that digest directly: one row per
+    /// requirement sorted by last-touch time, which was the default before
+    /// the status flow. Pass a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
     /// switch to that one spec's status-progression view instead — its
     /// status transitions in chronological order, each with a timestamp
     /// and old→new status, in human, TOON and JSON output alike. Add
     /// `--full` (or the `events` subcommand) for the complete edit/comment
     /// trail, not just status changes. Per-event flags (`--status-changes`,
-    /// `--comments`, `--oneline`, `--shipped`, `--json`) switch a
-    /// multi-spec query to the events feed. `--to`/`--from <STATUS>`
-    /// select status transitions by target and source status, and
-    /// `--opened` selects the specs filed; they always switch to the
-    /// events feed, like `--shipped`.
+    /// `--comments`, `--oneline`, `--shipped`) switch a multi-spec query to
+    /// the events feed. `--to`/`--from <STATUS>` select status transitions
+    /// by target and source status, and `--opened` selects the specs filed;
+    /// alone they narrow the status flow, and with a SPEC-ID or a per-event
+    /// flag they select from the events feed.
     // trace:FR-1-037 | ai:claude
+    // trace:STORY-1650 | ai:claude
     // trace:BUG-1635 | ai:claude
     // trace:TASK-1480 | ai:claude
     // trace:TASK-1512 | ai:claude
@@ -13221,17 +13551,21 @@ pub enum Command {
         #[clap(long, global = true, requires = "save_as_template")]
         force: bool,
 
-        /// Number of items to show. In digest mode (default) this caps
-        /// the number of distinct requirements; in events mode it
-        /// caps the number of decoded events.
-        #[clap(long, short = 'n', default_value = "20", global = true)]
-        limit: usize,
+        /// Number of items to show. In the status flow (default) this caps
+        /// the number of status changes; with --digest it caps the number
+        /// of distinct requirements; in events mode it caps the number of
+        /// decoded events. Default 20, configurable via `[history] limit`
+        /// in `.aida/config.toml` or env `AIDA_HISTORY_LIMIT` (this flag
+        /// beats env, which beats config).
+        // trace:STORY-1644 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, short = 'n', global = true)]
+        limit: Option<usize>,
 
         /// Walk at most N commits on the orphan branch. Default 5x --limit
-        /// (at least 50) for --full/events and a bare --json with no
-        /// SPEC-ID; 250 for the digest, a single SPEC-ID, and any query with
-        /// --shipped, --to, --from, --opened, --status-changes, --comments
-        /// or --oneline (adding --json to those does not change it).
+        /// (at least 50) for --full/events; 250 for the status flow, the
+        /// digest, a single SPEC-ID, and any query with --shipped, --to,
+        /// --from, --opened, --status-changes, --comments or --oneline
+        /// (adding --json does not change it).
         // trace:BUG-1635 | ai:claude
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true)]
@@ -13256,6 +13590,22 @@ pub enum Command {
         // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         full: bool,
+
+        /// The per-requirement digest: one row per requirement touched in
+        /// the window, sorted by last-touch time, with its current status
+        /// ("what was I up to last session?"). This was the default before
+        /// the status flow; the output is unchanged. Honors --limit,
+        /// --since, --until, --author, --type and the archive/defer flags.
+        // trace:STORY-1650 | ai:claude
+        #[clap(
+            long,
+            conflicts_with_all = [
+                "spec", "id", "full", "events", "timeline", "status_changes",
+                "comments", "oneline", "shipped", "to", "from", "opened",
+                "template", "fields", "kind",
+            ]
+        )]
+        digest: bool,
 
         /// Only show entries for this requirement (accepts a SPEC-ID, an
         /// agreed short ID, or the raw UUID `aida show` prints — a UUID
@@ -13343,10 +13693,11 @@ pub enum Command {
         /// `--to approved` for what got approved. Accepts the spellings
         /// `aida edit --status` does (`in-progress`, `needs-attention`, any
         /// case) plus `accepted` for approved. With --from, both ends must
-        /// match. Implies events mode (as --shipped does). With
-        /// --status-changes it narrows the transitions; with --comments or
-        /// --opened the result is the union of those events and the
-        /// matching transitions.
+        /// match. Narrows the status flow; with --shipped, --status-changes
+        /// or --comments it narrows the events feed. With --status-changes
+        /// it narrows the transitions; with --comments or --opened the
+        /// result is the union of those events and the matching
+        /// transitions.
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true, value_name = "STATUS")]
         to: Option<String>,
@@ -13354,7 +13705,7 @@ pub enum Command {
         /// Only status transitions OUT OF this status, e.g. `--from
         /// in-progress --to approved` for work sent back from in progress.
         /// Alone it matches any transition leaving that status. Same
-        /// spellings and combination rules as --to; implies events mode.
+        /// spellings and combination rules as --to.
         /// `--from X --to X` is refused, since a transition always changes
         /// the status.
         // trace:TASK-1512 | ai:claude
@@ -13365,7 +13716,8 @@ pub enum Command {
         /// whatever status they were filed at (a spec filed straight as
         /// approved is included). Creation is not a status transition, so
         /// with --to/--from (or --status-changes/--comments) the result is
-        /// the union of both kinds of event. Implies events mode.
+        /// the union of both kinds of event. In the status flow each one
+        /// shows as `(new) → <status>`.
         // trace:TASK-1512 | ai:claude
         #[clap(long, global = true, visible_alias = "created")]
         opened: bool,
@@ -13392,10 +13744,14 @@ pub enum Command {
         /// Emit JSON (same shape as the MCP history tool): `count`,
         /// `events`, `window_exhausted`, `source`, `index_tip`. Each event
         /// row has `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`
-        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`).
-        /// Without a SPEC-ID this implies the full event feed; with one
-        /// (and no `--full`) it is the status progression, oldest first,
-        /// adding `view`, `id`, `title`, `current_status`, `order`.
+        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`) for
+        /// the events feed. Without a SPEC-ID it is the status flow:
+        /// `view`, `count`, `source`, `index_tip`, `window_exhausted` and
+        /// `transitions` rows (`when`, `id`, `from`, `to`, `title`, `kind`,
+        /// `author`, `sha`); with --digest, `view`, `count` and `history`
+        /// rows (`id`, `type`, `status`, `when`, `change`, `title`). With a
+        /// SPEC-ID (and no `--full`) it is the status progression, oldest
+        /// first, adding `view`, `id`, `title`, `current_status`, `order`.
         /// `--format json` is the same.
         // trace:BUG-1631 | ai:claude
         // trace:BUG-1635 | ai:claude
@@ -15388,8 +15744,9 @@ mod tests {
     }
 
     // trace:TASK-900 — the truncation semantics the list handler relies on:
-    // `Vec::truncate(N)` keeps the FIRST N of the already-sorted (recency-first)
-    // vector, i.e. the N most-recent. `N >= len` is a no-op (full listing).
+    // `Vec::truncate(N)` keeps the FIRST N of the already-sorted vector (here a
+    // recency-ordered stand-in, i.e. the N most-recent; the default list order
+    // is natural ID since STORY-1644). `N >= len` is a no-op (full listing).
     #[test]
     fn list_limit_truncates_to_n_most_recent() {
         // Stand-in for the recency-first `reqs` vector (freshest first).
@@ -15595,6 +15952,36 @@ mod tests {
         assert!(
             flat.contains("BLOCKS until") && flat.contains("does not exit when its turn ends"),
             "`aida agent new --help` no longer explains the foreground blocking behavior; got:\n{help}"
+        );
+    }
+
+    // BUG-1920: `aida edit --type` must list `faq` among the accepted types.
+    // Checks the `--type` arg's own help (not the whole subcommand help) so a
+    // stray `faq` elsewhere in `aida edit --help` cannot satisfy it.
+    // trace:BUG-1920 | ai:claude
+    #[test]
+    fn edit_type_help_lists_faq() {
+        let cmd = <Cli as clap::CommandFactory>::command();
+        let edit = cmd
+            .get_subcommands()
+            .find(|s| s.get_name() == "edit")
+            .expect("`edit` subcommand exists");
+        let type_arg = edit
+            .get_arguments()
+            .find(|a| a.get_long() == Some("type"))
+            .expect("`aida edit` has a --type flag");
+        let help = type_arg
+            .get_long_help()
+            .or_else(|| type_arg.get_help())
+            .map(|h| h.to_string())
+            .unwrap_or_default();
+        let types: Vec<&str> = help
+            .split(|c: char| c == ',' || c == ':' || c.is_whitespace())
+            .map(str::trim)
+            .collect();
+        assert!(
+            types.contains(&"faq"),
+            "`aida edit --type` help no longer lists faq; got:\n{help}"
         );
     }
 

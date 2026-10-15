@@ -14,13 +14,26 @@
 # make process itself by killing its controlling MCP.
 set -euo pipefail
 
+# Optional $1: the reference binary. `aida dev build` / `aida dev rollback`
+# pass the live binary (outside target/) they just put in place.
+# trace:STORY-1646 | ai:claude
 target_bin=""
-for cand in target/debug/aida target/release/aida; do
-    if [ -x "$cand" ]; then
-        target_bin="$(realpath "$cand")"
-        break
+if [ -n "${1:-}" ]; then
+    if [ -x "$1" ]; then
+        target_bin="$(realpath "$1")"
+    else
+        echo "ℹ reference binary $1 is not executable — skipping MCP restart"
+        exit 0
     fi
-done
+fi
+if [ -z "$target_bin" ]; then
+    for cand in target/debug/aida target/release/aida; do
+        if [ -x "$cand" ]; then
+            target_bin="$(realpath "$cand")"
+            break
+        fi
+    done
+fi
 
 if [ -z "$target_bin" ]; then
     echo "ℹ no built aida binary at target/debug or target/release — skipping MCP restart"

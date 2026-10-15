@@ -13,9 +13,11 @@ Checks against the live binary + the spec graph:
      other half of the doc-intent loop — completeness asks "is every command documented?";
      reflection asks "is every spec's documented change actually IN the docs?". Drift here
      is a spec that moved a surface without the manual following.
+  4. SUBCOMMAND EXISTENCE (BUG-1949) — every cited `aida <cmd> <verb>` (and every
+     slash/vs verb list inside a command's section) names a subcommand the CLI has.
 
-Exit non-zero on a completeness omission, an unreflected surface-changing delta, or a
-flag mismatch.
+Exit non-zero on a completeness omission, an unreflected surface-changing delta, a
+flag mismatch, or a cited subcommand the CLI no longer has.
 
 # trace:TASK-795
 # trace:TASK-796
@@ -27,6 +29,7 @@ can backlink to its shaping spec(s) without the breadcrumb leaking into visible 
 
 Usage: python3 docs/cli/verify-manual.py            # all chapters
        python3 docs/cli/verify-manual.py 04-git*.md # one chapter
+       python3 docs/cli/verify-manual.py --static   # no-build hidden-flag check
 """
 import functools
 import glob
@@ -95,6 +98,10 @@ def help_all_commands():
     out = subprocess.run(["aida", "help-all"], capture_output=True, text=True).stdout
     cmds = []
     for line in out.splitlines():
+        # PATH extensions are machine-local, outside the built-in manual.
+        # trace:BUG-2121 | ai:codex
+        if re.match(r"^  [a-z][a-z0-9-]+\s+external\s", line):
+            continue
         m = re.match(r"^  ([a-z][a-z0-9-]+)\s", line)
         if m:
             cmds.append(m.group(1))
@@ -382,7 +389,391 @@ def reflection_misses(spec_deltas, manual_text, top_level_cmds):
     return misses
 
 
+# --- 4. subcommand existence (BUG-1949) ------------------------------------
+# trace:BUG-1949 | ai:claude
+#
+# The flag-accuracy check (2) resolves `--flag` tokens but never asks whether
+# the subcommand a citation names still exists, so a verb cut from the CLI
+# (`aida session forget`) survived in the manual. This check collects two
+# citation shapes and asks the live binary about each:
+#
+#   * EXPLICIT — a backtick span (or a fenced code line) starting `aida a b c`.
+#     Every leading lowercase word after a real top-level command is a
+#     candidate subcommand. Unknown TOP-level words are left to the
+#     completeness check: `aida <name>` may be a PATH extension (`aida-<name>`).
+#   * VERB LIST — single-word backtick spans joined by ` / ` or ` vs ` inside a
+#     `### `aida <cmd>`` section (`start` / `end` / `leases`): each word is read
+#     as `aida <cmd> <word>` — or `aida <cmd> <sub> <word>` when the list sits in
+#     parentheses right after a `<sub>` span (`scope` (`set` / `clear`)). A list
+#     counts only when at least half its words ARE real subcommands, so a list
+#     of roles, modes or graph reads is never mistaken for a list of verbs; and
+#     a word that is itself a top-level command is a cross-reference, not a
+#     miss.
+#
+# A path is a miss only when clap itself answers `unrecognized subcommand` —
+# a command that takes a positional parses the word as an argument and never
+# errors, so the check cannot false-fail on `aida show <ID>`-shaped prose.
+#
+# Deliberately NOT checked: whether a citation supplies a command's required
+# positional arguments. The manual names commands by path in prose and verb
+# lists (`usage unused`, `start` / `end`) without their arguments on purpose,
+# so flagging a missing positional would fail nearly every verb list. The
+# runnable-command guarantee belongs where a command is printed for the user
+# to paste — CLI hints, which are tested at their source.
+# trace:BUG-1973 | ai:claude
+SUBCMD_WORD_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+VERB_LIST_RE = re.compile(
+    r"`([a-z][a-z0-9-]*)`(?:\s*(?:/|vs\.?)\s*`[a-z][a-z0-9-]*`)+"
+)
+VERB_LIST_WORD_RE = re.compile(r"`([a-z][a-z0-9-]*)`")
+FENCE_LINE_RE = re.compile(r"^\s*(?:\$\s+)?(aida\s.*)$")
+NESTED_LIST_PARENT_RE = re.compile(r"`([a-z][a-z0-9-]*)`\s*\($")
+
+
+def _leading_words(snippet):
+    """Lowercase command words after `aida`, stopping at the first flag/arg."""
+    toks = snippet.split()
+    if not toks or toks[0] != "aida":
+        return []
+    words = []
+    for tok in toks[1:]:
+        if not SUBCMD_WORD_RE.match(tok):
+            break
+        words.append(tok)
+    return words
+
+
+def subcommand_citations(files):
+    """Every subcommand path the manual cites, in the two shapes above."""
+    # trace:BUG-1949 | ai:claude
+    cites = []
+    for f in files:
+        with open(f) as fh:
+            cur = None
+            in_fence = False
+            for line_no, line in enumerate(fh, 1):
+                if line.lstrip().startswith("```"):
+                    in_fence = not in_fence
+                    continue
+                if in_fence:
+                    m = FENCE_LINE_RE.match(line)
+                    words = _leading_words(m.group(1)) if m else []
+                    if words:
+                        cites.append(
+                            {"kind": "explicit", "words": words, "file": f, "line": line_no}
+                        )
+                    continue
+                m = ENTRY_RE.match(line)
+                if m:
+                    cur = m.group(1)
+                    continue
+                if line.startswith("## ") or line.startswith("---"):
+                    cur = None
+                for bm in re.finditer(r"`([^`]+)`", line):
+                    words = _leading_words(bm.group(1))
+                    if words:
+                        cites.append(
+                            {"kind": "explicit", "words": words, "file": f, "line": line_no}
+                        )
+                if not cur:
+                    continue
+                for lm in VERB_LIST_RE.finditer(line):
+                    verbs = VERB_LIST_WORD_RE.findall(lm.group(0))
+                    nested = NESTED_LIST_PARENT_RE.search(line[: lm.start()])
+                    parent = f"{cur} {nested.group(1)}" if nested else cur
+                    cites.append(
+                        {
+                            "kind": "list",
+                            "parent": parent,
+                            "words": verbs,
+                            "file": f,
+                            "line": line_no,
+                        }
+                    )
+    return cites
+
+
+@functools.lru_cache(maxsize=None)
+def subcommand_unrecognized(cmd_path):
+    """True when clap rejects the last word of cmd_path as an unknown subcommand."""
+    # trace:BUG-1949 | ai:claude
+    try:
+        res = subprocess.run(
+            ["aida", *cmd_path.split(), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:
+        return False
+    return "unrecognized subcommand" in (res.stderr or "")
+
+
+def subcommand_misses(cites, unrecognized, known):
+    """Citations naming a subcommand the CLI does not have.
+
+    `unrecognized(path)` — clap rejects the path's last word as a subcommand.
+    `known(path)` — the path is a real command (so its next word is a candidate
+    subcommand, not a positional argument).
+    """
+    # trace:BUG-1949 | ai:claude
+    misses = []
+    seen = set()
+    for cite in cites:
+        if cite["kind"] == "explicit":
+            words = cite["words"]
+            if not known(words[0]):
+                continue  # unknown top-level: completeness check / PATH extension
+            for k in range(2, len(words) + 1):
+                path = " ".join(words[:k])
+                if unrecognized(path):
+                    bad = path
+                    break
+                if not known(path):
+                    bad = None
+                    break
+            else:
+                bad = None
+            if bad:
+                key = (bad, cite["file"], cite["line"])
+                if key not in seen:
+                    seen.add(key)
+                    misses.append({"path": bad, "file": cite["file"], "line": cite["line"]})
+            continue
+        parent = cite["parent"]
+        paths = [f"{parent} {w}" for w in cite["words"]]
+        if 2 * sum(1 for p in paths if known(p)) < len(paths):
+            continue  # not a verb list (roles, modes, graph reads)
+        for w, p in zip(cite["words"], paths):
+            if known(w):
+                continue  # a top-level command cited alongside, not a subcommand
+            key = (p, cite["file"], cite["line"])
+            if key not in seen and unrecognized(p):
+                seen.add(key)
+                misses.append({"path": p, "file": cite["file"], "line": cite["line"]})
+    return misses
+
+
+# --- static hidden-flag guard (BUG-1937) -----------------------------------
+# trace:BUG-1937 | ai:claude
+#
+# Everything above shells out to a built `aida`, so the pre-push tier (which
+# promises no cargo build) cannot run it. `--static` is the no-build slice of
+# the flag-accuracy check: it reads the clap attributes straight from the Rust
+# source and fails on a manual citation of a long flag that exists ONLY as a
+# hidden flag or hidden alias. That's exactly how a hidden flag's doc citation
+# reached CI. It's deliberately conservative: a flag that is visible on ANY command
+# is never reported, so a wrong guess about which command a citation belongs
+# to cannot produce a false failure. The full binary-backed guard still runs in
+# CI and remains the authority on per-command accuracy.
+REPO_ROOT = os.path.dirname(os.path.dirname(CLI_DIR))
+CLAP_SOURCE_DIRS = ("aida-cli-lib/src", "aida-cli/src")
+CLAP_ATTR_RE = re.compile(r"#\[(?:clap|arg)\(")
+STRING_LIT_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+EXTERNAL_TOOL_RE = re.compile(r"(?:git|cargo|python3?|bash|gh|glab)\b")
+FIELD_RE = re.compile(r"(?:pub(?:\([^)]*\))?\s+)?(?:r#)?([a-z_][a-z0-9_]*)\s*:(?!:)")
+
+
+def _skip_string(text, i):
+    """Index just past the string literal opening at text[i] == '"'."""
+    i += 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == '"':
+            return i + 1
+        i += 1
+    return i
+
+
+def _balanced_end(text, i, open_ch, close_ch):
+    """Index just past the delimiter that closes text[i] == open_ch."""
+    depth = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '"':
+            i = _skip_string(text, i)
+            continue
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return i
+
+
+def _attached_field(text, i):
+    """(field_start, field_name) of the item an attribute ending at i decorates.
+
+    Skips whitespace, comments and further attributes. Returns (None, None)
+    when the next item is not a named struct field (an enum variant, a struct).
+    """
+    while i < len(text):
+        if text[i].isspace():
+            i += 1
+        elif text.startswith("//", i):
+            nl = text.find("\n", i)
+            i = len(text) if nl < 0 else nl + 1
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+        elif text.startswith("#[", i):
+            i = _balanced_end(text, i + 1, "[", "]")
+        else:
+            m = FIELD_RE.match(text, i)
+            if m:
+                return i, m.group(1)
+            return None, None
+    return None, None
+
+
+def clap_long_flags(text):
+    """Return (visible, hidden) sets of `--long` flag names declared in text.
+
+    A field's clap/arg attributes are merged before classifying, so
+    `#[clap(long)] #[clap(hide = true)]` on one field reads as hidden. Clap
+    `alias`/`aliases` are hidden by clap itself; `visible_alias(es)` are shown.
+    """
+    # trace:BUG-1937 | ai:claude
+    per_field = {}
+    for m in CLAP_ATTR_RE.finditer(text):
+        paren = m.end() - 1
+        end = _balanced_end(text, paren, "(", ")")
+        body = text[paren + 1 : end - 1]
+        start, name = _attached_field(text, end + 1)
+        if start is None:
+            continue
+        entry = per_field.setdefault(start, [name, []])
+        entry[1].append(body)
+
+    visible, hidden = set(), set()
+    for name, bodies in per_field.values():
+        raw = " , ".join(bodies)
+        bare = STRING_LIT_RE.sub('""', raw)
+        is_hidden = bool(re.search(r"\bhide\s*=\s*true\b", bare))
+        longs = set()
+        explicit = re.findall(r'\blong\s*=\s*"([^"]+)"', raw)
+        longs.update(explicit)
+        if re.search(r"\blong\b(?!\s*=)", bare):
+            longs.add(name.replace("_", "-"))
+        aliases = set()
+        for am in re.finditer(r'(?<![\w])alias\s*=\s*"([^"]+)"', raw):
+            aliases.add(am.group(1))
+        for am in re.finditer(r"(?<![\w])aliases\s*=\s*\[([^\]]*)\]", raw):
+            aliases.update(re.findall(r'"([^"]+)"', am.group(1)))
+        shown_aliases = set()
+        for am in re.finditer(r'\bvisible_alias\s*=\s*"([^"]+)"', raw):
+            shown_aliases.add(am.group(1))
+        for am in re.finditer(r"\bvisible_aliases\s*=\s*\[([^\]]*)\]", raw):
+            shown_aliases.update(re.findall(r'"([^"]+)"', am.group(1)))
+        if not longs:
+            continue  # positional / short-only / flatten: no long flag to cite
+        (hidden if is_hidden else visible).update("--" + f for f in longs)
+        hidden.update("--" + a for a in aliases)
+        (hidden if is_hidden else visible).update("--" + a for a in shown_aliases)
+    return visible, hidden
+
+
+def clap_source_files(root=REPO_ROOT):
+    """Non-test Rust sources that can declare `aida` CLI flags."""
+    files = []
+    for rel in CLAP_SOURCE_DIRS:
+        base = os.path.join(root, rel)
+        for dirpath, dirnames, fnames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d != "tests"]
+            for fn in fnames:
+                if fn.endswith(".rs") and not fn.endswith("tests.rs"):
+                    files.append(os.path.join(dirpath, fn))
+    return sorted(files)
+
+
+def static_flag_citations(files):
+    """Every `--flag` cited inside a `### `aida <cmd>`` section.
+
+    Same section scoping as parse_chapters: a `## ` heading or `---` rule ends a
+    command's scope, and flags inside a git/cargo/python/bash/gh/glab span
+    belong to that tool. Flags are taken from backtick spans and from bare
+    `aida ...` prose, a superset of what the full guard checks.
+    """
+    # trace:BUG-1937 | ai:claude
+    cites = []
+    for f in files:
+        with open(f) as fh:
+            cur = None
+            for line_no, line in enumerate(fh, 1):
+                m = ENTRY_RE.match(line)
+                if m:
+                    cur = m.group(1)
+                    continue
+                if line.startswith("## ") or line.startswith("---"):
+                    cur = None
+                if not cur:
+                    continue
+                flags = []
+                outside = line
+                for bm in re.finditer(r"`([^`]+)`", line):
+                    span = bm.group(1)
+                    outside = outside.replace(bm.group(0), " ", 1)
+                    if EXTERNAL_TOOL_RE.match(span):
+                        continue
+                    flags.extend(re.findall(r"--[a-z][a-z0-9-]*", span))
+                for cm in AIDA_CMD_RE.finditer(outside):
+                    flags.extend(re.findall(r"--[a-z][a-z0-9-]*", cm.group(0)))
+                for flag in flags:
+                    cites.append({"flag": flag, "parent": cur, "file": f, "line": line_no})
+    return cites
+
+
+def static_hidden_flag_misses(cites, visible, hidden):
+    """Citations of a flag that exists only hidden (never visible anywhere)."""
+    hidden_only = hidden - visible
+    return [c for c in cites if c["flag"] in hidden_only]
+
+
+def main_static(files):
+    # trace:BUG-1937 | ai:claude
+    visible, hidden = set(), set()
+    sources = clap_source_files()
+    for src in sources:
+        with open(src, encoding="utf-8") as fh:
+            v, h = clap_long_flags(fh.read())
+        visible |= v
+        hidden |= h
+    if not visible:
+        print(f"FAIL static flags — no clap long flags parsed from {', '.join(CLAP_SOURCE_DIRS)}")
+        return 1
+    misses = static_hidden_flag_misses(static_flag_citations(files), visible, hidden)
+    if misses:
+        print(
+            f"FAIL static flags — {len(misses)} cited --flag token(s) are hidden from "
+            "`--help` (hide = true or a hidden alias) and visible on no command:"
+        )
+        for cite in misses[:80]:
+            loc = f"{os.path.basename(cite['file'])}:{cite['line']}"
+            print(f"    {loc} `{cite['flag']}` cited under `aida {cite['parent']}`")
+        print("    Fix: drop the citation, or unhide the flag if users should see it.")
+        return 1
+    print(
+        f"OK static flags — no manual citation of a hidden-only flag "
+        f"({len(visible)} visible / {len(hidden - visible)} hidden-only long flags parsed "
+        f"from {len(sources)} source files)"
+    )
+    return 0
+
+
 def main():
+    # trace:BUG-1937 | ai:claude
+    if "--static" in sys.argv[1:]:
+        names = [a for a in sys.argv[1:] if a != "--static"]
+        files = (
+            [os.path.join(CLI_DIR, a) for a in names]
+            if names
+            else sorted(glob.glob(os.path.join(CLI_DIR, "[0-9][0-9]-*.md")))
+        )
+        sys.exit(main_static(files))
     files = (
         [os.path.join(CLI_DIR, a) for a in sys.argv[1:]]
         if len(sys.argv) > 1
@@ -471,6 +862,24 @@ def main():
             else:
                 n = len(spec_deltas)
                 print(f"OK reflection — all {n} surface-changing spec(s)' interface_changes reflected in the manual")
+
+    # 4. subcommand existence — every cited `aida <cmd> <verb>` must be a verb
+    # the CLI still has. trace:BUG-1949 | ai:claude
+    sub_misses = subcommand_misses(
+        subcommand_citations(files), subcommand_unrecognized, command_path_exists
+    )
+    if sub_misses:
+        hard_fail = True
+        print(
+            f"FAIL subcommands — {len(sub_misses)} cited subcommand(s) the CLI "
+            "rejects as unrecognized:"
+        )
+        for miss in sub_misses[:80]:
+            loc = f"{os.path.basename(miss['file'])}:{miss['line']}"
+            print(f"    {loc} `aida {miss['path']}`")
+        print("    Fix: cite a subcommand listed in the parent's --help, or drop the citation.")
+    else:
+        print("OK subcommands — every cited subcommand exists in the CLI")
 
     # 2. flag accuracy
     # trace:TASK-1207 | ai:codex

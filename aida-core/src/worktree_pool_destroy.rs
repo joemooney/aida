@@ -208,6 +208,27 @@ pub fn destroy(
             let class = classify_for_destroy(entry, &default_ref);
             let missing = missing_flag(class, opts, leased_named);
 
+            // A live process using the tree (a cwd, open file, or running
+            // program under it) blocks removal unless `--include-in-use` was
+            // passed. This is checked before salvage and the pre_destroy hook,
+            // so a running build is never cleaned out from under it.
+            // trace:BUG-1947 | ai:claude
+            if missing.is_none() && !opts.include_in_use {
+                if let Err(in_use) = crate::worktree_holders::check_worktree_removal(&entry.path) {
+                    targets.push(DestroyTarget {
+                        entry: entry.clone(),
+                        class,
+                        action: DestroyAction::Skipped,
+                        reason: format!(
+                            "{} — skipped, {}; needs --include-in-use",
+                            class.label(),
+                            in_use.summary()
+                        ),
+                    });
+                    continue;
+                }
+            }
+
             match (opts.dry_run, missing) {
                 (true, None) => targets.push(DestroyTarget {
                     entry: entry.clone(),
@@ -274,6 +295,9 @@ pub fn destroy(
 /// a pooled tree. Salvaging dirty state stays the caller's responsibility (the
 /// doctor heals already patch-salvage before calling this).
 ///
+/// Fails with [`crate::worktree_holders::WorktreeInUse`] when a live process
+/// is using the tree; nothing is touched in that case.
+///
 /// Returns Ok(true) when the worktree was removed. Unlike `destroy`, this does
 /// NOT classify or honor `--include-*` flags — the caller has already decided
 /// the tree should go (a confirmed orphan / merged-agent worktree); this just
@@ -284,6 +308,12 @@ pub fn teardown_worktree_path(
     worktree_path: &Path,
     pre_destroy_hooks: &[String],
 ) -> Result<bool> {
+    // Refuse while a live process is using the tree, before the cargo-clean
+    // hook can touch it. The error is a `WorktreeInUse`, so callers can
+    // downcast it to report the pids. No override here: reap and doctor heals
+    // are automatic sweeps, and an in-use tree is simply kept.
+    // trace:BUG-1947 | ai:claude
+    crate::worktree_holders::check_worktree_removal(worktree_path)?;
     // pre_destroy hooks (cargo clean) fire while the tree still exists.
     if worktree_path.exists() {
         crate::worktree_hooks::run_hooks(pre_destroy_hooks, worktree_path, "pre_destroy");

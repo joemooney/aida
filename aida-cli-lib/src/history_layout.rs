@@ -514,6 +514,7 @@ mod tests {
             title: "title".into(),
             req_type: "Task".into(),
             priority: "High".into(),
+            status: "Draft".into(),
         });
         assert_eq!(value(&added, "title"), "title");
         assert_eq!(value(&added, "priority"), "High");
@@ -566,8 +567,12 @@ mod tests {
         Templates::at(dir.join("user.toml"), dir.join("project.toml")).unwrap()
     }
     // trace:STORY-1477 | ai:codex
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn public_loader_uses_hermetic_home_and_preserves_scope() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let _env = crate::test_env::EnvVarGuard::set("HOME", home.path());

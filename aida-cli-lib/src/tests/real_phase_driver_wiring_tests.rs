@@ -2814,6 +2814,10 @@ fn t1458_merge_argv(calls: &std::path::Path) -> Option<String> {
 #[cfg(unix)]
 #[test]
 fn task_1458_drain_merge_passes_the_approved_head_as_match_head_commit() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_tmp, root, gh, calls, head, _) = t1458_fixture();
     t1458_run_merge(&root, &gh, &head[..12]).expect("an approval at the head merges");
     let argv = t1458_merge_argv(&calls).expect("gh pr merge was called");
@@ -2826,6 +2830,10 @@ fn task_1458_drain_merge_passes_the_approved_head_as_match_head_commit() {
 #[cfg(unix)]
 #[test]
 fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
+    // trace:BUG-1994 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_tmp, root, gh, calls, _, older) = t1458_fixture();
     let failure = t1458_run_merge(&root, &gh, &older).expect_err("a stale approval shelves");
     assert_eq!(failure.kind, FailureKind::StaleApproval);

@@ -1,7 +1,8 @@
 use super::*;
 use crate::statusline_cmd::{
-    derive_session_branch_suffix, draft_backlog_statusline_segment, sess_anchor_annotation,
-    sess_label_with_suffix, wt_divergence_segment,
+    derive_session_branch_suffix, draft_backlog_statusline_segment, drift_statusline_segment,
+    primary_checkout_drift_statusline_segment, role_display_segment_text, routing_role,
+    sess_anchor_annotation, sess_label_with_suffix, wt_divergence_segment,
 };
 
 /// TASK-244: matching shell + session role — no warning, plain
@@ -237,6 +238,110 @@ fn draft_backlog_statusline_segment_uses_drafts_label() {
     let rendered = draft_backlog_statusline_segment(4).unwrap();
     assert!(!rendered.starts_with("inbox:"), "got: {rendered}");
     assert_eq!(draft_backlog_statusline_segment(0), None);
+}
+
+/// TASK-1727: Contract test for the primary-checkout drift statusline segment
+/// wired in `statusline_cmd::handle_statusline_command`.
+/// Asserts that a clean checkout or non-repo yields no segment (`None`), while
+/// a drifted checkout (untracked files, tracked changes, off main branch)
+/// produces the exact marker contract:
+/// - Uncolored/plain: exactly "⌂!".
+/// - Colored: exactly bold red "\u{1b}[1;31m⌂!\u{1b}[0m".
+/// The colour choice is a parameter, so the test never touches the
+/// process-wide `colored` override.
+// trace:TASK-1727 | ai:antigravity
+#[test]
+fn statusline_drift_segment_contract_for_clean_and_drifted_checkouts() {
+    fn run_git(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "init.defaultBranch=main",
+            ])
+            .args(args)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("primary");
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(&root, &["init", "-q", "-b", "main"]);
+    std::fs::write(root.join("tracked.txt"), "one\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    run_git(&root, &["commit", "-q", "-m", "init"]);
+
+    // 1. Clean checkout on main: drift segment is None.
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, false),
+        None,
+        "clean primary checkout must emit no drift segment in statusline"
+    );
+
+    // 2. Non-git directory: drift segment is None.
+    let non_git = tmp.path().join("not-a-repo");
+    std::fs::create_dir_all(&non_git).unwrap();
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&non_git, true),
+        None,
+        "non-repo directory must emit no drift segment in statusline"
+    );
+
+    // 3. Drifted checkout (untracked file). Literal contract, asserted
+    // without toggling the process-wide colour override: the plain form is
+    // exactly "⌂!" and the coloured form is exactly bold red ESC[1;31m⌂!ESC[0m.
+    // trace:TASK-1727 | ai:claude
+    const PLAIN: &str = "\u{2302}!";
+    const BOLD_RED: &str = "\u{1b}[1;31m\u{2302}!\u{1b}[0m";
+    assert_eq!(PLAIN, "⌂!");
+    std::fs::write(root.join("scratch.py"), "print(1)\n").unwrap();
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, false).as_deref(),
+        Some(PLAIN),
+        "uncoloured drift segment must be exactly '⌂!'"
+    );
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, true).as_deref(),
+        Some(BOLD_RED),
+        "coloured drift segment must be exactly bold red '⌂!'"
+    );
+
+    // 4. Drifted checkout (tracked dirty): also yields the exact marker.
+    std::fs::remove_file(root.join("scratch.py")).unwrap();
+    std::fs::write(root.join("tracked.txt"), "two\n").unwrap();
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, false).as_deref(),
+        Some(PLAIN),
+        "tracked-dirty drift segment must be exactly '⌂!'"
+    );
+
+    // 5. Drifted checkout (off main branch): also yields the exact marker.
+    run_git(&root, &["checkout", "-q", "-f", "main"]);
+    run_git(&root, &["checkout", "-q", "-b", "feature-x"]);
+    assert_eq!(
+        primary_checkout_drift_statusline_segment(&root, true).as_deref(),
+        Some(BOLD_RED),
+        "off-main drift segment must be exactly bold red '⌂!'"
+    );
+}
+
+/// TASK-1727: the pure renderer never emits a segment for a missing probe
+/// (git failure), whatever the colour choice.
+// trace:TASK-1727 | ai:claude
+#[test]
+fn drift_statusline_segment_is_none_without_probe() {
+    assert_eq!(drift_statusline_segment(None, false), None);
+    assert_eq!(drift_statusline_segment(None, true), None);
 }
 
 /// BUG-1171: deferred drafts are parked outside the default advisor triage
@@ -5391,6 +5496,7 @@ fn entry_scope_session_match_decision_table() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     };
 
     // No routing tags = visible everywhere.
@@ -5833,6 +5939,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     };
     std::fs::write(
         leases.join("abcdef123456.toml"),
@@ -6039,4 +6146,71 @@ fn skill_lint_counts_registry_glyphs() {
     body.push_str(crate::glyphs::Glyph::Cross.unicode());
     body.push_str(crate::glyphs::Glyph::Check.unicode());
     assert_eq!(count_registry_glyphs(&body), 3);
+}
+
+/// An advisor label with no valid grant renders as ungranted in the warning
+/// colour; a validated grant renders exactly as before; the unset default
+/// keeps its `(default)` tag.
+// trace:BUG-1924 | ai:claude
+#[test]
+fn role_segment_reflects_the_seat_grant_not_the_label() {
+    use crate::seat_authority::RoleDisplay;
+
+    let (text, warn) = role_display_segment_text(
+        &RoleDisplay::Ungranted("advisor".into()),
+        "advisor",
+        None,
+        true,
+    );
+    assert_eq!(text, "role:advisor (no grant)");
+    assert!(warn, "an ungranted label takes the warning colour");
+
+    let (text, _) = role_display_segment_text(
+        &RoleDisplay::Ungranted("advisor".into()),
+        "advisor",
+        Some("implementer"),
+        true,
+    );
+    assert!(
+        text.starts_with("role:advisor (no grant) "),
+        "the tag sits on the role, ahead of a mismatch suffix: {text}"
+    );
+
+    let (text, warn) =
+        role_display_segment_text(&RoleDisplay::Held("advisor".into()), "advisor", None, true);
+    assert_eq!(text, "role:advisor", "a granted seat renders as today");
+    assert!(!warn);
+
+    let (text, warn) = role_display_segment_text(&RoleDisplay::Default, "implementer", None, false);
+    assert_eq!(text, "role:implementer (default)");
+    assert!(!warn);
+}
+
+/// With no label, a validated grant's seat routes queue depth and @SPEC;
+/// a set label keeps routing even when the grant names another seat.
+// trace:BUG-1924 | ai:claude
+#[test]
+fn routing_role_prefers_the_grant_only_without_a_label() {
+    use crate::seat_authority::RoleDisplay;
+
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            None,
+            ("implementer".into(), true)
+        ),
+        ("integrator".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(
+            &RoleDisplay::Held("integrator".into()),
+            Some("advisor"),
+            ("advisor".into(), false)
+        ),
+        ("advisor".to_string(), false)
+    );
+    assert_eq!(
+        routing_role(&RoleDisplay::Default, None, ("implementer".into(), true)),
+        ("implementer".to_string(), true)
+    );
 }

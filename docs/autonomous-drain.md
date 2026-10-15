@@ -1249,6 +1249,21 @@ The split is intentional: those last three describe a broken **environment**.
 Parking an entire batch of innocent specs because the env is broken would
 be worse than stopping; the env needs to be fixed before any spec can ship.
 
+### Environment-blocked halt
+
+Some failures belong to the machine, not the spec: the agent's tool calls
+were denied (`permission-denied`), or the disk or memory ran out
+(`resource-exhaustion`). The next spec would fail the same way, so after
+**2 consecutive** specs fail with the same one of these causes the drain
+halts before starting another (a member already running in a pipelined
+drain is not interrupted). It prints one `environment blocked` line naming
+the cause and the fix, leaves the rest of the queue untouched, and exits
+`3`. In a `--batches` chain the count runs across batch boundaries. The JSON summary reports `"outcome": "environment-blocked"` and
+`"halt_reason": "<cause>"` (`null` on every other stop). Any other result in
+between (a ship, or a different failure) resets the count. Set the threshold
+with `environment_halt_after` under `[orchestrator]` in `.aida/config.toml`;
+`0` turns the halt off.
+
 ### The `--max-failures` safety cap
 
 `aida queue work --auto-complete --batch X --max-failures N` stops the

@@ -20,6 +20,8 @@
 #   - solo mode is active within its TTL, as resolved by `aida internal solo-active` —
 #     operator-sanctioned coding here
 #   - the target file is not code (specs/plans/docs/config are advisor work)
+#   - the target lies outside every worktree of the session's repository
+#     (temp dirs, the session scratchpad)
 #   - this session already fired once (per-session marker)
 #
 # Install: .claude/settings.json hooks.PreToolUse matcher "Write|Edit|MultiEdit".
@@ -115,6 +117,63 @@ case "$FILE_PATH" in
     *.rs | *.ts | *.tsx | *.js | *.jsx | *.py | *.go | *.java | *.rb | *.c | *.h | *.hpp | *.cc | *.cpp | *.cs | *.kt | *.swift | *.php | *.sh) ;;
     *) exit 0 ;;
 esac
+
+# trace:BUG-1976 | ai:claude
+# ── Guard only the session's repository ──
+# A path outside every worktree of this repository (a temp dir, the Claude
+# session scratchpad) is not the code this guard protects: pass silently and
+# leave the fire-once marker untouched. Sibling linked worktrees share the
+# repository, so they stay guarded. The repository is the project's
+# (CLAUDE_PROJECT_DIR) and the cwd's: a session that cd'd into another
+# checkout still guards both. When the answer cannot be determined (git
+# missing, neither in a repository, the target's directory does not exist,
+# or the target is itself a symlink) the guard applies as before rather
+# than failing open.
+__aida_guard_target_outside_repo() {
+    local target="$1" parent canon_parent root canon_root roots="" anchor listed
+    case "$target" in
+        /*) ;;
+        *) target="$PWD/$target" ;;
+    esac
+    [ -L "$target" ] && return 1
+    parent=$(dirname -- "$target")
+    canon_parent=$(cd -- "$parent" 2>/dev/null && pwd -P) || return 1
+    [ -n "$canon_parent" ] || return 1
+    target="${canon_parent%/}/$(basename -- "$target")"
+    command -v git >/dev/null 2>&1 || return 1
+    for anchor in "${CLAUDE_PROJECT_DIR:-}" "$PWD"; do
+        [ -n "$anchor" ] || continue
+        listed=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR \
+            git -C "$anchor" worktree list --porcelain 2>/dev/null) || {
+            # A project directory git cannot list is not "outside": stay guarded.
+            [ "$anchor" = "${CLAUDE_PROJECT_DIR:-}" ] && return 1
+            continue
+        }
+        roots="$roots
+$listed"
+    done
+    case "$roots" in
+        *"worktree "*) ;;
+        *) return 1 ;;
+    esac
+    while IFS= read -r root; do
+        case "$root" in
+            "worktree "*) root="${root#worktree }" ;;
+            *) continue ;;
+        esac
+        canon_root=$(cd -- "$root" 2>/dev/null && pwd -P) || continue
+        canon_root="${canon_root%/}"
+        case "$target" in
+            "$canon_root" | "$canon_root"/*) return 1 ;;
+        esac
+    done <<EOF
+$roots
+EOF
+    return 0
+}
+if __aida_guard_target_outside_repo "$FILE_PATH"; then
+    exit 0
+fi
 
 # ── Per-session fire-once marker, keyed by the Claude session id ──
 SESSION_ID=$(printf '%s' "$INPUT" | __aida_json_field session_id)

@@ -1,0 +1,15 @@
+• first item that is long enough to wrap
+  onto a second line at forty columns
+• second
+  • nested one
+  • nested two with bold
+    1. deep ordered
+    2. deep ordered again
+• third
+
+1. one
+2. two
+3. ten
+
+• [x] done task
+• [ ] open task

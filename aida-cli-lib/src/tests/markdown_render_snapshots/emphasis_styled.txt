@@ -1,0 +1,6 @@
+Plain, ␛[1mbold␛[0m, ␛[3mitalic␛[0m, ␛[1;3mboth␛[0m, ␛[36minline␛[0m ␛[36mcode␛[0m, ␛[9mstruck␛[0m and a ␛[4mlink␛[0m
+␛[2m(https://example.com/docs)␛[0m.
+
+  ␛[2m│␛[0m fn main() {
+  ␛[2m│␛[0m     println!("hi");
+  ␛[2m│␛[0m }

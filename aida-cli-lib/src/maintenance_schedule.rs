@@ -2748,6 +2748,16 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: true,
             },
         ),
+        // Inline history-only work belongs to timer ticks, never prompt hooks.
+        // trace:STORY-1661 | ai:codex
+        (
+            &["cache refresh --history --if-behind"],
+            ScheduledCommand {
+                display: "cache refresh --history --if-behind",
+                args: &["cache", "refresh", "--history", "--if-behind"],
+                hook_allowed: false,
+            },
+        ),
         // TASK-1527: retire an orphaned cache refresh request. A silent no-op
         // without a pending request; when one pends it refreshes the cache
         // inline, which can take seconds — timer-tick territory, not a
@@ -3485,6 +3495,75 @@ mod tests {
             min_gap: DEFAULT_MIN_GAP.to_string(),
             tasks,
         }
+    }
+
+    // One actual maintenance tick runs the inline job. The scheduler's own
+    // ledger commit is a subsequent store write and remains inside the flow cap.
+    // trace:STORY-1661 | ai:codex
+    #[test]
+    fn story_1661_schedule_tick_runs_history_inline_and_skips_prompt_hooks() {
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
+        let fx = crate::history_indexer::tests::Fixture::new();
+        for n in 1..=200 {
+            fx.append(n);
+        }
+        let job = task(
+            "history-index-tick",
+            "15m",
+            "cache refresh --history --if-behind",
+        );
+        assert!(!job.command.as_ref().unwrap().hook_allowed);
+        assert_eq!(
+            job.command.as_ref().unwrap().args,
+            &["cache", "refresh", "--history", "--if-behind"]
+        );
+        let calls = std::cell::Cell::new(0);
+        let mut state = ScheduleState::default();
+        let lines = tick_with_executor(
+            fx.root.path(),
+            config(vec![job.clone()]),
+            &mut state,
+            at(12),
+            true,
+            |_root, _cmd| panic!("history indexing cannot run from a prompt hook"),
+        )
+        .unwrap();
+        assert!(lines.is_empty());
+        let lines = tick_with_executor(
+            fx.root.path(),
+            config(vec![job]),
+            &mut state,
+            at(13),
+            false,
+            |_root, _cmd| {
+                calls.set(calls.get() + 1);
+                assert_eq!(
+                    crate::history_indexer::run_tick(&fx.store).unwrap(),
+                    crate::history_indexer::TickOutcome::Advanced {
+                        appended: 200,
+                        lag: 0
+                    }
+                );
+                Ok(TaskOutcome {
+                    status: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            },
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(lines.len(), 1);
+        assert!(schedule_ledger::load(&fx.store, "history-index-tick").is_some());
+        let before = crate::history_cache::test_support::commit_count(&fx.db);
+        crate::history_cache::serve_flow(&fx.store, &crate::history_indexer::tests::opts())
+            .unwrap();
+        let extra = crate::history_cache::test_support::commit_count(&fx.db) - before;
+        assert_eq!(extra, 1, "the scheduler ledger is a real subsequent commit");
+        assert!(
+            extra <= crate::history_cache::FLOW_CATCH_UP_CAP as i64,
+            "scheduler bookkeeping must not push the next flow beyond its existing cap"
+        );
     }
 
     fn ok_exec(
@@ -4634,6 +4713,87 @@ enabled = true
         );
         assert_eq!(ledger.failure_trips.first().unwrap().at, at(1));
         assert_eq!(ledger.failure_trips.last().unwrap().at, at(20));
+    }
+
+    // BUG-1961: the tick persists through the batch writer, whose three-way
+    // merge dropped failure_trips (and the route job's due_failure) whenever
+    // the ledger file already existed. Two failing ticks must leave two trips,
+    // and a re-fired route job must name the NEW trip. trace:BUG-1961 | ai:claude
+    #[test]
+    fn two_failing_ticks_append_two_trips_and_route_names_the_newest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let guard = || {
+            config(vec![task(
+                "performance-guard",
+                "1h",
+                "doctor check performance --fail-on-findings",
+            )])
+        };
+        let failing = |_root: &Path, _cmd: &ScheduledCommand| {
+            Ok(TaskOutcome {
+                status: 1,
+                stdout: performance_json(96),
+                stderr: String::new(),
+            })
+        };
+        let route_cfg = || {
+            config(vec![seat_task(
+                "performance-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed"],
+            )])
+        };
+        let mut state = ScheduleState::default();
+        let mut route_state = ScheduleState::default();
+        route_state.tasks.insert(
+            "performance-guard-route".into(),
+            TaskState {
+                last_seen_event_ts: Some(at(11)),
+                ..Default::default()
+            },
+        );
+
+        let mut trip_ids = Vec::new();
+        for (n, hour) in [12u32, 14].into_iter().enumerate() {
+            tick_with_executor(tmp.path(), guard(), &mut state, at(hour), false, failing).unwrap();
+            let ledger = schedule_ledger::load(&store, "performance-guard").unwrap();
+            assert_eq!(ledger.result.as_deref(), Some("failed:1"));
+            assert_eq!(ledger.last_run, Some(at(hour)));
+            assert_eq!(ledger.failure_trips.len(), n + 1, "{ledger:?}");
+            let trip = ledger.failure_trips.last().unwrap();
+            assert_eq!(trip.at, at(hour));
+            assert_eq!(trip.performance[0].denominator, 96);
+            trip_ids.push(trip.trip_id.clone());
+
+            let events = events::read_all(tmp.path());
+            tick_core(
+                tmp.path(),
+                route_cfg(),
+                &mut route_state,
+                at(hour) + chrono::Duration::minutes(5),
+                false,
+                |_root, _cmd| unreachable!(),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let route = schedule_ledger::load(&store, "performance-guard-route").unwrap();
+            assert_eq!(
+                route.due_failure.as_ref().map(|f| f.trip_id.as_str()),
+                Some(trip.trip_id.as_str()),
+                "route job must point at the trip it was raised for"
+            );
+        }
+        assert_ne!(trip_ids[0], trip_ids[1]);
+        let ledger = schedule_ledger::load(&store, "performance-guard").unwrap();
+        let ids: Vec<_> = ledger
+            .failure_trips
+            .iter()
+            .map(|t| t.trip_id.clone())
+            .collect();
+        assert_eq!(ids, trip_ids);
     }
 
     #[test]

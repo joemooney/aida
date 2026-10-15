@@ -16,6 +16,11 @@ use colored::Colorize;
 use std::io::IsTerminal;
 
 pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
+    // The hook path must not initialize storage or statusline/cache context.
+    // trace:BUG-2014 | ai:codex
+    if matches!(cmd, RoleCommand::ExpiryNotice) {
+        return crate::grant_expiry_notice::handle();
+    }
     let project_root = statusline_project_root();
     match cmd {
         RoleCommand::Enter {
@@ -42,6 +47,11 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Repair { name } => handle_role_repair(&project_root, name.as_deref()),
         RoleCommand::Active => handle_role_active(),
         RoleCommand::Current { check } => handle_role_current(*check),
+        RoleCommand::Expiry {
+            warn_within,
+            refuse_within,
+        } => handle_role_expiry(warn_within, refuse_within.as_deref()),
+        RoleCommand::ExpiryNotice => unreachable!("notice dispatches before role setup"),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -855,6 +865,60 @@ fn handle_role_current(check: bool) -> Result<()> {
     println!("{}", role);
     if check && role.is_empty() {
         std::process::exit(1);
+    }
+    Ok(())
+}
+
+// `aida role expiry`: warn (stdout, exit 0) or refuse (stderr, exit 3) when
+// the session's seat grant is near expiry. Local file reads only, so the
+// SessionStart hook and a relay launcher can call it cheaply.
+// trace:TASK-1736 | ai:claude
+fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<()> {
+    let span = |raw: &str| -> Result<chrono::Duration> {
+        let std = crate::drain_caps::parse_duration(raw).ok_or_else(|| {
+            anyhow::anyhow!("invalid duration `{raw}`: use a form like 90m, 2h or 1h30m")
+        })?;
+        Ok(chrono::Duration::from_std(std)?)
+    };
+    let warn_within = span(warn_within)?;
+    let refuse_within = refuse_within.map(span).transpose()?;
+    // In refuse mode a grant handle that resolves to nothing fails closed: a
+    // relay would otherwise launch a session that meets refusals mid-run. No
+    // handle at all stays silent; every valid exported grant supplies expiry.
+    // trace:TASK-1736 | ai:claude
+    // Warning-only callers retain informational timestamps, including expired
+    // records. Only launch refusal consumes the strict authority verdict.
+    // trace:BUG-2011 | ai:codex
+    let lookup = if refuse_within.is_some() {
+        crate::seat_authority::session_grant_lookup()
+    } else {
+        match crate::seat_authority::session_grant_expiry() {
+            Some(expiry) => crate::seat_authority::GrantLookup::Expiry(expiry),
+            None => crate::seat_authority::GrantLookup::NoGrant,
+        }
+    };
+    let expiry = match lookup {
+        crate::seat_authority::GrantLookup::Expiry(expiry) => expiry,
+        crate::seat_authority::GrantLookup::Unresolved(reason) if refuse_within.is_some() => {
+            let label = std::env::var("AIDA_SESSION_ROLE").ok();
+            eprintln!(
+                "{}",
+                crate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
+            );
+            std::process::exit(3);
+        }
+        _ => return Ok(()),
+    };
+    let now = chrono::Utc::now();
+    if let Some(within) = refuse_within {
+        if let Some(refusal) = crate::seat_authority::launch_refusal(&expiry, now, within) {
+            eprintln!("{refusal}");
+            std::process::exit(3);
+        }
+        return Ok(());
+    }
+    if let Some(warning) = crate::seat_authority::expiry_warning(&expiry, now, warn_within) {
+        println!("{warning}");
     }
     Ok(())
 }

@@ -27,6 +27,87 @@ aida_precommit_sentinel() {
     return 0
 }
 
+# 0b. Primary-checkout gate (STORY-1647). Where feature work happens only in
+# sibling worktrees, a commit made in the PRIMARY checkout on the default branch
+# is always a mistake (an agent with a stale cwd, a tool run from the wrong
+# directory). Unlike the warn-only TASK-1178 scope guard this one REFUSES: no
+# legitimate agent commit lands there, and the server-side "PR required" rule
+# catches --no-verify. Opt-in per project: inert unless the repo's
+# .aida/config.toml carries `[hooks] block_primary_commits = true`.
+# Runs BEFORE the --allow-intermediate bypass so only the dedicated operator
+# override AIDA_ALLOW_PRIMARY_COMMIT=1 lifts it. Exempt: linked worktrees
+# (incl. .aida-store), merge commits (MERGE_HEAD), conflicted cherry-pick
+# (CHERRY_PICK_HEAD) or revert (REVERT_HEAD) replays, rebase replays
+# (rebase-merge / rebase-apply), the aida-store branch, and detached HEAD.
+# git commit --amend and git merge --squash + commit on main are refused
+# without the operator override. A primary checkout on some other named branch
+# is allowed with a one-line warning.
+# trace:STORY-1647 | ai:claude
+# trace:TASK-1728 | ai:antigravity
+__aida_primary_gate_enabled() {
+    local top cfg
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+    cfg="$top/.aida/config.toml"
+    [ -f "$cfg" ] || return 1
+    awk '
+        /^[[:space:]]*\[/ {
+            line = $0
+            sub(/[[:space:]]*#.*/, "", line)
+            in_hooks = (line ~ /^[[:space:]]*\[[[:space:]]*hooks[[:space:]]*\][[:space:]]*$/)
+            next
+        }
+        in_hooks && /^[[:space:]]*block_primary_commits[[:space:]]*=/ {
+            v = $0
+            sub(/^[^=]*=[[:space:]]*/, "", v)
+            sub(/[[:space:]]*#.*/, "", v)
+            sub(/[[:space:]]+$/, "", v)
+            found = (v == "true")
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$cfg"
+}
+
+__aida_abs_dir() {
+    (cd "$1" 2>/dev/null && pwd -P)
+}
+
+if __aida_primary_gate_enabled; then  # trace:STORY-1647 | ai:claude
+    __aida_pg_git_dir=$(__aida_abs_dir "$(git rev-parse --git-dir 2>/dev/null)")
+    __aida_pg_common=$(__aida_abs_dir "$(git rev-parse --git-common-dir 2>/dev/null)")
+    __aida_pg_branch=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+    __aida_pg_exempt=0
+    if [ -z "$__aida_pg_git_dir" ] || [ "$__aida_pg_git_dir" != "$__aida_pg_common" ]; then
+        __aida_pg_exempt=1   # linked worktree (or git dir unresolvable)
+    elif [ -z "$__aida_pg_branch" ] || [ "$__aida_pg_branch" = "aida-store" ]; then
+        __aida_pg_exempt=1   # detached HEAD (rebase replay) or the store branch
+    elif git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+        || git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 \
+        || git rev-parse -q --verify REVERT_HEAD >/dev/null 2>&1; then
+        __aida_pg_exempt=1   # merge commit (incl. git pull with a merge), conflicted cherry-pick or revert replay (trace:TASK-1728 | ai:antigravity)
+    elif [ -d "$__aida_pg_git_dir/rebase-merge" ] || [ -d "$__aida_pg_git_dir/rebase-apply" ]; then
+        __aida_pg_exempt=1   # rebase / pull --rebase replay
+    fi
+    if [ "$__aida_pg_exempt" = "0" ]; then
+        # Protected branch: main, plus the remote default branch when known.
+        __aida_pg_default=$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
+        __aida_pg_default=${__aida_pg_default#origin/}
+        if [ "$__aida_pg_branch" = "main" ] || { [ -n "$__aida_pg_default" ] && [ "$__aida_pg_branch" = "$__aida_pg_default" ]; }; then
+            if [ "$AIDA_ALLOW_PRIMARY_COMMIT" = "1" ]; then
+                printf 'pre-commit: primary-checkout commit on %s allowed by AIDA_ALLOW_PRIMARY_COMMIT=1.\n' "$__aida_pg_branch" >&2
+            else
+                printf 'pre-commit: refusing commit in the primary checkout on %s.\n' "$__aida_pg_branch" >&2
+                printf 'pre-commit:   feature work belongs in a sibling worktree: run aida worktree add <SPEC> and commit there.\n' >&2
+                printf 'pre-commit:   --amend and merge --squash + commit on %s are also refused (use AIDA_ALLOW_PRIMARY_COMMIT=1 to override).\n' "$__aida_pg_branch" >&2
+                printf 'pre-commit:   operator override: AIDA_ALLOW_PRIMARY_COMMIT=1 git commit ...\n' >&2
+                printf 'pre-commit:   (enabled by [hooks] block_primary_commits = true in .aida/config.toml)\n' >&2
+                exit 1
+            fi
+        else
+            printf 'pre-commit: warning: committing in the primary checkout on branch %s; feature work belongs in a sibling worktree.\n' "$__aida_pg_branch" >&2
+        fi
+    fi
+fi
+
 # 1. Environment and argument bypass check
 # Check if AIDA_ALLOW_INTERMEDIATE=1 is set, or if the git commit command was invoked with --allow-intermediate.
 # We check /proc/$PPID/cmdline (Linux) for --allow-intermediate to enable seamless bypass.
@@ -288,7 +369,7 @@ fi
 # (POSIX ERE has no portable `\b`), so an id-shaped substring of a longer word
 # (`DEBUG-2` → `BUG-2`, `SCR-4` → `CR-4`) is not mistaken for a SPEC-ID. The
 # cli.rs guard uses this exact pattern string — change both together.
-# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 | ai:claude
+# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 trace:TASK-144 trace:TASK-1516 trace:BUG-2008 | ai:claude
 SPEC_ID_RE='(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+'
 
 # A rustdoc line is EXACTLY three slashes (`///`), optionally indented. Four or
@@ -335,6 +416,13 @@ DOC_COMMENT_RE='^[[:space:]]*///([^/]|$)'
 # Progress: the scan reports on stderr every 100000 diff lines, and the shell
 # reports the total when it took 3 s or more, so an agent can tell a slow hook
 # from a hung one. trace:BUG-1925 | ai:claude
+#
+# FAIL CLOSED (BUG-1933): an empty offender list must mean "scanned, nothing
+# found", never "the scan broke". A `git diff` that fails (a parent object
+# missing in a shallow or partial clone) puts a `#AIDA-DIFF-FAILED <parent>`
+# marker in the stream, which awk reports back; awk prints `#AIDA-PROV-END` as
+# its last line, so a crashed or killed awk is caught by the missing sentinel.
+# Either refuses the commit. trace:BUG-1933 | ai:claude
 __aida_prov_parents=""
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
     && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
@@ -358,31 +446,71 @@ fi
 # Emit the staged `*.rs` diff(s), each introduced by a `#AIDA-DIFF` boundary
 # line (no unified-diff line starts with `#`). `D` is included so lines removed
 # by deleting a whole source file still register as move credits; deleted files
-# contribute no `+` lines, so the added-lines side is unaffected.
-# trace:TASK-144 trace:BUG-1925 | ai:claude
+# contribute no `+` lines, so the added-lines side is unaffected. A failed diff
+# appends `#AIDA-DIFF-FAILED <parent>` (`index` outside a merge) on a line of
+# its own: the leading newline ends a partial line a killed `git diff` left.
+# `--no-ext-diff --no-textconv --text` keep a user's `diff.external`
+# (difftastic), textconv driver, or `-diff`/`binary` attribute from replacing
+# the unified diff this scan parses.
+# trace:TASK-144 trace:BUG-1925 trace:BUG-1933 | ai:claude
 __aida_staged_rs_diffs() {
     local parent
     if [ -z "$__aida_prov_parents" ]; then
         printf '#AIDA-DIFF index\n'
-        git diff --cached --unified=0 --no-color --diff-filter=ACDMR -- '*.rs' 2>/dev/null
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
+            --diff-filter=ACDMR -- '*.rs' 2>/dev/null \
+            || printf '\n#AIDA-DIFF-FAILED index\n'
         return 0
     fi
     for parent in $__aida_prov_parents; do
         printf '#AIDA-DIFF %s\n' "$parent"
-        git diff --cached --unified=0 --no-color --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null
+        git diff --cached --unified=0 --no-color --no-ext-diff --no-textconv --text \
+            --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null \
+            || printf '\n#AIDA-DIFF-FAILED %s\n' "$parent"
     done
     return 0
 }
 
 __aida_prov_started=$SECONDS
 __aida_prov_offenders=$(__aida_staged_rs_diffs | awk -v spec_re="$SPEC_ID_RE" -v doc_re="$DOC_COMMENT_RE" '
-function __aida_doc_is_provenance_leak(doc,    residual) {
+function doc_has_prose(doc,    residual) {
+    residual = doc
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", residual)
+    # A markdown table row is structure, not prose. trace:TASK-1369 | ai:claude
+    if (residual ~ /^(#|[-*+]|[0-9]+\.|```|\|)/) return 0
+    gsub(spec_re, " ", residual)
+    return (residual ~ /[A-Za-z][A-Za-z]/) ? 1 : 0
+}
+# A `///` line that opens or closes a fenced code block.
+# trace:TASK-1369 | ai:claude
+function doc_is_fence(doc,    inner) {
+    inner = doc
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", inner)
+    return (inner ~ /^```/) ? 1 : 0
+}
+function doc_ends_sentence(doc,    s) {
+    s = trim_ws(doc)
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", s)
+    s = trim_ws(s)
+    # The abbreviation guard is word-anchored so "devs." still ends a
+    # sentence; U+2026 and U+3002 end one too. trace:TASK-1371 | ai:claude
+    if (s ~ /(…|。)$/) return 1
+    if (s ~ /[.?!:]$/ && s !~ /(^|[^A-Za-z])(e\.g|i\.e|etc|vs)\.$/) return 1
+    return 0
+}
+# trace:BUG-2008 | ai:antigravity
+function __aida_doc_is_provenance_leak(doc, prev_has_prose, prev_ends_sentence,    residual, inner) {
     if (doc !~ spec_re) return 0
     if (index(doc, "trace:") > 0) return 1
-    residual = doc
-    sub(/^[[:space:]]*\/\/\/+/, "", residual)
+    inner = doc
+    sub(/^[[:space:]]*\/\/\/+[[:space:]]*/, "", inner)
+    residual = inner
     gsub(spec_re, " ", residual)
     if (residual ~ /[A-Za-z][A-Za-z]/) return 0
+    if (inner ~ /^(#|[-*+]|[0-9]+\.|```)/) return 1
+    # A bare-ID line that continues a sentence from the previous /// line
+    # (previous line has prose and does not end a sentence) is prose, not provenance.
+    if (prev_has_prose && !prev_ends_sentence) return 0
     return 1
 }
 function trim_ws(s) {
@@ -417,7 +545,19 @@ function settle(    i, key, off) {
     split("", cand_off)
     ncand = 0
 }
-/^#AIDA-DIFF / { settle(); ndiff++; current_file = ""; next }
+/^#AIDA-DIFF-FAILED / { failed = failed " " substr($0, 19); next }
+/^#AIDA-DIFF / {
+    settle()
+    ndiff++
+    current_file = ""
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
+    next
+}
 {
     lines++
     if (lines % 100000 == 0) {
@@ -429,23 +569,66 @@ function settle(    i, key, off) {
 /^--- / { next }
 /^-/ {
     text = substr($0, 2)
-    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) credit[trim_ws(text)]++
+    if (text ~ doc_re) {
+        if (__aida_doc_is_provenance_leak(text, prev_rem_has_prose, prev_rem_ends_sentence)) {
+            credit[trim_ws(text)]++
+            prev_rem_has_prose = 0
+            prev_rem_ends_sentence = 0
+        } else {
+            # A code line inside a fenced block is not prose. trace:TASK-1369 | ai:claude
+            if (doc_is_fence(text)) rem_in_fence = !rem_in_fence
+            prev_rem_has_prose = rem_in_fence ? 0 : doc_has_prose(text)
+            prev_rem_ends_sentence = doc_ends_sentence(text)
+        }
+    } else {
+        prev_rem_has_prose = 0
+        prev_rem_ends_sentence = 0
+        rem_in_fence = 0
+    }
     next
 }
 # New-side file header: remember which file the following "+" lines belong to.
 /^\+\+\+ / {
     current_file = substr($0, 5)
     if (substr(current_file, 1, 2) == "b/") current_file = substr(current_file, 3)
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
+    next
+}
+/^@@ / {
+    prev_add_has_prose = 0
+    prev_add_ends_sentence = 0
+    prev_rem_has_prose = 0
+    prev_rem_ends_sentence = 0
+    add_in_fence = 0
+    rem_in_fence = 0
     next
 }
 /^\+/ {
     text = substr($0, 2)
-    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) {
-        ncand++
-        cand_key[ncand] = trim_ws(text)
-        lead = text
-        sub(/^[[:space:]]+/, "", lead)
-        cand_off[ncand] = (current_file == "" ? "<staged>" : current_file) ": " lead
+    if (text ~ doc_re) {
+        if (__aida_doc_is_provenance_leak(text, prev_add_has_prose, prev_add_ends_sentence)) {
+            ncand++
+            cand_key[ncand] = trim_ws(text)
+            lead = text
+            sub(/^[[:space:]]+/, "", lead)
+            cand_off[ncand] = (current_file == "" ? "<staged>" : current_file) ": " lead
+            prev_add_has_prose = 0
+            prev_add_ends_sentence = 0
+        } else {
+            # A code line inside a fenced block is not prose. trace:TASK-1369 | ai:claude
+            if (doc_is_fence(text)) add_in_fence = !add_in_fence
+            prev_add_has_prose = add_in_fence ? 0 : doc_has_prose(text)
+            prev_add_ends_sentence = doc_ends_sentence(text)
+        }
+    } else {
+        prev_add_has_prose = 0
+        prev_add_ends_sentence = 0
+        add_in_fence = 0
     }
     next
 }
@@ -458,10 +641,46 @@ END {
             print off
         }
     }
+    if (failed != "") print "#AIDA-PROV-FAILED" failed
+    print "#AIDA-PROV-END"
 }')
 __aida_prov_elapsed=$((SECONDS - __aida_prov_started))
 if [ "$__aida_prov_elapsed" -ge 3 ]; then
     printf 'pre-commit: /// provenance scan took %ss.\n' "$__aida_prov_elapsed" >&2
+fi
+
+# The sentinel must be the last line; strip it, then any failed-diff report.
+# trace:BUG-1933 | ai:claude
+case "$__aida_prov_offenders" in
+    '#AIDA-PROV-END'|*$'\n''#AIDA-PROV-END') ;;
+    *)
+        echo -e "${RED}Refusing commit: the \`///\` provenance scan did not complete" >&2
+        echo -e "(awk exited before its end marker), so staged \`///\` lines were not" >&2
+        echo -e "checked. Re-run the commit; if it keeps failing, check \`awk\` on PATH.${NC}" >&2
+        exit 1
+        ;;
+esac
+__aida_prov_offenders=${__aida_prov_offenders%'#AIDA-PROV-END'}
+__aida_prov_offenders=${__aida_prov_offenders%$'\n'}
+__aida_prov_failed=""
+case "$__aida_prov_offenders" in
+    '#AIDA-PROV-FAILED '*|*$'\n''#AIDA-PROV-FAILED '*)
+        __aida_prov_failed=${__aida_prov_offenders##*'#AIDA-PROV-FAILED '}
+        ;;
+esac
+if [ -n "$__aida_prov_failed" ]; then
+    echo -e "${RED}Refusing commit: \`git diff --cached\` against ${__aida_prov_failed} failed," >&2
+    echo -e "so the staged \`///\` lines could not be checked for SPEC-ID provenance.${NC}" >&2
+    # Re-run each failed diff in full (`--quiet` stops before reading blobs,
+    # so it would miss a missing one) to show git's own reason.
+    for __aida_parent in $__aida_prov_failed; do
+        if [ "$__aida_parent" = "index" ]; then __aida_parent=""; fi
+        git diff --cached --unified=0 --no-ext-diff --no-textconv --text $__aida_parent -- '*.rs' 2>&1 >/dev/null \
+            | head -n 3 | sed 's/^/  git: /' >&2
+    done
+    echo -e "${YELLOW}A shallow or partial clone may be missing a commit or blob: fetch it" >&2
+    echo -e "(\`git fetch\`) and commit again. Emergency skip: --no-verify.${NC}" >&2
+    exit 1
 fi
 
 DOC_TRACE_OFFENDERS=()

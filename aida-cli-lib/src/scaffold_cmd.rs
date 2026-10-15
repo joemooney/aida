@@ -313,7 +313,15 @@ pub(crate) fn handle_scaffold_command(
                         .map(|actual| artifact_text_matches(&actual, &artifact.content))
                         .unwrap_or(false);
 
-                if already_matches {
+                // BUG-2009: a matching hook git skips (no executable bit) is
+                // not unchanged; it is rewritten below with 0755.
+                // trace:BUG-2009 | ai:claude
+                if already_matches
+                    && !crate::requirements_cli::hook_artifact_needs_mode(
+                        &artifact.path,
+                        &full_path,
+                    )
+                {
                     unchanged += 1;
                     continue;
                 }
@@ -335,6 +343,9 @@ pub(crate) fn handle_scaffold_command(
                             full_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    crate::requirements_cli::ensure_executable_if_hook(&artifact.path, &full_path)
+                        .with_context(|| format!("making {} executable", full_path.display()))?;
                 }
 
                 let action = if exists { "updated" } else { "created" };
@@ -599,15 +610,19 @@ pub(crate) fn handle_scaffold_command(
             dry_run,
             force,
             prune,
+            only,
         } => {
             // trace:FR-1-028 | ai:claude
-            let store = storage.load()?;
             let root = project_root
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
             if !root.exists() {
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
+            if let Some(crate::cli::ScaffoldUpgradeOnly::GitHooks) = only {
+                return run_scaffold_upgrade_git_hooks(&root, *dry_run);
+            }
+            let store = storage.load()?;
 
             // trace:BUG-1639 | ai:claude
             let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
@@ -867,6 +882,101 @@ mod task1503_tests {
     }
 }
 
+/// `aida scaffold upgrade --only git-hooks`: back up and replace only the
+/// stale AIDA-generated git hooks (the ones a store write refuses), and
+/// make every AIDA hook git would skip for lack of an executable bit 0755.
+// trace:BUG-1977 trace:BUG-2009 | ai:claude
+pub(crate) fn run_scaffold_upgrade_git_hooks(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> Result<()> {
+    let report = aida_core::git_ops::refresh_stale_aida_hooks(project_root, dry_run)?;
+    // BUG-2003: core.hooksPath is followed, so say when that leaves the
+    // repository's own git metadata. trace:BUG-2003 | ai:claude
+    if let Some((hooks, git_dir)) = &report.hooks_dir_outside_git_dir {
+        println!(
+            "Note: core.hooksPath points this repository's git hooks at {}, outside its git \
+             directory {}. A change there applies to every repository that uses that \
+             directory, and if it is tracked, the backups show up as untracked files.",
+            hooks.display(),
+            git_dir.display()
+        );
+    }
+    if report.refreshed.is_empty() && report.manual.is_empty() {
+        println!(
+            "No stale AIDA git hooks: every AIDA-generated hook matches this build and is \
+             executable."
+        );
+        return Ok(());
+    }
+    // trace:BUG-2009 | ai:claude
+    for hook in &report.refreshed {
+        let line = match (&hook.backup, dry_run) {
+            (Some(backup), true) => format!(
+                "Would replace the `{}` hook ({}); stale copy would be saved to {}",
+                hook.name,
+                hook.path.display(),
+                backup.display()
+            ),
+            (Some(backup), false) => format!(
+                "Replaced the `{}` hook ({}); stale copy saved to {}",
+                hook.name,
+                hook.path.display(),
+                backup.display()
+            ),
+            (None, true) => format!(
+                "Would make the `{}` hook ({}) executable (0755)",
+                hook.name,
+                hook.path.display()
+            ),
+            (None, false) => format!(
+                "Made the `{}` hook ({}) executable (0755)",
+                hook.name,
+                hook.path.display()
+            ),
+        };
+        let skipped = if hook.not_executable && hook.backup.is_some() {
+            if dry_run {
+                "; it is not executable, so git skips it: it would be set to 0755"
+            } else {
+                "; it was not executable, so git skipped it: now 0755"
+            }
+        } else if hook.not_executable && dry_run {
+            "; git skips it until then"
+        } else if hook.not_executable {
+            "; git was skipping it"
+        } else {
+            ""
+        };
+        println!("{line}{skipped}");
+    }
+    if dry_run {
+        println!("Dry run: nothing was written.");
+    }
+    if !report.manual.is_empty() {
+        // The list goes to stdout too: agent-mode errors keep one line.
+        for hook in &report.manual {
+            println!(
+                "Needs manual action: the `{}` hook ({}): {}",
+                hook.name,
+                hook.path.display(),
+                hook.reason
+            );
+        }
+        let names = report
+            .manual
+            .iter()
+            .map(|h| format!("`{}`", h.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!(
+            "stale AIDA-generated git hook(s) {names} need manual action (listed above); store \
+             writes stay refused until they are fixed"
+        );
+    }
+    Ok(())
+}
+
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
 /// based on its `FileCategory` and current drift state, then either
 /// write or leave alone. Output is grouped by category with per-file
@@ -978,8 +1088,14 @@ pub(crate) fn run_scaffold_upgrade(
         // - Managed-merge files (settings.json, .mcp.json) with drift
         //   in any AIDA-owned slot get a slot-merge (FR-1-047) — replace
         //   only the declared slots, preserve every other key verbatim.
+        // BUG-2009: a matching hook git skips (no executable bit) is
+        // rewritten with 0755, not left as current. trace:BUG-2009 | ai:claude
+        let needs_mode = exists
+            && crate::requirements_cli::hook_artifact_needs_mode(&artifact.path, &on_disk_path);
         let action = if !exists {
             UpgradeAction::Create
+        } else if !drifted && needs_mode {
+            UpgradeAction::Overwrite
         } else if !drifted {
             UpgradeAction::None
         } else if force {
@@ -1043,6 +1159,12 @@ pub(crate) fn run_scaffold_upgrade(
                             on_disk_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    crate::requirements_cli::ensure_executable_if_hook(
+                        &artifact.path,
+                        &on_disk_path,
+                    )
+                    .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
                 stats.created.push(artifact.path.clone());
             }
@@ -1064,6 +1186,12 @@ pub(crate) fn run_scaffold_upgrade(
                             on_disk_path.display()
                         )
                     })?;
+                    // trace:BUG-2009 | ai:claude
+                    crate::requirements_cli::ensure_executable_if_hook(
+                        &artifact.path,
+                        &on_disk_path,
+                    )
+                    .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }
@@ -1884,4 +2012,58 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod bug2009_tests {
+    use super::run_scaffold_upgrade;
+    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+    use std::os::unix::fs::PermissionsExt;
+
+    fn preview(root: &std::path::Path) -> (Scaffolder, aida_core::ScaffoldPreview) {
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        (scaffolder, preview)
+    }
+
+    fn mode(path: &std::path::Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    /// BUG-2009 root cause: `aida scaffold upgrade` created a missing hook
+    /// with a bare write (umask mode, 0644) and left a matching 0644 hook as
+    /// current. Both now come out 0755.
+    // trace:BUG-2009 | ai:claude
+    #[test]
+    fn scaffold_upgrade_writes_hooks_0755_and_fixes_a_matching_0644_hook() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let (scaffolder, p) = preview(root);
+        scaffolder.apply(&p).unwrap();
+        let hooks = root.join(".git/hooks");
+        let post_commit = hooks.join("post-commit");
+        let commit_msg = hooks.join("commit-msg");
+        assert_eq!(mode(&post_commit), 0o755);
+        let current = std::fs::read_to_string(&post_commit).unwrap();
+        std::fs::set_permissions(&post_commit, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::remove_file(&commit_msg).unwrap();
+
+        // Dry run writes nothing.
+        let (_, p) = preview(root);
+        run_scaffold_upgrade(root, &p, true, false, false).unwrap();
+        assert_eq!(mode(&post_commit), 0o644);
+        assert!(!commit_msg.exists());
+
+        let (_, p) = preview(root);
+        run_scaffold_upgrade(root, &p, false, false, false).unwrap();
+        assert_eq!(mode(&post_commit), 0o755, "matching 0644 hook fixed");
+        assert_eq!(std::fs::read_to_string(&post_commit).unwrap(), current);
+        assert_eq!(mode(&commit_msg), 0o755, "created hook is executable");
+    }
 }

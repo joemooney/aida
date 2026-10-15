@@ -237,7 +237,7 @@ advisor signoff before any code is written.
 Advisors often find real bugs on main. File each one as its own spec, with
 `blocked-by` edges.
 
-### 4. Dispatch implementers (parallel)
+### 4. Dispatch implementers (bounded parallel)
 
 Use one session per spec, each in its own worktree with the implementer lease.
 First write the brief so the session reads it on pickup:
@@ -268,6 +268,30 @@ aida agent new claude --role implementer --spec <SPEC> --prompt "<short pickup l
 When you need the worktree before a session exists, `aida worktree add <SPEC>
 --path ../wt-<spec> --branch <agent>/<spec>` takes the lease directly.
 
+**Concurrency cap.** Run **at most 3 live child sessions** at once, counting
+implementers and reviewers together, unless the operator's delegation names a
+different number. Dispatch from the ready set in `burndown plan` order and
+queue the rest; start the next child only when `aida ps` shows a slot free
+because a child exited or you stopped it. Fanning out the whole ready set
+multiplies token spend, and a failure in a wide fan-out is hard to attribute.
+<!-- trace:BUG-1816 | ai:claude -->
+
+**Per-child budget.** Every child gets a wall-clock and a token budget, written
+into its brief: by default about 90 minutes and one context window for an
+implementer, half of each for a reviewer. The budget flags on `aida queue work`
+(`--max-runtime`, `--max-tokens`, `--no-progress-minutes`) apply only to
+`--auto-complete` drains, which this skill does not dispatch, so for the
+children this skill launches **you** are the budget: the ELAPSED column of
+`aida ps` is the clock. A child reports its token usage only when it finishes,
+so the time budget is the one you enforce live; check the token budget against
+the child's final usage report and treat an overrun as exceeded. When a
+child runs past its budget: stop it (`aida agent stop <name>`, or the harness's
+own job control), read its final report or
+`aida tail <SPEC> --no-follow -n 40`, record a PROXY DECISION on the spec with
+what was spent and why it stopped, and re-dispatch **once** with a narrower
+brief. If the second attempt also runs out, report the spec as blocked. Never
+retry silently, and never raise a budget just to keep going.
+
 The implementer brief must include:
 - Read `aida show <SPEC> --full` and the repo's agent instructions (AGENTS.md
   or CLAUDE.md). Work only in the worktree.
@@ -283,11 +307,21 @@ The implementer brief must include:
 - **Never run a `.py` file or Python snippet as a shell script.** Bash runs
   `import` as ImageMagick's screen-capture tool. Use `python3 file.py` or a
   `python3 -` heredoc.
+- The child's wall-clock and token budget, and the instruction to stop and
+  report when it runs out, not to retry.
+- Read handoffs, plans and docs over ~200 lines with targeted reads
+  (`rg -n <term> <file>`, `sed -n '<a>,<b>p' <file>`), never whole-file reads.
 - Commit as `[AI:<tool>] type(scope): summary (<SPEC>)`, push the branch, and
   set the spec to `done`. **Don't open a PR.**
 
-For store, lock or authority code, use the strongest model and vendor
-available (`--model` on `aida queue work`), never agy.
+**Model.** An AIDA-launched child does not inherit your model: an unset model
+means the `[agents.<vendor>] model` config or, when that is empty, the vendor
+default. Pass the parent's model explicitly to inherit it: `--model` on
+`aida queue work`, `aida agent new claude` and `aida agent new codex`. The
+antigravity lane (`aida agent new antigravity`) has no model option, so it runs
+the configured or vendor default. Only store, lock or authority code justifies
+a stronger model than the parent's, and the brief says why; for that code pick
+the strongest model and vendor available, never agy.
 
 Watch the fleet with `aida ps` and `aida tail <SPEC> --no-follow -n 40`. A
 session that makes no progress is stopped with `aida agent stop <name>` or the
@@ -464,6 +498,13 @@ vendor, review state, PR/run ids); AWAITING OPERATOR; DEFERRED (+trigger);
 CLOSURE-PENDING (+trigger); known flakes.
 EOF
 ```
+
+**Bounded check-ins.** Look at `aida ps` and a child's summary when the child
+exits or at a batch boundary, not on a timer, and never re-send the board, the
+handoff or a spec's full history to a running child: a follow-up message
+carries only the new finding. Read handoffs, plans and docs over ~200 lines
+with targeted reads (`rg -n <term> <file>`, `sed -n '<a>,<b>p' <file>`), not
+whole-file reads.
 
 **The context ceiling is a soft limit.** Do not stop the loop because the
 conversation is getting long. Rely on the harness's automatic compaction; the

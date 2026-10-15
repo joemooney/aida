@@ -33,6 +33,10 @@
 channels = ["worktree"]
 sites = 1
 
+[readers."aida-cli-lib/src/agent_config.rs"]
+channels = ["home", "write"]
+sites = 1
+
 [readers."aida-cli-lib/src/agent_registry.rs"]
 channels = ["worktree"]
 sites = 2
@@ -40,6 +44,12 @@ sites = 2
 [readers."aida-cli-lib/src/autoprogress.rs"]
 channels = ["probe"]
 sites = 1
+
+# burndown config: verbose, ready-order and bg-wait-ceiling knobs, each read
+# from the project copy and then ~/.aida (policy values only).
+[readers."aida-cli-lib/src/burndown_run.rs"]
+channels = ["worktree", "home"]
+sites = 6
 
 [readers."aida-cli-lib/src/bypass_confirm.rs"]
 channels = ["home"]
@@ -55,12 +65,26 @@ sites = 1
 channels = ["worktree", "home", "write", "other-file", "prose"]
 sites = 33
 
+# Settles a config edit by staging and committing exactly `.aida/config.toml`;
+# it reads no keys from the file. trace:BUG-1938 | ai:claude
+[readers."aida-cli-lib/src/config_commit.rs"]
+channels = ["write"]
+sites = 1
+
+[readers."aida-cli-lib/src/config_init.rs"]
+channels = ["worktree", "write"]
+sites = 2
+
 [readers."aida-cli-lib/src/dispatch_routing_config.rs"]
 channels = ["worktree"]
 sites = 1
 
 [readers."aida-cli-lib/src/doctor_cmd.rs"]
 channels = ["worktree", "write"]
+sites = 1
+
+[readers."aida-cli-lib/src/doctor_root.rs"]
+channels = ["worktree"]
 sites = 1
 
 [readers."aida-cli-lib/src/field_study.rs"]
@@ -75,9 +99,10 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# TASK-1335: checked_forge_kind adds a third worktree read of [forge] provider.
 [readers."aida-cli-lib/src/forge.rs"]
 channels = ["worktree", "write"]
-sites = 2
+sites = 3
 
 [readers."aida-cli-lib/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
@@ -98,6 +123,12 @@ sites = 2
 [readers."aida-cli-lib/src/history_layout.rs"]
 channels = ["worktree", "home", "write"]
 sites = 2
+
+# STORY-1680: `[awaiting] idle_in_progress_hours`, read from the project copy
+# and then ~/.aida through one path helper (a policy threshold only).
+[readers."aida-cli-lib/src/idle_in_progress.rs"]
+channels = ["worktree", "home"]
+sites = 1
 
 [readers."aida-cli-lib/src/implementer_preflight.rs"]
 channels = ["worktree"]
@@ -121,6 +152,10 @@ sites = 1
 channels = ["worktree"]
 sites = 2
 
+[readers."aida-cli-lib/src/requirements_cli.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/role.rs"]
 channels = ["worktree"]
 sites = 1
@@ -130,6 +165,77 @@ channels = ["worktree", "probe"]
 sites = 3
 
 [readers."aida-cli-lib/src/db_block.rs"]
+channels = ["worktree"]
+sites = 1
+
+# Distributed-store detection: an existence probe for a project root, the
+# walk-up that reads mode, and the [id_format] reader (policy values only).
+[readers."aida-cli-lib/src/store_sync.rs"]
+channels = ["worktree", "probe"]
+sites = 3
+
+[readers."aida-cli-lib/src/usage_mcp_helpers.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/agent_registry_root.rs"]
+channels = ["probe"]
+sites = 2
+
+[readers."aida-cli-lib/src/store_push_pull.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/drain_gate.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-cli-lib/src/worktree_gc.rs"]
+channels = ["worktree", "home", "prose"]
+sites = 9
+
+[readers."aida-cli-lib/src/zen_drive_root.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/session_start.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/autopilot_intake.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/scaffold_init.rs"]
+channels = ["worktree", "write"]
+sites = 1
+
+[readers."aida-cli-lib/src/agent_launch.rs"]
+channels = ["prose"]
+sites = 2
+
+# Session leases: [session].enforcement and [behavior] permission_mode
+# readers, both from the project .aida/config.toml (policy values only).
+[readers."aida-cli-lib/src/leases.rs"]
+channels = ["worktree"]
+sites = 2
+
+# Review-story storage check: walks ancestor .aida/config.toml files to
+# refuse legacy resolution when distributed storage is declared (policy).
+[readers."aida-cli-lib/src/pr_lookup.rs"]
+channels = ["worktree"]
+sites = 1
+
+# Phase driver: the [drain] section reader (read_drain_config) and the
+# queue-work permission-mode resolver's .aida/config.toml source, both from the
+# project .aida/config.toml (policy values only).
+[readers."aida-cli-lib/src/phase_driver.rs"]
+channels = ["worktree"]
+sites = 2
+
+# PhaseDriver trait impl: the harvest gate reads its config from the project
+# .aida/config.toml (policy values only).
+[readers."aida-cli-lib/src/phase_driver_trait.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -143,7 +249,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 41
+sites = 1
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
@@ -217,6 +323,13 @@ sites = 1
 channels = ["worktree", "write"]
 sites = 2
 
+# STORY-1641: external `aida-<name>` dispatch reads only store_path (a frozen
+# location key, via store_path_candidates) to export AIDA_STORE_PATH to the
+# child. The executable itself is resolved from PATH, never from this file.
+[readers."aida-cli-lib/src/external_cmd.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
 sites = 4
@@ -270,6 +383,9 @@ sites = 1
 store_path = "location"
 mode = "policy"            # distributed-mode detection line scan
 use_agreed_blocks = "policy"
+
+[keys.worktree.awaiting]
+idle_in_progress_hours = "policy" # STORY-1680
 
 [keys.worktree.deployment]
 store_path = "location"
@@ -387,6 +503,11 @@ auto_after_days = "policy"
 
 [keys.worktree.list]
 show_hidden_hints = "policy"
+default_sort = "policy"
+agent_limit = "policy"
+
+[keys.worktree.history]
+limit = "policy"
 
 [keys.worktree.focus]
 out_of_scope = "policy"

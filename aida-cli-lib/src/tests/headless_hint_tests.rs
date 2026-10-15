@@ -151,6 +151,12 @@ fn headless_env_launches_route_through_shared_argv_builders() {
     );
     // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
     assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
+    // STORY-1488: the phase driver moved out of lib_part6.rs.
+    assert_env_setter_has_builder_context("phase_driver.rs", include_str!("../phase_driver.rs"));
+    assert_env_setter_has_builder_context(
+        "phase_driver_trait.rs",
+        include_str!("../phase_driver_trait.rs"),
+    );
 }
 
 /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`
@@ -163,7 +169,7 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
     // STORY-771: the implementer + standalone-reviewer resume paths moved to
     // queue_cmd.rs; the advisor resume stays in lib.rs. Scan both.
     let src = format!(
-        "{}{}",
+        "{}{}{}",
         format!(
             "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("../lib.rs"),
@@ -174,7 +180,8 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
             include_str!("../lib_part5.rs"),
             include_str!("../lib_part6.rs")
         ),
-        include_str!("../queue_cmd.rs")
+        include_str!("../queue_cmd.rs"),
+        include_str!("../phase_driver_trait.rs")
     )
     .replace("\r\n", "\n");
     let count = src

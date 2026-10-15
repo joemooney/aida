@@ -48,6 +48,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         claim_verb: false,
         manual_enter_at: None,
         interrupted_at: None,
+        driver: None,
         interrupted_reason: None,
     }
 }
@@ -1049,7 +1050,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
 #[test]
 fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
     // Source guard: the worktree add/enter/do-guided claim is not a hand-off.
-    let part4 = include_str!("../lib_part4.rs");
+    let part4 = include_str!("../worktree_gc.rs");
     let start = part4
         .find("pub(crate) fn ensure_spec_worktree(")
         .expect("ensure_spec_worktree exists");
@@ -1109,7 +1110,7 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
 fn launched_worker_is_bound_by_the_real_launch_binding() {
     use std::io::BufRead;
     // Source guards: each launch path applies the binding.
-    let part2 = include_str!("../lib_part2.rs");
+    let part2 = include_str!("../agent_launch.rs");
     let tracked = &part2[part2
         .find("pub(crate) fn run_tracked_agent(")
         .expect("run_tracked_agent")..];
@@ -1121,7 +1122,8 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
         .find("review_authority::record_launched_worker(")
         .expect("foreground agent new records the spawned worker");
     assert!(bind < spawn && spawn < record);
-    let launch = &part2[part2.find("    if launch_claude {").unwrap()..];
+    let session_start = include_str!("../session_start.rs");
+    let launch = &session_start[session_start.find("    if launch_claude {").unwrap()..];
     assert!(
         launch.find("export_worker_session_env(&id)").unwrap()
             < launch.find("session::new_session(").unwrap(),
@@ -1260,7 +1262,7 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
     let gate = concat!("merge_path_approval", "_gate(");
     let merge = concat!(".merge_", "change(");
 
-    let release = include_str!("../lib_part4.rs");
+    let release = include_str!("../upgrade_release.rs");
     let start = release
         .find(concat!("`--after-pr` is a ", "merge path"))
         .expect("release --after-pr gate");
@@ -1271,7 +1273,7 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
         "release --after-pr",
     );
 
-    let wave = include_str!("../lib_part3.rs");
+    let wave = include_str!("../burndown_run.rs");
     let start = wave
         .find(concat!("fn merge_wave", "_pr(project_root"))
         .expect("burndown wave merge");
@@ -1282,7 +1284,7 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
         "burndown wave merge",
     );
 
-    let drain = include_str!("../lib_part6.rs");
+    let drain = include_str!("../phase_driver_trait.rs");
     let start = drain
         .find(concat!("merge_approval", "_inputs("))
         .expect("drain approval inputs");

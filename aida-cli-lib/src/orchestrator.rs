@@ -230,7 +230,7 @@ pub(crate) fn read_live_run(project_root: &Path, token: &str) -> Option<RunMarke
     let path = run_path(project_root, token)?;
     let marker: RunMarker = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
     let state = drain_state::DrainState::read(project_root)?;
-    (process_probe::pid_is_alive(state.orchestrator_pid)
+    (state.orchestrator_alive()
         && process_probe::pid_is_alive(marker.pid)
         && state.members.iter().any(|m| m.spec == marker.spec))
     .then_some(marker)
@@ -504,6 +504,11 @@ pub(crate) struct OrchestratorConfig {
     /// PID is dead — protects the brief window between session_start writing
     /// the lease and the shell wiring up.
     pub stale_lease_threshold_minutes: u64,
+    /// BUG-1930: a drain halts once this many consecutive specs fail with the
+    /// same environmental cause (permission denials, disk or memory
+    /// exhaustion). `0` disables the halt.
+    // trace:BUG-1930 | ai:claude
+    pub environment_halt_after: usize,
 }
 
 impl Default for OrchestratorConfig {
@@ -511,6 +516,7 @@ impl Default for OrchestratorConfig {
         Self {
             auto_release_dormant_leases: true,
             stale_lease_threshold_minutes: 10,
+            environment_halt_after: crate::auto_complete::DEFAULT_ENVIRONMENT_HALT_AFTER,
         }
     }
 }
@@ -540,6 +546,11 @@ impl OrchestratorConfig {
                 "stale_lease_threshold_minutes" => {
                     if let Ok(n) = val.parse::<u64>() {
                         cfg.stale_lease_threshold_minutes = n;
+                    }
+                }
+                "environment_halt_after" => {
+                    if let Ok(n) = val.parse::<usize>() {
+                        cfg.environment_halt_after = n;
                     }
                 }
                 _ => {}

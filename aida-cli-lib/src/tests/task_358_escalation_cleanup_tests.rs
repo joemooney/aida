@@ -44,6 +44,7 @@ fn write_test_lease(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        driver: None,
     };
     let path = sessions.join(format!("{id}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
@@ -117,6 +118,7 @@ fn auto_release_disabled_always_reports_live() {
     let cfg = orchestrator::OrchestratorConfig {
         auto_release_dormant_leases: false,
         stale_lease_threshold_minutes: 10,
+        ..Default::default()
     };
     assert_eq!(
         auto_release_decision_for_lease(root, &lease, &cfg),
