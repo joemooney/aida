@@ -2038,3 +2038,77 @@ fn fix_day_review_template_uses_provenance_writer_for_verdicts() {
     assert!(!template.contains("cat > \"$AIDA_REVIEW_VERDICT_FILE\""));
     assert!(template.contains("recorded_by") && template.contains("recorded_at"));
 }
+
+// BUG-2136: drive one record call the way `aida review record` does — snapshot
+// the file, build, judge the outcome, write — and return the outcome line.
+// trace:BUG-2136 | ai:claude
+fn record_and_describe(root: &Path, verdict: &str, sha: &str, findings: &[String]) -> String {
+    let path = verdict_path(root, "BUG-77");
+    let before = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned());
+    let obj = build_verdict_object(
+        root,
+        &path,
+        Some(verdict),
+        Some(sha),
+        None,
+        None,
+        findings,
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    let outcome = record_outcome(before.as_ref(), &obj);
+    write_verdict_object(&path, &obj).unwrap();
+    record_outcome_line(
+        &outcome,
+        VerdictKind::parse(verdict).label(),
+        "BUG-77",
+        obj.get("reviewed_sha").and_then(|v| v.as_str()),
+    )
+}
+
+#[test]
+fn a_fresh_approval_at_a_new_head_reports_a_new_round() {
+    let dir = TempDir::new().unwrap();
+    let sha1 = "1111111111111111111111111111111111111111";
+    let sha2 = "2222222222222222222222222222222222222222";
+    let first = record_and_describe(dir.path(), "request-changes", sha1, &["bug".into()]);
+    assert_eq!(
+        first,
+        format!(
+            "recorded {} for BUG-77 at 111111111111 (round 1)",
+            VerdictKind::RequestChanges.label()
+        )
+    );
+    // The BUG-2136 scenario: an approval after a merge from main, at a new head.
+    let second = record_and_describe(dir.path(), "approved", sha2, &[]);
+    assert_eq!(
+        second,
+        format!(
+            "recorded {} for BUG-77 at 222222222222 (round 2)",
+            VerdictKind::Approved.label()
+        )
+    );
+    assert!(!second.contains("unchanged"), "{second}");
+}
+
+#[test]
+fn an_identical_re_recording_reports_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let sha = "3333333333333333333333333333333333333333";
+    let first = record_and_describe(dir.path(), "approved", sha, &[]);
+    assert!(first.starts_with("recorded "), "{first}");
+    let again = record_and_describe(dir.path(), "approved", sha, &[]);
+    assert_eq!(
+        again,
+        format!(
+            "unchanged: identical {} already recorded at 333333333333",
+            VerdictKind::Approved.label()
+        )
+    );
+    // A different verdict at the SAME head is a new round, not "unchanged".
+    let changed = record_and_describe(dir.path(), "request-changes", sha, &["x".into()]);
+    assert!(changed.ends_with("(round 2)"), "{changed}");
+}
