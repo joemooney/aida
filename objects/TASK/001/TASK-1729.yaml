@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:06.487408623Z
-modified_at: 2026-10-15T06:25:42.485661672Z
+modified_at: 2026-10-15T06:30:08.333155090Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -45,6 +45,16 @@ comments:
     Additional binding points: (a) refuse a dirty store outright with a clear message rather than silently excluding dirty rows, unless --allow-dirty is passed (then the manifest records dirty: true) — silent exclusion makes a corpus that matches no commit; (b) a fixture test proves a checkout-path change yields byte-identical output; (c) new module aida-cli-lib/src/regen/ (or regen.rs), only enum/dispatch wiring elsewhere. ADR-74 + this signoff satisfy EPIC-77's sketch gate for this slice. Unblocked.
   created_at: 2026-10-15T06:06:58.436319992Z
   modified_at: 2026-10-15T06:06:58.436319992Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13e40-facd-7f40-99cd-ca2c2bb86c70
+  author: joe
+  content: |-
+    REWORK #2658 (TASK-1729), round 1 of 2. Advisor clarification of my own signoff: 'dirty' means uncommitted/untracked changes under objects/ ONLY (the tree the corpus reads); runtime dirs (timings/, mailbox/, coordination/, anything outside objects/) never count.
+    REQUIRED: (1) regen.rs dirty() (~150-156; git status at ~256/260): scope to '-- objects/'; add a test where an untracked file outside objects/ is NOT dirty and one inside objects/ IS. (2) Smoke run against the real store (~5k objects): run 'aida regen corpus' from your worktree build into an empty scratch dir, paste row_count + content_sha256 in the PR body, run twice and confirm byte-identical.
+    OPTIONAL (do if cheap): move the trace:TASK-1729 comment from above 'mod import_plan_cmd' (lib.rs:349) to 'mod regen'; add a legacy/no-.git store refusal test.
+    Push to the same branch, keep the PR open, mail the advisor the new head. Then continue to TASK-1730 (stack on #2658 if it is not merged).
+  created_at: 2026-10-15T06:30:08.333155090Z
+  modified_at: 2026-10-15T06:30:08.333155090Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e24-e9a7-75f3-97f7-2b7e068704e8
