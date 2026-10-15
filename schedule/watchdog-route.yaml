@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-10-15T07:06:06.711496649Z
+last_run: 2026-10-15T07:56:20.611975741Z
 last_by:
   seat: advisor
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
   vendor: claude
 result: done
-note: 'trip = mail-poll-setup on advisor session 20233459: a single 10-min sweep cron the OPERATOR explicitly requested at 23:47 (''check your email every 10-15m at least''). Not a runaway; kept deliberately. Session-only; dies with the session.'
-due_since: 2026-10-15T07:54:33.831308692Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-10-15T07:46:19.947806333Z
-  job: watchdog
-  error: 'exit 1: '
+note: 'trips = mail-poll-setup + repeated-prompt on advisor session 20233459: the operator-requested 10-min sweep (23:47). Session is past its context ceiling; handoff written at 00:50 (.aida/handoff/advisor/latest.md). Restart needs the operator (asleep) — exiting now would kill the in-session ship script and fixers. Operator restarts the seat in the morning.'
