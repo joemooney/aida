@@ -428,13 +428,30 @@ fn sweep_process_group(pgid: u32, config: &ExitSignalConfig) {
     }
 }
 
+/// The `kill` target for process group `pgid` (`-pgid`), or `None` when the
+/// value cannot name a single foreign group: `kill(0, …)` hits the caller's
+/// own group, `kill(-1, …)` every process we may signal, and a pgid above
+/// `pid_t::MAX` would wrap to an arbitrary target.
+// trace:TASK-1750 | ai:claude
+#[cfg(unix)]
+fn group_kill_target(pgid: u32) -> Option<libc::pid_t> {
+    libc::pid_t::try_from(pgid)
+        .ok()
+        .filter(|&g| g > 1)
+        .map(|g| -g)
+}
+
 /// `true` if the process group `pgid` still has at least one member. Uses
 /// `kill(-pgid, 0)`: success or `EPERM` ⇒ a member exists; `ESRCH` ⇒ empty.
+/// A pgid that cannot name a single group reads as empty.
 #[cfg(unix)]
 fn process_group_alive(pgid: u32) -> bool {
+    let Some(target) = group_kill_target(pgid) else {
+        return false;
+    };
     // SAFETY: `kill` with signal 0 performs only the existence/permission check
     // and delivers no signal. The negative pid targets the process group.
-    let rc = unsafe { libc::kill(-(pgid as libc::pid_t), 0) };
+    let rc = unsafe { libc::kill(target, 0) };
     if rc == 0 {
         return true;
     }
@@ -446,10 +463,13 @@ fn process_group_alive(pgid: u32) -> bool {
 /// Send `signal` to the whole process group `pgid` via `kill(-pgid, signal)`.
 #[cfg(unix)]
 fn kill_process_group(pgid: u32, signal: libc::c_int) {
+    let Some(target) = group_kill_target(pgid) else {
+        return;
+    };
     // SAFETY: a negative pid directs the signal to the process group; we ignore
     // the result (ESRCH simply means the group already drained).
     unsafe {
-        libc::kill(-(pgid as libc::pid_t), signal);
+        libc::kill(target, signal);
     }
 }
 
@@ -808,6 +828,27 @@ mod tests {
         assert!(
             !process_group_alive(0x7FFF_FFF0),
             "an impossible pgid must read as empty"
+        );
+    }
+
+    /// TASK-1750: pgids 0 and 1 (own group / every process) and values above
+    /// `pid_t::MAX` (which would wrap) never become a `kill` target.
+    // trace:TASK-1750 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn group_kill_target_rejects_own_group_broadcast_and_wrap() {
+        assert_eq!(group_kill_target(0), None);
+        assert_eq!(group_kill_target(1), None);
+        assert_eq!(group_kill_target(u32::MAX), None);
+        assert_eq!(group_kill_target(0x8000_0000), None);
+        assert_eq!(group_kill_target(4242), Some(-4242));
+        assert!(
+            !process_group_alive(0),
+            "pgid 0 must not probe our own group"
+        );
+        assert!(
+            !process_group_alive(u32::MAX),
+            "u32::MAX must not wrap to -1"
         );
     }
 

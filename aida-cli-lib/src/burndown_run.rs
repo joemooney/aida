@@ -564,31 +564,13 @@ pub(crate) fn handle_burndown_run(
             // discoverable log and render a live human progress line per event.
             run_burndown_verbose(&current_prompt, mode)?
         } else {
-            // Inherit stdio so the drain streams live (the quiet default:
-            // `claude -p` without stream-json buffers until completion, so the
-            // operator sees the final summary).
-            std::process::Command::new("claude")
-                .arg("-p")
-                .arg(&current_prompt)
-                .arg("--permission-mode")
-                .arg(mode)
-                // BUG-607: the launcher holds the exclusive drain lock (BUG-538),
-                // so the agent must NOT re-check for a "competing" drain — that
-                // check detects its own launcher and self-deadlocks. This flag
-                // tells the `/aida-burndown` skill to trust the lock and fan out.
-                .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-                // TASK-1169 / ADR-22: the LAUNCHER sets the bounded background-wait
-                // ceiling, so a hand-typed launch behaves identically to a
-                // daemonized one (the 2026-07-18 limp came from exactly that
-                // divergence) and the retired `=0` stopgap can't leak in from the
-                // ambient shell. trace:TASK-1169 | ai:claude
-                .env(ceiling_key, &ceiling_value)
+            build_burndown_quiet_command(&current_prompt, mode, ceiling_key, &ceiling_value)
                 .status()
                 .map_err(|e| {
                     anyhow::anyhow!(
                         "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
-                         Code CLI on PATH. Install it, or use `aida queue work --auto-complete` \
-                         (the orchestrator drain) instead."
+                     Code CLI on PATH. Install it, or use `aida queue work --auto-complete` \
+                     (the orchestrator drain) instead."
                     )
                 })?
         };
@@ -1994,29 +1976,64 @@ pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::proc
 
     let child_grant =
         seat_authority::issue_child(&project_root, "implementer", &current_user_id(None))?;
-    let status_code = std::process::Command::new("claude")
-        .args(burndown_verbose_claude_args(prompt, mode))
-        .stdout(std::process::Stdio::from(log))
-        // BUG-607: the launcher holds the exclusive drain lock — the agent must
-        // trust it and not self-detect a "competing" drain (see the quiet path).
-        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-        .env("AIDA_SESSION_ROLE", "implementer")
-        .env(seat_authority::GRANT_ENV, child_grant.id)
-        // TASK-1169 / ADR-22: identical bounded ceiling to the quiet path —
-        // `--verbose` adds visibility, never a behaviour fork.
-        // trace:TASK-1169 | ai:claude
-        .env(ceiling_key, ceiling_value)
-        .status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
-                 CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
-                 orchestrator drain) instead."
-            )
-        });
+    let status_code =
+        build_burndown_verbose_command(prompt, mode, &child_grant.id, ceiling_key, &ceiling_value)
+            .stdout(std::process::Stdio::from(log))
+            .status()
+            .map_err(|e| {
+                anyhow::anyhow!(
+            "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
+             CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
+             orchestrator drain) instead."
+        )
+            });
     // Always stop the tee, even on spawn failure, so the background thread exits.
     tee_handle.stop();
     status_code
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_burndown_quiet_command(
+    current_prompt: &str,
+    mode: &str,
+    ceiling_key: &str,
+    ceiling_value: &str,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new("claude");
+    cmd.arg("-p")
+        .arg(current_prompt)
+        .arg("--permission-mode")
+        .arg(mode)
+        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        .env(ceiling_key, ceiling_value);
+    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_burndown_verbose_command(
+    prompt: &str,
+    mode: &str,
+    child_grant_id: &str,
+    ceiling_key: &str,
+    ceiling_value: &str,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new("claude");
+    cmd.args(burndown_verbose_claude_args(prompt, mode))
+        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env(seat_authority::GRANT_ENV, child_grant_id)
+        .env(ceiling_key, ceiling_value);
+    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
 }
 
 /// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store

@@ -81,6 +81,12 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) id: String,
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
+    /// Kernel start time of `pid`, so a recycled pid does not read as the
+    /// live agent. Missing on entries written by older binaries; liveness
+    /// then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_start: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -507,6 +513,7 @@ pub(crate) fn touch_mcp_agent(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
+            pid_start: crate::process_probe::process_start_identity(pid),
             name: None,
             description: None,
             tty: current_tty(),
@@ -533,6 +540,9 @@ pub(crate) fn touch_mcp_agent(
     if entry.source != "agent-launcher" {
         entry.id = id;
         entry.agent_type = agent_type;
+        if entry.pid != pid || entry.pid_start.is_none() {
+            entry.pid_start = crate::process_probe::process_start_identity(pid);
+        }
         entry.pid = pid;
     }
     entry.last_active_at = now;
@@ -576,6 +586,7 @@ pub(crate) fn touch_session_start_agent(
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
+            pid_start: crate::process_probe::process_start_identity(pid),
             name: env_nonempty("AIDA_AGENT_NAME"),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -601,6 +612,9 @@ pub(crate) fn touch_session_start_agent(
 
     entry.id = id;
     entry.agent_type = agent_type;
+    if entry.pid != pid || entry.pid_start.is_none() {
+        entry.pid_start = crate::process_probe::process_start_identity(pid);
+    }
     entry.pid = pid;
     entry.last_active_at = now;
     entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
@@ -652,6 +666,7 @@ pub(crate) fn register_spawned_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name,
         description,
         tty: current_tty(),
@@ -697,6 +712,7 @@ pub(crate) fn register_role_enter_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name: Some(format!("role:{role}")),
         description: Some("aida role enter shell".to_string()),
         tty,
@@ -927,6 +943,7 @@ pub(crate) fn register_existing_agent(
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
         name,
         description,
         tty,
@@ -1562,9 +1579,16 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
     seen.then_some(false)
 }
 
+/// The entry's process is still running: pid plus recorded start time, so a
+/// recycled pid reads dead.
+// trace:TASK-1750 | ai:claude
+fn entry_process_alive(entry: &AgentRegistryEntry) -> bool {
+    crate::process_probe::process_identity_is_alive(entry.pid, entry.pid_start.as_deref())
+}
+
 // trace:BUG-1156 | ai:codex
 fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
-    if entry.ended_at.is_some() || !crate::process_probe::pid_is_alive(entry.pid) {
+    if entry.ended_at.is_some() || !entry_process_alive(entry) {
         return false;
     }
     if entry.source == "role-enter" {
@@ -1582,7 +1606,7 @@ fn role_enter_has_live_session(project_root: &Path, role_entry: &AgentRegistryEn
             entry.id != role_entry.id
                 && entry.source != "role-enter"
                 && entry.ended_at.is_none()
-                && crate::process_probe::pid_is_alive(entry.pid)
+                && entry_process_alive(&entry)
                 && role_entry
                     .role
                     .as_deref()
@@ -2301,6 +2325,7 @@ mod tests {
             id: agent_id("codex", pid),
             agent_type: "codex".to_string(),
             pid,
+            pid_start: None,
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
@@ -2695,6 +2720,31 @@ mod tests {
             ended_resumable_agent_views(tmp.path(), &ctx(Utc::now(), 30, vec![tmp.path().into()]));
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].native_session_id.as_deref(), Some("018f-session"));
+    }
+
+    /// TASK-1750: an entry whose live pid carries a different recorded start
+    /// time is a recycled pid and reads dead; the matching start time (and a
+    /// legacy entry with none) reads live.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_pid_entry_is_not_live() {
+        let Some(ours) = crate::process_probe::process_start_identity(std::process::id()) else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut e = entry_with(std::process::id(), Utc::now());
+        e.source = "mcp".to_string();
+        assert!(
+            registry_entry_is_live(tmp.path(), &e),
+            "legacy entry: bare pid probe"
+        );
+        e.pid_start = Some(ours);
+        assert!(registry_entry_is_live(tmp.path(), &e));
+        e.pid_start = Some("2000-01-01T00:00:00+00:00".to_string());
+        assert!(
+            !registry_entry_is_live(tmp.path(), &e),
+            "recycled pid must read dead"
+        );
     }
 
     // trace:STORY-790 | ai:codex

@@ -30,6 +30,7 @@ fn performance_injected_inputs_keep_findings_and_audits() {
         role: None,
         scope: None,
         schedule_source: None,
+        phases: Vec::new(),
     }];
     let policy = PerformancePolicy::default();
     let lineage = BinaryLineage::unscoped();
