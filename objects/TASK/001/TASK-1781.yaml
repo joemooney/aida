@@ -1,0 +1,25 @@
+id: 01a13fff-1445-7f13-9574-2207047b66ed
+spec_id: TASK-1781
+agreed_id: TASK-1781
+title: 'Contained-parent posture check: allowlist instead of denylist; --no-default-flags config gap; --cwd contained write root'
+description: |-
+  Non-blocking findings from the #2672 (BUG-2151) STRICT review:
+  - refuse_uncontained_child_of_contained_parent is a denylist of 4 posture flags; --allowedTools, --add-dir, --mcp-config and --permission-prompt-tool still pass via -- or default_flags. Use an allowlist under a contained parent.
+  - --no-default-flags skips the [agents] contained config (not reachable from a contained parent); either document it as the operator escape hatch or refuse it.
+  - contained_posture() computes the write root from the process cwd, not the --cwd target.
+  - codex/agy show the role picker before refusing (cosmetic).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T14:37:23.909918632Z
+modified_at: 2026-10-15T14:37:23.909918632Z
+req_type: Task
+filed_at:
+  code_sha: b9f2f5a28b0448375ce2ef8a819854b34acd4c11
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
