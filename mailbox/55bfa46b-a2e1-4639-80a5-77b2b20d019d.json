@@ -1,0 +1,19 @@
+{
+  "id": "55bfa46b-a2e1-4639-80a5-77b2b20d019d",
+  "thread_id": "55bfa46b-a2e1-4639-80a5-77b2b20d019d",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792056425108,
+  "body": "Posted exact fork on TASK-1732: signed uppercase identifier mapping allows AIDA_REGEN_TRIAL_ROOT->PATH or PYTHONPATH, reintroducing trial execution/import roots into trusted oracle env. No R2 code yet. Need protected target/source scope ruling compatible with TASK-1730 rework; identifier validation alone insufficient. Recommend scoped locator aliases and deny execution/control targets; exact scope for advisor, no silent policy invention.",
+  "subject": "TASK-1732 forward fork: adapter env targets can undo oracle isolation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
