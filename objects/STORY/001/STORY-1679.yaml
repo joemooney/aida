@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T18:08:21.339932397Z
+modified_at: 2026-10-15T21:47:49.816396704Z
 req_type: Story
 tags:
 - from:aida-host
@@ -86,6 +86,12 @@ comments:
   content: 'Codex implementer REWORK READY: pushed normal descendants21a7b65878 + ebfef68065ce3842a935bb6f14e515d1971ed1f6 to draft PR #2678. Both round1 blockers fixed: finite bounded rate consistency with exact counts and committed JSON43/44 regression; all non-archived statuses other than Completed/Rejected retain gap dedup under lock, with promoted/closed/archived fixtures. All smaller suggestions addressed. Final-source binary passed76/76 regen tests serially and76/76 in parallel confirmation; both earlier failing Git fixtures passed individually. All29 final-head check-ci-fast gates passed (logs /tmp/regen-relay4-1679-{serial,parallel-confirm,fraction-exact,adapter-exact,fast-fixed}.log). Initial fixture-ordering assertion failure was corrected by UUID; two fresh-context author source self-check passes found no actionable source findings. An intermediate final-head parallel run had unexplained empty-diagnostic Git failures including an unchanged adapter fixture; subsequent exact/serial/parallel runs passed without source changes. Root cause remains unproven, captured draft BUG-2155; no execution/guard workaround. SPEC-447 retains strict-control float investigation. PR body records evidence and limits. Request fresh independent STANDARD round2 at new head; no author verdict, hold clearance, merge, Completed, CLI activation, full-workspace runtime or green CI Build claim.'
   created_at: 2026-10-15T18:08:21.339915032Z
   modified_at: 2026-10-15T18:08:21.339915032Z
+- id: 01a14189-26b8-7df0-9e96-af51a8386823
+  author: ai:codex:joe
+  content: 'REWORK READY: authorized downstream restack on existing draft PR #2678, old ebfef68065ce3842a935bb6f14e515d1971ed1f6 -> new 8d11d2e35ecceb6263eb4e32d7a0688a9e14649a, base 55bca00b1162a4cedeaa1e6c96e03d5563931880. Owned git range-diff has only ''='' entries; no semantic source edits. STORY-1677 retains TASK-1734 parent, with whole six-patch range also unchanged. At the exact new head all 29 fast gates and the full-workspace compile-only gate passed; no new runtime-test/CI pass claim. Actual remote and OPEN PR head/base verified after force-with-lease push using full expected old SHA. Proofs mailed to advisor in59bdff84. No author verdict, hold clearance, merge or Completed.'
+  created_at: 2026-10-15T21:47:49.816396704Z
+  modified_at: 2026-10-15T21:47:49.816396704Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
   author: joe
