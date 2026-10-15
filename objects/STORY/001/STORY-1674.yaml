@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T15:44:36.772911777Z
+modified_at: 2026-10-15T15:46:07.977599148Z
 req_type: Story
 tags:
 - from:aida-host
@@ -81,6 +81,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Missing testable acceptance and signed implementation sketch for schema/write provenance and query-time ledger join; exact query surface, reported harness-version source and session/time join semantics are undecided.. No triage reason was given.'
   created_at: 2026-10-15T15:36:09.239902182Z
   modified_at: 2026-10-15T15:36:09.239902182Z
+- id: 01a1403e-01e9-75f3-b56a-b8b19288a5ac
+  author: joe
+  content: Relay3 resumed signed B+C work in isolated codex/story-1674, lease01a1403c9371 at origin/main3d85bbde84. Inspecting canonical write seams and the existing usage show query before implementation. Exact AIDA_HARNESS_VERSION only, missing stays unknown; no launcher/seat changes or guessed transcript metadata. Cache rework and prior branch validations remain queued in normal Cargo slots.
+  created_at: 2026-10-15T15:46:07.977599148Z
+  modified_at: 2026-10-15T15:46:07.977599148Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
   author: joe
