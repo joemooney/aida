@@ -1476,39 +1476,35 @@ fn apply_agent_default_flags_contained_injects_when_native() {
     assert!(!claude_args_request_dontask(&claude.default_args));
     assert!(claude.default_args.contains(&"--settings".to_string()));
 
-    let mut codex = AgentLaunchConfig {
-        agent_type: "codex",
-        binary: "codex",
-        default_args: Vec::new(),
-        prompt_style: AgentPromptStyle::Positional,
-        contained: false,
-    };
-    apply_agent_default_flags(
-        &mut codex,
-        &project,
-        AgentDefaultFlagOptions::new(true, Vec::new(), None),
-        false,
-    )
-    .unwrap();
-    assert_eq!(
-        codex.default_args,
-        vec![
-            "--sandbox",
-            "workspace-write",
-            "--ask-for-approval",
-            "never"
-        ]
-    );
-    assert_eq!(
-        resolved_agent_permission_summary("codex", &codex.default_args),
-        "codex sandbox=workspace-write, ask-for-approval=never"
-    );
-    assert!(!codex
-        .default_args
-        .contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()));
-    assert!(!codex
-        .default_args
-        .contains(&"--dangerously-bypass".to_string()));
+    // BUG-2144: this used to pin `[agents] contained` on codex as its own
+    // `--sandbox workspace-write` posture. The advisor ruling on #2665 reverses
+    // that intent: codex's sandbox is not AIDA containment, so a contained
+    // codex (or agy) `agent new` launch is refused. trace:BUG-2144 | ai:claude
+    for (agent_type, binary) in [("codex", "codex"), ("antigravity", "agy")] {
+        let mut cfg = AgentLaunchConfig {
+            agent_type,
+            binary,
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let err = apply_agent_default_flags(
+            &mut cfg,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
+            false,
+        )
+        .expect_err("a contained codex/agy agent launch must be refused");
+        assert!(
+            format!("{err:#}").contains("refusing to launch it"),
+            "{agent_type}: {err:#}"
+        );
+        assert!(
+            cfg.default_args.is_empty(),
+            "{agent_type}: no posture applied"
+        );
+        assert!(!cfg.contained);
+    }
 }
 
 // trace:STORY-1124 | ai:codex
@@ -3948,13 +3944,15 @@ fn apply_agent_default_flags_sets_contained_flag_for_claude() {
         prompt_style: AgentPromptStyle::Positional,
         contained: false,
     };
+    // BUG-2144: a contained codex launch used to proceed marked uncontained;
+    // per the advisor ruling on #2665 it is refused. trace:BUG-2144 | ai:claude
     apply_agent_default_flags(
         &mut codex,
         &project,
         AgentDefaultFlagOptions::new(true, Vec::new(), None),
         false,
     )
-    .unwrap();
+    .expect_err("a contained codex agent launch is refused");
     assert!(!codex.contained);
 
     // 2. Bypass mode active

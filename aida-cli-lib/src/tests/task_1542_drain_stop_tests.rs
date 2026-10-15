@@ -186,3 +186,69 @@ fn task_1542_forwarding_refuses_a_child_whose_identity_no_longer_matches() {
         "the matching child must be terminated by the forwarded SIGTERM"
     );
 }
+
+/// TASK-1768: the forwarder and the collector use the STRICT identity match.
+/// A record the lenient lock probe reads as Unknown (and so "alive") —
+/// unparsable, non-canonical exact ticks, or an exact identity in another
+/// scheme — must never be signalled, and the collector must not collect it.
+// trace:TASK-1768 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1768_signal_paths_refuse_unknown_identities() {
+    let mut survivor = std::process::Command::new("sleep")
+        .arg("60")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let pid = survivor.id();
+    let exact = aida_core::liveness::process_start_identity_exact(pid).expect("exact identity");
+    let (scheme, payload) = exact.split_at(exact.find(':').unwrap() + 1);
+    let unknowns = [
+        "garbage".to_string(),
+        format!("{scheme}+{payload}"),
+        format!("{scheme}0{payload}"),
+        // An exact identity in the other scheme is not comparable.
+        if scheme == "linux-starttime:" {
+            "sysinfo-start:2026-09-18T12:00:00+00:00".to_string()
+        } else {
+            "linux-starttime:5".to_string()
+        },
+    ];
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+    let drain = std::process::id();
+    for (i, rec) in unknowns.iter().enumerate() {
+        // The lenient probe still holds (reads alive) — behaviour-neutral for lock reclaim.
+        assert!(
+            aida_core::liveness::process_identity_is_alive(pid, Some(rec)),
+            "{rec:?}"
+        );
+        let child = VendorChild {
+            lease_id: format!("unknown-{i}"),
+            pid,
+            start_time: rec.clone(),
+        };
+        assert!(
+            forward_term_to_children(&[child]).is_empty(),
+            "{rec:?} was signalled"
+        );
+        write_child_lease(root, &format!("unknown-{i}"), drain, pid, Some(rec), false);
+    }
+    assert!(in_flight_vendor_children(root, drain).is_empty());
+    assert!(
+        survivor.try_wait().unwrap().is_none(),
+        "refused forwards must not touch the child"
+    );
+
+    // Positive control: the canonical exact identity IS a strict match.
+    let genuine = VendorChild {
+        lease_id: "genuine".to_string(),
+        pid,
+        start_time: exact,
+    };
+    assert_eq!(forward_term_to_children(&[genuine]), vec![pid]);
+    let _ = survivor.wait();
+}
