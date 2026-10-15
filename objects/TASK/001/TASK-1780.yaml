@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:40:07.146402411Z
-modified_at: 2026-10-15T12:45:12.003924929Z
+modified_at: 2026-10-15T12:47:27.958150411Z
 req_type: Task
 comments:
 - id: 01a13f98-5bc3-7163-8498-acfc5a3f26f1
@@ -31,6 +31,12 @@ comments:
     Tests: a docs-only diff skips; an embedded-template diff builds; an .rs diff builds; --force-build; the cold-target fallback.
   created_at: 2026-10-15T12:45:12.003924929Z
   modified_at: 2026-10-15T12:45:12.003924929Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a13f9a-6ed6-7fa2-a607-8534a5582dd8
+  author: joe
+  content: 'AMEND (05:48): the target fs is ext4 (/dev/sdd1); reflink is probed as NOT supported. Seed with a plain ''cp -a target/agent target/worktrees/<wt>/agent'' (7.6G NVMe-to-NVMe, ~10s). Do NOT hardlink: rustc rewrites incremental/ in place and would corrupt main''s cache. Also: target/worktrees holds 34 dirs = 224G; the reaper should drop target dirs of merged/removed worktrees (check aida doctor merged-agent-worktrees covers target/worktrees/<name>).'
+  created_at: 2026-10-15T12:47:27.958150411Z
+  modified_at: 2026-10-15T12:47:27.958150411Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
