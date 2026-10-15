@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:46:28.056514199Z
-modified_at: 2026-10-15T04:03:12.452041443Z
+modified_at: 2026-10-15T04:05:23.778755203Z
 req_type: Bug
 tags:
 - capture
@@ -19,6 +19,54 @@ comments:
   content: 'ADVISOR RULING (fire mode, 2026-10-14): Least privilege. A fresh headless queue-work child must NOT inherit the launcher''s grant. Direction: mint a child grant scoped to the routed role (subject = child, seat = routed role, delegable_seats = empty), so it falls under the BUG-1808 delegation preflight; if the launcher may not delegate that seat, the launch is refused (fail closed) rather than run under the parent grant. AIDA_SESSION_GRANT is always set explicitly for the child (never inherited from env). This is an authority-path change: an implementation SKETCH on this spec (grant minting call site, lifetime/expiry, revocation on child exit, what happens to existing in-flight children) is required and needs advisor signoff BEFORE code. Approved for sketch.'
   created_at: 2026-10-15T04:03:11.471761197Z
   modified_at: 2026-10-15T04:03:11.471761197Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13dbc-76c2-7243-bb20-e491998d510d
+  author: joe
+  content: |
+    SKETCH (for advisor signoff): BUG-2139 headless child gets a minted, routed-seat grant
+
+    Today: the Fresh+no_human arm (queue_cmd.rs ~12750) calls session::exec_vendor_headless; build_exec_vendor_headless_command (session.rs:3008) never touches AIDA_SESSION_GRANT, so the child inherits the launcher's grant id. The only caller is that one arm. Because queue_work_issues_child_grant returns false for a fresh headless launch, BUG-1808 skips its preflight here.
+
+    1. Preflight (read-only, before any mutation). Change queue_work_issues_child_grant to return `!no_launch`, which makes every launch mint a child grant. The existing block at queue_cmd.rs ~11094 then runs validate_child_delegation(project_root, canonical(role)) and fails through queue_work_delegation_refusal, so the status, queue row, worktree, lease and manifest are all left untouched. --dry-run stays exempt.
+
+    2. Mint call site. Reuse the existing issue_child block at queue_cmd.rs ~12560 by removing its `if !no_human` guard so it also covers Fresh+no_human: `seat_authority::issue_child(&project_root, &canonical_role_name(&role), &current_user_id(None))`. The result is subject = current_user_id, a fresh grant id and session_id, seat = routed role, delegable_seats = [], parent_grant_id = the launcher, and expires_at = the parent's expires_at. issue_child calls validate_child_delegation again, so a TOCTOU change such as a roster edit or a parent revoked between the preflight and the launch still fails closed. NOTE: "subject=child" in the ruling maps to the existing issue_child convention. The verifier binds grant.subject to the caller's current_user_id, so a distinct per-process subject would need verifier work and is out of scope.
+
+    3. Plumbing. exec_vendor_headless and build_exec_vendor_headless_command take a new `seat: &str, grant_id: &str` (non-optional). The command builder ALWAYS calls `.env(GRANT_ENV, grant_id)` and `.env("AIDA_SESSION_ROLE", seat)`, for all three vendors. It never inherits either one.
+
+    4. Lifetime and revocation.
+    - Normal exit and nonzero exit: once child.wait() returns, exec_vendor_headless calls a new `seat_authority::revoke(id)`. revoke_current is refactored into revoke_by_id plus an env wrapper. The revoke runs before process::exit, and a failed revoke only warns because expiry still bounds the grant.
+    - Spawn failure: the grant is revoked on the error path too.
+    - Launcher SIGKILL or crash: the grant can leak, but it stays bounded by the parent's expires_at (24h max), and grant_check_for_at rejects it as soon as the parent is revoked or expires. Revoking the launcher, for example with `aida role exit`, therefore cuts off every child.
+    - Optional hardening (same PR if cheap): stamp child_grant_id on the lease next to active_pid, and have lease end/reap revoke it.
+
+    5. In-flight children at deploy (N-1). A running headless child keeps the inherited parent grant id baked into its env. Nothing migrates it, and it ends when the child exits or the parent grant expires or is revoked. To cut one off immediately, the operator revokes the parent seat. No store or schema change is needed: the SeatGrant fields already exist and the lease field is optional. An old-binary launcher process already past exec keeps the old behaviour, and a new spawn always uses the new path.
+
+    6. Failure modes. Each one fails closed and the launch is refused:
+    - the launcher has no grant
+    - the launcher's grant does not delegate the seat
+    - the roster denies the principal
+    - the parent was revoked or expired between preflight and mint
+    - write_grant hits an IO error
+    - the grant id is missing at the builder (a type error, not a runtime check)
+
+    7. Orchestrator. A headless --auto-complete reviewer phase goes through the same Fresh+no_human arm with role=reviewer. It would therefore be refused mid-drive, after phase 1. The orchestrator should preflight every headless phase seat (implementer and reviewer) up front, before phase-1 mutation.
+
+    FORK (advisor call). Today an ungranted launcher can run a fresh headless implementer: cron, a plain shell, zen/supervisor drives, or the burndown-verbose session, whose implementer child grant delegates nothing. Strict reading: refuse all of these, which breaks unattended drains that are not launched from a grant-delegating seat. Recommended alternative: for baseline seats only (implementer, guest, requester, matching classify_role_display), when the launcher cannot delegate, launch with AIDA_SESSION_GRANT="" set explicitly (grant_check treats this as Absent, so the child has baseline authority only, which is strictly less than today). Non-baseline seats such as reviewer are always refused. This keeps least privilege without breaking drains.
+
+    Files: aida-cli-lib/src/queue_cmd.rs, aida-cli-lib/src/session.rs, aida-cli-lib/src/seat_authority.rs (revoke_by_id), the orchestrator preflight (phase_driver_trait.rs / orchestrator_leases.rs), and optionally the lease stamp.
+
+    Tests:
+    - Unit: the new queue_work_issues_child_grant truth table, and the builder env tests (GRANT_ENV and AIDA_SESSION_ROLE are always set, never inherited, even with a parent grant in env, for claude, codex and agy).
+    - e2e: extend aida-cli/tests/bug_1808_delegation_preflight.rs with fresh --no-human cases:
+      - an advisor grant that lacks the routed seat is refused, with store, refs, worktrees and manifest byte-identical;
+      - an implementer grant launching implementer is refused (or gets the baseline under the fork);
+      - no grant is refused (or baseline);
+      - positive: a delegating grant leads to a fake-vendor child whose env shows a new grant id with parent_grant_id = the launcher and empty delegable_seats;
+      - after exit, the grant record has revoked_at set.
+    - Revocation cascade: revoke the parent, and the child's grant_check is Rejected(Parent).
+    - Mutation witnesses: dropping the env set, or restoring the old guard, must turn the tests red.
+  created_at: 2026-10-15T04:05:23.778755203Z
+  modified_at: 2026-10-15T04:05:23.778755203Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13dba-75c4-7c73-a7ab-a6a77551efd8
