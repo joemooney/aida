@@ -1,0 +1,23 @@
+id: 01a13d03-3058-72a1-b2ea-1e435c430fe5
+spec_id: BUG-2136
+agreed_id: BUG-2136
+title: 'aida review record prints an ambiguous ''Already on record for PR #N:'' line, so the caller can''t tell whether the new verdict was recorded'
+description: 'Observed 2026-10-14: recording APPROVED for PR-2641 at a new head after a merge printed only ''Already on record for PR #2641:'' (the verdict file did update to the new sha). Recording request-changes for BUG-1929/#2541 printed the same line, with no confirmation either way. Print an explicit outcome: recorded new round at <sha>, or unchanged (identical verdict at the same sha).'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:01.592614197Z
+modified_at: 2026-10-15T00:43:01.592614197Z
+req_type: Bug
+tags:
+- capture
+- review
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
