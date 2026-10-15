@@ -138,6 +138,22 @@ session that did not author the work, and no tag opts out of it.
 Keep `lifecycle:no-review` a *deliberate* tag on genuinely-cosmetic work, never a
 default.
 
+**Migration note: entering a worker's lease makes you an author.** Approval
+authority is bound to session identity, not to a label or seat name. Any session
+that holds an authoring lease on the work, or is recorded against it in the
+authorship ledger, is an author of that work. That includes an operator who runs
+`aida worktree enter` on a worker's lease to finish, fix, or inspect it. From
+then on, an approval recorded from that session is refused as the author's own,
+even when a human records it at a terminal: there is no human-at-a-terminal
+exception. Earlier, an operator could step into a worker's
+worktree and then approve the same PR, which made the author and the approver
+the same identity, and that is the self-approval the gate exists to stop. To
+approve work you have entered, record the verdict from a separate session that
+never held that lease, such as a fresh reviewer seat or another terminal outside
+the worktree. The operator's human-only merge-hold controls are separate
+from this check and still work as before.
+<!-- trace:BUG-1918 | ai:claude -->
+
 ## Which mode to use
 
 - **Manual brief + advisor review** — best *decisions*. Use for keystone,
