@@ -375,31 +375,37 @@ fn global_scope_without_shared_block_claims_nothing() {
 fn failed_claim_commit_leaves_no_block_behind() {
     let fixture = legacy_per_type_node();
     let store = fixture.repo.join(".aida-store");
-    let hooks = fixture.repo.parent().unwrap().join("store-hooks");
-    std::fs::create_dir_all(&hooks).unwrap();
-    let hook = hooks.join("commit-msg");
-    std::fs::write(
-        &hook,
-        "#!/bin/sh\nif grep -q 'claim first' \"$1\"; then echo 'rejected claim' >&2; exit 1; fi\nexit 0\n",
-    )
-    .unwrap();
+    // Fault injection belongs to a test-owned git executable, since project
+    // hooks intentionally never run on host store commits. Forward the verified
+    // hook pin unchanged and fail exactly the first-block claim commit.
+    // trace:BUG-1929 | ai:codex
+    let bin = fixture.repo.parent().unwrap().join("claim-git");
+    std::fs::create_dir_all(&bin).unwrap();
+    let marker = bin.join("claim-refused");
+    let shim = bin.join("git");
+    std::fs::write(&shim, format!(
+        "#!/bin/bash\nis_commit=0\nfor arg in \"$@\"; do [ \"$arg\" = commit ] && is_commit=1; done\nif [ \"$is_commit\" = 1 ]; then\n  for arg in \"$@\"; do\n    case \"$arg\" in *'claim first'*) printf refused > '{}'; echo 'rejected claim' >&2; exit 1;; esac\n  done\nfi\nexec /usr/bin/git \"$@\"\n", marker.display()
+    )).unwrap();
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
-    assert!(git(
-        &store,
-        &["config", "core.hooksPath", hooks.to_str().unwrap()]
-    )
-    .status
-    .success());
-
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
     let stdout = ok(
         "aida add --type faq with failing claim commit",
-        aida(
+        aida_env(
             &fixture,
             &["add", "--type", "faq", "--title", "Hook said no?"],
+            &[("PATH", &path)],
         ),
+    );
+    assert!(
+        marker.exists(),
+        "claim-commit fault must actually be exercised"
     );
     let id = added_id(&stdout);
     assert!(

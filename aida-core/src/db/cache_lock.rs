@@ -564,8 +564,29 @@ pub(crate) fn write_lock_info_at(
             .map(|()| true)
             .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        // BUG-1929: the record is advisory (SQLite's locking arbitrates). In a
+        // contained session the cache directory is read-only while the
+        // database files are writable, so the record cannot be created; the
+        // write proceeds unclaimed instead of failing.
+        // trace:BUG-1929 | ai:claude
+        Err(err) if lock_info_dir_read_only(&err) => Ok(false),
         Err(err) => Err(err)
             .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
+    }
+}
+
+// trace:BUG-1929 | ai:claude
+fn lock_info_dir_read_only(err: &std::io::Error) -> bool {
+    if err.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        err.raw_os_error() == Some(libc::EROFS)
+    }
+    #[cfg(not(unix))]
+    {
+        false
     }
 }
 

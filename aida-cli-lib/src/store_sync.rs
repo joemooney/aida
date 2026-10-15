@@ -1522,9 +1522,7 @@ pub(crate) fn local_lags_origin(
         return Some(false);
     }
     let range = format!("{}..{}", local_sha, origin_sha);
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let out = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-list", "--count", &range])
         .output()
         .ok()?;
@@ -1580,9 +1578,7 @@ pub(crate) fn rev_parse_origin_aida_store(project_root: &std::path::Path) -> Opt
     } else {
         return None;
     };
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_path)
+    let out = aida_core::git_ops::host_git_command(&store_path)
         .args(["rev-parse", "--short", "origin/aida-store"])
         .output()
         .ok()?;
@@ -1659,10 +1655,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
                     // the rebase is ours, since none was in progress when the
                     // lock was taken. trace:STORY-78 | ai:claude
                     if aida_core::git_ops::rebase_in_progress(store_path) {
-                        let _ = std::process::Command::new("git")
-                            .arg("-C")
-                            .arg(store_path)
-                            .args(aida_core::git_ops::transaction_git_config())
+                        let _ = aida_core::git_ops::host_git_command(store_path)
                             .args(["rebase", "--abort"])
                             .output();
                     }

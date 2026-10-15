@@ -395,9 +395,8 @@ pub(crate) fn write_cas_opts(
         match git_ops::push(store_root, "origin", &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 continue;
             }
@@ -537,9 +536,8 @@ pub(crate) fn write_batch_cas_opts(
         match git_ops::push(store_root, "origin", &branch) {
             Ok(true) => return Ok(writes.len()),
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
             }
             Err(e) => {

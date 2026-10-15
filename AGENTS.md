@@ -232,6 +232,14 @@ mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
 
+Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
+profile under the git common directory. Project hook managers never run there.
+Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse
+store writes. Contained launch primes this profile before sandboxing and denies host git
+authority writes in both sandbox and tool rules; the writable store/cache set
+is unchanged. See OVERVIEW.md.
+<!-- trace:BUG-1929 | ai:codex -->
+
 The spec graph is git-canonical. The orphan `aida-store` branch stores
 one YAML object per requirement; `.aida-store/` is the live worktree for
 that branch; `.aida/cache.db` is a rebuildable read cache. Do not create
