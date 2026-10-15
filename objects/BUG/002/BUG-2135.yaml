@@ -1,0 +1,23 @@
+id: 01a13d03-11c8-7942-8c9c-ee066298a820
+spec_id: BUG-2135
+agreed_id: BUG-2135
+title: sccache server keeps a deleted per-invocation TMPDIR, so every build fails until it is restarted by hand
+description: 'Observed 2026-10-14 by the advisor seat: the sccache server had been started inside a session whose TMPDIR was later deleted, so all builds failed until ''TMPDIR=/tmp sccache --start-server''. The cargo wrapper / aida dev build should start (or restart) the sccache server with a stable TMPDIR, and detect this failure mode with a clear hint.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:42:53.768494949Z
+modified_at: 2026-10-15T00:42:53.768494949Z
+req_type: Bug
+tags:
+- build
+- capture
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
