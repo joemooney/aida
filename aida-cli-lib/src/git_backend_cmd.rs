@@ -4994,7 +4994,10 @@ pub(crate) fn handle_git_backend_command(
                         struct GitLinkageJson {
                             commits: Vec<GitCommitJson>,
                             files: Vec<GitFileJson>,
-                            shipped: bool,
+                            // BUG-1993: `null` when a bounded scan timed
+                            // out before the shipped state was known — never
+                            // a false "not shipped". trace:BUG-1993 | ai:claude
+                            shipped: Option<bool>,
                             branch: Option<String>,
                             worktree: Option<String>,
                             shipped_pr: Option<u64>,
@@ -5056,16 +5059,8 @@ pub(crate) fn handle_git_backend_command(
                                 &linkage.files,
                                 &linkage.commits,
                             );
-                            // trace:BUG-1594 | ai:claude
-                            let mut incomplete = Vec::new();
-                            if let Some((scanned, total)) = linkage.branch_scan_truncated {
-                                incomplete
-                                    .push(crate::format_branch_scan_truncated_note(scanned, total));
-                            }
-                            if linkage.files_scan_incomplete {
-                                incomplete
-                                    .push(crate::LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
-                            }
+                            // trace:BUG-1594 trace:BUG-1993 | ai:claude
+                            let incomplete = linkage.incomplete_notes();
                             Some(GitLinkageJson {
                                 complete: incomplete.is_empty(),
                                 incomplete,
@@ -5083,7 +5078,11 @@ pub(crate) fn handle_git_backend_command(
                                     .into_iter()
                                     .map(|(file, symbol)| GitFileJson { file, symbol })
                                     .collect(),
-                                shipped: linkage.shipped,
+                                shipped: if linkage.shipped_unknown {
+                                    None
+                                } else {
+                                    Some(linkage.shipped)
+                                },
                                 branch: linkage.branch,
                                 worktree: linkage.worktree,
                                 shipped_pr: linkage.shipped_pr,
