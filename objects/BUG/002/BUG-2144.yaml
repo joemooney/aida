@@ -1,0 +1,23 @@
+id: 01a13e0c-d756-7270-bf22-c9b6b0f83d49
+spec_id: BUG-2144
+agreed_id: BUG-2144
+title: Contained codex/agy drain still runs its queue-work implementer and reviewer children uncontained (containment_applied silently false)
+description: 'From the #2655 (BUG-2133) STRICT review, gap 1; violates the BUG-2133 ruling (containment is monotonic). Under a contained drain with vendor codex or agy, the queue-work implementer and reviewer children run uncontained: containment_applied (session.rs:1676) returns false and an existing test pins this behaviour. The implementer is the child that writes the most code. Fix: apply the BUG-2133 rule — contained requested + vendor cannot be contained => REFUSE the launch (fail closed) with a hint; update the pinning test to assert refusal. STRICT + functional verification.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T05:33:11.382382783Z
+modified_at: 2026-10-15T05:33:11.382382783Z
+req_type: Bug
+tags:
+- sandbox
+- security
+filed_at:
+  code_sha: dedea1776c0a252400fb552dd14d5bd93720e0e9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
