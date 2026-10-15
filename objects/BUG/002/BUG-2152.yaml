@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T13:16:38.062630877Z
-modified_at: 2026-10-15T15:56:06.148464234Z
+modified_at: 2026-10-15T20:26:34.627787541Z
 req_type: Bug
 comments:
 - id: 01a14047-2284-7820-a4be-b01ae7da24c0
@@ -21,6 +21,12 @@ comments:
   content: 'ADVISOR VERDICT: CHANGES REQUESTED, aida-relay PR #94 round 1 at ffc679754a. The bound logic is sound, it cannot busy-loop, and the escape hatches work. BLOCKING (contract-drift): in relay_slots_acquire ~L1971-1975, RELAY_QUEUED_SINCE is set before the RELAY_MAX_RELAYS>0 early return, so with slots off, --status shows a growing queued= (reproduced). Move it below the return and add a slots-off --status assertion. Non-blocking: comment that slot-wait time counts toward the bound, and loosen the timing-tight assertions. A fixer is dispatched.'
   created_at: 2026-10-15T15:56:06.148464234Z
   modified_at: 2026-10-15T15:56:06.148464234Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a1413e-c303-7330-8f3a-c2ff60b09984
+  author: joe
+  content: 'ADVISOR VERDICT: APPROVED, aida-relay #94 round 2 at 8123269c30 (STANDARD). RELAY_QUEUED_SINCE no longer leaks with slots off (new case 7); the dropped check is covered (mutation-verified); CI is green. Shipping.'
+  created_at: 2026-10-15T20:26:34.627787541Z
+  modified_at: 2026-10-15T20:26:34.627787541Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 filed_at:
   code_sha: 3ea566f8401deaca3f5e1bc62c61fff34c0e68c2
