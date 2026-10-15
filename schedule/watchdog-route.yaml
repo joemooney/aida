@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: runaway-seats recheck clean (0 findings); trip was stale from 09:19
+due_since: 2026-10-15T07:05:23.976903720Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-10-15T07:00:54.366944465Z
+  job: watchdog
+  error: 'exit 1: '
