@@ -285,8 +285,12 @@ Contained launch prepares the profile on the host before the sandbox starts,
 without adding writable paths. Host git authority directories are denied in
 both the sandbox and direct tool rules, including a primary-checkout launch.
 Store git removes relative/empty PATH entries
-and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` on Git
-2.40 or newer. The store-only hook marker keeps detached and override stores
+and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` so the
+store's `.gitattributes` cannot select a host filter or textconv driver. Older
+Git ignores that variable, so on Git below 2.40 (or when `git --version` cannot
+be parsed) every host git command over a store tree refuses with a message
+naming the version; upgrade Git to 2.40 or newer.
+<!-- trace:BUG-2131 | ai:claude --> The store-only hook marker keeps detached and override stores
 away from project-local executable probes without bypassing code-commit gates.
 Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.rs`
 and `tests/test_bug_1929_hook_templates.py`.

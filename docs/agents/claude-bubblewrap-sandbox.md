@@ -70,6 +70,18 @@ either failure:
    *before* the real drain, so you get an actionable message instead of a
    cryptic `uid map: Permission denied` mid-run.
 
+## Host requirement: git 2.40 or newer for store writes
+
+A contained session can write the `.aida-store` tree, so it could plant a
+`.gitattributes` there that selects a filter, textconv or merge driver from the
+host's git config. Host-side store git runs with `GIT_ATTR_SOURCE` set to the
+empty tree so that file is never read, but git only honours the variable from
+2.40. On older git (or when `git --version` cannot be parsed) AIDA refuses every
+host git command over the store, writes included, with a message naming the
+version found. The fix is to upgrade git to 2.40 or newer; there is no read-only
+fallback.
+<!-- trace:BUG-2131 | ai:claude -->
+
 ## Host requirement: unprivileged user namespaces
 
 `bwrap` needs the kernel to permit **unprivileged user namespaces**. On recent

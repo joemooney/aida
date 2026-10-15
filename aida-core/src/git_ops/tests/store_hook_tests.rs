@@ -546,3 +546,101 @@ fn bug_1929_store_commit_deferred_only_when_git_dir_unwritable() {
     assert!(deferred, "an unwritable object database defers to the host");
     assert!(!store_commit_deferred_to_host(&store));
 }
+
+// The GIT_ATTR_SOURCE version gate: 2.40+ only; anything unparseable is unsafe.
+// trace:BUG-2131 | ai:claude
+#[test]
+fn bug_2131_git_version_gate() {
+    use crate::store_hooks::{attr_source_supported_by as ok, parse_git_version as parse};
+    assert_eq!(parse("2.39.5"), Some((2, 39)));
+    assert_eq!(parse("git version 2.43.0.windows.1\n"), Some((2, 43)));
+    assert_eq!(parse("git version 2.40.1 (Apple Git-143)"), Some((2, 40)));
+    assert!(!ok("2.39.5"));
+    assert!(!ok("git version 2.39.5"));
+    assert!(ok("2.40.0"));
+    assert!(ok("2.43.0.windows.1"));
+    assert!(ok("git version 2.40.1 (Apple Git-143)"));
+    assert!(ok("git version 3.0.0"));
+    assert!(!ok("git version 1.99.9"));
+    for garbage in [
+        "",
+        "garbage",
+        "git version ",
+        "git version x.y",
+        "2",
+        "2.",
+        "v2.45.0",
+    ] {
+        assert_eq!(parse(garbage), None, "{garbage:?}");
+        assert!(!ok(garbage), "{garbage:?} must count as unsafe");
+    }
+}
+
+// Under a faked pre-2.40 (or unknown) git, every store git path refuses before
+// touching the index: the builder is the refusal shim, the write guard names
+// the version and the fix, and nothing is committed. Code checkouts are
+// unaffected. trace:BUG-2131 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2131_old_git_refuses_store_writes() {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            crate::store_hooks::FAKE_GIT_VERSION.with(|f| *f.borrow_mut() = None);
+        }
+    }
+    for (fake, expect) in [
+        ("git version 2.39.5", "host git is 2.39.5"),
+        ("not a version", "could not be determined"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, store) = bug_1929_main_with_store(dir.path());
+        let before = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+        let _reset = Reset;
+        crate::store_hooks::FAKE_GIT_VERSION.with(|f| *f.borrow_mut() = Some(fake.to_string()));
+        assert!(!crate::store_hooks::supports_attr_source(&store));
+
+        let safe = format!("{:#}", ensure_store_write_safe(&store).unwrap_err());
+        assert!(
+            safe.contains(expect) && safe.contains("Upgrade git to 2.40"),
+            "{fake}: {safe}"
+        );
+        assert_eq!(
+            store_worktree_issue(&store),
+            Some("host git is older than 2.40 and cannot ignore store .gitattributes")
+        );
+
+        std::fs::write(store.join("notes.txt"), "planted\n").unwrap();
+        let out = host_git_command(&store)
+            .args(["add", "notes.txt"])
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "{fake}: {out:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("ignores GIT_ATTR_SOURCE"),
+            "{fake}: {out:?}"
+        );
+        let committed = crate::db::with_store_write_lock(&store, || {
+            add(&store, &["notes.txt"])?;
+            commit_paths(&store, "chore: store write", &["notes.txt"])
+        });
+        assert!(committed.is_err(), "{fake}: store write must refuse");
+        crate::store_hooks::FAKE_GIT_VERSION.with(|f| *f.borrow_mut() = None);
+        assert_eq!(git(&store, &["rev-parse", "HEAD"]).unwrap().stdout, before);
+        let staged = Command::new("git")
+            .current_dir(&store)
+            .args(["diff", "--cached", "--name-only"])
+            .output()
+            .unwrap();
+        assert!(staged.stdout.is_empty(), "{fake}: {staged:?}");
+
+        // A code checkout never depends on the gate.
+        crate::store_hooks::FAKE_GIT_VERSION.with(|f| *f.borrow_mut() = Some(fake.to_string()));
+        assert!(host_git_command(&main)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap()
+            .status
+            .success());
+    }
+}

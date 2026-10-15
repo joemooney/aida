@@ -85,14 +85,18 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             "PATH",
             crate::store_hooks::safe_path(cwd, &std::env::var_os("PATH").unwrap_or_default()),
         );
-        if crate::store_hooks::supports_attr_source(cwd) {
-            // Git's empty tree object; never read tree-controlled attributes.
-            cmd.env(
-                "GIT_ATTR_SOURCE",
-                "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
-            );
-        }
-        if let Err(err) = resolve_store_hooks_dir(cwd) {
+        // Git's empty tree object; never read tree-controlled attributes.
+        // Below git 2.40 the variable is ignored, so every store git call
+        // refuses instead (BUG-2131).
+        // trace:BUG-2131 | ai:claude
+        cmd.env(
+            "GIT_ATTR_SOURCE",
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        );
+        let refusal = crate::store_hooks::ensure_attr_source(cwd)
+            .err()
+            .or_else(|| resolve_store_hooks_dir(cwd).err());
+        if let Some(err) = refusal {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
             // The static script prints only its first positional argument (the
@@ -1017,6 +1021,8 @@ pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
     // Surface the failed check itself first.
     // trace:BUG-1929 | ai:claude
     if is_store_tree(repo) {
+        // trace:BUG-2131 | ai:claude
+        crate::store_hooks::ensure_attr_source(repo)?;
         resolve_store_hooks_dir(repo)?;
     }
     if let Some(state) = store_worktree_issue(repo) {
@@ -1040,6 +1046,10 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     // shim when the store's hooks can't be verified: report that instead
     // of a false "detached".
     // trace:BUG-1929 | ai:claude
+    // trace:BUG-2131 | ai:claude
+    if is_store_tree(repo) && crate::store_hooks::ensure_attr_source(repo).is_err() {
+        return Some("host git is older than 2.40 and cannot ignore store .gitattributes");
+    }
     if is_store_tree(repo) && resolve_store_hooks_dir(repo).is_err() {
         return Some("host-owned AIDA store hooks could not be verified");
     }

@@ -252,29 +252,95 @@ pub(crate) fn establish(_common: &Path, _store: &Path) -> Result<PathBuf> {
     anyhow::bail!("refusing AIDA store write: host-owned hooks require Linux")
 }
 
-/// Git added GIT_ATTR_SOURCE in 2.40. No repository/config lookup is needed.
+/// First git release that honours `GIT_ATTR_SOURCE`.
+pub(crate) const MIN_ATTR_SOURCE_GIT: (u32, u32) = (2, 40);
+
+/// `(major, minor)` from `git --version` output, with or without its
+/// `git version ` prefix (`2.43.0.windows.1`, `2.40.1 (Apple Git-143)`).
+/// `None` when the text is not a version.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn parse_git_version(text: &str) -> Option<(u32, u32)> {
+    let text = text.trim();
+    let version = text.strip_prefix("git version ").unwrap_or(text);
+    let mut parts = version.split_whitespace().next()?.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+    Some((major, minor))
+}
+
+/// The version gate: only a parsed version at or above 2.40 is safe.
+/// Unparseable output is unsafe.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn attr_source_supported_by(version_output: &str) -> bool {
+    parse_git_version(version_output).is_some_and(|v| v >= MIN_ATTR_SOURCE_GIT)
+}
+
+// Test-only seam: the `git --version` text the gate sees on this thread,
+// so a test can fake an old git without touching PATH.
+// trace:BUG-2131 | ai:claude
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FAKE_GIT_VERSION: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Host `git --version` output, run once per process. Empty when git
+/// cannot be run or fails (which the gate treats as unsafe).
+// trace:BUG-2131 | ai:claude
+fn host_git_version(store: &Path) -> String {
+    #[cfg(test)]
+    if let Some(fake) = FAKE_GIT_VERSION.with(|f| f.borrow().clone()) {
+        return fake;
+    }
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
+            std::process::Command::new("git")
+                .env(
+                    "PATH",
+                    safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+                )
+                .arg("--version")
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+                .unwrap_or_default()
+        })
+        .clone()
+}
+
+/// Whether host git honours `GIT_ATTR_SOURCE` (git 2.40+).
 pub(crate) fn supports_attr_source(store: &Path) -> bool {
-    static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *SUPPORTED.get_or_init(|| {
-        // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
-        std::process::Command::new("git")
-            .env(
-                "PATH",
-                safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-            )
-            .arg("--version")
-            .output()
-            .ok()
-            .filter(|out| out.status.success())
-            .and_then(|out| String::from_utf8(out.stdout).ok())
-            .and_then(|s| s.strip_prefix("git version ").map(str::to_owned))
-            .and_then(|v| {
-                let mut parts = v.split('.');
-                Some((
-                    parts.next()?.parse::<u32>().ok()?,
-                    parts.next()?.parse::<u32>().ok()?,
-                ))
-            })
-            .is_some_and(|(major, minor)| (major, minor) >= (2, 40))
-    })
+    attr_source_supported_by(&host_git_version(store))
+}
+
+/// Refuse host git over a store tree when git ignores `GIT_ATTR_SOURCE`.
+/// Store git relies on it to ignore the tree's `.gitattributes`; on older
+/// git a contained session could plant one that selects a filter, textconv
+/// or merge driver from the host's git config, and that driver would run on
+/// the host. Fails closed for an unknown version.
+// trace:BUG-2131 | ai:claude
+pub(crate) fn ensure_attr_source(store: &Path) -> Result<()> {
+    let output = host_git_version(store);
+    if attr_source_supported_by(&output) {
+        return Ok(());
+    }
+    let (major, minor) = MIN_ATTR_SOURCE_GIT;
+    let found = if output.is_empty() {
+        "could not be determined (`git --version` failed)".to_string()
+    } else if parse_git_version(&output).is_none() {
+        format!("could not be determined (`git --version` printed {output:?})")
+    } else {
+        format!(
+            "is {}",
+            output.strip_prefix("git version ").unwrap_or(&output)
+        )
+    };
+    anyhow::bail!(
+        "refusing AIDA store git: host git {found}, and git older than {major}.{minor} ignores \
+         GIT_ATTR_SOURCE, so the store's .gitattributes could select a host filter/textconv \
+         driver that runs outside any sandbox. Upgrade git to {major}.{minor} or newer"
+    )
 }
