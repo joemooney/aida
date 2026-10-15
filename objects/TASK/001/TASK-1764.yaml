@@ -1,0 +1,23 @@
+id: 01a13d03-8fef-7473-b344-eeb77fef435f
+spec_id: TASK-1764
+agreed_id: TASK-1764
+title: 'No non-interactive way for an advisor-launched fixer subagent to take an implementer seat: it inherits the advisor grant, the code guard blocks its edits, and role enter needs a TTY'
+description: 'Observed 2026-10-14 in fire mode: the BUG-1953 fixer subagent (spawned by the advisor seat) was blocked by aida-advisor-code-guard on its first edit; ''aida role enter implementer'' requires an interactive terminal, so it retried the edit as the hook allows. Fire mode authorises the advisor to fix via subagents. Need a sanctioned, auditable delegation path (e.g. a --delegate-seat implementer child grant for subagents) instead of guard retries.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:26.063008833Z
+modified_at: 2026-10-15T00:43:26.063008833Z
+req_type: Task
+tags:
+- capture
+- seats
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
