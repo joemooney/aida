@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2134",
+  "publishes": [
+    {
+      "at": "2026-10-15T05:11:52.569465138Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T01:59:47.464746564Z",
+      "spec": "BUG-2134",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T02:00:45.876891342Z",
+      "spec": "BUG-2134",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T03:04:34.734558695Z",
+      "spec": "BUG-2134",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2134",
+        "branch": "bug-2134",
+        "first_seen": "2026-10-15T03:04:34.734484557+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T05:11:34.670074176Z",
+      "spec": "BUG-2134",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T05:11:43.950759475Z",
+      "spec": "BUG-2134",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2649
+      }
+    },
+    {
+      "ts": "2026-10-15T05:11:52.551782949Z",
+      "spec": "BUG-2134",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dedea1776c0a252400fb552dd14d5bd93720e0e9",
+        "pr": 2649,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
