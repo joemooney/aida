@@ -1,0 +1,25 @@
+id: 01a13fb5-232e-76d0-b1f2-86351b893c46
+spec_id: BUG-2152
+agreed_id: BUG-2152
+title: Relay capacity gate starves a queued relay indefinitely while any cargo build is queued
+description: |-
+  2026-10-15: the codex regen relay sat 'queued' from 05:04 to 06:15 (71 min) with reason 'host busy: builds queued'. 'cargo ps --capacity' denies admission whenever builds are queued, and with 4-5 fixers compiling in turn the queue never empties. The cargo wrapper already serializes builds through its slots, so the relay gate duplicates it and only delays the agent's non-build work (reading, conflict resolution, sketching). Workaround: AIDA_RELAY_CAPACITY_CMD=off.
+  ## Acceptance
+  - A relay queued for longer than a bound (default 15 min) is admitted even when builds are queued, provided memory and io pressure are fine; or the gate counts only CPU/mem/io, not the cargo queue.
+  - The relay status shows the queued duration.
+  - A test covers a persistently non-empty build queue that does not starve admission past the bound.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T13:16:38.062630877Z
+modified_at: 2026-10-15T13:16:38.062630877Z
+req_type: Bug
+filed_at:
+  code_sha: 3ea566f8401deaca3f5e1bc62c61fff34c0e68c2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 453b2e22c5
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
