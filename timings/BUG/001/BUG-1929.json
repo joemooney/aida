@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1929",
+  "publishes": [
+    {
+      "at": "2026-10-15T07:02:02.099579436Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T15:20:59.129498325Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T20:00:57.436797121Z",
+      "spec": "BUG-1929",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-12T00:54:55.117113673Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1929",
+        "branch": "bug-1929-work",
+        "first_seen": "2026-10-12T00:54:55.117064242+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-12T02:23:44.506447867Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "00648119d92bec00373b52882bd2e0dd3688e516"
+      }
+    },
+    {
+      "ts": "2026-10-12T02:23:45.226345711Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "The write set matches the operator's narrow ruling, and the store git commit works in a real sandbox (the 'fails silently' note is wrong). But the rw bind of <main>/.aida-store includes the .git pointer file, a host code-execution escape (verified with core.fsmonitor). The real-claude test fixture lives under the sandbox-writable TMPDIR, so it passes without proving the boundary.",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-12T04:23:05.016881486Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dd00453964c5d4861b18c88a530982b1d1d6c95d"
+      }
+    },
+    {
+      "ts": "2026-10-12T04:23:05.695093423Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "D1 fixed and verified in a real sandbox (the .git pointer is a ro bind; append, rm, mv and ln all fail). D2 fixed in code but never run. New HIGH escape reproduced end to end: the rw store lets a contained agent plant an embedded repo (objects/zz/.git -> gitdir with core.fsmonitor); the host's routine git status on store sync/push recurses into it and runs the attacker's fsmonitor on the host. Introduced by this PR.",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-12T06:12:22.254116906Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "04b529c167e6dcff04533c0311c5a47fedb02d83"
+      }
+    },
+    {
+      "ts": "2026-10-12T06:12:26.555908698Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 3: status/commit/push vector fixed; NEW escape F1: host git fetch over the store recurses into a planted submodule and runs its uploadpack on the host",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-12T16:36:57.993779197Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "c6174e7545e7f9bcdedc251c5ac67931c4ce5461"
+      }
+    },
+    {
+      "ts": "2026-10-13T16:18:47.786232690Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a1121bad7c389b88689b9123b01c24c0eb9fb664"
+      }
+    },
+    {
+      "ts": "2026-10-13T16:18:48.567381552Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Rebase sound; C1-C5 met. BLOCKER: the store commit-msg hook sources sandbox-writable .aida-store/.aida/commit-config on host store commits; PATH= passes the literal check, so a planted binary runs on the host.",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T17:07:56.583402073Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c448e8e5e7675f790abd412904d78faefb9ca155"
+      }
+    },
+    {
+      "ts": "2026-10-13T17:07:57.432193887Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round-5 blocker closed and mutation-verified. NEW BLOCKER: a relative core.hooksPath (husky .husky/_) resolves inside the sandbox-writable store tree, so host store commits run a planted hook. Reproduced via commit_paths.",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-13T17:53:05.800723694Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a8cc120c3fffff980267fe6406f4d895d486abb6"
+      }
+    },
+    {
+      "ts": "2026-10-13T17:53:07.192020850Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round-6 fix and the own-repo deviation hold (the denyWrite is recursive; verified with real claude). NEW host-exec path: project hooks (husky/pre-commit/lefthook) run on host store commits with cwd = the sandbox-writable store and load store-relative files. Reproduced via commit_paths. PARKED for the operator per the round-6 escalation.",
+        "recovery_hint": "address the review findings, move BUG-1929 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T00:21:15.514064483Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f04d74eccebe396d799451c167fed0e8a87cc91c"
+      }
+    },
+    {
+      "ts": "2026-10-15T01:56:22.669331239Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "APPROVED",
+        "reviewed_sha": "5c9ae5a01ba022ee47875d5b941b63b8a8c88db0"
+      }
+    },
+    {
+      "ts": "2026-10-15T03:51:27.316827672Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2541,
+        "verdict": "APPROVED",
+        "reviewed_sha": "67aebd5596f086b9cd7b090417fe2f88cbfcea7b"
+      }
+    },
+    {
+      "ts": "2026-10-15T07:01:40.955423950Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T07:01:52.833084687Z",
+      "spec": "BUG-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2541
+      }
+    },
+    {
+      "ts": "2026-10-15T07:02:02.078492362Z",
+      "spec": "BUG-1929",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
