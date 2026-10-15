@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-15T07:37:24.418851285Z
+modified_at: 2026-10-15T11:44:25.731227069Z
 req_type: Story
 tags:
 - from:aida-host
@@ -53,6 +53,12 @@ comments:
   content: IMPLEMENTER SCOPE / DESIGN FORK (regen relay Session 2; no code yet). The lane explicitly excludes launcher/session.rs/queue/phase-driver/containment work and keeps STORY-1678 out of scope. This story acceptance nevertheless requires aida regen trial harness launching and reinvocation; no regen trial launcher or approved harness config exists in this lane. Completeness checks could reuse score confinement read-only, but split per-component scores additionally need a trusted check-to-component mapping absent from exact-marker v1 and required_tools. Need advisor ruling separating or assigning the harness-continuation acceptance, plus trusted component mapping and concrete minimum non-trivial-size/placeholder rule before this story can ship fully. I will not implement a second launcher or silently omit acceptance. TASK-1730 remains the current milestone.
   created_at: 2026-10-15T07:37:24.418851285Z
   modified_at: 2026-10-15T07:37:24.418851285Z
+- id: 01a13f60-b883-7f23-a8fd-281098a7926f
+  author: joe
+  content: 'ADVISOR RULING (04:50). (A) SCOPE SPLIT: the harness continuation/re-invocation acceptance (bullet 2) is MOVED OUT of this story into a new child spec, blocked behind launcher work (it is not this lane''s to do). This story ships the completeness check plus incomplete reporting plus split scores. (B) Component mapping: the project regen config (committed, trusted, never regenerated) gains an optional per-required-tool ''checks = [exact check names]''. The restricted score counts only mapped checks whose component passed completeness. Unmapped checks are listed as unmapped. With no mapping at all, the restricted score reports ''unavailable (no check mapping)'', never a fabricated number. (C) Non-trivial rule: the file exists, is executable, has >= min_bytes (default 64, configurable) of non-whitespace content, has no case-insensitive placeholder marker from the fixed list [TODO: implement, NotImplemented, NotImplementedError, unimplemented!, placeholder], and ''--help'' exits 0 with non-empty stdout or stderr, run under the existing score confinement. An incomplete trial is never the headline score (reader from TASK-1734 must skip it).'
+  created_at: 2026-10-15T11:44:25.731227069Z
+  modified_at: 2026-10-15T11:44:25.731227069Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-4c9d-7ae1-9d4b-809d06333fa5
   author: joe
