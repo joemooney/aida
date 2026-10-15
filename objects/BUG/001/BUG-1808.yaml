@@ -14,12 +14,12 @@ description: |
   It must not depend on the publication, CommittedDispatch, store-CAS, launch transport or pane/containment architecture. All of that moved to EPIC-76 (with TASK-1612), along with the parked groundwork branch `bug-1808-delegation-publication`. Do not build on that branch.
   Authority-class still applies: write a short NEW sketch for the narrow fix (one page: where the check runs, which inputs it reads, how "no mutation" is proved), get independent advisor signoff, implement in the guided lane, and the operator merges.
   Comments before 2026-10-10 describe the architecture now owned by EPIC-76. They are history for this bug, not its acceptance.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-15T00:52:22.445730111Z
+modified_at: 2026-10-15T03:02:35.772469381Z
 req_type: Bug
 tags:
 - atomicity
@@ -4171,6 +4171,11 @@ comments:
   created_at: 2026-10-15T00:52:22.445730111Z
   modified_at: 2026-10-15T00:52:22.445730111Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a13d82-f80a-7e93-8cf2-08371b5bf0f2
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit defb55f), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1808 --description ...` / `aida edit BUG-1808 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1808 --since defb55f^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1808 --status completed`. (merge sha: defb55f88bc4108334f0ec266e20a5afed5a83f3)'
+  created_at: 2026-10-15T03:02:35.786234355Z
+  modified_at: 2026-10-15T03:02:35.786234355Z
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
@@ -4193,6 +4198,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13d82-f80a-7e93-8cf2-082f2362643c
+  author: aida-auto-bump
+  timestamp: 2026-10-15T03:02:35.786153581Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
