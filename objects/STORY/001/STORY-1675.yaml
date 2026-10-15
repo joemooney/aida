@@ -19,12 +19,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:33.423106707Z
-modified_at: 2026-10-15T15:35:54.681014884Z
+modified_at: 2026-10-15T15:36:11.632138341Z
 req_type: Story
 tags:
 - from:aida-host
@@ -68,6 +68,11 @@ comments:
   created_at: 2026-10-15T15:35:54.681014884Z
   modified_at: 2026-10-15T15:35:54.681014884Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14034-e870-7fc2-8db1-337ce45c101c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Acceptance is a placeholder and result identity/relationship plus sticky-versus-current-graph locking must be signed before changing cross-cutting mutability semantics.. No triage reason was given.'
+  created_at: 2026-10-15T15:36:11.632126937Z
+  modified_at: 2026-10-15T15:36:11.632126937Z
 history:
 - id: 01a130a2-e977-7043-b09f-989394c4522d
   author: joe
@@ -90,6 +95,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a14034-e870-7fc2-8db1-336caea118a9
+  author: joe
+  timestamp: 2026-10-15T15:36:11.632113464Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -98,9 +110,3 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
-attention_reason:
-  category: missing-context
-  detail: Acceptance is a placeholder and result identity/relationship plus sticky-versus-current-graph locking must be signed before changing cross-cutting mutability semantics.
-  lean: Sign the posted sketch and concrete acceptance, then return to Approved.
-  raised_by: implementer
-  raised_at: 2026-10-15T15:14:37.494738738Z
