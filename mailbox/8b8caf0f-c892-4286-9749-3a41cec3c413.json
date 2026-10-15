@@ -1,0 +1,19 @@
+{
+  "id": "8b8caf0f-c892-4286-9749-3a41cec3c413",
+  "thread_id": "8b8caf0f-c892-4286-9749-3a41cec3c413",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792098430828,
+  "body": "Pushed d4b9a4d to product/bug-83 (PR #11): .aida/config.toml cargo-reap-report prompt changed to exact report-only string ('Run cargo reap (dry-run) and cargo ps; report the would-reap list and free space to the operator. Never pass --apply.') and bin/cargo-reap staged deletion changed to subprocess.run(['rm', '-rf', '--one-file-system', stage], check=True). Ready for direct delta verification.",
+  "subject": "REWORK READY: aida-host PR #11 (d4b9a4d)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

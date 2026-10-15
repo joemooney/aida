@@ -1,0 +1,19 @@
+{
+  "id": "cf850e83-2c2c-4836-a24d-c3ac06bdb203",
+  "thread_id": "cf850e83-2c2c-4836-a24d-c3ac06bdb203",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792097349045,
+  "body": "All Round-3 (PR #9, PR #10) and Round-1 (PR #11) review items have been implemented, verified (bash tests/test_cargo_wrapper.sh -> ALL PASS, bash tests/test_tmp_sweep.sh -> ALL PASS), and force-pushed, along with updated store contracts (ADR-81, ADR-85, SR-21, SR-22, SR-23 @ cb2bc12):\n\n1. PR #9 (product/story-79 @ bc9e269 — STORY-79 / ADR-81):\n   - Added \"--exclude\" to VAL_FLAGS in fresh_py.\n   - Dated .fresh/<hash>.stamp at the wrapper's $t_start (os.utime(sp, ns=(start_ns, start_ns))) rather than finish time so any source edit occurring during a running build has mtime_ns > stamp_ns and forces a rebuild next time (while generated outputs inside <target> compare against max(stamp_ns, df_mt)).\n   - Added CARGO_INCREMENTAL and RUSTC_BOOTSTRAP to ENV_EXACT, removed build/dist/.cache from SKIP_DIRS, dropped 2>/dev/null from bare exec {ffd}>&- in on_signal, and moved the bin/cargo-log raw_wrappers hunk to PR #11.\n   - Added --exclude mismatch and mid-run edit tests in Section 24 of tests/test_cargo_wrapper.sh.\n\n2. PR #10 (product/story-80 @ baea1d5 — STORY-80 / ADR-82, rebased on bc9e269):\n   - Wrapped { exec {tfd}>\"$dir/slot-$s.lock\"; } 2>/dev/null || return 1 in slot_is_held so bash never permanently redirects fd 2 to /dev/null.\n   - Cleared burst_denied=\"\" at the end of burst_ok and omitted burst_denied in write_log whenever burst=true.\n   - Added invalid AIDA_CARGO_SLOTS_MAX stderr warning in bin/cargo-log capacity().\n   - Added stderr preservation assertions on both burst-granted and burst-refused builds (and \"burst_denied\" not in rec on burst-granted records) in Section 25 of tests/test_cargo_wrapper.sh.\n\n3. PR #11 (product/bug-83 @ f857d02 — BUG-83 / ADR-85, rebased on baea1d5):\n   - Real build activity signal in bin/cargo-reap (newest_build_mtime): combines newest builds.jsonl timestamp (_log.load(_log.LOG)), wrapper stamps (<tdir>/.last-activity touched at build start and after seed_target, <tdir>/<prof>/.fresh/*.stamp), and newest regular artifact file st_mtime under <tdir>/<prof>/{deps,.fingerprint,incremental} and top-level <tdir>/<prof>/ (falling back to .cargo-lock mtime only when no artifacts or log records exist).\n   - Basename collision guard in discover_worktrees: maps basename -> list of worktrees sharing that folder name, and reaps <main>/target/worktrees/<name> ONLY when every worktree in by_name[name] qualifies for reaping.\n   - Aligned flags (--apply/--delete, --idle-days/--max-age, --merged-idle-hours/--merged-age, --repo, --json), activity signal, collision guard, stage-rename (.reap-<name>.<pid> before shutil.rmtree), st_dev check, install.sh link, and .aida/config.toml 6h cargo-reap-report schedule across bin/cargo-reap, bin/cargo, README.md, docs/regeneration/journal.md, ADR-85, SR-21, SR-22, and SR-23.\n   - seed_target fails closed (builds cold) if df or du fails; check_target_disk logs outcome=\"refused\", reason=\"low-disk\", exit=101 in builds.jsonl on hard-floor refusals.\n   - Added seeded-active-wt (6d .cargo-lock + 10m deps -> kept), collision-wt (OPEN+MERGED sharing basename -> kept), install.sh cargo-reap symlink check, and outcome=refused log check to Section 26 of tests/test_cargo_wrapper.sh.",
+  "subject": "REWORK READY: aida-host PR #9 (STORY-79 @ bc9e269), PR #10 (STORY-80 @ baea1d5), and PR #11 (BUG-83 @ f857d02)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

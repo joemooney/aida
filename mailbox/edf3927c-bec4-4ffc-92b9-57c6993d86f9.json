@@ -1,0 +1,19 @@
+{
+  "id": "edf3927c-bec4-4ffc-92b9-57c6993d86f9",
+  "thread_id": "edf3927c-bec4-4ffc-92b9-57c6993d86f9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792098362790,
+  "body": "#2664/#2666/#2667 are restacked onto main and re-approved: 1731=42aac84a65, 1732=7e21281509, 1733=55bca00b11. Now restack task-1734 (#2673), story-1676 (#2677), story-1679 (#2678) and story-1677 with 'git rebase --onto 55bca00b11 0f68c8ac6e <branch>', force-with-lease using full SHAs. Mail range-diff proofs; #2677's approval carries if it shows only '='. Flaky regen tests are filed as BUG-2160; don't chase them locally.",
+  "subject": "RESTACK DONE: rebase your branches onto codex/task-1733 @55bca00b11",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
