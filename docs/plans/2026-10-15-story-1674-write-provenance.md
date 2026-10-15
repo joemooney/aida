@@ -71,15 +71,21 @@ it must never be summed as per-event or per-spec incremental cost.
 
 ## State
 
-Implementation in relay Session5, validation in progress. The first author
+Implementation in relay Session5; publication checks completed in relay Session6. The first author
 self-check found that historical export/import needs a distinct persistence
 boundary; `save_imported` now preserves historical unknowns and records the
 current import as its own write event. Ordinary create/edit paths retain the
 shared stamping helper. Returned atomic snapshots come from persisted rows.
 A default legacy add operation also re-reads its persisted result.
 
-No review approval, merge, or Completed status is claimed. Source self-checks
-and test evidence will be recorded in the PR trail once completed. Original Base:
+No review approval, merge, or Completed status is claimed. The PR trail records three author source-check rounds plus bounded runtime,
+formatter and generated-binding followups. Full core runtime passed (1,478 unit
+and one integration, three ignored), final CLI/MCP fixtures passed (7/7), and
+workspace test compilation and all 29 fast gates passed. Bindings generation
+also exposed missing pre-existing `ExecutionMode` and `Origin` declarations;
+the generator now emits them and trims ts-rs trailing spaces. Regenerated
+`shared/types.ts` passes TypeScript. Workspace compilation is compile-only;
+no full-workspace runtime or green CI claim. Original Base:
 `origin/main` at `3d85bbde84`; worktree `/home/joe/ai/aida-story-1674`,
 branch `codex/story-1674`, lease `01a1403c9371`. Prior regen validation and
 TASK-1734 rework take priority. Do not describe this plan as shipped acceptance.

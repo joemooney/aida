@@ -29,6 +29,10 @@ fn generate_types_content() -> String {
     let decls: Vec<String> = vec![
         // Models from aida_core::models
         models::RequirementStatus::decl(),
+        // Requirement also references these optional model types.
+        // trace:STORY-1674 | ai:codex
+        models::ExecutionMode::decl(),
+        models::Origin::decl(),
         // STORY-332: punt / NeedsAttention types
         models::PuntCategory::decl(),
         models::AttentionReason::decl(),
@@ -139,7 +143,13 @@ fn generate_types_content() -> String {
     // `QueueEntryResponse`. trace:STORY-522 | ai:claude
     body.push_str(QUEUE_ENTRY_DECL);
 
+    // Keep generated declarations free of trailing spaces from ts-rs output.
+    // trace:STORY-1674 | ai:codex
     format!("{HEADER}\n\n{body}")
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn main() {

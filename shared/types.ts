@@ -4,122 +4,137 @@
 
 // It is used to keep Rust and TypeScript types in sync.
 
-export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "NeedsAttention";
+export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "Superseded" | "NeedsAttention";
+
+export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
+
+export type Origin = {
+/**
+ * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
+ * repo entry in the workspace manifest (`.aida-workspace`); validated as
+ * a lowercase slug so it is stable as a map key and a filter value.
+ */
+repo: string,
+/**
+ * Optional finer-grained component within the repo (e.g. "orchestrator").
+ * Free-form within the repo; `None` = the whole repo.
+ */
+component?: string | null, };
 
 export type PuntCategory = "design-fork" | "ambiguous-spec" | "missing-context" | "blocked-dependency" | "other";
 
-export type AttentionReason = { 
+export type AttentionReason = {
 /**
  * The kind of obstacle that triggered the punt.
  */
-category: PuntCategory, 
+category: PuntCategory,
 /**
  * Human-readable description of the fork / obstacle the agent hit.
  */
-detail: string, 
+detail: string,
 /**
  * The raiser's best-guess answer if forced to pick — distinct from
  * `detail` so the fork and the lean stay separable. `None` when the
  * agent had no defensible lean.
  */
-lean?: string | null, 
+lean?: string | null,
 /**
  * Role / agent that raised the punt (the active session role, or
  * `None` when no role context was available).
  */
-raised_by?: string | null, 
+raised_by?: string | null,
 /**
  * When the punt was raised.
  */
 raised_at: string, };
 
-export type FailureReason = { 
+export type FailureReason = {
 /**
  * Stable slug for the phase that failed — `implementer`, `ci`,
  * `review`, `merge`, `pull`, or `build`. A string (not an enum)
  * keeps `aida-core` free of orchestrator concepts: the source of
  * truth for phase identities lives in `aida-cli::auto_complete`.
  */
-phase: string, 
+phase: string,
 /**
  * 1-based phase index (1..=6) for sorting / display.
  */
-phase_index: number, 
+phase_index: number,
 /**
  * Stable slug for the failure kind — `no-pr`, `ci-red`,
  * `request-changes`, `merge-conflict`, etc. Mirrors the orchestrator's
  * existing `PhaseFailureKind::slug()`.
  */
-kind: string, 
+kind: string,
 /**
  * One-line human description of what went wrong.
  */
-detail: string, 
+detail: string,
 /**
  * Pre-rendered recovery hint — what the orchestrator would tell a
  * human standing in front of the broken phase. Cached here so
  * triage doesn't have to rebuild it.
  */
-recovery_hint?: string | null, 
+recovery_hint?: string | null,
 /**
  * Role / agent that shelved the spec (the active session role,
  * `None` when no role context was available).
  */
-shelved_by?: string | null, 
+shelved_by?: string | null,
 /**
  * When the spec was shelved.
  */
 shelved_at: string, };
 
-export type DecisionChoice = { 
+export type DecisionChoice = {
 /**
  * Short human label for the option (what the human picks).
  */
-label: string, 
+label: string,
 /**
  * What happens / what this option means, in human terms.
  */
-consequence: string, 
+consequence: string,
 /**
  * Deterministic action token the loop will eventually apply (NOT
  * applied in slice 1). Never free-form prose — a parseable token.
  */
 resolution: string, };
 
-export type DecisionRequest = { 
+export type DecisionRequest = {
 /**
  * The self-contained question (state / deciding factor distilled so the
  * human needs no spec re-read to answer).
  */
-question: string, 
+question: string,
 /**
  * Enumerated, actionable choices (≥2). Each maps to a resolution token.
  */
-choices: Array<DecisionChoice>, 
+choices: Array<DecisionChoice>,
 /**
  * 0-based index of the recommended default choice, if any.
  */
-recommended?: number | null, 
+recommended?: number | null,
 /**
  * Why the recommended default is recommended (the advisor's reasoning).
  */
-rationale?: string | null, 
+rationale?: string | null,
 /**
  * 0-based index of the chosen answer. `None` while the request is
  * pending (unanswered).
  */
-answered?: number | null, 
+answered?: number | null,
 /**
  * Free-text counter-proposal recorded ALONGSIDE the chosen option — the
  * "1, but name it list-claude-sessions" escape. A pure data op: no LLM at
  * answer-time; the implementer later reads choice + note. `None` when the
  * human took the pure-pick path.
  */
-note?: string | null, 
+note?: string | null,
 /**
  * When the question was first posed.
  */
-asked_at?: string | null, 
+asked_at?: string | null,
 /**
  * When the human answered it.
  */
@@ -127,85 +142,85 @@ answered_at?: string | null, };
 
 export type RequirementPriority = "High" | "Medium" | "Low";
 
-export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc";
+export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc" | "Faq";
 
 export type MetaSubtype = "Prompt" | "Skill" | "Command" | "Template" | "Config";
 
-export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | "BlockedBy" | "Blocks" | { "Custom": string };
+export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | "BlockedBy" | "Blocks" | "SupersededBy" | "Supersedes" | { "Custom": string };
 
 export type CustomFieldType = "text" | "textarea" | "select" | "boolean" | "date" | "user" | "requirement" | "number";
 
-export type CustomFieldDefinition = { 
+export type CustomFieldDefinition = {
 /**
  * Field name (used as key in custom_fields map)
  */
-name: string, 
+name: string,
 /**
  * Display label for the field
  */
-label: string, 
+label: string,
 /**
  * Field type
  */
-field_type: CustomFieldType, 
+field_type: CustomFieldType,
 /**
  * Whether this field is required
  */
-required: boolean, 
+required: boolean,
 /**
  * Options for Select field type
  */
-options?: Array<string>, 
+options?: Array<string>,
 /**
  * Default value (as string, converted based on field_type)
  */
-default_value: string | null, 
+default_value: string | null,
 /**
  * Help text / description
  */
-description: string | null, 
+description: string | null,
 /**
  * Display order (lower = first)
  */
 order: number, };
 
-export type CustomTypeDefinition = { 
+export type CustomTypeDefinition = {
 /**
  * Internal name/key for the type (e.g., "ChangeRequest")
  */
-name: string, 
+name: string,
 /**
  * Display label (e.g., "Change Request")
  */
-display_name: string, 
+display_name: string,
 /**
  * Description of this type
  */
-description: string | null, 
+description: string | null,
 /**
  * Preferred ID prefix for this type (e.g., "CR")
  */
-prefix: string | null, 
+prefix: string | null,
 /**
  * Custom statuses for this type (if empty, uses default statuses)
  */
-statuses?: Array<string>, 
+statuses?: Array<string>,
 /**
  * Custom priorities for this type (if empty, uses default priorities)
  */
-priorities?: Array<string>, 
+priorities?: Array<string>,
 /**
  * Additional custom fields for this type
  */
-custom_fields?: Array<CustomFieldDefinition>, 
+custom_fields?: Array<CustomFieldDefinition>,
 /**
  * Whether this is a built-in type (cannot be deleted)
  */
-built_in: boolean, 
+built_in: boolean,
 /**
  * Color for visual distinction (hex color code)
  */
-color: string | null, 
+color: string | null,
 /**
  * Whether this type is stateless (no status/priority tracking)
  * Stateless types are used for organizational purposes (e.g., Folders)
@@ -215,51 +230,51 @@ stateless: boolean, };
 
 export type Cardinality = "OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany";
 
-export type RelationshipDefinition = { 
+export type RelationshipDefinition = {
 /**
  * Unique identifier for this relationship type (lowercase, no spaces)
  */
-name: string, 
+name: string,
 /**
  * Human-readable display name
  */
-display_name: string, 
+display_name: string,
 /**
  * Description of what this relationship means
  */
-description: string, 
+description: string,
 /**
  * The inverse relationship name (if any)
  * e.g., "parent" has inverse "child"
  */
-inverse: string | null, 
+inverse: string | null,
 /**
  * Whether this relationship is symmetric (A->B implies B->A with same type)
  * e.g., "duplicate" is symmetric
  */
-symmetric: boolean, 
+symmetric: boolean,
 /**
  * Cardinality constraints
  */
-cardinality: Cardinality, 
+cardinality: Cardinality,
 /**
  * Source type constraints (which requirement types can be the source)
  * Empty means all types allowed
  */
-source_types: Array<string>, 
+source_types: Array<string>,
 /**
  * Target type constraints (which requirement types can be the target)
  * Empty means all types allowed
  */
-target_types: Array<string>, 
+target_types: Array<string>,
 /**
  * Whether this is a built-in relationship (cannot be deleted)
  */
-built_in: boolean, 
+built_in: boolean,
 /**
  * Color for visualization (optional, hex format e.g., "#ff6b6b")
  */
-color: string | null, 
+color: string | null,
 /**
  * Icon/symbol for the relationship (optional)
  */
@@ -269,169 +284,208 @@ export type IdFormat = "SingleLevel" | "TwoLevel";
 
 export type NumberingStrategy = "Global" | "PerPrefix" | "PerFeatureType";
 
-export type RequirementTypeDefinition = { 
+export type RequirementTypeDefinition = {
 /**
  * Display name for the type (e.g., "Functional")
  */
-name: string, 
+name: string,
 /**
  * Prefix used in IDs (e.g., "FR")
  */
-prefix: string, 
+prefix: string,
 /**
  * Optional description
  */
 description: string, };
 
-export type FeatureDefinition = { 
+export type FeatureDefinition = {
 /**
  * Sequential number for ordering
  */
-number: number, 
+number: number,
 /**
  * Display name for the feature
  */
-name: string, 
+name: string,
 /**
  * Prefix used in IDs (e.g., "AUTH" for Authentication)
  */
-prefix: string, 
+prefix: string,
 /**
  * Optional description
  */
 description: string, };
 
-export type IdConfiguration = { 
+export type IdConfiguration = {
 /**
  * Format style for IDs
  */
-format: IdFormat, 
+format: IdFormat,
 /**
  * Numbering strategy
  */
-numbering: NumberingStrategy, 
+numbering: NumberingStrategy,
 /**
  * Number of digits for the numeric portion (default 3 = 001)
  */
-digits: number, 
+digits: number,
 /**
  * Configured requirement types
  */
 requirement_types: Array<RequirementTypeDefinition>, };
 
-export type RelationshipValidation = { 
+export type RelationshipValidation = {
 /**
  * Whether the relationship is valid
  */
-valid: boolean, 
+valid: boolean,
 /**
  * Error messages (if invalid)
  */
-errors: Array<string>, 
+errors: Array<string>,
 /**
  * Warning messages (valid but may have issues)
  */
 warnings: Array<string>, };
 
-export type Relationship = { 
+export type Relationship = {
 /**
  * The type of relationship
  */
-rel_type: RelationshipType, 
+rel_type: RelationshipType,
 /**
  * The target requirement ID
  */
-target_id: string, 
+target_id: string,
 /**
  * When this relationship was created
  */
-created_at?: string | null, 
+created_at?: string | null,
 /**
  * Who created this relationship
  */
 created_by?: string | null, };
 
-export type FieldChange = { 
+export type FieldChange = {
 /**
  * Name of the field that changed
  */
-field_name: string, 
+field_name: string,
 /**
  * Value before the change
  */
-old_value: string, 
+old_value: string,
 /**
  * Value after the change
  */
 new_value: string, };
 
-export type HistoryEntry = { 
+export type HistoryEntry = {
 /**
  * Unique identifier for this history entry
  */
-id: string, 
+id: string,
 /**
  * Who made the change
  */
-author: string, 
+author: string,
 /**
  * When the change was made
  */
-timestamp: string, 
+timestamp: string,
+/**
+ * Exact writing session, when explicitly available. Legacy rows remain unknown.
+ */
+session_id?: string | null, harness_version?: string | null,
 /**
  * List of field changes in this update
  */
 changes: Array<FieldChange>, };
 
-export type InterfaceChanges = { 
+export type FilingProvenance = {
+/**
+ * HEAD of the CODE repo the spec was filed from (full SHA; not the
+ * `aida-store` branch).
+ */
+code_sha?: string | null,
+/**
+ * Checked-out branch; omitted on a detached HEAD.
+ */
+branch?: string | null,
+/**
+ * Whether the working tree had uncommitted changes to tracked files.
+ */
+dirty?: boolean | null,
+/**
+ * Package version of the filing `aida` binary.
+ */
+aida_version?: string | null,
+/**
+ * Git SHA the filing `aida` binary was built from.
+ */
+aida_build_sha?: string | null,
+/**
+ * Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
+ */
+vendor?: string | null,
+/**
+ * Filing session id, when known.
+ */
+session?: string | null,
+/**
+ * Harness version explicitly supplied by AIDA_HARNESS_VERSION; absent is unknown.
+ */
+harness_version?: string | null, };
+
+export type InterfaceChanges = {
 /**
  * CLI-surface deltas: new commands/subcommands, changed flags/behavior.
  */
-cli?: Array<string>, 
+cli?: Array<string>,
 /**
  * MCP tool/resource surface deltas (new tools, gating, schema changes).
  */
-mcp?: Array<string>, 
+mcp?: Array<string>,
 /**
  * TUI surface deltas: new keybindings, panes, overlays, status.
  */
-tui?: Array<string>, 
+tui?: Array<string>,
 /**
  * Any other user-facing interface delta that is not cli/mcp/tui.
  */
 other?: Array<string>, };
 
-export type ReactionDefinition = { 
+export type ReactionDefinition = {
 /**
  * Unique identifier/key for the reaction (e.g., "resolved", "rejected")
  */
-name: string, 
+name: string,
 /**
  * The emoji character to display
  */
-emoji: string, 
+emoji: string,
 /**
  * Human-readable label for the reaction
  */
-label: string, 
+label: string,
 /**
  * Optional description of when to use this reaction
  */
-description: string | null, 
+description: string | null,
 /**
  * Whether this is a built-in reaction (cannot be deleted)
  */
 built_in: boolean, };
 
-export type CommentReaction = { 
+export type CommentReaction = {
 /**
  * The reaction type (references ReactionDefinition.name)
  */
-reaction: string, 
+reaction: string,
 /**
  * Who added this reaction
  */
-author: string, 
+author: string,
 /**
  * When the reaction was added
  */
@@ -439,73 +493,73 @@ added_at: string, };
 
 export type UrlOpenMode = "preview" | "new_tab";
 
-export type UrlLink = { 
+export type UrlLink = {
 /**
  * Unique identifier for the link
  */
-id: string, 
+id: string,
 /**
  * The URL
  */
-url: string, 
+url: string,
 /**
  * Display title/label for the link
  */
-title: string, 
+title: string,
 /**
  * Optional description
  */
-description?: string | null, 
+description?: string | null,
 /**
  * How the URL should be opened (preview iframe or new tab)
  */
-open_mode: UrlOpenMode, 
+open_mode: UrlOpenMode,
 /**
  * When the link was added
  */
-added_at: string, 
+added_at: string,
 /**
  * Who added the link
  */
-added_by: string, 
+added_by: string,
 /**
  * Last time the URL was verified as accessible
  */
-last_verified?: string | null, 
+last_verified?: string | null,
 /**
  * Whether the last verification succeeded
  */
 last_verified_ok?: boolean | null, };
 
-export type Attachment = { 
+export type Attachment = {
 /**
  * Unique identifier for the attachment
  */
-id: string, 
+id: string,
 /**
  * Original filename
  */
-filename: string, 
+filename: string,
 /**
  * Relative path to the stored file (e.g., "attachments/FR-0042/document.pdf")
  */
-stored_path: string, 
+stored_path: string,
 /**
  * Optional MIME type
  */
-mime_type?: string | null, 
+mime_type?: string | null,
 /**
  * File size in bytes
  */
-size_bytes: bigint, 
+size_bytes: bigint,
 /**
  * When the attachment was added
  */
-added_at: string, 
+added_at: string,
 /**
  * Who added the attachment (user handle)
  */
-added_by?: string | null, 
+added_by?: string | null,
 /**
  * Optional description of the attachment
  */
@@ -513,39 +567,39 @@ description?: string | null, };
 
 export type ArtifactType = "SourceCode" | "TestCode" | "Config" | "Doc";
 
-export type TraceLink = { 
+export type TraceLink = {
 /**
  * Unique identifier for the trace link
  */
-id: string, 
+id: string,
 /**
  * The type of artifact (source, test, config, doc)
  */
-artifact_type: ArtifactType, 
+artifact_type: ArtifactType,
 /**
  * Path to the file containing the artifact (relative to project root)
  */
-file_path: string, 
+file_path: string,
 /**
  * Optional symbol name (function, struct, module, etc.)
  */
-symbol?: string | null, 
+symbol?: string | null,
 /**
  * Optional line range (start, end) where the implementation exists
  */
-line_start?: number | null, line_end?: number | null, 
+line_start?: number | null, line_end?: number | null,
 /**
  * Optional notes about this trace link
  */
-notes?: string | null, 
+notes?: string | null,
 /**
  * When this trace link was created
  */
-created_at: string, 
+created_at: string,
 /**
  * Who created this trace link
  */
-created_by?: string | null, 
+created_by?: string | null,
 /**
  * Git commit hash where this trace was identified (optional)
  */
@@ -553,43 +607,43 @@ commit_hash?: string | null, };
 
 export type GitLabLinkType = "ImplementedBy" | "TracesTo" | "RelatedBug" | "FollowUp";
 
-export type GitLabIssueLink = { 
+export type GitLabIssueLink = {
 /**
  * Unique identifier for the link
  */
-id: string, 
+id: string,
 /**
  * GitLab issue IID (project-scoped issue number)
  */
-issue_iid: bigint, 
+issue_iid: bigint,
 /**
  * GitLab project ID (optional - uses default from config if not set)
  */
-project_id?: bigint | null, 
+project_id?: bigint | null,
 /**
  * Display title for the issue (cached from GitLab)
  */
-issue_title: string, 
+issue_title: string,
 /**
  * Type of link between requirement and issue
  */
-link_type: GitLabLinkType, 
+link_type: GitLabLinkType,
 /**
  * Optional notes about this link
  */
-notes?: string | null, 
+notes?: string | null,
 /**
  * When this link was created
  */
-created_at: string, 
+created_at: string,
 /**
  * Who created this link
  */
-created_by?: string | null, 
+created_by?: string | null,
 /**
  * Last time the issue data was synced from GitLab
  */
-last_synced?: string | null, 
+last_synced?: string | null,
 /**
  * GitLab issue state when last synced (open/closed)
  */
@@ -599,51 +653,51 @@ export type LinkOrigin = "CreatedFromAida" | "ImportedFromGitLab" | "ManualLink"
 
 export type SyncStatus = "InSync" | "AidaModified" | "GitLabModified" | "Conflict" | "Error" | "Untracked";
 
-export type GitLabSyncState = { 
+export type GitLabSyncState = {
 /**
  * AIDA requirement UUID
  */
-requirement_id: string, 
+requirement_id: string,
 /**
  * AIDA spec-id (for display)
  */
-spec_id: string, 
+spec_id: string,
 /**
  * GitLab project ID
  */
-gitlab_project_id: bigint, 
+gitlab_project_id: bigint,
 /**
  * GitLab issue IID (project-scoped issue number)
  */
-gitlab_issue_iid: bigint, 
+gitlab_issue_iid: bigint,
 /**
  * GitLab issue global ID (for API operations)
  */
-gitlab_issue_id: bigint, 
+gitlab_issue_id: bigint,
 /**
  * When the link was created
  */
-linked_at: string, 
+linked_at: string,
 /**
  * Last successful sync timestamp
  */
-last_sync: string, 
+last_sync: string,
 /**
  * Hash of AIDA content at last sync
  */
-aida_content_hash: string, 
+aida_content_hash: string,
 /**
  * Hash of GitLab content at last sync
  */
-gitlab_content_hash: string, 
+gitlab_content_hash: string,
 /**
  * How the link was created
  */
-link_origin: LinkOrigin, 
+link_origin: LinkOrigin,
 /**
  * Current sync status
  */
-sync_status: SyncStatus, 
+sync_status: SyncStatus,
 /**
  * Last sync error message (if any)
  */
@@ -651,279 +705,317 @@ last_error?: string | null, };
 
 export type ConfidenceLevel = "High" | "Medium" | "Low";
 
-export type ImplementationInfo = { 
+export type ImplementationInfo = {
 /**
  * Whether the requirement has been implemented
  */
-implemented: boolean, 
+implemented: boolean,
 /**
  * Summary of the implementation
  */
-summary?: string | null, 
+summary?: string | null,
 /**
  * When the last AI agent run occurred for this requirement
  */
-last_agent_run?: string | null, 
+last_agent_run?: string | null,
 /**
  * Risk notes identified during implementation
  */
-risk_notes?: string | null, 
+risk_notes?: string | null,
 /**
  * Notes about test coverage
  */
-test_coverage_notes?: string | null, 
+test_coverage_notes?: string | null,
 /**
  * The AI tool used for implementation (e.g., "claude", "copilot")
  */
-source_tool?: string | null, 
+source_tool?: string | null,
 /**
  * Confidence level of the AI-generated implementation
  */
-confidence?: ConfidenceLevel | null, 
+confidence?: ConfidenceLevel | null,
 /**
  * When the implementation was completed
  */
-implemented_at?: string | null, 
+implemented_at?: string | null,
 /**
  * Who performed the implementation
  */
-implemented_by?: string | null, 
+implemented_by?: string | null,
 /**
  * When the auto-bump from `Done` → `Completed` fired (i.e. when a
  * commit referencing this spec landed on the default branch).
  * Stamped by the `aida pull` auto-bump path, not by `aida queue done`.
  * trace:STORY-86 | ai:claude
  */
-completed_at?: string | null, 
+completed_at?: string | null,
 /**
  * The default-branch commit SHA that triggered the auto-bump.
  * Stamped alongside `completed_at`.
  * trace:STORY-86 | ai:claude
  */
-completion_sha?: string | null, };
+completion_sha?: string | null,
+/**
+ * The workspace repo slug the `completion_sha` commit landed in — the
+ * sibling qualifier that makes a bare SHA resolvable in a multi-repo
+ * shared-store workspace (ADR-12: qualify the record, not the SHA).
+ * Stamped alongside `completion_sha` by the auto-bump path when a
+ * workspace manifest is present. `None` = single-repo / legacy: resolve
+ * against the sole repo, the current behavior.
+ */
+completion_repo?: string | null,
+/**
+ * Code-repo HEAD when this spec was deliberately reopened from Done or
+ * Completed. Landing and completion scans ignore evidence at or before
+ * this SHA; a genuinely later commit may still land or complete it.
+ * Separate from completion_sha, which retains the last completion evidence.
+ */
+reopened_at_sha?: string | null, };
 
-export type Comment = { 
+export type Comment = {
 /**
  * Unique identifier for the comment
  */
-id: string, 
+id: string,
 /**
  * Author of the comment
  */
-author: string, 
+author: string,
 /**
  * Content of the comment
  */
-content: string, 
+content: string,
 /**
  * When the comment was created
  */
-created_at: string, 
+created_at: string,
 /**
  * When the comment was last modified
  */
-modified_at: string, 
+modified_at: string,
 /**
  * Parent comment ID (None for top-level comments)
  */
-parent_id: string | null, 
+parent_id: string | null,
 /**
  * Nested replies to this comment
  */
-replies?: Array<Comment>, 
+replies?: Array<Comment>,
 /**
  * Reactions on this comment
  */
-reactions?: Array<CommentReaction>, };
+reactions?: Array<CommentReaction>,
+/**
+ * Claude/AIDA session id that produced this comment, when known.
+ * Best-effort: comments added outside a tracked session (and every
+ * comment written before this field existed) carry `None`. Stamping
+ * it lets tooling correlate a comment back to the session that wrote
+ * it (`aida session list`). Optional + `skip_serializing_if` keeps the
+ * on-disk YAML unchanged for comments that have no session id.
+ */
+session_id?: string | null,
+/**
+ * Explicitly reported harness version at comment creation.
+ */
+harness_version?: string | null,
+/**
+ * The seat whose claim this comment RELAYS (`aida comment add
+ * --relayed-from <seat>`), when the author is recording another seat's
+ * measurement, finding or argument rather than something it verified
+ * itself. `None` = the author's own claim. Structured so the original
+ * author survives into anything built on the comment; older comments
+ * deserialize as `None` (marked by absence, never retro-attributed).
+ */
+relayed_from?: string | null, };
 
-export type User = { 
+export type User = {
 /**
  * Unique identifier for the user
  */
-id: string, 
+id: string,
 /**
  * Human-friendly spec ID (e.g., "$USER-001")
  */
-spec_id: string | null, 
+spec_id: string | null,
 /**
  * User's full name
  */
-name: string, 
+name: string,
 /**
  * User's email address
  */
-email: string, 
+email: string,
 /**
  * User's handle for @mentions (without the @)
  */
-handle: string, 
+handle: string,
 /**
  * Hashed PIN for simple authentication (SHA-256 hash stored as hex string)
  * This is a basic authentication mechanism for web clients.
  * For production use, consider a proper auth system (OAuth, JWT, etc.)
  */
-pin_hash?: string | null, 
+pin_hash?: string | null,
 /**
  * When the user was created
  */
-created_at: string, 
+created_at: string,
 /**
  * Whether the user is archived
  */
 archived?: boolean, };
 
-export type Team = { 
+export type Team = {
 /**
  * Unique identifier for the team
  */
-id: string, 
+id: string,
 /**
  * Human-friendly spec ID (e.g., "$TEAM-001")
  */
-spec_id: string | null, 
+spec_id: string | null,
 /**
  * Team name
  */
-name: string, 
+name: string,
 /**
  * Team description (optional)
  */
-description?: string, 
+description?: string,
 /**
  * Parent team ID for nested teams (None if top-level team)
  */
-parent_team_id: string | null, 
+parent_team_id: string | null,
 /**
  * User IDs of team members
  */
-member_ids?: Array<string>, 
+member_ids?: Array<string>,
 /**
  * When the team was created
  */
-created_at: string, 
+created_at: string,
 /**
  * When the team was last modified
  */
-modified_at: string | null, 
+modified_at: string | null,
 /**
  * Whether the team is archived
  */
 archived?: boolean, };
 
-export type ProcessingRecord = { 
+export type ProcessingRecord = {
 /**
  * Unique identifier for this record entry.
  */
-id: string, 
+id: string,
 /**
  * When the spec was processed to completion.
  */
-timestamp: string, 
+timestamp: string,
 /**
  * The agent that did the work (e.g. `claude`, `codex`), best-effort from
  * the brief's `generated_by` / the session lease role / a fallback.
  */
-agent: string, 
+agent: string,
 /**
  * Project-relative path of the pickup brief this work was routed by, when
  * one existed (`.aida/agent-briefs/...`). Promotes the gitignored brief
  * outcome into the durable record.
  */
-brief_ref?: string | null, 
+brief_ref?: string | null,
 /**
  * The merge/commit SHA that completed the spec, when known.
  */
-commit_sha?: string | null, 
+commit_sha?: string | null,
 /**
  * The PR/MR number that carried the work, when known.
  */
-pr?: bigint | null, 
+pr?: bigint | null,
 /**
  * One-line human-readable summary of what was done.
  */
-summary: string, 
+summary: string,
 /**
  * Key decisions + rationale (the WHY) — typically promoted from the
  * review verdict summary and the implementer's recorded notes.
  */
-decisions?: Array<string>, 
+decisions?: Array<string>,
 /**
  * What was punted or escalated during the work (follow-up TASK ids,
  * design-fork punts) — so the deferred tail is auditable, not lost.
  */
-punted?: Array<string>, 
+punted?: Array<string>,
 /**
  * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
  * promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
  */
 review_verdict?: string | null, };
 
-export type SpecIntent = { 
+export type SpecIntent = {
 /**
  * Layman register: plain prose for a human skimmer.
  */
-layman: string, 
+layman: string,
 /**
  * LLM register: denser/structured comprehension an agent loads BEFORE
  * working the spec.
  */
-llm: string, 
+llm: string,
 /**
  * RFC3339 timestamp of when this comprehension was generated.
  */
-generated_at: string, 
+generated_at: string,
 /**
  * Hash of the graph-neighborhood inputs at generation time. Compared
  * against a freshly-computed hash at read to detect drift (staleness).
  */
-source_hash: string, 
+source_hash: string,
 /**
  * The model identifier that produced the comprehension.
  */
 model: string, };
 
-export type Requirement = { 
+export type Requirement = {
 /**
  * Unique identifier for the requirement (UUID)
  */
-id: string, 
+id: string,
 /**
  * Human-friendly specification ID (e.g., "SPEC-001")
  */
-spec_id: string | null, 
+spec_id: string | null,
 /**
  * Short agreed ID assigned at merge-to-trunk (e.g., "FR-423").
  * Only populated in distributed mode after the merge gate runs.
  * In centralized mode, spec_id is already the short form so this is unused.
  * Both spec_id and agreed_id permanently resolve to the same UUID.
  */
-agreed_id?: string | null, 
+agreed_id?: string | null,
 /**
  * Optional prefix override for the spec_id (e.g., "SEC" for security requirements)
  * If set, uses this prefix instead of deriving from feature/type
  * Must be uppercase letters only (A-Z)
  */
-prefix_override?: string | null, 
+prefix_override?: string | null,
 /**
  * Short title describing the requirement
  */
-title: string, 
+title: string,
 /**
  * Detailed description of the requirement
  */
-description: string, 
+description: string,
 /**
  * Current status of the requirement
  */
-status: RequirementStatus, 
+status: RequirementStatus,
 /**
  * Priority level of the requirement
  */
-priority: RequirementPriority, 
+priority: RequirementPriority,
 /**
  * Person responsible for the requirement
  */
-owner: string, 
+owner: string,
 /**
  * The team member this spec is *assigned* to (the durable "who works on
  * this" pointer). Distinct from `owner`, which records the creator/author
@@ -932,56 +1024,56 @@ owner: string,
  * cleared by `aida unassign`. `None` ⇒ unassigned ⇒ current single-user
  * behavior (renders nothing). trace:STORY-639 | ai:claude
  */
-assignee?: string | null, 
+assignee?: string | null,
 /**
  * The feature this requirement belongs to
  */
-feature: string, 
+feature: string,
 /**
  * When the requirement was created
  */
-created_at: string, 
+created_at: string,
 /**
  * Who created this requirement
  */
-created_by?: string | null, 
+created_by?: string | null,
 /**
  * When the requirement was last modified
  */
-modified_at: string, 
+modified_at: string,
 /**
  * Type of the requirement
  */
-req_type: RequirementType, 
+req_type: RequirementType,
 /**
  * Subtype for Meta requirements (prompts, skills, commands, etc.)
  */
-meta_subtype?: MetaSubtype | null, 
+meta_subtype?: MetaSubtype | null,
 /**
  * IDs of requirements this requirement depends on
  */
-dependencies?: Array<string>, 
+dependencies?: Array<string>,
 /**
  * Tags for categorizing the requirement
  */
-tags?: Array<string>, 
+tags?: Array<string>,
 /**
  * Weight/effort estimate for the requirement (e.g., story points)
  * Optional - only shown in UI when set
  */
-weight?: number | null, 
+weight?: number | null,
 /**
  * Relationships to other requirements
  */
-relationships?: Array<Relationship>, 
+relationships?: Array<Relationship>,
 /**
  * Comments on this requirement (threaded)
  */
-comments?: Array<Comment>, 
+comments?: Array<Comment>,
 /**
  * History of changes to this requirement
  */
-history?: Array<HistoryEntry>, 
+history?: Array<HistoryEntry>,
 /**
  * STORY-582: durable processing records — the committed audit trail of
  * what was done + why each time this spec was processed to completion.
@@ -989,18 +1081,18 @@ history?: Array<HistoryEntry>,
  * the human-meaningful outcome promoted from the brief / review verdict.
  * trace:STORY-582 | ai:claude
  */
-processing_record?: Array<ProcessingRecord>, 
+processing_record?: Array<ProcessingRecord>,
 /**
  * Whether this requirement is archived
  */
-archived?: boolean, 
+archived?: boolean,
 /**
  * Timestamp when this requirement was archived (None when not archived).
  * Cleared on unarchive. Used by `aida archive --older-than` sweeps and
  * the auto-sweep on `aida pull` to compute spec age.
  * trace:STORY-441 | ai:claude
  */
-archived_at?: string | null, 
+archived_at?: string | null,
 /**
  * Whether this requirement is deferred — a view-flag orthogonal to status
  * (parallel to `archived`, NOT a new status). A deferred spec is primed
@@ -1008,13 +1100,13 @@ archived_at?: string | null,
  * view but is not filed away the way archived is.
  * trace:STORY-584 | ai:claude
  */
-deferred?: boolean, 
+deferred?: boolean,
 /**
  * Timestamp when this requirement was deferred (None when not deferred).
  * Cleared on undefer.
  * trace:STORY-584 | ai:claude
  */
-deferred_at?: string | null, 
+deferred_at?: string | null,
 /**
  * The revisit trigger — the free-text condition that brings a deferred
  * spec back (e.g. "when a slice verb ships", "if the shelf grows"). This
@@ -1022,37 +1114,85 @@ deferred_at?: string | null,
  * archived (retrospective/filed). Set via `aida defer --until "<cond>"`.
  * trace:STORY-584 | ai:claude
  */
-deferred_until?: string | null, 
+deferred_until?: string | null,
+/**
+ * Operator's reason for parking this requirement. Unlike the revisit
+ * trigger, this explains why the hold exists and is retained with the
+ * deferred state. Legacy deferred rows deserialize without a reason.
+ */
+deferred_reason?: string | null,
+/**
+ * Narrative risk notes — the residual risk / blast-radius call an
+ * implementer recorded that is NOT derivable from git, status, or trace
+ * (the narrowed remnant of the retired `ImplementationInfo`). Optional and
+ * serde-default so pre-existing YAML deserializes unchanged.
+ */
+risk_notes?: string | null,
+/**
+ * Narrative test-coverage notes — what was (and was not) covered, and why,
+ * beyond what CI status alone conveys. Optional, serde-default.
+ */
+test_coverage_notes?: string | null,
+/**
+ * Narrative implementation summary — the human-readable "what shipped and
+ * why it was done this way" that a commit prefix / diff does not capture.
+ * Optional, serde-default.
+ */
+implementation_summary?: string | null,
+/**
+ * The advisor's bless-time classification of HOW this spec runs when
+ * dispatched (`aida do`). `None` = ungroomed. Written through the
+ * advisor-authority path only (groom, `aida edit --mode`, or the TTY
+ * micro-groom confirm). Optional, serde-default.
+ */
+execution_mode?: ExecutionMode | null,
+/**
+ * Where this requirement's code lives in a multi-repo shared-store
+ * workspace (ADR-12): a workspace repo slug plus an optional component
+ * within it. `None` = single-repo store (the default; existing stores
+ * round-trip unchanged). The `repo` slug is the canonical join key
+ * qualifying this spec's linkage artifacts. Optional, serde-default.
+ */
+origin?: Origin | null,
+/**
+ * Filing provenance: the code state and tooling this spec was filed
+ * against (code HEAD SHA, branch, dirty flag, aida version + build SHA,
+ * filing agent/session). WRITE-ONCE — stamped at creation, never changed
+ * by edits (the store write paths preserve the on-disk value). Every
+ * sub-field is best-effort. `None` = filed before provenance existed;
+ * existing stores round-trip unchanged. Optional, serde-default.
+ */
+filed_at?: FilingProvenance | null,
 /**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field
  */
-custom_status?: string | null, 
+custom_status?: string | null,
 /**
  * Custom priority string (for types with custom priorities)
  * If set, this takes precedence over the `priority` enum field
  */
-custom_priority?: string | null, 
+custom_priority?: string | null,
 /**
  * Custom field values (key = field name, value = field value as string)
  */
-custom_fields?: { [key in string]?: string }, 
+custom_fields?: { [key in string]?: string },
 /**
  * External URL links attached to this requirement
  */
-urls?: Array<UrlLink>, 
+urls?: Array<UrlLink>,
 /**
  * File attachments on this requirement
  */
-attachments?: Array<Attachment>, 
+attachments?: Array<Attachment>,
 /**
  * Trace links to code artifacts implementing this requirement
  */
-trace_links?: Array<TraceLink>, 
+trace_links?: Array<TraceLink>,
 /**
  * Links to GitLab issues related to this requirement
  */
-gitlab_issues?: Array<GitLabIssueLink>, 
+gitlab_issues?: Array<GitLabIssueLink>,
 /**
  * One-way external issue references composing this spec with PM systems
  * (Linear / Jira / GitHub). Each entry is a validated `provider:id`
@@ -1062,23 +1202,23 @@ gitlab_issues?: Array<GitLabIssueLink>,
  * Deliberately one-way — AIDA records the ref, it does NOT sync state
  * back to the external system. trace:STORY-476 | ai:claude
  */
-external_refs?: Array<string>, 
+external_refs?: Array<string>,
 /**
  * Implementation metadata for this requirement
  */
-implementation_info?: ImplementationInfo | null, 
+implementation_info?: ImplementationInfo | null,
 /**
  * Cached AI evaluation results
  * Automatically populated by background evaluator when requirement changes
  */
-ai_evaluation?: StoredAiEvaluation | null, 
+ai_evaluation?: StoredAiEvaluation | null,
 /**
  * Why this spec is paused — set by `aida punt` when status flips to
  * `NeedsAttention`, cleared when it is triaged back out. Answers "why is
  * this *currently* paused"; the punt ledger keeps the durable history.
  * trace:STORY-332 | ai:claude
  */
-attention_reason?: AttentionReason | null, 
+attention_reason?: AttentionReason | null,
 /**
  * Set by the `--auto-complete` orchestrator when it shelves a spec
  * after a phase failure (sibling to `attention_reason` — see
@@ -1086,7 +1226,7 @@ attention_reason?: AttentionReason | null,
  * `NeedsAttention`; the punt ledger keeps the durable history.
  * trace:EPIC-28 | ai:claude
  */
-failure_reason?: FailureReason | null, 
+failure_reason?: FailureReason | null,
 /**
  * Marks this spec as work no agent can do — a person-in-the-room task,
  * a sign-off, a physical activity. The pre-pickup gate
@@ -1096,14 +1236,14 @@ failure_reason?: FailureReason | null,
  * `human_only` is a permanent property of the spec, cleared only by
  * the human explicitly flipping it off. trace:STORY-333 | ai:claude
  */
-human_only?: boolean, 
+human_only?: boolean,
 /**
  * A structured decision the human answers OUTSIDE any agent — the
  * async decision-inbox artifact. `None` when no question is pending or
  * recorded. Set by `aida questions ask`, answered by
  * `aida questions answer`. trace:STORY-522 | ai:claude
  */
-decision_request?: DecisionRequest | null, 
+decision_request?: DecisionRequest | null,
 /**
  * User-facing interface changes captured at spec close — the deterministic
  * Layer-1 source for the operator digest. `None` / empty ⇒ no user-facing
@@ -1112,7 +1252,7 @@ decision_request?: DecisionRequest | null,
  * `--interface-{cli,mcp,tui,other}` flags non-interactively) and readable
  * by the digest's capabilities lens. trace:STORY-542 | ai:claude
  */
-interface_changes?: InterfaceChanges | null, 
+interface_changes?: InterfaceChanges | null,
 /**
  * AI-generated plain-terms comprehension of WHY this spec exists — its
  * intent, distilled from the spec + its graph neighborhood. Generated
@@ -1123,286 +1263,290 @@ interface_changes?: InterfaceChanges | null,
  */
 intent?: SpecIntent | null, };
 
-export type RequirementSummaryDto = { id: string, spec_id: string | null, agreed_id?: string | null, title: string, status: RequirementStatus, priority: RequirementPriority, owner: string, assignee?: string | null, feature: string, created_at: string, modified_at: string, req_type: RequirementType, meta_subtype?: MetaSubtype | null, tags?: Array<string>, weight?: number | null, 
+export type RequirementSummaryDto = { id: string, spec_id: string | null, agreed_id?: string | null, title: string, status: RequirementStatus, priority: RequirementPriority, owner: string, assignee?: string | null, feature: string, created_at: string, modified_at: string, req_type: RequirementType, meta_subtype?: MetaSubtype | null, tags?: Array<string>, weight?: number | null,
 /**
  * Retained (light): drives the parent tree + sprint-assignment views.
  */
-relationships?: Array<Relationship>, 
+relationships?: Array<Relationship>,
 /**
  * Retained (light): drives sprint metadata (number/goal/dates).
  */
-custom_fields?: { [key in string]?: string }, custom_status?: string | null, custom_priority?: string | null, archived?: boolean, archived_at?: string | null, deferred?: boolean, deferred_at?: string | null, deferred_until?: string | null, };
+custom_fields?: { [key in string]?: string }, custom_status?: string | null, custom_priority?: string | null, archived?: boolean, archived_at?: string | null, deferred?: boolean, deferred_at?: string | null, deferred_until?: string | null,
+/**
+ * Why the requirement is parked, when the defer is an operator hold.
+ */
+deferred_reason?: string | null, };
 
-export type RequirementSnapshot = { 
+export type RequirementSnapshot = {
 /**
  * The original requirement's UUID (for linking back)
  */
-original_id: string, 
+original_id: string,
 /**
  * Spec ID at the time of snapshot
  */
-spec_id: string | null, 
+spec_id: string | null,
 /**
  * Title at snapshot time
  */
-title: string, 
+title: string,
 /**
  * Description at snapshot time
  */
-description: string, 
+description: string,
 /**
  * Status at snapshot time
  */
-status: RequirementStatus, 
+status: RequirementStatus,
 /**
  * Priority at snapshot time
  */
-priority: RequirementPriority, 
+priority: RequirementPriority,
 /**
  * Owner at snapshot time
  */
-owner: string, 
+owner: string,
 /**
  * Assignee at snapshot time. trace:STORY-639 | ai:claude
  */
-assignee?: string | null, 
+assignee?: string | null,
 /**
  * Feature at snapshot time
  */
-feature: string, 
+feature: string,
 /**
  * Type at snapshot time
  */
-req_type: RequirementType, 
+req_type: RequirementType,
 /**
  * Tags at snapshot time
  */
-tags: Array<string>, 
+tags: Array<string>,
 /**
  * Relationships at snapshot time (storing IDs, not full objects)
  */
-relationships: Array<Relationship>, 
+relationships: Array<Relationship>,
 /**
  * Custom status at snapshot time
  */
-custom_status?: string | null, 
+custom_status?: string | null,
 /**
  * Custom priority at snapshot time
  */
-custom_priority?: string | null, 
+custom_priority?: string | null,
 /**
  * Custom fields at snapshot time
  */
 custom_fields?: { [key in string]?: string }, };
 
-export type Baseline = { 
+export type Baseline = {
 /**
  * Unique identifier for this baseline
  */
-id: string, 
+id: string,
 /**
  * Human-readable name (e.g., "Release 1.0", "Sprint 5 End")
  */
-name: string, 
+name: string,
 /**
  * Optional description of what this baseline represents
  */
-description?: string | null, 
+description?: string | null,
 /**
  * When the baseline was created
  */
-created_at: string, 
+created_at: string,
 /**
  * Who created the baseline
  */
-created_by: string, 
+created_by: string,
 /**
  * Git tag associated with this baseline (for YAML backend)
  * Format: "baseline-{name-slug}" or custom
  */
-git_tag?: string | null, 
+git_tag?: string | null,
 /**
  * Full snapshots of all requirements at baseline time
  * For SQL backends, this is always populated
  * For YAML backend, this may be empty if git_tag is used (can reconstruct from git)
  */
-requirements?: Array<RequirementSnapshot>, 
+requirements?: Array<RequirementSnapshot>,
 /**
  * Whether this baseline is locked (cannot be modified or deleted)
  */
 locked: boolean, };
 
-export type BaselineComparison = { 
+export type BaselineComparison = {
 /**
  * Requirements added (in target but not in source)
  */
-added: Array<string>, 
+added: Array<string>,
 /**
  * Requirements removed (in source but not in target)
  */
-removed: Array<string>, 
+removed: Array<string>,
 /**
  * Requirements modified (exist in both but changed)
  */
-modified: Array<BaselineRequirementDiff>, 
+modified: Array<BaselineRequirementDiff>,
 /**
  * Requirements unchanged
  */
 unchanged: Array<string>, };
 
-export type BaselineRequirementDiff = { 
+export type BaselineRequirementDiff = {
 /**
  * The requirement's UUID
  */
-id: string, 
+id: string,
 /**
  * Spec ID (for display)
  */
-spec_id: string | null, 
+spec_id: string | null,
 /**
  * List of changed fields
  */
 changes: Array<FieldChange>, };
 
-export type AiActionPromptConfig = { 
+export type AiActionPromptConfig = {
 /**
  * Custom template to replace the default prompt entirely.
  * Use placeholders: {project_context}, {req_context}, {related_context}, {all_reqs}
  */
-custom_template?: string | null, 
+custom_template?: string | null,
 /**
  * Additional instructions appended to the default prompt.
  * Used when custom_template is None.
  */
 additional_instructions?: string, };
 
-export type AiTypePromptConfig = { 
+export type AiTypePromptConfig = {
 /**
  * The requirement type this config applies to (e.g., "Functional", "Epic", "Story")
  */
-type_name: string, 
+type_name: string,
 /**
  * Extra instructions for evaluation prompts for this type
  */
-evaluation_extra?: string, 
+evaluation_extra?: string,
 /**
  * Extra instructions for improve description prompts for this type
  */
-improve_extra?: string, 
+improve_extra?: string,
 /**
  * Extra instructions for generate children prompts for this type
  */
 generate_children_extra?: string, };
 
-export type AiPromptConfig = { 
+export type AiPromptConfig = {
 /**
  * Global context prepended to ALL AI prompts.
  * Use this to describe your project's methodology, terminology, or special rules.
  */
-global_context?: string, 
+global_context?: string,
 /**
  * Configuration for the evaluation action
  */
-evaluation?: AiActionPromptConfig, 
+evaluation?: AiActionPromptConfig,
 /**
  * Configuration for the find duplicates action
  */
-duplicates?: AiActionPromptConfig, 
+duplicates?: AiActionPromptConfig,
 /**
  * Configuration for the suggest relationships action
  */
-relationships?: AiActionPromptConfig, 
+relationships?: AiActionPromptConfig,
 /**
  * Configuration for the improve description action
  */
-improve?: AiActionPromptConfig, 
+improve?: AiActionPromptConfig,
 /**
  * Configuration for the generate children action
  */
-generate_children?: AiActionPromptConfig, 
+generate_children?: AiActionPromptConfig,
 /**
  * Per-type customization
  */
 type_prompts?: Array<AiTypePromptConfig>, };
 
-export type RequirementsStore = { 
+export type RequirementsStore = {
 /**
  * Database name (displayed in window title prefix)
  */
-name: string, 
+name: string,
 /**
  * Database title (one-liner, displayed in window title)
  */
-title: string, 
+title: string,
 /**
  * Database description (multi-line)
  */
-description: string, requirements: Array<Requirement>, 
+description: string, requirements: Array<Requirement>,
 /**
  * Users in the system
  */
-users?: Array<User>, 
+users?: Array<User>,
 /**
  * Teams in the system
  */
-teams?: Array<Team>, 
+teams?: Array<Team>,
 /**
  * ID system configuration
  */
-id_config: IdConfiguration, 
+id_config: IdConfiguration,
 /**
  * Defined features with their prefixes
  */
-features: Array<FeatureDefinition>, 
+features: Array<FeatureDefinition>,
 /**
  * Counter for feature numbers (used when creating new features)
  */
-next_feature_number: number, 
+next_feature_number: number,
 /**
  * Global counter for requirement IDs (used with Global numbering strategy)
  */
-next_spec_number: number, 
+next_spec_number: number,
 /**
  * Per-prefix counters for requirement IDs (used with PerPrefix numbering)
  * Key is the prefix (e.g., "FR", "AUTH"), value is the next number
  */
-prefix_counters: { [key in string]?: number }, 
+prefix_counters: { [key in string]?: number },
 /**
  * Relationship type definitions with constraints
  */
-relationship_definitions: Array<RelationshipDefinition>, 
+relationship_definitions: Array<RelationshipDefinition>,
 /**
  * Reaction definitions for comments
  */
-reaction_definitions: Array<ReactionDefinition>, 
+reaction_definitions: Array<ReactionDefinition>,
 /**
  * Counter for meta-type IDs (users, views, etc.) - maps prefix to next number
  * e.g., "$USER" -> 1 means next user will be $USER-001
  */
-meta_counters: { [key in string]?: number }, 
+meta_counters: { [key in string]?: number },
 /**
  * Custom type definitions with their statuses and fields
  */
-type_definitions: Array<CustomTypeDefinition>, 
+type_definitions: Array<CustomTypeDefinition>,
 /**
  * List of allowed/known ID prefixes for the project
  * These are collected from usage and can be managed by admins
  */
-allowed_prefixes: Array<string>, 
+allowed_prefixes: Array<string>,
 /**
  * Whether to restrict prefix selection to only allowed_prefixes
  * When false, users can enter any valid prefix (which gets added to allowed_prefixes)
  * When true, users must select from the allowed_prefixes list
  */
-restrict_prefixes: boolean, 
+restrict_prefixes: boolean,
 /**
  * AI prompt configuration for customizing AI behavior
  */
-ai_prompts?: AiPromptConfig, 
+ai_prompts?: AiPromptConfig,
 /**
  * Baselines - named snapshots of requirements at specific points in time
  */
-baselines?: Array<Baseline>, 
+baselines?: Array<Baseline>,
 /**
  * Migration marker - if set, indicates this YAML was migrated to another format
  * Contains the path to the migrated database (e.g., "requirements.db")
@@ -1416,15 +1560,15 @@ export type SuggestedImprovement = { description: string | null, rationale: stri
 
 export type EvaluationResponse = { quality_score: number, issues: Array<IssueReport>, strengths: Array<string>, suggested_improvements: SuggestedImprovement | null, };
 
-export type StoredAiEvaluation = { 
+export type StoredAiEvaluation = {
 /**
  * The evaluation results from AI
  */
-evaluation: EvaluationResponse, 
+evaluation: EvaluationResponse,
 /**
  * When the evaluation was performed
  */
-evaluated_at: string, 
+evaluated_at: string,
 /**
  * Hash of the requirement content at time of evaluation
  * Used to detect if requirement has changed since evaluation
@@ -1445,7 +1589,7 @@ export type GeneratedChild = { title: string, description: string, type: string,
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
 
-export type TeamMemberDto = { 
+export type TeamMemberDto = {
 /**
  * The person's identity — the **person key** that roles / queues /
  * assignees all key on: the node owner `$USER` string captured at
@@ -1456,79 +1600,79 @@ export type TeamMemberDto = {
  * assignment set in the UI under this id actually enforces. A person may
  * register several clones, all grouped under this id. trace:STORY-653
  */
-userId: string, 
+userId: string,
 /**
  * A friendly display label for the person — their email if recorded, else
  * the person key. Shown in the UI instead of the cryptic integer id.
  * trace:STORY-653 | ai:claude
  */
-displayLabel: string, 
+displayLabel: string,
 /**
  * The friendly node names (STORY-652) for this person's registered clones,
  * e.g. `["imac-joe-1", "spock-joe-2"]`. trace:STORY-653 | ai:claude
  */
-nodeNames: Array<string>, 
+nodeNames: Array<string>,
 /**
  * The person's role from `registry/team.toml`, if any (canonicalized),
  * resolved via the person key. trace:STORY-653
  */
-role: string | null, 
+role: string | null,
 /**
  * Distinct hostnames this person is registered on.
  */
-hosts: Array<string>, 
+hosts: Array<string>,
 /**
  * Absolute clone paths this person has registered.
  */
-clonePaths: Array<string>, 
+clonePaths: Array<string>,
 /**
  * The most recent registration timestamp across the person's clones (RFC3339).
  */
-lastSeen: string | null, 
+lastSeen: string | null,
 /**
  * One coordination claim scope this person currently holds, if any (the
  * roster "active now" signal). The full claim set is on `/coordination`.
  */
 activeClaim: string | null, };
 
-export type CoordinationClaimDto = { 
+export type CoordinationClaimDto = {
 /**
  * `"lease"` (a leased spec/worktree scope), `"drain"`, or `"solo"`.
  */
-kind: string, 
+kind: string,
 /**
  * The leased scope (a SPEC-ID / worktree scope) for a lease; `None` for the
  * drain/solo process locks (their scope is the kind itself).
  */
-scope: string | null, 
+scope: string | null,
 /**
  * The node id holding the claim.
  */
-holderUser: string, 
+holderUser: string,
 /**
  * Host the holder runs on.
  */
-host: string, 
+host: string,
 /**
  * Absolute path of the holding clone.
  */
-clonePath: string, 
+clonePath: string,
 /**
  * Agent / command context, if recorded.
  */
-agent: string | null, 
+agent: string | null,
 /**
  * RFC3339 UTC when the claim was taken.
  */
-startedAt: string, 
+startedAt: string,
 /**
  * RFC3339 UTC of the last heartbeat.
  */
-heartbeatAt: string, 
+heartbeatAt: string,
 /**
  * Seconds since the heartbeat (computed at read time).
  */
-ageSecs: bigint, 
+ageSecs: bigint,
 /**
  * True when the heartbeat has aged past the claim's TTL (reclaimable).
  */
