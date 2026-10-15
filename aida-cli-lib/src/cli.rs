@@ -9690,7 +9690,9 @@ pub enum Command {
     /// — it owns the lane's filing convention in one place so the
     /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
     ///
-    /// CI is never skipped. The lane drops only the human-review ceremony.
+    /// CI is never skipped, and merging still needs an approval from a
+    /// session that did not author the work; no tag opts a PR out of that.
+    /// The lane drops only the reviewer model session.
     // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
     // `aida fasttrack <title>` filing form stays the default (title optional so
@@ -16762,6 +16764,25 @@ mod seat_help_tests {
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegenCommand {
+    /// Run the declared installer and oracle, then record a raw R1 trial
+    // trace:TASK-1730 | ai:codex
+    Score {
+        /// Regenerated system directory (commands run relative to this root)
+        dir: PathBuf,
+        /// Corpus directory containing corpus.json and manifest.json
+        #[clap(long)]
+        corpus: PathBuf,
+        #[clap(long)]
+        model: String,
+        #[clap(long)]
+        vendor: String,
+        #[clap(long)]
+        harness: String,
+        /// Explicitly bypass bubblewrap; the recorded trial is never clean
+        #[clap(long)]
+        unconfined: bool,
+    },
+
     /// Export committed store content as corpus.json and manifest.json
     Corpus {
         /// New or empty output directory

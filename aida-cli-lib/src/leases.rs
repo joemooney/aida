@@ -324,6 +324,9 @@ pub(crate) fn session_harness_worktree_register(
         &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
+    // BUG-1918: durable record of who is authoring this worktree's work.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
     println!(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
@@ -338,6 +341,14 @@ pub(crate) fn session_harness_worktree_register(
         println!(
             "adopted spec lease {adopted} for this subagent (its worktree is this subagent's cwd)"
         );
+        // BUG-1918: the adopting subagent now authors that spec's work.
+        // trace:BUG-1918 | ai:claude
+        if let Some(spec_lease) = list_leases(&project_root)
+            .into_iter()
+            .find(|l| l.id == adopted)
+        {
+            review_authority::record_authoring_lease(&project_root, &spec_lease);
+        }
     }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
     // now working that spec — flip Approved → In Progress at lease-take (the

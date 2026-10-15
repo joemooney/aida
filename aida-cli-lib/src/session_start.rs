@@ -2141,6 +2141,9 @@ pub(crate) fn session_start(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // BUG-1918: durable record of who claimed this spec, surviving release.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
 
     // BUG-2010: update the resolved agent's own registry entry with its new
     // current_spec and worktree path.
@@ -2393,6 +2396,9 @@ pub(crate) fn session_start(
         );
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
+        // BUG-1918: the exec'd worker carries its lease id.
+        // trace:BUG-1918 | ai:claude
+        review_authority::export_worker_session_env(&id);
         // TASK-31: pass a display name to claude so the /resume picker and
         // terminal title can distinguish concurrent worktrees. Explicit
         // --name wins; otherwise derive from scope+branch+role.

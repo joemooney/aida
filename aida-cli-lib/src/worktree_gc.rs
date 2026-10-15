@@ -1614,6 +1614,11 @@ pub(crate) fn ensure_spec_worktree(
             // per-spec path (no warm-pool tree); launch=false = no agent.
             let _context = ScopedEnvVar::set("AIDA_WORKTREE_CONTEXT", worktree_context);
             let _suppress_next = ScopedEnvVar::set("AIDA_SUPPRESS_SESSION_NEXT", "1");
+            // BUG-1918: `worktree add` / `enter` / `do-guided` are the
+            // implementer claiming for itself, so its own identity (harness
+            // ancestry, shell, session ids) is recorded as the author. Only a
+            // true hand-off to another process uses `as_launcher`.
+            // trace:BUG-1918 | ai:claude
             session_start(
                 spec_display,
                 Some(branch),
