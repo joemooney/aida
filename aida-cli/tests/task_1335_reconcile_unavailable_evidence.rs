@@ -68,7 +68,7 @@ else
 fi
 case "$mode" in
   clear) echo '[]' ;;
-  open:*) printf '[{"number":%s}]\n' "${mode#open:}" ;;
+  open:*) printf '[{"number":%s,"title":"wip (%s)","body":"","headRefName":"x"}]\n' "${mode#open:}" "$search" ;;
   exit) echo 'HTTP 401: Bad credentials (https://api.github.com/graphql)' >&2; exit 1 ;;
   garbage) echo 'this is not json' ;;
   object) echo '{"number":5}' ;;
