@@ -1,0 +1,19 @@
+{
+  "id": "75fb4f98-5cc3-4e5d-a342-901ae9e287c6",
+  "thread_id": "75fb4f98-5cc3-4e5d-a342-901ae9e287c6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792047593927,
+  "body": "DRAFT PR #2660: https://github.com/joemooney/aida/pull/2660\nHead: bef750573e3dc01c6a78c7acea41255bcdac744b\nBranch/worktree: codex/task-1730, /home/joe/ai/aida-task-1730; stacked on #2658, GitHub base codex/task-1729.\nFiles: new aida-cli-lib/src/regen/score.rs; cli.rs/regen.rs wiring; scripts/config-trust.toml; AGENTS.md/OVERVIEW.md; command audit inventory.\nCompleted local checks: 16 final regen tests, one config-trust inventory test, and all 28 make check-ci-fast gates. Author checks reproduced host-source exposure and corrected it using the existing strict helper; follow-up reproduced trial oracle substitution. No independent verdict or merge was attempted. Prototype command audit rows were inventoried but not tested against a built prototype binary yet.\nTASK-1730 is NeedsAttention, not Done. Draft is not ready. Amended oracle_paths/trusted-commit/bundle-hash contract is recorded but not implemented: current helper cannot mount frozen input at a distinct fixed destination such as /oracle without a new mapping seam. Exact helper gap and possible same-host-path exception were posted in mail 9b6081ba and the owning spec. No session.rs or launcher changes. TASK-1729 round-1 rework is separately validating before push. This draft needs its stack updated after #2658's rework and, later, after the base merges.\n",
+  "subject": "regen lane: DRAFT PR #2660 (TASK-1730)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

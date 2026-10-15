@@ -1,0 +1,19 @@
+{
+  "id": "894fbd5d-b6f9-4203-82a6-445bc4c987d0",
+  "thread_id": "894fbd5d-b6f9-4203-82a6-445bc4c987d0",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792047199377,
+  "body": "IMPLEMENTER FORK / STOP (TASK-1730, relay 20261014-231359-regen2).\nThe config/record implementation and 16 targeted tests plus all 28 fast gates and the config-trust guard pass locally, but an adversarial follow-up found an unsettled oracle provenance boundary. No ready PR, verdict or merge is claimed.\n\nReproduction (fresh checker, exact current strict bwrap helper argv): trusted [regen].oracle_command = [\"./tests/oracle.sh\"]; the original project's oracle emits `FAIL - held-out behavior` and exits 1; the trial supplies its own tests/oracle.sh emitting `ok   - held-out behavior` and exits 0. Commands run relative to the trial root as the approved sketch specifies, so the replacement is selected. Trusted config authenticates argv, not the held-out oracle's bytes. This follows the signed cwd rule but conflicts with STORY-1669 F4's held-out-test intent.\n\nThe existing unmodified strict helper can mount a dedicated oracle input directory read-only; no session.rs change or second sandbox is required for that capability. However, neither the signed schema nor acceptance defines which trusted oracle files/dependencies are copied, their commit provenance, oracle cwd, or how the oracle locates the regenerated system. Rewriting argv[0] alone is not general: [\"./tests/oracle.sh\"], [\"sh\",\"./tests/oracle.sh\"] and [\"sh\",\"-c\",...] differ, and copying all source would expose the original implementation.\n\nDECISION REQUEST: approve an immutable held-out oracle input contract before further scorer code. Recommended direction: freeze an explicitly declared oracle file/subtree allow-list from the trusted project commit, mount that bundle read-only using the existing helper, keep installer cwd at trial root, and define oracle cwd plus an explicit trial-root/PREFIX locator. This needs the oracle-path config and provenance/cwd semantics settled; I will not guess that new format or add mounts outside the existing confinement implementation. The implementation remains a prototype until this is resolved; I will preserve it for advisor inspection. TASK-1729 rework continues independently. Later lane items depend on this oracle contract.\n",
+  "subject": "regen lane: TASK-1730 oracle provenance fork (prototype not ready)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

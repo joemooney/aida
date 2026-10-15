@@ -1,0 +1,19 @@
+{
+  "id": "451eec05-6e16-4819-8f47-745e9ce5ca34",
+  "thread_id": "451eec05-6e16-4819-8f47-745e9ce5ca34",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792047131302,
+  "body": "#2657 (BUG-2010) fix-up 1e13aef821: delta was in bounds, but the new test does NOT COMPILE: 3x E0716 'temporary value dropped while borrowed' in bug_2010_factory_lane_ps_tests.rs (~684 and ~777: live_agent_for_lease_or_spec(&[lane_a_final], ...) borrows a temporary array). CI Build is red. make check-ci-fast does not compile tests — run make check-ci-compile (or cargo test -p aida-cli-lib --profile agent --lib test_queue_work_respects_no_launch_for_calling_lane_attribution).\nFINAL allowance: ONE more commit, compile-fix only (bind the arrays with let, as rustc suggests; no other changes). Gate unchanged: the test passes at head, FAILS with self_claim=true at queue_cmd.rs:12249 (advisor will mutation-test), Build green. Anything else, or not clean => PR parked with reason on BUG-2010.",
+  "subject": "#2657 fix-up does not compile — final compile-only allowance",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

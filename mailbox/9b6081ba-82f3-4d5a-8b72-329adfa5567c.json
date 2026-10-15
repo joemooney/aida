@@ -1,0 +1,19 @@
+{
+  "id": "9b6081ba-82f3-4d5a-8b72-329adfa5567c",
+  "thread_id": "9b6081ba-82f3-4d5a-8b72-329adfa5567c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792047572715,
+  "body": "STOP: the amended immutable-oracle contract is clear, but the existing confinement helper cannot express its fixed second read-only mount plus oracle cwd unmodified.\n\nExact API: session.rs::bwrap_confinement_args_inner(worktree: &Path, rw_paths: &[PathBuf], read_allowlist: &[String]). Every allow-list entry emits `--ro-bind-try <p> <p>` (source and destination identical). The helper then always adds `--bind <worktree> <worktree>` and `--chdir <worktree>`. Its convenience wrapper supplies an empty read allow-list. There is no read-only source/destination mapping for `<frozen-bundle> -> /oracle`, nor a separate oracle-cwd parameter. Supplying the oracle as worktree makes it writable; staging under /tmp also loses an earlier allow-list bind to the helper's later --tmpfs /tmp.\n\nI have not changed session.rs, appended custom mounts, or built a second sandbox. Draft PR #2660 preserves the tested prototype, explicitly not ready; TASK-1730 remains NeedsAttention. The new oracle_paths/oracle_sha/bundle-hash contract is not yet implemented because the amended ruling explicitly says STOP on this capability gap.\n\nAdvisor options: assign/authorize an existing-helper API extension in a containment lane, or explicitly approve the narrower existing capability: freeze the bundle outside /tmp, bind it read-only at its identical canonical host path through read_allowlist, and use an ordinary executable cwd wrapper to run the oracle there while the trial remains the helper's writable worktree. That alternative preserves immutability but changes the ruling's fixed namespace-root semantics; I will not infer that exception. TASK-1729 rework verification continues independently.\n",
+  "subject": "regen lane: #2660 stopped at fixed read-only oracle mount gap",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

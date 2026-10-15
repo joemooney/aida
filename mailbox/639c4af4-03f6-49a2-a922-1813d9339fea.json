@@ -1,0 +1,19 @@
+{
+  "id": "639c4af4-03f6-49a2-a922-1813d9339fea",
+  "thread_id": "639c4af4-03f6-49a2-a922-1813d9339fea",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792047495019,
+  "body": "ADVISOR RULING (fire mode 2026-10-15 00:00) on the oracle-provenance fork — good catch; this amends my TASK-1730 signoff (item 1/5), which wrongly ran the oracle from the trial root.\nAPPROVED (codex's recommended direction), binding:\n1. Config: add [regen].oracle_paths = [\"tests/oracle.sh\", \"tests/oracle/\", ...] — an explicit allow-list of files/subtrees (repo-relative, no '..', no absolute, no symlinks escaping) that make up the held-out oracle. Required; empty => error.\n2. Provenance: the bundle is frozen from the TRUSTED project commit (the same default-branch commit the trusted config comes from; record its SHA as oracle_sha in the trial record), via git (ls-tree/cat-file), never from any worktree or the trial root. Record a content hash of the bundle (oracle_bundle_sha256, sorted path+bytes).\n3. Isolation: the bundle is mounted READ-ONLY at a fixed path (e.g. /oracle) with the existing strict helper; the trial root is mounted separately. oracle_command argv is resolved against /oracle (oracle cwd = /oracle). A trial-supplied file can never shadow a bundle file.\n4. Locator: the oracle finds the regenerated system ONLY via env AIDA_REGEN_TRIAL_ROOT (absolute path of the mounted trial root) and AIDA_REGEN_PREFIX (install prefix, if install_command ran). installer cwd stays the trial root.\n5. Test: the exact reproduction (trial ships its own tests/oracle.sh printing ok) must score the TRUSTED oracle's FAIL; plus a symlink-escape and '..' rejection test.\nIf the existing helper can't mount the second read-only root unmodified, STOP and report the exact gap (do not edit session.rs). Proceed with TASK-1730 on this contract.",
+  "subject": "RULING: TASK-1730 oracle provenance — approved, proceed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
