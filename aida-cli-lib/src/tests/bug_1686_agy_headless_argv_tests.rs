@@ -317,8 +317,12 @@ fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
 // trace:BUG-1686.acb8f1db | ai:claude
 // trace:BUG-1686.ac4341ac | ai:claude
 #[cfg(unix)]
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn spawned_agy_process_receives_the_ordered_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
     std::fs::create_dir_all(home.join(".aida")).unwrap();
@@ -400,8 +404,12 @@ fn spawned_agy_process_receives_the_ordered_argv() {
 /// queue-work path's argv construction without spawning anything.
 // trace:BUG-1686 | ai:claude
 // trace:BUG-1686.acb8f1db | ai:claude
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
     std::fs::create_dir_all(home.join(".aida")).unwrap();

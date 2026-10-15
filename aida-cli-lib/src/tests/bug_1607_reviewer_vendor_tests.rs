@@ -78,8 +78,12 @@ fn codex_only_project(tmp: &std::path::Path) -> (std::path::PathBuf, std::path::
 // 193); same unix gating as the other shell-mock launch tests.
 // trace:BUG-1646 | ai:claude
 #[cfg(unix)]
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree_exists() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let (home, project) = codex_only_project(tmp.path());
     let capture = tmp.path().join("captured-argv.txt");
@@ -154,8 +158,12 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
 /// (`is_file`), so unlike the launch test below it needs no shell mock and
 /// runs on every OS, Windows included.
 // trace:BUG-1607 trace:BUG-1648 | ai:claude
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn review_spec_resolve_vendor_picks_codex_for_codex_only_project() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let (home, project) = codex_only_project(tmp.path());
     let mock = tmp.path().join("mock-agent");
@@ -190,8 +198,12 @@ fn review_spec_resolve_vendor_picks_codex_for_codex_only_project() {
 // 193); same unix gating as the other shell-mock launch tests.
 // trace:BUG-1646 | ai:claude
 #[cfg(unix)]
+// trace:TASK-1748 | ai:antigravity
 #[test]
 fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let (home, project) = codex_only_project(tmp.path());
     let capture = tmp.path().join("captured-argv.txt");
