@@ -1,0 +1,29 @@
+id: 01a13db9-315b-74f1-aa5f-66e23dbd77cd
+spec_id: BUG-2142
+agreed_id: BUG-2142
+title: Scheduler tick unit pins the install-time binary (target/release/aida); one unknown job command then aborts the whole tick, silently stopping every substrate job
+description: |-
+  Observed 2026-10-14: aida-tick-2b20e8a3.service (installed by `aida schedule install-systemd`) ExecStart is /home/joe/ai/aida/target/release/aida — an Oct 5 build. history-index-tick (command `cache refresh --history --if-behind`) was registered later; the stale binary rejects it in parse_scheduled_command and `schedule tick` exits 1 BEFORE running any other job. Every substrate job (cache refresh, watchdog, disk-headroom, drift guard, mirror-sync, night-shift) stopped for ~12h; the only signal was `aida schedule due` showing "last 12h ago".
+
+  Two defects:
+  1. install-systemd/install-cron bake current_exe() into the unit. When that is a raw target/ build it rots. It should resolve to the stable live link (~/.local/bin/aida or ~/.local/share/aida/live/aida) when one exists, and doctor should flag a driver whose ExecStart is not the live binary or is older than it.
+  2. An unknown/unsupported job command must fail THAT job (ledger it as failed + route it) and let the tick continue with the rest — not abort the tick. Related to BUG-1557 (allowlist drift), which fixed the scaffold side but not the fail-whole-tick behavior.
+
+  Acceptance: a tick with one unparseable job runs every other due job and exits nonzero with the bad job named; `aida doctor` reports a tick driver pointing at a non-live / older binary; reinstalling writes the live path.
+
+  Operator remediation (human-only gate): `aida schedule install-systemd` from an interactive terminal using ~/.local/bin/aida.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T04:01:49.403524916Z
+modified_at: 2026-10-15T04:01:49.403524916Z
+req_type: Bug
+filed_at:
+  code_sha: 70f9a8eb07ebb9ecc72c55f7187377db99707111
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
