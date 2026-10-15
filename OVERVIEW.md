@@ -377,6 +377,18 @@ aida/
 
 ## Feature surface (high level)
 
+`aida regen corpus <dir>` freezes committed requirements and knowledge rows,
+including archived rows and comment threads, into versioned `corpus.json` plus
+`manifest.json`. The manifest pins the store SHA and SHA-256 of the corpus bytes;
+exports of the same commit are identical across checkout paths. Only projected
+spec content is included: source artifacts, attachments, history, processing
+records and implementation metadata are excluded. Store-authored prose is kept
+verbatim. The output directory must be new or empty. Uncommitted changes under `objects/`
+refuse unless `--allow-dirty` is explicit; runtime files outside `objects/` do not
+count as dirty. The override still exports committed HEAD and adds
+`dirty: true` to the manifest. Legacy stores must migrate to git-canonical storage.
+<!-- trace:TASK-1729 | ai:codex -->
+
 External wall displays and dashboards use a narrow, versioned read-only
 contract rather than depending on incidental CLI JSON fields. The eleven
 polling lenses and local event follow feed are declared by `aida contract

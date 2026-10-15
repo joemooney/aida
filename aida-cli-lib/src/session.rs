@@ -1176,6 +1176,12 @@ pub(crate) fn compose_headless_command(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
+    // BUG-2144: fail closed before composing anything. Every headless launch
+    // (the queue-work implementer, the headless reviewer, harvest, …) builds
+    // its argv here, so a contained request on a vendor that cannot apply it
+    // is refused at the one choke point instead of silently running uncontained.
+    // trace:BUG-2144 | ai:claude
+    require_vendor_containment(vendor, contained, "headless session")?;
     let worktree = headless_worktree_root();
     // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
     // own skills, so its path is byte-identical to before.
@@ -1238,6 +1244,8 @@ pub fn spawn_vendor_headless_with_seat(
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
+    // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
+    require_vendor_containment(vendor, contained, &format!("{} session", seat.as_str()))?;
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create {}", dir.display()))?;
@@ -1547,6 +1555,9 @@ pub(crate) fn interactive_reviewer_launch_plan(
     session_id: &str,
     contained: bool,
 ) -> Result<ReviewerLaunchPlan> {
+    // BUG-2144: a contained reviewer on a vendor that cannot be contained is
+    // refused, never downgraded. trace:BUG-2144 | ai:claude
+    require_vendor_containment(vendor, contained, "reviewer session")?;
     match vendor {
         HeadlessVendor::Claude => Ok(ReviewerLaunchPlan {
             vendor,
@@ -2105,11 +2116,67 @@ pub(crate) fn headless_vendor_args_contained_in(
 /// the children the drain spawns directly (CI-fix, advisor, harvest) can never
 /// run with less confinement than their implementer sibling.
 // trace:BUG-2133 | ai:claude
-pub(crate) fn drain_contained(project_root: &Path) -> bool {
-    let env = std::env::var("AIDA_CONTAINED")
-        .ok()
-        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
-    env || crate::agent_config::load_agents_contained(project_root).unwrap_or(false)
+///
+/// BUG-2146: an unreadable or malformed `agents.toml` is an error, not
+/// "uncontained" — the caller refuses to launch, naming the file, rather than
+/// failing open.
+// trace:BUG-2146 | ai:claude
+pub(crate) fn drain_contained(project_root: &Path) -> Result<bool> {
+    if aida_contained_env()? {
+        return Ok(true);
+    }
+    crate::agent_config::load_agents_contained(project_root).context(
+        "[contained] could not read the contained posture — refusing to launch rather than \
+         run uncontained. Fix the file named below and retry",
+    )
+}
+
+/// BUG-2146 (#2665 review): parse `AIDA_CONTAINED`. Case-insensitive
+/// `1`/`true`/`yes`/`on` is contained; unset, empty, or `0`/`false`/`no`/`off`
+/// is not. Any other value is an ERROR: a typo such as `AIDA_CONTAINED=ture`
+/// must not read as "uncontained" (fail closed, never open).
+// trace:BUG-2146 | ai:claude
+pub(crate) fn aida_contained_env() -> Result<bool> {
+    let Some(raw) = std::env::var_os("AIDA_CONTAINED") else {
+        return Ok(false);
+    };
+    parse_aida_contained(&raw.to_string_lossy())
+}
+
+/// The pure parse behind [`aida_contained_env`].
+// trace:BUG-2146 | ai:claude
+pub(crate) fn parse_aida_contained(raw: &str) -> Result<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        other => anyhow::bail!(
+            "[contained] AIDA_CONTAINED={other:?} is not recognised — refusing to launch \
+             rather than guess. Use 1/true/yes/on to contain, or 0/false/no/off (or unset it)."
+        ),
+    }
+}
+
+/// BUG-2144: the vendor half of [`child_containment_preflight`] for a launch
+/// that is not necessarily a drain child (an interactive `aida queue work
+/// --sandbox`, a headless implementer or reviewer). Containment is monotonic:
+/// a contained request on a vendor that cannot apply it (only Claude can) is
+/// refused, never silently downgraded to an uncontained launch.
+// trace:BUG-2144 | ai:claude
+pub(crate) fn require_vendor_containment(
+    vendor: HeadlessVendor,
+    contained: bool,
+    what: &str,
+) -> Result<()> {
+    if contained && !containment_applied(vendor, true) {
+        anyhow::bail!(
+            "[contained] containment was requested (--sandbox, AIDA_CONTAINED, or \
+             [agents] contained), but the `{}` vendor cannot run a contained session — \
+             refusing to launch the {what} uncontained. Re-run on claude (--vendor claude \
+             or AIDA_HEADLESS_VENDOR=claude) or turn containment off for this run.",
+            vendor.as_str()
+        );
+    }
+    Ok(())
 }
 
 /// BUG-2133: fail closed. A child launch that was asked to run contained must
@@ -3231,6 +3298,8 @@ pub fn exec_vendor_headless(
     lease_id: Option<&str>,
 ) -> Result<()> {
     use std::process::Stdio;
+    // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
+    require_vendor_containment(vendor, contained, "implementer session")?;
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create {}", dir.display()))?;
@@ -8119,8 +8188,14 @@ mod tests {
     }
 
     // trace:BUG-2006 | ai:antigravity
+    // BUG-2144: this test used to pin the OPPOSITE behaviour — a contained
+    // codex/agy launch silently ran uncontained (AIDA_CONTAINED stripped).
+    // The BUG-2133 ruling (containment is monotonic, fail closed) reverses
+    // that intent: a contained request on a vendor that cannot apply it is
+    // REFUSED, and the vendor binary never runs. The uncontained control still
+    // strips an ambient AIDA_CONTAINED. trace:BUG-2144 | ai:claude
     #[test]
-    fn spawn_vendor_headless_with_seat_codex_and_agy_strip_contained_even_if_passed() {
+    fn spawn_vendor_headless_with_seat_codex_and_agy_refuse_contained_launch() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -8142,8 +8217,8 @@ mod tests {
             label: None,
         };
 
-        // Codex with contained = true -> AIDA_CONTAINED must be stripped
-        {
+        for vendor in [HeadlessVendor::Codex, HeadlessVendor::Agy] {
+            let _ = std::fs::remove_file(&env_out);
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 &project,
                 "advisor",
@@ -8154,8 +8229,9 @@ mod tests {
                     ("AIDA_CONTAINED", Some("1")),
                 ],
             );
-            let status = spawn_vendor_headless_with_seat(
-                HeadlessVendor::Codex,
+            // Contained -> refused, the vendor binary never runs.
+            let err = spawn_vendor_headless_with_seat(
+                vendor,
                 aida_core::agents_config::AgentSeat::Implementer,
                 "prompt",
                 "sid",
@@ -8163,37 +8239,26 @@ mod tests {
                 &tee_opts,
                 true,
             )
-            .unwrap();
-            assert!(status.success());
-            let env_contents = std::fs::read_to_string(&env_out).unwrap();
+            .expect_err("a contained codex/agy launch must be refused");
+            let msg = format!("{err:#}");
             assert!(
-                !env_contents
-                    .lines()
-                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
-                "Codex headless must strip AIDA_CONTAINED even when contained=true: {env_contents}"
+                msg.contains("refusing to launch") && msg.contains(vendor.as_str()),
+                "{vendor:?}: {msg}"
             );
-        }
+            assert!(
+                !env_out.exists(),
+                "{vendor:?}: the vendor binary must not run on a refused contained launch"
+            );
 
-        // Agy with contained = true -> AIDA_CONTAINED must be stripped
-        {
-            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
-                &project,
-                "advisor",
-                &["implementer"],
-                &[
-                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
-                    ("AIDA_OS_WRAP", Some("0")),
-                    ("AIDA_CONTAINED", Some("1")),
-                ],
-            );
+            // Uncontained control -> runs, ambient AIDA_CONTAINED stripped.
             let status = spawn_vendor_headless_with_seat(
-                HeadlessVendor::Agy,
+                vendor,
                 aida_core::agents_config::AgentSeat::Implementer,
                 "prompt",
                 "sid",
                 &log_path,
                 &tee_opts,
-                true,
+                false,
             )
             .unwrap();
             assert!(status.success());
@@ -8202,14 +8267,14 @@ mod tests {
                 !env_contents
                     .lines()
                     .any(|l| l.starts_with("AIDA_CONTAINED=")),
-                "Agy headless must strip AIDA_CONTAINED even when contained=true: {env_contents}"
+                "{vendor:?}: an uncontained launch must strip AIDA_CONTAINED: {env_contents}"
             );
         }
     }
 
     // trace:BUG-2006 | ai:antigravity
     #[test]
-    fn interactive_reviewer_launch_plan_for_codex_is_uncontained_and_strips_aida_contained() {
+    fn interactive_reviewer_launch_plan_for_codex_refuses_contained_and_strips_aida_contained() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -8226,13 +8291,29 @@ mod tests {
             format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
 
-        let plan = interactive_reviewer_launch_plan(
+        // BUG-2144: a contained Codex reviewer used to be planned uncontained;
+        // per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude
+        let err = interactive_reviewer_launch_plan(
             HeadlessVendor::Codex,
             Some("bypassPermissions"),
             Some("codex-reviewer"),
             "review prompt",
             "sid-123",
             true,
+        )
+        .expect_err("a contained Codex reviewer must be refused");
+        assert!(
+            format!("{err:#}").contains("refusing to launch the reviewer session"),
+            "{err:#}"
+        );
+
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            Some("bypassPermissions"),
+            Some("codex-reviewer"),
+            "review prompt",
+            "sid-123",
+            false,
         )
         .unwrap();
         assert!(
@@ -8386,12 +8467,23 @@ mod tests {
             "uncontained Claude exec headless must strip AIDA_CONTAINED: {envs:?}"
         );
 
-        // Codex with contained=true -> stripped (fails safe)
-        let cmd_codex = build_exec_vendor_headless_command(
+        // BUG-2144: Codex with contained=true is REFUSED (this used to pin a
+        // silent downgrade that stripped AIDA_CONTAINED); uncontained strips it.
+        let err = build_exec_vendor_headless_command(
             HeadlessVendor::Codex,
             "prompt",
             "sid",
             true,
+            None,
+            None,
+        )
+        .expect_err("a contained Codex exec headless launch must be refused");
+        assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
+        let cmd_codex = build_exec_vendor_headless_command(
+            HeadlessVendor::Codex,
+            "prompt",
+            "sid",
+            false,
             None,
             None,
         )
@@ -8401,15 +8493,26 @@ mod tests {
         assert!(
             envs.iter()
                 .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
-            "Codex exec headless must strip AIDA_CONTAINED even when contained=true: {envs:?}"
+            "uncontained Codex exec headless must strip AIDA_CONTAINED: {envs:?}"
         );
 
-        // Agy with contained=true -> stripped (fails safe)
-        let cmd_agy = build_exec_vendor_headless_command(
+        // BUG-2144: Agy with contained=true is REFUSED (this used to pin a
+        // silent downgrade that stripped AIDA_CONTAINED); uncontained strips it.
+        let err = build_exec_vendor_headless_command(
             HeadlessVendor::Agy,
             "prompt",
             "sid",
             true,
+            None,
+            None,
+        )
+        .expect_err("a contained Agy exec headless launch must be refused");
+        assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
+        let cmd_agy = build_exec_vendor_headless_command(
+            HeadlessVendor::Agy,
+            "prompt",
+            "sid",
+            false,
             None,
             None,
         )
@@ -8418,7 +8521,7 @@ mod tests {
         assert!(
             envs.iter()
                 .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
-            "Agy exec headless must strip AIDA_CONTAINED even when contained=true: {envs:?}"
+            "uncontained Agy exec headless must strip AIDA_CONTAINED: {envs:?}"
         );
     }
 }
