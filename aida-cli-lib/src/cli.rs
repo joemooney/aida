@@ -34,9 +34,11 @@ pub enum OutputFormat {
 // trace:BUG-1977 | ai:claude
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScaffoldUpgradeOnly {
-    /// Only the AIDA-generated git hooks whose body is not this build's
-    /// shipped hook: each is backed up beside itself and replaced. Custom
-    /// hooks and every other file are left alone.
+    /// Only the AIDA git hooks git would not run as this build ships them:
+    /// a stale AIDA-generated body is backed up beside itself and replaced,
+    /// and a hook without an executable bit is set to 0755. Custom hooks
+    /// and every other file are left alone.
+    // trace:BUG-2009 | ai:claude
     GitHooks,
 }
 
@@ -890,8 +892,9 @@ pub enum ScaffoldCommand {
 
         /// Limit the upgrade to one scope. `git-hooks` replaces only the
         /// stale AIDA-generated git hooks a store write refuses (backing
-        /// each up beside itself) and touches no other file.
-        // trace:BUG-1977 | ai:claude
+        /// each up beside itself), makes non-executable AIDA hooks 0755,
+        /// and touches no other file.
+        // trace:BUG-1977 trace:BUG-2009 | ai:claude
         #[clap(long, value_enum, conflicts_with_all = ["force", "prune"])]
         only: Option<ScaffoldUpgradeOnly>,
     },
@@ -8520,6 +8523,86 @@ pub enum HistoryCommand {
         #[clap(subcommand)]
         cmd: Option<HistoryTemplatesCommand>,
     },
+    /// Specs filed in the window, one row each: when it was filed, then
+    /// its `aida list` row with its CURRENT status.
+    ///
+    /// Example: `aida history opened --since 2w --type bug`
+    // trace:STORY-1664 | ai:claude
+    Opened(HistoryViewArgs),
+    /// Specs that entered Completed in the window, one row each: when,
+    /// then its `aida list` row with its CURRENT status (a spec reopened
+    /// since shows its status now).
+    ///
+    /// Example: `aida history completed --since 2w --type bug`
+    // trace:STORY-1664 | ai:claude
+    Completed(HistoryViewArgs),
+    /// Specs that entered Rejected in the window, one row each, with
+    /// their CURRENT status.
+    ///
+    /// Example: `aida history rejected --since 30d`
+    // trace:STORY-1664 | ai:claude
+    Rejected(HistoryViewArgs),
+    /// Specs that entered Approved in the window, one row each, with
+    /// their CURRENT status.
+    ///
+    /// Example: `aida history approved --since 3d --priority high`
+    // trace:STORY-1664 | ai:claude
+    Approved(HistoryViewArgs),
+    /// Specs that entered a terminal status in the window: Completed,
+    /// Rejected or Superseded. Archiving is housekeeping, not an outcome,
+    /// so it does not count. One row each, with their CURRENT status.
+    ///
+    /// Example: `aida history closed --since 7d --tags cli`
+    // trace:STORY-1664 | ai:claude
+    Closed(HistoryViewArgs),
+}
+
+/// Options shared by the `aida history opened|completed|rejected|approved|closed`
+/// views. The window is `--since` (default 7d) to `--until` (default now),
+/// in the forms `aida history` accepts (`7d`, `2w`, an ISO date, RFC3339).
+/// `--type`, `--limit`, `--max-commits`, `--author`, `--all`, `--archived`
+/// and `--deferred` work as they do on `aida history`; `--type` matches the
+/// spec's current type. Rows are newest first.
+// trace:STORY-1664 | ai:claude
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct HistoryViewArgs {
+    /// Only specs whose CURRENT priority is this.
+    #[clap(long)]
+    pub priority: Option<String>,
+    /// Only specs carrying every one of these tags (comma-separated).
+    #[clap(long, value_delimiter = ',')]
+    pub tags: Vec<String>,
+    /// Only specs whose CURRENT status is this. The status column is
+    /// always the current status, not the status at the event.
+    #[clap(long, value_name = "STATUS")]
+    pub status: Option<String>,
+    /// One row per matching event instead of one per spec: a spec
+    /// completed, reopened and completed again appears twice.
+    #[clap(long)]
+    pub all_events: bool,
+    /// Oldest first instead of newest first.
+    #[clap(long)]
+    pub oldest_first: bool,
+    /// Output JSON (same as `--format json`).
+    #[clap(long)]
+    pub json: bool,
+}
+
+// trace:STORY-1664 | ai:claude
+impl HistoryCommand {
+    /// The list view this subcommand selects, with its options; `None` for
+    /// `events` and `templates`.
+    pub(crate) fn view(&self) -> Option<(crate::history_views::HistoryView, &HistoryViewArgs)> {
+        use crate::history_views::HistoryView;
+        match self {
+            HistoryCommand::Opened(a) => Some((HistoryView::Opened, a)),
+            HistoryCommand::Completed(a) => Some((HistoryView::Completed, a)),
+            HistoryCommand::Rejected(a) => Some((HistoryView::Rejected, a)),
+            HistoryCommand::Approved(a) => Some((HistoryView::Approved, a)),
+            HistoryCommand::Closed(a) => Some((HistoryView::Closed, a)),
+            HistoryCommand::Events { .. } | HistoryCommand::Templates { .. } => None,
+        }
+    }
 }
 
 // trace:STORY-1477 | ai:codex

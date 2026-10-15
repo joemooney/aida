@@ -151,7 +151,7 @@ pub(crate) fn has_transition_filter(opts: &HistoryOpts) -> bool {
 /// A status spelling reduced to its letters, lowercased, so the stored
 /// `In Progress` / `InProgress` / `in_progress` forms all compare equal.
 // trace:TASK-1512 | ai:claude
-fn status_key(s: &str) -> String {
+pub(crate) fn status_key(s: &str) -> String {
     s.chars()
         .filter(|c| !matches!(c, ' ' | '-' | '_'))
         .flat_map(char::to_lowercase)
@@ -524,7 +524,7 @@ type ResolvedWindow = (
 /// are injectable so tests get deterministic output regardless of the wall
 /// clock or system timezone; production passes `chrono::Local`.
 // trace:TASK-1502 | ai:claude
-fn resolve_history_window<Tz>(
+pub(crate) fn resolve_history_window<Tz>(
     opts: &HistoryOpts,
     now: chrono::DateTime<chrono::Utc>,
     tz: &Tz,
@@ -610,7 +610,7 @@ where
 /// even when the caller typed a relative duration or a bare date. `None`
 /// when neither bound was given (nothing to show).
 // trace:TASK-1502 | ai:claude
-fn format_resolved_window<Tz>(
+pub(crate) fn format_resolved_window<Tz>(
     since_at: Option<chrono::DateTime<chrono::Utc>>,
     until_at: Option<chrono::DateTime<chrono::Utc>>,
     tz: &Tz,
