@@ -1256,8 +1256,8 @@ pub(crate) fn update_agent_current_spec(
 /// Find a live registered agent that matches a lease by exact owner identity.
 /// Requires an exact owner match (lease.owner == agent.name or agent.id).
 /// No worktree-prefix matching in either direction.
-/// Protects against recycled lane names by requiring start-time identity
-/// matching on active_pid or that the lease started recently (within 5s of agent start).
+/// Protects against recycled lane names by requiring active_pid == agent.pid
+/// with the lease's own start-time identity.
 // trace:BUG-2010 | ai:antigravity
 pub(crate) fn live_agent_for_lease_or_spec<'a>(
     live_agents: &'a [AgentRegistryEntry],
@@ -1278,25 +1278,19 @@ pub(crate) fn live_agent_for_lease_or_spec<'a>(
             return false;
         }
 
-        // Recycled lane guard (BUG-2010 Blocker 1):
+        // Recycled lane guard (BUG-2010):
         // A recycled lane name must not revive an old dead lease.
-        // Require active_pid == agent.pid with start-time identity, or that the lease
-        // was started after or within 5s of the agent's start time.
-        if let Some(active) = lease.active_pid {
-            if active != agent.pid && crate::process_probe::pid_is_alive(active) {
-                return false;
-            }
+        // The lease must explicitly record its own active_pid and active_pid_start_time.
+        // If either is missing, the lease is treated as unattributed.
+        let (Some(active_pid), Some(ref start_time)) =
+            (lease.active_pid, lease.active_pid_start_time.as_ref())
+        else {
+            return false;
+        };
+        if active_pid != agent.pid {
+            return false;
         }
-        let pid_matches = lease.active_pid == Some(agent.pid)
-            && crate::process_probe::process_identity_is_alive(
-                agent.pid,
-                lease
-                    .active_pid_start_time
-                    .as_deref()
-                    .or(agent.pid_start.as_deref()),
-            );
-        let started_recently = lease.started_at >= agent.started_at - chrono::Duration::seconds(5);
-        if !pid_matches && !started_recently {
+        if !crate::process_probe::process_identity_is_alive(agent.pid, Some(start_time.as_str())) {
             return false;
         }
 

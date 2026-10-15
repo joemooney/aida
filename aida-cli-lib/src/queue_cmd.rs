@@ -12245,6 +12245,8 @@ pub(crate) fn handle_queue_work(
         // --base), so stacked work keeps a fresh `git worktree add`.
         /* use_pool */
         None,
+        /* self_claim */
+        true,
     )?;
 
     // trace:TASK-1337 | ai:codex

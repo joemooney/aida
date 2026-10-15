@@ -1129,6 +1129,9 @@ pub(crate) fn session_start(
     // STORY-714: pool the session's worktree? Some(true)=--pool,
     // Some(false)=--no-pool, None=resolve from [worktree_pool] enabled config.
     use_pool: Option<bool>,
+    // BUG-2010: true when caller is working the lease itself (self-claim).
+    // false when launching/spawning another agent (agent new, session start --launch).
+    self_claim: bool,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1970,11 +1973,13 @@ pub(crate) fn session_start(
     let id = id_long.replace('-', "")[..12].to_string();
     // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
     // attribute the lease to that agent's live process rather than a short-lived
-    // transient CLI / shell PID. Drain phase children get their own lease PID
-    // and skip agent resolution.
+    // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted
+    // for another agent (agent new, session start --launch) skip attribution
+    // so the launcher lane is not falsely pinned to the child's lease.
+    // Drain phase children get their own lease PID and also skip agent resolution.
     // trace:BUG-2010 | ai:antigravity
     let is_drain_child = orchestrator::detect(&project_root).is_orchestrated();
-    let session_agent = if is_drain_child {
+    let session_agent = if is_drain_child || !self_claim {
         None
     } else {
         agent_registry::resolve_session_agent_for_lease(&project_root)
@@ -2122,12 +2127,14 @@ pub(crate) fn session_start(
     // current_spec and worktree path.
     // trace:BUG-2010 | ai:antigravity
     if let Some(ref agent) = session_agent {
-        let _ = agent_registry::update_agent_current_spec(
+        if let Err(e) = agent_registry::update_agent_current_spec(
             &project_root,
             &agent.id,
             owns,
             &worktree_path,
-        );
+        ) {
+            eprintln!("aida: warning: failed to update agent registry current_spec: {e}");
+        }
     }
 
     // BUG-379: atomic-enough with the lease just persisted, bump

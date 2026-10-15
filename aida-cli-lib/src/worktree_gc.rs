@@ -1630,6 +1630,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* role */ Some("implementer".to_string()),
                 /* force_claim */ false,
                 /* use_pool */ Some(false),
+                /* self_claim */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()

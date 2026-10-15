@@ -154,6 +154,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 role.clone(),
                 *force_claim,
                 use_pool,
+                !*launch,
             )
         }
         SessionCommand::HarnessWorktreeRegister {
@@ -3175,6 +3176,8 @@ fn prepare_agent_launch_with_cwd(
                 // yet) — [worktree_pool] enabled decides.
                 /* use_pool */
                 None,
+                /* self_claim */
+                false,
             );
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result

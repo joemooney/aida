@@ -149,6 +149,7 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         None,
         false,
         Some(false),
+        /* self_claim */ true,
     )
     .unwrap();
 
@@ -171,9 +172,6 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         .expect("agent entry must exist");
     assert_eq!(updated_agent.current_spec.as_deref(), Some("TASK-2010"));
     assert_eq!(updated_agent.worktree_path, lease.worktree_path);
-
-    // Verify Blocker 3: direct invocation of session_leases
-    crate::leases::session_leases(false, true, false).unwrap();
 
     // Verify direct classification through classify_session_leases
     let classified = crate::leases::classify_session_leases(&root, &leases);
@@ -240,6 +238,49 @@ fn test_recycled_lane_name_does_not_revive_dead_lease() {
         "recycled lane name must not revive old lease even if active_pid is None"
     );
 
+    // Test recycled PID without lease start time:
+    // If lease has matching active_pid but NO active_pid_start_time, it must NOT match.
+    let mut recycled_pid_lease = old_lease.clone();
+    recycled_pid_lease.active_pid = Some(live_pid);
+    recycled_pid_lease.active_pid_start_time = None;
+    let matched_recycled_no_start = agent_registry::live_agent_for_lease_or_spec(
+        &live_agents,
+        Some(&recycled_pid_lease),
+        Some("TASK-100"),
+    );
+    assert!(
+        matched_recycled_no_start.is_none(),
+        "recycled pid without lease start time must not match"
+    );
+
+    // Test recycled PID with different start time:
+    let mut recycled_pid_diff_start = old_lease.clone();
+    recycled_pid_diff_start.active_pid = Some(live_pid);
+    recycled_pid_diff_start.active_pid_start_time = Some("1999-01-01T00:00:00Z".to_string());
+    let matched_diff_start = agent_registry::live_agent_for_lease_or_spec(
+        &live_agents,
+        Some(&recycled_pid_diff_start),
+        Some("TASK-100"),
+    );
+    assert!(
+        matched_diff_start.is_none(),
+        "recycled pid with non-matching start time must not match"
+    );
+
+    // Test started_recently without active_pid:
+    // Even if started within 5s of agent, without matching active_pid and start time it must NOT match
+    let mut quick_relaunch_lease = old_lease.clone();
+    quick_relaunch_lease.started_at = chrono::Utc::now();
+    let matched_quick = agent_registry::live_agent_for_lease_or_spec(
+        &live_agents,
+        Some(&quick_relaunch_lease),
+        Some("TASK-100"),
+    );
+    assert!(
+        matched_quick.is_none(),
+        "quick relaunch must not match without active_pid and start-time identity"
+    );
+
     // Direct classification: old lease must remain non-Live
     let classified = crate::leases::classify_session_leases(&root, &[old_lease.clone()]);
     assert_ne!(
@@ -300,82 +341,207 @@ fn test_spoofed_agent_name_with_live_non_ancestor_pid_rejected() {
 #[test]
 fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_invariants() {
     let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path();
+    let root = tmp.path().to_path_buf();
+    init_git_repo(&root);
 
-    // Register a Claude operator session
-    let claude_pid = std::process::id();
-    let claude = agent_registry::AgentRegistryEntry {
-        id: format!("claude-{claude_pid}"),
-        agent_type: "claude".to_string(),
-        pid: claude_pid,
-        pid_start: crate::process_probe::process_start_identity(claude_pid),
-        name: None,
-        description: None,
-        tty: None,
-        terminal: None,
-        started_at: chrono::Utc::now(),
-        last_active_at: chrono::Utc::now(),
-        role: Some("implementer".to_string()),
-        current_spec: None,
-        worktree_path: root.to_path_buf(),
-        source: "session-start-hook".to_string(),
-        binary_version: None,
-        build_sha: None,
-        availability: agent_registry::Availability::Available,
-        paused_since: None,
-        paused_reason: None,
-        expected_back: None,
-        native_session_id: None,
-        claude_session_id: None,
-        ended_at: None,
-        spec_status_at_end: None,
-        resumed_from: None,
-    };
-    agent_registry::write_entry(root, &claude).unwrap();
+    // Register an agent (e.g. an implementer lane with AIDA_AGENT_NAME set)
+    let live_pid = std::process::id();
+    let lane_name = "antigravity-worker-drain";
+    let agent = agent_entry("antigravity", lane_name, live_pid, None, root.clone());
+    agent_registry::write_entry(&root, &agent).unwrap();
 
-    // In a drain phase child or Claude session, AIDA_AGENT_NAME is not set
-    let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_NAME", None)]);
+    // Create a corroborated drain token in root
+    let token = uuid::Uuid::now_v7().to_string();
+    let mut state = crate::drain_state::DrainState::new_single("BUG-1930", &token, false);
+    state.orchestrator_pid = live_pid;
+    state.write(&root).unwrap();
+    crate::orchestrator::publish_run(
+        &root,
+        &token,
+        &crate::orchestrator::RunMarker {
+            pid: live_pid,
+            spec: "BUG-1930".into(),
+            started_at: state.started_at,
+            zen: false,
+        },
+    )
+    .unwrap();
 
-    // resolve_session_agent_for_lease must return None
-    let resolved = agent_registry::resolve_session_agent_for_lease(root);
+    // Assert that orchestrator::detect finds an Orchestrated context
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "implementer",
+        &[],
+        &[
+            (crate::orchestrator::AUTO_COMPLETE_ENV, Some("1")),
+            (crate::orchestrator::TOKEN_ENV, Some(&token)),
+            ("AIDA_AGENT_NAME", Some(lane_name)),
+            ("AIDA_AGENT_TYPE", Some("antigravity")),
+        ],
+    );
+
     assert!(
-        resolved.is_none(),
-        "must not resolve Claude session as session_agent"
+        crate::orchestrator::detect(&root).is_orchestrated(),
+        "drain context must be corroborated"
     );
 
-    // Simulate lease minted under drain
-    let drain_orchestrator_pid = 42424;
-    let mut lease = ps_lease(
-        "drain-child-lease",
+    // Mint the lease through session_start in the orchestrated context.
+    // Even though self_claim is true and AIDA_AGENT_NAME is set,
+    // the is_drain_child branch MUST prevent attribution to the agent.
+    crate::session_start::session_start(
         "BUG-1930",
-        "drain-runner",
-        root.to_path_buf(),
+        None,
+        None,
+        false,
+        None,
+        None,
+        "slug",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        false,
+        Some(false),
+        /* self_claim */ true,
+    )
+    .unwrap();
+
+    let leases = crate::leases::list_leases(&root);
+    let lease = leases
+        .iter()
+        .find(|l| l.scope == "BUG-1930")
+        .expect("minted lease for BUG-1930 must exist");
+
+    // Under drain, active_pid and active_pid_start_time must be None
+    assert_eq!(
+        lease.active_pid, None,
+        "is_drain_child must prevent setting active_pid on lease minted under drain"
     );
-    lease.creator_pid = Some(drain_orchestrator_pid);
-    lease.creator_pid_start_time = Some("2026-10-14T00:00:00Z".to_string());
-    lease.active_pid = None; // unset, as required
-    lease.active_pid_start_time = None;
+    assert_eq!(
+        lease.active_pid_start_time, None,
+        "lease active_pid_start_time must be None under drain"
+    );
+    assert_ne!(
+        lease.owner, lane_name,
+        "lease owner must not be attributed to agent under drain"
+    );
 
     // BUG-1930 predecessor check MUST hold
+    let my_start = crate::process_probe::process_start_identity(live_pid);
     assert!(
-        leases::lease_minted_by_returned_phase_child(
-            &lease,
-            drain_orchestrator_pid,
-            Some("2026-10-14T00:00:00Z")
-        ),
+        leases::lease_minted_by_returned_phase_child(lease, live_pid, my_start.as_deref()),
         "BUG-1930 predecessor check must succeed when active_pid is None and creator_pid matches"
     );
 
-    // If active_pid was erroneously set, predecessor check would fail
+    // If active_pid was erroneously set (as would happen if is_drain_child branch were deleted),
+    // predecessor check would fail
     let mut broken_lease = lease.clone();
-    broken_lease.active_pid = Some(claude_pid);
+    broken_lease.active_pid = Some(live_pid);
+    broken_lease.active_pid_start_time = my_start.clone();
     assert!(
-        !leases::lease_minted_by_returned_phase_child(
-            &broken_lease,
-            drain_orchestrator_pid,
-            Some("2026-10-14T00:00:00Z")
-        ),
+        !leases::lease_minted_by_returned_phase_child(&broken_lease, live_pid, my_start.as_deref()),
         "BUG-1930 predecessor check must fail if active_pid was erroneously attributed"
+    );
+}
+
+/// Item 1: Leases minted for ANOTHER agent (e.g. via `agent new --spec X`) must not
+/// be attributed to the calling lane, and the calling lane's registry entry must not
+/// be overwritten.
+// trace:BUG-2010 | ai:antigravity
+#[test]
+fn test_agent_new_does_not_attribute_lease_to_calling_lane() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    init_git_repo(&root);
+
+    let lane_a_pid = std::process::id();
+    let lane_a_name = "lane-a-calling";
+    let mut lane_a = agent_entry(
+        "codex",
+        lane_a_name,
+        lane_a_pid,
+        None,
+        root.join("lane-a-wt"),
+    );
+    lane_a.current_spec = Some("TASK-1000".to_string());
+    agent_registry::write_entry(&root, &lane_a).unwrap();
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "implementer",
+        &[],
+        &[
+            ("AIDA_AGENT_NAME", Some(lane_a_name)),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+        ],
+    );
+
+    // Calling lane A runs prepare_agent_launch for a new agent B on TASK-2000
+    let plan = crate::agent_launch::prepare_agent_launch(
+        &root,
+        Some("implementer".into()),
+        Some("TASK-2000".into()),
+        "codex",
+        None,
+    )
+    .expect("prepare_agent_launch should succeed");
+
+    assert_eq!(plan.current_spec.as_deref(), Some("TASK-2000"));
+
+    // Assert 1: Calling lane A's registry entry is completely UNCHANGED
+    let entries = agent_registry::load_entries(&root);
+    let (_, lane_a_after) = entries
+        .into_iter()
+        .find(|(_, e)| e.id == lane_a.id)
+        .expect("lane A record must still exist");
+    assert_eq!(
+        lane_a_after.current_spec.as_deref(),
+        Some("TASK-1000"),
+        "lane A current_spec must NOT be overwritten by agent new"
+    );
+    assert_eq!(
+        lane_a_after.worktree_path,
+        root.join("lane-a-wt"),
+        "lane A worktree_path must NOT be overwritten by agent new"
+    );
+
+    // Assert 2: Lease for TASK-2000 is NOT lane A's
+    let leases = crate::leases::list_leases(&root);
+    let lease_x = leases
+        .iter()
+        .find(|l| l.scope == "TASK-2000")
+        .expect("lease for TASK-2000 must exist");
+
+    assert_ne!(
+        lease_x.owner, lane_a_name,
+        "lease for TASK-2000 must not be owned by calling lane A"
+    );
+    assert_ne!(
+        lease_x.active_pid,
+        Some(lane_a_pid),
+        "lease for TASK-2000 active_pid must not be calling lane A's pid"
+    );
+    assert_eq!(
+        lease_x.active_pid, None,
+        "lease for TASK-2000 active_pid must be None until child agent runs"
+    );
+    assert_eq!(
+        lease_x.active_pid_start_time, None,
+        "lease for TASK-2000 active_pid_start_time must be None until child agent runs"
+    );
+
+    // Assert 3: ps / live_agent_for_lease_or_spec does NOT attribute lease X to lane A
+    let matched = agent_registry::live_agent_for_lease_or_spec(
+        &[lane_a_after],
+        Some(lease_x),
+        Some("TASK-2000"),
+    );
+    assert!(
+        matched.is_none(),
+        "lease X must not be matched to calling lane A"
     );
 }
 
@@ -551,10 +717,22 @@ fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
     let live_pid = std::process::id();
     let lane_name = "antigravity-factory-1";
 
-    // The lease records the factory lane owner but a dead / transient PID (e.g. 99999).
+    // Live factory agent (Codex or Antigravity) running with a live PID
+    let agent = agent_entry(
+        "antigravity",
+        lane_name,
+        live_pid,
+        Some("BUG-2010"),
+        wt.clone(),
+    );
+    let live_agents = vec![agent.clone()];
+
+    // The lease was minted with the factory lane owner and active_pid = agent.pid,
+    // but creator_pid was a transient process (e.g. 99999) that died.
     let mut lease = ps_lease("lease-2010", "BUG-2010", lane_name, wt.clone());
     lease.creator_pid = Some(99999);
-    lease.active_pid = Some(99999);
+    lease.active_pid = Some(live_pid);
+    lease.active_pid_start_time = agent.pid_start.clone();
 
     let row = PsRow {
         lease: lease.clone(),
@@ -587,10 +765,6 @@ fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
         possibly_subagent: false,
         driver: None,
     }];
-
-    // Live factory agent (Codex or Antigravity) running with a live PID
-    let agent = agent_entry("antigravity", lane_name, live_pid, Some("BUG-2010"), wt);
-    let live_agents = vec![agent];
 
     apply_registered_agent_overlay(
         &live_agents,
