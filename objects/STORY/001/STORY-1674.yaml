@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T18:42:34.541503364Z
+modified_at: 2026-10-15T18:43:00.162058587Z
 req_type: Story
 tags:
 - from:aida-host
@@ -98,6 +98,12 @@ comments:
   content: Commit bfddcbee42 references this requirement
   created_at: 2026-10-15T18:42:34.541503364Z
   modified_at: 2026-10-15T18:42:34.541503364Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a140df-efc2-77d1-9ef7-39c1ac683712
+  author: ai:codex:joe
+  content: 'IMPLEMENTATION CHECKPOINT (relay5, NOT review ready): isolated codex/story-1674 source commit c667b227c62ba81b86e629febbe1fa51acd45702. Implements signed B+C usage provenance view with exact session/parsed cutoff join, optional explicit harness/write context, canonical/YAML/SQLite persistence and imported-history preservation. Three fresh-context author SOURCE self-check rounds ended with no remaining actionable findings; these are not independent review/approval. Initial earlier-source21 provenance and4 query tests passed; expanded route run12/13 exposed the compiled pre-correction tree-replacement baseline bug, now corrected and rebuilding. Final-source runtime/gates/bindings remain pending; no green-workspace claim. Optional archived PostgreSQL remains outside the inspected plan/validation scope and lacks filing-context persistence. No launcher/seat changes, transcript parsing, guessed provenance, author verdict, hold clearance, merge or Completed status.'
+  created_at: 2026-10-15T18:43:00.162058587Z
+  modified_at: 2026-10-15T18:43:00.162058587Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
