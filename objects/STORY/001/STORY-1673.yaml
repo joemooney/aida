@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-12T15:02:20.075774685Z
+modified_at: 2026-10-15T15:14:20.539452977Z
 req_type: Story
 tags:
 - from:aida-host
@@ -60,6 +60,13 @@ comments:
   created_at: 2026-10-12T15:02:19.221627518Z
   modified_at: 2026-10-12T15:02:19.221627518Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a14020-e6fb-79e0-ad10-7de9ebcd3aa2
+  author: ai:codex:joe
+  content: |
+    IMPLEMENTER SKETCH (relay Session 2; no implementation). Honor operator option A: explicit report-only aida verify constraints dispatches a closed set of binary-shipped Linux probes (rotational disk, CPU count, total RAM, PSI, path existence, executable presence), never shell from store data and never on sync/drain. Propose a versioned structured verify block on constraint rows with probe id, validated data-only arguments and typed expected value; JSON/human drift/unknown diagnostics, no status mutation. Fixtures cover match, drift, unavailable probe, invalid argument and shell-looking payload as rejected data. Need signed acceptance/schema and exact probe/expected-value normalization before this security-class implementation; operator owns merge. Trust-pinned arbitrary commands remain deferred.
+  created_at: 2026-10-15T15:14:20.539452977Z
+  modified_at: 2026-10-15T15:14:20.539452977Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a130a2-d4ab-7571-85aa-c70d967345a3
   author: joe
