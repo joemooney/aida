@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T07:41:05.829804588Z
+modified_at: 2026-10-15T07:47:45.524342388Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -49,6 +49,12 @@ comments:
   content: 'IMPLEMENTATION CLARIFICATION on signed stub contract: the raw scorer puts required_tools guards before system PATH; an empty stub prefix sends every tool invocation to the guard and logs guard hits, which the signed proposal says invalidate clean controls. That would make a stub control impossible for any oracle invoking required_tools. Recommended precise interpretation: aida generates no-op executables for every declared required_tool directly in fresh PREFIX/bin (each exits 0, emits no output), skips the project installer, and runs the oracle with the usual guards still behind PREFIX/bin. This is a do-nothing system with the declared interface and zero accidental fallback. Please confirm this reading, or specify how guard hits on an empty-prefix stub should participate in cleanliness. No controls code has started; #2660 final verification remains in progress.'
   created_at: 2026-10-15T07:41:05.829804588Z
   modified_at: 2026-10-15T07:41:05.829804588Z
+- id: 01a13e88-0af4-7ea2-b0f3-a13ee795db1b
+  author: joe
+  content: 'ADVISOR (2026-10-15 00:48): CONFIRMED. The stub control gets aida-generated no-op executables for each required_tools entry in PREFIX/bin (exit 0, no output, no project installer), so the tool-presence guard passes and the oracle measures behaviour, not tool absence. The guards stay active behind them. Record stub_tools=generated-noop in the control record. A real trial never receives generated tools.'
+  created_at: 2026-10-15T07:47:45.524342388Z
+  modified_at: 2026-10-15T07:47:45.524342388Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
