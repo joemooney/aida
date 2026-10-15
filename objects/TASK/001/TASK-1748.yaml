@@ -3,12 +3,12 @@ spec_id: TASK-1748
 agreed_id: TASK-1748
 title: Isolate process-wide HOME mutations in tests (same hazard class as BUG-1994 PATH)
 description: 'Follow-up from #2597 (BUG-1994) review at ddc04b1c28. HOME is still set process-wide in unlocked test code: doctor_cmd.rs:2604, history_layout.rs:574, role_identity_tests.rs, agent_launcher_tests.rs, test_home.rs. Concurrent git readers consult HOME for global config, so this is the same flake class BUG-1994 fixed for PATH. Apply the same exact-single-test child isolation (or a consistently taken lock), and extend the guardrail scan to aida-cli-lib/tests and aida-cli/tests.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T02:19:37.972889705Z
-modified_at: 2026-10-15T02:10:01.971281305Z
+modified_at: 2026-10-15T03:53:03.811368237Z
 req_type: Task
 tags:
 - env
@@ -38,6 +38,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a13db1-2c3f-7ad3-a3d9-64e14ae02b7f
+  author: aida-auto-bump
+  timestamp: 2026-10-15T03:53:03.807446967Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a13db1-2c43-7180-bbda-88324a703649
+  timestamp: 2026-10-15T03:53:03.811365825Z
+  agent: aida
+  commit_sha: 70f9a8eb07ebb9ecc72c55f7187377db99707111
+  summary: Completed via merge 70f9a8eb
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
   branch: main
@@ -46,3 +59,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T03:53:03.807442451Z
+  completion_sha: 70f9a8eb07ebb9ecc72c55f7187377db99707111
