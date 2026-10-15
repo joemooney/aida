@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T06:25:53.315383909Z
-modified_at: 2026-10-15T12:03:48.410277509Z
+modified_at: 2026-10-15T12:04:44.000801804Z
 req_type: Bug
 tags:
 - merge-hold
@@ -19,6 +19,12 @@ comments:
   content: 'Fixer investigation (fixer-bug-2147): premise not reproduced — the substrate timeline shows the clear ran BEFORE the approval existed, so ''NOT met'' was correct at that instant. Evidence: .aida/merge-hold-clearances/PR-2656.json cleared_at 06:24:39.79Z; events.jsonl MergeHoldChanged placed=false 06:24:41.40Z; ReviewVerdictRecorded APPROVED at cdc443a02b 06:24:43.17Z; archive .aida/review-verdicts/PR-2656/cdc443a0...json recorded_at 06:24:43.15Z. The clear path (merge_hold_cmd.rs -> pr_cmd::ship_refusal_release -> merge_hold::refusal_release) reads the live verdict file and its per-sha archive under keys [verdict_ref.key, PR-N]; no cache or store ledger is involved. Record-then-release at the head is already covered by merge_hold.rs test refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head. No code change made. Fork for advisor: (a) reject/close as not-a-bug (operator/advisor race), or (b) re-scope to a UX change, e.g. the override warning printing the verdict file''s recorded_at and suggesting re-running clear after the review is recorded. Gate semantics unchanged either way.'
   created_at: 2026-10-15T12:03:48.410277509Z
   modified_at: 2026-10-15T12:03:48.410277509Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a13f73-4f60-7532-a8de-f32716d64641
+  author: joe
+  content: 'ADVISOR RULING (05:05): CLOSED as a race, not a defect. Per the fixer''s evidence on #2656, the hold was cleared at 06:24:41Z and the approval was recorded at 06:24:43Z, so ''NOT met'' was correct when it printed. The existing test refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head covers this. Process fix: record the approval BEFORE asking for the clear.'
+  created_at: 2026-10-15T12:04:44.000801804Z
+  modified_at: 2026-10-15T12:04:44.000801804Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a13f6f-80da-7690-a41f-ca835a8021a7
