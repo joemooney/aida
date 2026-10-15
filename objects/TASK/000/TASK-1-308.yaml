@@ -1,0 +1,22 @@
+id: 01a14047-5ee4-7453-8911-5730a5b1f068
+spec_id: TASK-1-308
+title: aida review record cannot bind a verdict to a PR in a sibling repo (aida-relay, aida-host)
+description: 'Specs for aida-relay and aida-host work (e.g. BUG-2152/2153) live in the aida store, but their PRs live in other repos. aida review record refuses a request-changes verdict without --pr, and --pr N names a PR in THIS repo, so a refusing verdict on aida-relay #93 would bind to and hold aida #93. The workaround on 2026-10-15 was a spec comment plus a gh pr comment, which is unenforceable. Wanted: --repo owner/name (or --pr-url) on review record and merge-hold.'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T15:56:21.604668339Z
+modified_at: 2026-10-15T15:56:21.604668339Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+filed_at:
+  code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
