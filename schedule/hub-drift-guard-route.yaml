@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: gitlab aida-store was behind origin (not diverged); reconcile --execute fast-forwarded; drift now 0
+due_since: 2026-10-15T04:04:33.559019574Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-15T04:01:13.605796057Z
+  job: hub-drift-guard
+  error: 'exit 1: '
