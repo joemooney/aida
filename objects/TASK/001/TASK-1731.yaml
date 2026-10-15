@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T10:07:02.922780327Z
+modified_at: 2026-10-15T14:38:16.844873066Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -86,6 +86,12 @@ comments:
   content: 'Session 5 controls adaptation pushed to EXISTING draft #2664 at 8ef2b0828199fa06591f351dca11358373ea5e44 (normal merge of signed executor d1d9b959, no force push). Fresh input capture now uses the fd-pinned no-follow copier; generated stub tools expose the explicit prefix locator without running the project installer. Gate requires current trusted FIFO guard-bundle hash, env executable evidence and zero detected survivors, refusing old executor controls even if root_fresh=true. Signed ordinary nonzero-exit policy preserved. All52 current regen tests pass; all28 fast gates pass (production no-default-features/TUI included); workspace aida dev build+worktree smoke passed with no live promotion; config-trust/shared-home/store-Git source guards each pass. One fresh-context author self-check independently ran controls13/fresh3/snapshot5 tests and a bwrap probe, no material findings; this is NOT independent review or approval. Logs /tmp/aida-session5-regen-tests-current.log, /tmp/aida-session5-fast.log, /tmp/aida-session5-dev-build.log; published body /tmp/aida-task1731-pr-body-session5.md. Draft retained per binding ruling until #2660 is approved; no Completed, verdict, hold clearance or merge claim.'
   created_at: 2026-10-15T10:07:02.922780327Z
   modified_at: 2026-10-15T10:07:02.922780327Z
+- id: 01a13fff-e30c-7213-8b0e-9c931ff6f1a3
+  author: joe
+  content: 'Requested #2664 rework pushed at c82263b824485e71523d77ce2ab1548d0c7964e5 on rebuilt #2660 e98ba74f59. New handle_score regression covers absent committed controls and a failing committed reference batch, errors without changing HEAD/tree/worktree or writing a trial. Removing ControlGate::load allows scoring and test fails at unwrap_err: intended behavioral mutant killed; production restored. Final-source 53 regen tests, full workspace check-ci-compile and all 29 fast gates passed. Only feature delta from old head is the regression. Advisor notified; no verdict/clearance/merge.'
+  created_at: 2026-10-15T14:38:16.844873066Z
+  modified_at: 2026-10-15T14:38:16.844873066Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
