@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:46:28.056514199Z
-modified_at: 2026-10-15T04:05:23.778755203Z
+modified_at: 2026-10-15T04:05:46.097943463Z
 req_type: Bug
 tags:
 - capture
@@ -67,6 +67,18 @@ comments:
     - Mutation witnesses: dropping the env set, or restoring the old guard, must turn the tests red.
   created_at: 2026-10-15T04:05:23.778755203Z
   modified_at: 2026-10-15T04:05:23.778755203Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13dbc-cdf1-7ef2-8f1c-6693a571e9fb
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (STRICT, fire mode 2026-10-14): sketch APPROVED as written, with these rulings.
+    FORK 1 (ungranted launchers): ACCEPT the baseline fallback, conditioned: (a) the baseline seat set is ONE named constant shared with classify_role_display (implementer, guest, requester), not a second hand-maintained list; (b) the child gets AIDA_SESSION_GRANT="" set EXPLICITLY (never unset/inherited), and the launch prints one line saying the child runs ungranted at baseline authority; (c) every non-baseline seat (reviewer, advisor, integrator, ...) is refused fail-closed when the launcher cannot delegate it; (d) tests cover each arm. Rationale: strictly less authority than today and does not break unattended drains.
+    FORK 2 (subject): ACCEPT the issue_child convention (subject=current_user_id; the child is distinguished by its own grant id + parent_grant_id). A per-process subject is out of scope; no follow-up needed unless a verifier change is otherwise motivated.
+    Step 4 hardening (child_grant_id stamped on the lease, revoked on lease end/reap): REQUIRED in this PR, not optional; it closes the crash-leak window cheaply.
+    Step 7 (orchestrator preflights every headless phase seat up front): REQUIRED.
+    Implementation is unblocked. Tier STRICT: review enumerates every grant/check/bypass path and the mutation witnesses must be shown red.
+  created_at: 2026-10-15T04:05:46.097943463Z
+  modified_at: 2026-10-15T04:05:46.097943463Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13dba-75c4-7c73-a7ab-a6a77551efd8
