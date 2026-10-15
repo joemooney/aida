@@ -3,16 +3,24 @@ spec_id: BUG-2148
 agreed_id: BUG-2148
 title: aida agent stop and session end's leaked-process kill signal by pid-alive only, with no start-time identity check (pid-reuse kill risk)
 description: 'From the #2653 (TASK-1750/TASK-1768) rework: aida agent stop and session end''s terminate_pids_with_grace check only that the pid is alive before signalling, never the recorded start-time identity. After the original process exits, a reused pid belonging to an unrelated process can be SIGTERM''d/SIGKILL''d. Pre-existing (not introduced by #2653). Fix: record identity where these pids are captured (if not already) and gate the signal on liveness::process_identity_matches_strict (from #2653); Unknown => do not signal, report. Tests with a reused/mismatched identity.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T07:24:20.118104074Z
-modified_at: 2026-10-15T07:24:20.118104074Z
+modified_at: 2026-10-15T13:36:00.707045423Z
 req_type: Bug
 tags:
 - liveness
 - security
+history:
+- id: 01a13fc6-e0c3-75b0-8803-7781d5179b0b
+  author: joe
+  timestamp: 2026-10-15T13:36:00.707040155Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 266d8f5ef3ef6dafccff037e2c8d62a4007aac6a
   branch: main
