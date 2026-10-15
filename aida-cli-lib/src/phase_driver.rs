@@ -143,6 +143,12 @@ pub(crate) struct RealPhaseDriver {
     // trace:BUG-1038 | ai:codex
     pub(crate) queue_user_id: String,
     pub(crate) permission_mode: Option<String>,
+    /// BUG-2133: whether this drain is contained, resolved once at
+    /// construction ([`session::drain_contained`]). Containment is monotonic:
+    /// every agent child the drain spawns directly (CI-fix, advisor, harvest)
+    /// inherits it, and a child that cannot be contained is refused.
+    // trace:BUG-2133 | ai:claude
+    pub(crate) contained: bool,
     pub(crate) json: bool,
     pub(crate) branch: Option<String>,
     pub(crate) implementer_lease: Option<String>,
@@ -636,6 +642,7 @@ impl RealPhaseDriver {
     ) -> Self {
         let drain_tuning = DrainTuning::resolve(&project_root);
         let lifecycle_forge = crate::forge::resolve_open_change_forge_kind(&project_root);
+        let contained = session::drain_contained(&project_root);
         Self {
             project_root,
             lifecycle_forge,
@@ -643,6 +650,7 @@ impl RealPhaseDriver {
             spec,
             queue_user_id,
             permission_mode,
+            contained,
             json,
             branch: None,
             implementer_lease: None,
@@ -2132,14 +2140,36 @@ impl RealPhaseDriver {
             vendor,
             aida_core::agents_config::AgentSeat::Advisor,
         );
-        let (program, advisor_args) = session::advisor_tier_program_and_args_with_tuning(
+        // BUG-2133: a contained drain contains its advisor child — the
+        // advisor reads untrusted PR content and runs commands. Scoped to the
+        // advisor's cwd (the project root, where it writes its punt response).
+        let contained_in = self.contained.then_some(self.project_root.as_path());
+        let (program, advisor_args) = session::advisor_tier_program_and_args_with_posture(
             vendor,
             is_fork,
             &seeded,
             &advisor_uuid,
             advisor_tuning.model.as_deref(),
             advisor_tuning.effort.as_deref(),
+            contained_in,
         );
+        let (program, advisor_args) = match contained_child_program_and_args(
+            vendor,
+            self.contained,
+            contained_in,
+            "advisor session",
+            &program,
+            advisor_args,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => {
+                tee_handle.stop();
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: {e:#}"),
+                ));
+            }
+        };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let mut child_cmd = build_phase_driver_advisor_command(
@@ -2151,6 +2181,7 @@ impl RealPhaseDriver {
             &ceiling_key,
             &ceiling_value,
             vendor,
+            self.contained,
         );
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
@@ -2231,6 +2262,32 @@ pub(crate) fn missing_implementer_worktree_push_gate(
     Ok(())
 }
 
+/// BUG-2133: the fail-closed gate + OS wrapper every agent child a drain
+/// spawns directly goes through. Uncontained: `(program, args)` unchanged.
+/// Contained: refuse a child that cannot be contained
+/// ([`session::require_child_containment`]), then apply the same opt-in
+/// `bwrap` OS boundary (`[contained] os_wrap` / `AIDA_OS_WRAP`) the contained
+/// implementer gets, rooted at the child's cwd `contained_in` — which itself
+/// refuses when os_wrap is requested but bwrap cannot run.
+// trace:BUG-2133 | ai:claude
+pub(crate) fn contained_child_program_and_args(
+    vendor: session::HeadlessVendor,
+    contained: bool,
+    contained_in: Option<&std::path::Path>,
+    child: &str,
+    program: &str,
+    args: Vec<String>,
+) -> anyhow::Result<(String, Vec<String>)> {
+    if !contained {
+        return Ok((program.to_string(), args));
+    }
+    session::require_child_containment(vendor, contained, child)?;
+    let root = contained_in.ok_or_else(|| {
+        anyhow::anyhow!("[contained] no working directory to scope the {child} to — refusing to launch it uncontained")
+    })?;
+    session::os_wrapped_program_and_args(root, program, args)
+}
+
 // trace:BUG-2124 | ai:antigravity
 // Builds advisor command for advisor_tier_program_and_args argv.
 #[allow(clippy::too_many_arguments)]
@@ -2243,6 +2300,8 @@ pub(crate) fn build_phase_driver_advisor_command(
     ceiling_key: &str,
     ceiling_value: &str,
     vendor: session::HeadlessVendor,
+    // trace:BUG-2133 | ai:claude
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     cmd.current_dir(project_root)
@@ -2252,7 +2311,7 @@ pub(crate) fn build_phase_driver_advisor_command(
         .env(punt::RESPONSE_FILE_ENV, response_path)
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(ceiling_key, ceiling_value);
-    if session::containment_applied(vendor, false) {
+    if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

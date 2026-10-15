@@ -338,6 +338,12 @@ sites = 4
 channels = ["home"]
 sites = 1
 
+# BUG-2131: [contained] enable from the main checkout, read only to decide
+# whether old-git store git refuses; it can only make AIDA refuse more.
+[readers."aida-core/src/store_hooks.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/scaffolding/mod.rs"]
 channels = ["other-file"]
 sites = 1

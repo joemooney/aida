@@ -85,14 +85,18 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             "PATH",
             crate::store_hooks::safe_path(cwd, &std::env::var_os("PATH").unwrap_or_default()),
         );
-        if crate::store_hooks::supports_attr_source(cwd) {
-            // Git's empty tree object; never read tree-controlled attributes.
-            cmd.env(
-                "GIT_ATTR_SOURCE",
-                "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
-            );
-        }
-        if let Err(err) = resolve_store_hooks_dir(cwd) {
+        // Git's empty tree object; never read tree-controlled attributes.
+        // Below git 2.40 the variable is ignored, so store git refuses when a
+        // contained writer may exist and warns once otherwise (BUG-2131).
+        // trace:BUG-2131 | ai:claude
+        cmd.env(
+            "GIT_ATTR_SOURCE",
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        );
+        let refusal = crate::store_hooks::ensure_attr_source(cwd)
+            .err()
+            .or_else(|| resolve_store_hooks_dir(cwd).err());
+        if let Some(err) = refusal {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
             // The static script prints only its first positional argument (the
@@ -191,6 +195,52 @@ pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
 // trace:BUG-1929 | ai:codex
 #[cfg(test)]
 thread_local! { static DROP_STORE_HOOK_PIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Refuse launching (or enabling) contained mode when host git is older than
+/// 2.40 or its version cannot be parsed (BUG-2131).
+// trace:BUG-2131 | ai:claude
+pub fn ensure_git_supports_contained() -> Result<()> {
+    crate::store_hooks::ensure_git_supports_contained()
+}
+
+/// Run `f` with this thread's host git version reported as `version`
+/// (`git --version` text). For tests in this and dependent crates; the
+/// override is thread-local and restored afterwards, even on panic.
+// trace:BUG-2131 | ai:claude
+#[doc(hidden)]
+pub fn with_host_git_version<R>(version: &str, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let old = self.0.take();
+            crate::store_hooks::FAKE_GIT_VERSION.with(|v| *v.borrow_mut() = old);
+        }
+    }
+    let previous =
+        crate::store_hooks::FAKE_GIT_VERSION.with(|v| v.borrow_mut().replace(version.to_string()));
+    let _restore = Restore(previous);
+    f()
+}
+
+/// Record, in the store's host-owned git common directory, that a contained
+/// session was launched against `store`. Store git on a later old git then
+/// refuses even when the project config does not enable contained mode
+/// (a `--sandbox` launch). No-op when `store` is not a git checkout.
+// trace:BUG-2131 | ai:claude
+pub fn mark_store_contained(store: &Path) -> Result<()> {
+    let Some(common) = crate::store_hooks::git_common_dir(store) else {
+        return Ok(());
+    };
+    let marker = common.join(crate::store_hooks::CONTAINED_MARKER);
+    if !marker.exists() {
+        std::fs::write(
+            &marker,
+            "A contained AIDA session was launched against this store (BUG-2131).\n",
+        )
+        .with_context(|| format!("writing {}", marker.display()))?;
+    }
+    Ok(())
+}
 
 /// A hooks directory that holds no hook: git run with it runs none.
 // trace:BUG-1929 | ai:claude
@@ -416,24 +466,45 @@ pub fn is_git_repo(path: &Path) -> bool {
     command.output().is_ok_and(|out| out.status.success())
 }
 
-/// Append AIDA's per-worktree runtime paths to the worktree-local git exclude.
+/// Append AIDA's runtime paths to the repository's git exclude file.
 ///
 /// Linked worktrees expose `.git` as a pointer file, so callers must not assume
 /// `<worktree>/.git/info/exclude`. `git rev-parse --git-path info/exclude`
-/// resolves the private exclude file for both main and linked worktrees.
-// trace:BUG-914 | ai:codex
+/// resolves the exclude file, which lives in the COMMON git dir: it is one
+/// file shared by the main checkout and every linked worktree, so every
+/// pattern written here applies repository-wide.
+///
+/// The `.aida` pattern is therefore anchored and narrow: `/.aida/*` hides the
+/// root runtime directory's contents (BUG-914: a repository that does not
+/// commit AIDA scaffolding must not see `.aida/` as stageable) without
+/// matching other directories named `.aida` (template masters such as
+/// `aida-core/templates/.aida/`) and without excluding the `.aida` directory
+/// itself, so a tracked `.gitignore`'s `!.aida/discipline/**` /
+/// `!.aida/config.toml` re-includes still win. A legacy unanchored `.aida/`
+/// line, which shadowed both, is rewritten in place.
+// trace:BUG-914 trace:BUG-2141 | ai:claude
 pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
     let exclude_path = resolve_exclude_path(worktree)?;
-    append_exclude_entries(
+    update_exclude_entries(
         &exclude_path,
         &[
-            ".aida/",
+            AIDA_RUNTIME_EXCLUDE,
             ".aida-store",
             ".aida-store/",
             ".aida-compete-*.log",
         ],
+        &[(LEGACY_AIDA_RUNTIME_EXCLUDE, AIDA_RUNTIME_EXCLUDE)],
     )
 }
+
+/// Anchored root-runtime exclude written by [`ensure_aida_runtime_excluded`].
+// trace:BUG-2141 | ai:claude
+const AIDA_RUNTIME_EXCLUDE: &str = "/.aida/*";
+
+/// The pre-BUG-2141 unanchored entry; migrated in place to
+/// [`AIDA_RUNTIME_EXCLUDE`].
+// trace:BUG-2141 | ai:claude
+const LEGACY_AIDA_RUNTIME_EXCLUDE: &str = ".aida/";
 
 /// Exclude the store's runtime lock files (`.aida/*.lock`, e.g. the store
 /// write lock) from git in a store worktree, so `git add -A` (db sync,
@@ -483,6 +554,19 @@ fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {
 
 // trace:BUG-914 | ai:codex
 fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool> {
+    update_exclude_entries(exclude_path, entries, &[])
+}
+
+/// Append missing `entries`, first rewriting each `(legacy, replacement)`
+/// line in place: the first legacy line becomes the replacement (or is
+/// dropped when the replacement is already present), later duplicates are
+/// dropped. Idempotent; returns whether it wrote anything.
+// trace:BUG-914 trace:BUG-2141 | ai:claude
+fn update_exclude_entries(
+    exclude_path: &Path,
+    entries: &[&str],
+    migrations: &[(&str, &str)],
+) -> Result<bool> {
     // An absent exclude file is empty; any other read failure is an error,
     // because this function rewrites the whole file and must never replace a
     // user's exclude file with only its own entries.
@@ -494,8 +578,30 @@ fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool>
             return Err(e).with_context(|| format!("read {}", exclude_path.display()));
         }
     };
-    let mut contents = existing.clone();
     let mut changed = false;
+    let mut migrated = existing.clone();
+    for (legacy, replacement) in migrations {
+        if !migrated.lines().any(|line| line.trim() == *legacy) {
+            continue;
+        }
+        let mut have_replacement = migrated.lines().any(|line| line.trim() == *replacement);
+        let mut out = String::with_capacity(migrated.len());
+        for line in migrated.split_inclusive('\n') {
+            if line.trim() == *legacy {
+                if !have_replacement {
+                    out.push_str(replacement);
+                    out.push('\n');
+                    have_replacement = true;
+                }
+                continue;
+            }
+            out.push_str(line);
+        }
+        migrated = out;
+        changed = true;
+    }
+    let existing = migrated;
+    let mut contents = existing.clone();
     for entry in entries {
         if existing.lines().any(|line| line.trim() == *entry) {
             continue;
@@ -1017,6 +1123,8 @@ pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
     // Surface the failed check itself first.
     // trace:BUG-1929 | ai:claude
     if is_store_tree(repo) {
+        // trace:BUG-2131 | ai:claude
+        crate::store_hooks::ensure_attr_source(repo)?;
         resolve_store_hooks_dir(repo)?;
     }
     if let Some(state) = store_worktree_issue(repo) {
@@ -1040,6 +1148,10 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     // shim when the store's hooks can't be verified: report that instead
     // of a false "detached".
     // trace:BUG-1929 | ai:claude
+    // trace:BUG-2131 | ai:claude
+    if is_store_tree(repo) && crate::store_hooks::ensure_attr_source(repo).is_err() {
+        return Some("contained sessions are enabled and host git is older than 2.40");
+    }
     if is_store_tree(repo) && resolve_store_hooks_dir(repo).is_err() {
         return Some("host-owned AIDA store hooks could not be verified");
     }
@@ -5356,9 +5468,151 @@ mod tests {
             worktree.join(exclude_path)
         };
         let exclude = std::fs::read_to_string(exclude_path).unwrap();
-        assert!(exclude.lines().any(|line| line.trim() == ".aida/"));
+        assert!(exclude.lines().any(|line| line.trim() == "/.aida/*"));
+        assert!(!exclude.lines().any(|line| line.trim() == ".aida/"));
         assert!(exclude.lines().any(|line| line.trim() == ".aida-store"));
         assert!(exclude.lines().any(|line| line.trim() == ".aida-store/"));
+    }
+
+    /// `git check-ignore --no-index -q`: true when `rel` is ignored.
+    fn bug_2141_ignored(worktree: &Path, rel: &str) -> bool {
+        Command::new("git")
+            .current_dir(worktree)
+            .args(["check-ignore", "--no-index", "-q", rel])
+            .status()
+            .unwrap()
+            .success()
+    }
+
+    /// A repo + linked worktree whose tracked `.gitignore` mirrors AIDA's
+    /// deny-by-default `.aida/*` with the discipline/config re-includes.
+    fn bug_2141_repo(tmp: &Path) -> (PathBuf, PathBuf) {
+        let repo = tmp.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "aida@example.invalid"]);
+        run_git(&repo, &["config", "user.name", "AIDA Test"]);
+        std::fs::write(
+            repo.join(".gitignore"),
+            ".aida/*\n!.aida/config.toml\n!.aida/discipline/\n!.aida/discipline/**\n",
+        )
+        .unwrap();
+        run_git(&repo, &["add", "-A"]);
+        run_git(&repo, &["commit", "-qm", "seed"]);
+        let worktree = tmp.join("repo-bug2141");
+        run_git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "bug-2141",
+                worktree.to_str().unwrap(),
+                "HEAD",
+            ],
+        );
+        (repo, worktree)
+    }
+
+    // trace:BUG-2141 | ai:claude
+    #[test]
+    fn bug_2141_runtime_exclude_leaves_tracked_aida_dirs_addable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, worktree) = bug_2141_repo(tmp.path());
+        assert!(ensure_aida_runtime_excluded(&worktree).unwrap());
+
+        for root in [&repo, &worktree] {
+            std::fs::create_dir_all(root.join("aida-core/templates/.aida/discipline")).unwrap();
+            std::fs::write(
+                root.join("aida-core/templates/.aida/discipline/new.md"),
+                "x\n",
+            )
+            .unwrap();
+            std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
+            std::fs::write(root.join(".aida/discipline/new.md"), "x\n").unwrap();
+            std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+            std::fs::write(root.join(".aida/sessions/s.json"), "{}\n").unwrap();
+            std::fs::write(root.join(".aida/store.lock"), "").unwrap();
+
+            for addable in [
+                "aida-core/templates/.aida/discipline/new.md",
+                ".aida/discipline/new.md",
+                ".aida/config.toml",
+            ] {
+                assert!(
+                    !bug_2141_ignored(root, addable),
+                    "{addable} must stay addable in {}",
+                    root.display()
+                );
+            }
+            for runtime in [".aida/sessions/s.json", ".aida/store.lock"] {
+                assert!(
+                    bug_2141_ignored(root, runtime),
+                    "{runtime} must stay ignored in {}",
+                    root.display()
+                );
+            }
+            run_git(root, &["add", "-A"]);
+            let staged = run_git(root, &["diff", "--cached", "--name-only"]);
+            assert!(
+                staged.contains("aida-core/templates/.aida/discipline/new.md"),
+                "{staged}"
+            );
+            assert!(staged.contains(".aida/discipline/new.md"), "{staged}");
+            assert!(!staged.contains("sessions"), "{staged}");
+        }
+    }
+
+    // trace:BUG-2141 | ai:claude
+    #[test]
+    fn bug_2141_runtime_exclude_hides_root_aida_without_gitignore() {
+        // BUG-914's case: a repo that does not commit AIDA scaffolding.
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, worktree) = bug_2141_repo(tmp.path());
+        run_git(&repo, &["rm", "-q", ".gitignore"]);
+        run_git(&repo, &["commit", "-qm", "drop gitignore"]);
+        run_git(&worktree, &["checkout", "-q", "main", "--detach"]);
+        assert!(ensure_aida_runtime_excluded(&worktree).unwrap());
+        std::fs::create_dir_all(worktree.join(".aida/discipline")).unwrap();
+        std::fs::write(worktree.join(".aida/config.toml"), "").unwrap();
+        std::fs::write(worktree.join(".aida/discipline/x.md"), "").unwrap();
+        std::fs::create_dir_all(worktree.join(".aida/sessions")).unwrap();
+        assert_eq!(run_git(&worktree, &["status", "--short", "-uall"]), "");
+    }
+
+    // trace:BUG-2141 | ai:claude
+    #[test]
+    fn bug_2141_migrates_legacy_unanchored_aida_line_in_place() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, worktree) = bug_2141_repo(tmp.path());
+        let exclude_path = repo.join(".git/info/exclude");
+        std::fs::write(
+            &exclude_path,
+            "# user\nfoo/\n.aida/\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n.aida/\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(worktree.join(".aida/discipline")).unwrap();
+        std::fs::write(worktree.join(".aida/discipline/new.md"), "").unwrap();
+        assert!(bug_2141_ignored(&worktree, ".aida/discipline/new.md"));
+
+        assert!(ensure_aida_runtime_excluded(&worktree).unwrap());
+        let migrated = std::fs::read_to_string(&exclude_path).unwrap();
+        assert_eq!(
+            migrated,
+            "# user\nfoo/\n/.aida/*\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n"
+        );
+        assert!(!bug_2141_ignored(&worktree, ".aida/discipline/new.md"));
+
+        assert!(!ensure_aida_runtime_excluded(&worktree).unwrap());
+        assert_eq!(std::fs::read_to_string(&exclude_path).unwrap(), migrated);
+
+        // Legacy line alongside an already-present anchored entry: dropped.
+        std::fs::write(&exclude_path, "/.aida/*\n.aida/\n").unwrap();
+        assert!(ensure_aida_runtime_excluded(&worktree).unwrap());
+        let both = std::fs::read_to_string(&exclude_path).unwrap();
+        assert_eq!(both.matches(".aida/").count(), 1, "{both}");
+        assert!(both.starts_with("/.aida/*\n"), "{both}");
     }
 
     #[test]
