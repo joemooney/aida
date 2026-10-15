@@ -31,12 +31,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T15:04:50.442590132Z
+modified_at: 2026-10-15T15:11:56.771441349Z
 req_type: Story
 tags:
 - from:aida-host
 - groom:approve
 - groomed:night
+- needs-docs
 - regenerability
 relationships:
 - rel_type: Child
