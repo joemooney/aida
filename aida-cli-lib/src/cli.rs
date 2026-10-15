@@ -1845,7 +1845,8 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
         write: Option<String>,
 
-        /// Print the seat's latest handoff note (the seed for a fresh session).
+        /// Print the seat's standing orders (if any), then its latest handoff
+        /// note (the seed for a fresh session).
         // trace:STORY-1464 | ai:claude
         #[clap(long, conflicts_with = "check")]
         show: bool,
@@ -1855,6 +1856,20 @@ pub enum SessionCommand {
         // trace:STORY-1464 | ai:claude
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
+
+        /// Manage the seat's repo-local standing orders
+        /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
+        /// entry, `list` prints them. `--show` prints standing orders before
+        /// the handoff.
+        // trace:STORY-1693 | ai:claude
+        #[clap(
+            long,
+            value_names = ["ACTION", "TEXT"],
+            num_args = 1..=2,
+            allow_hyphen_values = true,
+            conflicts_with_all = ["check", "write", "show"]
+        )]
+        standing_orders: Option<Vec<String>>,
     },
 
     /// Manage the planned-cluster manifest for the active session
@@ -14954,6 +14969,30 @@ mod tests {
     #[test]
     fn cli_arg_tree_has_no_definition_conflicts() {
         Cli::command().debug_assert();
+    }
+
+    // trace:STORY-1693 | ai:claude
+    #[test]
+    fn session_handoff_standing_orders_parses_add_and_list() {
+        let so = |args: &[&str]| -> Option<Vec<String>> {
+            let cli = Cli::try_parse_from(args).unwrap();
+            match cli.command {
+                Command::Session(SessionCommand::Handoff {
+                    standing_orders, ..
+                }) => standing_orders,
+                _ => panic!("expected session handoff"),
+            }
+        };
+        let base = ["aida", "session", "handoff", "--seat", "advisor"];
+        let add = [&base[..], &["--standing-orders", "add", "-never page"]].concat();
+        assert_eq!(
+            so(&add),
+            Some(vec!["add".to_string(), "-never page".to_string()])
+        );
+        let list = [&base[..], &["--standing-orders", "list"]].concat();
+        assert_eq!(so(&list), Some(vec!["list".to_string()]));
+        let both = [&base[..], &["--show", "--standing-orders", "list"]].concat();
+        assert!(Cli::try_parse_from(both).is_err());
     }
 
     #[test]

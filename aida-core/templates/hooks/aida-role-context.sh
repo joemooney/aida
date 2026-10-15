@@ -133,7 +133,25 @@ done
 if [ -n "$role_file" ] && [ ! -r "$role_file" ]; then
     role_file=""
 fi
-if [ -z "$role_file" ]; then
+
+# STORY-1693: point at the seat's standing orders when either source exists
+# (tracked template copy, or repo-local operator rulings in the main checkout).
+# One line; the orders themselves print with `aida session handoff --show`.
+# trace:STORY-1693 | ai:claude
+standing_line=""
+main_root=""
+common_dir=$(git -C "$project_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+    main_root="${common_dir%/.git}"
+for root in "$project_root" "$main_root"; do
+    [ -n "$root" ] || continue
+    if [ -f "$root/.aida/discipline/standing-orders/$canonical_label.md" ] ||
+        [ -f "$root/.aida/standing-orders/$canonical_label.md" ]; then
+        standing_line="Standing orders exist for this seat and override any handoff: read them first with \`aida session handoff --seat ${canonical_label} --show\`."
+        break
+    fi
+done
+
+if [ -z "$role_file" ] && [ -z "$standing_line" ]; then
     exit 0
 fi
 
@@ -180,8 +198,12 @@ extract_field() {
     ' "$file"
 }
 
-purpose=$(extract_field purpose "$role_file")
-system_prompt=$(extract_field system_prompt "$role_file")
+purpose=""
+system_prompt=""
+if [ -n "$role_file" ]; then
+    purpose=$(extract_field purpose "$role_file")
+    system_prompt=$(extract_field system_prompt "$role_file")
+fi
 
 # STORY-278/STORY-285: the advisor seat triages findings the headless drain
 # files as draft TASKs — the reviewer (from-review:) and the implementer
@@ -203,7 +225,8 @@ fi
 
 # Build the addendum body. If the role contributes no purpose/system_prompt
 # AND there is no findings line, there's nothing useful — exit silently.
-if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ]; then
+if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ] &&
+    [ -z "$standing_line" ]; then
     exit 0
 fi
 
@@ -222,6 +245,11 @@ if [ -n "$findings_line" ]; then
     body="${body}
 
 ${findings_line}"
+fi
+if [ -n "$standing_line" ]; then
+    body="${body}
+
+${standing_line}"
 fi
 
 emit_context "$body"
