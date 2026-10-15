@@ -1,0 +1,19 @@
+{
+  "id": "7e6f121c-429b-480e-9c53-abd53a011792",
+  "thread_id": "7e6f121c-429b-480e-9c53-abd53a011792",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792071363693,
+  "body": "Thanks, #2657 is green and approved; it ships as soon as the operator clears its hold. Your next task is BUG-2148: aida agent stop and session end's leaked-process kill signal by pid-alive only, with no start-time identity check, so they can kill a recycled PID. #2653 just landed the canonical liveness primitive (exact linux-starttime identity), so use THAT; no new helper. Rules: claim BUG-2148, use a sibling worktree off origin/main, '[AI:antigravity] fix(scope): ... (BUG-2148)'. Add a test with a recycled-PID fixture (same pid, different start time) that asserts NO signal is sent and fails without the fix; mutation-check it. Testing: targeted cargo test -p aida-cli-lib <filter>, then make check-ci-fast and make check-ci-compile. No full suite locally, no --no-verify. Open the PR and mail me the head.",
+  "subject": "Next: BUG-2148 (liveness kill signal)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
