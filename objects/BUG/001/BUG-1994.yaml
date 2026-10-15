@@ -9,12 +9,12 @@ description: |-
   - Tests needing a fake git inject the binary path (or a scoped env) instead of mutating the process-wide PATH, OR every PATH mutator and PATH-sensitive test serialises on the shared env lock.
   - A source-shape guard forbids new unguarded `set_var("PATH"` in tests.
   - 15 rounds x 16 threads of the history tests alongside the PATH mutators pass with zero failures.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T17:27:33.359425622Z
-modified_at: 2026-10-15T00:31:54.280024225Z
+modified_at: 2026-10-15T06:22:52.248066609Z
 req_type: Bug
 tags:
 - plan:night
@@ -186,6 +186,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a13e3a-5354-76a2-8d97-547ff6eb60db
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:22:52.244098933Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-5358-73e2-9da5-b462dd59040f
+  timestamp: 2026-10-15T06:22:52.248052540Z
+  agent: implementer
+  commit_sha: f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7
+  summary: 'Wiring delta 237e401b07..4dfe251b7b approved (STANDARD tier): ci.yml and ci-gate-tiers.toml identical to origin/main; weekly-linux path-history-stress job runs the exact ignored test (verified via --list --ignored), bounded 40/60 min, no continue-on-error, </dev/null; guardrail kills 10/11 mutations (drop ignore, stress in ci.yml, delete job, Build timeout 45, drop --exact, drop /dev/null, job continue-on-error, step timeout removed, schedule removed, job timeout 600); guardrail test + make check-ci-fast green; merge-tree clean. Non-blocking: step/job if: false survives guardrail; ci.yml absence check matches only full test name.'
+  review_verdict: approved
 filed_at:
   code_sha: 11fcd15b4985ffd66ae91e29bf6ceda9283f3927
   branch: main
@@ -194,3 +208,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:22:52.244093704Z
+  completion_sha: f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7
