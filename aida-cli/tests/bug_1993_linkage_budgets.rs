@@ -165,6 +165,11 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
     );
     assert_eq!(l["complete"], false, "{l}");
     assert!(notes(&l).contains("commit scan incomplete"), "{l}");
+    // A timed-out scan is `null`, never a false "not shipped".
+    assert!(
+        l["shipped"].is_null(),
+        "shipped must be null on timeout: {l}"
+    );
     let human = show_human(&repo, &home, &spec, &slow_log);
     assert!(human.contains("commit scan incomplete"), "{human}");
     assert!(
@@ -177,6 +182,10 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
     let l = show_json(&repo, &home, &spec, Some(&slow_merge));
     assert_eq!(l["complete"], false, "{l}");
     assert!(notes(&l).contains("shipped state unknown"), "{l}");
+    assert!(
+        l["shipped"].is_null(),
+        "shipped must be null on timeout: {l}"
+    );
     assert_eq!(l["commits"].as_array().map(|c| c.len()), Some(1), "{l}");
     let human = show_human(&repo, &home, &spec, &slow_merge);
     assert!(human.contains("shipped state unknown"), "{human}");

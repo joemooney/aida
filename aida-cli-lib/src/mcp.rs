@@ -910,8 +910,9 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
     let mut out = String::from("\n## Git linkage\n\n");
 
     // trace:BUG-1993 | ai:claude — a timed-out check is unknown, not unshipped.
-    let state = if linkage.shipped_unknown {
-        "unknown (shipped check did not finish in time budget)".to_string()
+    // trace:BUG-1993 | ai:claude — name WHICH scan timed out.
+    let state = if let Some(reason) = linkage.unknown_reason() {
+        format!("unknown ({reason})")
     } else if linkage.shipped {
         match linkage.shipped_pr {
             Some(pr) => format!("shipped (merged via PR #{})", pr),

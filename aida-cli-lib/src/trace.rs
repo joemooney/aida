@@ -474,7 +474,37 @@ impl GitLinkage {
         }
         notes
     }
+
+    /// BUG-1993: why the linkage cannot say where the spec's work sits, when
+    /// a bounded scan stopped before it found out. `None` when the shipped /
+    /// branch picture is complete (or a branch was found despite a truncated
+    /// walk). Review-surface classifiers read this so a timed-out scan is
+    /// "unknown", never "never pushed" (PRIN-5).
+    // trace:BUG-1993 | ai:claude
+    pub(crate) fn unknown_reason(&self) -> Option<&'static str> {
+        if self.shipped {
+            return None;
+        }
+        if self.commits_scan_incomplete {
+            Some(LINKAGE_UNKNOWN_REASON_COMMIT_SCAN)
+        } else if self.shipped_unknown {
+            Some(LINKAGE_UNKNOWN_REASON_MERGE_CHECK)
+        } else if self.branch.is_none() && self.branch_scan_truncated.is_some() {
+            Some(LINKAGE_UNKNOWN_REASON_BRANCH_SCAN)
+        } else {
+            None
+        }
+    }
 }
+
+/// BUG-1993: which bounded scan left the linkage unknown. Short phrases that
+/// read after "scan timed out:" on the review surfaces and in the MCP state.
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_UNKNOWN_REASON_COMMIT_SCAN: &str = "commit scan timed out";
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_UNKNOWN_REASON_MERGE_CHECK: &str = "merge check timed out";
+// trace:BUG-1993 | ai:claude
+pub(crate) const LINKAGE_UNKNOWN_REASON_BRANCH_SCAN: &str = "branch scan stopped early";
 
 /// BUG-1993: the budget for the referencing-commit `git log --all --grep`.
 /// Measured on this repo (73k commits, 5k refs, idle host, 2026-10-14):
