@@ -1,0 +1,20 @@
+id: 01a13cfe-c142-7a72-8637-59a252bcc458
+spec_id: TASK-1762
+agreed_id: TASK-1762
+title: 'History list views follow-ups: when without tz in JSON, ''closed'' vs ''aida list closed'' (Done), filter alias/priority validation, human golden test, approved-transition help text'
+description: 'Non-blocking from the #2639 (STORY-1664) review: (1) the JSON ''when'' field is local YYYY-MM-DD HH:MM with no offset, while since/until are RFC3339; (2) the ''closed'' view excludes Done but ''aida list closed'' includes it, so document or align; (3) --status closed/open aliases are rejected and an invalid --priority silently returns empty; (4) no human-table golden test, although the acceptance criteria named one; (5) help should say that ''approved'' counts NeedsAttention->Approved and reopen->Approved; (6) verify that renumbering doesn''t make ''opened'' show a renumbered spec as newly filed.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:38:11.010499915Z
+modified_at: 2026-10-15T00:38:11.010499915Z
+req_type: Task
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
