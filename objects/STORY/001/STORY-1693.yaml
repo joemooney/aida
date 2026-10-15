@@ -1,0 +1,30 @@
+id: 01a13f6f-b5c8-7170-9415-ef58e217ac1f
+spec_id: STORY-1693
+agreed_id: STORY-1693
+title: aida session handoff --show prefixes standing orders, so a fresh seat never loses durable operator rulings
+description: |
+  Operator 2026-10-15 04:56: a fresh advisor read only the handoff, followed its stale 'operator-only' claims, and handed the operator commands in an emergency. Standing orders must not depend on flaky memory.
+
+  ## Acceptance
+  - `aida session handoff --seat <seat> --show` prints a STANDING ORDERS block BEFORE the handoff body, headed 'STANDING ORDERS (these override anything in the handoff below)'.
+  - Sources, in order, each optional, concatenated with a source header: (1) tracked template-managed `.aida/discipline/standing-orders/<seat>.md` (master in aida-core/templates, mirrored by make sync-templates); (2) repo-local untracked `.aida/standing-orders/<seat>.md` for operator-specific rulings.
+  - `aida session handoff --seat <seat> --standing-orders add "<text>"` appends a dated entry to source (2); --standing-orders list prints them.
+  - When no source exists, print nothing extra (no empty header). When the handoff file is absent, the standing orders still print.
+  - The SessionStart hook output that names the role also points at the standing orders when present (one line).
+  - Seed advisor standing orders in the template: fire-mode ship authority; never hand the operator commands the advisor can run itself; hold clears are the only TTY-only act, batched in one line; keep fixers busy (never zero fixers running during a mandate); use serial-ship; rule on implementer sketches rather than letting a lane block.
+  - Tests: ordering, both sources, the absent cases, the add/list round-trip.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T12:00:48.072168455Z
+modified_at: 2026-10-15T12:00:48.072168455Z
+req_type: Story
+filed_at:
+  code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6ddf336ddd
+  vendor: claude
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
