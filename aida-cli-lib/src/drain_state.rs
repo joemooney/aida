@@ -186,6 +186,12 @@ pub(crate) struct DrainState {
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
+    /// Kernel start time of `orchestrator_pid`, so a recycled pid does not
+    /// read as a live drain. Missing on files written by older binaries;
+    /// liveness then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) orchestrator_pid_start: Option<String>,
     /// RFC-3339 time of a deliberate stop request.
     // trace:TASK-1542 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -365,6 +371,7 @@ impl DrainState {
             current_vendor: None,
             review_spec: None,
             orchestrator_pid: std::process::id(),
+            orchestrator_pid_start: process_probe::process_start_identity(std::process::id()),
             stopped_at: None,
             stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
@@ -395,6 +402,7 @@ impl DrainState {
             current_vendor: None,
             review_spec: None,
             orchestrator_pid: std::process::id(),
+            orchestrator_pid_start: process_probe::process_start_identity(std::process::id()),
             stopped_at: None,
             stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
@@ -424,6 +432,7 @@ impl DrainState {
             current_vendor: None,
             review_spec: None,
             orchestrator_pid: std::process::id(),
+            orchestrator_pid_start: process_probe::process_start_identity(std::process::id()),
             stopped_at: None,
             stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
@@ -433,6 +442,16 @@ impl DrainState {
             retries: Vec::new(),
             excluded_from_batch: 0,
         }
+    }
+
+    /// Is the recorded orchestrator still running? Pid plus recorded start
+    /// time, so a pid the OS recycled for an unrelated process reads dead.
+    // trace:TASK-1750 | ai:claude
+    pub(crate) fn orchestrator_alive(&self) -> bool {
+        process_probe::process_identity_is_alive(
+            self.orchestrator_pid,
+            self.orchestrator_pid_start.as_deref(),
+        )
     }
 
     /// Serialize to JSON.
@@ -700,7 +719,7 @@ pub(crate) fn set_run(
             "batch drain state is missing or unreadable",
         )
     })?;
-    if !process_probe::pid_is_alive(state.orchestrator_pid) {
+    if !state.orchestrator_alive() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "batch drain parent is not live",
@@ -1248,7 +1267,7 @@ pub(crate) fn probe(project_root: &Path) -> DrainStatus {
     match DrainState::read(project_root) {
         None => DrainStatus::None,
         Some(state) => {
-            if process_probe::pid_is_alive(state.orchestrator_pid) {
+            if state.orchestrator_alive() {
                 DrainStatus::Active(state)
             } else if state.stopped_at.is_some() {
                 DrainStatus::Stopped(state)
@@ -2202,6 +2221,7 @@ mod tests {
             current_vendor: None,
             review_spec: None,
             orchestrator_pid: std::process::id(),
+            orchestrator_pid_start: process_probe::process_start_identity(std::process::id()),
             stopped_at: None,
             stopped_reason: None,
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
@@ -3449,6 +3469,27 @@ mod tests {
         let reread = DrainState::read(dir.path()).unwrap();
         assert_eq!(reread.stopped_at.as_deref(), Some(first.as_str()));
         assert_eq!(reread.stopped_reason.as_deref(), Some("changed"));
+    }
+
+    /// TASK-1750: a live orchestrator pid whose recorded start time differs
+    /// is a recycled pid, so the drain reads stale (not active) and `set_run`
+    /// refuses it; the start time survives a write/read round trip.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_orchestrator_pid_reads_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.orchestrator_pid_start = process_probe::process_start_identity(std::process::id());
+        if state.orchestrator_pid_start.is_none() {
+            return; // platform cannot report start times; nothing to distinguish
+        }
+        state.write(dir.path()).unwrap();
+        assert_eq!(DrainState::read(dir.path()).unwrap(), state);
+        assert!(matches!(probe(dir.path()), DrainStatus::Active(_)));
+        state.orchestrator_pid_start = Some("2000-01-01T00:00:00+00:00".to_string());
+        state.write(dir.path()).unwrap();
+        assert!(matches!(probe(dir.path()), DrainStatus::Stale(_)));
+        assert!(set_run(dir.path(), "STORY-301", "run", false).is_err());
     }
 
     #[test]

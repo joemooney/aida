@@ -240,6 +240,12 @@ pub struct AdvisorRegistration {
     /// liveness check verifies the PID is still in the process table; falls
     /// back to JSONL mtime when the PID is missing or stale.
     pub claude_pid: Option<u32>,
+    /// Kernel start time of `claude_pid` at registration, so a recycled pid
+    /// does not read as the live advisor. `None` on older registrations;
+    /// the check then degrades to a bare pid probe.
+    // trace:TASK-1750 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_pid_start: Option<String>,
 }
 
 /// Path to the per-user registration file (`~/.aida/advisor.toml`).
@@ -342,7 +348,7 @@ pub fn discover_live_advisor_session(
     if let Some(reg) = read_registration() {
         if let Some(advisor) = locate_session(&reg.uuid, &reg.project_slug, Discovery::Registration)
         {
-            if is_alive(&advisor, reg.claude_pid) {
+            if is_alive(&advisor, reg.claude_pid, reg.claude_pid_start.as_deref()) {
                 return Some(advisor);
             }
         }
@@ -354,7 +360,7 @@ pub fn discover_live_advisor_session(
             // Without a recorded slug we have to scan every project dir for
             // a matching JSONL — relatively cheap (one stat per project).
             if let Some(advisor) = locate_session_by_uuid(&uuid, Discovery::EnvVar) {
-                if is_alive(&advisor, None) {
+                if is_alive(&advisor, None, None) {
                     return Some(advisor);
                 }
             }
@@ -364,7 +370,7 @@ pub fn discover_live_advisor_session(
     if config.allow_mtime_fallback {
         if let Some(root) = fallback_project_root {
             if let Some(advisor) = latest_jsonl_under_project(root, Discovery::MtimeFallback) {
-                if is_alive(&advisor, None) {
+                if is_alive(&advisor, None, None) {
                     return Some(advisor);
                 }
             }
@@ -445,11 +451,16 @@ fn latest_jsonl_under_project(project_root: &Path, discovery: Discovery) -> Opti
 }
 
 /// Liveness check: the JSONL was touched recently OR the recorded `claude_pid`
-/// is still alive. Either signal alone is enough — claude can spend longer
+/// is still alive (pid plus its recorded start time, so a recycled pid does
+/// not count, TASK-1750). Either signal alone is enough — claude can spend longer
 /// than the mtime window inside a single tool call.
-pub fn is_alive(advisor: &LiveAdvisor, claude_pid: Option<u32>) -> bool {
+pub fn is_alive(
+    advisor: &LiveAdvisor,
+    claude_pid: Option<u32>,
+    claude_pid_start: Option<&str>,
+) -> bool {
     if let Some(pid) = claude_pid {
-        if process_probe::pid_is_alive(pid) {
+        if process_probe::process_identity_is_alive(pid, claude_pid_start) {
             return true;
         }
     }
@@ -668,6 +679,29 @@ max_source_size_mb = 50
         });
     }
 
+    /// TASK-1750: the recorded `claude_pid` counts as alive only while its
+    /// start time still matches; a recycled pid falls through to the (here
+    /// absent) JSONL mtime and reads dead.
+    // trace:TASK-1750 | ai:claude
+    #[test]
+    fn recycled_claude_pid_does_not_keep_the_advisor_alive() {
+        let pid = std::process::id();
+        let Some(ours) = process_probe::process_start_identity(pid) else {
+            return; // platform cannot report start times; nothing to distinguish
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let a = LiveAdvisor {
+            uuid: "u".to_string(),
+            project_slug: "s".to_string(),
+            source_jsonl: tmp.path().join("missing.jsonl"),
+            jsonl_size_bytes: 0,
+            discovery: Discovery::Registration,
+        };
+        assert!(is_alive(&a, Some(pid), None), "legacy: bare pid probe");
+        assert!(is_alive(&a, Some(pid), Some(&ours)));
+        assert!(!is_alive(&a, Some(pid), Some("2000-01-01T00:00:00+00:00")));
+    }
+
     // trace:TASK-1748 | ai:antigravity
     #[test]
     fn discovery_picks_registered_session_when_alive() {
@@ -693,6 +727,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -718,6 +753,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -757,6 +793,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -796,6 +833,7 @@ max_source_size_mb = 50
             project_root: "/home/joe/ai/aida".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -839,6 +877,7 @@ max_source_size_mb = 50
             project_root: "/tmp/x".to_string(),
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {
@@ -867,6 +906,7 @@ max_source_size_mb = 50
             project_root: "/home/joe/ai/aida".to_string(),
             registered_at: "2026-05-21T17:30:00Z".to_string(),
             claude_pid: Some(12345),
+            claude_pid_start: None,
         };
 
         with_home(home.path(), || {

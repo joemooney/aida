@@ -410,6 +410,7 @@ mod not_found;
 mod pr_claim_surface;
 mod reconcile_evidence;
 mod reconstitute;
+mod rework_hold_release;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the

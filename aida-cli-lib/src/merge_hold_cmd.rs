@@ -197,6 +197,28 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
     // trace:BUG-1188 | ai:codex
     let root = find_main_worktree_root()?;
     match action {
+        // trace:STORY-1687 | ai:codex
+        crate::cli::MergeHoldAction::AutoRelease { pr } => {
+            let prs = pr.map(|n| vec![n]).unwrap_or_else(|| {
+                merge_hold::list_holds(&root)
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect()
+            });
+            let mut refused = false;
+            for pr in prs {
+                match crate::rework_hold_release::auto_release(&root, pr) {
+                    Ok(true) => println!("PR #{pr}: merge-hold auto-released by recorded verdict"),
+                    Ok(false) => println!("PR #{pr}: no active local hold"),
+                    Err(error) => {
+                        eprintln!("PR #{pr}: held — {error:#}");
+                        refused = true;
+                    }
+                }
+            }
+            anyhow::ensure!(!refused, "one or more merge-holds remain armed");
+            Ok(())
+        }
         crate::cli::MergeHoldAction::Labels {
             create_missing,
             json,

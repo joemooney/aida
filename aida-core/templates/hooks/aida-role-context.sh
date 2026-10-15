@@ -14,6 +14,67 @@
 
 set -u
 
+# BUG-2007: a Codex session attached to the shared app-server daemon runs its
+# hooks with the DAEMON's environment, i.e. the role and grant of whichever
+# shell first started the daemon, not this session's. Detect that ancestry
+# (Linux /proc; elsewhere this is a no-op) so the role is reported as
+# unresolved instead of borrowed. trace:BUG-2007 | ai:claude
+under_shared_codex_daemon() {
+    # Builtins only (no subshell per ancestor): this runs on every session start.
+    local pid="$PPID" depth=0 a0 a1 a2 stat rest
+    while [ "$depth" -lt 16 ] && [ "${pid:-0}" -gt 1 ] 2>/dev/null; do
+        a0="" a1="" a2=""
+        {
+            IFS= read -r -d '' a0
+            IFS= read -r -d '' a1
+            IFS= read -r -d '' a2
+        } <"/proc/$pid/cmdline" 2>/dev/null
+        # The daemon is `codex app-server ...`; an interpreter-run stand-in
+        # shifts it one slot (`bash .../codex app-server`).
+        # Compare argv slots exactly so `app-server` must be codex's subcommand.
+        if { [ "${a0##*/}" = codex ] && [ "$a1" = app-server ]; } ||
+            { [ "${a1##*/}" = codex ] && [ "$a2" = app-server ]; }; then
+            return 0
+        fi
+        IFS= read -r stat <"/proc/$pid/stat" 2>/dev/null || return 1
+        # Field 4 is the ppid; skip past "(comm) " since comm may hold spaces.
+        rest=${stat##*) }
+        # shellcheck disable=SC2086
+        set -- $rest
+        pid="${2:-0}"
+        depth=$((depth + 1))
+    done
+    return 1
+}
+# shellcheck disable=SC2016 # backticks are literal prose
+DAEMON_NOTE='this session runs under the shared Codex app-server daemon, whose environment (role and grant) belongs to the shell that started it, not to this session. Relaunch with `codex --no-daemon` (`aida agent new codex` does this) to get this session'"'"'s own role.'
+
+# Emit JSON envelope so Claude Code injects body as additionalContext.
+# jq if available (handles all the escaping), Python as fallback, raw
+# heredoc as last resort (only safe for plain ASCII).
+emit_context() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg ctx "$1" \
+            '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import json, os, sys
+body = sys.stdin.read()
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": body}}))
+' <<<"$1"
+    fi
+    # Bare-bones fallback: no escaping. Skip emission rather than emit
+    # malformed JSON.
+    return 0
+}
+
+if under_shared_codex_daemon; then
+    emit_context "# AIDA active role: unresolved
+
+Role unresolved: ${DAEMON_NOTE}"
+    exit 0
+fi
+
 role="${AIDA_SESSION_ROLE:-}"
 if [ -z "$role" ]; then
     exit 0
@@ -163,22 +224,6 @@ if [ -n "$findings_line" ]; then
 ${findings_line}"
 fi
 
-# Emit JSON envelope so Claude Code injects body as additionalContext.
-# jq if available (handles all the escaping), Python as fallback, raw
-# heredoc as last resort (only safe for plain ASCII).
-if command -v jq >/dev/null 2>&1; then
-    jq -n --arg ctx "$body" \
-        '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
-elif command -v python3 >/dev/null 2>&1; then
-    python3 -c '
-import json, os, sys
-body = sys.stdin.read()
-print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": body}}))
-' <<<"$body"
-else
-    # Bare-bones fallback: no escaping. Skip emission rather than emit
-    # malformed JSON.
-    exit 0
-fi
+emit_context "$body"
 
 exit 0

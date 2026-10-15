@@ -342,3 +342,16 @@ You now own the back half of the lifecycle and the two-leg sync model. Next:
 - **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: the front half — queue, pickup, and letting agents drain work (where Done comes *from*).
 - **[Chapter 8 — Reporting](08-reporting.md)**: `history` / `metrics` to *see* the lifecycle you just drove.
 - The full state machine, with every edge and edge-case, is [`docs/lifecycle.md`](../lifecycle.md).
+
+
+### `aida merge-hold auto-release`
+
+Release an eligible Rework-only hold from a fresh recorded approval at the
+current PR head. Omit the PR number to inspect every local hold, or use
+`aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
+it has no override flag and never merges. Refused candidates remain held and
+produce a nonzero exit with a reason. The review-record handler runs the same
+release after a verified APPROVED write. Sensitive or composed holds retain
+the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+for grant, arming-round, metadata and audit requirements.
+<!-- trace:STORY-1687 | ai:codex -->

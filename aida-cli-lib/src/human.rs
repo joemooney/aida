@@ -517,6 +517,17 @@ pub(crate) fn reviews_awaiting_human(
                     wip,
                 });
             }
+            // BUG-1993: the linkage scan timed out — keep the spec listed with
+            // an "unknown" note instead of dropping a possibly-pushed branch.
+            // trace:BUG-1993 | ai:claude
+            ReviewSurface::Unknown { .. } => {
+                out.push(ReviewAwaiting {
+                    spec_id,
+                    surface: crate::REVIEW_SURFACE_UNKNOWN_LABEL.to_string(),
+                    reviewed: false,
+                    wip,
+                });
+            }
             // Already merged or never pushed — nothing for the human to review.
             // (Unreachable: `classify_human_review_bucket` already dropped these
             // above; kept exhaustive for the match.)

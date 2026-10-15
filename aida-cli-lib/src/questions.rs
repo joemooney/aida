@@ -1620,10 +1620,7 @@ pub(crate) fn questions_clarify(
     let project_root = find_project_root()?;
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = std::process::Command::new("claude")
-        .arg(&prompt)
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(seat_authority::GRANT_ENV, child_grant.id)
+    let status_code = build_questions_clarify_command(&prompt, &child_grant.id)
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -1641,6 +1638,23 @@ pub(crate) fn questions_clarify(
         let code = status_code.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+// trace:BUG-2124 | ai:antigravity
+pub(crate) fn build_questions_clarify_command(
+    prompt: &str,
+    child_grant_id: &str,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new("claude");
+    cmd.arg(prompt)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env(seat_authority::GRANT_ENV, child_grant_id);
+    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    cmd
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring

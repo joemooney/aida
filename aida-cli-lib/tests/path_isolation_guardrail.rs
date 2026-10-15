@@ -274,7 +274,7 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
 // trace:BUG-1994 | ai:codex
 // The stress is too slow for every PR Build: it runs only in the scheduled /
 // manually dispatched weekly Linux workflow, and the Build job keeps its
-// 25-minute fail-fast bound. trace:BUG-1994 | ai:claude
+// 40-minute fail-fast bound. trace:BUG-1994 | ai:claude
 #[test]
 fn stress_runs_only_in_its_bounded_scheduled_job() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -371,7 +371,7 @@ fn stress_runs_only_in_its_bounded_scheduled_job() {
     }
     assert_eq!(
         ci["jobs"]["build"]["timeout-minutes"].as_u64(),
-        Some(25),
-        "Build keeps its 25-minute fail-fast bound (BUG-611)"
+        Some(40),
+        "Build keeps its 40-minute fail-fast bound (BUG-611): healthy runs take 17-25 min"
     );
 }

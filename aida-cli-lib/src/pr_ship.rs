@@ -1238,6 +1238,19 @@ pub fn step5_inside_worktree_messages(
     (line, detail)
 }
 
+/// BUG-1953: step 5's report when no lease holds the shipped branch. Names
+/// the PR head branch (`ship_branch`), not the cwd branch — shipping by
+/// number from `main` once printed "no AIDA lease for branch main" while the
+/// head branch's lease survived the merge. Returns `(stderr line, activity-log
+/// detail)`.
+// trace:BUG-1953 | ai:claude
+pub fn step5_no_lease_messages(ship_branch: &str) -> (String, String) {
+    (
+        format!("  step 5: no AIDA lease for branch {ship_branch} — nothing to clean up"),
+        format!("no lease for branch {ship_branch}"),
+    )
+}
+
 /// Format the dry-run plan: one line per resolved step, in execution
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
@@ -2703,6 +2716,38 @@ mod tests {
         assert!(should_delete_branch(false, 0, child_prs.len(), false));
     }
 
+    // BUG-1953: step 5 looks the lease up on `ship_branch`, so it must fall
+    // back to the cwd branch only when no PR head branch resolved.
+    // trace:BUG-1953 | ai:claude
+    #[test]
+    fn bug_1953_ship_branch_falls_back_to_cwd_branch_only_without_a_pr_branch() {
+        let (branch, _, _) = ship_branch_context("task-9-work", None, &[]);
+        assert_eq!(branch, "task-9-work", "no PR resolved: use the cwd branch");
+
+        let empty_head = crate::forge::ChangeRef {
+            id: 7,
+            url: String::new(),
+            branch: String::new(),
+            base: "main".to_string(),
+            title: None,
+        };
+        let (branch, _, _) = ship_branch_context("task-9-work", Some(&empty_head), &[]);
+        assert_eq!(
+            branch, "task-9-work",
+            "PR without a head branch: use the cwd branch"
+        );
+
+        let head = crate::forge::ChangeRef {
+            branch: "task-123-work".to_string(),
+            ..empty_head
+        };
+        let (branch, _, _) = ship_branch_context("main", Some(&head), &[]);
+        assert_eq!(
+            branch, "task-123-work",
+            "PR head branch wins over the cwd branch"
+        );
+    }
+
     #[test]
     fn explicit_stacked_child_pr_still_protects_source_branch() {
         let target = crate::forge::ChangeRef {
@@ -3841,6 +3886,17 @@ mod tests {
             ending,
             "lease 01abc (scope TASK-9, role unrecorded, worktree /dummy/aida-worktrees/aida-task-9)"
         );
+    }
+
+    // trace:BUG-1953.ac81b0b1 | ai:claude
+    #[test]
+    fn bug_1953_step5_no_lease_messages_name_the_ship_branch() {
+        let (line, detail) = step5_no_lease_messages("task-123-work");
+        assert_eq!(
+            line,
+            "  step 5: no AIDA lease for branch task-123-work — nothing to clean up"
+        );
+        assert_eq!(detail, "no lease for branch task-123-work");
     }
 
     #[test]
