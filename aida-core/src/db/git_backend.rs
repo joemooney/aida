@@ -633,9 +633,9 @@ impl GitBackend {
             let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
         }
         // Don't make an empty commit if nothing was actually staged.
-        let staged = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&self.root)
+        // Store git goes through the hardened host builder (TASK-1775).
+        // trace:TASK-1775 | ai:claude
+        let staged = crate::git_ops::host_git_command(&self.root)
             .args(["diff", "--cached", "--quiet"])
             .status()
             .map(|s| !s.success()) // non-zero exit means there ARE staged changes

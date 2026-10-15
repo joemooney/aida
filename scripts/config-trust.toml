@@ -779,3 +779,15 @@ required_tools = "policy"
 [readers."aida-cli-lib/src/regen/score.rs"]
 channels = ["trusted"]
 sites = 1
+
+# Main-worktree policy copy shared by all sibling occupancy callers. This
+# is still committable policy, not the trusted executable/credential channel.
+# trace:TASK-1607 | ai:codex
+[readers."aida-cli-lib/src/seat_occupancy/config.rs"]
+channels = ["worktree"]
+sites = 1
+
+[keys.worktree.seat_occupancy]
+single_seats = "policy"
+takeover_grace_secs = "policy"
+inspection = "policy"

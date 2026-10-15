@@ -1368,11 +1368,18 @@ impl LiveAidaPaths {
     }
 
     /// Whether `exe` (as written in a driver) names a stable live path.
+    /// TASK-1769: both sides are compared canonically as well as raw, so a
+    /// driver written through a symlinked `$HOME`, or through any other link
+    /// that resolves to the live binary, is not reported as stale. A path that
+    /// cannot be resolved (gone, or never on this host) compares raw only.
+    // trace:TASK-1769 | ai:claude
     pub(crate) fn names(&self, exe: &Path) -> bool {
+        let canonical = |p: &Path| p.canonicalize().ok();
+        let exe_canonical = canonical(exe);
         [self.link.as_deref(), self.live.as_deref()]
             .into_iter()
             .flatten()
-            .any(|p| p == exe)
+            .any(|p| p == exe || (exe_canonical.is_some() && canonical(p) == exe_canonical))
     }
 }
 
