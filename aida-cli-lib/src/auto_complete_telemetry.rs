@@ -490,8 +490,12 @@ mod bug_1649_telemetry_path_tests {
         ]
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn bug_1649_telemetry_logs_honour_aida_home() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let aida_home = tempfile::tempdir().unwrap();
         let _env = EnvVarsGuard::set(&[
@@ -503,8 +507,12 @@ mod bug_1649_telemetry_path_tests {
         }
     }
 
+    // trace:TASK-1748 | ai:antigravity
     #[test]
     fn bug_1649_telemetry_logs_unchanged_without_aida_home() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let home = tempfile::tempdir().unwrap();
         let _env = EnvVarsGuard::apply(&[
             ("HOME", Some(home.path().to_str().unwrap())),
