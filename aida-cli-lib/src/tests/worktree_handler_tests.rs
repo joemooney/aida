@@ -497,7 +497,10 @@ fn spec_worktree_core_ignores_worktreeless_lease_and_rejects_empty_path() {
         },
     )
     .expect("a claim lease must not block creating the worktree");
-    assert!(minted.get(), "the worktree must be minted, not the claim re-entered");
+    assert!(
+        minted.get(),
+        "the worktree must be minted, not the claim re-entered"
+    );
     assert!(out.created);
     assert_eq!(
         out.path,
