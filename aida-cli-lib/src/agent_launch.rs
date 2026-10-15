@@ -1171,7 +1171,12 @@ pub(crate) fn agent_resume_ended(
     // --resume`, the TTY picker, the `--bg` path) funnels through here, so a
     // contained parent is enforced HERE — before the session/binary checks
     // and any side effect. trace:BUG-2151 | ai:claude
-    let config = agent_resume_launch_config(&entry.agent_type, native_session_id, resume_prompt)?;
+    let config = agent_resume_launch_config(
+        &entry.agent_type,
+        &entry.worktree_path,
+        native_session_id,
+        resume_prompt,
+    )?;
     verify_agent_native_session_available(
         &entry.agent_type,
         &entry.worktree_path,
@@ -1235,10 +1240,12 @@ pub(crate) fn agent_resume_ended(
 /// parent (`AIDA_CONTAINED`, strict parse) a claude session resumes with the
 /// same contained posture (sandbox settings, `AIDA_CONTAINED=1` kept on the
 /// child) and codex/agy are refused; otherwise the resume is uncontained as
-/// before.
+/// before. The write roots are the resumed agent's own `worktree` (where the
+/// child runs), never the launcher's cwd.
 // trace:BUG-2151 | ai:claude
 pub(crate) fn agent_resume_launch_config(
     agent_type: &str,
+    worktree: &std::path::Path,
     native_session_id: &str,
     resume_prompt: &str,
 ) -> Result<AgentLaunchConfig> {
@@ -1258,7 +1265,10 @@ pub(crate) fn agent_resume_launch_config(
     if session::aida_contained_env()? && agent_type == "claude" {
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
-        config.default_args = tool_contained_flags("claude");
+        // The child runs in `worktree`, so its write boundary is that
+        // worktree — not the launcher's cwd (`tool_contained_flags` would
+        // resolve the parent's git root). trace:BUG-2151 | ai:claude
+        config.default_args = session::claude_contained_flags_for(worktree);
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(

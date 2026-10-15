@@ -271,8 +271,13 @@ fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
 #[test]
 fn resume_config_under_a_contained_parent_contains_claude() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
-    let cfg =
-        crate::agent_launch::agent_resume_launch_config("claude", "018f-session", "go").unwrap();
+    let cfg = crate::agent_launch::agent_resume_launch_config(
+        "claude",
+        &std::env::current_dir().unwrap(),
+        "018f-session",
+        "go",
+    )
+    .unwrap();
     assert!(cfg.contained, "a resumed claude child must be contained");
     assert!(crate::agent_launch::is_contained_launch(&cfg));
     assert!(
@@ -294,7 +299,13 @@ fn resume_config_under_a_contained_parent_contains_claude() {
 fn resume_config_without_a_contained_parent_is_unchanged() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     for t in ["claude", "codex", "antigravity"] {
-        let cfg = crate::agent_launch::agent_resume_launch_config(t, "sid", "go").unwrap();
+        let cfg = crate::agent_launch::agent_resume_launch_config(
+            t,
+            &std::env::current_dir().unwrap(),
+            "sid",
+            "go",
+        )
+        .unwrap();
         assert!(!cfg.contained, "{t}");
         assert!(!cfg.default_args.iter().any(|a| a == "--settings"), "{t}");
     }
@@ -342,4 +353,43 @@ fn agent_resume_under_a_malformed_aida_contained_fails_closed() {
     let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("ture"))]);
     let err = crate::agent_launch::agent_resume_in(&root, "codex-impl-3").unwrap_err();
     assert!(format!("{err:#}").contains("not recognised"), "{err:#}");
+}
+
+/// The value following `--settings` in `args`.
+fn settings_value(args: &[String]) -> String {
+    args.windows(2)
+        .find(|w| w[0] == "--settings")
+        .map(|w| w[1].clone())
+        .unwrap_or_else(|| panic!("no --settings in {args:?}"))
+}
+
+/// Round-2 review: the resumed child runs in the agent's recorded worktree,
+/// so its contained write roots must be THAT worktree, not the launcher's cwd.
+// trace:BUG-2151 | ai:claude
+#[test]
+fn resumed_contained_child_write_roots_follow_its_worktree_not_the_launcher_cwd() {
+    let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = std::fs::canonicalize(tmp.path()).unwrap().join("proj-wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+
+    let cfg =
+        crate::agent_launch::agent_resume_launch_config("claude", &worktree, "018f-session", "go")
+            .unwrap();
+    let settings = settings_value(&cfg.default_args);
+    let expected = settings_value(&crate::session::claude_contained_flags_for(&worktree));
+    assert_eq!(
+        settings, expected,
+        "resumed child's write roots must be its worktree"
+    );
+    assert!(
+        settings.contains(&*worktree.to_string_lossy()),
+        "worktree {} missing from {settings}",
+        worktree.display()
+    );
+    let launcher = settings_value(&crate::session::claude_contained_flags());
+    assert_ne!(
+        settings, launcher,
+        "resumed child must not inherit the launcher cwd's write roots"
+    );
 }
