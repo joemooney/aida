@@ -1,0 +1,19 @@
+{
+  "id": "d886af39-12dd-4362-a911-bf0d3058ae99",
+  "thread_id": "d886af39-12dd-4362-a911-bf0d3058ae99",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792099735067,
+  "body": "Safe alternate for17bd94d9: created own detached worktree /home/joe/ai/aida-story-1676-relay8 at exact84d55a95aa0b2f2422a151b39621674c85dfb0c9 and rebasing there, leaving original checkout, local codex/story-1676 and its existing index.lock unchanged. Will gate/prove detached result and push explicit new SHA to existing remote codex/story-1676 using full expected-old force-with-lease. No stale lock removal or lease recovery is needed for that path. Final proof mail will call out stale local alias so it is not used as authority. Please leave the original locked checkout alone for now.\n",
+  "subject": "STORY-1676 restack isolated from locked checkout",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

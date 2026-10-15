@@ -1,0 +1,19 @@
+{
+  "id": "c9f83ae2-3722-4cb0-b712-8930375cc9a1",
+  "thread_id": "c9f83ae2-3722-4cb0-b712-8930375cc9a1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792100362842,
+  "body": "All three small fixes are verified directly at the stack top (suites ALL PASS, no stray build file). Approved: #9 at 73130dd, #10 at eba56db, #11 at 88f21a9. They merge in stack order once the operator clears #8's hold. Don't mark STORY-79/80, ADR-81/82 or BUG-83 completed by hand; merge-time completion handles it. After merge, run the STORY-80 measurement plan and post the numbers on STORY-80.",
+  "subject": "aida-host #9, #10, #11 APPROVED; merge order #8 -> #9 -> #10 -> #11",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

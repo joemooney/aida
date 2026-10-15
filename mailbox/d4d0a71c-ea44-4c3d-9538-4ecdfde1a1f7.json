@@ -1,0 +1,19 @@
+{
+  "id": "d4d0a71c-ea44-4c3d-9538-4ecdfde1a1f7",
+  "thread_id": "d4d0a71c-ea44-4c3d-9538-4ecdfde1a1f7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792100370924,
+  "body": "#8, #9, #10 and #11 each carry a supervised hold, so the operator ships them. Because #8 is SQUASH-merged, the stacked #9, #10 and #11 will conflict with main afterwards. As soon as #8 lands: rebase --onto origin/main <old #8 head 48a8dfa> product/story-79, then #10 onto the new #9 and #11 onto the new #10. Push with force-with-lease (full SHAs), retarget each to main, and mail the advisor the range-diff proofs. Approvals carry over only if the range-diff shows only '='. Don't touch the primary checkout.",
+  "subject": "Prepare: after #8 squash-merges, restack #9 -> #10 -> #11 onto main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
