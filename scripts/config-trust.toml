@@ -338,6 +338,12 @@ sites = 4
 channels = ["home"]
 sites = 1
 
+# BUG-2131: [contained] enable from the main checkout, read only to decide
+# whether old-git store git refuses; it can only make AIDA refuse more.
+[readers."aida-core/src/store_hooks.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/scaffolding/mod.rs"]
 channels = ["other-file"]
 sites = 1
@@ -759,3 +765,15 @@ confirm_bypass = "policy" # can only tighten; malformed means "on"
 [keys.trusted.review]
 run_acceptance_commands = "policy" # presence probed for a display note
 acceptance_command_allow = "policy"
+
+# Main-worktree policy copy shared by all sibling occupancy callers. This
+# is still committable policy, not the trusted executable/credential channel.
+# trace:TASK-1607 | ai:codex
+[readers."aida-cli-lib/src/seat_occupancy/config.rs"]
+channels = ["worktree"]
+sites = 1
+
+[keys.worktree.seat_occupancy]
+single_seats = "policy"
+takeover_grace_secs = "policy"
+inspection = "policy"

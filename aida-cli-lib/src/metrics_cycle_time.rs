@@ -708,10 +708,8 @@ struct BatchBlobs {
 
 impl BatchBlobs {
     fn new(store_path: &Path) -> Result<Self> {
-        use std::process::{Command, Stdio};
-        let mut child = Command::new("git")
-            .arg("-C")
-            .arg(store_path)
+        use std::process::Stdio;
+        let mut child = aida_core::git_ops::host_git_command(store_path)
             .args(["cat-file", "--batch"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

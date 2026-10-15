@@ -1115,6 +1115,10 @@ fn write_permission_posture(
     tier: ConfigPermissionTier,
     scope: PermissionPostureScope,
 ) -> Result<PermissionPostureWriteResult> {
+    // trace:BUG-2131 | ai:claude
+    if tier == ConfigPermissionTier::Contained {
+        aida_core::git_ops::ensure_git_supports_contained()?;
+    }
     let paths = permission_posture_paths(project_root, scope)?;
     let mut edited_paths = Vec::new();
     let mut backup_paths = Vec::new();

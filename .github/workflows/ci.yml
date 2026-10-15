@@ -556,6 +556,10 @@ jobs:
       - name: Verify pure-move slice stack fixtures
         run: python3 -m unittest discover scripts/split-lib/tests/
 
+      # BUG-2135: sccache tmpdir detection, restart hint, and pre-start fixtures. trace:BUG-2135 | ai:antigravity
+      - name: Sccache tmpdir detection fixtures
+        run: python3 -m unittest tests/test_bug_2135_sccache_tmpdir.py
+
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS

@@ -290,37 +290,14 @@ fn identity_scheme(identity: &str) -> &str {
     identity.split_once(':').map(|(s, _)| s).unwrap_or("")
 }
 
-/// Scheme-prefixed kernel start identity of `pid`, or `None` when it cannot be
-/// read. Linux reads the `starttime` field (clock ticks since boot) from the
-/// process stat file, which is exact and never changes for a process's life.
+/// Scheme-prefixed kernel start identity of `pid` (`linux-starttime:<ticks>`
+/// on Linux, `sysinfo-start:<rfc3339>` elsewhere), or `None` when it cannot
+/// be read. The implementation lives in the canonical liveness module
+/// (TASK-1750) so `process_identity_is_alive` can read this format too; this
+/// re-export keeps the public path and the exact behaviour.
 // trace:TASK-1484 | ai:claude
-#[cfg(target_os = "linux")]
-pub fn live_start_identity(pid: u32) -> Option<String> {
-    if pid == 0 {
-        return None;
-    }
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    parse_proc_stat_starttime(&stat).map(|ticks| format!("linux-starttime:{ticks}"))
-}
-
-/// Best effort elsewhere: sysinfo's start time (seconds resolution).
-// trace:TASK-1484 | ai:claude
-#[cfg(not(target_os = "linux"))]
-pub fn live_start_identity(pid: u32) -> Option<String> {
-    if pid == 0 {
-        return None;
-    }
-    crate::liveness::process_start_identity(pid).map(|t| format!("sysinfo-start:{t}"))
-}
-
-/// Field 22 (`starttime`) of a Linux process stat line. The command name
-/// (field 2) is parenthesised and may itself contain spaces or `)`, so parsing
-/// resumes after the LAST `)`; the next token is field 3.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn parse_proc_stat_starttime(stat: &str) -> Option<u64> {
-    let rest = &stat[stat.rfind(')')? + 1..];
-    rest.split_whitespace().nth(22 - 3)?.parse().ok()
-}
+// trace:TASK-1750 | ai:claude
+pub use crate::liveness::process_start_identity_exact as live_start_identity;
 
 /// A read of the sidecar plus the owner verdict and any deadline overrun.
 // trace:TASK-1484 | ai:claude
@@ -564,8 +541,29 @@ pub(crate) fn write_lock_info_at(
             .map(|()| true)
             .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        // BUG-1929: the record is advisory (SQLite's locking arbitrates). In a
+        // contained session the cache directory is read-only while the
+        // database files are writable, so the record cannot be created; the
+        // write proceeds unclaimed instead of failing.
+        // trace:BUG-1929 | ai:claude
+        Err(err) if lock_info_dir_read_only(&err) => Ok(false),
         Err(err) => Err(err)
             .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
+    }
+}
+
+// trace:BUG-1929 | ai:claude
+fn lock_info_dir_read_only(err: &std::io::Error) -> bool {
+    if err.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        err.raw_os_error() == Some(libc::EROFS)
+    }
+    #[cfg(not(unix))]
+    {
+        false
     }
 }
 
@@ -1060,14 +1058,6 @@ mod tests {
             reclaim_dead_lock_info(&path).unwrap(),
             LockInfoReclaim::Absent
         );
-    }
-
-    #[test]
-    fn proc_stat_starttime_parses_field_22() {
-        // Command name with spaces and a closing paren; starttime = 987654.
-        let stat = "4242 (aida (tick) x) S 1 4242 4242 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 987654 1000 50";
-        assert_eq!(parse_proc_stat_starttime(stat), Some(987_654));
-        assert_eq!(parse_proc_stat_starttime("garbage"), None);
     }
 
     #[cfg(target_os = "linux")]
