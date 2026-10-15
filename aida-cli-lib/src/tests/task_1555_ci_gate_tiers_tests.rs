@@ -204,3 +204,105 @@ fn task_1555_runner_mirrors_cis_declared_shell() {
          shell; update the runner, or the claim is false."
     );
 }
+
+/// The `[derived]` table of `scripts/ci-gate-tiers.toml`, as `(local, source)`.
+fn derived_gates(root: &Path) -> Vec<(String, String)> {
+    let table: toml::Value = std::fs::read_to_string(root.join("scripts/ci-gate-tiers.toml"))
+        .expect("ci-gate-tiers.toml must exist")
+        .parse()
+        .expect("ci-gate-tiers.toml must parse");
+    table
+        .get("derived")
+        .and_then(|v| v.as_table())
+        .map(|t| {
+            t.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// TASK-1763: `make check-ci-compile` must exist, be wired to the runner's
+/// `compile` tier, and that tier must derive from a CI step that is still there.
+/// Two PRs passed `make check-ci-fast` after merging main and then failed CI
+/// with E0063 because nothing pre-push compiled the tests; deleting this tier
+/// (or renaming `Run tests` under it) must fail here, not quietly bring that
+/// gap back.
+// trace:TASK-1763 | ai:claude
+#[test]
+fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
+    let root = workspace_root();
+
+    let derived = derived_gates(&root);
+    let compile = derived
+        .iter()
+        .find(|(name, _)| name == "Compile tests")
+        .unwrap_or_else(|| {
+            panic!(
+                "scripts/ci-gate-tiers.toml [derived] must carry \"Compile tests\" = \"Run tests\"; \
+                 without it `make check-ci-compile` compiles nothing and reports success. \
+                 Found: {derived:?}"
+            )
+        });
+    assert_eq!(
+        compile.1, "Run tests",
+        "the compile gate must derive from CI's `Run tests` step"
+    );
+
+    let ci_names = ci_build_gate_names(&root);
+    let (tiered, skipped) = classified_gate_names(&root);
+    for (name, source) in &derived {
+        assert!(
+            ci_names.contains(source),
+            "derived gate {name:?} derives from {source:?}, which is no longer a step in \
+             CI's Build job; a renamed CI step must be renamed in [derived] too"
+        );
+        assert!(
+            !ci_names.contains(name) && !tiered.contains(name) && !skipped.contains(name),
+            "derived gate {name:?} shares a name with a CI step or a classified gate"
+        );
+    }
+
+    // The derivation in the runner understands exactly one shape: a single
+    // `cargo test ...` command. Pin that here so CI moving to another runner
+    // fails in CI, not only on the next local `make check-ci-compile`.
+    let workflow: serde_yaml::Value = serde_yaml::from_str(
+        &std::fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci.yml readable"),
+    )
+    .expect("ci.yml parses");
+    let run_tests = workflow["jobs"]["build"]["steps"]
+        .as_sequence()
+        .expect("jobs.build.steps")
+        .iter()
+        .find(|step| step.get("name").and_then(|n| n.as_str()) == Some("Run tests"))
+        .and_then(|step| step.get("run"))
+        .and_then(|run| run.as_str())
+        .expect("CI's `Run tests` step must have a run body")
+        .trim()
+        .to_string();
+    assert!(
+        run_tests.starts_with("cargo test ")
+            && !run_tests.contains('\n')
+            && !["|", "&&", ";", "--profile"]
+                .iter()
+                .any(|bad| run_tests.contains(bad)),
+        "CI's `Run tests` is `{run_tests}`, a shape derive_compile_command in \
+         scripts/check-ci-gates.py does not reshape; update both together"
+    );
+
+    let makefile = std::fs::read_to_string(root.join("Makefile")).expect("Makefile readable");
+    assert!(
+        makefile.contains("check-ci-compile:")
+            && makefile.contains("scripts/check-ci-gates.py --tier compile"),
+        "the Makefile must define `check-ci-compile` running `check-ci-gates.py --tier compile`"
+    );
+
+    let runner = std::fs::read_to_string(root.join("scripts/check-ci-gates.py"))
+        .expect("check-ci-gates.py must exist");
+    assert!(
+        runner.contains(r#"DERIVED_TIERS = ("compile",)"#)
+            && runner.contains(r#"COMPILE_LOCAL_ARGS = ["--no-run", "--profile", "agent"]"#),
+        "the runner must keep the `compile` derived tier and compile with \
+         `--no-run --profile agent` (no test runs; the profile every worktree builds)"
+    );
+}

@@ -34,6 +34,7 @@ the PATH links once. Common checks:
 
 ```bash
 make check-ci-fast        # PRE-PUSH GATE: every CI gate needing no build (~90s)
+make check-ci-compile     # after merging main into a branch: compile all tests, run none
 aida dev build            # build + smoke test (+ promote from clean main)
 cargo test --workspace
 make check-ci             # the rest of CI's gates, locally, in CI's order
