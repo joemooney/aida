@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-14T03:32:51.462439781Z
+modified_at: 2026-10-15T00:21:11.825433811Z
 req_type: Bug
 tags:
 - contained
@@ -273,6 +273,12 @@ comments:
   content: Commit 014a28d3f7 references this requirement
   created_at: 2026-10-14T03:32:51.462439781Z
   modified_at: 2026-10-14T03:32:51.462439781Z
+- id: 01a13cef-3411-7b13-99c8-c107ba97f8b5
+  author: joe
+  content: 'ADVISOR (STRICT review r3 at f04d74ecce): security APPROVE, but FUNCTIONAL FAIL in a real sandbox. Under bwrap''s user namespace, root-owned ancestors (/ and /home) show up as the overflow uid 65534, so store_hooks::establish''s ancestor-ownership check fails. host_git_command then swaps in the refusal shim, and contained store writes are refused with a misleading ''store worktree detached''. A control run without the <main>/.git denyWrite fails the same way. RULING: accept the overflow uid (read from /proc/sys/kernel/overflowuid) as an ancestor owner ONLY when (1) the process is in a non-identity user namespace (/proc/self/uid_map is not ''0 0 4294967295''), and (2) the directory meets the same mode rule as root-owned ancestors (no g+w/o+w unless sticky). The user-owned components must still be owned by the user. The refusal must name the failed check rather than ''detached''. Tests: unit tests for the uid_map parsing and the accept/reject matrix; then re-run real_claude_contained_session_claims_and_comments with AIDA_TEST_REAL_CLAUDE=1 against the new head, and it must PASS before merge.'
+  created_at: 2026-10-15T00:21:11.825433811Z
+  modified_at: 2026-10-15T00:21:11.825433811Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
