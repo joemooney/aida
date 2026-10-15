@@ -230,3 +230,116 @@ fn an_operator_posture_flag_still_overrides_the_config_knob() {
         .windows(2)
         .any(|w| w == ["--permission-mode", "acceptEdits"]));
 }
+
+// ── (3) #2672 round 1: resume paths ─────────────────────────────────────────
+
+#[test]
+fn contained_parent_refuses_allow_dangerously_skip_permissions_passthrough() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+    let err = claude_launch(
+        &root,
+        None,
+        false,
+        vec!["--allow-dangerously-skip-permissions".to_string()],
+    )
+    .expect_err("--allow-dangerously-skip-permissions must not escape containment");
+    assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
+}
+
+/// Register an ended, resumable agent of `agent_type` named `name`.
+fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
+    let dead_pid = 4_294_967_290u32;
+    crate::agent_registry::register_spawned_agent(
+        root,
+        agent_type,
+        dead_pid,
+        Some("implementer".into()),
+        None,
+        root.into(),
+        None,
+        Some(name.into()),
+        Some("018f-session".into()),
+        None,
+        None,
+    )
+    .unwrap();
+    crate::agent_registry::mark_agent_ended(root, agent_type, dead_pid).unwrap();
+}
+
+#[test]
+fn resume_config_under_a_contained_parent_contains_claude() {
+    let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
+    let cfg =
+        crate::agent_launch::agent_resume_launch_config("claude", "018f-session", "go").unwrap();
+    assert!(cfg.contained, "a resumed claude child must be contained");
+    assert!(crate::agent_launch::is_contained_launch(&cfg));
+    assert!(
+        cfg.default_args.iter().any(|a| a == "--settings"),
+        "{:?}",
+        cfg.default_args
+    );
+    assert!(
+        cfg.default_args
+            .windows(2)
+            .any(|w| w == ["--resume", "018f-session"]),
+        "{:?}",
+        cfg.default_args
+    );
+    assert!(!has_bypass(&cfg.default_args), "{:?}", cfg.default_args);
+}
+
+#[test]
+fn resume_config_without_a_contained_parent_is_unchanged() {
+    let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for t in ["claude", "codex", "antigravity"] {
+        let cfg = crate::agent_launch::agent_resume_launch_config(t, "sid", "go").unwrap();
+        assert!(!cfg.contained, "{t}");
+        assert!(!cfg.default_args.iter().any(|a| a == "--settings"), "{t}");
+    }
+}
+
+#[test]
+fn agent_new_resume_under_a_contained_parent_refuses_codex_and_agy() {
+    for (agent_type, name) in [("codex", "codex-impl-1"), ("antigravity", "agy-impl-1")] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, home) = project(tmp.path(), false);
+        ended_agent(&root, agent_type, name);
+        let _env =
+            EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+        let resume = crate::AgentResumeOptions::new(false, Some(name.to_string()), false, false);
+        let err = crate::agent_launch::maybe_handle_agent_resume_or_duplicate(
+            &root, agent_type, None, None, &resume,
+        )
+        .expect_err("--resume under a contained parent must refuse codex/agy");
+        assert!(
+            format!("{err:#}").contains("cannot run an AIDA-contained session"),
+            "{agent_type}: {err:#}"
+        );
+    }
+}
+
+#[test]
+fn agent_resume_under_a_contained_parent_refuses_codex() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    ended_agent(&root, "codex", "codex-impl-2");
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+    let err = crate::agent_launch::agent_resume_in(&root, "codex-impl-2")
+        .expect_err("`agent resume` under a contained parent must refuse codex");
+    assert!(
+        format!("{err:#}").contains("cannot run an AIDA-contained session"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn agent_resume_under_a_malformed_aida_contained_fails_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    ended_agent(&root, "codex", "codex-impl-3");
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("ture"))]);
+    let err = crate::agent_launch::agent_resume_in(&root, "codex-impl-3").unwrap_err();
+    assert!(format!("{err:#}").contains("not recognised"), "{err:#}");
+}

@@ -1118,6 +1118,13 @@ pub(crate) fn agent_pause(agent: &str, reason: &str, resets: Option<&str>) -> Re
 pub(crate) fn agent_resume(agent: &str) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    agent_resume_in(&project_root, agent)
+}
+
+/// `aida agent resume` against an explicit project root (testable seam).
+// trace:BUG-2151 | ai:claude
+pub(crate) fn agent_resume_in(project_root: &std::path::Path, agent: &str) -> Result<()> {
+    let project_root = project_root.to_path_buf();
     match agent_registry::resume_agent(&project_root, agent) {
         Ok(entry) => {
             let identity = entry
@@ -1158,17 +1165,19 @@ pub(crate) fn agent_resume_ended(
             entry.name.as_deref().unwrap_or(entry.id.as_str())
         )
     })?;
+    let resume_prompt =
+        "Read the fresh AIDA resume context first: cat \"$AIDA_AGENT_CONTEXT_FILE\"";
+    // BUG-2151: every resume entry point (`agent resume`, `agent new
+    // --resume`, the TTY picker, the `--bg` path) funnels through here, so a
+    // contained parent is enforced HERE — before the session/binary checks
+    // and any side effect. trace:BUG-2151 | ai:claude
+    let config = agent_resume_launch_config(&entry.agent_type, native_session_id, resume_prompt)?;
     verify_agent_native_session_available(
         &entry.agent_type,
         &entry.worktree_path,
         native_session_id,
     )?;
-    let binary_name = match entry.agent_type.as_str() {
-        "claude" => "claude",
-        "codex" => "codex",
-        "antigravity" => "agy",
-        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
-    };
+    let binary_name = config.binary;
     let binary = find_executable_on_path(binary_name).ok_or_else(|| {
         anyhow::anyhow!(
             "`{}` is not on PATH — install {} or activate the environment that provides it",
@@ -1176,20 +1185,6 @@ pub(crate) fn agent_resume_ended(
             entry.agent_type
         )
     })?;
-    let resume_prompt =
-        "Read the fresh AIDA resume context first: cat \"$AIDA_AGENT_CONTEXT_FILE\"";
-    let config = AgentLaunchConfig {
-        agent_type: match entry.agent_type.as_str() {
-            "claude" => "claude",
-            "codex" => "codex",
-            "antigravity" => "antigravity",
-            _ => unreachable!(),
-        },
-        binary: binary_name,
-        default_args: agent_resume_args(&entry.agent_type, native_session_id, resume_prompt)?,
-        prompt_style: AgentPromptStyle::Positional,
-        contained: false,
-    };
     let plan = AgentLaunchPlan {
         project_root: project_root.to_path_buf(),
         launch_cwd: entry.worktree_path.clone(),
@@ -1234,6 +1229,45 @@ pub(crate) fn agent_resume_ended(
         true,
         false,
     )
+}
+
+/// BUG-2151: the launch config for resuming an ended agent. Under a contained
+/// parent (`AIDA_CONTAINED`, strict parse) a claude session resumes with the
+/// same contained posture (sandbox settings, `AIDA_CONTAINED=1` kept on the
+/// child) and codex/agy are refused; otherwise the resume is uncontained as
+/// before.
+// trace:BUG-2151 | ai:claude
+pub(crate) fn agent_resume_launch_config(
+    agent_type: &str,
+    native_session_id: &str,
+    resume_prompt: &str,
+) -> Result<AgentLaunchConfig> {
+    let (agent_type, binary): (&'static str, &'static str) = match agent_type {
+        "claude" => ("claude", "claude"),
+        "codex" => ("codex", "codex"),
+        "antigravity" => ("antigravity", "agy"),
+        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
+    };
+    let mut config = AgentLaunchConfig {
+        agent_type,
+        binary,
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    if session::aida_contained_env()? && agent_type == "claude" {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
+        config.default_args = tool_contained_flags("claude");
+        config.contained = true;
+    }
+    config.default_args.extend(agent_resume_args(
+        agent_type,
+        native_session_id,
+        resume_prompt,
+    )?);
+    refuse_uncontained_child_of_contained_parent(&config)?;
+    Ok(config)
 }
 
 // trace:STORY-790 | ai:codex
@@ -1471,6 +1505,8 @@ pub(crate) fn split_posture_flags(
             ("--settings", true),
             ("--setting-sources", true),
             ("--dangerously-skip-permissions", false),
+            // trace:BUG-2151 | ai:claude
+            ("--allow-dangerously-skip-permissions", false),
         ],
         "codex" => &[
             ("--sandbox", true),
