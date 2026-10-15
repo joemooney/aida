@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-15T07:23:28.071007157Z
+modified_at: 2026-10-15T18:13:17.793785299Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -223,6 +223,12 @@ comments:
   created_at: 2026-10-15T07:23:28.071007157Z
   modified_at: 2026-10-15T07:23:28.071007157Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a140c4-bd61-7c82-9504-68e272dd4bd6
+  author: joe
+  content: 'Main merged into PR #2485 head (aa7ac578a1 -> 6475cfba9b), mechanical only. Two files conflicted, and both resolve the same way. In aida-cli-lib/src/agent_launch.rs (session start --launch, and agent new / prepare_agent_launch_with_cwd) I kept the BUG-1918 review_authority::as_launcher wrappers and added main''s new trailing self_claim argument to session_start (!*launch and false). In aida-cli-lib/src/queue_cmd.rs (handle_queue_work) I kept the as_launcher wrapper (used when not no_launch) and added self_claim = queue_work_self_claim(no_launch). self_claim (BUG-2010) only controls agent-registry attribution, so it is independent of the review-authority ledger. In the conflicted files, diff aa7ac578a1..6475cfba9b is identical (ignoring indentation) to main''s own base..main diff, so it is base-only. Gates: check-ci-fast and check-ci-compile pass. Targeted lib tests pass: review_authority, bug_1918, verdict, approv, bug_2010, seat, queue_work, session_start, agent_launch. One known flake from main: run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it failed 1 of 9 runs, in a file this branch does not touch.'
+  created_at: 2026-10-15T18:13:17.793785299Z
+  modified_at: 2026-10-15T18:13:17.793785299Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
