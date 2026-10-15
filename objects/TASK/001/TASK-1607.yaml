@@ -18,12 +18,12 @@ description: |
 
   ## Bounds
   Guided lane only (no unattended drain, no --auto-complete). Continue on branch story-1485 (merge current origin/main, preserving sketch commits edeac57b63/faa07e4acb; no reset, no force-push). make check-ci-fast before every push. No merge or merge-hold clearance by the implementer; independent advisor review required.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-15T15:02:45.636871300Z
+modified_at: 2026-10-15T15:26:38.948296998Z
 req_type: Task
 tags:
 - guided-lane
@@ -789,6 +789,11 @@ comments:
   created_at: 2026-10-15T15:02:45.636871300Z
   modified_at: 2026-10-15T15:02:45.636871300Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a1402c-2b6b-7561-880a-d8d38f907af1
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 3d85bbd), but completion is held at Done: unresolved BlockedBy EPIC-76 (Draft). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted). The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1607 --since 3d85bbd^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1607 --status completed`. (merge sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7)'
+  created_at: 2026-10-15T15:26:38.955941356Z
+  modified_at: 2026-10-15T15:26:38.955941356Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
@@ -867,6 +872,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1402c-2b6b-7561-880a-d8c3575fff37
+  author: aida-auto-bump
+  timestamp: 2026-10-15T15:26:38.955922633Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: guided
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
