@@ -125,7 +125,7 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     let verdict_path = tmp.path().join("verdict.json");
     let prompt = "/aida-review --pr 59";
 
-    run_standalone_reviewer(
+    let result = run_standalone_reviewer(
         &project,
         59,
         QueueWorkLaunch::Fresh("019e0000-0000-7000-8000-0000000000bb".to_string()),
@@ -140,8 +140,16 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         &verdict_path,
         false,
         launch_vendor,
-    )
-    .expect("standalone reviewer launch with a reachable mock must succeed");
+    );
+    // BUG-2149: the mock records no verdict, so the launch reports that —
+    // but it must have got as far as spawning the vendor.
+    // trace:BUG-2149 | ai:claude
+    if let Err(e) = result {
+        assert!(
+            format!("{e:#}").contains("verifiable verdict"),
+            "the launch must fail only for the missing verdict: {e:#}"
+        );
+    }
 
     let argv = read_captured_argv(&capture);
     assert_eq!(

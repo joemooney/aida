@@ -1512,6 +1512,238 @@ pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     archive_round_by_sha(path, &obj)
 }
 
+/// BUG-2149: what [`collect_standalone_verdict`] found and where it put it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectedVerdict {
+    /// The verdict now present at the launcher's canonical PR-keyed path.
+    pub verdict: RecordedVerdict,
+    /// Spec-keyed records (upper-case ids) written into the launcher project.
+    pub spec_records: Vec<String>,
+    /// True when the canonical PR-keyed file was written by the collector
+    /// rather than in place by the reviewer.
+    pub collected_from_worktree: bool,
+}
+
+/// BUG-2149: one verdict file the reviewer wrote during this run.
+#[derive(Debug, Clone)]
+pub struct VerdictCandidate {
+    /// Where it was found.
+    pub path: PathBuf,
+    /// The raw JSON body.
+    pub body: String,
+    /// The parsed JSON object.
+    pub obj: serde_json::Map<String, serde_json::Value>,
+    /// The parsed verdict.
+    pub verdict: RecordedVerdict,
+    modified: std::time::SystemTime,
+}
+
+impl VerdictCandidate {
+    /// The grant that recorded this file (`release_grant.id`), when stamped.
+    pub fn recording_grant_id(&self) -> Option<&str> {
+        self.obj
+            .get("release_grant")
+            .and_then(|g| g.get("id"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+}
+
+/// BUG-2149: a verdict file modified at or after `since` (the reviewer's
+/// start), read as a candidate. A pre-existing file is never a candidate.
+fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    if modified < since {
+        return None;
+    }
+    let body = std::fs::read_to_string(path).ok()?;
+    let obj = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()?
+        .as_object()
+        .cloned()?;
+    let verdict = parse_recorded_verdict(&body).unwrap_or_default();
+    Some(VerdictCandidate {
+        path: path.to_path_buf(),
+        body,
+        obj,
+        verdict,
+        modified,
+    })
+}
+
+/// BUG-2149: the checks a collected verdict must pass, supplied by the caller
+/// (they need the forge and the seat-grant store, which this filesystem-only
+/// module does not touch).
+pub trait VerdictCollectionChecks {
+    /// Schema, PR number and reviewed commit. `Err(reason)` on any mismatch.
+    fn check_record(&self, candidate: &VerdictCandidate) -> Result<(), String>;
+    /// `Ok` only when `grant_id` is the child reviewer grant of this run —
+    /// never the launcher's own grant or the implementer's.
+    fn check_identity(&self, grant_id: &str) -> Result<(), String>;
+}
+
+/// BUG-2149: make a standalone reviewer's verdict visible from the LAUNCHER
+/// checkout, where `aida review verdict` and `aida pr ship` read.
+///
+/// A contained reviewer may only write inside its review worktree, so
+/// `aida review record` there lands `<worktree>/.aida/review-verdicts/<SPEC>.json`
+/// (and possibly `PR-N.json`), and the launcher's `canonical` file never appears.
+/// After the reviewer exits, the launcher collects from the files written
+/// AFTER `since` (the reviewer's start) in the worktree and the launcher:
+///
+/// - every candidate must pass [`VerdictCollectionChecks::check_record`];
+/// - a candidate stamped with a recording grant must pass
+///   [`VerdictCollectionChecks::check_identity`], and at least one must;
+/// - an unstamped candidate (the PR-keyed handshake) must agree with the
+///   identity-checked source on verdict and reviewed commit.
+///
+/// Any mismatch collects nothing and returns `Err(reason)`. On success the
+/// newest identity-checked record is written to `canonical` unless the
+/// reviewer already wrote it in place, and the spec-keyed records (`spec_ids`
+/// plus those the reviewer wrote) are mirrored into the launcher project
+/// unless the launcher already holds one written during this run.
+// trace:BUG-2149 | ai:claude
+pub fn collect_standalone_verdict(
+    launcher_root: &Path,
+    worktree: &Path,
+    canonical: &Path,
+    spec_ids: &[String],
+    since: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> Result<CollectedVerdict, String> {
+    let launcher_dir = launcher_root.join(".aida").join("review-verdicts");
+    let worktree_dir = worktree.join(".aida").join("review-verdicts");
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let separate = canon(&launcher_dir) != canon(&worktree_dir);
+    let canonical_name = canonical
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let is_change_key = |stem: &str| {
+        let up = stem.to_ascii_uppercase();
+        up.starts_with("PR-") || up.starts_with("MR-")
+    };
+    let mut spec_ids: Vec<String> = spec_ids
+        .iter()
+        .map(|s| s.trim().to_ascii_uppercase())
+        .filter(|s| !s.is_empty() && !is_change_key(s))
+        .collect();
+
+    // Candidates: worktree files of this run, then the launcher's own.
+    let mut worktree_specs: Vec<VerdictCandidate> = Vec::new();
+    let mut candidates: Vec<VerdictCandidate> = Vec::new();
+    if separate {
+        if let Ok(rd) = std::fs::read_dir(&worktree_dir) {
+            for entry in rd.flatten() {
+                let path = entry.path();
+                let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+                    continue;
+                };
+                let Some(stem) = name.strip_suffix(".json") else {
+                    continue;
+                };
+                if name.starts_with('.') {
+                    continue;
+                }
+                if is_change_key(stem) && name != canonical_name {
+                    continue;
+                }
+                let Some(c) = fresh_candidate(&path, since) else {
+                    continue;
+                };
+                if !is_change_key(stem) {
+                    let id = stem.to_ascii_uppercase();
+                    if !spec_ids.contains(&id) {
+                        spec_ids.push(id);
+                    }
+                    worktree_specs.push(c.clone());
+                }
+                candidates.push(c);
+            }
+        }
+    }
+    let canonical_in_place = fresh_candidate(canonical, since);
+    candidates.extend(canonical_in_place.clone());
+    for id in &spec_ids {
+        candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
+    }
+    if candidates.is_empty() {
+        return Err("the reviewer wrote no verdict file after it started".to_string());
+    }
+
+    for c in &candidates {
+        checks
+            .check_record(c)
+            .map_err(|why| format!("{}: {why}", c.path.display()))?;
+        if let Some(grant) = c.recording_grant_id() {
+            checks
+                .check_identity(grant)
+                .map_err(|why| format!("{}: {why}", c.path.display()))?;
+        }
+    }
+    let source = candidates
+        .iter()
+        .filter(|c| c.recording_grant_id().is_some())
+        .max_by_key(|c| c.modified)
+        .cloned()
+        .ok_or_else(|| {
+            "no verdict file carries the reviewer's recording grant, so its author cannot be \
+             verified"
+                .to_string()
+        })?;
+    for c in &candidates {
+        let same_sha = match (&c.verdict.reviewed_sha, &source.verdict.reviewed_sha) {
+            (Some(a), Some(b)) => same_reviewed_sha(a, b),
+            _ => false,
+        };
+        if c.verdict.kind != source.verdict.kind || !same_sha {
+            return Err(format!(
+                "{} disagrees with {} on the verdict or the reviewed commit",
+                c.path.display(),
+                source.path.display()
+            ));
+        }
+    }
+
+    // Mirror. Never overwrite a file written during this run.
+    let mut collected_from_worktree = false;
+    if canonical_in_place.is_none() {
+        write_verdict_atomic(canonical, &source.body)
+            .map_err(|e| format!("could not write {}: {e}", canonical.display()))?;
+        let _ = adopt_direct_write(canonical);
+        collected_from_worktree = true;
+    }
+    let mut spec_records = Vec::new();
+    for id in spec_ids {
+        let target = verdict_path(launcher_root, &id);
+        if fresh_candidate(&target, since).is_some() {
+            continue;
+        }
+        let body = worktree_specs
+            .iter()
+            .find(|c| {
+                c.path
+                    .file_stem()
+                    .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&id))
+            })
+            .map(|c| c.body.clone())
+            .unwrap_or_else(|| source.body.clone());
+        // Archive the round being replaced before overwriting it.
+        let _ = adopt_direct_write(&target);
+        write_verdict_atomic(&target, &body)
+            .map_err(|e| format!("could not write {}: {e}", target.display()))?;
+        let _ = adopt_direct_write(&target);
+        spec_records.push(id);
+    }
+
+    Ok(CollectedVerdict {
+        verdict: source.verdict,
+        spec_records,
+        collected_from_worktree,
+    })
+}
+
 /// TASK-1460: the marker that says the one-shot sidecar migration has run in
 /// a verdict directory. A dotfile with no `.json` extension, so every `*.json`
 /// walker of the directory is untouched by it.

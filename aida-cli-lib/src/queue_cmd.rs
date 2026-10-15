@@ -5953,6 +5953,16 @@ pub(crate) fn handle_queue_command(
                     }
                     if lookup.as_ref().is_some_and(|l| l.is_found()) || lookup_failed {
                         None
+                    } else if reviewer_pickup_keeps_pr_scope(role.as_deref())
+                        && !orchestrator_review_envelope_for_pr(pr)
+                    {
+                        // BUG-2150: an explicit `--role reviewer` pickup is a
+                        // REVIEW of PR-N, never an implementer pickup of the
+                        // backing spec. Keep the PR scope so the plan resolver
+                        // synthesizes a PR-scoped review plan — no queue step,
+                        // and no conflict with the implementer's spec lease.
+                        // trace:BUG-2150 | ai:claude
+                        None
                     } else if orchestrator_review_envelope_for_pr(pr) {
                         let why = lookup
                             .as_ref()
@@ -9366,6 +9376,19 @@ pub(crate) fn resolve_queue_work_plan(
             })
             .cloned()
             .collect();
+        // BUG-2150: an explicit reviewer pickup with no queued review story
+        // reviews the PR against its backing spec directly — the review
+        // lease is PR-scoped, so it needs neither a queue entry nor the
+        // implementer's spec lease released. trace:BUG-2150 | ai:claude
+        if matches.is_empty() && reviewer_pickup_keeps_pr_scope(role_hint) {
+            if let Some(project_root) = storage.path().parent() {
+                if let Ok(spec) = resolve_pr_to_spec(project_root, n as u32, &store) {
+                    if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, &spec)) {
+                        return Ok(standalone_review_plan(forge, n, req, user_id));
+                    }
+                }
+            }
+        }
         match matches.len() {
             0 => {
                 let label = format_review_label(forge, n);
@@ -9844,6 +9867,55 @@ pub(crate) fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> Q
         entries: vec![resolved],
         scope,
         review_target,
+        anchor_display,
+        anchor_title: req.title.clone(),
+    }
+}
+
+/// BUG-2150: does this `queue work PR-N` pickup ask for the reviewer seat
+/// explicitly (`--role reviewer`)? Only then does a PR scope with no queued
+/// review story stay a PR-scoped review instead of resolving to the backing
+/// spec (TASK-518's convenience for a human who wants to keep implementing).
+// trace:BUG-2150 | ai:claude
+pub(crate) fn reviewer_pickup_keeps_pr_scope(role_flag: Option<&str>) -> bool {
+    role_flag.is_some_and(|r| canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
+}
+
+/// BUG-2150: the plan for a standalone reviewer pickup of PR-N whose backing
+/// spec is `req` and which has no queued review story. The scope is the PR
+/// (`PR-N` / `MR-N`), so `session_start` takes a PR-scoped review lease that
+/// does not collide with the implementer's spec-scoped lease, while a second
+/// reviewer on the same PR still hits the PR-scope conflict. The entry is
+/// synthesized at position 0, so nothing is written to the queue.
+// trace:BUG-2150 | ai:claude
+pub(crate) fn standalone_review_plan(
+    forge: ReviewForge,
+    n: u64,
+    req: &aida_core::Requirement,
+    user_id: &str,
+) -> QueueWorkPlan {
+    let synthetic = aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id,
+        position: 0,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("reviewer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    let anchor_display = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| format_review_label(forge, n));
+    QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![build_resolved_entry(synthetic, req)],
+        scope: format_review_label(forge, n),
+        review_target: Some((forge, n)),
         anchor_display,
         anchor_title: req.title.clone(),
     }
@@ -12910,6 +12982,12 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
+    // BUG-2149: only verdict files written after the reviewer starts belong
+    // to this run. trace:BUG-2149 | ai:claude
+    let launched_at = reviewer_spawn_instant(worktree);
+    let launcher_grant = std::env::var(crate::seat_authority::GRANT_ENV)
+        .ok()
+        .filter(|s| !s.trim().is_empty());
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
     let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
@@ -13083,15 +13161,51 @@ pub(crate) fn run_standalone_reviewer(
     // trace:TASK-1460 | ai:claude
     let _ = crate::review_verdict::adopt_direct_write(verdict_path);
 
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
+        .unwrap_or_default();
+
+    // BUG-2149: a contained reviewer can only write inside its review
+    // worktree, so its `aida review record` lands there and the launcher's
+    // canonical PR-N.json never appears. Collect it (and mirror the
+    // spec-keyed records) into the launcher project, where `aida review
+    // verdict` and `aida pr ship` read. trace:BUG-2149 | ai:claude
+    let checks = StandaloneVerdictChecks {
+        project_root,
+        pr,
+        head_sha: standalone_review_pr_head(project_root, pr),
+        launcher_grant,
+        since: launched_at,
+    };
+    let collected = crate::review_verdict::collect_standalone_verdict(
+        project_root,
+        worktree,
+        verdict_path,
+        &pr_spec_ids,
+        launched_at,
+        &checks,
+    );
+    match &collected {
+        Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
+            "  {} collected the reviewer's verdict from {} into {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            worktree.display(),
+            verdict_path.display()
+        ),
+        Ok(_) => {}
+        Err(why) => eprintln!(
+            "  {} no verdict collected for PR-{pr}: {why}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+        ),
+    }
+
     // STORY-439: tag-along reviewer-side calibration capture. Resolve
     // every spec the PR credits (via the existing title / branch / body
     // precedence used by the squash-subject repair) and write a review
     // slot per spec. Best-effort; never blocks the summary print.
     // trace:STORY-439 | ai:claude
-    if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
-        for spec in review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body) {
-            capture_review_calibration_for_spec(project_root, verdict_path, &spec);
-        }
+    for spec in &pr_spec_ids {
+        capture_review_calibration_for_spec(project_root, verdict_path, spec);
     }
 
     // End-of-command summary, assembled from the verdict file the
@@ -13118,9 +13232,131 @@ pub(crate) fn run_standalone_reviewer(
 
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
-    match status.code() {
-        Some(0) | None => Ok(()),
-        Some(code) => std::process::exit(code),
+    if let Some(code) = status.code().filter(|c| *c != 0) {
+        std::process::exit(code);
+    }
+    standalone_reviewer_outcome(pr, collected.err(), verdict_path)
+}
+
+/// BUG-2149: the launch command's result once the reviewer exited cleanly. A
+/// review that produced no verifiable verdict is a failure — a caller waiting
+/// on the exit status must never read a missing verdict as an approval.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn standalone_reviewer_outcome(
+    pr: u64,
+    rejection: Option<String>,
+    verdict_path: &std::path::Path,
+) -> Result<()> {
+    let Some(why) = rejection else {
+        return Ok(());
+    };
+    anyhow::bail!(
+        "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
+         nothing was collected into {}. Treat this as no approval and re-run the review.",
+        verdict_path.display()
+    )
+}
+
+/// BUG-2149: the reviewer's start as the FILESYSTEM sees it — the mtime of a
+/// marker written just before the spawn, so a verdict file's mtime compares
+/// on the same (possibly coarse) clock. Falls back to the wall clock.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn reviewer_spawn_instant(worktree: &std::path::Path) -> std::time::SystemTime {
+    let dir = worktree.join(".aida");
+    let marker = dir.join(format!(".review-spawn-{}", std::process::id()));
+    let stamped = std::fs::create_dir_all(&dir)
+        .and_then(|()| std::fs::write(&marker, b""))
+        .and_then(|()| std::fs::metadata(&marker))
+        .and_then(|m| m.modified());
+    let _ = std::fs::remove_file(&marker);
+    stamped.unwrap_or_else(|_| std::time::SystemTime::now())
+}
+
+/// BUG-2149: PR-N's head commit at collection time, read from the pinned
+/// forge repo. `None` when it cannot be resolved — which refuses collection.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn standalone_review_pr_head(project_root: &std::path::Path, pr: u64) -> Option<String> {
+    #[cfg(test)]
+    if let Ok(sha) = std::env::var("AIDA_TEST_PR_HEAD_SHA") {
+        return Some(sha);
+    }
+    merge_hold::fetch_pinned_change(
+        project_root,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+        pr,
+    )
+    .ok()
+    .flatten()
+    .and_then(|change| change.head_sha)
+}
+
+/// BUG-2149: what a collected standalone verdict must satisfy: a recognized
+/// verdict for THIS PR at its CURRENT head, recorded by the child reviewer
+/// grant this launch issued — not the launcher's grant, not an implementer's.
+// trace:BUG-2149 | ai:claude
+pub(crate) struct StandaloneVerdictChecks<'a> {
+    pub(crate) project_root: &'a std::path::Path,
+    pub(crate) pr: u64,
+    pub(crate) head_sha: Option<String>,
+    pub(crate) launcher_grant: Option<String>,
+    pub(crate) since: std::time::SystemTime,
+}
+
+impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
+    fn check_record(&self, c: &crate::review_verdict::VerdictCandidate) -> Result<(), String> {
+        if c.verdict.kind == review_verdict::VerdictKind::Unknown {
+            return Err("not a recognized verdict record".to_string());
+        }
+        if let Some(pr) = c.obj.get("pr") {
+            let n = pr
+                .as_u64()
+                .or_else(|| pr.as_str().and_then(|s| s.trim().parse().ok()));
+            if n != Some(self.pr) {
+                return Err(format!("it names PR {pr}, not PR-{}", self.pr));
+            }
+        }
+        let Some(head) = self.head_sha.as_deref() else {
+            return Err(format!(
+                "PR-{}'s current head could not be resolved",
+                self.pr
+            ));
+        };
+        match c.verdict.reviewed_sha.as_deref() {
+            Some(sha) if review_verdict::same_reviewed_sha(sha, head) => Ok(()),
+            Some(sha) => Err(format!(
+                "it reviewed {sha}, but PR-{}'s head is now {head}",
+                self.pr
+            )),
+            None => Err("it names no reviewed commit".to_string()),
+        }
+    }
+
+    fn check_identity(&self, grant_id: &str) -> Result<(), String> {
+        let Some(launcher) = self.launcher_grant.as_deref() else {
+            return Err("the launcher holds no seat grant to verify the reviewer against".into());
+        };
+        if grant_id == launcher {
+            return Err("it was recorded under the launcher's own grant".to_string());
+        }
+        let grant = match crate::seat_authority::grant_check_for(
+            self.project_root,
+            grant_id,
+            &crate::current_user_id(None),
+        ) {
+            crate::seat_authority::GrantCheck::Valid(g) => g,
+            _ => return Err(format!("its recording grant {grant_id} is not valid")),
+        };
+        if grant.seat != "reviewer" {
+            return Err(format!("it was recorded by a `{}` seat", grant.seat));
+        }
+        if grant.parent_grant_id.as_deref() != Some(launcher) {
+            return Err("its recording grant was not issued by this launch".to_string());
+        }
+        let issued: std::time::SystemTime = grant.issued_at.into();
+        if issued < self.since {
+            return Err("its recording grant predates this review".to_string());
+        }
+        Ok(())
     }
 }
 

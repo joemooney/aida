@@ -1510,8 +1510,27 @@ pub(crate) fn session_start(
                     || !std::io::IsTerminal::is_terminal(&std::io::stdin());
                 let live_sessions = process_probe::probe_live_claude_sessions();
                 let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
-                let decision = lease_conflict_decision(headless, is_live);
+                // BUG-2150: an explicit reviewer pickup coexists with the
+                // implementer's lease; another reviewer's lease still conflicts.
+                // trace:BUG-2150 | ai:claude
+                let decision = review_source_branch_conflict_decision(
+                    headless,
+                    is_live,
+                    l.role.as_deref(),
+                    launch_role.as_deref(),
+                );
                 match decision {
+                    LeaseConflictDecision::Coexist => {
+                        eprintln!(
+                            "{} PR-{}'s source branch `{}` is held by {} lease {} — the review checks out its own `{}` branch and runs alongside it",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            n,
+                            source_branch,
+                            l.role.as_deref().unwrap_or("an implementer"),
+                            l.id,
+                            branch_name
+                        );
+                    }
                     LeaseConflictDecision::AutoEnd => {
                         eprintln!(
                             "{} PR-{}'s source branch `{}` is held by lease {} whose session has exited — ending it so the review can check out the branch",
@@ -1548,7 +1567,7 @@ pub(crate) fn session_start(
                     }
                     LeaseConflictDecision::Prompt => {}
                 }
-                if decision != LeaseConflictDecision::AutoEnd {
+                if decision == LeaseConflictDecision::Prompt {
                     eprintln!();
                     eprintln!(
                         "{} PR-{}'s source branch `{}` is held by lease {}",

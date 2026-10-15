@@ -1619,6 +1619,11 @@ pub(crate) enum LeaseConflictDecision {
     AutoEnd,
     /// Headless and the lease is LIVE — refuse with a typed message.
     Refuse,
+    /// BUG-2150: the holder is not a reviewer (the implementer working the
+    /// PR). A review checks out its own `pr-N` branch from the forge's PR
+    /// head ref, so it coexists with that lease — no prompt, no refusal, and
+    /// never ending the implementer's session.
+    Coexist,
 }
 
 // BUG-1205: pure decision for the lease-held pre-flight in `session_start`.
@@ -1628,6 +1633,29 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
         (false, _) => LeaseConflictDecision::Prompt,
         (true, false) => LeaseConflictDecision::AutoEnd,
         (true, true) => LeaseConflictDecision::Refuse,
+    }
+}
+
+/// BUG-2150: the decision for a review whose PR source branch is held by
+/// another lease. A review lease is a different kind from an implementer
+/// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
+/// with a non-reviewer holder. Every other case — a non-reviewer pickup, or a
+/// holder that is itself a reviewer — keeps the BUG-1205 prompt / auto-end /
+/// refuse handling.
+// trace:BUG-2150 | ai:claude
+pub(crate) fn review_source_branch_conflict_decision(
+    headless: bool,
+    lease_live: bool,
+    holder_role: Option<&str>,
+    pickup_role: Option<&str>,
+) -> LeaseConflictDecision {
+    let is_reviewer = |r: Option<&str>| {
+        r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
+    };
+    if is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+        LeaseConflictDecision::Coexist
+    } else {
+        lease_conflict_decision(headless, lease_live)
     }
 }
 
