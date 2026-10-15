@@ -42,9 +42,13 @@ def meta(root, packages):
 
 
 SYNTH_FILES = {
-    "aida-core/build.rs": 'fn main() { println!("cargo:rerun-if-changed=templates/"); }\n',
+    "aida-core/build.rs": (
+        'fn main() { println!("cargo:rerun-if-changed=templates/");\n'
+        '  code.push_str("pub static EMBEDDED_TEMPLATES: X = Y;"); }\n'
+    ),
     "aida-core/templates/skills/x.md": "x\n",
-    "aida-core/src/lib.rs": "pub mod db;\npub mod ai;\npub mod embed;\n",
+    "aida-core/src/lib.rs": 'pub mod db;\npub mod ai;\npub mod embed;\n#[path = "tests/x_tests.rs"]\nmod x_tests;\n',
+    "aida-core/src/tests/x_tests.rs": "// tests went missing\n",
     "aida-core/src/db/mod.rs": "pub mod cache;\n",
     "aida-core/src/db/cache.rs": "#[cfg(test)]\nmod tests {}\n",
     "aida-core/src/ai/mod.rs": "\n",
@@ -52,7 +56,9 @@ SYNTH_FILES = {
     "aida-core/src/embed.rs": 'const S: &str = include_str!("embed/schema.sql");\n',
     "aida-core/src/embed/schema.sql": "create table t();\n",
     "aida-core/tests/context_budget.rs": "\n",
-    "aida-cli/src/main.rs": "mod grpc;\n",
+    "aida-cli/src/main.rs": "mod grpc;\nmod scaffold;\nmod refresh;\n",
+    "aida-cli/src/scaffold.rs": "use aida_core::EMBEDDED_TEMPLATES;\n#[cfg(test)]\nmod tests {}\n",
+    "aida-cli/src/refresh.rs": "fn f() { aida_core::EMBEDDED_TEMPLATES.len(); }\n",
     "aida-cli/src/grpc.rs": "\n",
     "aida-cli/tests/agent_write_confirm.rs": "\n",
     "aida-cli/tests/common/mod.rs": "\n",
@@ -124,13 +130,23 @@ class SynthTest(unittest.TestCase):
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli", "--bins", "--", "grpc"]])
 
     def test_package_build_inputs_run_unfiltered(self):
-        for f in ["aida-core/build.rs", "aida-core/Cargo.toml", "aida-core/templates/skills/x.md"]:
+        p = self.run_plan(["aida-core/Cargo.toml"])
+        self.assertEqual(p.commands, [BASE + ["-p", "aida-core", "--lib"]])
+
+    def test_build_inputs_also_run_generated_symbol_consumers(self):
+        for f in ["aida-core/build.rs", "aida-core/templates/skills/x.md"]:
             with self.subTest(f=f):
                 p = self.run_plan([f])
-                self.assertEqual(p.commands, [BASE + ["-p", "aida-core", "--lib"]])
+                self.assertEqual(p.commands, [
+                    BASE + ["-p", "aida-cli", "--bins", "--", "refresh", "scaffold"],
+                    BASE + ["-p", "aida-core", "--lib"],
+                ])
+                self.assertEqual(p.consumer, {"aida-cli": {"refresh", "scaffold"}})
+                self.assertEqual(p.suspect, {"aida-cli": {"scaffold"}})
 
     def test_non_rust_include_str_input_runs_unfiltered(self):
         p = self.run_plan(["aida-core/src/embed/schema.sql"])
+        self.assertEqual(p.consumer, {})
         self.assertEqual(p.commands, [BASE + ["-p", "aida-core", "--lib"]])
 
     def test_workspace_root_config_is_untargetable(self):
@@ -164,15 +180,43 @@ class SynthTest(unittest.TestCase):
     def fail_list(self, cmd):
         self.fail(f"must not list {cmd}")
 
-    def test_filter_matching_zero_tests_fails(self):
-        p = self.run_plan(["aida-core/src/db/cache.rs", "aida-core/src/ai/mod.rs"])
-        listed = []
+    def listing(self, *names):
+        return lambda cmd: (0, "".join(f"{n}: test\n" for n in names) + "\n9 tests, 0 benchmarks\n")
+
+    def test_untested_clean_module_falls_back_to_unfiltered(self):
+        # ai/mod.rs holds no tests and was mapped conventionally: not suspect.
+        p = self.run_plan(["aida-core/src/ai/mod.rs", "aida-core/src/db/cache.rs"])
+        self.assertEqual(p.suspect, {"aida-core": {"db::cache"}})
+        ran, listed = [], []
 
         def list_tests(cmd):
             listed.append(cmd)
-            return 0, "db::cache::tests::t1: test\nother::t: test\n\n2 tests, 0 benchmarks\n"
-        self.assertEqual(tt.execute(p, [], False, self.fail_run, list_tests), 3)
+            return self.listing("db::cache::tests::t1", "other::t")(cmd)
+        rc = tt.execute(p, [], False, lambda c: ran.append(c) or 0, list_tests)
+        self.assertEqual(rc, 0)
         self.assertEqual(listed, [BASE + ["-p", "aida-core", "--lib", "--", "--list"]])
+        self.assertEqual(ran, [BASE + ["-p", "aida-core", "--lib"]])
+
+    def test_zero_match_on_a_file_holding_tests_fails(self):
+        p = self.run_plan(["aida-core/src/db/cache.rs"])
+        self.assertEqual(tt.execute(p, [], False, self.fail_run, self.listing("other::t")), 3)
+
+    def test_zero_match_on_a_path_mapped_file_fails(self):
+        p = self.run_plan(["aida-core/src/tests/x_tests.rs"])
+        self.assertEqual(p.commands, [BASE + ["-p", "aida-core", "--lib", "--", "x_tests"]])
+        self.assertEqual(tt.execute(p, [], False, self.fail_run, self.listing("other::t")), 3)
+
+    def test_untested_consumer_is_dropped(self):
+        p = self.run_plan(["aida-core/templates/skills/x.md"])
+        ran = []
+        rc = tt.execute(p, [], False, lambda c: ran.append(c) or 0, self.listing("scaffold::tests::t"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(ran, [BASE + ["-p", "aida-cli", "--bins", "--", "scaffold"],
+                               BASE + ["-p", "aida-core", "--lib"]])
+
+    def test_consumer_holding_tests_with_zero_match_fails(self):
+        p = self.run_plan(["aida-core/templates/skills/x.md"])
+        self.assertEqual(tt.execute(p, [], False, self.fail_run, self.listing("other::t")), 3)
 
     def test_filters_that_all_match_run(self):
         p = self.run_plan(["aida-core/src/db/cache.rs"])
@@ -276,6 +320,16 @@ class RealRepoTest(unittest.TestCase):
         p = self.run_plan(["aida-core/templates/skills/aida-pickup.md"])
         self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
         self.assertIn("story_1350_review_approach_tests", p.derived["aida-cli-lib"])
+
+    def test_discipline_pack_change_runs_embedded_template_consumers(self):
+        # #2671 round 1 broke these aida-cli-lib tests while aida-core's were green.
+        p = self.run_plan(["aida-core/templates/.aida/discipline/README.md"])
+        self.assertIn(BASE + ["-p", "aida-core", "--lib"], p.commands)
+        cli = [c for c in p.commands if c[5] == "aida-cli-lib"]
+        self.assertEqual(len(cli), 1)
+        self.assertIn("story_255_discipline_pack_tests", cli[0])
+        self.assertIn("scaffold_refresh", cli[0])  # reaches scaffold_refresh::tests
+        self.assertIn("--", cli[0])
 
     def test_proto_runs_both_generated_client_packages(self):
         p = self.run_plan(["proto/aida.proto"])

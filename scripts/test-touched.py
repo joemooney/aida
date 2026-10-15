@@ -29,17 +29,25 @@ sources:
   package's unit tests unfiltered. A `.rs` file read by a guard test with
   `include_str!` also adds that guard test's module.
 
-Before a filtered run the script lists the package's unit tests and exits
-nonzero if any derived filter matches 0 tests, so a stale or wrong filter can
-never read as a green run. Filters are substring matches; pass extra filters
+Before a filtered run the script lists the package's unit tests. A derived
+filter that matches 0 tests exits 3 when the derivation is suspect (the file
+holds `#[test]`/`mod tests`, or was mapped through `#[path]`/`include!`), so a
+wrong filter never reads as a green run; a module with no unit tests of its own
+falls back to the package's unit tests unfiltered, with a note. A change to a
+package's build-script inputs (aida-core's templates) also runs, in other
+packages, the modules that use a symbol that build script generates (e.g.
+`EMBEDDED_TEMPLATES`: `scaffold_refresh`, `story_255_discipline_pack_tests`);
+crate-root consumers are left to CI. Filters are substring matches; pass extra filters
 with `--filter`. Whole-tree source-scanning guard tests (ones that walk
 `src/` at run time) are not reached by module filters; CI runs them.
 
 Usage: scripts/test-touched.py [--print] [--base REF] [--profile P] [--filter F]...
 `make test-touched` runs it; `make test-touched ARGS=--print` only prints.
 
-Exit codes: 0 green or nothing to test, 2 cannot diff, 3 a filter matched 0
-tests, 4 an untargetable change, otherwise cargo's exit code.
+Exit codes: 0 green or nothing to test, 2 cannot diff, 3 a suspect filter
+matched 0 tests, 4 an untargetable change, otherwise cargo's exit code. Under
+`make test-touched`, make itself reports any nonzero exit as `Error 3`/`Error
+4` and exits 2.
 
 trace:TASK-1780 | ai:claude
 """
@@ -82,6 +90,9 @@ class SourceIndex:
     build_inputs: dict[str, set[str]] = field(default_factory=dict)
     # file text, for `mod name` declaration checks
     texts: dict[str, str] = field(default_factory=dict)
+    # package name -> files in OTHER packages that use a symbol its build
+    # script generates (e.g. aida-core's EMBEDDED_TEMPLATES)
+    consumers: dict[str, set[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -90,6 +101,10 @@ class Plan:
     notes: list[str]
     # package name -> filters derived from changed paths (each must match a test)
     derived: dict[str, set[str]] = field(default_factory=dict)
+    # the subset whose 0-test match means a wrong mapping, not an untested module
+    suspect: dict[str, set[str]] = field(default_factory=dict)
+    # the subset added only as consumers of a generated symbol (dropped if untested)
+    consumer: dict[str, set[str]] = field(default_factory=dict)
     untargetable: list[str] = field(default_factory=list)
 
 
@@ -108,6 +123,8 @@ INCLUDE_RE = re.compile(
 )
 STRING_RE = re.compile(r'"([^"\\\n{}]+)"')
 RERUN_RE = re.compile(r'rerun-if-changed=([^"\\\n{}]+)')
+GENERATED_SYMBOL_RE = re.compile(r'pub static (\w+)')
+TEST_CODE_RE = re.compile(r'#\[test\]|\bmod\s+tests\b')
 
 
 def load_packages(metadata: dict) -> list[Package]:
@@ -174,12 +191,21 @@ def build_index(root: str, packages: list[Package]) -> SourceIndex:
                     idx.includes.setdefault(target, f)
                 else:
                     idx.embeds.setdefault(target, set()).add(f)
+    # Build scripts last: a generated symbol's consumers may live in any package.
+    for pkg in packages:
+        pdir = pkg.dir
+        src_dir = _join(pdir, "src")
         for bs in sorted(pkg.build_scripts):
             try:
                 with open(os.path.join(root, bs), encoding="utf-8", errors="replace") as fh:
                     text = fh.read()
             except OSError:
                 continue
+            for sym in GENERATED_SYMBOL_RE.findall(text):
+                sym_re = re.compile(rf"\b{sym}\b")
+                for f, ftext in idx.texts.items():
+                    if not _under(f, pdir) and sym_re.search(ftext):
+                        idx.consumers.setdefault(pkg.name, set()).add(f)
             for lit in set(STRING_RE.findall(text)) | set(RERUN_RE.findall(text)):
                 lit = lit.strip()
                 if not lit or lit.startswith(("/", "-")) or ":" in lit or " " in lit:
@@ -257,6 +283,13 @@ def is_test_module(mod: list[str] | None) -> bool:
     return bool(mod) and any(m == "tests" or m.endswith("_tests") for m in mod)
 
 
+def is_suspect(f: str, idx: SourceIndex) -> bool:
+    """A filter from `f` that matches 0 tests is a mapping bug, not an untested module."""
+    if f in idx.path_mods or f in idx.includes:
+        return True
+    return TEST_CODE_RE.search(idx.texts.get(f, "")) is not None
+
+
 def is_root_config(f: str) -> bool:
     if "/" not in f:
         return f in ROOT_CONFIG_FILES or f.startswith("rust-toolchain")
@@ -279,14 +312,30 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         unit_all.add(pkg_name)
         notes.append(why)
 
-    def add_module(f: str, pkg: Package) -> None:
+    # (pkg, filter) -> [suspect, consumer-only]
+    origin: dict[tuple[str, str], list[bool]] = {}
+
+    def add_module(f: str, pkg: Package, consumer: bool = False) -> None:
         mod = module_path(f, pkg, idx)
-        if mod is None:
+        if consumer and not mod:
+            notes.append(f"{f}: consumer at the crate root or unresolvable; not targeted (CI covers it)")
+        elif mod is None:
             unfiltered(pkg.name, f"{f}: module path not resolvable; {pkg.name} unit tests run unfiltered")
         elif not mod:
             unit_all.add(pkg.name)
         else:
-            filters.setdefault(pkg.name, set()).add("::".join(mod))
+            flt = "::".join(mod)
+            filters.setdefault(pkg.name, set()).add(flt)
+            o = origin.setdefault((pkg.name, flt), [False, True])
+            o[0] = o[0] or is_suspect(f, idx)
+            o[1] = o[1] and consumer
+
+    def add_consumers(producer: str) -> None:
+        """Modules in other packages that use a symbol `producer`'s build script generates."""
+        for c in sorted(idx.consumers.get(producer, ())):
+            cpkg = owning_package(c, packages)
+            if cpkg is not None:
+                add_module(c, cpkg, consumer=True)
 
     for f in sorted(set(changed)):
         if is_root_config(f):
@@ -298,6 +347,7 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
                 embedded = True
                 for n in sorted(names):
                     unfiltered(n, f"{f}: read by {n}'s build script; {n} unit tests run unfiltered")
+                    add_consumers(n)
         for target, embedders in sorted(idx.embeds.items()):
             if not _under(f, target):
                 continue
@@ -321,6 +371,8 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         inner = f[len(pkg.dir) + 1:] if pkg.dir else f
         if inner == "Cargo.toml" or f in pkg.build_scripts:
             unfiltered(pkg.name, f"{f}: package build input; {pkg.name} unit tests run unfiltered")
+            if f in pkg.build_scripts:
+                add_consumers(pkg.name)
             continue
         if not f.endswith(".rs"):
             if not embedded:
@@ -346,6 +398,8 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
     base = ["cargo", "test", "--profile", profile]
     cmds: list[list[str]] = []
     derived: dict[str, set[str]] = {}
+    suspect: dict[str, set[str]] = {}
+    consumer: dict[str, set[str]] = {}
     for name in sorted(unit_all | set(filters)):
         pkg = by_name[name]
         sel = (["--lib"] if pkg.lib else []) + (["--bins"] if pkg.bins else [])
@@ -355,6 +409,12 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         cmd = base + ["-p", name] + sel
         if name not in unit_all:
             derived[name] = set(filters[name])
+            sus = {fl for fl in filters[name] if origin.get((name, fl), [False])[0]}
+            con = {fl for fl in filters[name] if origin.get((name, fl), [False, False])[1]}
+            if sus:
+                suspect[name] = sus
+            if con:
+                consumer[name] = con
             cmd += ["--"] + sorted(filters[name]) + list(extra)
         elif extra:
             cmd += ["--"] + list(extra)
@@ -366,7 +426,7 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         for t in sorted(integ[name]):
             cmd += ["--test", t]
         cmds.append(cmd)
-    return Plan(cmds, notes, derived, untargetable)
+    return Plan(cmds, notes, derived, suspect, consumer, untargetable)
 
 
 def unmatched_filters(filters: set[str] | list[str], test_names: list[str]) -> list[str]:
@@ -398,17 +458,36 @@ def execute(p: Plan, extra: list[str], dry: bool,
             names = parse_test_list(out)
             derived = p.derived.get(pkg, set())
             dead = unmatched_filters(derived, names)
+            suspect = [f for f in dead if f in p.suspect.get(pkg, set())]
             if not derived and len(unmatched_filters(extra, names)) == len(extra):
-                dead = list(extra)
-            if dead:
+                suspect = list(extra)  # the caller's own filters select nothing
+            if suspect:
                 print(
-                    f"test-touched: filter(s) {', '.join(dead)} match 0 of {len(names)} unit tests in {pkg}; "
-                    "a filtered run would pass vacuously, so this is a failure, not a green run. "
-                    "If no unit test lives in that module, add one or run the package's unit tests "
-                    f"unfiltered ({' '.join(head)})",
+                    f"test-touched: filter(s) {', '.join(suspect)} match 0 of {len(names)} unit tests in {pkg}, "
+                    "but the source holds tests or was mapped through #[path]/include!, so the mapping is "
+                    "wrong; a filtered run would pass vacuously. This is a failure, not a green run; "
+                    f"run the package's unit tests unfiltered ({' '.join(head)}) and fix the mapping",
                     file=sys.stderr,
                 )
                 return 3
+            consumers = [f for f in dead if f in p.consumer.get(pkg, set())]
+            untested = [f for f in dead if f not in consumers]
+            if untested:
+                print(
+                    f"test-touched: {', '.join(untested)} has no unit tests of its own; "
+                    f"running {pkg}'s unit tests unfiltered instead",
+                    file=sys.stderr,
+                )
+                cmd = head + (["--"] + list(extra) if extra else [])
+                print("+ " + " ".join(cmd), flush=True)
+            elif consumers:
+                print(f"test-touched: consumer module(s) {', '.join(consumers)} have no unit tests; dropped",
+                      file=sys.stderr)
+                live = [f for f in cmd[cmd.index("--") + 1:] if f not in consumers]
+                if not live:
+                    continue
+                cmd = head + ["--"] + live
+                print("+ " + " ".join(cmd), flush=True)
         rc = run(cmd)
         if rc != 0:
             return rc
