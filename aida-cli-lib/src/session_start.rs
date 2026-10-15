@@ -1129,6 +1129,9 @@ pub(crate) fn session_start(
     // STORY-714: pool the session's worktree? Some(true)=--pool,
     // Some(false)=--no-pool, None=resolve from [worktree_pool] enabled config.
     use_pool: Option<bool>,
+    // BUG-2010: true when caller is working the lease itself (self-claim).
+    // false when launching/spawning another agent (agent new, session start --launch).
+    self_claim: bool,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1968,10 +1971,27 @@ pub(crate) fn session_start(
     // Compose lease.
     let id_long = uuid::Uuid::now_v7().to_string();
     let id = id_long.replace('-', "")[..12].to_string();
-    let owner = aida_core::git_ops::git_config_get("user.email")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "unknown".to_string());
+    // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
+    // attribute the lease to that agent's live process rather than a short-lived
+    // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted
+    // for another agent (agent new, session start --launch) skip attribution
+    // so the launcher lane is not falsely pinned to the child's lease.
+    // Drain phase children get their own lease PID and also skip agent resolution.
+    // trace:BUG-2010 | ai:antigravity
+    let is_drain_child = orchestrator::detect(&project_root).is_orchestrated();
+    let session_agent = if is_drain_child || !self_claim {
+        None
+    } else {
+        agent_registry::resolve_session_agent_for_lease(&project_root)
+    };
+    let owner = if let Some(ref agent) = session_agent {
+        agent.name.clone().unwrap_or_else(|| agent.id.clone())
+    } else {
+        aida_core::git_ops::git_config_get("user.email")
+            .ok()
+            .or_else(|| std::env::var("USER").ok())
+            .unwrap_or_else(|| "unknown".to_string())
+    };
     // STORY-65 + TASK-67: role resolution by INTENT, not blind env
     // inheritance. Order:
     //   1. --role <name>             explicit override always wins
@@ -2027,8 +2047,20 @@ pub(crate) fn session_start(
     // even when cwd doesn't help. Best effort — if PPID isn't set / process
     // self-introspection fails, we leave the field None and fall back to
     // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
-    let creator_pid = creator_shell_pid();
-    let creator_pid_start_time = creator_pid.and_then(process_probe::process_start_identity);
+    let (creator_pid, creator_pid_start_time, active_pid, active_pid_start_time) =
+        if let Some(ref agent) = session_agent {
+            let pid = agent.pid;
+            let start = agent
+                .pid_start
+                .clone()
+                .or_else(|| process_probe::process_start_identity(pid));
+            (Some(pid), start.clone(), Some(pid), start)
+        } else {
+            let creator_pid = creator_shell_pid();
+            let creator_pid_start_time =
+                creator_pid.and_then(process_probe::process_start_identity);
+            (creator_pid, creator_pid_start_time, None, None)
+        };
 
     let lease = SessionLease {
         id: id.clone(),
@@ -2044,8 +2076,8 @@ pub(crate) fn session_start(
         role: inherited_role.clone(),
         creator_pid,
         creator_pid_start_time,
-        active_pid: None,
-        active_pid_start_time: None,
+        active_pid,
+        active_pid_start_time,
         cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -2090,6 +2122,23 @@ pub(crate) fn session_start(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // BUG-1918: durable record of who claimed this spec, surviving release.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
+
+    // BUG-2010: update the resolved agent's own registry entry with its new
+    // current_spec and worktree path.
+    // trace:BUG-2010 | ai:antigravity
+    if let Some(ref agent) = session_agent {
+        if let Err(e) = agent_registry::update_agent_current_spec(
+            &project_root,
+            &agent.id,
+            owns,
+            &worktree_path,
+        ) {
+            eprintln!("aida: warning: failed to update agent registry current_spec: {e}");
+        }
+    }
 
     // BUG-379: atomic-enough with the lease just persisted, bump
     // Approved → InProgress. Idempotent — if the spec already moved
@@ -2328,6 +2377,9 @@ pub(crate) fn session_start(
         );
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
+        // BUG-1918: the exec'd worker carries its lease id.
+        // trace:BUG-1918 | ai:claude
+        review_authority::export_worker_session_env(&id);
         // TASK-31: pass a display name to claude so the /resume picker and
         // terminal title can distinguish concurrent worktrees. Explicit
         // --name wins; otherwise derive from scope+branch+role.

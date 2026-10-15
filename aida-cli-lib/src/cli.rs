@@ -1314,6 +1314,82 @@ pub enum LockCommand {
 }
 
 // trace:FR-1-043 | ai:claude
+
+// `aida session seat` subcommands.
+// trace:TASK-1607 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum SeatCommand {
+    /// Claim an empty seat, or one whose holder has provably exited. Holding
+    /// it already is fine. `--force` asks a live holder to hand it over.
+    Claim {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Request a graceful takeover from a live holder (same as `takeover --force`).
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS", requires = "force")]
+        grace_secs: Option<i64>,
+        /// Send the request and return without waiting.
+        #[clap(long, requires = "force")]
+        no_wait: bool,
+    },
+    /// Show the holder, its liveness, any pending takeover and in-flight work.
+    Status {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        json: bool,
+    },
+    /// Give the seat up. Only the current holder can, at its current
+    /// generation; with a pending takeover, pass its request ID to hand over.
+    Release {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        generation: u64,
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+    },
+    /// Ask the live holder to hand the seat over, and wait for its
+    /// acknowledgment. Nothing is stopped if it does not answer in time.
+    Takeover {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Required: a takeover asks another session to stand down.
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS")]
+        grace_secs: Option<i64>,
+        /// Resume your own interrupted request (keeps its original deadline).
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+        /// Send the request and return without waiting.
+        #[clap(long)]
+        no_wait: bool,
+    },
+    /// As the holder: confirm you wrote your handoff and stopped dispatching,
+    /// and hand the seat to the pending requester.
+    Ack {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long, value_name = "UUID")]
+        request: String,
+        #[clap(long)]
+        generation: u64,
+        /// Confirms the handoff is written and no new dispatch will start.
+        #[clap(long)]
+        safe_to_stop: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
     /// List recent Claude Code conversations for this project (cwd)
@@ -1855,6 +1931,14 @@ pub enum SessionCommand {
         // trace:STORY-1464 | ai:claude
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
+    },
+
+    /// Single-occupancy seats: see who drives the orchestrator loop, claim
+    /// or release it, and hand it over gracefully.
+    // trace:TASK-1607 | ai:claude
+    Seat {
+        #[command(subcommand)]
+        cmd: SeatCommand,
     },
 
     /// Manage the planned-cluster manifest for the active session
@@ -9606,7 +9690,9 @@ pub enum Command {
     /// — it owns the lane's filing convention in one place so the
     /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
     ///
-    /// CI is never skipped. The lane drops only the human-review ceremony.
+    /// CI is never skipped, and merging still needs an approval from a
+    /// session that did not author the work; no tag opts a PR out of that.
+    /// The lane drops only the reviewer model session.
     // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
     // `aida fasttrack <title>` filing form stays the default (title optional so
@@ -16647,10 +16733,56 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod seat_help_tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    // trace:TASK-1607 | ai:codex
+    #[test]
+    fn session_seat_generated_help_contains_no_internal_spec_ids() {
+        let mut cli = Cli::command();
+        let session = cli.find_subcommand_mut("session").unwrap();
+        let seat = session.find_subcommand_mut("seat").unwrap();
+        let help = seat.render_long_help().to_string();
+        let leaves: Vec<_> = seat
+            .get_subcommands_mut()
+            .map(|leaf| leaf.render_long_help().to_string())
+            .collect();
+        for text in std::iter::once(help).chain(leaves) {
+            for internal in ["STORY-1485", "TASK-1607", "trace:"] {
+                assert!(
+                    !text.contains(internal),
+                    "internal trace leaked to generated help: {text}"
+                );
+            }
+        }
+    }
+}
+
 /// Versioned regeneration artifacts.
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegenCommand {
+    /// Run the declared installer and oracle, then record a raw R1 trial
+    // trace:TASK-1730 | ai:codex
+    Score {
+        /// Regenerated system directory (commands run relative to this root)
+        dir: PathBuf,
+        /// Corpus directory containing corpus.json and manifest.json
+        #[clap(long)]
+        corpus: PathBuf,
+        #[clap(long)]
+        model: String,
+        #[clap(long)]
+        vendor: String,
+        #[clap(long)]
+        harness: String,
+        /// Explicitly bypass bubblewrap; the recorded trial is never clean
+        #[clap(long)]
+        unconfined: bool,
+    },
+
     /// Export committed store content as corpus.json and manifest.json
     Corpus {
         /// New or empty output directory

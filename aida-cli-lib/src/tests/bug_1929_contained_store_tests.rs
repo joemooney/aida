@@ -971,7 +971,8 @@ fn bug_1929_store_git_guard() {
                     continue;
                 }
                 let src = std::fs::read_to_string(&path).unwrap();
-                let any_raw = name == "store_push_pull.rs";
+                // trace:TASK-1775 | ai:claude
+                let any_raw = matches!(name.as_str(), "store_push_pull.rs" | "git_backend.rs");
                 for line in bug_1929_raw_store_git(&src, any_raw) {
                     let rel = path.strip_prefix(workspace).unwrap_or(&path);
                     offenders.push(format!("{}:{line}", rel.display()));
@@ -1185,4 +1186,35 @@ fn bug_1929_primary_root_never_grants_host_hook_writes() {
         allow_write(&settings),
         sandbox_allow_write_entries(&contained_store_write_paths(&main))
     );
+}
+
+// The contained-store marker is written before the git version check: on git
+// older than 2.40 the session gets no store write paths, but a write root that
+// is the primary checkout still covers `.aida-store`, so the marker must exist
+// for later host store git to refuse.
+// trace:TASK-1775 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1775_contained_marker_written_before_git_version_check() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = std::fs::canonicalize(tmp.path()).unwrap().join("main");
+    std::fs::create_dir_all(&main).unwrap();
+    bug_1929_git(&main, &["init", "-q", "-b", "main"]);
+    bug_1929_git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    bug_1929_git(&main, &["worktree", "add", "-q", "--detach", ".aida-store"]);
+    let marker = main.join(".git").join("aida-contained-store");
+    for fake in ["git version 2.39.5", "not a version"] {
+        let _ = std::fs::remove_file(&marker);
+        aida_core::git_ops::with_host_git_version(fake, || {
+            let json = crate::session::claude_contained_settings_json(&[main.clone()]);
+            let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert!(
+                !allow_write(&settings)
+                    .iter()
+                    .any(|p| p.contains(".aida-store")),
+                "{fake}: no store write paths on old git: {settings}"
+            );
+        });
+        assert!(marker.is_file(), "{fake}: marker written on old git");
+    }
 }

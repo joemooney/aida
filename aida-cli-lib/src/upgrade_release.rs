@@ -1627,6 +1627,28 @@ pub(crate) fn handle_release(
             ),
         }
 
+        // BUG-1918: `--after-pr` is a merge path, so it needs what `aida pr
+        // ship` needs — an attested approval by a non-author session that
+        // covers the head — and pins the merge to that head.
+        // trace:BUG-1918 | ai:claude
+        let after_pr_head = forge
+            .change_status(&change_ref)
+            .ok()
+            .map(|status| status.head_sha.trim().to_string())
+            .filter(|sha| !sha.is_empty());
+        let mut after_pr_ids = pr_ship::extract_spec_ids_from_text(&change_ref.branch);
+        if let Some(title) = &change_ref.title {
+            after_pr_ids.extend(pr_ship::extract_spec_ids_from_text(title));
+        }
+        let after_pr_match_head = crate::pr_cmd::merge_path_approval_gate(
+            &merge_root,
+            n,
+            &after_pr_ids,
+            Some(change_ref.branch.as_str()),
+            after_pr_head.as_deref(),
+        )
+        .map_err(|refusal| anyhow::anyhow!("{refusal} Not merging or releasing."))?;
+
         println!(
             "{} merging {change_noun} #{n}…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
@@ -1636,7 +1658,7 @@ pub(crate) fn handle_release(
             squash_subject: None,
             squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
-            match_head: None,
+            match_head: after_pr_match_head, // trace:BUG-1918
         };
         let mut sink = crate::network_retry::StderrSink;
         if let Err(e) =

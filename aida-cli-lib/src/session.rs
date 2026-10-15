@@ -2551,7 +2551,7 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
+pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2586,20 +2586,23 @@ fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
                     eprintln!("{error:#}");
                 }
             }
-            // BUG-2131: launchers refuse contained mode on git < 2.40; should
-            // any path reach here anyway, the session gets no store write
-            // access at all. Otherwise mark the store so later host store git
-            // on an older git refuses even without contained config.
+            // BUG-2131: mark the store before the git version check, so host
+            // store git on an older git refuses even without contained config.
+            // Launchers refuse contained mode on git < 2.40; should any path
+            // reach here anyway, no store write paths are granted, but a write
+            // root that is the primary checkout still covers `.aida-store`, so
+            // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
+            // trace:TASK-1775 | ai:claude
+            if store.is_dir() {
+                if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
+                    eprintln!("{error:#}");
+                }
+            }
             if let Err(error) = aida_core::git_ops::ensure_git_supports_contained() {
                 eprintln!("{error:#}");
                 Vec::new()
             } else {
-                if store.is_dir() {
-                    if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
-                        eprintln!("{error:#}");
-                    }
-                }
                 crate::contained_boundary::contained_store_write_paths(&main)
             }
         }
@@ -3377,13 +3380,27 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
         .parse::<DocumentMut>()
         .with_context(|| format!("parsing lease {}", path.display()))?;
     doc["active_pid"] = value(i64::from(pid));
-    if let Some(start_time) = crate::process_probe::process_start_identity(pid) {
-        doc["active_pid_start_time"] = value(start_time);
+    let start_time = crate::process_probe::process_start_identity(pid);
+    if let Some(start_time) = &start_time {
+        doc["active_pid_start_time"] = value(start_time.clone());
     }
     // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&path, doc.to_string())
         .with_context(|| format!("writing lease {}", path.display()))?;
+    // BUG-1918: the spawned worker — not the launcher that claimed — works
+    // this lease; record its process as one of the lease's authors so the
+    // ledger outlives the lease.
+    // trace:BUG-1918 | ai:claude
+    crate::review_authority::record_lease_identity(
+        project_root,
+        lease_id,
+        &[crate::review_authority::process_token(
+            "proc",
+            pid,
+            start_time.as_deref(),
+        )],
+    );
     Ok(())
 }
 

@@ -928,6 +928,60 @@ pub(crate) fn ps_overlay_integration_standing(project_root: &std::path::Path, ro
     }
 }
 
+/// BUG-2010: overlay live registered agents (Codex, Antigravity, Claude) on running work rows
+/// and prune contradictory orphan rows.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn apply_registered_agent_overlay(
+    live_agents: &[agent_registry::AgentRegistryEntry],
+    leases: &[SessionLease],
+    rows: &mut [PsRow],
+    orphans: &mut Vec<PsOrphan>,
+    pid_start_time: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
+    probe_mail_identity: impl Fn(u32) -> MailIdentityStatus,
+) {
+    if live_agents.is_empty() {
+        return;
+    }
+    for row in rows.iter_mut() {
+        if let Some(agent) = agent_registry::live_agent_for_lease_or_spec(
+            live_agents,
+            Some(&row.lease),
+            row.spec.as_deref(),
+        ) {
+            row.state = LeaseState::Live;
+            row.pid = Some(agent.pid);
+            row.pid_started_at = pid_start_time(agent.pid);
+            if row.role.is_none() || row.role.as_deref() == Some("-") {
+                row.role = agent
+                    .role
+                    .clone()
+                    .or_else(|| Some(agent.agent_type.clone()));
+            }
+            row.mail_identity = Some(probe_mail_identity(agent.pid));
+            if let Some(ref mut d) = row.dispatch {
+                if d.state == dispatch_health_ps::DispatchState::Salvageable {
+                    d.state = dispatch_health_ps::DispatchState::Moving;
+                    d.hint = None;
+                } else if d.state == dispatch_health_ps::DispatchState::Stalled {
+                    row.dispatch = None;
+                }
+            }
+        }
+    }
+
+    orphans.retain(|orphan| {
+        let matching_lease = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(&orphan.spec));
+        agent_registry::live_agent_for_lease_or_spec(
+            live_agents,
+            matching_lease,
+            Some(&orphan.spec),
+        )
+        .is_none()
+    });
+}
+
 /// TASK-1064: should a flag-only In-Progress spec (no spec-scoped lease) be
 /// surfaced as "likely worked by a fan-out" rather than "orphaned"? True only
 /// when there is NO spec-scoped lease at all (`stale_lease == false` — a crashed
@@ -2011,6 +2065,19 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // trace:BUG-1681 | ai:claude
     ps_overlay_integration_standing(project_root, &mut rows);
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
+    // BUG-2010: a live registered agent (Codex, Antigravity, Claude) working a spec
+    // keeps the row live even if the lease recorded a dead or transient pid.
+    // Prune contradictory orphan rows when the spec belongs to a live registered agent.
+    // trace:BUG-2010 | ai:antigravity
+    let live_agents = agent_registry::load_live_entries(project_root);
+    apply_registered_agent_overlay(
+        &live_agents,
+        &leases,
+        &mut rows,
+        &mut orphans,
+        pid_start_time,
+        probe_mail_identity,
+    );
     // The derived driver: a relay / drain / registered agent working a spec
     // whose own lease pid is gone keeps the row live (no stalled framing).
     // trace:STORY-1653 | ai:claude
@@ -3354,3 +3421,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
 
     Ok(())
 }
+
+// trace:BUG-2010 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2010_factory_lane_ps_tests.rs"]
+mod bug_2010_factory_lane_ps_tests;

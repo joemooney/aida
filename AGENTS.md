@@ -1,3 +1,35 @@
+Regen scoring uses independent private `/tmp` install roots and same-path
+quarantine snapshots, then fresh oracle HOME/XDG/TMPDIR. Only immutable guards
+and fixed system directories are on oracle PATH; regenerated tools use locators.
+Guards write an AIDA-owned, read-only-bound FIFO before absolute host delegation.
+Survivor detection is best effort and flags raw scores as non-clean. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
+`aida regen score <dir> --corpus <dir> --model <name> --vendor <name>
+--harness <name>` runs trusted-config argv commands via existing bubblewrap
+confinement and records raw R1 trial JSON under `regen/trials/` in the store.
+Required `oracle_paths` freezes held-out inputs at the trusted config commit;
+the hashed external bundle is verified before runs and mounted read-only.
+Exact v1 check markers, fallback guards, private HOME/XDG and explicit
+`--unconfined` flags govern score cleanliness. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
+C7 lifecycle commands resolve invoking caller authority after acquiring the
+seat lock; ack/release also revalidate persisted requester authority locally.
+The dormant runtime gate refreshes its caller at the same locked boundary.
+Absolute deadlines reconcile on lifecycle/gate entry without a live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
+Seat occupancy C7 core rework uses process-bound child scope plus persisted
+review/implements relationships for assigned-work routing, bounded seat-lock
+acquisition, and one shared main-worktree policy/state root. Plain-shell
+one-shot routing/spawn does not implicitly hold the seat. Production gateway
+wiring still awaits fresh independent C7 approval; hard takeover stays disabled.
+See [the sketch addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements).
+<!-- trace:TASK-1607 | ai:codex -->
+
 `aida regen corpus <dir>` exports committed store content as deterministic
 `corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
 records `dirty: true` while exporting HEAD. See OVERVIEW.md.

@@ -765,3 +765,29 @@ confirm_bypass = "policy" # can only tighten; malformed means "on"
 [keys.trusted.review]
 run_acceptance_commands = "policy" # presence probed for a display note
 acceptance_command_allow = "policy"
+
+# Regeneration commands come only from the trusted default-branch config.
+# trace:TASK-1730 | ai:codex
+[keys.trusted.regen]
+oracle_paths = "policy" # frozen held-out inputs, read at the same trusted SHA
+oracle_command = "command"
+install_command = "command"
+required_tools = "policy"
+
+# Pin once for both configuration and the immutable oracle input bundle.
+# trace:TASK-1730 | ai:codex
+[readers."aida-cli-lib/src/regen/score.rs"]
+channels = ["trusted"]
+sites = 1
+
+# Main-worktree policy copy shared by all sibling occupancy callers. This
+# is still committable policy, not the trusted executable/credential channel.
+# trace:TASK-1607 | ai:codex
+[readers."aida-cli-lib/src/seat_occupancy/config.rs"]
+channels = ["worktree"]
+sites = 1
+
+[keys.worktree.seat_occupancy]
+single_seats = "policy"
+takeover_grace_secs = "policy"
+inspection = "policy"
