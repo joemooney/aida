@@ -1,0 +1,20 @@
+id: 01a13dcb-7da3-71f1-bf47-3ac7887d283e
+spec_id: BUG-2143
+agreed_id: BUG-2143
+title: aida worktree add <SPEC> prints a blank/stale path after aida claim, so fixers fall back to raw git worktree add
+description: 'Fire mode 2026-10-14: two independent fixers (BUG-2141, TASK-1750) ran ''aida claim <SPEC>'' then ''aida worktree add <SPEC>''; the command reported an empty (or stale empty) path instead of creating/printing a sibling worktree, and both fell back to ''git worktree add'' by hand (/home/joe/ai/aida-bug-2141, /home/joe/ai/aida-task1750-reader). Suspect: claim records a lease with worktree_path="" (seen in .aida/sessions/*.toml for the BUG-2130 claim: worktree_path = ""), and worktree add returns the lease''s recorded path instead of creating one. Acceptance: claim then worktree add creates the worktree off origin/main and prints its absolute path; an empty recorded path is never printed as success.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T04:21:48.579518689Z
+modified_at: 2026-10-15T04:21:48.579518689Z
+req_type: Bug
+filed_at:
+  code_sha: 7bf6b769498ca0ae386f04b11aa44b16da175740
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
