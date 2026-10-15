@@ -32,7 +32,7 @@ description: |
   Depends on STORY-1669 slices 1-2 (corpus + sandboxed raw score) and the slice-0 decision on how a project declares its installer.
 
   - [ ] `aida regen score` installs the regenerated system by running the project-declared install command (default `./install.sh` when present) with a sandbox prefix (e.g. `PREFIX=<sandbox>`), instead of copying selected directories. A missing or failing installer is reported as an install failure, distinct from oracle failures.
-  - [ ] The oracle invokes tools by name on the sandbox PATH produced by the installer; the scorer never prepends an interpreter (`python3 <file>`) unless the contract names it. A test fixture whose logic lives in `lib/` behind its own installer scores the same as one whose logic lives in `bin/`.
+  - [ ] The oracle runs with the signed TASK-1730 immutable guards followed by fixed system PATH, and invokes regenerated tools through the explicit AIDA_REGEN_PREFIX locator; trial/prefix directories never enter oracle PATH. The scorer never prepends an interpreter (`python3 <file>`) unless the contract names it. A test fixture whose logic lives in `lib/` behind its own installer scores the same as one whose logic lives in `bin/`.
   - [ ] Each failing check is classified as crash (traceback, import error, usage/unknown-option error, exit 126/127) or assertion failure. When crashes are more than a configurable share of failures (default 50%), the score is flagged `crash-dominated: review before reporting` and is not shown as a headline number without that flag.
   - [ ] When scores from two or more model families are available, the score report lists checks that fail for exactly one family as "oracle-assumption audit candidates". (Auditing them stays a human step.)
   - [ ] Tests cover: installer-based layout, crash-dominated flag on/off, and the single-family-failure list.
@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-15T14:44:54.352223329Z
+modified_at: 2026-10-15T14:50:31.650711514Z
 req_type: Story
 tags:
 - from:aida-host
