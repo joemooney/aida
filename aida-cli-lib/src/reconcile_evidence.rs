@@ -169,9 +169,22 @@ pub(crate) fn open_changes_or_none(
 fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
     let out = match std::process::Command::new(gh)
         .current_dir(project_root)
+        // BUG-2134: GitHub search is token-fuzzy and also matches review
+        // comments, so the first hit is not necessarily a PR that names the
+        // spec. Fetch a page of hits with the fields the match is decided on
+        // and let `parse_open_change_rows` keep only a genuine reference.
+        // trace:BUG-2134 | ai:claude
         .args([
-            "pr", "list", "--state", "open", "--search", spec_id, "--limit", "1", "--json",
-            "number",
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--search",
+            spec_id,
+            "--limit",
+            "30",
+            "--json",
+            "number,title,body,headRefName",
         ])
         .output_retrying_etxtbsy()
     {
@@ -184,7 +197,7 @@ fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChang
     if !out.status.success() {
         return OpenChangeCheck::Unavailable(exit_failure(&out));
     }
-    parse_open_change_rows(&out.stdout)
+    parse_open_change_rows(&out.stdout, spec_id)
 }
 
 fn exit_failure(out: &std::process::Output) -> EvidenceUnavailable {
@@ -196,31 +209,64 @@ fn exit_failure(out: &std::process::Output) -> EvidenceUnavailable {
     }
 }
 
-/// Validate the complete `gh pr list --json number` response. Only a JSON
-/// array whose every row carries a positive integer `number` is an answer;
-/// `[]` is the authoritative "no open change".
-// trace:TASK-1335 | ai:claude
-pub(crate) fn parse_open_change_rows(stdout: &[u8]) -> OpenChangeCheck {
+/// Validate the complete `gh pr list --json number,title,body,headRefName`
+/// response. Only a JSON array whose every row carries a positive integer
+/// `number` and string `title` / `body` is an answer; `[]` is the
+/// authoritative "no open change".
+///
+/// BUG-2134: a row counts as an open change for `spec_id` only when its title
+/// or body names the id as a whole token, or its head branch is named for it
+/// (`bug-1994`, `bug-1994-work`, `fix/bug-1994`). `gh pr list --search` also
+/// returns PRs that mention the id only in a review comment, or that merely
+/// contain its tokens (`BUG`, `1994`) apart. Before this filter such a PR held
+/// a merged spec open: BUG-1994 stayed Needs Attention after #2597 and #2618
+/// merged because unrelated #2606 quoted it in a review comment.
+// trace:TASK-1335 trace:BUG-2134 | ai:claude
+pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChangeCheck {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(stdout) else {
         return OpenChangeCheck::Unavailable(EvidenceUnavailable::Undecodable);
     };
     let Some(rows) = value.as_array() else {
         return OpenChangeCheck::Unavailable(EvidenceUnavailable::NotArray);
     };
+    let ids = [spec_id.to_string()];
     let mut first = None;
     for row in rows {
-        match row
+        let Some(number) = row
             .get("number")
             .and_then(|n| n.as_u64())
             .filter(|n| *n > 0)
-        {
-            Some(number) => {
-                first.get_or_insert(number);
-            }
-            None => return OpenChangeCheck::Unavailable(EvidenceUnavailable::BadRow),
+        else {
+            return OpenChangeCheck::Unavailable(EvidenceUnavailable::BadRow);
+        };
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let (Some(title), Some(body)) = (field("title"), field("body")) else {
+            return OpenChangeCheck::Unavailable(EvidenceUnavailable::BadDiagnosticRow);
+        };
+        let branch = field("headRefName").unwrap_or("");
+        let names_spec = crate::count_ids_mentioned(&format!("{title}\n{body}"), &ids) > 0
+            || branch_names_spec(branch, spec_id);
+        if names_spec {
+            first.get_or_insert(number);
         }
     }
     first.map_or(OpenChangeCheck::Clear, OpenChangeCheck::Open)
+}
+
+/// BUG-2134: is `branch` named for `spec_id`? A path segment of the branch
+/// must equal the id or start with it followed by `-` (`bug-1994-work`), so
+/// `bug-19945` does not match `BUG-1994`.
+// trace:BUG-2134 | ai:claude
+fn branch_names_spec(branch: &str, spec_id: &str) -> bool {
+    let id = spec_id.to_ascii_lowercase();
+    if id.is_empty() {
+        return false;
+    }
+    branch.to_ascii_lowercase().split('/').any(|segment| {
+        segment
+            .strip_prefix(id.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('-'))
+    })
 }
 
 /// The already-Completed sweep diagnostic: how many of `candidate_ids` an
@@ -581,9 +627,15 @@ mod tests {
 
     #[test]
     fn open_change_rows_require_a_complete_valid_array() {
-        assert_eq!(parse_open_change_rows(b"[]\n"), OpenChangeCheck::Clear);
         assert_eq!(
-            parse_open_change_rows(br#"[{"number":2436}]"#),
+            parse_open_change_rows(b"[]\n", "TASK-11"),
+            OpenChangeCheck::Clear
+        );
+        assert_eq!(
+            parse_open_change_rows(
+                br#"[{"number":2436,"title":"wip (TASK-11)","body":""}]"#,
+                "TASK-11"
+            ),
             OpenChangeCheck::Open(2436)
         );
         for (bytes, want) in [
@@ -594,17 +646,64 @@ mod tests {
             (&b"null"[..], EvidenceUnavailable::NotArray),
             (&br#"[{"title":"x"}]"#[..], EvidenceUnavailable::BadRow),
             (&br#"[{"number":"7"}]"#[..], EvidenceUnavailable::BadRow),
+            (
+                &br#"[{"number":7}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"[{"number":7,"title":"x","body":null}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
             (&br#"[{"number":0}]"#[..], EvidenceUnavailable::BadRow),
             (&br#"[{"number":-3}]"#[..], EvidenceUnavailable::BadRow),
-            (&br#"[{"number":5},7]"#[..], EvidenceUnavailable::BadRow),
+            (
+                &br#"[{"number":5,"title":"x","body":""},7]"#[..],
+                EvidenceUnavailable::BadRow,
+            ),
         ] {
             assert_eq!(
-                parse_open_change_rows(bytes),
+                parse_open_change_rows(bytes, "TASK-11"),
                 OpenChangeCheck::Unavailable(want),
                 "{}",
                 String::from_utf8_lossy(bytes)
             );
         }
+    }
+
+    /// BUG-2134: only a PR whose title, body or head branch names the spec
+    /// holds it open. A search hit that matched on a review comment or on the
+    /// id's tokens apart (the #2606 / BUG-1994 case) is not an open change.
+    // trace:BUG-2134 | ai:claude
+    #[test]
+    fn open_change_rows_keep_only_prs_that_name_the_spec() {
+        let check = |bytes: &[u8]| parse_open_change_rows(bytes, "BUG-1994");
+        // Comment-only / fuzzy hit: nothing in title, body or branch.
+        assert_eq!(
+            check(br#"[{"number":2606,"title":"fix(pr-ship): never None (BUG-1997)","body":"see 1994 bugs","headRefName":"bug-1997"}]"#),
+            OpenChangeCheck::Clear
+        );
+        // A longer id is not the spec.
+        assert_eq!(
+            check(br#"[{"number":9,"title":"x (BUG-19945)","body":"","headRefName":"bug-19945"}]"#),
+            OpenChangeCheck::Clear
+        );
+        // Title trailer, body prose, and branch name each count.
+        assert_eq!(
+            check(br#"[{"number":2606,"title":"x","body":"","headRefName":"y"},{"number":2597,"title":"fix (BUG-1994)","body":"","headRefName":"z"}]"#),
+            OpenChangeCheck::Open(2597)
+        );
+        assert_eq!(
+            check(br#"[{"number":5,"title":"x","body":"part 2 of BUG-1994","headRefName":"z"}]"#),
+            OpenChangeCheck::Open(5)
+        );
+        assert_eq!(
+            check(br#"[{"number":6,"title":"x","body":"","headRefName":"bug-1994-work"}]"#),
+            OpenChangeCheck::Open(6)
+        );
+        assert_eq!(
+            check(br#"[{"number":7,"title":"x","body":""}]"#),
+            OpenChangeCheck::Clear
+        );
     }
 
     #[test]
