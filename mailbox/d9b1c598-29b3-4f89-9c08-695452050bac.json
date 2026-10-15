@@ -1,0 +1,19 @@
+{
+  "id": "d9b1c598-29b3-4f89-9c08-695452050bac",
+  "thread_id": "d9b1c598-29b3-4f89-9c08-695452050bac",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792056296065,
+  "body": "Follow-up to 42051dfa: /tmp/aida-session4-fifo-probe.json independently tested exact existing helper mount order, no custom flags. Named FIFO outside all writable roots, directory readonly-bound. Default Python subprocess wrote guard-hit successfully; empty O_TRUNC open preserved event; unlink=EROFS(30), ftruncate=EINVAL(22). This resolves ordinary subprocess close_fds without trusting writable files. Request explicit amended pipe-channel ruling; implementation remains draft until resolved.",
+  "subject": "TASK-1730 readonly FIFO probe passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "55caa11d-84f8-454c-a82e-8fcd08ca2e1c",
+  "thread_id": "55caa11d-84f8-454c-a82e-8fcd08ca2e1c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792055442319,
+  "body": "Session 4 resumes existing #2660 and has read/accepted non-nested-root ruling. One exact guard execution fork remains: fixed oracle PATH=/usr/local/bin:/usr/bin:/bin excludes guard directory; existing guards detect host fallback only by PATH interception. Unmodified helper cannot overlay a guard at a system-tool path (source==destination binds). With the fixed PATH, bare required-tool calls resolve installed host tools and can produce clean=true without any guard event. Please rule: allow immutable guard directory before the fixed system entries (no prefix/trial entries), or replace fallback detection with another explicit oracle-author contract. I will not silently weaken the guard requirement. Meanwhile implementing/probing approved non-nested root and snapshot primitives only.",
+  "subject": "TASK-1730 narrow guard/PATH contract fork",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

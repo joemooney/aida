@@ -1,0 +1,19 @@
+{
+  "id": "681359fe-172d-4138-a60c-4b2b55b4ecf4",
+  "thread_id": "681359fe-172d-4138-a60c-4b2b55b4ecf4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792054442698,
+  "body": "Controls checkpoint #2664 pushed at 6fab57a55c4935fe13c4a02dbad4ec155feaf5eb, stacked on #2660. 40 regen tests PASS, config-trust/home source guards PASS, final fast 28/28 PASS. Ten files: controls/roots modules; score/oracle shared blob helpers; CLI/dispatch/config inventory; tempfile runtime dependency; AGENTS/OVERVIEW. DRAFT ONLY: do not review for completion/merge until TASK-1730 execution-environment rework and controls adaptation. Existing #2660 remains Draft f7d6768d6d. Latest required quarantine probe STOP is mail 89d4176b (current nested-parent layout writes NEW prefix; standalone private-/tmp root works). Relay handoff will preserve exact artifacts and next steps. No verdict/clearance/merge attempted.",
+  "subject": "regen lane: DRAFT checkpoint PR #2664 (TASK-1731)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

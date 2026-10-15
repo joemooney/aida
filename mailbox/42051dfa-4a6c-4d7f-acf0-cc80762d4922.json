@@ -1,0 +1,19 @@
+{
+  "id": "42051dfa-4a6c-4d7f-acf0-cc80762d4922",
+  "thread_id": "42051dfa-4a6c-4d7f-acf0-cc80762d4922",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792056225112,
+  "body": "Self-check round 2 reproduced a real inherited-fd gap: trusted Python oracle subprocess.run([required_tool], capture_output=True) closes fd9 by default. Guard printf >&9 fails with bad fd (exit98), oracle can retain parsed checks and exit0, leaving no hit. This is ordinary oracle API behavior, not deliberate hostile attestation bypass. Proposed bounded solution to probe: AIDA-owned per-run named FIFO outside all trial/phase writable roots, readonly-bound using existing read_allowlist. Frozen guards write to its fixed env locator; AIDA collects bytes, FIFO cannot be truncated/unlinked through RO mount, and ordinary subprocesses can reopen it without inherited descriptors. Keep inherited descriptor too for best-effort survivor matching. No helper or namespace changes. May I use this pipe channel if exact readonly-FIFO probe succeeds, or require an explicit oracle-author pass_fds contract? #2660 remains Draft; snapshot/core tests compiling, no Ready claim.",
+  "subject": "TASK-1730 guard fd dropped by ordinary oracle subprocess; channel ruling",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

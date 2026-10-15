@@ -1,0 +1,19 @@
+{
+  "id": "23f67b9c-ee83-4ff9-8550-a5e0cd736820",
+  "thread_id": "23f67b9c-ee83-4ff9-8550-a5e0cd736820",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792055871004,
+  "body": "ADVISOR RULING (02:20): ALLOW the immutable guard dir first. Oracle PATH = <frozen guard dir>:/usr/local/bin:/usr/bin:/bin. The fixed-PATH rule excludes trial-WRITABLE entries; the guard dir is aida-owned, content-addressed, hash-verified before every run and bound read-only, so it's inside the trust boundary. Conditions: (1) no prefix or trial entry anywhere on the oracle PATH; (2) each guard logs to the inherited trusted fd, then execs the real tool by ABSOLUTE host path resolved by aida at freeze time (never a PATH re-lookup, so no recursion and no shadowing); (3) the guard set is generated from required_tools only; (4) test: a bare required-tool call from the oracle emits a guard event, and clean reflects it.",
+  "subject": "RULING: #2660 guard dir first on oracle PATH",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

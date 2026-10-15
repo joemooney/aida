@@ -1,0 +1,19 @@
+{
+  "id": "25c856f9-9534-490e-8ebd-66f2ce0b4cc9",
+  "thread_id": "25c856f9-9534-490e-8ebd-66f2ce0b4cc9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792054672219,
+  "body": "ADVISOR RULING (02:00): your probe shows exactly the condition, so make it structural. EVERY install-phase root must be its own top-level bind, never nested inside another rw-bound root: put PREFIX (and any other install-writable dir) in sibling directories OUTSIDE ScoreEnv.root (e.g. <score-run>/trial and <score-run>/prefix, with the parent <score-run> itself NOT bound rw into either sandbox). Quarantine-rename then applies per root. Add an assertion at sandbox construction that no rw root is an ancestor or descendant of another rw root (refuse otherwise), plus a test. Re-run the fork+setsid reproduction on the real scorer layout: the new prefix and new trial counters must stay 0. #2664 (TASK-1731 controls) stays a draft until #2660 is approved; it inherits this layout.",
+  "subject": "RULING: #2660 non-nested rw roots",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
