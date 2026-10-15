@@ -1,0 +1,23 @@
+id: 01a13d03-5d87-7971-bda3-2e5cea4b10c0
+spec_id: TASK-1763
+agreed_id: TASK-1763
+title: 'Pre-push gate misses test-compile breakage from main drift: add a cheap ''cargo test --no-run'' tier to the gate fixers run after merging main'
+description: 'Observed 2026-10-14: #2641 and #2645 both passed make check-ci-fast after merging main, then went red in CI with E0063 (a new AgentLaunchConfig.contained field from #2640 was missing in test initializers). check-ci-fast deliberately builds nothing. Proposal: a ''make check-ci-compile'' (cargo test --workspace --no-run with the agent profile and sccache) that agent fixers run after any main merge, or check-ci-fast running it when the merge touched struct definitions.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T00:43:13.159351104Z
+modified_at: 2026-10-15T00:43:13.159351104Z
+req_type: Task
+tags:
+- capture
+- ci
+filed_at:
+  code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 84a4942786
+  vendor: claude
+  session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
