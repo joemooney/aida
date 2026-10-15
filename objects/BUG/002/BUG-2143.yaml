@@ -3,12 +3,12 @@ spec_id: BUG-2143
 agreed_id: BUG-2143
 title: aida worktree add <SPEC> prints a blank/stale path after aida claim, so fixers fall back to raw git worktree add
 description: 'Fire mode 2026-10-14: two independent fixers (BUG-2141, TASK-1750) ran ''aida claim <SPEC>'' then ''aida worktree add <SPEC>''; the command reported an empty (or stale empty) path instead of creating/printing a sibling worktree, and both fell back to ''git worktree add'' by hand (/home/joe/ai/aida-bug-2141, /home/joe/ai/aida-task1750-reader). Suspect: claim records a lease with worktree_path="" (seen in .aida/sessions/*.toml for the BUG-2130 claim: worktree_path = ""), and worktree add returns the lease''s recorded path instead of creating one. Acceptance: claim then worktree add creates the worktree off origin/main and prints its absolute path; an empty recorded path is never printed as success.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T04:21:48.579518689Z
-modified_at: 2026-10-15T13:43:42.871094837Z
+modified_at: 2026-10-15T16:38:30.929368186Z
 req_type: Bug
 comments:
 - id: 01a13e39-d8f5-7e73-98db-37127b172809
@@ -46,6 +46,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1406d-f711-7b11-818e-66dd38d768dc
+  author: aida-orchestrator
+  timestamp: 2026-10-15T16:38:30.929405463Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7bf6b769498ca0ae386f04b11aa44b16da175740
   branch: main
@@ -54,3 +61,11 @@ filed_at:
   aida_build_sha: defb55f88b
   vendor: claude
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'STRICT round 1: the reported case is fixed, but advisory claim leases with a --worktree path are still re-entered, and the on-disk guard can never fire'
+  recovery_hint: address the review findings, move BUG-2143 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-15T16:38:30.929368186Z
