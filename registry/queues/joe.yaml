@@ -54,3 +54,11 @@
   note: Promoted from finding BUG-2118 via `aida findings promote`
   added_at: 2026-10-15T15:41:39.252869625Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a1412c-da09-7063-89b6-06d068a4164e
+  position: 59000
+  added_by: joe
+  note: auto-queued by `aida pr` (abf9f7f0); covers 1 spec
+  added_at: 2026-10-15T20:07:12.147369917Z
+  for_role: reviewer
+  added_by_machine: imac
