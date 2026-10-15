@@ -85,10 +85,16 @@ fn require_execution(
 }
 
 pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
-    // Only committed evidence counts; pin once to avoid mixing concurrent writes.
     let sha = super::super::head(store)?;
-    let rows = super::super::git(store, &["ls-tree", "-rz", &sha, "--", "regen/trials/"])?;
-    let mut records = Vec::new();
+    read_records_at(store, &sha)
+}
+
+// One pinned tree plus one blob batch, regardless of the trial/control count.
+// The score/control gate keeps its strict uncached reader.
+// trace:TASK-1734 | ai:codex
+pub(super) fn read_records_at(store: &Path, sha: &str) -> Result<Vec<TrialRecord>> {
+    let rows = super::super::git(store, &["ls-tree", "-rz", sha, "--", "regen/trials/"])?;
+    let mut objects = Vec::new();
     for row in rows.split(|b| *b == 0).filter(|b| !b.is_empty()) {
         let row = std::str::from_utf8(row)?;
         let (meta, path) = row.split_once('\t').context("invalid trial tree entry")?;
@@ -97,11 +103,17 @@ pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
             fields.len() == 3 && fields[0] == "100644" && fields[1] == "blob",
             "unsafe control record: {path}"
         );
-        let bytes = super::super::git(store, &["cat-file", "blob", fields[2]])?;
+        objects.push((fields[2].to_owned(), path.to_owned()));
+    }
+    let mut records = Vec::new();
+    for ((_, path), bytes) in objects
+        .iter()
+        .zip(super::super::read_blobs(store, &objects)?)
+    {
         let record: TrialRecord = serde_json::from_slice(&bytes)
             .with_context(|| format!("invalid control/trial record: {path}"))?;
         anyhow::ensure!(
-            path == format!("regen/trials/{}.json", record.trial_id),
+            path == &format!("regen/trials/{}.json", record.trial_id),
             "control record identity/path mismatch: {path}"
         );
         records.push(record);

@@ -520,6 +520,12 @@ are `interface|missing|behavior|other`, and notes are optional plain text.
 discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
 Digest JSON includes an optional `regeneration` object. Missing scores or invalid
 committed records omit this optional display; reads use local committed evidence.
+A derived summary cache under `$XDG_CACHE_HOME/aida/regen-display` (default
+`~/.cache`) is keyed by store HEAD and CLI build. An unchanged HEAD uses no Git
+subprocesses; a miss reads trial blobs in one batch. Failed reads are not cached.
+Digest selection excludes trials after `--until`; text ages use compact days,
+hours, minutes or seconds. The cache grants no scoring or control authority;
+unusual Git discovery environments omit this optional segment.
 <!-- trace:TASK-1734 | ai:codex -->
 
 `aida regen report` reads committed ordinary trial records from a pinned store

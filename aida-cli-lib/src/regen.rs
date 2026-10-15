@@ -186,6 +186,28 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
     if objects.is_empty() {
         return Ok(Vec::new());
     }
+    let mut reqs = Vec::new();
+    let mut ids = HashSet::new();
+    for ((_, path), bytes) in objects.iter().zip(read_blobs(store, &objects)?) {
+        let req: Requirement = serde_yaml::from_slice(&bytes)
+            .with_context(|| format!("parse committed object {path}"))?;
+        anyhow::ensure!(
+            ids.insert(req.id),
+            "duplicate corpus UUID {} in {path}",
+            req.id
+        );
+        reqs.push(req);
+    }
+    reqs.sort_by_key(|r| r.id);
+    Ok(reqs)
+}
+
+// Shared immutable blob protocol; one child and concurrent stdin draining.
+// trace:TASK-1734 | ai:codex
+fn read_blobs(store: &Path, objects: &[(String, String)]) -> Result<Vec<Vec<u8>>> {
+    if objects.is_empty() {
+        return Ok(Vec::new());
+    }
     let input: String = objects.iter().map(|(oid, _)| format!("{oid}\n")).collect();
     let mut child = aida_core::git_ops::host_git_command(store)
         .args(["cat-file", "--batch"])
@@ -206,8 +228,7 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
         String::from_utf8_lossy(&output.stderr)
     );
     let mut remaining = output.stdout.as_slice();
-    let mut reqs = Vec::new();
-    let mut ids = HashSet::new();
+    let mut blobs = Vec::new();
     for (oid, path) in objects {
         let (header, data) = split_byte(remaining, b'\n').context("missing git blob header")?;
         let fields: Vec<_> = std::str::from_utf8(header)?.split_whitespace().collect();
@@ -220,19 +241,11 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
             size < data.len() && data[size] == b'\n',
             "truncated git blob for {path}"
         );
-        let req: Requirement = serde_yaml::from_slice(&data[..size])
-            .with_context(|| format!("parse committed object {path}"))?;
-        anyhow::ensure!(
-            ids.insert(req.id),
-            "duplicate corpus UUID {} in {path}",
-            req.id
-        );
-        reqs.push(req);
+        blobs.push(data[..size].to_vec());
         remaining = &data[size + 1..];
     }
     anyhow::ensure!(remaining.is_empty(), "unexpected trailing git batch output");
-    reqs.sort_by_key(|r| r.id);
-    Ok(reqs)
+    Ok(blobs)
 }
 
 fn split_byte(data: &[u8], byte: u8) -> Option<(&[u8], &[u8])> {
