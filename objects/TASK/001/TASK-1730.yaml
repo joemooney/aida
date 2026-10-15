@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T07:34:45.324036122Z
+modified_at: 2026-10-15T08:07:16.879374323Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -131,6 +131,11 @@ comments:
   content: Commit 266d8f5ef3 references this requirement
   created_at: 2026-10-15T07:34:45.324036122Z
   modified_at: 2026-10-15T07:34:45.324036122Z
+- id: 01a13e99-ea8f-7510-b49a-a5d114626621
+  author: joe
+  content: 'Immutable bundle implementation pushed on existing draft #2660 at fd14dabcddc909a1b4af485b98ec6fff910ad8ce. Same pinned trusted SHA supplies config and git-only oracle inputs; content-addressed external RO bundle verified before runs; absolute bundled executable, private env and locator vars. All 24 regen tests pass, including executable all-pass substitution against trusted FAIL, tampering, path/symlink escapes, actual bwrap RO write rejection, overlap and cache/worktree checks. Merged-base make check-ci-compile passed; aida dev build/worktree smoke passed; config-trust/home/store-Git/exhaustive audit guards passed; final make check-ci-fast 28/28. Only post-test source change was explicit Linux test cfg annotations required by portability ratchet; no baseline exemption. PR body is current. No verdict or merge. One narrow conditional-dependency clarification sent to advisor: implementation requires GNU env --chdir (works here, fail closed if unavailable), and currently has no alternate cwd wrapper from the ruling. Draft retained until advisor confirms prerequisite vs fallback requirement; no absent fallback coverage is claimed.'
+  created_at: 2026-10-15T08:07:16.879374323Z
+  modified_at: 2026-10-15T08:07:16.879374323Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
