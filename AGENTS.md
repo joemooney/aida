@@ -1,3 +1,11 @@
+Ordinary regen scoring reads optional strict trial-root `GAPS.toml` v1.
+`[environment]` maps contract names to regenerated names; protected names and
+sensitive source names refuse before selective one-time capture. R1 receives
+sources, then fresh R2 receives sources plus aliases under the same oracle and
+controls. An additive versioned adapter block retains complete R2 evidence and
+pass-rate deltas; a failed R2 refuses the combined result. See OVERVIEW.md.
+<!-- trace:TASK-1732 | ai:codex -->
+
 `aida regen score --control reference|stub --corpus <dir> --model <name>
 --vendor <name> --harness <name>` generates fresh controls. Ordinary scoring
 copies system inputs into a fresh root and requires matching, clean reference

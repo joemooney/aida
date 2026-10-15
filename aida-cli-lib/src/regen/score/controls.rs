@@ -248,6 +248,7 @@ mod tests {
         let passed = values.iter().filter(|(_, pass)| *pass).count();
         TrialRecord {
             format_version: 1,
+            adapter: None,
             trial_id: Uuid::new_v4(),
             kind: kind.into(),
             root_fresh: true,
@@ -322,6 +323,81 @@ mod tests {
         };
         assert!(format!("{error:#}").contains(expected), "{error:#}");
     }
+    // trace:TASK-1732 | ai:codex
+    #[test]
+    fn adapter_applies_same_controls_to_both_runs_and_retains_failure_evidence() {
+        let gate = gate(records()).unwrap();
+        for failure in 0..6 {
+            let mut r1 = record(
+                "trial",
+                Uuid::new_v4(),
+                1,
+                &[("behavior", false), ("hollow", true)],
+            );
+            let mut r2 = record(
+                "trial-adapted",
+                Uuid::new_v4(),
+                1,
+                &[("behavior", true), ("hollow", true)],
+            );
+            match failure {
+                1 => {
+                    r2.guard_hits.push("tool".into());
+                    r2.flags.push("guard_hits".into());
+                    r2.clean = false;
+                }
+                2 => {
+                    r2.status = "install_failed".into();
+                    r2.install_exit = Some(3);
+                    r2.oracle_exit = None;
+                    r2.aggregate = None;
+                    r2.checks.clear();
+                    r2.error = Some("install diagnostic".into());
+                    r2.clean = false;
+                }
+                3 => {
+                    r2.checks[0].name = "changed".into();
+                }
+                4 => {
+                    r2.survivors_detected = 1;
+                    r2.clean = false;
+                }
+                5 => {
+                    r2.oracle_exit = Some(7);
+                    r2.flags.push("oracle_nonzero_exit".into());
+                    r2.clean = false;
+                }
+                _ => {}
+            }
+            adapter::apply_gate(&mut r1, Some(&gate));
+            adapter::apply_gate(&mut r2, Some(&gate));
+            let root = tempfile::tempdir().unwrap();
+            std::fs::write(root.path().join("GAPS.toml"), "format_version=1").unwrap();
+            let capture = adapter::CapturedAdapter::load(root.path())
+                .unwrap()
+                .unwrap();
+            capture.attach(&mut r1, r2);
+            let value = serde_json::to_value(&r1).unwrap();
+            if failure == 0 || failure == 5 {
+                assert_eq!(r1.status, "scored");
+                assert_eq!(value["adapter"]["raw_delta"], 0.5);
+                assert_eq!(value["adapter"]["discriminating_delta"], 1.0);
+                assert_eq!(
+                    value["adapter"]["r2"]["excluded_checks"],
+                    serde_json::json!(["hollow"])
+                );
+                assert_eq!(value["adapter"]["r2"]["control_ids"], value["control_ids"]);
+                assert_eq!(r1.clean, failure == 0);
+            } else {
+                assert_eq!(r1.status, "adapter_refused");
+                assert!(!r1.clean);
+                assert!(value["adapter"]["raw_delta"].is_null());
+                assert_eq!(value["aggregate"]["pass_rate"], 0.5);
+                assert!(value["adapter"]["r2"]["status"] != "scored");
+            }
+        }
+    }
+
     #[test]
     fn absent_and_stale_reference_or_stub_refuse() {
         refused(vec![], "missing matching reference");
