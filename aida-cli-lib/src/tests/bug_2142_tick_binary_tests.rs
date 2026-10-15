@@ -208,3 +208,57 @@ fn bug_2142_doctor_flags_a_driver_not_on_the_live_binary() {
     assert!(build_stale_tick_binary_findings(&ok, &live_paths(), Some(now)).is_empty());
     assert!(build_stale_tick_binary_findings(&stale, &LiveAidaPaths::default(), None).is_empty());
 }
+
+/// TASK-1769: a driver that reaches the live binary through a symlinked
+/// `$HOME`, or through any other link to it, runs the live binary and is not
+/// flagged; a different binary still is.
+// trace:TASK-1769 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1769_live_path_compare_is_canonical() {
+    use std::os::unix::fs::symlink;
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let (bin, live_dir) = (home.join("bin"), home.join("live"));
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&live_dir).unwrap();
+    let live_exe = live_dir.join("aida");
+    std::fs::write(&live_exe, b"live").unwrap();
+    symlink(&live_exe, bin.join("aida")).unwrap();
+    let linked_home = tmp.path().join("linked-home");
+    symlink(&home, &linked_home).unwrap();
+    let other_link = tmp.path().join("other-aida");
+    symlink(&live_exe, &other_link).unwrap();
+    let elsewhere = tmp.path().join("elsewhere-aida");
+    std::fs::write(&elsewhere, b"old").unwrap();
+
+    let live = LiveAidaPaths {
+        link: Some(bin.join("aida")),
+        live: Some(live_exe.clone()),
+    };
+    assert!(live.names(&linked_home.join("bin").join("aida")));
+    assert!(live.names(&linked_home.join("live").join("aida")));
+    assert!(live.names(&other_link));
+    assert!(!live.names(&elsewhere));
+    // A path that does not resolve compares raw.
+    assert!(!live.names(&tmp.path().join("gone").join("aida")));
+
+    let now = SystemTime::now();
+    let evidence = |exe: PathBuf| TickExeEvidence {
+        installed: InstalledTickExe {
+            driver: Driver::Systemd,
+            exe,
+        },
+        modified: Some(now),
+    };
+    let ok = [
+        evidence(linked_home.join("bin").join("aida")),
+        evidence(other_link),
+    ];
+    assert!(build_stale_tick_binary_findings(&ok, &live, Some(now)).is_empty());
+    let stale = [evidence(elsewhere)];
+    assert_eq!(
+        build_stale_tick_binary_findings(&stale, &live, Some(now)).len(),
+        1
+    );
+}
