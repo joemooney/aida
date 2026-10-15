@@ -299,7 +299,7 @@ fn open_pr_for_same_spec_defers_auto_bump() {
              \tshift\n\
              done\n\
              case \"$search\" in\n\
-             \tBUG-1454) echo '[{{\"number\":1979}}]' ;;\n\
+             \tBUG-1454) echo '[{{\"number\":1979,\"title\":\"second deliverable (BUG-1454)\",\"body\":\"\"}}]' ;;\n\
              \t*) echo '[]' ;;\n\
              esac\n",
             log = gh_log.display()
@@ -4758,4 +4758,151 @@ fn bug_1944_trailer_completes_approved_spec_with_gates_intact() {
         |_| None,
     );
     assert!(trailer.ids.is_empty(), "{trailer:?}");
+}
+
+/// BUG-2134 (the BUG-1994 repro): a Needs Attention spec whose trailered
+/// commit merges completes on pull even when `gh pr list --search` returns an
+/// open PR that does not name it — #2606 matched BUG-1994 only through a
+/// review comment, and that hit used to hold the merge back. A real open PR
+/// still holds (the BUG-1454 control below).
+// trace:BUG-2134 | ai:claude
+#[cfg_attr(
+    windows,
+    ignore = "the fake gh is a shebang script; Windows cannot execute it via shebang"
+)]
+#[test]
+fn needs_attention_spec_completes_past_an_open_pr_that_does_not_name_it() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-1994", "Needs Attention");
+    seed_spec_at(&store_path, "BUG-1454", "Needs Attention");
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/aida.git",
+        ],
+    );
+    let fake_gh = project_root.join("fake-gh");
+    crate::test_exec::write_executable(
+        &fake_gh,
+        "#!/bin/sh\n\
+         if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
+         search=''\n\
+         while [ $# -gt 0 ]; do\n\
+         \tif [ \"$1\" = '--search' ]; then search=\"$2\"; fi\n\
+         \tshift\n\
+         done\n\
+         case \"$search\" in\n\
+         \tBUG-1994) echo '[{\"number\":2606,\"title\":\"fix(pr-ship): never None (BUG-1997)\",\"body\":\"\",\"headRefName\":\"bug-1997\"}]' ;;\n\
+         \tBUG-1454) echo '[{\"number\":77,\"title\":\"part two (BUG-1454)\",\"body\":\"\",\"headRefName\":\"x\"}]' ;;\n\
+         \t*) echo '[]' ;;\n\
+         esac\n",
+    );
+    let _gh = crate::test_env::EnvVarGuard::set(
+        "AIDA_TEST_GH_BINARY",
+        fake_gh.to_string_lossy().as_ref(),
+    );
+
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    for (file, id) in [("a.txt", "BUG-1994"), ("b.txt", "BUG-1454")] {
+        std::fs::write(project_root.join(file), "x\n").unwrap();
+        run_git(&project_root, &["add", file]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("fix: deliverable ({id}) (#12)")],
+        );
+    }
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(has_flip(&flips, "BUG-1994"), "flips: {flips:?}");
+    assert!(!has_flip(&flips, "BUG-1454"), "flips: {flips:?}");
+    let after = storage.load().unwrap();
+    assert_eq!(
+        after.get_requirement_by_spec_id("BUG-1994").unwrap().status,
+        RequirementStatus::Completed
+    );
+    assert_eq!(
+        after.get_requirement_by_spec_id("BUG-1454").unwrap().status,
+        RequirementStatus::NeedsAttention,
+        "a PR that names the spec still holds it"
+    );
+}
+
+/// BUG-2134: a merge commit whose body declares a non-completing slice
+/// completes nothing, for a Needs Attention spec exactly as for an In Progress
+/// one. The control spec, merged the ordinary way, completes in the same pass.
+// trace:BUG-2134 | ai:claude
+#[test]
+fn non_completing_slice_merge_leaves_needs_attention_and_in_progress_open() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "TASK-9101", "Needs Attention");
+    seed_spec_at(&store_path, "TASK-9102", "In Progress");
+    seed_spec_at(&store_path, "TASK-9103", "Needs Attention");
+
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    for (file, id, body) in [
+        ("a.txt", "TASK-9101", "Non-completing slice."),
+        ("b.txt", "TASK-9102", "aida: no-complete"),
+        ("c.txt", "TASK-9103", "Ordinary merge."),
+    ] {
+        std::fs::write(project_root.join(file), "x\n").unwrap();
+        run_git(&project_root, &["add", file]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("fix: slice ({id}) (#9)"),
+                "-m",
+                body,
+            ],
+        );
+    }
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let after = storage.load().unwrap();
+    let status = |id: &str| after.get_requirement_by_spec_id(id).unwrap().status.clone();
+    assert!(!has_flip(&flips, "TASK-9101"), "flips: {flips:?}");
+    assert!(!has_flip(&flips, "TASK-9102"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9101"), RequirementStatus::NeedsAttention);
+    assert_eq!(status("TASK-9102"), RequirementStatus::InProgress);
+    assert!(has_flip(&flips, "TASK-9103"), "control: flips: {flips:?}");
+    assert_eq!(status("TASK-9103"), RequirementStatus::Completed);
+}
+
+/// BUG-2134: the marker is read from the body only — a subject is never a
+/// declaration — and a mid-prose mention stays descriptive (BUG-1919 rules).
+// trace:BUG-2134 | ai:claude
+#[test]
+fn commit_non_completing_marker_reads_the_body_only() {
+    assert!(commit_declares_non_completing(
+        "fix: slice (BUG-1) (#2)\n\nnon-completing slice\n"
+    ));
+    assert!(!commit_declares_non_completing("non-completing slice"));
+    assert!(!commit_declares_non_completing(
+        "fix: x (BUG-1) (#2)\n\nThis is not a non-completing slice of anything.\n"
+    ));
+}
+
+/// BUG-2134: the open-PR hold names the status the spec keeps, and a held
+/// Needs Attention spec gets the one-time triage prompt.
+// trace:BUG-2134 | ai:claude
+#[test]
+fn open_pr_withheld_message_names_kept_status_and_prompts_triage() {
+    let na = open_pr_withheld_message("BUG-1994", &RequirementStatus::NeedsAttention, 2606);
+    assert!(
+        na.contains("merged work references needs-attention spec BUG-1994: triage it"),
+        "{na}"
+    );
+    assert!(na.contains("#2606"), "{na}");
+    let ip = open_pr_withheld_message("BUG-7", &RequirementStatus::InProgress, 3);
+    assert!(ip.contains("BUG-7 stays In Progress"), "{ip}");
+    let done = open_pr_withheld_message("BUG-8", &RequirementStatus::Done, 4);
+    assert!(done.contains("BUG-8 stays Done"), "{done}");
 }
