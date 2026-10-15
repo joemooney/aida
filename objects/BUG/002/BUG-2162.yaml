@@ -1,0 +1,42 @@
+id: 01a141ba-8ed3-7ab2-bfdb-505cc7e13d21
+spec_id: BUG-2162
+agreed_id: BUG-2162
+title: Preserve sticky hypothesis evidence across clean store synchronization
+description: |
+  ## Problem
+
+  Author self-checks for STORY-1675 proved that a clean textual store rebase can combine an offline description rewrite with a newly appended `hypothesis_lock` field. No YAML conflict occurs, so the structured resolver is never invoked. The final row has the changed description and the earlier description hash. The implementation refuses later canonical mutations on the mismatch, but the AIDA-owned sync has already exposed changed evidence. A combined graph from separate clones can also establish first-result eligibility without a backend mutation stamping the hypothesis.
+
+  ## Source / evidence
+
+  - aida-core/src/git_ops.rs: pull_rebase and pull_rebase_auto_merge report clean Git success without a hypothesis graph boundary; resolve_spec_conflict only covers textual conflicts.
+  - Author checker1 ran native Git merge/rebase demonstrations under /tmp/story1675-checker1-merge-k24o3azw and /tmp/story1675-checker1-rebase-25js4852. It also reproduced lost stamps in the original structured resolver; structured preservation is fixed in STORY-1675 commit871667a4b70c744c06832b5ed2a62fc10c07ab8f.
+  - Author checker3 retained the clean-sync issue at that head; the core14 hypothesis fixtures and its32 additional canonical mutation probes passed. No independent verdict has been authored.
+
+  ## Proposed acceptance (pending advisor scope ruling)
+
+  - AIDA-owned clean and conflicted store synchronization preserve pre-existing sticky timestamps, hashes and frozen descriptions, or refuse incompatible incoming changes before a clean-success claim.
+  - Cover first-result eligibility created by merging separate clone graphs, and tag/link removal or result reopen during sync.
+  - Exercise a two-clone fixture where one completes a linked result while the other edits the pre-result description; ensure clean textual Git merge is covered, not only the structured resolver.
+  - No unlock/override flag, force push, or destructive reset recovery. Maintain store-lock and existing conflict-recovery discipline.
+
+  Advisor must decide whether this boundary extends STORY-1675 or is a separately accepted follow-up. It is NOT declared out of scope or deferred by the author. Pending request: mail3a05e1d1 and the STORY-1675 sketch addendum. No implementation of the clean-sync guard has started.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T22:41:47.731555387Z
+modified_at: 2026-10-15T22:41:47.731555387Z
+req_type: Bug
+tags:
+- from-implementer:STORY-1675
+- needs-advisor
+- regenerability
+filed_at:
+  code_sha: a46af7481e794f7ad299631a78a258f55022c503
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 34280b1914
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
