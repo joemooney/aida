@@ -1419,7 +1419,15 @@ pub(crate) fn session_start(
     //   - DEAD/stale claims → ignored (a crashed agent can't lock its spec).
     // trace:BUG-637 | ai:claude
     if !force_claim_effective && !is_review_session {
-        let leases = list_leases(&project_root);
+        // BUG-2143: the caller's OWN `aida claim` never blocks its own pickup —
+        // `aida claim <spec>` then `aida worktree add <spec>` from one shell
+        // is the documented fixer flow.
+        // trace:BUG-2143 | ai:claude
+        let my_pid = creator_shell_pid();
+        let leases: Vec<SessionLease> = list_leases(&project_root)
+            .into_iter()
+            .filter(|l| !crate::claim::is_own_claim(l, owns, my_pid))
+            .collect();
         if !leases.is_empty() {
             let self_lease = std::env::current_dir()
                 .ok()

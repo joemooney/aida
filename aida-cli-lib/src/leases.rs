@@ -624,7 +624,13 @@ pub(crate) fn existing_lease_for_scope<'a>(
     leases: &'a [SessionLease],
     scope: &str,
 ) -> Option<&'a SessionLease> {
-    leases.iter().find(|l| l.scope.eq_ignore_ascii_case(scope))
+    // BUG-2143: only a lease that HOLDS a worktree is re-enterable. An `aida
+    // claim` (or review) lease records an empty `worktree_path`; "re-entering"
+    // it printed `cd ` with a blank path as success and created nothing.
+    // trace:BUG-2143 | ai:claude
+    leases
+        .iter()
+        .find(|l| l.scope.eq_ignore_ascii_case(scope) && !l.worktree_path.as_os_str().is_empty())
 }
 
 /// BUG-483: pure decision — does any lease OTHER than the one being ended

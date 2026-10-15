@@ -240,6 +240,21 @@ fn branch_is_protected(branch: &str, default_ref: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
+/// BUG-2143: the branch the reap reasons about for `lease`. A lease that holds
+/// no worktree owns no branch: a claim/review lease that recorded the primary
+/// checkout's protected branch (`main`) has nothing on disk to protect, so it
+/// is treated as branchless — reapable once its spec is finished and its
+/// process is gone — and the reap never touches that protected ref.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn reap_branch<'a>(lease: &'a SessionLease, default_ref: Option<&str>) -> &'a str {
+    let branch = lease.branch.trim();
+    if lease.worktree_path.as_os_str().is_empty() && branch_is_protected(branch, default_ref) {
+        ""
+    } else {
+        branch
+    }
+}
+
 /// One row of the reap report — a session the pass considered, with the verdict
 /// it reached and (after execution) what actually happened to it.
 // trace:TASK-1177 | ai:claude
@@ -775,7 +790,8 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
                 || lease.branch.trim().eq_ignore_ascii_case("aida-store"));
         // Same floor for the branch: a lease pointing at a protected ref is
         // bookkeeping, not a disposable session branch.
-        let protected_branch = branch_is_protected(&lease.branch, default_ref.as_deref());
+        let branch = reap_branch(lease, default_ref.as_deref());
+        let protected_branch = branch_is_protected(branch, default_ref.as_deref());
         if is_project_or_store_tree || protected_branch {
             report.skipped.push(ReapRow {
                 session: lease.id.clone(),
@@ -816,7 +832,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         let (worktree, branch_tip) = gather_merge_facts_pinned(
             project_root,
             default_ref.as_deref(),
-            &lease.branch,
+            branch,
             &lease.scope,
             dirty,
             spec_finished && process_exited,
@@ -832,10 +848,10 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             spec_finished,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
-            head_on_branch: session_head_on_branch(&lease.worktree_path, &lease.branch),
+            head_on_branch: session_head_on_branch(&lease.worktree_path, branch),
             branch_checked_out_elsewhere: branch_checked_out_elsewhere(
                 project_root,
-                &lease.branch,
+                branch,
                 &lease.worktree_path,
             ),
             worktree,
@@ -912,7 +928,7 @@ fn reap_one_with_clear_hooks(
     after_final_registration_check: impl FnOnce(),
 ) -> String {
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
-    let branch = lease.branch.trim();
+    let branch = reap_branch(lease, resolve_default_branch_ref(project_root).as_deref());
 
     // The scan proved a specific commit shipped. If the branch moved since
     // (or its tip was never pinned), those proofs say nothing about the new

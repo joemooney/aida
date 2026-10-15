@@ -1499,6 +1499,9 @@ pub(crate) fn ensure_spec_worktree_core(
 
     // Idempotent re-entry: a lease already covers this spec — re-affirm focus at
     // that worktree and report it, don't mint a second one.
+    // BUG-2143: an existing lease with no worktree on disk is not re-entrable;
+    // fall through to the registered / fresh paths instead of reporting it.
+    let existing = existing.filter(|(p, ..)| !p.as_os_str().is_empty());
     if let Some((worktree_path, lease_branch, lease_id, has_session_env)) = existing {
         if aida_core::git_ops::is_git_repo(&worktree_path) {
             aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
@@ -1536,6 +1539,13 @@ pub(crate) fn ensure_spec_worktree_core(
 
     // Fresh: mint the worktree + lease, then scope focus to the spec.
     let (worktree_path, minted_branch) = mint(&path, &branch)?;
+    // BUG-2143: an empty path is never success.
+    if worktree_path.as_os_str().is_empty() {
+        anyhow::bail!(
+            "worktree setup for `{spec_display}` reported no path — no worktree was created. \
+             Check `aida session leases` and retry."
+        );
+    }
     crate::focus::write_focus_marker(&worktree_path, focus_label)?;
     Ok(WorktreeOutcome {
         path: worktree_path,
@@ -1545,6 +1555,35 @@ pub(crate) fn ensure_spec_worktree_core(
         lease_id: None,
         has_session_env: false,
     })
+}
+
+/// BUG-2143: does this lease hold a worktree of its own? A claim or review
+/// lease records an empty `worktree_path`; it can gate pickups but there is
+/// nothing to re-enter.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn lease_holds_worktree(lease: &SessionLease) -> bool {
+    !lease.worktree_path.as_os_str().is_empty()
+}
+
+/// BUG-2143: refuse to report a worktree that is not on disk. `aida worktree
+/// add` used to print a blank path as success; the caller then fell back to a
+/// raw `git worktree add`.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn ensure_worktree_on_disk(path: &std::path::Path, spec: &str) -> Result<()> {
+    if path.as_os_str().is_empty() {
+        anyhow::bail!(
+            "worktree setup for `{spec}` reported no path — no worktree was created. \
+             Check `aida session leases` and retry."
+        );
+    }
+    if !path.is_dir() {
+        anyhow::bail!(
+            "worktree setup for `{spec}` reported {} but no directory exists there — \
+             check `aida session leases` and retry.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// `<spec>` variant of [`ensure_epic_worktree`]: create-if-missing a worktree
@@ -1565,10 +1604,14 @@ pub(crate) fn ensure_spec_worktree(
     let home =
         crate::home_dir().context("cannot resolve home directory for the default worktree path")?;
 
-    // Existing lease for this spec → re-enter it (freshest wins).
+    // Existing lease for this spec → re-enter it (freshest wins). BUG-2143:
+    // only a lease that actually HOLDS a worktree is re-enterable — an
+    // `aida claim` (or review) lease records no worktree, and re-entering it
+    // printed a blank path as success while creating nothing.
     let existing = list_leases(&main_root)
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+        .filter(lease_holds_worktree)
         .max_by_key(|l| l.started_at)
         .map(|l| {
             (
@@ -1635,6 +1678,7 @@ pub(crate) fn ensure_spec_worktree(
             let lease = list_leases(&main_root)
                 .into_iter()
                 .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                .filter(lease_holds_worktree)
                 .max_by_key(|l| l.started_at)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
@@ -1653,6 +1697,7 @@ pub(crate) fn ensure_spec_worktree(
         if let Some(lease) = list_leases(&main_root)
             .into_iter()
             .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .filter(lease_holds_worktree)
             .max_by_key(|l| l.started_at)
         {
             out.lease_id = Some(lease.id.clone());
@@ -2473,6 +2518,10 @@ pub(crate) fn handle_worktree_add(
             ensure_spec_worktree(&display, &focus, path_override, branch_override, "add")?
         }
     };
+    // BUG-2143: print an absolute path, and never a blank one as success.
+    ensure_worktree_on_disk(&out.path, &out.focus)?;
+    let mut out = out;
+    out.path = crate::worktree::canonical_or_self(&out.path);
     let verb = if out.created {
         "Created"
     } else {

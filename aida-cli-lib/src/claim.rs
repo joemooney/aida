@@ -57,6 +57,25 @@ pub(crate) fn is_own_claim(lease: &SessionLease, scope: &str, my_pid: Option<u32
     lease.claim_verb && lease.scope.eq_ignore_ascii_case(scope) && lease.creator_pid == my_pid
 }
 
+/// BUG-2143: the branch a claim lease records — the claimed worktree's own
+/// branch, or empty when the claim names no worktree (or names the primary
+/// checkout). Never the primary checkout's branch: a worktree-less claim has
+/// no branch of its own.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn claim_lease_branch(
+    worktree_path: &std::path::Path,
+    project_root: &std::path::Path,
+) -> String {
+    if worktree_path.as_os_str().is_empty() {
+        return String::new();
+    }
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    if canon(worktree_path) == canon(project_root) {
+        return String::new();
+    }
+    current_branch_at(worktree_path).unwrap_or_default()
+}
+
 /// `aida claim <spec>` — record a spec-scoped advisory CLAIM so advisor-fanned
 /// work (a Claude Agent-tool subagent, which otherwise takes only a generic
 /// `harness-worktree` lease) is visible to the BUG-637 duplicate-dispatch gates.
@@ -89,7 +108,10 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         })
         .unwrap_or_default();
 
-    let branch = current_branch_at(&project_root).unwrap_or_default();
+    // BUG-2143: the branch is the CLAIMED WORKTREE's branch, or none. Reading
+    // it off the project root stamped the primary checkout's `main` on every
+    // worktree-less claim, which `aida session reap` then protected forever.
+    let branch = claim_lease_branch(&worktree_path, &project_root);
     let owner = aida_core::git_ops::git_config_get("user.email")
         .ok()
         .or_else(|| std::env::var("USER").ok())

@@ -148,3 +148,106 @@ fn write_then_unclaim_round_trips_through_the_gate() {
         "after unclaim the gate must no longer fire"
     );
 }
+
+/// BUG-2143: run git in `dir`, panicking on failure.
+fn git_in(dir: &std::path::Path, args: &[&str]) {
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git runs")
+        .status
+        .success();
+    assert!(ok, "git {args:?} failed in {}", dir.display());
+}
+
+/// BUG-2143: a claim with no worktree records NO branch — never the primary
+/// checkout's `main`, which reap would then protect forever. A claim naming
+/// the primary checkout itself also records none; a claim naming a real
+/// worktree records that worktree's branch.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn claim_lease_branch_is_the_worktree_branch_or_none() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    std::fs::create_dir_all(&root).unwrap();
+    git_in(&root, &["init", "-q", "-b", "main"]);
+    git_in(
+        &root,
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let wt = tmp.path().join("wt");
+    git_in(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "fix/bug-2143",
+            wt.to_str().unwrap(),
+        ],
+    );
+
+    assert_eq!(
+        crate::claim::claim_lease_branch(std::path::Path::new(""), &root),
+        "",
+        "a worktree-less claim must not inherit the primary checkout's branch"
+    );
+    assert_eq!(crate::claim::claim_lease_branch(&root, &root), "");
+    assert_eq!(crate::claim::claim_lease_branch(&wt, &root), "fix/bug-2143");
+}
+
+/// BUG-2143: a worktree-less lease that recorded `main` (legacy claims) is
+/// branchless to the reap — so a dead claim on a merged spec is reapable and
+/// the reap never touches `main` — while a lease that HOLDS a worktree keeps
+/// its branch (and the protected-ref floor) unchanged.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn reap_treats_worktreeless_main_claim_as_branchless() {
+    let mut legacy = claim("c1", "BUG-2143", None);
+    legacy.branch = "main".into();
+    assert_eq!(
+        crate::session_reap::reap_branch(&legacy, Some("origin/main")),
+        ""
+    );
+
+    let mut feature = claim("c2", "BUG-2143", None);
+    feature.branch = "fix/bug-2143".into();
+    assert_eq!(
+        crate::session_reap::reap_branch(&feature, Some("origin/main")),
+        "fix/bug-2143"
+    );
+
+    let mut in_place = claim("c3", "BUG-2143", None);
+    in_place.branch = "main".into();
+    in_place.worktree_path = std::path::PathBuf::from("/some/checkout");
+    assert_eq!(
+        crate::session_reap::reap_branch(&in_place, Some("origin/main")),
+        "main",
+        "a lease holding a worktree keeps its protected branch"
+    );
+}
+
+/// BUG-2143: a claim lease holds no worktree, so `aida worktree add` must not
+/// re-enter it (that printed a blank path as success).
+// trace:BUG-2143 | ai:claude
+#[test]
+fn claim_lease_holds_no_worktree() {
+    let c = claim("c1", "BUG-2143", None);
+    assert!(!crate::worktree_gc::lease_holds_worktree(&c));
+    let mut held = c.clone();
+    held.worktree_path = std::path::PathBuf::from("/home/u/ai/aida-bug-2143");
+    assert!(crate::worktree_gc::lease_holds_worktree(&held));
+}

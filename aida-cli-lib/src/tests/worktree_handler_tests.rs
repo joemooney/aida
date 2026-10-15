@@ -469,3 +469,57 @@ fn spec_worktree_core_honors_path_and_branch_overrides() {
     assert_eq!(out.branch, "my-spec-branch");
     assert_eq!(out.focus, "STORY-742");
 }
+
+/// BUG-2143: an existing lease with NO worktree (an `aida claim` lease) is not
+/// re-entered — the fresh mint runs and its real path is reported — and a mint
+/// that reports an empty path is an error, never a blank success.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn spec_worktree_core_ignores_worktreeless_lease_and_rejects_empty_path() {
+    let home = tempfile::tempdir().unwrap();
+    let minted = std::cell::Cell::new(false);
+    let out = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        Some((
+            std::path::PathBuf::new(),
+            "main".to_string(),
+            "01a13f58claim".to_string(),
+            false,
+        )),
+        false,
+        |path, branch| {
+            minted.set(true);
+            Ok((path.to_path_buf(), branch.to_string()))
+        },
+    )
+    .expect("a claim lease must not block creating the worktree");
+    assert!(minted.get(), "the worktree must be minted, not the claim re-entered");
+    assert!(out.created);
+    assert_eq!(
+        out.path,
+        crate::worktree::default_worktree_path(home.path(), "BUG-2143")
+    );
+
+    let Err(err) = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        None,
+        false,
+        |_p, _b| Ok((std::path::PathBuf::new(), String::new())),
+    ) else {
+        panic!("an empty minted path is never success");
+    };
+    assert!(err.to_string().contains("no path"), "{err}");
+
+    let missing = home.path().join("nope");
+    assert!(ensure_worktree_on_disk(&missing, "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(std::path::Path::new(""), "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(home.path(), "BUG-2143").is_ok());
+}
