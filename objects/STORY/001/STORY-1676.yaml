@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:41:55.612065833Z
-modified_at: 2026-10-15T14:54:54.007795658Z
+modified_at: 2026-10-15T14:55:45.579709263Z
 req_type: Story
 tags:
 - from:aida-host
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-10-15T14:54:23.436603039Z
   modified_at: 2026-10-15T14:54:23.436603039Z
   session_id: 01a14005f01a
+- id: 01a1400f-e3ab-7910-821d-7de54086410f
+  author: joe
+  content: Commit dcc46d8298 references this requirement
+  created_at: 2026-10-15T14:55:45.579709263Z
+  modified_at: 2026-10-15T14:55:45.579709263Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-47da-7740-93a8-14448b62f594
   author: joe
