@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T09:59:43.952471633Z
+modified_at: 2026-10-15T10:07:02.922780327Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -81,6 +81,11 @@ comments:
   content: Commit 0d8c0c3b0c references this requirement
   created_at: 2026-10-15T09:59:43.952471633Z
   modified_at: 2026-10-15T09:59:43.952471633Z
+- id: 01a13f07-910a-7721-ae9d-c2ac5b7fa793
+  author: joe
+  content: 'Session 5 controls adaptation pushed to EXISTING draft #2664 at 8ef2b0828199fa06591f351dca11358373ea5e44 (normal merge of signed executor d1d9b959, no force push). Fresh input capture now uses the fd-pinned no-follow copier; generated stub tools expose the explicit prefix locator without running the project installer. Gate requires current trusted FIFO guard-bundle hash, env executable evidence and zero detected survivors, refusing old executor controls even if root_fresh=true. Signed ordinary nonzero-exit policy preserved. All52 current regen tests pass; all28 fast gates pass (production no-default-features/TUI included); workspace aida dev build+worktree smoke passed with no live promotion; config-trust/shared-home/store-Git source guards each pass. One fresh-context author self-check independently ran controls13/fresh3/snapshot5 tests and a bwrap probe, no material findings; this is NOT independent review or approval. Logs /tmp/aida-session5-regen-tests-current.log, /tmp/aida-session5-fast.log, /tmp/aida-session5-dev-build.log; published body /tmp/aida-task1731-pr-body-session5.md. Draft retained per binding ruling until #2660 is approved; no Completed, verdict, hold clearance or merge claim.'
+  created_at: 2026-10-15T10:07:02.922780327Z
+  modified_at: 2026-10-15T10:07:02.922780327Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
