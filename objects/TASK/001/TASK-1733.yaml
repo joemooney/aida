@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:51.121660473Z
-modified_at: 2026-10-15T22:29:04.028175962Z
+modified_at: 2026-10-15T23:02:12.312126711Z
 req_type: Task
 tags:
 - needs-docs
@@ -69,6 +69,12 @@ comments:
   content: 'Restacked after #2664 squash: 55bca00b11->538ca9419d (on new #2666 head 7c8c72c75f). range-diff: ''=''. Gates on this head: check-ci-fast 29/29, check-ci-compile pass, cargo test -p aida-cli-lib regen 71/71 (single run).'
   created_at: 2026-10-15T22:29:04.028175962Z
   modified_at: 2026-10-15T22:29:04.028175962Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a141cd-3e58-7612-bbab-8077957d9ecd
+  author: joe
+  content: 'Final restack onto main after #2666 squash (c419f6a5ef): 538ca9419d->26006258c8. range-diff 7c8c72c75f..538ca9419d vs origin/main..26006258c8: ''='' (clean). PR base set to main. Gates on 26006258c8: check-ci-fast 29/29, check-ci-compile pass.'
+  created_at: 2026-10-15T23:02:12.312126711Z
+  modified_at: 2026-10-15T23:02:12.312126711Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
