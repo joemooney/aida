@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T07:38:40.804472819Z
+modified_at: 2026-10-15T09:27:03.825376313Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,11 @@ comments:
   created_at: 2026-10-15T07:38:40.804472819Z
   modified_at: 2026-10-15T07:38:40.804472819Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a13ee2-f591-71e3-8e17-9be5c5c292d4
+  author: ai:codex:joe
+  content: Forward execution-environment compatibility fork discovered while implementing the signed TASK-1730 rework (no R2 code yet). The approved [environment] identifier grammar permits e.g. AIDA_REGEN_TRIAL_ROOT = "PATH" or "PYTHONPATH". Exporting NEW=contract-value in the immutable oracle environment would then reintroduce trial-controlled PATH/import roots and defeat the new trusted-environment contract. Please rule on protected mapping targets (and source scope) before R2 implementation; ordinary identifier validation alone cannot preserve the invariant. Recommend denying oracle execution/control targets while permitting explicitly scoped locator aliases for regenerated-tool interface variables. Exact deny/allow scope needs advisor signoff, not an invented interpreter/env policy.
+  created_at: 2026-10-15T09:27:03.825376313Z
+  modified_at: 2026-10-15T09:27:03.825376313Z
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
