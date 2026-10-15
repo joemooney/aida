@@ -1,0 +1,23 @@
+id: 01a13e0c-f861-7532-942f-4465ddb6adf8
+spec_id: BUG-2146
+agreed_id: BUG-2146
+title: A malformed agents.toml silently disables containment (load_agents_contained(..).unwrap_or(false))
+description: 'From the #2655 review: drain_contained and queue work use load_agents_contained(..).unwrap_or(false), so a parse error in agents.toml turns containment OFF silently — fail-open. Fix: a parse error is a hard error (refuse to launch) naming the file; test with a malformed file.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T05:33:19.841969108Z
+modified_at: 2026-10-15T05:33:19.841969108Z
+req_type: Bug
+tags:
+- sandbox
+- security
+filed_at:
+  code_sha: dedea1776c0a252400fb552dd14d5bd93720e0e9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
