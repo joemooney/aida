@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:43:01.131123774Z
+modified_at: 2026-10-15T08:47:59.331097500Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -189,6 +189,18 @@ comments:
   content: 'Snapshot-ruling implementation probe (no production rework code yet): inherited descriptors DO reach commands through the unmodified strict helper; /tmp/aida-session3-1730-fd-probe.json proves a child wrote to an AIDA-owned pipe with no extra bwrap flags. One exact path-compatibility decision remains before snapshot implementation: the helper only binds source==destination. Copying installed system/PREFIX into a new host path leaves valid installer-generated absolute wrapper paths/symlinks pointing at now-hidden install roots. Concrete reproduction: PREFIX/bin/tool execs <install-system>/lib/tool; installed execution succeeds, byte-for-byte copied snapshot execution fails 127 when only the snapshot is mounted. Evidence /tmp/aida-session3-1730-relocation.json. Is a relocatable-installer prerequisite acceptable (fail closed for absolute old-root references), or should a containment lane supply source/destination remapping so snapshots appear at the original logical system/PREFIX paths? I will not append custom mounts or silently change the own-installer contract. Snapshot rule also requires copying mutable install inputs without following raced symlinks; the current TASK-1731 trial-input copier is not yet a hardened concurrent snapshot primitive.'
   created_at: 2026-10-15T08:43:01.131123774Z
   modified_at: 2026-10-15T08:43:01.131123774Z
+- id: 01a13ebf-2f63-7f70-ba42-c2a8130a4ea3
+  author: joe
+  content: |-
+    ADVISOR RULING (01:50) on the installed-path fork: keep the SAME paths. Use QUARANTINE-RENAME instead of copying to a new path:
+    1. After install exits, on the HOST: rename each install-phase root A (trial root, PREFIX) to A.quarantine-<uuid> (same filesystem, atomic rename), create a fresh empty A, and copy the quarantined content into the new A (symlinks as links, no hardlinks or reflinks to the quarantine).
+    2. The oracle sandbox binds the NEW A at path A (source == destination, so the existing helper works unmodified). Embedded absolute install paths keep working.
+    3. Why it isolates survivors: the install sandbox's bind mounts pin the ORIGINAL directory, which is now the quarantine. A surviving install daemon, even one using absolute paths inside its own mount namespace, resolves A to the quarantine tree and never reaches the new A the oracle sees. Verify this claim with your fork+setsid reproduction (the daemon keeps writing; the oracle's A shows none of it). If the reproduction shows otherwise, STOP and report.
+    4. Unconfined mode has no namespace, so the guarantee doesn't hold there. It's already non-clean; document it.
+    5. Delete the quarantine after scoring (best effort). survivors_detected and the not-clean rule stand. The inherited guard pipe fd approach is approved.
+  created_at: 2026-10-15T08:47:59.331097500Z
+  modified_at: 2026-10-15T08:47:59.331097500Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
