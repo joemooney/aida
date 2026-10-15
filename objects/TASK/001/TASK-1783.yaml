@@ -1,0 +1,30 @@
+id: 01a14101-c24c-7592-b653-01a55d1b1218
+spec_id: TASK-1783
+agreed_id: TASK-1783
+title: Report whole-tree Rust function trace coverage
+description: |-
+  Implements the first of the two PRs signed on STORY-1672, advisor comment 2026-10-15 08:38. This child exists so the first partial merge cannot auto-complete the parent story.
+
+  ## Acceptance
+  - Add aida trace coverage --all / --path <dir>, Rust only, reusing the existing trace-marker definition and SPIKE-47 file exemptions.
+  - Report functions lacking a marker in or directly above them per file; fixture with one traced and one untraced fn reports 1/2 and names the untraced function.
+  - Human and JSON output. Report-only; nonzero coverage exit only with explicit --fail-on. Existing diff-scoped mode remains unchanged, with a regression test.
+  - No constants scanner in this slice and no store mutation. STANDARD independent gate; operator merges. Parent story remains open until slice 2.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T19:19:56.748783847Z
+modified_at: 2026-10-15T19:19:56.748783847Z
+req_type: Task
+tags:
+- regenerability
+- slice:1
+filed_at:
+  code_sha: 0c69debffe439310aacf3756a5efe363d1216474
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bfddcbee42
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
