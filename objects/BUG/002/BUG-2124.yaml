@@ -7,12 +7,12 @@ description: |
 
   Expected: every launch path routes through `containment_applied(vendor, contained)` (session.rs:1676), which sets or strips the variable. Acceptance: one production-builder test per launcher asserting that the uncontained child has no AIDA_CONTAINED.
   Also from that review: `is_contained_args` (agent_launch.rs:4366) infers containment from argv (`--settings x.json` from agents.toml reads as contained). Replace it with the launch's real containment decision.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T07:14:56.022070526Z
-modified_at: 2026-10-14T23:52:11.696807982Z
+modified_at: 2026-10-15T00:16:43.374960376Z
 req_type: Bug
 tags:
 - contained
@@ -51,6 +51,19 @@ comments:
   content: 'FACTORY READY: PR #2640 green at c2dad3373356d242229054a7e8b6261325327be9'
   created_at: 2026-10-14T23:52:11.696807982Z
   modified_at: 2026-10-14T23:52:11.696807982Z
+- id: 01a13ceb-1b6e-73a0-b404-bc7c515c2084
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (eb97104) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-15T00:16:43.374959302Z
+  modified_at: 2026-10-15T00:16:43.374959302Z
+history:
+- id: 01a13ceb-1b6e-73a0-b404-bc671087fcd0
+  author: aida-auto-bump
+  timestamp: 2026-10-15T00:16:43.374957900Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
