@@ -16760,6 +16760,14 @@ mod seat_help_tests {
     }
 }
 
+/// Generated control kinds; callers cannot label arbitrary roots as controls.
+// trace:TASK-1731 | ai:codex
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegenControl {
+    Reference,
+    Stub,
+}
+
 /// Versioned regeneration artifacts.
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
@@ -16767,8 +16775,12 @@ pub enum RegenCommand {
     /// Run the declared installer and oracle, then record a raw R1 trial
     // trace:TASK-1730 | ai:codex
     Score {
-        /// Regenerated system directory (commands run relative to this root)
-        dir: PathBuf,
+        /// Regenerated system directory; copied into a fresh scoring root
+        #[clap(required_unless_present = "control", conflicts_with = "control")]
+        dir: Option<PathBuf>,
+        /// Run generated controls instead of a caller-supplied system
+        #[clap(long, value_enum)]
+        control: Option<RegenControl>,
         /// Corpus directory containing corpus.json and manifest.json
         #[clap(long)]
         corpus: PathBuf,
