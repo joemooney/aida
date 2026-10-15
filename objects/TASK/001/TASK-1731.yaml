@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:26.816691681Z
-modified_at: 2026-10-15T14:38:16.844873066Z
+modified_at: 2026-10-15T21:04:36.570404678Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -92,6 +92,12 @@ comments:
   created_at: 2026-10-15T14:38:16.844873066Z
   modified_at: 2026-10-15T14:38:16.844873066Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14161-94da-7223-83c4-b4f6342ebfdf
+  author: joe
+  content: 'Restacked onto main after #2660 squash (7b51e37f21): c82263b824->42aac84a65. range-diff e98ba74f59..c82263b824 vs origin/main..42aac84a65: commit 2 ''=''; commit 1 ''!'' only in a hunk-context header (cli.rs conflict with main''s TASK-1607 seat_help_tests module; resolved keeping both, RegenControl enum placed after that module, content identical). Gates on stack top 55bca00b11: check-ci-fast 29/29, check-ci-compile pass, regen tests 71/71 (see note on pre-existing flake in guards.rs from TASK-1730).'
+  created_at: 2026-10-15T21:04:36.570404678Z
+  modified_at: 2026-10-15T21:04:36.570404678Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
