@@ -1,0 +1,24 @@
+id: 01a13eb6-100c-7a30-a611-3ac54772b4f4
+spec_id: TASK-1774
+agreed_id: TASK-1774
+title: 'Confinement helper: optional --unshare-pid (pid namespace) so callers can guarantee no process survives a confined phase'
+description: 'From TASK-1730/#2660: the strict bwrap helper (session.rs bwrap_confinement_args_inner) offers only filesystem binds + --die-with-parent; a fork+setsid daemon survives installer exit and killpg. Regen works around it with snapshot isolation, but a hard guarantee needs an opt-in pid-namespace flag (--unshare-pid, plus --as-pid-1 handling) in the helper. STRICT containment change; serialize with the other launcher-file work.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T08:38:01.484588584Z
+modified_at: 2026-10-15T08:38:01.484588584Z
+req_type: Task
+tags:
+- regen
+- sandbox
+- security
+filed_at:
+  code_sha: efd3bba8de3e098599e85dd29c381d4066961994
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
