@@ -1,5 +1,5 @@
 `aida regen corpus <dir>` exports committed store content as deterministic
-`corpus.json` and `manifest.json`. Dirty stores require `--allow-dirty`, which
+`corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
 records `dirty: true` while exporting HEAD. See OVERVIEW.md.
 <!-- trace:TASK-1729 | ai:codex -->
 

@@ -150,7 +150,13 @@ fn head(store: &Path) -> Result<String> {
 fn dirty(store: &Path) -> Result<bool> {
     Ok(!git(
         store,
-        &["status", "--porcelain=v1", "--untracked-files=all"],
+        &[
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            "objects/",
+        ],
     )?
     .is_empty())
 }
@@ -549,6 +555,36 @@ mod tests {
         assert_eq!(manifest["row_count"], 1700);
         assert!(!store.path().join(".aida").exists());
         assert!(!store.path().join("cache.db").exists());
+    }
+
+    // trace:TASK-1729 | ai:codex
+    #[test]
+    fn corpus_dirty_scope_is_only_objects_and_legacy_stores_refuse() {
+        let store = fixture();
+        let out = TempDir::new().unwrap();
+        std::fs::create_dir_all(store.path().join("coordination")).unwrap();
+        std::fs::write(
+            store.path().join("coordination/runtime.yaml"),
+            "untracked runtime",
+        )
+        .unwrap();
+        assert!(!dirty(store.path()).unwrap());
+        let manifest = export_corpus(store.path(), &out.path().join("runtime"), false).unwrap();
+        assert!(!manifest.dirty);
+        std::fs::write(
+            store.path().join("objects/DOC/000/NEW.yaml"),
+            "untracked object",
+        )
+        .unwrap();
+        assert!(dirty(store.path()).unwrap());
+        assert!(export_corpus(store.path(), &out.path().join("objects"), false).is_err());
+        let legacy = TempDir::new().unwrap();
+        assert!(
+            export_corpus(legacy.path(), &out.path().join("legacy"), false)
+                .unwrap_err()
+                .to_string()
+                .contains("git-canonical")
+        );
     }
 
     #[test]

@@ -353,8 +353,9 @@ including archived rows and comment threads, into versioned `corpus.json` plus
 exports of the same commit are identical across checkout paths. Only projected
 spec content is included: source artifacts, attachments, history, processing
 records and implementation metadata are excluded. Store-authored prose is kept
-verbatim. The output directory must be new or empty. Dirty stores refuse unless
-`--allow-dirty` is explicit; that override still exports committed HEAD and adds
+verbatim. The output directory must be new or empty. Uncommitted changes under `objects/`
+refuse unless `--allow-dirty` is explicit; runtime files outside `objects/` do not
+count as dirty. The override still exports committed HEAD and adds
 `dirty: true` to the manifest. Legacy stores must migrate to git-canonical storage.
 <!-- trace:TASK-1729 | ai:codex -->
 
