@@ -4159,12 +4159,9 @@ pub(crate) fn print_auto_bump_summary(flips: &[AutoBumpFlip]) {
 /// trace:TASK-73 | ai:claude
 pub(crate) fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     use std::collections::BTreeMap;
-    use std::process::Command as ProcessCommand;
 
     let range = format!("{}..HEAD", pre_sha);
-    let log = match ProcessCommand::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let log = match aida_core::git_ops::host_git_command(store_path)
         .args([
             "log",
             "--name-status",

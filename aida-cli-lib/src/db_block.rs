@@ -279,9 +279,8 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                     }
                     Ok(false) => {
                         // Push rejected — undo commit, pull, retry
-                        let _ = std::process::Command::new("git")
+                        let _ = aida_core::git_ops::host_git_command(store_path)
                             .args(["reset", "--soft", "HEAD~1"])
-                            .current_dir(store_path)
                             .output();
                         if attempt + 1 == max_retries {
                             anyhow::bail!(
@@ -923,9 +922,8 @@ pub(crate) fn auto_allocate_block_inner(
                 )));
             }
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = aida_core::git_ops::host_git_command(store_path)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_path)
                     .output();
                 continue;
             }
@@ -1303,9 +1301,8 @@ fn rollback_unpushed_claim(
     type_prefix: &str,
 ) {
     let git = |args: &[&str]| {
-        std::process::Command::new("git")
+        aida_core::git_ops::host_git_command(store_path)
             .args(args)
-            .current_dir(store_path)
             .output()
     };
     let head = aida_core::git_ops::head_sha(store_path).ok();
