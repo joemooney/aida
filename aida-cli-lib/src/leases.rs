@@ -2498,6 +2498,50 @@ pub(crate) fn session_leases_prune_stale(yes: bool) -> Result<()> {
     Ok(())
 }
 
+/// BUG-2010: classify a list of session leases with live agent overlay.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn classify_session_leases(
+    project_root: &std::path::Path,
+    leases: &[SessionLease],
+) -> Vec<(SessionLease, LeaseState, Option<u32>)> {
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let live_agents = agent_registry::load_live_entries(project_root);
+    leases
+        .iter()
+        .map(|l| {
+            let live_in_worktree = live.iter().find(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            // BUG-511: review-verb leases classify by creator PID, not worktree.
+            let mut state = lease_state_for(l, &live, now);
+            let mut pid = l
+                .active_pid
+                .filter(|p| process_probe::pid_is_alive(*p))
+                .or_else(|| live_in_worktree.map(|s| s.pid))
+                .or(if l.review_verb || l.claim_verb {
+                    l.creator_pid
+                } else {
+                    None
+                });
+            // BUG-2010: a live registered agent (Codex, Antigravity, Claude) keeps the lease live
+            // even if its recorded pid was dead or transient.
+            // trace:BUG-2010 | ai:antigravity
+            if !matches!(state, LeaseState::Live) {
+                if let Some(agent) =
+                    agent_registry::live_agent_for_lease_or_spec(&live_agents, Some(l), None)
+                {
+                    state = LeaseState::Live;
+                    if pid.is_none() {
+                        pid = Some(agent.pid);
+                    }
+                }
+            }
+            (l.clone(), state, pid)
+        })
+        .collect()
+}
+
 pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -2532,31 +2576,10 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         return Ok(());
     }
 
-    // TASK-55: probe live claudes once + classify every lease so we
-    // can render the state column AND apply the hide-stale filter
-    // off the same data. trace:TASK-55 | ai:claude
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let classified: Vec<(SessionLease, LeaseState, Option<u32>)> = leases
-        .iter()
-        .map(|l| {
-            let live_in_worktree = live.iter().find(|s| {
-                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            });
-            // BUG-511: review-verb leases classify by creator PID, not worktree.
-            let state = lease_state_for(l, &live, now);
-            let pid = l
-                .active_pid
-                .filter(|p| process_probe::pid_is_alive(*p))
-                .or_else(|| live_in_worktree.map(|s| s.pid))
-                .or(if l.review_verb || l.claim_verb {
-                    l.creator_pid
-                } else {
-                    None
-                });
-            (l.clone(), state, pid)
-        })
-        .collect();
+    let root = find_main_worktree_root()?;
+    let classified = classify_session_leases(&root, &leases);
 
     let (shown, hidden_stale) = select_lease_listing(classified, all);
 

@@ -471,7 +471,13 @@ pub(crate) fn handle_schedule_command(
             // BUG-2142: every other due job has already run; the tick still
             // exits nonzero so the driver (systemd/cron log) shows the
             // registry needs a binary that knows these commands.
+            // TASK-1769: this is the intended signal, not a side effect. While
+            // an enabled job's command is unsupported, EVERY full tick exits
+            // nonzero, so the systemd service stays `failed` (and each cron
+            // run logs the error) until the binary is updated or the job is
+            // fixed or disabled. Hook ticks never report it.
             // trace:BUG-2142 | ai:claude
+            // trace:TASK-1769 | ai:claude
             if !run.unsupported.is_empty() {
                 anyhow::bail!(
                     "schedule tick: {} scheduled job(s) use a command this aida binary does not \

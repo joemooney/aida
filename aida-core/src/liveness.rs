@@ -442,6 +442,20 @@ fn is_claude_process(name: &str, cmd: &[String]) -> bool {
         .unwrap_or(false)
 }
 
+/// Which coding-agent harness (if any) a process is, by the same executable /
+/// script-position heuristics the live-agent walk uses. Exposed for the
+/// seat-occupancy anchor walk so both agree on what counts as a harness.
+// trace:TASK-1607 | ai:claude
+pub fn harness_kind(name: &str, cmd: &[String]) -> Option<AgentKind> {
+    if is_claude_process(name, cmd) {
+        Some(AgentKind::Claude)
+    } else if is_codex_process(name, cmd) {
+        Some(AgentKind::Codex)
+    } else {
+        None
+    }
+}
+
 // trace:TASK-1499 | ai:codex
 fn is_aida_process(name: &str, cmd: &[String]) -> bool {
     let matches = |s: &str| {

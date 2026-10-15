@@ -284,30 +284,59 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// Host `git --version` output, run once per process. Empty when git
-/// cannot be run or fails (which the gate treats as unsafe).
+/// How long a read of the host git version stays fresh. A long-running
+/// server re-reads it after this, so a git upgrade (or downgrade) on the host
+/// takes effect without a restart (TASK-1775).
+// trace:TASK-1775 | ai:claude
+pub(crate) const GIT_VERSION_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The cached `git --version` text and when it was read.
+pub(crate) type GitVersionCache = std::sync::Mutex<Option<(std::time::Instant, String)>>;
+
+/// Return the cached version while it is younger than [`GIT_VERSION_TTL`] at
+/// `now`; otherwise `read` it afresh and cache the result.
+// trace:TASK-1775 | ai:claude
+pub(crate) fn cached_git_version(
+    cache: &GitVersionCache,
+    now: std::time::Instant,
+    read: impl FnOnce() -> String,
+) -> String {
+    let mut slot = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((read_at, version)) = slot.as_ref() {
+        if now.saturating_duration_since(*read_at) < GIT_VERSION_TTL {
+            return version.clone();
+        }
+    }
+    let version = read();
+    *slot = Some((now, version.clone()));
+    version
+}
+
+/// Host `git --version` output, re-read at most once per
+/// [`GIT_VERSION_TTL`]. Empty when git cannot be run or fails (which the gate
+/// treats as unsafe).
 // trace:BUG-2131 | ai:claude
 fn host_git_version(store: &Path) -> String {
     if let Some(fake) = FAKE_GIT_VERSION.with(|f| f.borrow().clone()) {
         return fake;
     }
-    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    VERSION
-        .get_or_init(|| {
-            // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
-            std::process::Command::new("git")
-                .env(
-                    "PATH",
-                    safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
-                )
-                .arg("--version")
-                .output()
-                .ok()
-                .filter(|out| out.status.success())
-                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-                .unwrap_or_default()
-        })
-        .clone()
+    static VERSION: GitVersionCache = std::sync::Mutex::new(None);
+    cached_git_version(&VERSION, std::time::Instant::now(), || {
+        // raw-git-ok(BUG-1929): --version reads no repository and uses sanitized PATH.
+        std::process::Command::new("git")
+            .env(
+                "PATH",
+                safe_path(store, &std::env::var_os("PATH").unwrap_or_default()),
+            )
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .unwrap_or_default()
+    })
 }
 
 /// Whether host git honours `GIT_ATTR_SOURCE` (git 2.40+).
