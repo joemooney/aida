@@ -1,0 +1,35 @@
+id: 01a141b3-ff3f-78b0-87b0-80b9af12416d
+spec_id: TASK-1785
+agreed_id: TASK-1785
+title: Report unexplained Rust numeric constants in traced code
+description: |
+  Implements the second of the two report-only Rust slices signed on STORY-1672, advisor comment 2026-10-15 08:38. This child exists so separate slice PRs cannot prematurely auto-complete the parent story. No source work started.
+
+  ## Acceptance
+  - Add `aida lint constants`, Rust only, scanning numeric literals inside traced regions only; reuse existing trace-marker conventions and resolve owning specs through AIDA.
+  - A literal is explained when its normalized value (strip `_` separators and type suffixes; compare hex/decimal by value) appears in the owning spec description or in a decision row linked to that spec.
+  - Exempt only 0 and 1 and any literal on a line carrying `// arbitrary` (optionally `// arbitrary: <reason>`). No other heuristic exemptions in v1.
+  - Fixture: the spec mentions 15; code has 15 and 40 and a marked 7; only 40 is flagged.
+  - Human and JSON output name file:line, value and owning spec.
+  - Report-only, no store edits, nonzero exit only with explicit `--fail-on`.
+  - Keep existing `aida lint` behavior and the first trace-coverage slice intact; update affected command documentation.
+  - STANDARD independent gate for this slice, operator merges. Use only this child ID in its completion trailer; parent STORY-1672 stays open until both slices are merged and verified.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T22:34:37.759524907Z
+modified_at: 2026-10-15T22:34:37.759524907Z
+req_type: Task
+tags:
+- docs:impacted
+- regenerability
+- slice:2
+filed_at:
+  code_sha: a46af7481e794f7ad299631a78a258f55022c503
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 34280b1914
+  vendor: codex
+  session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
