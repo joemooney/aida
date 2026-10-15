@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1918",
+  "publishes": [
+    {
+      "at": "2026-10-15T18:48:35.739625257Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T14:30:12.692778419Z",
+      "spec": "BUG-1918",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-10T15:33:40.105065045Z",
+      "spec": "BUG-1918",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-10T18:21:05.372285199Z",
+      "spec": "BUG-1918",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1918",
+        "branch": "bug-1918-work",
+        "first_seen": "2026-10-10T18:21:05.372240369+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:44:19.574060232Z",
+      "spec": "BUG-1918",
+      "seat": "integrator",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:53:09.821309707Z",
+      "spec": "BUG-1918",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T18:14:33.643983191Z",
+      "spec": "BUG-1918",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2485,
+        "verdict": "APPROVED",
+        "reviewed_sha": "6475cfba9b43bae3babefef7614893c22257860f"
+      }
+    },
+    {
+      "ts": "2026-10-15T18:47:52.095848474Z",
+      "spec": "BUG-1918",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T18:48:03.747585768Z",
+      "spec": "BUG-1918",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2485
+      }
+    },
+    {
+      "ts": "2026-10-15T18:48:35.702859410Z",
+      "spec": "BUG-1918",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0c69debffe439310aacf3756a5efe363d1216474",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
