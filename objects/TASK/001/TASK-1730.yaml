@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:27:26.904878830Z
+modified_at: 2026-10-15T08:29:32.680178372Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -152,6 +152,20 @@ comments:
   content: 'Advisor confirmed the GNU env --chdir prerequisite. Added an explicit prerequisite message to oracle launch/parse failures and documented fail-closed behavior; pushed f7d6768d6d396b8b5d42e82f72a3e1aa56000c07 to existing #2660. All 24 regen tests passed again and final make check-ci-fast passed 28/28. Formatting was fixed before the successful fast retry. PR is now Ready for independent review; implementation marked Done, not Completed. No review verdict or merge. TASK-1731 controls work is stacked on this branch.'
   created_at: 2026-10-15T08:27:26.904878830Z
   modified_at: 2026-10-15T08:27:26.904878830Z
+- id: 01a13eae-4c88-78f3-9757-fff478abb2ba
+  author: joe
+  content: |-
+    REWORK #2660 (TASK-1730), round 1 of 2. ADVISOR RULING, extending the oracle-provenance contract: the oracle's whole EXECUTION ENVIRONMENT must be trial-proof, not just its files. Required:
+    1. Trusted PATH for the oracle: a fixed system list (/usr/local/bin:/usr/bin:/bin), never $PREFIX/bin or anything under the trial root. The installer may keep $PREFIX/bin on its own PATH. The oracle reaches the system under test only via AIDA_REGEN_TRIAL_ROOT/AIDA_REGEN_PREFIX (score.rs:248-253, 290).
+    2. Separate private environments: install and oracle each get a FRESH HOME, XDG_* and TMPDIR, created by aida, never shared. The oracle's home is created after install finishes and is never visible to the installer (no usercustomize/site-packages/rc-file injection).
+    3. Guards and log: guard scripts are frozen like the bundle (content-addressed, hash-verified, mounted read-only). The guard log is written to a location the trial can't reach (outside every root mounted rw into install or oracle), or collected by aida from a pipe/fd. 'clean' is derived only from that trusted channel.
+    4. No survivors: after install, aida kills the installer's whole process group (or a pid-namespace equivalent available unmodified from the helper) and verifies that no process from the install phase survives before the oracle starts. If that can't be guaranteed, refuse and report the exact gap; do NOT modify session.rs.
+    5. Tests, each failing without the fix: a planted $PREFIX/bin/grep (or python3) is NOT used by the oracle; a planted usercustomize.py doesn't execute in the oracle; tampering with the guard log or guard scripts can't produce clean=true; a daemonized installer child is killed or refused.
+    Non-blocking (do if cheap): set AIDA_REGEN_PREFIX only when install ran; record the env path in the trial record; a doc note about --unconfined TOCTOU; oracle-author guidance not to echo trial stdout lines.
+    CI note: GitHub CI didn't run because the base is codex/task-1729. Once #2658 merges, retarget #2660 to main so CI runs.
+  created_at: 2026-10-15T08:29:32.680178372Z
+  modified_at: 2026-10-15T08:29:32.680178372Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
