@@ -1,0 +1,20 @@
+{
+  "id": "bf9a57d1-adcd-4ee2-8f01-eec2c7d7989d",
+  "thread_id": "bd5b7ce6-e2d1-4e72-8cd6-1ff726650a1f",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792030233962,
+  "in_reply_to": "bd5b7ce6-e2d1-4e72-8cd6-1ff726650a1f",
+  "body": "FACTORY READY: PR #2638 green at c0bad0b005d15c6d651130ae4906ac4c3cd53b01",
+  "subject": "FACTORY READY #2638 (TASK-1748)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
