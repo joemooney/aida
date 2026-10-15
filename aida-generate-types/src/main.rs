@@ -56,6 +56,8 @@ fn generate_types_content() -> String {
         models::Relationship::decl(),
         models::FieldChange::decl(),
         models::HistoryEntry::decl(),
+        // trace:STORY-1674 | ai:codex — Requirement references filing context.
+        models::FilingProvenance::decl(),
         // STORY-542: Requirement.interface_changes references InterfaceChanges,
         // so its definition must be emitted too (else the web dashboard
         // type-check fails with "Cannot find name 'InterfaceChanges'"). BUG-516.

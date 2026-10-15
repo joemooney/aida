@@ -635,7 +635,12 @@ impl Storage {
         // Serialize and write to file
         // trace:STORY-1674 | ai:codex — snapshot under the existing write lock.
         let disk: RequirementsStore = if self.file_path.exists() {
-            serde_yaml::from_reader(File::open(&self.file_path)?)?
+            let text = fs::read_to_string(&self.file_path)?;
+            if text.trim().is_empty() {
+                RequirementsStore::new()
+            } else {
+                serde_yaml::from_str(&text)?
+            }
         } else {
             RequirementsStore::new()
         };
@@ -1791,6 +1796,24 @@ mod tests {
     }
 
     // trace:STORY-1674 | ai:codex
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_yaml_initial_empty_file_and_invalid_nonempty_guard() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        std::fs::write(&path, "  \n\t").unwrap();
+        let storage = Storage::new(&path);
+        storage.save(&RequirementsStore::new()).unwrap();
+        assert!(serde_yaml::from_str::<RequirementsStore>(
+            &std::fs::read_to_string(&path).unwrap()
+        )
+        .is_ok());
+        let malformed = "name: leave-me-alone\n";
+        std::fs::write(&path, malformed).unwrap();
+        assert!(storage.save(&RequirementsStore::new()).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), malformed);
+    }
+
     #[test]
     fn story1674_yaml_writes_stamp_new_context_and_preserve_legacy_rows() {
         let _env = crate::test_env::EnvVarsGuard::set(&[

@@ -11160,6 +11160,8 @@ mod tests {
     #[test]
     fn story1674_mcp_comment_and_edit_persist_write_context() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // The temporary store test must not append to an inherited live role log.
+            ("AIDA_SESSION_ROLE", None),
             ("AIDA_SESSION_ID", Some("mcp-exact-session")),
             ("AIDA_HARNESS_VERSION", Some("mcp-harness")),
         ]);
@@ -11177,7 +11179,7 @@ mod tests {
         server
             .tool_update_requirement(&json!({"id":id,"title":"Edited through MCP"}))
             .unwrap();
-        let store: RequirementsStore = serde_yaml::from_str(
+        let store: aida_core::RequirementsStore = serde_yaml::from_str(
             &std::fs::read_to_string(dir.path().join(".aida/mcp-test-cache.yaml")).unwrap(),
         )
         .unwrap();

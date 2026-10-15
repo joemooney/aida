@@ -400,6 +400,8 @@ mod tests {
         use aida_core::db::DatabaseBackend;
         use clap::Parser;
         let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // The temporary store test must not append to an inherited live role log.
+            ("AIDA_SESSION_ROLE", None),
             ("AIDA_SESSION_ID", Some("cli-exact-session")),
             ("AIDA_HARNESS_VERSION", Some("cli-harness")),
         ]);
