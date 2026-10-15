@@ -3,15 +3,23 @@ spec_id: BUG-2118
 agreed_id: BUG-2118
 title: Identify and reproduce the history fixture Git temporary-file/object-write failure
 description: 'Split from the carried BUG-1955 obligation in BUG-1994 under ADVISOR SKETCH SIGNOFF C2. PATH isolation does NOT establish the root cause of unable to create temporary file / failed to write commit object. Earlier foreign-shim strace claims were retracted: the entries were ENOENT search probes. Acceptance: name the actual mechanism using raw exec/exit/cwd/fixture-lifetime evidence; provide a reproduction that fails before the fix; make the failure non-recurring with a permanent regression. Do not treat passing PATH/history stress as proof of this mechanism.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T18:20:13.880079609Z
-modified_at: 2026-10-13T18:20:13.880079609Z
+modified_at: 2026-10-15T15:41:39.252663720Z
 req_type: Bug
 tags:
 - from-implementer:BUG-1994
+history:
+- id: 01a14039-fa30-75f2-a174-7c28c074b509
+  author: joe
+  timestamp: 2026-10-15T15:41:43.856625246Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 66d923f1483cbadebff41d7d89030a94f8146798
   branch: bug-1994-work
