@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2143",
+  "publishes": [
+    {
+      "at": "2026-10-15T21:13:30.768790142Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T05:05:45.689999200Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:43:27.334539485Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:43:46.758400819Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T16:38:30.272239841Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2675,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "d1ea3d30fb7ab7cb0dfdfe6327b52e362ab4cbcd"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:39:04.740057705Z",
+      "spec": "BUG-2143",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT round 1: the reported case is fixed, but advisory claim leases with a --worktree path are still re-entered, and the on-disk guard can never fire",
+        "recovery_hint": "address the review findings, move BUG-2143 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T19:52:15.380173454Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2675,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7af1af8b7d1cb52e1bfb837efa159def5301cd37"
+      }
+    },
+    {
+      "ts": "2026-10-15T21:13:10.295682159Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T21:13:21.921305300Z",
+      "spec": "BUG-2143",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2675
+      }
+    },
+    {
+      "ts": "2026-10-15T21:13:30.753766725Z",
+      "spec": "BUG-2143",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
