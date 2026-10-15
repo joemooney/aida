@@ -58,7 +58,7 @@ impl Guard {
                     self.import(tree);
                 }
             }
-            syn::UseTree::Rename(r) if r.ident == "set_var" => {
+            syn::UseTree::Rename(r) if r.ident == "set_var" || r.ident == "remove_var" => {
                 self.setter_aliases.insert(r.rename.to_string());
             }
             _ => {}
@@ -71,7 +71,9 @@ impl Guard {
             if let (proc_macro2::TokenTree::Ident(name), proc_macro2::TokenTree::Group(args)) =
                 (&pair[0], &pair[1])
             {
-                if (name == "set_var" || self.setter_aliases.contains(&name.to_string()))
+                if (name == "set_var"
+                    || name == "remove_var"
+                    || self.setter_aliases.contains(&name.to_string()))
                     && args.delimiter() == proc_macro2::Delimiter::Parenthesis
                 {
                     let parser =
@@ -135,13 +137,13 @@ impl<'ast> Visit<'ast> for Guard {
     fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
         if let syn::Expr::Path(path) = call.func.as_ref() {
             if let Some(last) = path.path.segments.last() {
-                if (last.ident == "require_path_mutation_scope"
-                    && call.args.first().is_some_and(|arg| self.is_path(arg)))
-                    || last.ident == "lock"
+                if last.ident == "require_path_mutation_scope"
+                    && call.args.first().is_some_and(|arg| self.is_path(arg))
                 {
                     self.scope_checked = true;
                 }
                 let setter = last.ident == "set_var"
+                    || last.ident == "remove_var"
                     || (path.path.segments.len() == 1
                         && self.setter_aliases.contains(&last.ident.to_string()));
                 if setter
@@ -154,19 +156,24 @@ impl<'ast> Visit<'ast> for Guard {
         }
         visit::visit_expr_call(self, call);
     }
-    fn visit_expr_method_call(&mut self, method: &'ast syn::ExprMethodCall) {
-        if method.method == "lock" {
-            self.scope_checked = true;
-        }
-        visit::visit_expr_method_call(self, method);
-    }
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
         self.macro_setters(mac.tokens.clone());
     }
 }
 
 fn count(src: &str) -> usize {
-    let file = syn::parse_file(src).expect("source must parse");
+    let sanitized: String = src
+        .lines()
+        .map(|line| {
+            if line.contains("// allow-unisolated-home") {
+                ""
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let file = syn::parse_file(&sanitized).expect("source must parse");
     let mut guard = Guard::default();
     guard.visit_file(&file);
     guard.offenders
@@ -178,9 +185,6 @@ fn scan(dir: &Path, offenders: &mut Vec<String>) {
         if path.is_dir() {
             scan(&path, offenders);
         } else if path.extension().is_some_and(|ext| ext == "rs") {
-            if path.file_name().is_some_and(|n| n == "test_home.rs") {
-                continue;
-            }
             let source = std::fs::read_to_string(&path).unwrap();
             let n = count(&source);
             if n > 0 {
@@ -219,6 +223,11 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
         r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); } fn unguarded() { std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"fn t() { std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
         r#"const KEY: &str = "HOME"; fn t() { std::env::set_var(KEY, "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _g = lock(); std::env::set_var("HOME", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { let _o = std::io::stdout().lock(); std::env::set_var("PATH", "fake"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::remove_var("HOME"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        r#"fn t() { std::env::remove_var("PATH"); }"#, // allow-raw-env-write: inert source fixture parsed by syn, never executed
     ] {
         assert_eq!(count(src), 1, "{src}");
     }
@@ -236,7 +245,19 @@ fn guard_rejects_direct_aliased_and_macro_path_setters() {
     );
     assert_eq!(
         count(
-            r#"fn t() { let _g = lock(); std::env::set_var("HOME", "fake"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+            r#"fn t() { crate::test_env::require_path_mutation_scope("HOME"); std::env::remove_var("HOME"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        ),
+        0
+    );
+    assert_eq!(
+        count(
+            r#"fn t() { crate::test_env::require_path_mutation_scope("PATH"); std::env::remove_var("PATH"); }"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
+        ),
+        0
+    );
+    assert_eq!(
+        count(
+            r#"fn t() { std::env::set_var("HOME", "fake"); // allow-unisolated-home: fixture"# // allow-raw-env-write: inert source fixture parsed by syn, never executed
         ),
         0
     );

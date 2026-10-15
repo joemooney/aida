@@ -354,7 +354,7 @@ fn create_test_home() -> std::io::Result<PathBuf> {
 unsafe fn set_home_vars(test_home: &Path) {
     #[allow(unused_unsafe)]
     unsafe {
-        std::env::set_var("HOME", test_home);
+        std::env::set_var("HOME", test_home); // allow-unisolated-home: pre-main ctor runs before threads exist
         #[cfg(windows)]
         {
             std::env::set_var("USERPROFILE", test_home);
