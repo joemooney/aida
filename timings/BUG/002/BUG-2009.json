@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2009",
+  "publishes": [
+    {
+      "at": "2026-10-15T02:34:58.480828927Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:10:04.837819133Z",
+      "spec": "BUG-2009",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:12.972743505Z",
+      "spec": "BUG-2009",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-14T23:13:55.551744231Z",
+      "spec": "BUG-2009",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T02:34:36.028188745Z",
+      "spec": "BUG-2009",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2644
+      }
+    },
+    {
+      "ts": "2026-10-15T02:34:58.461344309Z",
+      "spec": "BUG-2009",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9e9c09c093d998d2f1694a6d75dc54deb82a0254",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
