@@ -24,6 +24,10 @@ reason = "drives Agent(isolation: worktree) implementer fan-out and lists Agent 
 name = "aida-solo"
 reason = "drives Agent(isolation: worktree) implementer fan-out as the solo driver loop"
 
+[[claude_only]]
+name = "aida-fire"
+reason = "fans out Agent fixers and reviewers, resumes them with SendMessage, and waits on background CI watchers"
+
 # Templates under `skills/` that are never scaffolded as skills into any
 # project, Claude's pack included, to keep them out of the per-call skill
 # catalogue.

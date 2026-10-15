@@ -261,9 +261,8 @@ pub fn link_cas(store_root: &Path, a: &str, b: &str) -> std::io::Result<bool> {
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly, then retry.
-                let _ = std::process::Command::new("git")
+                let _ = crate::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 continue;
             }
