@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T10:37:59.758029774Z
+modified_at: 2026-10-15T14:38:42.146270519Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -91,6 +91,12 @@ comments:
   content: 'Author implementation pushed as DRAFT PR #2666 https://github.com/joemooney/aida/pull/2666, head3107a754a36600e5b668d78e2fc993c607152a6c, stacked on #2664/codex/task-1731 (base8ef2b0828199fa06591f351dca11358373ea5e44). Final-source regen tests63passed; all28 fast gates passed; workspace aida dev build --no-promote + smoke passed; isolated real CLI controls/R1/R2/persistence/protected refusal probe passed; config-trust/shared-home/store-Git guards each1passed; fmt/diff clean. Author self-check2 fresh-context rounds: first found R2 setup error loss; now explicitly stores setup_failed without borrowed execution evidence, tested. Mapped child diagnostics withheld to prevent partial echo leakage. Final checker independently ran current adapter10 + controls1 tests with no findings. These are AUTHOR SELF-CHECKS, not independent review/approval. Status left Approved; no ready, verdict, hold-clear, ship or completion claim.'
   created_at: 2026-10-15T10:37:59.758029774Z
   modified_at: 2026-10-15T10:37:59.758029774Z
+- id: 01a14000-45e2-79c3-9baa-c6f79c32fc2f
+  author: joe
+  content: 'Base-only replay pushed to #2666 at 968eec9f00f5813baad6dbaa15120d38469adaec on rebuilt #2664 c82263b824. Range-diff against approved feature patch 3107a754a3 is unchanged (=). Full workspace compile, all 64 regen tests and all 29 fast gates pass. New base includes the separately mutation-proven controls regression; no adapter behavior change. Advisor notified; no author verdict/clearance/merge.'
+  created_at: 2026-10-15T14:38:42.146270519Z
+  modified_at: 2026-10-15T14:38:42.146270519Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
