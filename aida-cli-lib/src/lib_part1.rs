@@ -4269,6 +4269,12 @@ pub(crate) fn run() -> Result<()> {
         Command::Type(type_cmd) => {
             type_cmd::handle_type_command(type_cmd, &storage)?;
         }
+        // trace:TASK-1729 | ai:codex
+        Command::Regen(_) => {
+            anyhow::bail!(
+                "regeneration requires a git-canonical store; migrate the legacy store first"
+            );
+        }
         Command::Export { format, output, id } => {
             import_export_cmd::handle_export_command(
                 &storage,

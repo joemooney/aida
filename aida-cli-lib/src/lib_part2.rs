@@ -722,6 +722,8 @@ pub(crate) fn apply_agent_default_flags(
                 );
             }
             if contained {
+                // trace:BUG-2131 | ai:claude
+                aida_core::git_ops::ensure_git_supports_contained()?;
                 config
                     .default_args
                     .extend(tool_contained_flags(config.agent_type));

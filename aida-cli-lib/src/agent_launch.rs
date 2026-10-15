@@ -1924,10 +1924,14 @@ pub(crate) fn resolve_claude_new_posture(
             );
         }
     }
-    let contained_posture = || ClaudeNewPosture {
-        default_args: tool_contained_flags("claude"),
-        contained: true,
-        explicit: true,
+    let contained_posture = || -> Result<ClaudeNewPosture> {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
+        Ok(ClaudeNewPosture {
+            default_args: tool_contained_flags("claude"),
+            contained: true,
+            explicit: true,
+        })
     };
     if let Some(m) = permission_mode {
         return Ok(ClaudeNewPosture {
@@ -1937,7 +1941,7 @@ pub(crate) fn resolve_claude_new_posture(
         });
     }
     if sandbox || parent_contained {
-        return Ok(contained_posture());
+        return contained_posture();
     }
     if bg {
         if knob_contained()? {
@@ -1945,7 +1949,7 @@ pub(crate) fn resolve_claude_new_posture(
                 "{} --bg under [agents] contained: the detached session stays contained.",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
             );
-            return Ok(contained_posture());
+            return contained_posture();
         }
         // STORY-495: a detached `--bg` launch has no answerable TTY, so a
         // native (prompting) child would hang forever on the first
@@ -2928,6 +2932,8 @@ pub(crate) fn resolve_interactive_launch_mode_for_root(
             );
         }
         if contained {
+            // trace:BUG-2131 | ai:claude
+            aida_core::git_ops::ensure_git_supports_contained()?;
             return Ok(ResolvedClaudeLaunch {
                 mode: None,
                 contained: true,

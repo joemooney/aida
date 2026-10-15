@@ -1,3 +1,8 @@
+`aida regen corpus <dir>` exports committed store content as deterministic
+`corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
+records `dirty: true` while exporting HEAD. See OVERVIEW.md.
+<!-- trace:TASK-1729 | ai:codex -->
+
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
