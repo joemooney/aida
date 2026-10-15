@@ -92,13 +92,29 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
                 "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
             );
         }
-        if resolve_store_hooks_dir(cwd).is_err() {
+        if let Err(err) = resolve_store_hooks_dir(cwd) {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
-            // The static script consumes none of the caller's appended args.
+            // The static script prints only its first positional argument (the
+            // failed check, passed as data, never interpolated into the
+            // script) and consumes none of the caller's appended args.
+            // trace:BUG-1929 | ai:claude
             let mut refused = Command::new("sh");
-            refused.current_dir(cwd).env("PATH", crate::store_hooks::safe_path(cwd, &std::env::var_os("PATH").unwrap_or_default()))
-                .args(["-c", "printf '%s\n' 'refusing AIDA store write: host-owned AIDA hooks could not be verified; check ownership, permissions and contents.' >&2; exit 1", "--"]);
+            refused
+                .current_dir(cwd)
+                .env(
+                    "PATH",
+                    crate::store_hooks::safe_path(
+                        cwd,
+                        &std::env::var_os("PATH").unwrap_or_default(),
+                    ),
+                )
+                .args([
+                    "-c",
+                    "printf '%s\n' \"$1\" >&2; exit 1",
+                    "aida-store-refusal",
+                ])
+                .arg(format!("{err:#}"));
             return refused;
         }
     } else {
@@ -996,6 +1012,13 @@ pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
     if !is_git_repo(repo) {
         return Ok(());
     }
+    // An unverifiable hook profile makes every store git call the refusal
+    // shim, so the HEAD probe below would misreport it as "detached".
+    // Surface the failed check itself first.
+    // trace:BUG-1929 | ai:claude
+    if is_store_tree(repo) {
+        resolve_store_hooks_dir(repo)?;
+    }
     if let Some(state) = store_worktree_issue(repo) {
         anyhow::bail!(
             "refusing AIDA store write: {state}. Run `git -C {} rebase --continue` to finish recovery or `git -C {} rebase --abort`, then retry the AIDA command",
@@ -1012,6 +1035,13 @@ pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
 pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     if !is_git_repo(repo) {
         return None;
+    }
+    // The HEAD probe runs through `host_git_command`, which is the refusal
+    // shim when the store's hooks can't be verified: report that instead
+    // of a false "detached".
+    // trace:BUG-1929 | ai:claude
+    if is_store_tree(repo) && resolve_store_hooks_dir(repo).is_err() {
+        return Some("host-owned AIDA store hooks could not be verified");
     }
     let rebasing = rebase_in_progress(repo);
     // `rev-parse --abbrev-ref HEAD` also prints `HEAD` on an unborn but

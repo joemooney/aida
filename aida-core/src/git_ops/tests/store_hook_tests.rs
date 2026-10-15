@@ -99,6 +99,25 @@ fn bug_1929_unverified_host_hooks_refuse_store_writes() {
             .output()
             .unwrap();
         assert!(!out.status.success(), "{corruption}: {out:?}");
+        // The refusal names the failed check, never a false "detached".
+        // trace:BUG-1929 | ai:claude
+        let shim = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            shim.contains("cannot establish verified host-owned AIDA hooks")
+                && shim.contains(&*hooks.to_string_lossy()),
+            "{corruption}: {shim}"
+        );
+        let safe = format!("{:#}", ensure_store_write_safe(&store).unwrap_err());
+        assert!(!safe.contains("detached"), "{corruption}: {safe}");
+        assert!(
+            safe.contains("cannot establish verified"),
+            "{corruption}: {safe}"
+        );
+        assert_eq!(
+            store_worktree_issue(&store),
+            Some("host-owned AIDA store hooks could not be verified"),
+            "{corruption}"
+        );
         let staged = Command::new("git")
             .current_dir(&store)
             .args(["diff", "--cached", "--name-only"])
@@ -439,4 +458,69 @@ fn bug_1929_user_private_group_0775_checkout_allows_store_writes() {
         "a world-writable .git must still refuse"
     );
     set(&main.join(".git"), 0o775);
+}
+
+// uid_map parsing: only a well-formed non-identity map relaxes anything.
+// Malformed or empty input counts as identity (no relaxation).
+// trace:BUG-1929 | ai:claude
+#[test]
+fn bug_1929_uid_map_identity_parsing() {
+    use crate::store_hooks::uid_map_is_identity as identity;
+    assert!(identity("         0          0 4294967295\n"));
+    assert!(identity("0 0 4294967295"));
+    assert!(identity("\t0\t0\t4294967295  \n\n"));
+    // Typical bwrap --unshare-user map: own uid only.
+    assert!(!identity("      1000       1000          1\n"));
+    // Rootless-container style multi-line map.
+    assert!(!identity("0 1000 1\n1 100000 65536\n"));
+    // Identity line plus another mapping is not the single identity line.
+    assert!(!identity("0 0 4294967295\n1 1 1\n"));
+    assert!(!identity("0 0 4294967294\n"));
+    // Malformed: never treated as a namespace.
+    assert!(identity(""));
+    assert!(identity("garbage"));
+    assert!(identity("1000 1000\n"));
+    assert!(identity("1000 1000 1 7\n"));
+    assert!(identity("1000 1000 x\n"));
+    assert!(identity("1000 1000 1\nnot a map\n"));
+    assert!(identity("-1 1000 1\n"));
+}
+
+// Ancestor owner/mode matrix: the overflow uid is an acceptable ancestor owner
+// only inside a user namespace and only with the root mode rule.
+// trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1929_ancestor_overflow_uid_matrix() {
+    use crate::store_hooks::check_ancestor as check;
+    let (me, my_group, overflow, other) = (1000, 1000, 65534, 2000);
+    let ns = Some(overflow);
+    // Overflow-owned / and /home inside bwrap.
+    assert!(check(overflow, overflow, 0o755, me, my_group, ns).is_ok());
+    assert!(
+        check(overflow, overflow, 0o1777, me, my_group, ns).is_ok(),
+        "sticky world-writable like /tmp"
+    );
+    // Outside a namespace the overflow uid is just another user.
+    let err = check(overflow, overflow, 0o755, me, my_group, None).unwrap_err();
+    assert!(err.contains("untrusted owner uid 65534"), "{err}");
+    // Unsafe modes refuse even inside a namespace.
+    let err = check(overflow, overflow, 0o775, me, my_group, ns).unwrap_err();
+    assert!(err.contains("group- or world-writable"), "{err}");
+    assert!(check(overflow, overflow, 0o757, me, my_group, ns).is_err());
+    assert!(check(overflow, overflow, 0o777, me, my_group, ns).is_err());
+    // A different overflow value does not admit 65534.
+    assert!(check(overflow, overflow, 0o755, me, my_group, Some(4242)).is_err());
+    // Other owners always refuse, namespace or not.
+    let err = check(other, other, 0o755, me, my_group, ns).unwrap_err();
+    assert!(err.contains("untrusted owner uid 2000"), "{err}");
+    // Root rule unchanged.
+    assert!(check(0, 0, 0o755, me, my_group, None).is_ok());
+    assert!(check(0, 0, 0o1777, me, my_group, None).is_ok());
+    assert!(check(0, 0, 0o775, me, my_group, None).is_err());
+    // User-owned components must still be user-only (UPG 0775 allowed).
+    assert!(check(me, my_group, 0o755, me, my_group, ns).is_ok());
+    assert!(check(me, my_group, 0o775, me, my_group, ns).is_ok());
+    assert!(check(me, other, 0o775, me, my_group, ns).is_err());
+    assert!(check(me, my_group, 0o1777, me, my_group, ns).is_err());
 }

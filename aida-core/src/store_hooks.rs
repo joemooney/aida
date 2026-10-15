@@ -40,34 +40,106 @@ pub(crate) fn only_owner_may_write(owner: u32, group: u32, mode: u32, uid: u32, 
     mode & 0o002 == 0 && (mode & 0o020 == 0 || (owner == uid && group == gid))
 }
 
+/// Whether `/proc/self/uid_map` content is the initial (identity) user
+/// namespace: exactly one mapping `0 0 4294967295`, whitespace-insensitive.
+/// Unreadable or malformed content counts as identity, so it never relaxes
+/// the ancestor-owner check.
+// trace:BUG-1929 | ai:claude
+pub(crate) fn uid_map_is_identity(map: &str) -> bool {
+    let mut lines = Vec::new();
+    for line in map.lines().filter(|l| !l.trim().is_empty()) {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let parsed: Option<Vec<u32>> = fields.iter().map(|f| f.parse::<u32>().ok()).collect();
+        match parsed {
+            Some(v) if v.len() == 3 => lines.push(v),
+            _ => return true,
+        }
+    }
+    lines.is_empty() || lines == [vec![0, 0, u32::MAX]]
+}
+
+/// The kernel overflow uid when this process runs in a non-identity user
+/// namespace, else `None`. Read from `/proc/sys/kernel/overflowuid`,
+/// falling back to 65534.
+// trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+fn namespace_overflow_uid() -> Option<u32> {
+    let map = std::fs::read_to_string("/proc/self/uid_map").ok()?;
+    if uid_map_is_identity(&map) {
+        return None;
+    }
+    Some(
+        std::fs::read_to_string("/proc/sys/kernel/overflowuid")
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(65534),
+    )
+}
+
+/// Owner and mode rule for one ancestor of the git common directory. The
+/// user's own directories must be writable only by the user. Root-owned
+/// ones, and overflow-uid ones only when `namespace_overflow` is `Some`
+/// (a non-identity user namespace), must have no group/other write unless
+/// sticky. Any other owner refuses. `Err` names the failed check.
+// trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+pub(crate) fn check_ancestor(
+    owner: u32,
+    group: u32,
+    mode: u32,
+    uid: u32,
+    gid: u32,
+    namespace_overflow: Option<u32>,
+) -> std::result::Result<(), String> {
+    let sticky = mode & 0o1000 != 0;
+    if owner == uid {
+        if only_owner_may_write(owner, group, mode, uid, gid) || (owner == 0 && sticky) {
+            return Ok(());
+        }
+    } else if owner == 0 || namespace_overflow == Some(owner) {
+        if only_owner_may_write(owner, group, mode, uid, gid) || sticky {
+            return Ok(());
+        }
+    } else {
+        return Err(format!("has untrusted owner uid {owner}"));
+    }
+    Err(format!(
+        "(owner uid {owner}) is group- or world-writable (mode {:o})",
+        mode & 0o7777
+    ))
+}
+
 /// Never repair a suspicious existing profile. Versioned directories let a new
 /// binary install its own template masters without overwriting another build.
 #[cfg(unix)]
 pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-    let fail = || {
-        format!(
-        "refusing AIDA store write: cannot establish verified host-owned AIDA hooks in {}. \
-         Check ownership, permissions, symlinks and contents; project hooks cannot run on store commits",
-        common.display()
-    )
-    };
     let result = (|| -> Result<PathBuf> {
         // SAFETY: geteuid/getegid have no arguments or memory-safety preconditions.
         let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
         // A writable ancestor could replace even a read-only hooks directory.
         // Root-owned sticky temporary roots protect each user-owned child.
+        // Inside a non-identity user namespace (bwrap) root-owned ancestors
+        // such as / and /home read back as the kernel overflow uid.
+        // trace:BUG-1929 | ai:claude
+        let overflow = namespace_overflow_uid();
         for ancestor in common.ancestors() {
-            let meta = std::fs::symlink_metadata(ancestor)?;
+            let meta = std::fs::symlink_metadata(ancestor).with_context(|| {
+                format!(
+                    "cannot inspect store hooks dir ancestor {}",
+                    ancestor.display()
+                )
+            })?;
             anyhow::ensure!(
-                meta.is_dir()
-                    && !meta.file_type().is_symlink()
-                    && (meta.uid() == uid || meta.uid() == 0)
-                    && (only_owner_may_write(meta.uid(), meta.gid(), meta.mode(), uid, gid)
-                        || (meta.uid() == 0 && meta.mode() & 0o1000 != 0)),
-                "unsafe hooks authority ancestor {}",
+                meta.is_dir() && !meta.file_type().is_symlink(),
+                "store hooks dir ancestor {} is not a real directory",
                 ancestor.display()
             );
+            if let Err(reason) =
+                check_ancestor(meta.uid(), meta.gid(), meta.mode(), uid, gid, overflow)
+            {
+                anyhow::bail!("store hooks dir ancestor {} {reason}", ancestor.display());
+            }
         }
         let common_meta = std::fs::symlink_metadata(common)?;
         anyhow::ensure!(
@@ -80,7 +152,8 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
                     uid,
                     gid
                 ),
-            "git common directory is not owned exclusively by this user"
+            "git common directory {} is not owned exclusively by this user",
+            common.display()
         );
         let store_real = std::fs::canonicalize(store)?;
         let common_real = std::fs::canonicalize(common)?;
@@ -132,12 +205,14 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
                 && !meta.file_type().is_symlink()
                 && meta.uid() == uid
                 && meta.mode() & 0o022 == 0,
-            "unsafe hooks directory"
+            "unsafe hooks directory {} (not a directory, symlink, wrong owner or group/world-writable)",
+            dir.display()
         );
         let entries = std::fs::read_dir(&dir)?.collect::<std::io::Result<Vec<_>>>()?;
         anyhow::ensure!(
             entries.len() == HOOKS.len(),
-            "unexpected hooks directory contents"
+            "unexpected hooks directory contents in {}",
+            dir.display()
         );
         for (name, template) in HOOKS {
             let path = dir.join(name);
@@ -160,7 +235,16 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
         }
         Ok(dir)
     })();
-    result.with_context(fail)
+    // Name the failed check in the top-level message: callers and the
+    // refusal shim show only this line, never the error chain.
+    // trace:BUG-1929 | ai:claude
+    result.map_err(|e| {
+        anyhow::anyhow!(
+            "refusing AIDA store write: cannot establish verified host-owned AIDA hooks in {}: {e:#}. \
+             Check ownership, permissions, symlinks and contents; project hooks cannot run on store commits",
+            common.display()
+        )
+    })
 }
 
 #[cfg(not(unix))]
