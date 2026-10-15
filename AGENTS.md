@@ -1,3 +1,10 @@
+`regen score --consensus <uuid...>` compares at least three committed ordinary
+scored R1 trials with matching corpus/oracle/bundle and discriminating check sets.
+All-fail checks are reported as store gaps, partial failures separately. It is
+report-only unless `--file` requests draft amendments; open drafts deduplicate
+under the store write lock using exact-check hash tags. See OVERVIEW.md.
+<!-- trace:STORY-1679 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.

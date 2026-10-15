@@ -537,6 +537,34 @@ durable diagnostics. Gap IDs containing a captured mapping value refuse before
 execution, without printing the ID or value.
 <!-- trace:TASK-1733 | ai:codex -->
 
+`aida regen score --consensus <trial-uuid> <trial-uuid> <trial-uuid> ...` compares
+at least three distinct committed ordinary scored R1 trials. It cannot be combined
+with a system directory, controls, corpus/model/vendor/harness execution inputs,
+or `--unconfined`. No tools are launched. Mixed oracle SHA, bundle hash or corpus
+hash, invalid discriminating aggregates, or differing discriminating check sets
+refuse the entire selection before any filing. Adapted R2, control and unsuccessful
+attempts cannot be selected. Dirty/untracked trial files never count.
+
+A discriminating check failed by every selected regeneration is a **store gap**;
+partial failures are listed separately as **capability-dependent**, never as store
+gaps. The report gives N and counts of distinct recorded models/vendors; a single
+vendor produces an explicit weaker-consensus warning. Repeated runs are separate
+regenerations, and their actual diversity counts remain visible. These labels are
+investigation evidence rather than proof of cause. Contract clause mapping is not
+yet available: every gap explicitly says `contract mapping missing`.
+
+By default consensus only reports. `--file` explicitly creates draft amendment
+tasks through the normal atomic requirement write path, preserving type-based IDs,
+filing provenance and store hooks. A tag `regen-gap:<sha256(exact check)[:16]>`
+identifies a check within this project store; deduplication and insertion share
+the store write lock. A non-archived draft with that tag suppresses another draft,
+including a repeated `--file` run; a closed investigation allows a new draft. The
+body retains the exact check name and compared trial IDs. No parent is invented
+without a clause mapping. Check-to-clause mapping and parenting are a separate
+follow-up; the command retains its explicit missing-mapping diagnostic until then.
+<!-- trace:STORY-1679 | ai:codex -->
+
+
 Sources and targets cannot name PATH, HOME, SHELL, ENV, BASH_ENV, IFS, TMPDIR,
 PWD, OLDPWD, LANG, any oracle-owned variable, or a name starting with LD_,
 DYLD_, PYTHON, PERL, RUBY, NODE_, JAVA_, CLASSPATH, GIT_, XDG_, AIDA_ or LC_.

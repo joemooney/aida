@@ -837,6 +837,12 @@ pub(super) fn handle_score(
     Ok(())
 }
 
+// One committed-evidence reader for reports and consensus, never cache/disk JSON.
+// trace:STORY-1679 | ai:codex
+pub(super) fn read_committed_trials(store: &Path) -> Result<Vec<TrialRecord>> {
+    controls::read_records(store)
+}
+
 #[cfg(test)]
 #[cfg(target_os = "linux")]
 mod tests {

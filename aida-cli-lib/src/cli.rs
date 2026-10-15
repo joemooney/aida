@@ -16819,22 +16819,45 @@ pub enum RegenCommand {
     // trace:TASK-1730 | ai:codex
     Score {
         /// Regenerated system directory; copied into a fresh scoring root
-        #[clap(required_unless_present = "control", conflicts_with = "control")]
+        #[clap(required_unless_present_any = ["control", "consensus"], conflicts_with_all = ["control", "consensus"])]
         dir: Option<PathBuf>,
         /// Run generated controls instead of a caller-supplied system
-        #[clap(long, value_enum)]
+        #[clap(long, value_enum, conflicts_with = "consensus")]
         control: Option<RegenControl>,
         /// Corpus directory containing corpus.json and manifest.json
-        #[clap(long)]
-        corpus: PathBuf,
-        #[clap(long)]
-        model: String,
-        #[clap(long)]
-        vendor: String,
-        #[clap(long)]
-        harness: String,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        corpus: Option<PathBuf>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        model: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        vendor: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        harness: Option<String>,
+        /// Compare at least three committed scored ordinary trials; never executes tools
+        // trace:STORY-1679 | ai:codex
+        #[clap(long, num_args = 3..)]
+        consensus: Vec<uuid::Uuid>,
+        /// File draft amendment tasks for consensus gaps (report-only by default)
+        #[clap(long, requires = "consensus")]
+        file: bool,
         /// Explicitly bypass bubblewrap; the recorded trial is never clean
-        #[clap(long)]
+        #[clap(long, conflicts_with = "consensus")]
         unconfined: bool,
     },
 
