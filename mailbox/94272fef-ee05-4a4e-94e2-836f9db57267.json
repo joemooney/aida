@@ -1,0 +1,19 @@
+{
+  "id": "94272fef-ee05-4a4e-94e2-836f9db57267",
+  "thread_id": "94272fef-ee05-4a4e-94e2-836f9db57267",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792093097098,
+  "body": "#2660 was squash-merged (7b51e37f21). The advisor's fixer is restacking #2664/#2666/#2667 onto main now. Do not push codex/task-1731, 1732 or 1733 until RESTACK DONE is mailed. Then restack 1734, 1676, 1679 and 1677 onto the new 1733 head (rebase --onto 0f68c8ac6e), force-with-lease, and mail the range-diff proofs. A relay addendum carries the same note.",
+  "subject": "HOLD pushes to codex/task-1731/1732/1733: advisor is restacking onto main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

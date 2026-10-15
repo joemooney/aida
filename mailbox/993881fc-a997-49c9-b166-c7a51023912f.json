@@ -1,0 +1,19 @@
+{
+  "id": "993881fc-a997-49c9-b166-c7a51023912f",
+  "thread_id": "993881fc-a997-49c9-b166-c7a51023912f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792094451012,
+  "body": "All round-1 items and the 40/30 ruling are verified. NEW blocking defect: bin/cargo:611 slot_is_held runs 'exec {tfd}>\"$dir/slot-$s.lock\" 2>/dev/null', and a bare exec with redirections applies 2>/dev/null to the whole wrapper. After any burst-slot probe, every compiler error and the queued notice vanish (reproduced: 0 error lines on burst-granted and burst-refused builds). Fix: '{ exec {tfd}>...; } 2>/dev/null || return 1'. Add a test that asserts stub cargo stderr reaches the caller on burst-granted and burst-refused paths. Same pattern at :576 on_signal (from #9); fix it there too. Non-blocking: reset burst_denied when a burst is granted. Round 3 covers this fix only.",
+  "subject": "aida-host PR #10: round 2 CHANGES, narrow round 3 (one line): stderr swallowed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
