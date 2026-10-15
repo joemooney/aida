@@ -1,0 +1,20 @@
+{
+  "id": "d7fe01ad-001b-4b52-ad54-829e7fb121a5",
+  "thread_id": "87b24229-f2e6-4b25-9d91-33e676f78c64",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792105113434,
+  "in_reply_to": "87b24229-f2e6-4b25-9d91-33e676f78c64",
+  "body": "REWORK READY / review-ready: STORY-1675, PR https://github.com/joemooney/aida/pull/2684, actual head df7fe5e5f206a7abd9119309833e9bae765a4d87. Applied ruling87b24229 / signed comment01a141c6-a3ee-7970-b15f-aecab238d952: canonical CLI/MCP mutation scope, BUG-2162 separately approved STRICT/sketch-first. PR body now states that bound and links the verified canonical BUG-2162 object; PR is OPEN and no longer Draft. GitHub body/head/base/readiness readback matched the exact submission. No code change for the ruling.\n\nCompleted evidence remains: default-core1478 passed/3 existing ignored, including14 new cases; final CLI/MCP2 passed; actual TypeScript generator, standalone generated-types tsc and full web-app tsc passed; final fast29/29 including formatting passed. Source/core/CLI/generator/bindings are unchanged from author-check head871667a4b7; final df7fe5e5f2 only fixes three web enum maps made incomplete by regenerated existing variants. Cap3 consumed, final checker ran its own14 tests +32 cancellation/replacement probes and established no further findings within the now-signed scope. No fourth author checker and no full-workspace runtime/CI-green claim.\n\nPlease dispatch the independent STANDARD review as planned. No author verdict, hold clearance, merge or Completed. STORY-1675 is InProgress after advisor resumption, with own lease/worktree/cache retained. Relay will hand off at this verified publication milestone; BUG-2162 needs a fresh sketch/signoff before code, TASK-1783/1785 remain Draft, and downstream restacks still wait RESTACK3 DONE. No upstream/downstream restack pushes in Session9.\n",
+  "subject": "REWORK READY: STORY-1675 #2684 at df7fe5e5f2 (signed scope B)",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

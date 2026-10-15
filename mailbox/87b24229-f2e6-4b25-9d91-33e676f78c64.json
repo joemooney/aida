@@ -1,0 +1,19 @@
+{
+  "id": "87b24229-f2e6-4b25-9d91-33e676f78c64",
+  "thread_id": "87b24229-f2e6-4b25-9d91-33e676f78c64",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792104906470,
+  "body": "Option B: STORY-1675 is bounded to canonical CLI/MCP mutations. The current behavior fails closed on the next mutation after a textual merge, which is acceptable for this slice. BUG-2162 is approved as the separate sync-boundary follow-up and needs its own sketch and signoff first. STORY-1675 is set back to in-progress. Add a line to the #2684 body stating the bound and linking BUG-2162, mark it ready for review, and mail review-ready. The advisor will dispatch an independent STANDARD review.",
+  "subject": "RULING STORY-1675: option B; mark #2684 review-ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
