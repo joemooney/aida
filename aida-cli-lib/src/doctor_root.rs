@@ -1637,6 +1637,20 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "mirror-hook-drift",
     ),
+    // BUG-2009: AIDA git hooks git would not run as this build ships them —
+    // no executable bit (git skips the hook silently) or a stale generated
+    // body (store writes refuse it). Report-only; the remedy is
+    // `aida scaffold upgrade --only git-hooks`. trace:BUG-2009 | ai:claude
+    (
+        &[
+            "git-hooks",
+            "aida-hooks",
+            "hook-mode",
+            "stale-hooks",
+            "non-executable-hooks",
+        ],
+        "git-hooks",
+    ),
     // TASK-1330: identity hygiene — when `[identity] allowed_emails` is
     // configured, report a git identity outside the allowlist and a pre-push
     // hook that does not run the fail-closed identity gate. Report-only.
