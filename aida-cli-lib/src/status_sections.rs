@@ -1378,6 +1378,10 @@ mod bug_2133_contained_drain_children_tests;
 #[cfg(test)]
 #[path = "tests/bug_2144_2146_containment_refusal_tests.rs"]
 mod bug_2144_2146_containment_refusal_tests;
+// trace:BUG-2151 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2151_contained_parent_agent_new_tests.rs"]
+mod bug_2151_contained_parent_agent_new_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]

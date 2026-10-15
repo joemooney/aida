@@ -1876,6 +1876,146 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
     Ok(true)
 }
 
+/// BUG-2151: the Claude `agent new` launch posture.
+// trace:BUG-2151 | ai:claude
+pub(crate) struct ClaudeNewPosture {
+    pub(crate) default_args: Vec<String>,
+    pub(crate) contained: bool,
+    /// The launcher set the posture itself, so the `[agents]` knobs and
+    /// per-tool posture flags must not add another.
+    pub(crate) explicit: bool,
+}
+
+/// BUG-2151 (ruling on BUG-2133: containment is monotonic). Resolve the
+/// posture for `aida agent new claude`:
+///
+/// - A contained PARENT (`AIDA_CONTAINED`, parsed strictly by the caller)
+///   always wins: the child is contained, and `--permission-mode` (the only
+///   claude posture flag) is refused rather than honoured.
+/// - `--permission-mode` / `--sandbox` are operator posture flags and may
+///   override the `[agents] contained` CONFIG knob, never the env.
+/// - `--bg` is NOT a posture flag. Under the contained knob a detached launch
+///   stays contained; only an uncontained `--bg` launch is forced to
+///   `bypassPermissions` (no answerable TTY).
+// trace:BUG-2151 | ai:claude
+pub(crate) fn resolve_claude_new_posture(
+    permission_mode: Option<&str>,
+    sandbox: bool,
+    bg: bool,
+    parent_contained: bool,
+    knob_contained: impl FnOnce() -> Result<bool>,
+) -> Result<ClaudeNewPosture> {
+    // STORY-495: faithful default — inject `--permission-mode` only when the
+    // operator passed it explicitly. Otherwise leave Claude on its native
+    // posture and let the uniform `[agents] bypass` knob (applied in
+    // `apply_agent_default_flags`) decide whether to flip the whole fleet.
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if parent_contained {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained_posture = || ClaudeNewPosture {
+        default_args: tool_contained_flags("claude"),
+        contained: true,
+        explicit: true,
+    };
+    if let Some(m) = permission_mode {
+        return Ok(ClaudeNewPosture {
+            default_args: vec!["--permission-mode".to_string(), m.to_string()],
+            contained: false,
+            explicit: true,
+        });
+    }
+    if sandbox || parent_contained {
+        return Ok(contained_posture());
+    }
+    if bg {
+        if knob_contained()? {
+            eprintln!(
+                "{} --bg under [agents] contained: the detached session stays contained.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            );
+            return Ok(contained_posture());
+        }
+        // STORY-495: a detached `--bg` launch has no answerable TTY, so a
+        // native (prompting) child would hang forever on the first
+        // permission prompt. Force bypass and say so. An explicit
+        // `--permission-mode` still wins (handled above).
+        eprintln!(
+            "{} --bg detaches from this terminal (no answerable prompt); forcing \
+             --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+        );
+        return Ok(ClaudeNewPosture {
+            default_args: vec![
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+            contained: false,
+            explicit: true,
+        });
+    }
+    Ok(ClaudeNewPosture {
+        default_args: Vec::new(),
+        contained: false,
+        explicit: false,
+    })
+}
+
+/// BUG-2151: fail closed on the final `agent new` argv. When this process is
+/// contained (`AIDA_CONTAINED`, parsed strictly — a typo errors), the child
+/// must be a containable tool, must be marked contained (so the child env
+/// keeps `AIDA_CONTAINED=1`), and must carry no posture flag beyond the
+/// containment flags themselves (no `--permission-mode`, no
+/// `--dangerously-*`, no second `--settings`) — whatever the launcher flags,
+/// the agents.toml defaults, or a `--` passthrough tried to add.
+// trace:BUG-2151 | ai:claude
+pub(crate) fn refuse_uncontained_child_of_contained_parent(
+    config: &AgentLaunchConfig,
+) -> Result<()> {
+    if !session::aida_contained_env()? {
+        return Ok(());
+    }
+    let containable = session::HeadlessVendor::parse(config.agent_type)
+        .is_some_and(|v| session::containment_applied(v, true));
+    if !containable {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), but `{}` cannot run an \
+             AIDA-contained session — refusing to launch it uncontained. Launch \
+             `aida agent new claude`, or launch from an uncontained shell.",
+            config.agent_type
+        );
+    }
+    let (_, posture) = split_posture_flags(config.agent_type, config.default_args.clone());
+    let mut posture_names: Vec<&str> = posture
+        .iter()
+        .filter(|a| a.starts_with("--"))
+        .map(|a| a.split('=').next().unwrap_or(a))
+        .collect();
+    posture_names.sort_unstable();
+    let only_containment = posture_names == ["--setting-sources", "--settings"];
+    if !is_contained_launch(config) || !only_containment {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+             launches must be contained too — refusing to launch `{}` with posture flags \
+             [{}]. Drop the posture override, or launch from an uncontained shell.",
+            config.agent_type,
+            posture.join(" ")
+        );
+    }
+    Ok(())
+}
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn agent_new_claude(
@@ -1897,6 +2037,31 @@ pub(crate) fn agent_new_claude(
     description: Option<String>,
     bg: bool,
 ) -> Result<()> {
+    // BUG-2151: resolve the launch posture BEFORE the role picker, so a
+    // contained parent (or a malformed AIDA_CONTAINED) refuses before any
+    // interaction. trace:BUG-2151 | ai:claude
+    let parent_contained = session::aida_contained_env()?;
+    let knob_contained = || -> Result<bool> {
+        if !flag_options.use_config_defaults {
+            return Ok(false);
+        }
+        let base = cwd
+            .map(std::path::PathBuf::from)
+            .unwrap_or(std::env::current_dir()?);
+        let root = agent_launch_project_root_from(&find_aida_project_root_from(&base)?);
+        crate::agent_config::load_agents_contained(&root)
+    };
+    let ClaudeNewPosture {
+        mut default_args,
+        contained,
+        explicit,
+    } = resolve_claude_new_posture(
+        permission_mode,
+        sandbox,
+        bg,
+        parent_contained,
+        knob_contained,
+    )?;
     // TASK-646: resolve the child role (flag → picker → implementer default)
     // before any launch work. A cancelled picker aborts cleanly.
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
@@ -1909,38 +2074,6 @@ pub(crate) fn agent_new_claude(
             return Ok(());
         }
     };
-    // STORY-495: faithful default — inject `--permission-mode` only when the
-    // operator passed it explicitly. Otherwise leave Claude on its native
-    // posture and let the uniform `[agents] bypass` knob (applied in
-    // `apply_agent_default_flags`) decide whether to flip the whole fleet.
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    let mut default_args = Vec::new();
-    let mut explicit = permission_mode.is_some() || sandbox;
-    let mut contained = false;
-    if let Some(m) = permission_mode {
-        default_args.push("--permission-mode".to_string());
-        default_args.push(m.to_string());
-    } else if sandbox {
-        default_args.extend(tool_contained_flags("claude"));
-        contained = true;
-    } else if bg {
-        // STORY-495: a detached `--bg` launch has no answerable TTY, so a
-        // native (prompting) child would hang forever on the first
-        // permission prompt. Force bypass and say so. An explicit
-        // `--permission-mode` still wins (handled above).
-        eprintln!(
-            "{} --bg detaches from this terminal (no answerable prompt); forcing \
-             --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
-        );
-        default_args.push("--permission-mode".to_string());
-        default_args.push("bypassPermissions".to_string());
-        explicit = true;
-    }
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
@@ -2170,6 +2303,9 @@ pub(crate) fn agent_new_with_config(
         flag_options,
         explicit_permission,
     )?;
+    // BUG-2151: a contained parent contains every child, whatever the flags.
+    // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
@@ -2421,6 +2557,9 @@ pub(crate) fn agent_new_bg_dispatch(
         flag_options,
         explicit_permission,
     )?;
+    // BUG-2151: a contained parent contains every child, whatever the flags.
+    // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
