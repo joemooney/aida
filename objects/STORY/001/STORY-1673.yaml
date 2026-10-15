@@ -23,12 +23,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-15T15:14:25.601716156Z
+modified_at: 2026-10-15T15:14:28.033328507Z
 req_type: Story
 tags:
 - from:aida-host
@@ -82,6 +82,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14021-0441-7720-8a38-f6ae5cb1b2d1
+  author: ai:codex:joe
+  timestamp: 2026-10-15T15:14:28.033361197Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -90,3 +97,9 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
+attention_reason:
+  category: missing-context
+  detail: Security-class builtin-probe scope is chosen, but Acceptance, versioned row schema, data-argument validation and expected-value normalization are not signed.
+  lean: Sign the posted sketch and concrete acceptance, then return to Approved.
+  raised_by: implementer
+  raised_at: 2026-10-15T15:14:28.033328507Z
