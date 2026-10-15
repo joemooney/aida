@@ -44,12 +44,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T01:11:13.185429246Z
-modified_at: 2026-10-15T01:11:13.185429246Z
+modified_at: 2026-10-15T01:20:26.395001212Z
 req_type: Story
 tags:
 - advisor
 - burndown
 - workflow
+comments:
+- id: 01a13d25-711b-7123-a289-2cb5377ec8ee
+  author: joe
+  content: 'Lessons to add to the skill (2026-10-14, 18:20): (1) SEMANTIC CONFLICTS. #2637 and #2640 were each green and merged back to back with --override-stale-check. One added a required struct field, and the other added a literal without it, so main''s tests stopped compiling for about 50 minutes and every open PR went red. Rule: after each merge, the next PR must be updated from main and re-run Build before shipping (or use a merge queue), and the stale-check override is not a substitute for that. Add a main-CI watcher after every merge wave, and stop shipping when main goes red. (2) The fire-mode fixer that hit the break diagnosed it; the advisor fixed it forward with a one-line FASTTRACK PR (#2646). (3) Never use --no-verify, even for a one-line fix-forward.'
+  created_at: 2026-10-15T01:20:26.395001212Z
+  modified_at: 2026-10-15T01:20:26.395001212Z
+  session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
