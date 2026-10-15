@@ -642,7 +642,10 @@ impl RealPhaseDriver {
     ) -> Self {
         let drain_tuning = DrainTuning::resolve(&project_root);
         let lifecycle_forge = crate::forge::resolve_open_change_forge_kind(&project_root);
-        let contained = session::drain_contained(&project_root);
+        // BUG-2146: the production entry (`drain_gate`) already refused a
+        // malformed agents.toml; any residual read error here fails CLOSED
+        // (contained), never open. trace:BUG-2146 | ai:claude
+        let contained = session::drain_contained(&project_root).unwrap_or(true);
         Self {
             project_root,
             lifecycle_forge,

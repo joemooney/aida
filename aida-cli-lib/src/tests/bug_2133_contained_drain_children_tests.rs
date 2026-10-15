@@ -275,12 +275,12 @@ fn drain_contained_reads_the_env_and_the_agents_knob() {
 
     {
         let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
-        assert!(!session::drain_contained(&root));
+        assert!(!session::drain_contained(&root).unwrap());
     }
     {
         let _env =
             EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", Some("1"))]);
-        assert!(session::drain_contained(&root), "AIDA_CONTAINED=1");
+        assert!(session::drain_contained(&root).unwrap(), "AIDA_CONTAINED=1");
     }
     std::fs::write(
         root.join(".aida/agents.toml"),
@@ -289,7 +289,10 @@ fn drain_contained_reads_the_env_and_the_agents_knob() {
     .unwrap();
     {
         let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s)), ("AIDA_CONTAINED", None)]);
-        assert!(session::drain_contained(&root), "[agents] contained knob");
+        assert!(
+            session::drain_contained(&root).unwrap(),
+            "[agents] contained knob"
+        );
     }
 }
 

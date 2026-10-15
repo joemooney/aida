@@ -6416,7 +6416,10 @@ pub enum QueueCommand {
         permission_mode: Option<String>,
         /// Launch Claude in contained mode: strict Bash sandboxing, no
         /// unsandboxed fallback, destructive-command deny rules, and
-        /// project-relative edit auto-allow only.
+        /// project-relative edit auto-allow only. With --auto-complete it
+        /// contains the whole drain and every agent child it spawns. A
+        /// vendor that cannot run contained (codex, agy) is refused.
+        // trace:BUG-2144 BUG-2145 | ai:claude
         #[clap(long)]
         sandbox: bool,
         /// Run the full setup (worktree, lease, manifest) but skip the
