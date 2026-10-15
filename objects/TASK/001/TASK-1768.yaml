@@ -1,0 +1,20 @@
+id: 01a13dcc-bcbb-7de2-ae63-33899723ed9c
+spec_id: TASK-1768
+agreed_id: TASK-1768
+title: Kill paths (drain_signal.rs SIGTERM) must use a strict liveness variant where 'cannot tell' means 'do not signal'
+description: 'From the #2653 (TASK-1750) STRICT review. drain_signal.rs:217/:251 use process_identity_is_alive to decide whether to SIGTERM, where ''alive'' is the DANGEROUS answer. After #2653 an unparseable active_pid_start_time reads alive and would be signalled (previously skipped). No writer produces such values today. Add a strict variant (Unknown => do not signal) and use it on every kill/signal path. Also tighten recorded_identity_format to plain ASCII digits so ''linux-starttime:+5''/''007'' classify Unknown. Prerequisite for BUG-2130 (step 3).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T04:23:10.267185081Z
+modified_at: 2026-10-15T04:23:10.267185081Z
+req_type: Task
+filed_at:
+  code_sha: 7bf6b769498ca0ae386f04b11aa44b16da175740
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
