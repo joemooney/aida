@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1750",
+  "publishes": [
+    {
+      "at": "2026-10-15T13:05:16.034183185Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T04:11:37.622457969Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-14T18:26:35.893359116Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T22:06:33.309852164Z",
+      "spec": "TASK-1750",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1750",
+        "branch": "task-1750-identity",
+        "first_seen": "2026-10-14T22:06:33.301423496+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T23:15:50.218652030Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T23:19:13.561472942Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T23:22:17.302642415Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T12:41:15.923564703Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T13:05:16.015367297Z",
+      "spec": "TASK-1750",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:05:16.016063267Z",
+      "spec": "TASK-1750",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

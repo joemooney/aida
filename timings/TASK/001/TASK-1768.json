@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1768",
+  "publishes": [
+    {
+      "at": "2026-10-15T13:05:26.071793645Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T13:05:26.052500785Z",
+      "spec": "TASK-1768",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:05:26.053124153Z",
+      "spec": "TASK-1768",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
