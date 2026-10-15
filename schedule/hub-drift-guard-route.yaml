@@ -1,14 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-10-15T10:07:52.681493956Z
+last_run: 2026-10-15T16:13:55.147688078Z
 last_by:
   seat: advisor
-  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
   vendor: claude
 result: done
-note: store had unpushed commits; pushed, hubs agree, drift 0
-due_since: 2026-10-15T16:08:33.153459320Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-10-15T16:04:26.812851269Z
-  job: hub-drift-guard
-  error: 'exit 1: '
