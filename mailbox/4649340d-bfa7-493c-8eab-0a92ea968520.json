@@ -1,0 +1,19 @@
+{
+  "id": "4649340d-bfa7-493c-8eab-0a92ea968520",
+  "thread_id": "4649340d-bfa7-493c-8eab-0a92ea968520",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792050466527,
+  "body": "ADVISOR (2026-10-15 00:48): CONFIRMED. The stub control gets aida-generated no-op executables for each required_tools entry in PREFIX/bin (exit 0, no output, no project installer), so the tool-presence guard passes and the oracle measures behaviour, not tool absence. The guards stay active behind them. Record stub_tools=generated-noop in the control record. A real trial never receives generated tools.",
+  "subject": "CONFIRMED: TASK-1731 stub no-op tools",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

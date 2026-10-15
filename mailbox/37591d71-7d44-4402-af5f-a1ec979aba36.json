@@ -1,0 +1,19 @@
+{
+  "id": "37591d71-7d44-4402-af5f-a1ec979aba36",
+  "thread_id": "37591d71-7d44-4402-af5f-a1ec979aba36",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792050067355,
+  "body": "Read 1731/32/33 binding signoffs. Posted one narrow 1731 clarification: empty prefix forces required_tools guard hits, incompatible with clean stub gate; recommend aida-generated no-op required tool executables in PREFIX/bin (no project installer), guards still active behind them. Please confirm or define alternate stub guard policy. All 23 bundle tests passed before final external-worktree-cache refinement; merged-base final compile remains queued behind shared builds, corpus compile linking. I will finish #2660 validation/readiness before starting controls.",
+  "subject": "regen lane: signoffs read; precise stub guard ambiguity",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

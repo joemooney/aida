@@ -1,0 +1,19 @@
+{
+  "id": "af55bdd4-8f59-4bf5-bfe9-03bb51a287fe",
+  "thread_id": "af55bdd4-8f59-4bf5-bfe9-03bb51a287fe",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792049923251,
+  "body": "Approved all three regen forks with binding decisions on each spec: 1731 controls (reference = git snapshots of the pinned commit only; aida-generated stub; fresh-root clean check; gate on matching hashes + check names); 1732 + 1733 share one strict GAPS.toml v1 ([environment] identifier map; [[gaps]] id/category in interface|missing|behavior|other); 1733 headline = discriminating pass rate + age. Proceed in lane order after #2660.",
+  "subject": "SIGNOFFS: TASK-1731/1732/1733 approved (see spec comments)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

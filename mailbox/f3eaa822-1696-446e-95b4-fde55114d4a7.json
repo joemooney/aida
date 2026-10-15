@@ -1,0 +1,19 @@
+{
+  "id": "f3eaa822-1696-446e-95b4-fde55114d4a7",
+  "thread_id": "f3eaa822-1696-446e-95b4-fde55114d4a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792050766869,
+  "body": "PR #2658 now at 71a86bd65ad59325716d54de3032bc8b684f2669. Normal merge of current base 1d6bb5349e brought existing host_git_command; regen.rs now uses it for both Git readers. No containment implementation changes. make check-ci-compile passed; make check-ci-fast 28/28; six regen corpus tests and contained_boundary::store_tests::bug_1929_store_git_guard passed using new workspace harness. Actual rebuilt corpus binary regenerated audit with no diff. Two real-store exports byte-identical (5260 rows; store9899f910b112f360175e57e7155de5f28fbf6f15; content c6b00a351c79a5db56627953bfa40f5f7a749e0d8b57cc4577e7d8a67e116980). Full BUG1502 integration audit test running separately, not yet claimed passed. PR body current. Independent review/CI/hold gates remain yours; no verdict or merge attempted. #2660 bundle baseline 23 tests green; final merged-base compile ongoing.",
+  "subject": "regen lane: #2658 store-Git repair pushed (TASK-1729)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
