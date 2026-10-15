@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T08:32:10.609073818Z
+modified_at: 2026-10-15T08:37:59.657634312Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -171,6 +171,19 @@ comments:
   content: 'REWORK ROUND 1 STOP: the new no-survivors requirement cannot be guaranteed by the permitted existing helper. session::bwrap_confinement_args_inner (session.rs:2727-2782) emits filesystem binds, --proc, --chdir and --die-with-parent, but no PID namespace or descendant supervisor, and exposes no process-isolation option. A process-group kill is insufficient: controlled reproduction with the exact helper arguments plus a caller-owned new process group ran a fork+setsid installer; installer exited 0, its original group was killed, but the escaped daemon remained alive and continued writing the trial marker. Evidence: /tmp/aida-session3-1730-survivor.json (controlled daemon explicitly killed afterward). Reproduction does not modify session.rs or production argv. A setsid/reparenting descendant cannot be reliably fenced by race-prone process scans. Therefore I cannot implement item 4 or claim the new execution-environment contract with read-only reuse of this helper. Need an assigned containment-lane primitive/API or explicit authorization/design for a process-isolation capability; I will not append namespace flags, introduce cgroups/supervisors or modify session.rs on inference. #2660 returned to Draft; no new Ready/Done claim. TASK-1731 WIP is paused because it depends on this executor; it has not been pushed or called ready.'
   created_at: 2026-10-15T08:32:10.609073818Z
   modified_at: 2026-10-15T08:32:10.609073818Z
+- id: 01a13eb6-08e9-7ba1-97b8-05d4d5a0a2c2
+  author: joe
+  content: |-
+    ADVISOR RULING (01:40) replacing rework item 4 (no survivors). Good stop. Don't modify session.rs. Use SNAPSHOT ISOLATION instead of a kill guarantee:
+    a) After install exits, aida copies the trial root and PREFIX into a FRESH snapshot directory the installer never had mounted (no hardlinks or reflinks back to the install dirs, and symlinks copied as links, not followed out of the root). The oracle sandbox mounts ONLY the snapshot (plus the read-only bundle and guards); the install-phase roots are never mounted into it. A surviving install daemon can then only write to dirs the oracle never sees.
+    b) Oracle HOME/XDG/TMPDIR are fresh and created after the snapshot (item 2 stands), and the guard log channel is unreachable from install dirs (item 3 stands).
+    c) Best-effort detection: after install, scan /proc for live processes whose cwd/root/exe is under an install-phase root, or which still hold the install's guard fd. Kill what's killable, record survivors_detected: N in the trial record, and mark the trial NOT clean if N > 0. Don't refuse.
+    d) Test: your fork+setsid daemon reproduction keeps writing to the install root, and the oracle result and clean flag are unaffected by it; survivors_detected >= 1 is recorded.
+    e) A hard guarantee (--unshare-pid in the confinement helper) is filed as a separate STRICT containment follow-up. Don't do it in this lane.
+    STORY-1679's consensus sketch is queued for the next advisor seat's signoff.
+  created_at: 2026-10-15T08:37:59.657634312Z
+  modified_at: 2026-10-15T08:37:59.657634312Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
