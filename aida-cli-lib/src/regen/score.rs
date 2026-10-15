@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 mod adapter; // trace:TASK-1732 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
+mod diagnostics; // trace:STORY-1676 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
 mod guards; // trace:TASK-1730 | ai:codex
 mod oracle; // trace:TASK-1730 | ai:codex
@@ -28,6 +29,8 @@ struct RegenConfig {
     oracle_paths: Vec<String>,
     #[serde(default = "default_reference_repeats")]
     reference_repeats: usize,
+    #[serde(default = "diagnostics::default_crash_share")]
+    crash_failure_share_percent: u8,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -46,6 +49,10 @@ impl RegenConfig {
             .clone()
             .try_into()?;
         validate_argv(&config.oracle_command)?;
+        anyhow::ensure!(
+            config.crash_failure_share_percent <= 100,
+            "crash_failure_share_percent must be 0..100"
+        );
         anyhow::ensure!(
             config.reference_repeats >= 1,
             "reference_repeats must be >= 1"
@@ -172,6 +179,12 @@ pub(super) struct TrialRecord {
     pub(super) oracle_sha: String,
     pub(super) oracle_bundle_sha256: String,
     pub(super) model: String,
+    // Optional on legacy trials; explicit identity, never derived from model/vendor.
+    // trace:STORY-1676 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) model_family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) failure_diagnostics: Option<serde_json::Value>,
     pub(super) vendor: String,
     pub(super) harness: String,
     pub(super) started_at: DateTime<Utc>,
@@ -251,6 +264,7 @@ struct ScoreEnv {
     // Explicitly captured interface inputs, supplied only to the oracle.
     // trace:TASK-1732 | ai:codex
     oracle_environment: BTreeMap<String, String>,
+    diagnostic_bytes: std::cell::RefCell<Option<Vec<u8>>>,
     #[cfg(test)]
     _guard_cache: tempfile::TempDir,
 }
@@ -319,6 +333,7 @@ impl ScoreEnv {
             bwrap,
             install_ran: std::cell::Cell::new(false),
             oracle_environment: BTreeMap::new(),
+            diagnostic_bytes: Default::default(),
             #[cfg(test)]
             _guard_cache: guard_cache,
         };
@@ -364,6 +379,16 @@ impl ScoreEnv {
             bundle.verify()?;
             reads.push(bundle.root.to_string_lossy().into_owned());
         }
+        // Only the oracle receives this scorer-owned file, created after install.
+        // Keep the original descriptor: a replaced pathname is never read back.
+        // trace:STORY-1676 | ai:codex
+        let sidecar = if bundle.is_some() {
+            Some(diagnostics::Sidecar::new(
+                &phase_root.join("run/check-results.jsonl"),
+            )?)
+        } else {
+            None
+        };
         let mut cmd = if let Some(bwrap) = &self.bwrap {
             let mut cmd = Command::new(bwrap);
             // Reuse the existing strict-read arm, rather than the convenience
@@ -417,12 +442,21 @@ impl ScoreEnv {
             cmd.env("PREFIX", &self.prefix);
         } else {
             cmd.envs(&self.oracle_environment);
+            cmd.env(
+                "AIDA_REGEN_CHECK_RESULTS",
+                phase_root.join("run/check-results.jsonl"),
+            );
             if self.install_ran.get() {
                 cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
             }
         }
-        cmd.output()
-            .with_context(|| format!("run regen command {}", argv[0]))
+        let output = cmd
+            .output()
+            .with_context(|| format!("run regen command {}", argv[0]))?;
+        if let Some(sidecar) = sidecar {
+            *self.diagnostic_bytes.borrow_mut() = sidecar.read();
+        }
+        Ok(output)
     }
 
     fn require_source_hidden(&self, dir: &Path, source: &Path) -> Result<()> {
@@ -464,7 +498,14 @@ fn execute(
             .is_file()
             .then(|| vec!["./install.sh".into()])
     });
-    if let Some(installer) = installer.filter(|_| record.kind != "control-stub") {
+    // Generated stubs deliberately have no installer. Every actual system must.
+    // trace:STORY-1676 | ai:codex
+    if record.kind != "control-stub" {
+        let Some(installer) = installer else {
+            record.status = "install_failed".into();
+            record.error = Some("no declared installer or ./install.sh".into());
+            return Ok(());
+        };
         env.install_ran.set(true);
         let install = match env.run(dir, &installer) {
             Ok(output) => output,
@@ -509,6 +550,11 @@ fn execute(
                         .collect::<String>()
                 )
             })?;
+    record.failure_diagnostics = Some(serde_json::to_value(diagnostics::capture(
+        env.diagnostic_bytes.borrow().as_deref(),
+        &record.checks,
+        config.crash_failure_share_percent,
+    ))?);
     let passed = record.checks.iter().filter(|c| c.passed).count();
     let total = record.checks.len();
     record.aggregate = Some(Aggregate {
@@ -607,6 +653,8 @@ fn initial_record(
         oracle_sha: bundle.sha.clone(),
         oracle_bundle_sha256: bundle.hash.clone(),
         model: model.into(),
+        model_family: None,
+        failure_diagnostics: None,
         vendor: vendor.into(),
         harness: harness.into(),
         started_at: Utc::now(),
@@ -728,10 +776,17 @@ pub(super) fn handle_score(
     control: Option<crate::cli::RegenControl>,
     corpus: &Path,
     model: &str,
+    model_family: Option<&str>,
     vendor: &str,
     harness: &str,
     unconfined: bool,
 ) -> Result<()> {
+    if let Some(family) = model_family {
+        anyhow::ensure!(
+            diagnostics::valid_family(family),
+            "model family must be nonempty, trimmed, at most 128 bytes, without control characters"
+        );
+    }
     let project = crate::project_root_from_store_hint(store).canonicalize()?;
     let (config, oracle_sha) = load_config(&project)?;
     let manifest = read_manifest(corpus)?;
@@ -806,6 +861,7 @@ pub(super) fn handle_score(
                 repeats: control.map(|_| repeats),
             }),
         )?;
+        record.model_family = model_family.map(str::to_owned);
         adapter::apply_gate(&mut record, gate.as_ref());
         if let Some(adapter) = adapter {
             // Capture from the same private, pre-execution input as the adapter.
@@ -823,6 +879,10 @@ pub(super) fn handle_score(
                 gate.as_ref(),
             )?;
         }
+        // Quality warnings follow execution/control validation, and never
+        // contaminate generated controls or turn a score into gate refusal.
+        // trace:STORY-1676 | ai:codex
+        diagnostics::flag_trial(&mut record);
         persist(store, &record)?;
         // A refused trial is durable diagnostic evidence, never a reported score.
         anyhow::ensure!(
@@ -848,7 +908,8 @@ mod tests {
             oracle_command: oracle.iter().map(|s| (*s).into()).collect(),
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 3,
-            install_command: None,
+            crash_failure_share_percent: 50,
+            install_command: Some(vec!["/bin/true".into()]),
             required_tools: vec!["regen-fixture-tool".into()],
         }
     }
@@ -1159,7 +1220,7 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
         assert_eq!(record.status, "install_failed");
         assert_eq!(record.install_exit, Some(3));
         assert!(record.oracle_exit.is_none() && record.aggregate.is_none());
-        cfg.install_command = None;
+        cfg.install_command = Some(vec!["/bin/true".into()]);
         cfg.oracle_command = vec![
             "/bin/sh".into(),
             "-c".into(),
@@ -1177,16 +1238,9 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
         let path = dir.path().join("install.sh");
         std::fs::write(&path, "#!/bin/sh\nexit 12\n").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let record = run_trial(
-            &config(&["/bin/sh", "-c", "echo 'ok   - never'"]),
-            dir.path(),
-            manifest(),
-            "m",
-            "v",
-            "h",
-            true,
-        )
-        .unwrap();
+        let mut cfg = config(&["/bin/sh", "-c", "echo 'ok   - never'"]);
+        cfg.install_command = None;
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
         assert_eq!(record.status, "install_failed");
         assert_eq!(record.install_exit, Some(12));
         let corpus = dir.path().join("corpus");
@@ -1205,6 +1259,120 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
             .unwrap_err()
             .to_string()
             .contains("hash mismatch"));
+    }
+
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn own_installer_keeps_bin_and_lib_layouts_equivalent_and_missing_install_is_distinct() {
+        let mut cfg = config(&["/bin/sh", "-c", "test \"$(\"$AIDA_REGEN_PREFIX/bin/tool\")\" = real && printf 'ok   - installed tool\\n'"]);
+        cfg.install_command = None;
+        for layout in ["bin", "lib"] {
+            let source = TempDir::new().unwrap();
+            std::fs::create_dir(source.path().join(layout)).unwrap();
+            std::fs::write(
+                source.path().join(layout).join("tool"),
+                "#!/bin/sh\nprintf real\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(
+                source.path().join(layout).join("tool"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            let installer = format!(
+                r#"#!/bin/sh
+set -eu
+test -z "${{AIDA_REGEN_CHECK_RESULTS+x}}"
+mkdir -p "$PREFIX/{layout}" "$PREFIX/bin"
+cp {layout}/tool "$PREFIX/{layout}/tool"
+"#
+            );
+            let installer = if layout == "lib" {
+                format!("{installer}printf '#!/bin/sh\\nexec \"%s/lib/tool\"\\n' \"$PREFIX\" > \"$PREFIX/bin/tool\"\nchmod +x \"$PREFIX/bin/tool\"\n")
+            } else {
+                installer
+            };
+            std::fs::write(source.path().join("install.sh"), installer).unwrap();
+            std::fs::set_permissions(
+                source.path().join("install.sh"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            let result = run_trial(&cfg, source.path(), manifest(), "m", "v", "h", true).unwrap();
+            assert_eq!(result.status, "scored", "{:?}", result.error);
+            assert_eq!(result.install_exit, Some(0));
+            assert_eq!(result.aggregate.unwrap().pass_rate, 1.0);
+            assert_eq!(
+                std::fs::read_dir(source.path()).unwrap().count(),
+                2,
+                "input remains untouched"
+            );
+        }
+        let empty = TempDir::new().unwrap();
+        let result = run_trial(&cfg, empty.path(), manifest(), "m", "v", "h", true).unwrap();
+        assert_eq!(result.status, "install_failed");
+        assert!(
+            result.install_exit.is_none()
+                && result.oracle_exit.is_none()
+                && result.aggregate.is_none()
+        );
+        assert!(result.error.unwrap().contains("no declared installer"));
+        cfg.install_command = Some(vec!["./missing-installer".into()]);
+        let result = run_trial(&cfg, empty.path(), manifest(), "m", "v", "h", true).unwrap();
+        assert_eq!(result.status, "install_failed");
+        assert!(result.error.unwrap().contains("installer launch failed"));
+    }
+
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn oracle_sidecar_capture_flags_and_roundtrips_without_marker_guessing() {
+        let dir = TempDir::new().unwrap();
+        for (diagnostic, crash, unknown) in [
+            (
+                r#"printf '%s\n' '{"v":1,"check":"Traceback usage 127","kind":"crash","exit":127}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                1,
+                0,
+            ),
+            (
+                r#"printf '%s\n' '{"v":1,"check":"Traceback usage 127","kind":"assertion","exit":127}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                0,
+                0,
+            ),
+            (
+                r#"printf '%s\n' '{"v":2,"check":"Traceback usage 127","kind":"crash"}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                0,
+                1,
+            ),
+            (":", 0, 1),
+        ] {
+            let script = format!("{diagnostic}\nprintf 'FAIL - Traceback usage 127\\n'");
+            let mut cfg = config(&["/bin/sh", "-c", &script]);
+            cfg.install_command = Some(vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                "test -z \"${AIDA_REGEN_CHECK_RESULTS+x}\"".into(),
+            ]);
+            let mut row = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
+            assert_eq!(row.status, "scored", "{:?}", row.error);
+            let counts = diagnostics::summary(&row);
+            assert_eq!((counts.crashes, counts.unknown), (crash, unknown));
+            diagnostics::flag_trial(&mut row);
+            assert_eq!(
+                row.flags.iter().any(|f| f.starts_with("crash-dominated:")),
+                crash > 0
+            );
+            assert_eq!(
+                row.flags.iter().any(|f| f.starts_with("unclassified:")),
+                unknown > 0
+            );
+            let copy: TrialRecord =
+                serde_json::from_slice(&serde_json::to_vec(&row).unwrap()).unwrap();
+            assert_eq!(diagnostics::summary(&copy).unknown, unknown);
+            assert_eq!(diagnostics::summary(&copy).crashes, crash);
+        }
+        for threshold in ["-1", "101", "256", "0.5"] {
+            assert!(RegenConfig::parse(&format!("[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\ncrash_failure_share_percent={threshold}")).is_err());
+        }
     }
 
     #[test]

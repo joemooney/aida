@@ -196,7 +196,7 @@ pub(super) struct AdapterRecord {
     adapter_input_sha256: String,
     mappings: Vec<Mapping>,
     r1: R1Scores,
-    r2: Box<TrialRecord>,
+    pub(super) r2: Box<TrialRecord>,
     raw_delta: Option<f64>,
     discriminating_delta: Option<f64>,
 }
@@ -359,6 +359,7 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
     for value in env.values().filter(|v| !v.is_empty()) {
         if record.checks.iter().any(|c| c.name.contains(value)) {
             record.checks.clear();
+            record.failure_diagnostics = None;
             record.aggregate = None;
             record.status = "error".into();
             record.error =
@@ -631,6 +632,7 @@ mod tests {
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 1,
+            crash_failure_share_percent: 50,
             required_tools: vec!["regen-fixture-tool".into()],
             install_command: Some(vec!["/bin/sh".into(), "-c".into(), installer.into()]),
         };

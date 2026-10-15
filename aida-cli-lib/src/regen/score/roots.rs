@@ -325,6 +325,7 @@ mod tests {
         }
         let config = RegenConfig {
             reference_repeats: 3,
+            crash_failure_share_percent: 50,
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             install_command: None,

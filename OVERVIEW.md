@@ -457,6 +457,45 @@ reporting; per-check outcomes are retained for later controls and comparisons.
 Raw cleanliness describes execution conditions, not the pass rate.
 <!-- trace:TASK-1730 | ai:codex -->
 
+Every actual system (including reference controls and R2) must have the declared
+installer or `./install.sh`. Missing, unlaunchable and nonzero installers record
+`install_failed`, distinct from oracle/check failures. Only generated no-op stub
+controls skip installation. No source-layout subset is selected by the scorer.
+
+The trusted oracle can write optional per-failure JSONL to the scorer-created
+`AIDA_REGEN_CHECK_RESULTS` path, supplied only during the oracle phase. Each line
+is `{"v":1,"check":"exact failing marker name","kind":"crash","exit":127}`;
+`kind` is `crash` or `assertion`, and integer `exit` is optional. No extra fields,
+duplicate identities, passing/unknown checks or unsupported versions are accepted.
+Absent, unreadable, over-1-MiB or invalid sidecars classify **every** failure as
+unknown; a valid partial sidecar leaves omitted failures unknown. Marker text and
+exit numbers never imply a classification. The scorer keeps its original file
+handle rather than reopening the child-writable pathname. These are oracle-supplied
+diagnostics, not independent attestation of generated tool behavior.
+
+Trial JSON retains versioned `failure_diagnostics`. Trusted
+`[regen].crash_failure_share_percent` is an integer 0–100, default 50. Crashes
+strictly above that percentage of **classified** failures produce
+`crash-dominated: review before reporting`; unknown failures strictly above 50%
+of **all** failures produce `unclassified: review before reporting`. Both can
+apply. Ordinary R1/R2 warnings are attached after control validation and forbid a
+clean headline; expected stub failures retain diagnostics without changing control
+execution cleanliness. Reports show counts/unknown share and put warnings beside
+the headline, including for legacy or invalid diagnostic extensions.
+
+`regen score --model-family <identity>` records an explicit optional family on the
+trial (and nested R2); model/vendor strings never infer it. `regen report` lists
+**oracle-assumption audit candidates** from the latest scored ordinary R1 per
+family, ordered by completion then UUID. Comparison requires matching corpus,
+oracle SHA and bundle hash. A candidate must be observed in every compared family
+and fail in exactly one; repeated runs do not count as separate families. Fewer
+than two families is unavailable, absent/invalid-family trials are counted as
+excluded, and checks unobserved in some families are counted separately. The audit
+is a prompt for human investigation, not proof of an oracle defect. No launcher or
+continuation policy is introduced here.
+<!-- trace:STORY-1676 | ai:codex -->
+
+
 Before ordinary scoring, generate controls with `aida regen score --control
 reference|stub --corpus <dir> --model <name> --vendor <name> --harness <name>`.
 The reference command exports the pinned trusted commit into a fresh directory

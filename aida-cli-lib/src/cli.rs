@@ -16829,6 +16829,10 @@ pub enum RegenCommand {
         corpus: PathBuf,
         #[clap(long)]
         model: String,
+        /// Explicit family identity for cross-family oracle audits (no inferred mapping)
+        // trace:STORY-1676 | ai:codex
+        #[clap(long)]
+        model_family: Option<String>,
         #[clap(long)]
         vendor: String,
         #[clap(long)]
