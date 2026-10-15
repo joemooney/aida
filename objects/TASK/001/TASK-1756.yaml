@@ -9,12 +9,12 @@ description: |
   3. L782: the scan_file mtime wiring (passing None) survives. Add a scan-level test with the file mtime pinned via File::set_modified.
   4. L812-831: the format_age branches are unpinned. Add a unit test at -1s, 59s, 60s, 59m59s, 1h, 23h59m and 24h.
   5. L877: the resolved-seat summary label is unpinned. Add a test asserting "pid N, transcript last written ...".
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T11:14:23.073373949Z
-modified_at: 2026-10-14T18:57:22.382463557Z
+modified_at: 2026-10-15T06:23:05.490948687Z
 req_type: Task
 tags:
 - follow-up
@@ -33,6 +33,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a13e3a-870f-77a3-b216-24f9b0726708
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:23:05.487135204Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a13e3a-8712-7ef3-873c-b05da0431502
+  timestamp: 2026-10-15T06:23:05.490946423Z
+  agent: aida
+  commit_sha: b6d97f11e5d019661d9586660ce04e7acfffaafc
+  summary: Completed via merge b6d97f11
 filed_at:
   code_sha: d0308bcefe8cb4d7ad99bb2449a0064d24c4e3d9
   branch: main
@@ -41,3 +54,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 3d8fc102-1166-4ecc-afbc-275650aca76e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:23:05.487129653Z
+  completion_sha: b6d97f11e5d019661d9586660ce04e7acfffaafc
