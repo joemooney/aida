@@ -1,0 +1,23 @@
+id: 01a14162-9f55-7740-ba31-625e3a3a4376
+spec_id: BUG-2160
+agreed_id: BUG-2160
+title: 'Flaky regen tests under load: guards unexpected_fifo_eof... asserts <1s; exit_policy_distinguishes... intermittent ''git cat-file blob failed'' with empty stderr'
+description: |-
+  Seen during the 2026-10-15 regen restack (stack top 55bca00b11; 3 of 10 runs had one failure each).
+  - regen::score::guards::tests::unexpected_fifo_eof_is_recorded_and_collection_never_waits_for_descendants asserts the run takes <1s; it fails under load and also fails 1/5 on bare origin/main. Make it measure 'did not wait for descendants' structurally (or use a generous bound tied to the descendant's sleep), not with a wall-clock <1s.
+  - regen::score::tests::exit_policy_distinguishes_installer_failure_oracle_checks_and_scoring_errors failed once with 'git cat-file blob ... failed:' and empty stderr, right after a long compile. It passed 9/9 afterwards. Investigate oracle.rs cat-file error capture (stderr is empty, so the real cause is lost) and any race with a concurrent git object write.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T21:05:44.789566170Z
+modified_at: 2026-10-15T21:05:44.789566170Z
+req_type: Bug
+filed_at:
+  code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7b51e37f21
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
