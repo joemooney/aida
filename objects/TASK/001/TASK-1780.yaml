@@ -18,8 +18,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:40:07.146402411Z
-modified_at: 2026-10-15T12:40:07.146402411Z
+modified_at: 2026-10-15T12:45:12.003924929Z
 req_type: Task
+comments:
+- id: 01a13f98-5bc3-7163-8498-acfc5a3f26f1
+  author: joe
+  content: |-
+    ADVISOR DESIGN (05:46, operator discussion). Programmatic gate, derived from the DIFF, not a spec flag:
+    (1) The cargo wrapper (~/.local/bin/cargo; the master lives wherever the slot wrapper is versioned) runs, before test/build, git diff --name-only origin/main...HEAD plus the working tree. It intersects that list with the dependency paths in the target dir's *.d dep-info files, which include include_str!/include_dir! inputs. If the intersection is empty, it skips with 'no compile inputs changed; CI covers it' and exits 0. --force-build overrides. With no dep-info (a cold target), it falls back to the patterns *.rs, Cargo.*, build.rs, .cargo/, rust-toolchain*, and embedded template dirs. It skips only when the compiler provably would not see the change.
+    (2) The spec's tier/heft chooses the DEPTH (targeted, area integration or full), not whether to compile.
+    (3) Seed per-worktree CARGO_TARGET_DIR from main's warm target at worktree creation (cp --reflink=auto, else cp -al for immutable deps). The TASK-1767 cost was 27 min of COLD build of aida-cli-lib, not test selection.
+    Tests: a docs-only diff skips; an embedded-template diff builds; an .rs diff builds; --force-build; the cold-target fallback.
+  created_at: 2026-10-15T12:45:12.003924929Z
+  modified_at: 2026-10-15T12:45:12.003924929Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
   branch: main
