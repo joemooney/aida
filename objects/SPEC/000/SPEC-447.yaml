@@ -1,0 +1,21 @@
+id: 01a1403f-ecb1-7412-bd8a-56dd869eb0b2
+spec_id: SPEC-447
+title: Investigate exact floating-rate validation across regen control and consensus JSON roundtrips
+description: TASK-1734 author self-check reproduced a serde_json roundtrip mismatch for the mathematically valid ratio1/11. Its optional display reader is now tolerant within8*f64::EPSILON and recomputes rates from counts. The strict scoring/control eligibility code still compares floating pass_rate with integer division exactly (e.g. regen/score/controls.rs::require_execution). Investigate whether valid committed control/consensus evidence can be refused after JSON persistence; cover1/11 and other representable ratios in real committed fixtures. If confirmed, design a bounded consistency check retaining integer-count and provenance validation, NaN/materially wrong rejection, and existing authority gates. Do not silently apply the display policy to strict gates. This is a separate investigation, not a claim of completed reproduction through a live control execution. Search of roundtrip/floating found no matching existing spec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T15:48:13.617378738Z
+modified_at: 2026-10-15T15:48:13.617378738Z
+req_type: Task
+tags:
+- from-implementer:TASK-1734
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
