@@ -312,7 +312,10 @@ mod tests {
             std::iter::once(bin.path().to_path_buf()).chain(std::env::split_paths(&old_path)),
         )
         .unwrap();
-        let _env = crate::test_env::EnvVarGuard::set("PATH", path.to_str().unwrap());
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(path.to_str().unwrap())),
+            ("GIT_CEILING_DIRECTORIES", None),
+        ]);
         let now = DateTime::from_timestamp(200, 0).unwrap();
         let cache = super::path(&store).unwrap();
         let _ = std::fs::remove_file(&cache);
@@ -401,13 +404,9 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "");
         // Optional display omits unusual discovery contexts; canonical resolver
         // semantics are unaffected because its source is unchanged.
-        {
-            let _ceiling = crate::test_env::EnvVarGuard::set(
-                "GIT_CEILING_DIRECTORIES",
-                project.path().to_str().unwrap(),
-            );
-            assert!(read_summary_for_project(linked.path(), now).is_none());
-        }
+        env.set_key("GIT_CEILING_DIRECTORIES", project.path());
+        assert!(read_summary_for_project(linked.path(), now).is_none());
+        env.unset_key("GIT_CEILING_DIRECTORIES");
         // Packing refs must preserve the file-only HEAD key and cache hit.
         git(&store, &["pack-refs", "--all"]);
         std::fs::write(&log, "").unwrap();
