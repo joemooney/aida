@@ -482,6 +482,7 @@ mod tests {
             commit_rows(store.path(), &rows());
             handle(store.path(), &ids(), true).unwrap();
             let storage = aida_core::Storage::new(store.path());
+            let closed_id = storage.load().unwrap().requirements[0].id;
             storage
                 .update_atomically(|graph| {
                     graph.requirements[0].status = status.clone();
@@ -495,7 +496,14 @@ mod tests {
                 2,
                 "{status:?}, archived={archived}"
             );
-            assert_eq!(graph.requirements[1].status, RequirementStatus::Draft);
+            let fresh = graph
+                .requirements
+                .iter()
+                .find(|r| r.id != closed_id)
+                .unwrap();
+            assert_eq!(fresh.status, RequirementStatus::Draft);
+            assert!(!fresh.archived);
+            assert!(fresh.tags.contains(&gap_tag("gap")));
         }
     }
 
