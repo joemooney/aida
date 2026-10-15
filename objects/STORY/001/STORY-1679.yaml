@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T15:11:56.771441349Z
+modified_at: 2026-10-15T15:14:44.296156759Z
 req_type: Story
 tags:
 - from:aida-host
@@ -65,6 +65,12 @@ comments:
   content: 'ADVISOR SIGNOFF (04:50): sketch SIGNED. (1) CLI: regen score --consensus <uuid...> is exclusive of trial/control execution; it reads committed ordinary scored trials only; N>=3; it REFUSES mixed oracle_sha/bundle/corpus provenance or differing discriminating check sets, with a clear message. (2) Report: N, distinct models, distinct vendors, a single-vendor warning; all-fail checks = store gaps; partial-fail = capability-dependent, never called gaps. (3) Dedup identity: project store + exact check name, persisted as a tag on the draft (regen-gap:<sha256(check)[:16]>, with the check name in the body); --file skips when an OPEN draft carries that tag; it writes through the normal requirement path, report-only by default. (4) Mapping: the explicit ''mapping missing'' diagnostic fallback is APPROVED; a check-to-clause mapping adapter is NOT in this story (file it as a follow-up). Tests per acceptance, plus an idempotent second --file run and a mixed-provenance refusal.'
   created_at: 2026-10-15T11:44:27.650044861Z
   modified_at: 2026-10-15T11:44:27.650044861Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14021-43c8-7bc1-bea7-46ace73f5e49
+  author: joe
+  content: Commit dcc46d8298 references this requirement
+  created_at: 2026-10-15T15:14:44.296156759Z
+  modified_at: 2026-10-15T15:14:44.296156759Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
