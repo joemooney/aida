@@ -635,7 +635,19 @@ pub(crate) fn existing_lease_for_scope<'a>(
     leases: &'a [SessionLease],
     scope: &str,
 ) -> Option<&'a SessionLease> {
-    leases.iter().find(|l| l.scope.eq_ignore_ascii_case(scope))
+    // BUG-2143: an advisory lease (`aida claim` / `aida review`) is never
+    // re-entered, whatever path it recorded, and neither is a blank path —
+    // "re-entering" one printed `cd ` with a blank or bogus path as success and
+    // created nothing. Callers pass leases pre-filtered by
+    // `worktree_gc::reenterable_leases`, which also drops MCP claims and any
+    // path that is not a live linked worktree.
+    // trace:BUG-2143 | ai:claude
+    leases.iter().find(|l| {
+        l.scope.eq_ignore_ascii_case(scope)
+            && !l.claim_verb
+            && !l.review_verb
+            && !l.worktree_path.to_string_lossy().trim().is_empty()
+    })
 }
 
 /// BUG-483: pure decision — does any lease OTHER than the one being ended
