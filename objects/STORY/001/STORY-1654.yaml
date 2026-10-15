@@ -23,12 +23,12 @@ description: |
   - An end-to-end relay run against a build that includes PR #2485: implementer subagent → separate reviewer process → `aida review record` → `aida pr ship` succeeds with no override. The same flow with an in-process reviewer subagent is refused as AuthorSession, which proves the gate is live.
   - The skills and relay prompts no longer instruct an in-process reviewer subagent.
   - The throughput cost is measured: wall-clock per review, before and after.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-11T15:21:05.786782032Z
+modified_at: 2026-10-15T06:53:46.951678160Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -153,6 +153,14 @@ comments:
   created_at: 2026-10-11T13:18:19.627954574Z
   modified_at: 2026-10-11T13:18:19.627954574Z
   session_id: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
+history:
+- id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
+  author: aida-lease-take
+  timestamp: 2026-10-15T06:53:46.951677333Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
