@@ -1,0 +1,20 @@
+id: 01a13e8f-6ed6-70f3-a0b9-fb8649e992af
+spec_id: TASK-1773
+agreed_id: TASK-1773
+title: 'TASK-1768 test/UX nits: drop-guard the sleep child in the stop-now test; distinguish a kill failure from an unconfirmed identity'
+description: 'From the #2653 final review: (1) task_1768_stop_now_never_signals_an_unconfirmed_identity drops its Child without a kill on early assert failure, orphaning sleep 60; add a drop guard. (2) signal_drain_stop_now prints ''identity could not be confirmed'' even when the strict match passed but kill itself failed; report that case accurately.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T07:55:49.846110560Z
+modified_at: 2026-10-15T07:55:49.846110560Z
+req_type: Task
+filed_at:
+  code_sha: 92763a125a7b2ac062064c6324063723a02a80ad
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
