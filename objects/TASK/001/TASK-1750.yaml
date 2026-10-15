@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:20.284960861Z
-modified_at: 2026-10-15T04:05:10.590597084Z
+modified_at: 2026-10-15T04:21:19.941617305Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -98,6 +98,12 @@ comments:
   created_at: 2026-10-14T23:14:12.669680106Z
   modified_at: 2026-10-14T23:14:12.669680106Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a13dcb-0dc5-7df0-b26a-2fd52884dc42
+  author: joe
+  content: 'Steps (1)+(2) of the cache_lock identity consolidation: PR #2653 (62318e6f62), non-completing, needs STRICT review. Exact linux-starttime/sysinfo-start records are now read by process_identity_is_alive; legacy rfc3339 is unchanged; unknown or unparsable records read as Unknown/alive. Step (3), switching the writers (BUG-2130), must land at least one release later.'
+  created_at: 2026-10-15T04:21:19.941617305Z
+  modified_at: 2026-10-15T04:21:19.941617305Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13dbc-433e-71c0-b0aa-7c4c75ba531b
   author: aida-lease-take
