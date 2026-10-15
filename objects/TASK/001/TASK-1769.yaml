@@ -3,13 +3,21 @@ spec_id: TASK-1769
 agreed_id: TASK-1769
 title: 'Schedule driver follow-ups from #2654: canonicalize live-path compare; document invalid-job nonzero tick; de-host shift install test'
 description: 'From the #2654 (BUG-2142) review, non-blocking: (1) schedule_driver.rs:1371 LiveAidaPaths::names compares raw paths; canonicalize both sides so a symlinked $HOME or another link to live/aida is not flagged. (2) maintenance_schedule.rs:898 makes EVERY tick exit nonzero while an enabled invalid job exists (systemd unit stays failed) — document as the intended signal. (3) shift_install_is_gated test now reads the real ~/.local/bin via real_tick_invocation; inject the path. (4) note in docs that installing from a worktree after dev activate writes the live link.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T05:31:26.895863900Z
-modified_at: 2026-10-15T05:31:26.895863900Z
+modified_at: 2026-10-15T12:00:45.220147682Z
 req_type: Task
+history:
+- id: 01a13f6f-aaa4-7382-afd8-f79eaae0b4a2
+  author: joe
+  timestamp: 2026-10-15T12:00:45.220141836Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: dedea1776c0a252400fb552dd14d5bd93720e0e9
   branch: main
