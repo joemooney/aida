@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1953",
+  "publishes": [
+    {
+      "at": "2026-10-15T00:00:37.708600229Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T15:17:50.147697664Z",
+      "spec": "BUG-1953",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:33:48.776736496Z",
+      "spec": "BUG-1953",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:58:38.243651775Z",
+      "spec": "BUG-1953",
+      "run_uuid": "01a13822-0d98-7253-a731-1f64d54bff52",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:59:09.702963445Z",
+      "spec": "BUG-1953",
+      "run_uuid": "01a13822-0d98-7253-a731-1f64d54bff52",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "claude",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T02:36:49.809729129Z",
+      "spec": "BUG-1953",
+      "run_uuid": "01a13822-0d98-7253-a731-1f64d54bff52",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "claude",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T02:36:52.022468765Z",
+      "spec": "BUG-1953",
+      "run_uuid": "01a13822-0d98-7253-a731-1f64d54bff52",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "ci",
+        "kind": "ci-unavailable",
+        "detail": "phase-1 PR/MR 2615 is Closed, not open",
+        "recovery_hint": "CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1953 --auto-complete`."
+      }
+    },
+    {
+      "ts": "2026-10-14T02:47:23.001356095Z",
+      "spec": "BUG-1953",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1953",
+        "branch": "bug-1953",
+        "first_seen": "2026-10-14T02:47:23.001290597+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T03:38:46.880028563Z",
+      "spec": "BUG-1953",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "before": "drain",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-15T00:00:02.180689241Z",
+      "spec": "BUG-1953",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T00:00:26.877654428Z",
+      "spec": "BUG-1953",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2643
+      }
+    },
+    {
+      "ts": "2026-10-15T00:00:37.677212012Z",
+      "spec": "BUG-1953",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "11154cd1566734d2bc9c07b087dc9d38fb41820f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
