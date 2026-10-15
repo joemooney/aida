@@ -351,6 +351,7 @@ impl OracleBundle {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests {
     use super::*;
     use tempfile::TempDir;

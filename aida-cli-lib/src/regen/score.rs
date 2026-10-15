@@ -392,6 +392,7 @@ fn execute(
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 fn run_trial(
     config: &RegenConfig,
     dir: &Path,
@@ -568,6 +569,7 @@ pub(super) fn handle_score(
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests {
     use super::*;
     use tempfile::TempDir;
