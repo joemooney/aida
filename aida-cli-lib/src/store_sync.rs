@@ -119,6 +119,9 @@ pub(crate) fn run_on_distributed_store(
 ) -> Result<()> {
     let storage = Storage::new(store_path);
     match command {
+        // Immutable corpus reads bypass cache/dispenser setup.
+        // trace:TASK-1729 | ai:codex
+        Command::Regen(cmd) => crate::regen::handle_command(store_path, cmd),
         // MCP server reads/writes through the same canonical git store the CLI
         // uses. The previous YAML-snapshot approach wrote to
         // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on

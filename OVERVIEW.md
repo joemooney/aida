@@ -285,8 +285,16 @@ Contained launch prepares the profile on the host before the sandbox starts,
 without adding writable paths. Host git authority directories are denied in
 both the sandbox and direct tool rules, including a primary-checkout launch.
 Store git removes relative/empty PATH entries
-and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` on Git
-2.40 or newer. The store-only hook marker keeps detached and override stores
+and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` so the
+store's `.gitattributes` cannot select a host filter or textconv driver. Older
+Git ignores that variable. On Git below 2.40, or when `git --version` cannot be
+parsed, contained mode is unavailable: launching a contained session or
+enabling the contained posture refuses, and host store git refuses while
+contained mode is in play for the store (`[agents] contained` /
+`[contained] enable`, `AIDA_CONTAINED`, or the marker a contained launch leaves
+in the git common directory). Without contained mode, store git keeps working
+and warns once. The fix is Git 2.40 or newer.
+<!-- trace:BUG-2131 | ai:claude --> The store-only hook marker keeps detached and override stores
 away from project-local executable probes without bypassing code-commit gates.
 Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.rs`
 and `tests/test_bug_1929_hook_templates.py`.
@@ -368,6 +376,18 @@ aida/
 ---
 
 ## Feature surface (high level)
+
+`aida regen corpus <dir>` freezes committed requirements and knowledge rows,
+including archived rows and comment threads, into versioned `corpus.json` plus
+`manifest.json`. The manifest pins the store SHA and SHA-256 of the corpus bytes;
+exports of the same commit are identical across checkout paths. Only projected
+spec content is included: source artifacts, attachments, history, processing
+records and implementation metadata are excluded. Store-authored prose is kept
+verbatim. The output directory must be new or empty. Uncommitted changes under `objects/`
+refuse unless `--allow-dirty` is explicit; runtime files outside `objects/` do not
+count as dirty. The override still exports committed HEAD and adds
+`dirty: true` to the manifest. Legacy stores must migrate to git-canonical storage.
+<!-- trace:TASK-1729 | ai:codex -->
 
 External wall displays and dashboards use a narrow, versioned read-only
 contract rather than depending on incidental CLI JSON fields. The eleven

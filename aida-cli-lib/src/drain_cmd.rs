@@ -598,10 +598,19 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
     let lock = lock.unwrap();
     write_stop_request(&root, if now { "now" } else { "graceful" }, Some(lock.pid))?;
     if now {
-        let _ = std::process::Command::new("kill")
-            .arg("-TERM")
-            .arg(lock.pid.to_string())
-            .status();
+        // TASK-1768: `probe_lock` is the lenient lock-holding probe, which
+        // reads an uncomparable identity as Running. Signal only on a strict
+        // positive identity match; otherwise the cooperative stop request
+        // written above is the whole stop.
+        if !signal_drain_stop_now(&lock) {
+            println!(
+                "Drain pid {} was not signalled: its process identity could not be confirmed, \
+                 so it may be a different process. A stop request was written; a live drain \
+                 stops at its next phase.",
+                lock.pid
+            );
+            return Ok(());
+        }
         // TASK-1518: the drain catches SIGTERM and may keep driving its
         // in-flight head (possibly an integrate on main) for up to its grace
         // window, holding the drain lock the whole time. Removing the lock
@@ -641,6 +650,80 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// SIGTERM the drain named by `lock` ONLY when its recorded start identity
+/// strictly matches the live process (TASK-1768). A missing, unparsable,
+/// non-canonical or cross-scheme identity is "cannot tell", and "cannot tell"
+/// never signals: the pid may have been recycled onto an unrelated process.
+/// Returns whether the signal was sent.
+// trace:TASK-1768 | ai:claude
+pub(crate) fn signal_drain_stop_now(lock: &drain_lock::DrainLock) -> bool {
+    let confirmed = lock
+        .pid_start_time
+        .as_deref()
+        .is_some_and(|start| aida_core::liveness::process_identity_matches_strict(lock.pid, start));
+    if !confirmed || lock.pid <= 1 {
+        return false;
+    }
+    std::process::Command::new("kill")
+        .arg("-TERM")
+        .arg(lock.pid.to_string())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+#[cfg(all(test, unix))]
+mod task_1768_stop_now_tests {
+    use super::*;
+
+    fn lock_for(pid: u32, start: Option<&str>) -> drain_lock::DrainLock {
+        serde_json::from_value(serde_json::json!({
+            "pid": pid,
+            "pid_start_time": start,
+            "started_at_utc": "2026-10-15T00:00:00Z",
+            "command": "queue work --drain",
+            "host": "test",
+        }))
+        .unwrap()
+    }
+
+    /// A drain lock whose start identity is Unknown (garbage, non-canonical
+    /// exact ticks, absent) naming a LIVE unrelated pid is never signalled by
+    /// `stop --now`, even though the lenient lock probe reads it Running.
+    // trace:TASK-1768 | ai:claude
+    #[test]
+    fn task_1768_stop_now_never_signals_an_unconfirmed_identity() {
+        let mut unrelated = std::process::Command::new("sleep")
+            .arg("60")
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = unrelated.id();
+        for start in [
+            Some("garbage"),
+            Some("linux-starttime:+5"),
+            Some("linux-starttime:007"),
+            None,
+        ] {
+            let lock = lock_for(pid, start);
+            if let Some(s) = start {
+                assert!(process_probe::process_identity_is_alive(pid, Some(s)));
+            }
+            assert!(!signal_drain_stop_now(&lock), "{start:?} was signalled");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(
+            unrelated.try_wait().unwrap().is_none(),
+            "the unrelated process must be untouched"
+        );
+
+        // Positive control: the genuine identity IS signalled.
+        let real = aida_core::liveness::process_start_identity(pid).expect("identity");
+        assert!(signal_drain_stop_now(&lock_for(pid, Some(&real))));
+        use std::os::unix::process::ExitStatusExt as _;
+        assert_eq!(unrelated.wait().unwrap().signal(), Some(15));
+    }
 }
 
 /// How long `aida drain stop --now` waits for the signalled drain to exit
