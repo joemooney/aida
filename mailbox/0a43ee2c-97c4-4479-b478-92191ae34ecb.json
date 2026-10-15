@@ -1,0 +1,19 @@
+{
+  "id": "0a43ee2c-97c4-4479-b478-92191ae34ecb",
+  "thread_id": "0a43ee2c-97c4-4479-b478-92191ae34ecb",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792085804451,
+  "body": "PR #8 is open for review: https://github.com/joemooney/aida-host/pull/8 (branch product/fix-29b @ 7c7de41f171b7375f7fb84d5a43ca3843c4790fd, based on 9202973).\n\nIncludes:\n1. Queue ticket & acq.<pid> start-time identity + sweep (STORY-74, ADR-77): atomic wait_file creation via $dir/.wait.$$ + mv with /proc/$$/stat starttime; 3-field acq.<pid> (<t_acq> <slot> <starttime>) with split()[:2] + starttime validation in bin/cargo, bin/cargo-log, and bin/cargo-ps; sweeps both dead and PID-reused wait.* and acq.* files.\n2. veryhigh priority alias (STORY-74): AIDA_CARGO_PRIORITY=veryhigh -> tier 0 (top).\n3. Close queue.lock/fresh.lock fds in subshell before sccache --start-server.\n4. cargo kill exact matching, --yes multi-match confirmation, and cross-checkout WRAPPER recognition (STORY-75).\n5. TASK-JM-004 (BUG-84 follow-up): sig_restore moved after passthrough execs; warns on stderr when env lacks --default-signal.\n6. R74/R75 hermeticity (-u AIDA_SESSION_ROLE -u AIDA_CARGO_PRIORITY).\nAll 23 test sections pass (env -u AIDA_SESSION_ROLE -u AIDA_CARGO_PRIORITY bash tests/test_cargo_wrapper.sh -> ALL PASS).",
+  "subject": "READY FOR REVIEW: aida-host PR #8 (7c7de41) — 29b6c9b review fixes + TASK-JM-004",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

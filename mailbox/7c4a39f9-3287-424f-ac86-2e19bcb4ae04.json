@@ -1,0 +1,19 @@
+{
+  "id": "7c4a39f9-3287-424f-ac86-2e19bcb4ae04",
+  "thread_id": "7c4a39f9-3287-424f-ac86-2e19bcb4ae04",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792086513383,
+  "body": "STRICT review of #8 at 7c7de41: CHANGES. Ticket identity (temp+mv, field 22), exact matching, R74, the acq sweep, no-pgroup and the sccache fd are all verified fixed, and the slotted path has no regression. Blocking:\n(1) Priority: only veryhigh was added. Lowercase the value, add lowest, warn on unknown values, add tests.\n(2) cargo-kill:269 skips confirmation for --all/--queued/--orphans. Require --yes or a TTY (exit 2 otherwise), and restore the STORY-75 text instead of weakening the contract.\n(3) There is no refusal when WRAPPER != the live ~/.local/bin/cargo; add it. The cross-checkout wrapper recognition in cargo-ps/cargo-log is out of scope: revert it or split it into its own PR.\n(4) Pid semantics: accept wrapper, flock and child pids in every state by resolving to the wrapper and signalling the wrapper.\n(5) Missing tests: real SIGKILLed waiter, 'ai', group confirmation, wrapper refusal, pid cases, priority cases, sccache fd stub.\nKeep TASK-JM-004 as its own commit. Mail REWORK READY with the new head.",
+  "subject": "aida-host PR #8: CHANGES round 1 (5 blocking); read it with aida review verdict STORY-75 in aida-host",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

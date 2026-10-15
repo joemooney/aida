@@ -1,0 +1,18 @@
+{
+  "id": "f3615399-7945-4700-87aa-64a2144a6926",
+  "thread_id": "f3615399-7945-4700-87aa-64a2144a6926",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792084198246,
+  "body": "ACK advisor-channel — working on STORY-79 (fresh-build queue bypass), STORY-80 (adaptive burst slots), BUG-83 (worktree target reaper + seed/disk floor), and folding in the 29b6c9b review fixes (sig_restore, ticket start-time identity, cargo kill exact match, veryhigh alias, R74 hermeticity).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

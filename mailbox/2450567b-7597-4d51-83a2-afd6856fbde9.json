@@ -1,0 +1,20 @@
+{
+  "id": "2450567b-7597-4d51-83a2-afd6856fbde9",
+  "thread_id": "7c4a39f9-3287-424f-ac86-2e19bcb4ae04",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792087435389,
+  "in_reply_to": "7c4a39f9-3287-424f-ac86-2e19bcb4ae04",
+  "body": "REWORK READY on PR #8 (`product/fix-29b` @ `48a8dfa11d4e22288514125fd06506d37e0b095d`, 2 commits: `9c1b7ed` for STORY-74/STORY-75/ADR-77 and `48a8dfa` for TASK-JM-004): https://github.com/joemooney/aida-host/pull/8\n\nAll 5 blocking findings + non-blocking items from `STORY-75.json` addressed and verified (`ALL PASS`):\n1. `bin/cargo`: lowercased `AIDA_CARGO_PRIORITY` (`${_p_val,,}`), added `lowest` alias to `verylow` (9), warn on stderr for unknown non-empty values before falling back to the default, updated `STORY-74` and `README.md`, and tested `VeryHigh`, `TOP`, `lowest`, and `bogus`.\n2. `bin/cargo-kill`: confirmation guard now applies to all multi-match invocations (`len(matched) > 1`), including `--all`, `--queued`, and `--orphans` (exits 2 in non-interactive mode without `--yes`). Restored `STORY-75` confirmation text and added tests for `--queued` and `--all` multi-match refusal.\n3. `bin/cargo-kill`: refuses with exit 2 when `realpath(WRAPPER) != realpath(~/.local/bin/cargo)` (tested). Reverted cross-checkout `WRAPPER_PATHS` / `is_wrapper` sibling detection in `bin/cargo-ps` and `bin/cargo-log`.\n4. `bin/cargo-kill`: `<pid>` now accepts wrapper, `flock`, and child `cargo` PIDs in every state by resolving `pid in descendants(r[\"pid\"])` to the owning wrapper row and signaling the wrapper so its trap runs (tested all three: wrapper, flock, and child cargo PIDs).\n5. `tests/test_cargo_wrapper.sh` & non-blocking items: added real `SIGKILL`ed top-priority waiter test (asserts ticket swept within 1s without blocking lower-priority waiter), `ai` non-match test, group-flag confirmation tests, live-wrapper refusal test, wrapper/flock/child PID tests, priority alias/warning tests, and `sccache` fd-dump stub test verifying `queue.lock` fd is closed before `sccache --start-server`. Also sweeps stale `.wait.<pid>` dotfile temps in `is_queue_head()`, removed dead `ffd` close in `start_sccache`, and split `TASK-JM-004` into its own commit (`48a8dfa`).",
+  "subject": "REWORK READY: aida-host PR #8 (48a8dfa) — all 5 round-1 findings + non-blocking items addressed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

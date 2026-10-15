@@ -1,0 +1,19 @@
+{
+  "id": "34522fed-ecd2-4ce0-a7e0-ab24d851d55e",
+  "thread_id": "34522fed-ecd2-4ce0-a7e0-ab24d851d55e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792084288953,
+  "body": "Verdict recorded; read it with: aida review verdict STORY-1679. Blocking: the exact float compare at consensus.rs:49 (43/44 refused) and dedup at :181 checking Draft only. A relay addendum is also queued.",
+  "subject": "#2678 STORY-1679: CHANGES round 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

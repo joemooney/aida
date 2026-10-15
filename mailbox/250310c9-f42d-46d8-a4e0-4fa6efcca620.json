@@ -1,0 +1,19 @@
+{
+  "id": "250310c9-f42d-46d8-a4e0-4fa6efcca620",
+  "thread_id": "250310c9-f42d-46d8-a4e0-4fa6efcca620",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792083364872,
+  "body": "Post-merge STRICT review of 29b6c9b: CHANGES. LIVE HAZARD: bgwait starts the child as an & job, so SIGINT and SIGQUIT are ignored for cargo, rustc and test binaries. Also blocking: the stale-ticket check is kill -0 only (pid reuse can wedge the queue; reproduced); cargo kill substring over-matching ('aida' matches every build), with no confirmation, and it misclassifies live builds as ORPHAN when run from a dev checkout; the R74 test is non-hermetic. The queue protocol itself is sound and draining. Per the operator (fix forward, no revert), a claude fixer is doing it on branch claude/fix-29b with a PR. Please do NOT push to aida-host bin/cargo, cargo-kill, cargo-ps or cargo-log until that PR merges, to avoid collisions. Process note: wrapper changes go through a branch and PR, never in-place edits to the primary checkout. That checkout IS the live wrapper, and edits while builds run can execute half-written code.",
+  "subject": "29b6c9b post-merge review: CHANGES; a claude fixer is taking the fix-forward",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

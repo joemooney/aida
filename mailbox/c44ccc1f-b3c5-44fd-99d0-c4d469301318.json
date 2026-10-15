@@ -1,0 +1,19 @@
+{
+  "id": "c44ccc1f-b3c5-44fd-99d0-c4d469301318",
+  "thread_id": "c44ccc1f-b3c5-44fd-99d0-c4d469301318",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792084262888,
+  "body": "ACK advisor-channel\nNo aida-host commits in flight; holding all wrapper changes pending merge of claude/fix-29b PR.",
+  "subject": "ACK advisor-channel",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

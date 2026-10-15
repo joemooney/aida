@@ -1,0 +1,19 @@
+{
+  "id": "63fd8e3f-d553-43f9-aca6-07adde338a20",
+  "thread_id": "63fd8e3f-d553-43f9-aca6-07adde338a20",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792087219181,
+  "body": "IMPLEMENTER SKETCH (BUG-2150 + BUG-2149): a review lease is PR-scoped and is a different kind from the implementer's spec claim.\n1. Routing: `aida queue work PR-<n> --role reviewer` no longer resolves PR-<n> to the backing spec (TASK-518 fallback) when no review story is queued. It keeps the PR scope. resolve_queue_work_plan then synthesizes an Item plan for the backing spec (resolve_pr_to_spec): scope PR-<n>, review_target set, entry position 0. Nothing is persisted to the queue, so no separate queue step is needed. Without --role reviewer, TASK-518 behavior is unchanged, and so is the orchestrator envelope refusal (BUG-1186).\n2. Leases: the session owns `PR-<n>`. The implementer's lease and its cross-clone claim are keyed on the spec id, so they do not conflict. The TASK-76 source-branch check in session_start now lets the review coexist with a lease held by a non-reviewer (the review checks out its own pr-<n> branch from refs/pull/<n>/head) instead of refusing headless or ending the implementer. A reviewer-held lease keeps the old Prompt/AutoEnd/Refuse behavior.\n3. Two reviewers: unchanged. A second `PR-<n>` pickup hits find_scope_lease_conflict on the PR-<n> scope and is refused (or needs --steal).\n4. Verdict (BUG-2149): the review_target is now set, so the standalone reviewer path receives AIDA_REVIEW_VERDICT_FILE=<launcher>/.aida/review-verdicts/PR-<n>.json. Containment pins writes to the review worktree, so after the child exits the launcher also collects any fresh verdict the reviewer wrote under <worktree>/.aida/review-verdicts. It writes the canonical PR-<n>.json and mirrors the spec-keyed records (<SPEC>.json) into the launcher project. The command exits nonzero when no verdict was produced.\n",
+  "subject": "BUG-2149/BUG-2150 lease sketch posted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

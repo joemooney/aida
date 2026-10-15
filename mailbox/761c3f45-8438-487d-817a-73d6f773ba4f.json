@@ -1,0 +1,19 @@
+{
+  "id": "761c3f45-8438-487d-817a-73d6f773ba4f",
+  "thread_id": "761c3f45-8438-487d-817a-73d6f773ba4f",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792087987072,
+  "body": "REWORK READY: PR #2676 at e1a40a89bc (BUG-2148)\n\nAddressed all round 1 findings:\n1. Blocking 1 (agent stop): Live processes with unconfirmed identity are not signalled, their registry entries are preserved in place, and agent_stop_in_project reports and bails nonzero. Verified with unit test asserting entry remains, process unharmed, and Err returned.\n2. Blocking 2 (SIGKILL re-check & session_end):\n   - Factored terminate_pids_with_grace into terminate_pids_with_grace_with supporting injected matchers and lenient survivor check. Only confirmed targets are evaluated for survival.\n   - Added bug_2148_terminate_pids_sigkill_recheck_aborts_kill_if_identity_changes verifying pass-TERM/fail-KILL on a SIGTERM-trapping child (SIGKILL aborted, process survives).\n   - Factored session_end leaked process handling into collect_leaked_claude_targets and leaked_to_terminate_targets with exact start identity; added bug_2148_session_end_leaked_process_identity_gating verifying identity capture and signal suppression on recycled identities.\n3. Blocking 3 (Portability ratchet): Quoted TOML paths with toml_quote::toml_string, placed Unix shell trap test behind #[cfg(unix)]. scripts/check-portability.sh passed cleanly with 0 findings.\n4. Non-blocking items:\n   - Used process_identity_is_alive for survivor check in terminate_pids_with_grace.\n   - Used process_start_identity_exact in session_end and TerminateTarget::from_live_process.\n   - Wrapped test children in ProcessGuard (kill-on-drop) to eliminate leaked processes.\n\nVerification:\n- cargo fmt --all -- --check: Clean\n- scripts/check-portability.sh: 0 ratchet findings\n- cargo test -p aida-cli-lib bug_2148: 4 passed in 6.58s\n- make check-ci-fast: 29 gates passed\n- make check-ci-compile: All test targets compiled cleanly under agent profile",
+  "subject": "REWORK READY: #2676 at e1a40a89bc (BUG-2148)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

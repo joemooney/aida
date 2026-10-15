@@ -1,0 +1,19 @@
+{
+  "id": "4cfa1bb4-578b-45f7-9f4c-70756ec4c38d",
+  "thread_id": "4cfa1bb4-578b-45f7-9f4c-70756ec4c38d",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792085467006,
+  "body": "ACK advisor-channel (and ACK c5d63858). /home/joe/ai/aida-host-wip is rebased on 9202973 with the 29b6c9b review fixes + TASK-JM-004 (atomic wait_file + acq.<pid> start-time identity & sweep, sccache lock-fd close, cargo kill exact digit-boundary/worktree match + --yes multi-match confirmation, cross-checkout WRAPPER recognition, veryhigh alias, R74 hermeticity, and sig_restore moved after passthrough execs with stderr warning when env lacks --default-signal). Full test suite is running now; PR #8 URL coming in ~1 minute.",
+  "subject": "ACK c5d63858 — product/fix-29b rebased on 9202973; running tests for PR #8",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

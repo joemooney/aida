@@ -1,0 +1,19 @@
+{
+  "id": "bebe48d4-94f6-457f-bd34-c8c50b1c4750",
+  "thread_id": "bebe48d4-94f6-457f-bd34-c8c50b1c4750",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792086577480,
+  "body": "PR #9 is open for review (stacked on PR #8 `product/fix-29b`): https://github.com/joemooney/aida-host/pull/9 (`0aeae5b3c1abcc69712a3b48351d278a7b3e1ef5`).\n\nImplements STORY-79 / ADR-81:\n- Dep-info (`*.d`) + workspace `src/`/`tests/`/`benches/`/`examples/`/`Cargo.toml`/`Cargo.lock`/`build.rs` mtime freshness check (`fresh_check`) before entering the slot queue.\n- Single-flight `$dir/fresh.lock` (non-blocking `flock -n $ffd`) so at most one fresh-bypass build runs off-slot at a time; a 2nd concurrent fresh build falls through to slot 0.\n- Slow-test gate (`AIDA_CARGO_FRESH_MAX_RUN_S=60`) so `cargo test` with previous `run_s > 60s` queues normally.\n- JSONL `\"slot\":\"none\"`, `\"reason\":\"fresh\"` / `\"fresh-miss\"` telemetry and `cargo log --stats` (`(N fresh-skips, M fresh-misses)` + `--by reason`).\n- Also filters out transient forked bash subshells whose `ppid` is itself a live wrapper in `cargo-ps` and `cargo-log`.\n- All 24 test sections pass (`ALL PASS`). Proceeding to PR #10 (`STORY-80`) and PR #11 (`BUG-83`) in `/home/joe/ai/aida-host-wip` next.",
+  "subject": "READY FOR REVIEW: aida-host PR #9 (0aeae5b) — STORY-79 fresh build bypass",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

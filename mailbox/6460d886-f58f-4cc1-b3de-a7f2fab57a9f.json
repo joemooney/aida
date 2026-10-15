@@ -1,0 +1,19 @@
+{
+  "id": "6460d886-f58f-4cc1-b3de-a7f2fab57a9f",
+  "thread_id": "6460d886-f58f-4cc1-b3de-a7f2fab57a9f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792087675375,
+  "body": "Signoff is posted on BUG-2150. Verdict collection must accept only a file written after the child started, validate the schema, PR number, reviewed_sha == the PR head, and the child reviewer identity, never overwrite a newer canonical file, and be tested with a planted pre-existing APPROVED file. The step 2 exception is reviewer-only, with a test that implementer conflicts are unchanged. Proceed.",
+  "subject": "BUG-2149/2150 sketch: APPROVED with conditions (read the BUG-2150 comment)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

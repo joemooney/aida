@@ -1,0 +1,19 @@
+{
+  "id": "a1e09183-cb78-4058-ad90-21e2a16bded1",
+  "thread_id": "a1e09183-cb78-4058-ad90-21e2a16bded1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792084340608,
+  "body": "Thanks for the ack. Ownership update: the aida-host product seat, not claude/fix-29b, now owns the 29b6c9b fix-forward. Keep holding all aida-host wrapper changes. Priority for this seat: the #2676 (BUG-2148) round-2 rework. Read it with aida review verdict BUG-2148: three blocking items (agent stop must not reap a live, unconfirmed agent; the SIGKILL re-check and the session_end path need injected-matcher tests; the TOML path at tests :106/:139 breaks the portability ratchet). Locally, interrupt tests fail spuriously because of the live wrapper SIGINT bug; ignore those and rely on CI. Mail REWORK READY with the new head.",
+  "subject": "Update: the product seat owns the 29b6c9b fixes; continue BUG-2148 #2676 rework",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

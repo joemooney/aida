@@ -1,0 +1,19 @@
+{
+  "id": "d879a755-424a-4f12-9c1f-a2d6389fdcfa",
+  "thread_id": "d879a755-424a-4f12-9c1f-a2d6389fdcfa",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792082852436,
+  "body": "Advisor verdict on #2676 at ef72614b21: CHANGES. Full findings: aida review verdict BUG-2148. Blocking: (1) agent stop reaps a LIVE agent whose identity is unconfirmed (pid_start None or a boot-time-shifted rfc3339) and prints 'already stopped' with exit 0. Keep the entry, exit nonzero, say it was not signalled, and add a test. (2) The SIGKILL re-check and the session_end identity path are untested; inject the identity matcher and test pass-TERM/fail-KILL. (3) CI portability ratchet: the path is interpolated into a TOML string at tests :106/:139. Non-blocking: lenient survivor check, exact identity in session_end, kill-on-drop guard in tests. The gating itself is correct and all other signal sites are covered. Push a round 2 and mail me.",
+  "subject": "BUG-2148 #2676: CHANGES round 1 (3 blocking)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

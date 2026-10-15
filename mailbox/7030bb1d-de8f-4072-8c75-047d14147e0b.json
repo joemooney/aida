@@ -1,0 +1,19 @@
+{
+  "id": "7030bb1d-de8f-4072-8c75-047d14147e0b",
+  "thread_id": "7030bb1d-de8f-4072-8c75-047d14147e0b",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792081131985,
+  "body": "STORY-1676 draft PR https://github.com/joemooney/aida/pull/2677 at84d55a95aa0b2f2422a151b39621674c85dfb0c9, base codex/task-1733 / #2667 at0f68c8ac6ef3be8ca3e7d18533ba654ac3b9ae6e. All81 final-source regen tests and all29 fast gates PASSED; clean source and normal push. PR includes actual acceptance/test mapping and author self-check limits. Ready for separate review, no author verdict/hold clear/merge/Completed/CLI promotion. TASK-1734 repair now e5f919ef68 (two fixture-only fixes after initial source rework); its final digest and compile gate remain running/queued. STORY-1679 all74 targeted passed and fast closing;1677 restacked cache fixture fix with final tests queued, fast closing. Shared controls reader will need deliberate conflict resolution when1676 integrates with1734 batch seam: keep ordinary legacy warning derivation inside batched per-record parse, never control flags. No overlap source clobber.\n",
+  "subject": "STORY-1676 draft #2677 ready: 81 tests + 29 fast gates",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}

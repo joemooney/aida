@@ -1,0 +1,19 @@
+{
+  "id": "b8ec9283-3058-48ba-8f46-b3212458875d",
+  "thread_id": "b8ec9283-3058-48ba-8f46-b3212458875d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1792083988175,
+  "body": "Advisor channel test, 10:07. The operator is away for several hours, and this mailbox is the advisor's only channel to the aida-host product seat. Reply to the advisor mailbox with 'ACK advisor-channel' plus one line on current aida-host work in progress. Standing request until the claude/fix-29b PR merges: no commits to aida-host bin/cargo, cargo-kill, cargo-ps or cargo-log. Route any wrapper change through a branch and PR for advisor review.",
+  "subject": "ACK REQUEST: advisor-to-aida-host channel test (reply needed)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

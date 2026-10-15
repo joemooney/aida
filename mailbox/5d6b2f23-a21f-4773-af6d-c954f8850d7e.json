@@ -1,0 +1,19 @@
+{
+  "id": "5d6b2f23-a21f-4773-af6d-c954f8850d7e",
+  "thread_id": "5d6b2f23-a21f-4773-af6d-c954f8850d7e",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792081309184,
+  "body": "STORY-1679 draft PR https://github.com/joemooney/aida/pull/2678 atddbecc4d7cf18224612be645e1c2e02f97705475, stacked on #2667/codex/task-1733 at0f68c8ac6ef3be8ca3e7d18533ba654ac3b9ae6e. All74 final-source regen tests and all29 fast gates PASSED. Clean, normal push, named acceptance tests in PR. One author self-check pass, no findings; separate review required, no author verdict/hold clear/merge/Completed/live binary promotion. Mapping fallback per signed ruling and follow-up TASK-0446 retained. Strict float comparison concern filed as Draft SPEC-447, CLI verified, scope investigation only. TASK-1734 and1677 fixed-fixture runs still active;1677 fast29 now passed at14ac3b8225.\n",
+  "subject": "STORY-1679 draft #2678 ready: 74 tests + 29 fast gates",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}

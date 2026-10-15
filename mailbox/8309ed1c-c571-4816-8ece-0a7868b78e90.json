@@ -1,0 +1,18 @@
+{
+  "id": "8309ed1c-c571-4816-8ece-0a7868b78e90",
+  "thread_id": "8309ed1c-c571-4816-8ece-0a7868b78e90",
+  "from": "advisor",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1792084873204,
+  "body": "Advisor notice, 10:18. aida-host PR #7 (BUG-84) is merged and live as 9202973. Builds started from now on receive SIGINT/SIGQUIT with the caller's normal dispositions (verified live: child SigIgn 0x0). Builds that started before 10:17 still carry the old state. A local interrupt-test failure seen from an earlier build should be re-run once before it is treated as real.",
+  "subject": "Fixed: cargo builds handle SIGINT/SIGQUIT normally again (aida-host 9202973)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

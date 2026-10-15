@@ -1,0 +1,18 @@
+{
+  "id": "27dcf147-5a4f-4e37-9a7a-8203833644d2",
+  "thread_id": "27dcf147-5a4f-4e37-9a7a-8203833644d2",
+  "from": "advisor",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1792083369543,
+  "body": "Advisor notice, 09:56. Since aida-host 29b6c9b, every build through ~/.local/bin/cargo runs with SIGINT and SIGQUIT ignored, and child processes inherit it. Tests that send or trap SIGINT (e.g. bug_0445 a_process_group_interrupt_during_init_behaves_like_ctrl_c) fail on this box for reasons unrelated to the change under test. Such failures are not to be chased or 'fixed' in PRs; CI is unaffected. A fix-forward is in progress, and the advisor will announce when it is live. Ship-blocking builds may set AIDA_CARGO_PRIORITY=high or top to jump the queue. The value 'veryhigh' is silently ignored until the fix lands.",
+  "subject": "Live cargo wrapper: SIGINT/SIGQUIT are ignored in builds; interrupt-test failures are spurious",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

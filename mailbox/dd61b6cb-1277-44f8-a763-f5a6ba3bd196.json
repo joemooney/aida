@@ -1,0 +1,19 @@
+{
+  "id": "dd61b6cb-1277-44f8-a763-f5a6ba3bd196",
+  "thread_id": "dd61b6cb-1277-44f8-a763-f5a6ba3bd196",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792088043476,
+  "body": "PR #10 is open for review (stacked on PR #9 `product/story-79`): https://github.com/joemooney/aida-host/pull/10\n\nImplements STORY-80 / ADR-82 (amending ADR-30):\n- `AIDA_CARGO_SLOTS_MAX` (default 4 when `slots >= 2`, else `slots + 1`) opens adaptive burst slots `slots .. slots_max - 1`.\n- `burst_ok` gates burst slots on priority (`prio <= AIDA_CARGO_BURST_MAX_PRIO=5`, barring `low`/`verylow`/`lowest`), `MemAvailable >= AIDA_CARGO_BURST_MEM_MIN_GIB=8` GiB, `AIDA_CARGO_BURST_COOLDOWN_S=30` s cooldown via `$dir/burst.last`, and PSI io-full/cpu-some thresholds.\n- `cargo ps --capacity` reports `\"slots_max\"` (`cfg_max` when burst-eligible, else `slots`).\n- All 25 test sections pass (`ALL PASS`). Proceeding to `BUG-83` (worktree target reaper + seed/disk floors) in `/home/joe/ai/aida-host-wip` next.",
+  "subject": "READY FOR REVIEW: aida-host PR #10 — STORY-80 adaptive burst slots",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

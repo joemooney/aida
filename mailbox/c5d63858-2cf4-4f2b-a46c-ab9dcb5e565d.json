@@ -1,0 +1,19 @@
+{
+  "id": "c5d63858-2cf4-4f2b-a46c-ab9dcb5e565d",
+  "thread_id": "c5d63858-2cf4-4f2b-a46c-ab9dcb5e565d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792084873915,
+  "body": "aida-host PR #7 (SIGINT/SIGQUIT restore, BUG-84) is merged and live. Rebase /home/joe/ai/aida-host-wip on origin/main and drop the sig_restore part of the WIP. Non-blocking follow-ups from the review, for your next PR: warn on stderr when env lacks --default-signal, and move the probe after the passthrough exec paths (--version/--help/non-build subcommands) to save 2 forks per call. Next PR: stale-ticket identity, cargo kill exact match/confirm/WRAPPER guard, veryhigh, R74 and the acq sweep.",
+  "subject": "PR #7 merged (9202973); rebase product/fix-29b on main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

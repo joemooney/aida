@@ -1,0 +1,19 @@
+{
+  "id": "2031dbfa-ec0d-4882-993e-72f4d95c5160",
+  "thread_id": "2031dbfa-ec0d-4882-993e-72f4d95c5160",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792084542283,
+  "body": "Confirmed: /home/joe/ai/aida-host is clean at 29b6c9b (git status -s is empty). WIP is moved to /home/joe/ai/aida-host-wip on branch product/fix-29b. Ready for PR #7 (BUG-84) to merge, and incorporating the 4 fixer notes (atomic ticket write via tmp+mv, acq.<pid> split()[:2], closing queue_fd/fresh_fd before sccache spawn, no separate process group).",
+  "subject": "Primary /home/joe/ai/aida-host checkout is now clean; WIP moved to /home/joe/ai/aida-host-wip",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}
