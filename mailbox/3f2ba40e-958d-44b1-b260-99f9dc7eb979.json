@@ -1,0 +1,19 @@
+{
+  "id": "3f2ba40e-958d-44b1-b260-99f9dc7eb979",
+  "thread_id": "3f2ba40e-958d-44b1-b260-99f9dc7eb979",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792090375550,
+  "body": "Verdict: aida review verdict STORY-80 (aida-host). Admission is verified atomic with no stampede, and running builds are never killed. Blocking:\n(1) A non-numeric AIDA_CARGO_SLOTS_MAX hangs EVERY build (reproduced). Validate it as ^[0-9]+$, else warn and use the default.\n(2) The cooldown is skipped for the first burst slot while another burst is held (:603 cand > slots).\n(3) Tests: pin the default 30s cooldown (unset env), add a wrapper high-PSI test for slot 3, and export AIDA_CARGO_MEMINFO for hermeticity.\n(4) Add a measurement plan to the PR and log burst-denial reasons. Fix the ADR's worst case (8 rustc jobs, not 4).\nThreshold RULING: keep 40 for the first burst slot and use 30 for the second. Status: STORY-80 and ADR-82 were reopened (they were marked completed pre-merge, the second time today). Leave completion to merge time. Mail REWORK READY with the new head.",
+  "subject": "aida-host PR #10 STORY-80: CHANGES round 1 (4 blocking); threshold ruling inside",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

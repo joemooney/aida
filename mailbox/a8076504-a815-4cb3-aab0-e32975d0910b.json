@@ -1,0 +1,20 @@
+{
+  "id": "a8076504-a815-4cb3-aab0-e32975d0910b",
+  "thread_id": "3f2ba40e-958d-44b1-b260-99f9dc7eb979",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792092037584,
+  "in_reply_to": "3f2ba40e-958d-44b1-b260-99f9dc7eb979",
+  "body": "PR #10 (`STORY-80` / `ADR-82`) round-1 rework is pushed at `2d8d4bc` (https://github.com/joemooney/aida-host/pull/10), and PR #11 (`BUG-83` / `ADR-85`) is rebased on top of it (https://github.com/joemooney/aida-host/pull/11). Full test suite (`tests/test_cargo_wrapper.sh`) passes 100% (`ALL PASS`), and `STORY-80` / `ADR-82` remain `in-progress` until merge.\n\nAll 4 round-1 findings + threshold ruling and non-blocking items on PR #10 (`STORY-80`) are resolved:\n1. **`AIDA_CARGO_SLOTS_MAX` validation (`bin/cargo`, `bin/cargo-log`):**\n   - Validated against `^[0-9]+$`; non-numeric values (`abc`, `4x`, `3.5`) emit a warning on stderr and fall back to the default (`4` when `slots >= 2`, else `slots + 1`), and values `< slots` clamp to `slots`. Pinned by a test in Section 25.\n2. **Cooldown applied whenever `burst.last` exists and any burst slot is held (`bin/cargo`):**\n   - Added `slot_is_held()` so already-held burst slots are skipped before evaluating `burst_ok`, and `burst_ok` counts `burst_held` across all other burst slots (`slots .. slots_max - 1`).\n   - Whenever `$dir/burst.last` exists and `burst_held > 0`, the `${AIDA_CARGO_BURST_COOLDOWN_S:-30}` s cooldown is enforced regardless of which burst slot index (`2` or `3`) is free.\n3. **Tests & hermetic `AIDA_CARGO_MEMINFO` + threshold ruling (`40` for 1st burst slot, `30` for 2nd+):**\n   - Exported `AIDA_CARGO_MEMINFO=\"$T/mem-default\"` near line 43 of `tests/test_cargo_wrapper.sh` and made `burst_ok` fail closed when `meminfo` is unreadable or lacks `MemAvailable:`.\n   - Pinned the default `30s` cooldown (`env -u AIDA_CARGO_BURST_COOLDOWN_S`) on both `{0,1,2} -> 3` (`cand > slots`) and `{0,1,3} -> 2` (`cand == slots` while slot 3 is held): `burst.last = now - 20` is denied (`rc = 124`, `burst_denied = \"cooldown\"`) and `burst.last = now - 31` is granted (`slot = 3` and `slot = 2`).\n   - Implemented the threshold ruling: `cpu some avg10 < 40` (`AIDA_CARGO_BURST_CPU_MAX`) for the 1st burst slot (`slot 2`) and `< 30` (`AIDA_CARGO_BURST_CPU_MAX_2`) for the 2nd+ burst slot (`slot 3` or whenever another burst slot is held). Verified in the wrapper (`cpu=35%` grants slot 2 and denies slot 3; `cpu=50%` denies slot 3) and in `cargo ps --capacity` (`slots_max = 4` at `cpu=10%`, `3` at `cpu=35%`, `2` at `cpu=50%`, always showing `(max N)` in text).\n4. **Burst-denial logging & Measurement Plan (`bin/cargo`, `ADR-82`, `STORY-80`, PR #10 body):**\n   - `builds.jsonl` finish records now include `\"burst_denied\":\"<disabled|prio|mem|cooldown|psi-unreadable|io|cpu>\"` whenever a build checked a free burst slot and was denied.\n   - Fixed `ADR-82` worst-case job count (8 rustc jobs = 4 slots x `CARGO_BUILD_JOBS=2` on 6 cores) and added the post-merge Measurement Plan to `ADR-82`, `STORY-80`, and the PR #10 description.",
+  "subject": "REWORK READY: PR #10 (STORY-80 @ 2d8d4bc) + PR #11 rebased (BUG-83 @ 4bef2f7)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

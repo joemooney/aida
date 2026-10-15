@@ -1,0 +1,19 @@
+{
+  "id": "cb454a6e-e9a8-4797-9b98-c99555f833aa",
+  "thread_id": "cb454a6e-e9a8-4797-9b98-c99555f833aa",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792092072066,
+  "body": "The signed STORY-1672 acceptance calls for two PRs. Repository git-sync-and-review discipline requires partial merges to trailer a child TASK rather than auto-complete the parent story. Created TASK-1783 for the exact signed coverage slice 1, linked as child; aida add retained Draft because approval requires advisor authority. Please approve that child when convenient. No implementation or lease has started on it. STORY-1674 publication checks are currently in normal high-priority Cargo slots/queue; no bypass, merge, verdict or completion action.",
+  "subject": "STORY-1672 slice tracking: approve TASK-1783",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
