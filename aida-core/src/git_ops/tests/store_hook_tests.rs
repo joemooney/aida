@@ -524,3 +524,25 @@ fn bug_1929_ancestor_overflow_uid_matrix() {
     assert!(check(me, other, 0o775, me, my_group, ns).is_err());
     assert!(check(me, my_group, 0o1777, me, my_group, ns).is_err());
 }
+
+// r4: a store whose git directory this process cannot write leaves its commit
+// to the host; a writable one commits as before. trace:BUG-1929 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1929_store_commit_deferred_only_when_git_dir_unwritable() {
+    use std::os::unix::fs::PermissionsExt;
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: root ignores directory write bits");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    assert!(!store_commit_deferred_to_host(&store), "host store commits");
+    let objects = main.join(".git/objects");
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let deferred = store_commit_deferred_to_host(&store);
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(deferred, "an unwritable object database defers to the host");
+    assert!(!store_commit_deferred_to_host(&store));
+}

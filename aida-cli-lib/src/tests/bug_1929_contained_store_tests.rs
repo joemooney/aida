@@ -514,10 +514,14 @@ fn real_claude_contained_session_claims_and_comments() {
     // One script, so the model has a single command to run. Each write probe
     // records its outcome; the host re-checks every file itself.
     let probe_out = worktree.join("probe.out");
+    // r4: the aida commands' stderr carries the deferred-commit notice.
+    // trace:BUG-1929 | ai:claude
+    let aida_err = worktree.join("aida.err");
     let mut script = format!(
-        "{aida} edit BUG-1 --status in-progress && {aida} comment add BUG-1 contained-ok \
-         && {aida} queue done BUG-2 --user fixture -y\n\
+        "{{ {aida} edit BUG-1 --status in-progress && {aida} comment add BUG-1 contained-ok \
+         && {aida} queue done BUG-2 --user fixture -y; }} 2> {err}\n\
          echo \"aida=$?\" > {out}\n",
+        err = aida_err.display(),
         out = probe_out.display()
     );
     for target in unchanged.iter().chain(std::iter::once(&store_probe)) {
@@ -632,6 +636,19 @@ fn real_claude_contained_session_claims_and_comments() {
         probe.contains("aida=0"),
         "the aida commands failed: {probe}\n{transcript}"
     );
+    // r4: no commit from inside the sandbox (<main>/.git stays denied), and
+    // the session was told its change is queued for the host, not silent.
+    // trace:BUG-1929 | ai:claude
+    let aida_stderr = std::fs::read_to_string(&aida_err).unwrap_or_default();
+    assert!(
+        aida_stderr.contains("store change queued for host commit"),
+        "the contained write must say its commit is left to the host: {aida_stderr}\n{probe}"
+    );
+    assert_eq!(
+        run(&store, "git", &["rev-parse", "HEAD"]),
+        store_head_before,
+        "a contained session must not commit to the store: {aida_stderr}"
+    );
 
     // Inside the write set: the store's objects directory.
     assert!(
@@ -707,6 +724,36 @@ fn real_claude_contained_session_claims_and_comments() {
         let _ = std::fs::remove_dir_all(planted);
     }
     let _ = std::fs::remove_file(&evil_hook);
+    // The refused sync above committed nothing either.
+    // trace:BUG-1929 | ai:claude
+    assert_eq!(
+        run(&store, "git", &["rev-parse", "HEAD"]),
+        store_head_before,
+        "the refused host sync must not commit: {sync_text}"
+    );
+
+    // r4: a host-side aida run commits the contained writes. The F1 plant
+    // (another embedded repository) is set aside first, or the same refusal
+    // would hold, and restored for the F1 checks below.
+    // trace:BUG-1929 | ai:claude
+    let f1_aside = parent.join("f1-sub-aside");
+    std::fs::rename(&f1_sub, &f1_aside).unwrap();
+    let host_sync = Command::new(&aida)
+        .args(["db", "sync"])
+        .current_dir(&main)
+        .output()
+        .expect("spawn aida db sync");
+    std::fs::rename(&f1_aside, &f1_sub).unwrap();
+    assert!(
+        host_sync.status.success(),
+        "the host sync must commit the contained writes: {}\n{}",
+        String::from_utf8_lossy(&host_sync.stdout),
+        String::from_utf8_lossy(&host_sync.stderr)
+    );
+    assert!(
+        !marker.exists() && !up_marker.exists(),
+        "the host commit ran a planted command"
+    );
 
     // The writes are committed to the store, not left in its working tree.
     let log = run(

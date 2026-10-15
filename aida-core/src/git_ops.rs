@@ -1066,6 +1066,63 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     }
 }
 
+/// Whether this process cannot commit to the store at `repo` and must leave
+/// its store change for a host-side aida run to commit (BUG-1929 r4): the
+/// store's git directory or object database is not writable here. The
+/// contained sandbox write set covers the store's files but denies
+/// `<main>/.git`, so a contained session can never write the history. The
+/// check is on the filesystem, not `AIDA_CONTAINED`: that variable is set
+/// in host-side launcher processes and can leak into host children
+/// (BUG-2124), and a host process must never skip its own commit. The host commits the
+/// pending YAML at its next store sync (`aida db sync`), which stages
+/// through the hardened builder and keeps the embedded-repository refusal.
+// trace:BUG-1929 | ai:claude
+#[cfg(feature = "native")]
+pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        let writable = |p: &Path| -> bool {
+            use std::os::unix::ffi::OsStrExt;
+            let Ok(c) = std::ffi::CString::new(p.as_os_str().as_bytes()) else {
+                return false;
+            };
+            // SAFETY: `c` is a valid NUL-terminated path for the call's duration.
+            unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
+        };
+        let dir = |args: &[&str]| {
+            git(repo, args)
+                .ok()
+                .filter(|r| r.success && !r.stdout.is_empty())
+                .map(|r| PathBuf::from(r.stdout))
+        };
+        let git_dir = dir(&["rev-parse", "--absolute-git-dir"]);
+        let common = dir(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+        match (git_dir, common) {
+            (Some(g), Some(c)) => !(writable(&g) && writable(&c.join("objects"))),
+            // Can't resolve the git directories: let the commit run and
+            // report its own failure.
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    false
+}
+
+/// Tell the user, once per process, that a store change was written but its
+/// commit is left to the host (BUG-1929 r4). A notice, not an error: the
+/// write itself succeeded and is visible to every reader.
+// trace:BUG-1929 | ai:claude
+#[cfg(feature = "native")]
+pub fn notice_store_commit_deferred() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        eprintln!(
+            "note: store change queued for host commit (this sandboxed session cannot write \
+             the store's git history; the next host-side `aida db sync` commits it)"
+        );
+    });
+}
+
 /// True when HEAD has advanced and no rebase is in progress (sanity check
 /// after a `--continue` that reported a non-zero status but actually finished).
 #[cfg(feature = "native")]
