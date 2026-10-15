@@ -95,6 +95,7 @@
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
 "Verify pure-move slice stack fixtures" = "fast"
+"Sccache tmpdir detection fixtures" = "fast"  # trace:BUG-2135 | ai:antigravity
 "Run clippy" = "full"
 "Glyph-literal lint (block new raw glyphs)" = "fast"
 "Trace/doc-header stranding gate" = "fast"

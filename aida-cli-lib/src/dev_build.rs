@@ -681,11 +681,156 @@ pub(crate) fn full_clean_command(layout: &DevLayout) -> Command {
     cmd
 }
 
+// trace:BUG-2135 | ai:antigravity
+/// Check if any running `sccache` process has a missing `TMPDIR` and whether
+/// an sccache server process is currently alive.
+/// Returns `(is_running, missing_tmpdir)`.
+pub(crate) fn sccache_server_status() -> (bool, Option<PathBuf>) {
+    let proc_dir = std::env::var_os("AIDA_SCCACHE_PROC_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/proc"));
+    let pids = std::env::var("AIDA_SCCACHE_PIDS").ok();
+    sccache_server_status_in(&proc_dir, pids.as_deref())
+}
+
+pub(crate) fn sccache_missing_tmpdir() -> Option<PathBuf> {
+    sccache_server_status().1
+}
+
+pub(crate) fn sccache_server_status_in(
+    proc_dir: &Path,
+    pids_env: Option<&str>,
+) -> (bool, Option<PathBuf>) {
+    if !proc_dir.is_dir() {
+        return (false, None);
+    }
+    let pids: Vec<String> = if let Some(env) = pids_env {
+        env.split_whitespace().map(|s| s.to_string()).collect()
+    } else {
+        let Ok(read_dir) = std::fs::read_dir(proc_dir) else {
+            return (false, None);
+        };
+        read_dir
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|name| name.chars().all(|c| c.is_ascii_digit()))
+            .collect()
+    };
+
+    let mut is_running = false;
+    let mut missing_tmpdir = None;
+
+    for pid in pids {
+        let pid_dir = proc_dir.join(&pid);
+        let comm_path = pid_dir.join("comm");
+        if comm_path.is_file() {
+            if let Ok(comm) = std::fs::read_to_string(&comm_path) {
+                if comm.trim() != "sccache" {
+                    continue;
+                }
+            }
+        }
+        is_running = true;
+        let env_path = pid_dir.join("environ");
+        let Ok(raw) = std::fs::read(&env_path) else {
+            continue;
+        };
+        for entry in raw.split(|&b| b == 0) {
+            if let Ok(s) = std::str::from_utf8(entry) {
+                if let Some(val) = s.strip_prefix("TMPDIR=") {
+                    if !val.is_empty() {
+                        let path = PathBuf::from(val);
+                        if !path.is_dir() {
+                            missing_tmpdir = Some(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    (is_running, missing_tmpdir)
+}
+
+pub(crate) fn sccache_missing_tmpdir_in(
+    proc_dir: &Path,
+    pids_env: Option<&str>,
+) -> Option<PathBuf> {
+    sccache_server_status_in(proc_dir, pids_env).1
+}
+
+/// Ensure sccache server is running with a stable TMPDIR (/tmp).
+/// Respects the opt-out: if RUSTC_WRAPPER is set and empty or doesn't name sccache, does nothing.
+/// If no sccache server is running, pre-starts it with `TMPDIR=/tmp sccache --start-server`.
+/// If an sccache server is running with a missing TMPDIR, stops it and restarts it with `TMPDIR=/tmp`.
+pub(crate) fn ensure_sccache_server() -> Result<()> {
+    if let Ok(wrapper) = std::env::var("RUSTC_WRAPPER") {
+        let trimmed = wrapper.trim();
+        if trimmed.is_empty() || !trimmed.contains("sccache") {
+            return Ok(());
+        }
+    }
+    if std::env::var("AIDA_SCCACHE_DISABLE").as_deref() == Ok("1") {
+        return Ok(());
+    }
+    let sccache_bin = if let Ok(bin) = std::env::var("AIDA_SCCACHE") {
+        PathBuf::from(bin)
+    } else if let Some(path) = std::env::var_os("PATH").and_then(|p| {
+        std::env::split_paths(&p)
+            .map(|dir| dir.join("sccache"))
+            .find(|cand| cand.is_file())
+    }) {
+        path
+    } else {
+        return Ok(());
+    };
+
+    let (is_running, missing) = sccache_server_status();
+    let stable_tmp = std::env::var("AIDA_SCCACHE_TMPDIR").unwrap_or_else(|_| "/tmp".into());
+    if missing.is_some() {
+        let _ = Command::new(&sccache_bin)
+            .arg("--stop-server")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        let _ = Command::new(&sccache_bin)
+            .arg("--start-server")
+            .env("TMPDIR", stable_tmp)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    } else if !is_running {
+        let _ = Command::new(&sccache_bin)
+            .arg("--start-server")
+            .env("TMPDIR", stable_tmp)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    Ok(())
+}
+
 fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
     let status = cmd
         .status()
         .with_context(|| format!("could not run {what}"))?;
     if !status.success() {
+        let sccache_active = match std::env::var("RUSTC_WRAPPER") {
+            Ok(ref w) => {
+                let trimmed = w.trim();
+                !trimmed.is_empty() && trimmed.contains("sccache")
+            }
+            Err(_) => true,
+        };
+        if sccache_active {
+            if let Some(missing) = sccache_missing_tmpdir() {
+                bail!(
+                    "{what} exited with {status}\n\
+                     sccache: error: sccache server temp directory ({}) is missing.\n\
+                     hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
+                    missing.display()
+                );
+            }
+        }
         bail!("{what} exited with {status}");
     }
     Ok(())
