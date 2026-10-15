@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:14.890959895Z
-modified_at: 2026-10-15T09:33:05.107288092Z
+modified_at: 2026-10-15T09:42:37.599435791Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -239,6 +239,11 @@ comments:
   content: 'Implementing latest signed FIFO ruling (mail 61e1cd07) on existing draft #2660. Strengthened bounded probe additionally proved write-only FIFO permissions prevent competing-reader evidence theft: read-open EACCES, chmod/fchmod/unlink EROFS, truncate EINVAL, prior event retained (/tmp/aida-session4-fifo-permissions-probe.json). The actual FIFO read descriptor/host keepalive remain CLOEXEC; a separate inherited pipe descriptor is solely the best-effort survivor identity marker. Generated guards use FIFO locator, so ordinary Python subprocess.run does not need pass_fds. New regression and real mount tests compiling. No Ready/Done claim before current-code tests/gates/self-check.'
   created_at: 2026-10-15T09:30:33.516237958Z
   modified_at: 2026-10-15T09:30:33.516237958Z
+- id: 01a13ef1-351f-70f0-834d-b201c31f6970
+  author: ai:codex:joe
+  content: Current final-code regen filter passed 36/36, zero failures/ignored (/tmp/aida-session4-regen-current-tests.log), including actual confined trial+PREFIX daemon isolation, raw score with detected survivors, prefix grep shadow exclusion, fresh Python home, installed absolute wrapper compatibility, default Python subprocess guard evidence, immutable guards, FIFO read/metadata/truncate denials, EOF/bounded collection, no-follow concurrent symlink swaps and absent registered-worktree overlap handling. Earlier test failures were preflight harness-cache selection and missing registered-path canonicalization; both fixed and covered. All 28 fast gates passed before the final path fix; final fast rerun and actual workspace aida dev build/smoke are running. PR remains Draft until these complete.
+  created_at: 2026-10-15T09:42:37.599435791Z
+  modified_at: 2026-10-15T09:42:37.599435791Z
 history:
 - id: 01a13e3d-7222-70c2-9ef1-10706a190c6d
   author: joe
