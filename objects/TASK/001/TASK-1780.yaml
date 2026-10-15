@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:40:07.146402411Z
-modified_at: 2026-10-15T12:47:27.958150411Z
+modified_at: 2026-10-15T14:31:05.926476533Z
 req_type: Task
 comments:
 - id: 01a13f98-5bc3-7163-8498-acfc5a3f26f1
@@ -37,6 +37,12 @@ comments:
   content: 'AMEND (05:48): the target fs is ext4 (/dev/sdd1); reflink is probed as NOT supported. Seed with a plain ''cp -a target/agent target/worktrees/<wt>/agent'' (7.6G NVMe-to-NVMe, ~10s). Do NOT hardlink: rustc rewrites incremental/ in place and would corrupt main''s cache. Also: target/worktrees holds 34 dirs = 224G; the reaper should drop target dirs of merged/removed worktrees (check aida doctor merged-agent-worktrees covers target/worktrees/<name>).'
   created_at: 2026-10-15T12:47:27.958150411Z
   modified_at: 2026-10-15T12:47:27.958150411Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a13ff9-4fd0-7fb1-8a7f-93e933eff7b3
+  author: joe
+  content: 'FIXER (fixer-task-1780): DESIGN FORK on part (e), the nightly full-suite job. I stopped on this part and did not implement it. The signed design does not cover it, and the existing mechanism cannot do it as-is. Substrate jobs in [[schedule.jobs]] run only an ALLOW-LISTED aida subcommand (maintenance_schedule.rs parse_scheduled_command), so a substrate job cannot run ''cargo test --workspace''. Options: (A) Add an allow-listed verb, e.g. ''aida dev test-suite --fail-on-red'', that runs the suite in the main checkout and files a BUG on red. It would pair with a CronJobFailed route, like performance-guard. This widens the scheduler allow-list, which is a security boundary, and adds Rust code, so it needs a sketch and advisor signoff. (B) An advisor seat job (every = 24h) whose prompt says to run the suite and file a bug on red. This needs no code, but an LLM seat does the work, so it is not unattended. (C) A GitHub Actions scheduled workflow on main that opens an issue or BUG on red. This runs outside aida schedule. Open questions: which tree to test (the main checkout is often dirty, so a clean worktree at origin/main?), what slot or capacity budget to use, and how to dedupe bugs across nights. Parts (a) to (d) are done: the aida-host PR has the wrapper skip and seed, and the aida PR has the tiers text and make test-touched. Reaper check from the 05:48 amendment: session end removes target/worktrees/<name> only when .aida/session-env.sh names it (session_end.rs remove_session_cargo_target_dir). Targets the wrapper creates for plain ''git worktree add'' worktrees are NOT reaped. That needs a follow-up.'
+  created_at: 2026-10-15T14:31:05.926476533Z
+  modified_at: 2026-10-15T14:31:05.926476533Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
