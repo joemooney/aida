@@ -3,12 +3,12 @@ spec_id: TASK-1766
 agreed_id: TASK-1766
 title: 'Mention/recipient follow-ups: ignore @tokens inside code spans; warn on all-uppercase handles (@QA silently dropped vs --to QA accepted); store trimmed recipient id; round count after shaless rounds'
 description: 'From the #2650/#2647 reviews. (1) extract_mentions (punt_done.rs) ignores backticks, so `@param` / `@dataclass` in comment text still become recipients. (2) The mention parser silently drops all-uppercase handles via the needs-a-lowercase-letter rule, while --to accepts them, so a custom @QA agent would get no mail. Warn, or align the two paths. (3) recipient_id_rejection checks the trimmed id but Recipient::Agent stores the untrimmed one. (4) review_verdict archive_current_round drops shaless previous rounds, so the round count resets to 1 after a PR-keyed handshake write.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T03:39:38.395425629Z
-modified_at: 2026-10-15T15:47:27.648175366Z
+modified_at: 2026-10-15T15:47:29.756076382Z
 req_type: Task
 tags:
 - mailbox
@@ -19,6 +19,14 @@ comments:
   created_at: 2026-10-15T15:47:27.648175366Z
   modified_at: 2026-10-15T15:47:27.648175366Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+history:
+- id: 01a1403f-415c-7d43-9b0e-a887d8e0e755
+  author: joe
+  timestamp: 2026-10-15T15:47:29.756071071Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: defb55f88bc4108334f0ec266e20a5afed5a83f3
   branch: main
