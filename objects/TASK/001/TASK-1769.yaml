@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T05:31:26.895863900Z
-modified_at: 2026-10-15T12:00:45.220147682Z
+modified_at: 2026-10-15T13:23:08.783518318Z
 req_type: Task
+comments:
+- id: 01a13fbb-196f-7c33-a87e-20913218e924
+  author: joe
+  content: 'Follow-ups from the #2669 review (low): (1) schedule_driver.rs:1381 resolves a bare or relative cron ''aida'' against the doctor cwd; (2) add a test for a resolvable driver path with the live binary missing.'
+  created_at: 2026-10-15T13:23:08.783518318Z
+  modified_at: 2026-10-15T13:23:08.783518318Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
 history:
 - id: 01a13f6f-aaa4-7382-afd8-f79eaae0b4a2
   author: joe
