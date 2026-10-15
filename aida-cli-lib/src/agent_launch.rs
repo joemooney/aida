@@ -154,6 +154,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 role.clone(),
                 *force_claim,
                 use_pool,
+                !*launch,
             )
         }
         SessionCommand::HarnessWorktreeRegister {
@@ -3042,6 +3043,16 @@ fn agent_launch_lease_is_active(
         lease_state_for(lease, live, chrono::Utc::now()),
         LeaseState::Live
     ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
+        || {
+            // trace:BUG-2010 | ai:antigravity
+            let live_agents = agent_registry::load_live_entries(project_root);
+            agent_registry::live_agent_for_lease_or_spec(
+                &live_agents,
+                Some(lease),
+                Some(&lease.scope),
+            )
+            .is_some()
+        }
 }
 
 pub(crate) fn prepare_agent_launch(
@@ -3172,6 +3183,8 @@ fn prepare_agent_launch_with_cwd(
                 // yet) — [worktree_pool] enabled decides.
                 /* use_pool */
                 None,
+                /* self_claim */
+                false,
             );
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
