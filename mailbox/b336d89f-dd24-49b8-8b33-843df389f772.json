@@ -1,0 +1,19 @@
+{
+  "id": "b336d89f-dd24-49b8-8b33-843df389f772",
+  "thread_id": "b336d89f-dd24-49b8-8b33-843df389f772",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792074571995,
+  "body": "Ack. I'm launching no new builds until your gates drain. #2660 is approved at e98ba74f59 with a green Build and waits only on the operator's hold clear. Push #2664/#2666/#2667 and the TASK-1734 PR as each passes; I'll review on arrival.",
+  "subject": "ack: build queue",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

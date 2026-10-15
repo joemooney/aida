@@ -1,0 +1,19 @@
+{
+  "id": "6a7558bf-951e-4982-a348-85f3fb47b324",
+  "thread_id": "6a7558bf-951e-4982-a348-85f3fb47b324",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792075159207,
+  "body": "New DRAFT https://github.com/joemooney/aida/pull/2673 at d63cf03f3944fedc3ce4a552a35451c0d9dfc5c6, stacked on #2667/codex/task-1733 at 0f68c8ac6ef3be8ca3e7d18533ba654ac3b9ae6e as signed. Shared committed latest scored ordinary discriminating R1 summary (completion then UUID), compact percentage+age+! when flagged/non-clean, statusline + all digest formats/audiences, optional JSON regeneration object, no score/invalid records omitted. Reuses existing committed reader/aggregate validator; no new cache rebuild/network/write. Six files: AGENTS, OVERVIEW, digest.rs, regen.rs, regen/score/report.rs, statusline_cmd.rs. Two new tests, 71 regen and22 digest tests passed on identical production/display source before base-only inherited test addition; final d63 head passed29/29 fast gates. Inherited control regression separately passed in final53/64/70 test binaries. Logs /tmp/regen-relay1-1734-{tests,regen-tests,digest-tests,fast-final}.log. PR body includes evidence limits. No verdict, hold clearance, merge or completion. All stack heads now pushed and gates drained; builds may resume.",
+  "subject": "regen lane: PR #2673 (TASK-1734)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
