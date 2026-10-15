@@ -1,0 +1,22 @@
+id: 01a13e0c-b08a-75c0-a97e-b3571779a088
+spec_id: TASK-1770
+agreed_id: TASK-1770
+title: Uncontained drain with os_wrap on does not bwrap-wrap CI-fix/advisor children; bwrap functional test skips on CI
+description: 'From the #2655 review, gap 2 + non-blocking: (1) with os_wrap enabled in an UNcontained drain, CI-fix and advisor children are not bwrap-wrapped (inconsistent with implementer); (2) the bug_2133 real-bwrap functional test self-skips on CI runners without userns, so CI does not guard the regression — add a CI job/runner config where bwrap works or an equivalent argv-level assertion for Claude''s default settings sandbox.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-15T05:33:01.450036291Z
+modified_at: 2026-10-15T05:33:01.450036291Z
+req_type: Task
+tags:
+- sandbox
+filed_at:
+  code_sha: dedea1776c0a252400fb552dd14d5bd93720e0e9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
