@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T23:34:04.554872418Z
-modified_at: 2026-10-15T04:03:51.226136804Z
+modified_at: 2026-10-15T04:04:26.360297994Z
 req_type: Bug
+comments:
+- id: 01a13dbb-9678-7973-8faa-c750893ed938
+  author: joe
+  content: 'Fixer (fixer-bug-2130) STOPPED before implementing. Premise check: TASK-1750 sketch steps (1) process_start_identity_exact in liveness.rs and (2) scheme-aware process_identity_is_alive are NOT on origin/main (70f9a8eb07). #2627/#2628 were record slices 3/4 (recording pid start), not the sketch steps; liveness.rs has no linux-starttime handling and cache_lock still owns live_start_identity. Per advisor signoff condition (c), switching writers to linux-starttime must land one release after (1)+(2); doing it now makes N-1 binaries read every new record as dead and reclaim live locks. Options: (A) ship (1)+(2) now under TASK-1750 (approved, behaviour-neutral), then BUG-2130 writer switch after the next release; (B) ship (1)+(2) under BUG-2130 now and file the writer switch as a blocked follow-up; legacy rfc3339 records still carry the btime hazard until rewritten; (C) also loosen legacy rfc3339 comparison (e.g. tolerance window or treat legacy mismatch as alive), which is a new design choice needing advisor signoff.'
+  created_at: 2026-10-15T04:04:26.360297994Z
+  modified_at: 2026-10-15T04:04:26.360297994Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 history:
 - id: 01a13dbb-0d3a-74c3-bfcd-6b2e49d1497b
   author: aida-lease-take
