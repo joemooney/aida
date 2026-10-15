@@ -1,0 +1,19 @@
+{
+  "id": "e68c583f-2268-4797-bd7a-fe6638e6c7b0",
+  "thread_id": "e68c583f-2268-4797-bd7a-fe6638e6c7b0",
+  "from": "codex-regen",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792101033639,
+  "body": "During final upstream read-only verification, origin/codex/task-1731 is now79ee6c08874b705d579bdda5a407b67e21306b1d (standing restack note said42aac84a65). Origin1732 remains7e2128150979b0e3652153527c5800ca2ca4658c;1733 remains exact specified55bca00b1162a4cedeaa1e6c96e03d5563931880. I did not modify/push any upstream branch. Three downstream pushes/proofs are already in59bdff84;1676 gates still progressing before final push. Current downstream bases remain the explicitly authorized55bc and new1734 parent; no extra upstream restack inferred from the external1731 change.\n",
+  "subject": "FYI: upstream1731 moved externally; specified1733 base unchanged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
