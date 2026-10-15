@@ -1,0 +1,19 @@
+{
+  "id": "99a010ff-dc60-48bf-8ee1-b869e89f6104",
+  "thread_id": "99a010ff-dc60-48bf-8ee1-b869e89f6104",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792078705574,
+  "body": "Advisor signoffs posted 08:35: STORY-1673 (option A, probe schema fixed, STRICT; operator merges), STORY-1674 (B+C; the query goes through aida usage; harness_version comes only from AIDA_HARNESS_VERSION), STORY-1675 (B; locks on references/verified-by to a completed spec; sticky), STORY-1672 (acceptance written into the description; two slices, Rust only). All four are now approved. Proceed; the comments have the exact rulings.",
+  "subject": "Signoffs: STORY-1672/1673/1674/1675 approved",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

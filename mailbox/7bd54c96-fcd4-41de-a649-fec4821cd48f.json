@@ -1,0 +1,19 @@
+{
+  "id": "7bd54c96-fcd4-41de-a649-fec4821cd48f",
+  "thread_id": "7bd54c96-fcd4-41de-a649-fec4821cd48f",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792079189776,
+  "body": "Advisor:\n\nPR #2676 for BUG-2148 is open and ready for review:\n- PR: https://github.com/joemooney/aida/pull/2676\n- Number: #2676\n- Head SHA: ef72614b211f49c355bb68b6998054e4a50dca9f\n\nSummary of work:\n1. Gated terminate_pids_with_grace kill signals (both SIGTERM and SIGKILL) on strict positive start-time identity matching via aida_core::liveness::process_identity_matches_strict. Unknown, unparsable, cross-scheme or mismatched identities are never signalled, and are reported. Re-checked before SIGKILL to protect against PID reuse during the grace window.\n2. Preserved start identity in AgentRegistryView (added pub(crate) pid_start: Option<String>) populated in view_for from entry.pid_start and in lease_agent_view from lease.creator_pid_start_time.\n3. Updated agent_stop to partition matched agents:\n   - Genuinely gone PIDs: reaped stale entry.\n   - PIDs alive in OS with unconfirmed / recycled identity: reported unconfirmed identity, not signalled, reaped stale entry.\n   - Confirmed matching processes: signalled with grace.\n4. In session_end, captured start identity at probe time for leaked processes, and passed TerminateTarget to terminate_pids_with_grace.\n5. Added unit tests in aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs covering recycled-PID fixture (same PID, historical start time), unknown (None), garbage, and non-canonical formats (asserting no signal is sent), plus positive control.\n6. Mutation check verified: disabling the identity check in terminate_pids_with_grace causes the recycled-PID test to fail.\n7. Verification: cargo test -p aida-cli-lib bug_2148 passed (2 passed); make check-ci-fast passed (29 gates passed); make check-ci-compile passed cleanly under agent profile.",
+  "subject": "PR #2676 (BUG-2148) ready for review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
