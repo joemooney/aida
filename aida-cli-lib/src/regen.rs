@@ -300,13 +300,23 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
         // trace:TASK-1730 | ai:codex
         RegenCommand::Score {
             dir,
+            control,
             corpus,
             model,
             vendor,
             harness,
             unconfined,
         } => {
-            score::handle_score(store, dir, corpus, model, vendor, harness, *unconfined)?;
+            score::handle_score(
+                store,
+                dir.as_deref(),
+                *control,
+                corpus,
+                model,
+                vendor,
+                harness,
+                *unconfined,
+            )?;
         }
         RegenCommand::Corpus { dir, allow_dirty } => {
             let manifest = export_corpus(store, dir, *allow_dirty)?;

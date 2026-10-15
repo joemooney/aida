@@ -1,3 +1,11 @@
+`aida regen score --control reference|stub --corpus <dir> --model <name>
+--vendor <name> --harness <name>` generates fresh controls. Ordinary scoring
+copies system inputs into a fresh root and requires matching, clean reference
+repeats plus a generated no-op stub. Raw R1 and the discriminating aggregate
+(excluding listed stub-passing checks) are recorded with control IDs. Additive
+v1 control fields default to absent for older records, which cannot satisfy
+the gate. See OVERVIEW.md.
+<!-- trace:TASK-1731 | ai:codex -->
 Regen scoring uses independent private `/tmp` install roots and same-path
 quarantine snapshots, then fresh oracle HOME/XDG/TMPDIR. Only immutable guards
 and fixed system directories are on oracle PATH; regenerated tools use locators.

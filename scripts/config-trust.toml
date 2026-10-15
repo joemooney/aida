@@ -773,6 +773,7 @@ oracle_paths = "policy" # frozen held-out inputs, read at the same trusted SHA
 oracle_command = "command"
 install_command = "command"
 required_tools = "policy"
+reference_repeats = "policy" # trusted control batch size; trace:TASK-1731
 
 # Pin once for both configuration and the immutable oracle input bundle.
 # trace:TASK-1730 | ai:codex

@@ -55,16 +55,19 @@ fn descriptor_path(file: &File) -> PathBuf {
     PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
-fn copy_directory(source: &File, destination: &Path) -> Result<()> {
+fn copy_directory(source: &File, destination: &Path, skip_git: bool) -> Result<()> {
     for child in std::fs::read_dir(descriptor_path(source))? {
         let child = child?;
         let name = child.file_name();
+        if skip_git && name == ".git" {
+            continue;
+        }
         let source = open_child(source.as_raw_fd(), &name)?;
         let metadata = source.metadata()?;
         let target = destination.join(name);
         if metadata.is_dir() {
             std::fs::DirBuilder::new().mode(0o700).create(&target)?;
-            copy_directory(&source, &target)?;
+            copy_directory(&source, &target, false)?;
             // Ignore set-id/sticky bits supplied by the untrusted installer.
             std::fs::set_permissions(
                 &target,
@@ -119,7 +122,16 @@ pub(super) fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
         .read(true)
         .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(source)?;
-    copy_directory(&source, destination)
+    copy_directory(&source, destination, false)
+}
+
+// trace:TASK-1731 | ai:codex
+pub(super) fn copy_trial_tree(source: &Path, destination: &Path) -> Result<()> {
+    let source = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(source)?;
+    copy_directory(&source, destination, true)
 }
 
 /// The original bind mount pins the renamed inode. The replacement at the same
@@ -161,7 +173,7 @@ impl Quarantine {
             std::fs::rename(path, &old)?;
             quarantine.paths.push((path.clone(), old));
             std::fs::DirBuilder::new().mode(0o700).create(path)?;
-            copy_directory(&source, path)?;
+            copy_directory(&source, path, false)?;
         }
         quarantine.complete = true;
         Ok(quarantine)
@@ -312,6 +324,7 @@ mod tests {
             return;
         }
         let config = RegenConfig {
+            reference_repeats: 3,
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             install_command: None,

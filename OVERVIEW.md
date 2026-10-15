@@ -454,9 +454,44 @@ execution are recorded and forbid a clean result. Records include the trusted
 `oracle_sha`, `oracle_bundle_sha256`, `guard_bundle_sha256`, the env executable
 path and `survivors_detected` (older records default that count to zero). Trial timestamps support age
 reporting; per-check outcomes are retained for later controls and comparisons.
-Raw cleanliness describes execution conditions, not the pass rate or completed
-controls validation. Control gating is a subsequent slice.
+Raw cleanliness describes execution conditions, not the pass rate.
 <!-- trace:TASK-1730 | ai:codex -->
+
+Before ordinary scoring, generate controls with `aida regen score --control
+reference|stub --corpus <dir> --model <name> --vendor <name> --harness <name>`.
+The reference command exports the pinned trusted commit into a fresh directory
+per repeat. Trusted `[regen].reference_repeats` defaults to 3 and must be positive.
+Every repeat in the latest matching reference batch must be clean and pass 100%;
+an incomplete or failed new batch cannot borrow older successful repeats.
+The stub command starts empty, skips the project installer and generates no-op
+executables for `required_tools` in the private prefix, exposed through
+`AIDA_REGEN_PREFIX`. Oracles invoke these tools by locator; bare tool names
+reach immutable fallback guards on PATH. Ordinary trials receive no generated tools.
+
+Each trial copies the selected system's files into a fresh scoring root; installs
+cannot mutate the caller's directory or carry state between runs. Root git
+metadata is omitted. Special files and links to external, omitted or directory
+inputs refuse. A pre-run comparison asserts exactly the placed files, modes,
+links and directories, including empty directories. HOME/XDG/PREFIX are fresh too.
+`root_fresh` records this condition; it is execution evidence, not attestation
+against hostile code inside the existing writable scratch area.
+
+The gate reads committed controls with the same `oracle_sha`,
+`oracle_bundle_sha256`, corpus content hash and exact check-name set. Controls
+with errors, nonzero exits, dirty flags, guard hits, unconfined execution or
+missing fresh-root evidence refuse. Controls must also carry the current
+`guard_bundle_sha256` and env executable evidence with zero detected survivors;
+older executor records remain readable but cannot qualify. A trial with sandbox contamination refuses
+a reported score. An ordinary nonzero oracle exit with parsed checks retains its
+flagged discriminating score; a nonzero control exit invalidates the control.
+Raw R1 `aggregate` remains available in records; the separate
+`discriminating` aggregate excludes and lists stub-passing checks. An empty
+discriminating denominator refuses. Records retain the control IDs used, and
+reference batches retain their run ID and repeat identities. These are additive
+format-v1 fields; older records deserialize with absent evidence and cannot
+qualify as controls. A refused trial is stored as diagnostics without printing
+a score to stdout.
+<!-- trace:TASK-1731 | ai:codex -->
 
 
 External wall displays and dashboards use a narrow, versioned read-only
