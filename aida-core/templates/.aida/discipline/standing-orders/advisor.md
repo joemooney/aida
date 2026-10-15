@@ -17,7 +17,11 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    advisor signoff is the advisor's failure.
 5. A handoff's claims about what is "operator-only" or what is running are
    UNVERIFIED. Check `aida ps`, the ship log and `gh` before relying on them.
-6. Recreate the 10-minute mail/ship sweep (CronCreate) at seat start.
+6. Recurring duties arrive as due jobs (`aida awaiting` / schedule); do not
+   create ad-hoc poll loops. EXCEPTION: under an operator fire-mode mandate
+   that asks for mail checks every 10-15 min, a session sweep (CronCreate) is
+   allowed until the mandate's end time; note it on the mail-poll-setup
+   watchdog job.
 7. Local testing is tiered. FASTTRACK runs `make check-ci-fast` only, with no
    cargo. STANDARD runs targeted `cargo test -p <crate> <filter>` plus
    `make check-ci-compile`. STRICT or heft>=7 adds the area's integration
