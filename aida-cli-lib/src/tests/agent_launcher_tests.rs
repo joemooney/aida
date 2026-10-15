@@ -4134,8 +4134,6 @@ fn codex_fresh_launch_does_not_double_no_daemon() {
         binary: "codex",
         default_args: vec![CODEX_NO_DAEMON_FLAG.to_string()],
         prompt_style: AgentPromptStyle::Positional,
-        // BUG-2124 added the field; this BUG-2007 literal predates it.
-        // trace:TASK-1350 | ai:claude
         contained: false,
     };
 
