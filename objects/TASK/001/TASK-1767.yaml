@@ -3,12 +3,12 @@ spec_id: TASK-1767
 agreed_id: TASK-1767
 title: Template memory feedback_check_ignore_names_the_winner.md claims info/exclude outranks .gitignore; git precedence is the reverse
 description: 'From the #2652 (BUG-2141) review: aida-core/templates/memories/feedback_check_ignore_names_the_winner.md:8 states info/exclude outranks .gitignore. Git''s documented precedence (and an empirical check-ignore -v test) is: in-tree .gitignore beats $GIT_DIR/info/exclude beats core.excludesFile. Fix the memory text (template master, then make sync-templates).'
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T04:22:20.604445124Z
-modified_at: 2026-10-15T12:02:27.122647123Z
+modified_at: 2026-10-15T13:27:57.923908712Z
 req_type: Task
 history:
 - id: 01a13f6f-9f40-7b42-b7da-ba950ec56d7b
@@ -25,6 +25,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a13fbf-82df-7a33-969c-7bfa0f0db115
+  author: aida-auto-bump
+  timestamp: 2026-10-15T13:27:57.919289298Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a13fbf-82e3-7883-a088-ccb056343add
+  timestamp: 2026-10-15T13:27:57.923905830Z
+  agent: advisor
+  commit_sha: 596a91dbc047f434d8db31558d6465c1f4c0030e
+  summary: Completed via merge 596a91db
 filed_at:
   code_sha: 7bf6b769498ca0ae386f04b11aa44b16da175740
   branch: main
@@ -33,3 +46,7 @@ filed_at:
   aida_build_sha: defb55f88b
   vendor: claude
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T13:27:57.919284685Z
+  completion_sha: 596a91dbc047f434d8db31558d6465c1f4c0030e
