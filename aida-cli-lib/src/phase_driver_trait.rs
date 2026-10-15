@@ -1099,17 +1099,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // No PR and no commit to open one from: a stream that
                 // recorded permission denials means the writes were refused.
                 // trace:BUG-1930 | ai:claude
+                // TASK-1350: only write-capable denials reclassify; read-only
+                // denials keep NoPr but stay named in the reason.
+                // trace:TASK-1350 | ai:claude
+                let mut read_only_denials = Vec::new();
                 if headless_impl {
-                    if let Some(failure) =
-                        no_pr_permission_denied_failure(&self.project_root, &session_uuid)
-                    {
-                        return Err(failure);
+                    match no_pr_permission_denials(&self.project_root, &session_uuid) {
+                        NoPrDenials::Write(failure) => return Err(failure),
+                        NoPrDenials::ReadOnly(tools) => read_only_denials = tools,
+                        NoPrDenials::None => {}
                     }
                 }
                 let failure = auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoPr,
-                    "the implementer session exited cleanly but opened no PR — \
-                     run `/aida-pr` inside the session before exiting",
+                    no_pr_reason(&read_only_denials),
                 );
                 if headless_impl {
                     Err(enrich_headless_wait_failure(
@@ -2378,7 +2381,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.spec
             );
         }
-        match harvest::propose_only(&self.project_root, &store, &self.spec, pr as u64) {
+        // trace:BUG-2133 | ai:claude
+        match harvest::propose_only(
+            &self.project_root,
+            &store,
+            &self.spec,
+            pr as u64,
+            self.contained,
+        ) {
             Ok(s) => {
                 if !self.json {
                     match &s.file {
@@ -3623,6 +3633,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
             return false;
         };
+        // Gate before any forge call: a refused child costs nothing.
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        // BUG-2133: containment is monotonic — a contained drain's CI-fix
+        // child (it writes code) is contained too, scoped to the worktree it
+        // runs in; a child that cannot be contained is refused, never
+        // launched uncontained.
+        // trace:BUG-2133 | ai:claude
+        if let Err(e) = session::require_child_containment(vendor, self.contained, "CI-fix session")
+        {
+            eprintln!(
+                "  {} {e:#} — leaving the red-CI failure standing",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            return false;
+        }
+        let contained_in = self.contained.then_some(worktree.as_path());
         eprintln!("  🔧 CI is red on `{branch}` — attempting in-drain fix {attempt}/{budget}…");
         let run_id = self
             .ci_run_id
@@ -3635,7 +3661,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let head_before = remote_head_sha(&self.project_root, &branch);
         let prompt = build_ci_fix_prompt(&self.spec, &branch, &failure.reason, &log_excerpt);
 
-        let vendor = session::resolve_headless_vendor(&self.project_root);
         let fix_uuid = uuid::Uuid::now_v7().to_string();
         let log_path = self
             .project_root
@@ -3668,7 +3693,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None, None);
+        let fix_args = session::headless_vendor_args_contained_in(
+            vendor,
+            &prompt,
+            &fix_uuid,
+            contained_in,
+            None,
+            None,
+        );
+        let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
+            vendor,
+            self.contained,
+            contained_in,
+            "CI-fix session",
+            &program,
+            fix_args,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => {
+                tee.stop();
+                eprintln!(
+                    "  {} {e:#} — leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let mut child_cmd = build_phase_driver_ci_fix_command(
@@ -3678,6 +3728,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &ceiling_key,
             &ceiling_value,
             vendor,
+            self.contained,
         );
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
@@ -3799,13 +3850,15 @@ pub(crate) fn build_phase_driver_ci_fix_command(
     ceiling_key: &str,
     ceiling_value: &str,
     vendor: session::HeadlessVendor,
+    // trace:BUG-2133 | ai:claude
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     cmd.current_dir(worktree)
         .args(fix_args)
         .env("AIDA_HEADLESS", "1")
         .env(ceiling_key, ceiling_value);
-    if session::containment_applied(vendor, false) {
+    if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
@@ -3813,17 +3866,53 @@ pub(crate) fn build_phase_driver_ci_fix_command(
     cmd
 }
 
-/// BUG-1930: the failure for a headless implementer that opened no PR and
-/// made no commit, when its stream recorded permission denials; `None`
-/// otherwise (no log, or no denials), leaving the ordinary NoPr path.
+/// BUG-1930 / TASK-1350: what a headless implementer's stream says about
+/// permission denials when it opened no PR and made no commit.
+// trace:TASK-1350 | ai:claude
+#[derive(Debug, PartialEq)]
+enum NoPrDenials {
+    /// No log, or no denials: the ordinary NoPr path.
+    None,
+    /// Only read-only tools were denied: still NoPr (a spec failure, not an
+    /// environment block), but the tools are named in the reason.
+    ReadOnly(Vec<String>),
+    /// At least one write-capable tool was denied: PermissionDenied.
+    Write(auto_complete::PhaseFailure),
+}
+
+/// BUG-1930 / TASK-1350: classify the session's headless-log denials. Only a
+/// write-capable denial (see [`auto_complete::is_write_capable_tool`])
+/// becomes PermissionDenied; read-only denials keep the NoPr kind.
 // trace:BUG-1930 | ai:claude
-fn no_pr_permission_denied_failure(
-    project_root: &std::path::Path,
-    session_uuid: &str,
-) -> Option<auto_complete::PhaseFailure> {
-    let log = crate::questions::read_headless_log_for_session(project_root, session_uuid)?;
+// trace:TASK-1350 | ai:claude
+fn no_pr_permission_denials(project_root: &std::path::Path, session_uuid: &str) -> NoPrDenials {
+    let Some(log) = crate::questions::read_headless_log_for_session(project_root, session_uuid)
+    else {
+        return NoPrDenials::None;
+    };
     let denied = crate::questions::headless_log_permission_denied_tools(&log);
-    (!denied.is_empty()).then(|| auto_complete::permission_denied_failure(&denied))
+    if denied.is_empty() {
+        NoPrDenials::None
+    } else if auto_complete::denials_reclassify_as_permission_denied(&denied) {
+        NoPrDenials::Write(auto_complete::permission_denied_failure(&denied))
+    } else {
+        NoPrDenials::ReadOnly(denied)
+    }
+}
+
+/// The NoPr reason, naming any read-only denials as context (TASK-1350).
+// trace:TASK-1350 | ai:claude
+fn no_pr_reason(read_only_denials: &[String]) -> String {
+    let base = "the implementer session exited cleanly but opened no PR — \
+                run `/aida-pr` inside the session before exiting";
+    if read_only_denials.is_empty() {
+        base.to_string()
+    } else {
+        format!(
+            "{base} (the stream also recorded permission denials for read-only tools: {})",
+            read_only_denials.join(", ")
+        )
+    }
 }
 
 #[cfg(test)]
@@ -3851,18 +3940,58 @@ mod bug_1930_tests {
         )
         .expect("clean log");
 
-        let failure = no_pr_permission_denied_failure(dir.path(), "denied-sess")
-            .expect("denials classify the stop");
+        let NoPrDenials::Write(failure) = no_pr_permission_denials(dir.path(), "denied-sess")
+        else {
+            panic!("write denials classify the stop");
+        };
         assert_eq!(failure.kind, auto_complete::FailureKind::PermissionDenied);
         assert!(failure.reason.contains("Edit, Write"), "{}", failure.reason);
 
         assert_eq!(
-            no_pr_permission_denied_failure(dir.path(), "clean-sess"),
-            None
+            no_pr_permission_denials(dir.path(), "clean-sess"),
+            NoPrDenials::None
         );
         assert_eq!(
-            no_pr_permission_denied_failure(dir.path(), "missing-sess"),
-            None
+            no_pr_permission_denials(dir.path(), "missing-sess"),
+            NoPrDenials::None
+        );
+    }
+
+    /// TASK-1350: read-only denials alone keep the NoPr path (named in the
+    /// reason); a mix with any write denial becomes PermissionDenied.
+    // trace:TASK-1350 | ai:claude
+    #[test]
+    fn no_pr_read_only_denials_stay_no_pr() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let logs = dir.path().join(".aida").join("headless-logs");
+        std::fs::create_dir_all(&logs).expect("log dir");
+        std::fs::write(
+            logs.join("bug-90-read-sess.jsonl"),
+            "{\"type\":\"result\",\"permission_denials\":[{\"tool_name\":\"WebFetch\"}]}\n",
+        )
+        .expect("read log");
+        std::fs::write(
+            logs.join("bug-91-mixed-sess.jsonl"),
+            "{\"type\":\"result\",\"permission_denials\":[{\"tool_name\":\"WebFetch\"},\
+             {\"tool_name\":\"Bash\"}]}\n",
+        )
+        .expect("mixed log");
+
+        let read = no_pr_permission_denials(dir.path(), "read-sess");
+        assert_eq!(read, NoPrDenials::ReadOnly(vec!["WebFetch".to_string()]));
+        let reason = no_pr_reason(&["WebFetch".to_string()]);
+        assert!(reason.contains("opened no PR"), "{reason}");
+        assert!(reason.contains("read-only tools: WebFetch"), "{reason}");
+        assert!(!no_pr_reason(&[]).contains("read-only"));
+
+        let NoPrDenials::Write(failure) = no_pr_permission_denials(dir.path(), "mixed-sess") else {
+            panic!("a write denial in the mix classifies the stop");
+        };
+        assert_eq!(failure.kind, auto_complete::FailureKind::PermissionDenied);
+        assert!(
+            failure.reason.contains("WebFetch, Bash"),
+            "{}",
+            failure.reason
         );
     }
 }

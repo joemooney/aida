@@ -348,7 +348,8 @@ mod external_cmd;
 mod import_export_cmd;
 mod import_plan_cmd;
 mod interview;
-// trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
+mod regen; // trace:TASK-1729 | ai:codex
+           // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
 mod glyph_config;
 mod glyphs;
 mod goal_cmd;

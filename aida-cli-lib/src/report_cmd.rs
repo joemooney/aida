@@ -567,9 +567,7 @@ fn print_stale_upstream_notice(rows: &[UpstreamRecheckRow]) {
 /// readable git worktree.
 // trace:BUG-1594 | ai:claude
 fn store_head_sha(store_path: &Path) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let out = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-parse", "--verify", "--quiet", "HEAD"])
         .stderr(std::process::Stdio::null())
         .output()

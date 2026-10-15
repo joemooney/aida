@@ -441,6 +441,41 @@ pub(crate) fn specs_with_open_prs(
     ))
 }
 
+/// BUG-2134: the line `aida pull` prints when the BUG-1454 open-PR guard
+/// withholds a merge-driven completion. It names the status the spec actually
+/// keeps (it used to say "stays Done" for every status). A Needs Attention
+/// spec gets a triage prompt as well: this merge commit is now behind the scan
+/// window, so no later pull retries it, and the spec would otherwise sit
+/// shelved with its work merged. The scan window makes the prompt print once.
+// trace:BUG-2134 | ai:claude
+pub(crate) fn open_pr_withheld_message(
+    spec_id: &str,
+    prior_status: &RequirementStatus,
+    open_pr: u64,
+) -> String {
+    let glyph = "↷".yellow();
+    if matches!(prior_status, RequirementStatus::NeedsAttention) {
+        format!(
+            "{glyph} merged work references needs-attention spec {spec_id}: triage it \
+             (not completed — open PR #{open_pr} still references it)"
+        )
+    } else {
+        format!("{glyph} {spec_id} stays {prior_status} — open PR #{open_pr} still references it")
+    }
+}
+
+/// BUG-2134: does a commit message's BODY (everything after the subject line)
+/// carry a [`crate::pr_ship::NO_COMPLETE_BODY_MARKERS`] line? A squash merge
+/// copies the PR body into the commit body, so this is where a non-completing
+/// slice declaration survives a merge done outside `aida pr ship`.
+// trace:BUG-2134 | ai:claude
+pub(crate) fn commit_declares_non_completing(message: &str) -> bool {
+    let mut lines = message.lines().skip_while(|l| l.trim().is_empty());
+    lines.next();
+    let body: Vec<&str> = lines.collect();
+    crate::pr_ship::pr_body_declares_non_completing(&body.join("\n"))
+}
+
 impl AutoBumpFlip {
     pub(crate) fn new(spec_id: String, sha: String, prior_status: RequirementStatus) -> Self {
         Self {
@@ -1974,7 +2009,12 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // via `extract_spec_ids_from_commit`, and a plan PR that is genuinely
         // reviewed + merged still completes via its review-story covers path.
         // trace:BUG-426 | ai:claude
-        if !is_plan_commit_subject(subject) {
+        // BUG-2134: a merge commit whose body carries a BUG-1919
+        // non-completing-slice marker (a PR merged outside `aida pr ship`, so
+        // its title trailer survived into the subject) completes no spec,
+        // whatever status the spec is in — the same rule ship applies.
+        // trace:BUG-2134 | ai:claude
+        if !is_plan_commit_subject(subject) && !commit_declares_non_completing(message) {
             for spec_id in extract_spec_ids_from_commit(subject) {
                 candidates.entry(spec_id).or_insert_with(|| sha.to_string());
             }
@@ -2193,10 +2233,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
                     return true;
                 };
                 eprintln!(
-                    "  {} {} stays Done — open PR #{} still references it",
-                    "↷".yellow(),
-                    flip.spec_id,
-                    pr
+                    "  {}",
+                    open_pr_withheld_message(&flip.spec_id, &flip.prior_status, *pr)
                 );
                 false
             });
@@ -2908,7 +2946,9 @@ pub(crate) fn handle_db_reconcile_status(
         // not delivered ones. Mirrors the gate in `auto_bump_done_to_completed`
         // so the manual reconcile replay can't false-complete a planned spec
         // the live pull already (correctly) left alone. trace:BUG-426 | ai:claude
-        if !is_plan_commit_subject(subject) {
+        // BUG-2134: and a non-completing-slice merge, as the live scan does.
+        // trace:BUG-2134 | ai:claude
+        if !is_plan_commit_subject(subject) && !commit_declares_non_completing(message) {
             for id in extract_spec_ids_from_commit(subject) {
                 if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
                     candidate_sources.insert(
@@ -4119,12 +4159,9 @@ pub(crate) fn print_auto_bump_summary(flips: &[AutoBumpFlip]) {
 /// trace:TASK-73 | ai:claude
 pub(crate) fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     use std::collections::BTreeMap;
-    use std::process::Command as ProcessCommand;
 
     let range = format!("{}..HEAD", pre_sha);
-    let log = match ProcessCommand::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let log = match aida_core::git_ops::host_git_command(store_path)
         .args([
             "log",
             "--name-status",

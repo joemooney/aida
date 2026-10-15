@@ -1927,6 +1927,8 @@ pub(crate) fn agent_new_claude(
         default_args.push("--permission-mode".to_string());
         default_args.push(m.to_string());
     } else if sandbox {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
         default_args.extend(tool_contained_flags("claude"));
         contained = true;
     } else if bg {
@@ -2783,13 +2785,16 @@ pub(crate) fn resolve_interactive_launch_mode_for_root(
     }
     if let Some(root) = root {
         let bypass = load_agents_bypass(root).unwrap_or(false);
-        let contained = sandbox || load_agents_contained(root).unwrap_or(false);
+        // BUG-2146: a malformed agents.toml refuses the launch. trace:BUG-2146 | ai:claude
+        let contained = sandbox || load_agents_contained(root)?;
         if bypass && contained {
             anyhow::bail!(
                 "[agents] bypass and [agents] contained are mutually exclusive launch postures"
             );
         }
         if contained {
+            // trace:BUG-2131 | ai:claude
+            aida_core::git_ops::ensure_git_supports_contained()?;
             return Ok(ResolvedClaudeLaunch {
                 mode: None,
                 contained: true,
@@ -4072,7 +4077,8 @@ pub(crate) fn render_agent_launch_noexec(
     let mut argv = vec![program.to_string_lossy().to_string()];
     argv.extend(exec_args.clone());
     let agents_bypass = load_agents_bypass(&plan.project_root).unwrap_or(false);
-    let agents_contained = load_agents_contained(&plan.project_root).unwrap_or(false);
+    // trace:BUG-2146 | ai:claude
+    let agents_contained = load_agents_contained(&plan.project_root)?;
     // TASK-1467: a dry-computed path — same naming scheme `prepare_agent_launch_context`
     // uses, but nothing is written here (no side effects). The real launch mints
     // its own token, so this path is illustrative of the SHAPE, not a promise of

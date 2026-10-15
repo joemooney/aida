@@ -14,6 +14,11 @@ wiring still awaits fresh independent C7 approval; hard takeover stays disabled.
 See [the sketch addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements).
 <!-- trace:TASK-1607 | ai:codex -->
 
+`aida regen corpus <dir>` exports committed store content as deterministic
+`corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
+records `dirty: true` while exporting HEAD. See OVERVIEW.md.
+<!-- trace:TASK-1729 | ai:codex -->
+
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
@@ -242,6 +247,14 @@ refresh flock holder (including an inline refresher). `aida cache rebuild` and
 mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
+
+Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
+profile under the git common directory. Project hook managers never run there.
+Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse
+store writes. Contained launch primes this profile before sandboxing and denies host git
+authority writes in both sandbox and tool rules; the writable store/cache set
+is unchanged. See OVERVIEW.md.
+<!-- trace:BUG-1929 | ai:codex -->
 
 The spec graph is git-canonical. The orphan `aida-store` branch stores
 one YAML object per requirement; `.aida-store/` is the live worktree for

@@ -399,7 +399,8 @@ pub fn forbidden_attention_transition(
             "a Needs Attention spec can only be triaged to Approved, \
              In Progress, or Rejected; to mark it done, go via In Progress \
              (aida edit <ID> --status in-progress, then --status done); a merged \
-             PR referencing this spec completes it via aida pull"
+             PR whose commit trailer names this spec completes it on the next \
+             aida pull, unless another open PR still names it"
                 .to_string(),
         )
     }
@@ -8959,7 +8960,12 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         .expect("NeedsAttention → Done must remain forbidden");
 
         assert!(message.contains("aida edit <ID> --status in-progress, then --status done"));
-        assert!(message.contains("a merged PR referencing this spec completes it via aida pull"));
+        // BUG-2134: the completion route names its real precondition.
+        // trace:BUG-2134 | ai:claude
+        assert!(message.contains(
+            "a merged PR whose commit trailer names this spec completes it on the next \
+             aida pull, unless another open PR still names it"
+        ));
     }
 
     /// STORY-332: transitions that do not touch NeedsAttention are never
@@ -8999,7 +9005,8 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
                     "a Needs Attention spec can only be triaged to Approved, \
                      In Progress, or Rejected; to mark it done, go via In Progress \
                      (aida edit <ID> --status in-progress, then --status done); a merged \
-                     PR referencing this spec completes it via aida pull"
+                     PR whose commit trailer names this spec completes it on the next \
+                     aida pull, unless another open PR still names it"
                         .to_string(),
                 ),
                 _ => None,
