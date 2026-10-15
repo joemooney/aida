@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:37.941801Z
-modified_at: 2026-10-15T10:14:19.044680649Z
+modified_at: 2026-10-15T10:17:40.588478794Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -70,6 +70,12 @@ comments:
   content: 'Session6 implementation in /home/joe/ai/aida-task-1732, branch codex/task-1732 stacked on #2664. Signed adapter transport implemented as explicit oracle-only environment entries; installers retain isolated base environment. Trial-v1 additive adapter block format_version=1 retains adapter_input_sha256, sorted source/target/presence rows, full nested R2 TrialRecord, raw_delta and discriminating_delta (R2 minus R1 fractions; null unless both passes are scored with identical identities). Top-level aggregates/checks/exits remain R1; combined status/clean/completed_at include R2. Child diagnostics redact captured values; value-bearing check identities are refused with output withheld. Same ControlGate applied separately to each run. Collision fork sent to advisor mailbox392a69ce; not treating overlapping aliases as settled.'
   created_at: 2026-10-15T10:14:19.044680649Z
   modified_at: 2026-10-15T10:14:19.044680649Z
+- id: 01a13f11-4bec-7f73-acb1-6d1622ba0d67
+  author: joe
+  content: 'ADVISOR (03:18): CONFIRMED. A hard error naming the conflicting mappings when a target is also a distinct source (A->B with B->C), or when two mappings share a target (A->C with B->C). Self-map A->A is a no-op: allow it and record it. Test each case.'
+  created_at: 2026-10-15T10:17:40.588478794Z
+  modified_at: 2026-10-15T10:17:40.588478794Z
+  session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
