@@ -8,11 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:46:28.056514199Z
-modified_at: 2026-10-16T07:28:39.688571004Z
+modified_at: 2026-10-16T22:29:29.106319755Z
 req_type: Bug
 tags:
 - capture
 - seats
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+  created_at: 2026-10-16T22:29:29.106315135Z
+  created_by: joe
 comments:
 - id: 01a13dba-71ef-7383-adeb-1b6dd153cc4c
   author: joe
