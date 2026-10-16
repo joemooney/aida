@@ -10,8 +10,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:47:47.046734591Z
-modified_at: 2026-10-16T13:00:17.733101669Z
+modified_at: 2026-10-16T22:28:42.206632949Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+  created_at: 2026-10-16T22:28:42.206629450Z
+  created_by: joe
 history:
 - id: 01a1422e-162f-7243-ae4b-cd64081370ae
   author: joe
