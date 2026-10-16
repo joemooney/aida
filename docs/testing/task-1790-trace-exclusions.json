@@ -3,7 +3,6 @@
   "mandate_include_supervised": false,
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_entries": 5,
-  "ledger_canonical_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
   "reference_collector_commit": "e31456c5613163e9995dabdf89cfaccdab9ab548",
   "full_newly_refused": 25,
   "scoped_newly_refused": 24,
@@ -1063,7 +1062,13 @@
       ]
     }
   ],
-  "collector_sha256": "dbd6794c98f33e509a7ee4e7291deaa3dcd2457c20bdab8ee3fbf1113f62901c",
+  "collector_sha256": "63b8e1731137f9195974c6f33d3788f2374518286b353ec0d7508319c6f26264",
   "optimized_real_case_equivalence": 50,
-  "optimized_adversarial_equivalence": 1813
+  "optimized_adversarial_equivalence": 1813,
+  "algorithm_checked_collector_sha256": "dbd6794c98f33e509a7ee4e7291deaa3dcd2457c20bdab8ee3fbf1113f62901c",
+  "hardened_actual_core_real_case_equivalence": 50,
+  "collector_regressions_with_actual_core": 15,
+  "ledger_parsed_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
+  "ledger_hash_encoding": "Python json.dumps(parsed_ledger, sort_keys=True, separators=(',', ':')), UTF-8",
+  "store_refs_sha256": "1a183ca6c62f3f9c495dc88877c08221c82106beb358d24d4fe1058bd9107793"
 }

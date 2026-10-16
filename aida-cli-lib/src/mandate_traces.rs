@@ -3,7 +3,7 @@
 // trace:TASK-1790 | ai:codex
 
 use anyhow::{ensure, Context, Result};
-use std::{collections::BTreeSet, path::Path, process::Command};
+use std::{collections::BTreeSet, path::Path};
 use syn::{spanned::Spanned, visit::Visit};
 
 #[derive(Clone, Copy, Debug)]
@@ -23,9 +23,9 @@ pub(crate) struct Evidence {
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    // Store status can execute fsmonitor: use the shared host boundary for
+    // every command, including read-only source/object evidence.
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(args)
         .env("GIT_NO_REPLACE_OBJECTS", "1")
         .output()
@@ -115,6 +115,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
             "--no-renames",
             "--no-ext-diff",
             "--no-textconv",
+            "--ignore-submodules=none",
             base,
             head,
             "--",

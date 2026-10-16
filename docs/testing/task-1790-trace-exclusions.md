@@ -29,10 +29,10 @@ it does not enumerate all exclusion reasons.
 Named subjects use the actual branch/title extraction and original commit
 trailer parser. All other mandate gates are held fixed. This measures additional
 CLASSIFICATION refusals, rather than replaying grants, approvals or merges.
-No store or exclusion-ledger writes are performed by the measurement.
+No canonical store or exclusion-ledger mutations are performed by the measurement.
 
 Store snapshot: `a5dae7145abd11d2480271c466030b12db6e7668`.
-The host's ledger snapshot has 5 entries; its canonical parsed JSON SHA-256 is
+The host's ledger snapshot has 5 entries; its parsed JSON SHA-256 (sorted keys, compact separators, Python JSON encoding) is
 `753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af`. Ledger contents stay private.
 The result is specific to these frozen inputs; `--include-supervised` was not
 measured. Two newly refused cases have an unresolved trace as their first
@@ -50,4 +50,17 @@ A fresh author checker compared the optimized collector with the reference:
 all 50 pinned cases matched IDs and fallback paths, and 1,813 adversarial
 source/range comparisons matched. The tested collector SHA-256 is
 `dbd6794c98f33e509a7ee4e7291deaa3dcd2457c20bdab8ee3fbf1113f62901c`. This author-controlled check conveys no
-independent review authority. STRICT review is required.
+independent review authority.
+
+A later author boundary check found that raw store status could execute a
+repository fsmonitor hook. Reads now use the existing hardened host-Git builder;
+raw diffs explicitly retain submodule changes so its ignore defaults cannot hide
+unsupported source modes. Fifteen collector regressions ran with the real AIDA
+core, including an executed fsmonitor positive control and a hardened refusal to
+execute it, plus a source gitlink refusal. The final hardened collector, with
+root-locked dependency versions and real AIDA core, reproduced the same IDs and
+fallback paths for all 50 cases. Final collector SHA-256:
+`63b8e1731137f9195974c6f33d3788f2374518286b353ec0d7508319c6f26264`.
+The prior three author checker contexts preceded this host-reader correction;
+the new regressions and benchmark are author verification. STRICT independent
+review is required.

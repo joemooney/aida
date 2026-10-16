@@ -257,3 +257,57 @@ fn mode_only_change_uses_full_file_fallback() {
     assert_eq!(got.ids, ids(&["TASK-1"]));
     assert_eq!(got.full_file_fallbacks, ids(&["a.rs"]));
 }
+
+#[test]
+fn snapshot_does_not_execute_repository_fsmonitor() {
+    let r = Repo::new();
+    r.put("objects/a.yaml", "title: fixture\n");
+    let watcher = r.path().join("watcher.sh");
+    crate::test_exec::write_executable(&watcher, "#!/bin/sh\nprintf called > fsmonitor-ran\n");
+    r.commit();
+    r.run(&["config", "core.fsmonitor", watcher.to_str().unwrap()]);
+    // Positive control: this same repository setting executes without the
+    // host builder. The controlled hook writes only in this fixture repository.
+    let raw = std::process::Command::new("git")
+        .current_dir(r.path())
+        .args(["status", "--porcelain=v1"])
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    let marker = r.path().join("fsmonitor-ran");
+    assert!(
+        marker.exists(),
+        "positive control did not execute the fixture"
+    );
+    std::fs::remove_file(&marker).unwrap();
+    assert!(store_snapshot(r.path()).is_ok());
+    assert!(
+        !marker.exists(),
+        "mandate snapshot executed repository code"
+    );
+}
+
+#[test]
+fn unsupported_source_gitlink_cannot_be_hidden_by_host_diff_defaults() {
+    let r = Repo::new();
+    let base = r.commit();
+    r.run(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{base},module.rs"),
+    ]);
+    r.run(&[
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-qm",
+        "gitlink fixture",
+    ]);
+    let head = r.run(&["rev-parse", "HEAD"]);
+    let err = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap_err();
+    assert!(
+        err.to_string().contains("not an ordinary regular file"),
+        "{err:#}"
+    );
+}
