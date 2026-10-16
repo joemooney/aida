@@ -24,7 +24,19 @@ use anyhow::{Context, Result};
 /// Where `create` writes the marker naming the clone's main checkout,
 /// relative to the clone root. `.aida/*` is excluded from git in the clone.
 // trace:BUG-2169 | ai:claude
-pub(crate) const MARKER_RELATIVE: &str = ".aida/seat-clone.toml";
+pub(crate) use aida_core::seat_clone_detect::{CLONE_DIR_PREFIX, MARKER_RELATIVE};
+
+/// Until slice S3 moves the host's status, reap and end paths off plain git,
+/// `seat_tree = "clone"` is a development switch: it works under test or with
+/// this variable set to `1`, and refuses otherwise (advisor ruling on #2699).
+// trace:BUG-2169 | ai:claude
+pub(crate) const DEV_ENABLE_ENV: &str = "AIDA_DEV_SEAT_CLONE";
+
+/// Where [`crate::worktree_gc::main_worktree_root_from`] points a seat clone
+/// that does not verify: a path under `/dev/null`, so every read, write or
+/// `git -C` aimed at it fails instead of treating the clone as main.
+// trace:BUG-2169 | ai:claude
+pub(crate) const UNVERIFIED_MAIN_SENTINEL: &str = "/dev/null/aida-unverified-seat-clone";
 
 /// The namespace of the base pins `create` writes in the MAIN checkout, so
 /// main's `gc` never prunes objects a clone borrows through alternates.
@@ -105,7 +117,23 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
     if !contained_seat {
         return Ok(TreeKind::Worktree);
     }
-    seat_tree_knob(project_root)
+    let kind = seat_tree_knob(project_root)?;
+    let dev_switch = std::env::var(DEV_ENABLE_ENV).ok();
+    if kind == TreeKind::Clone && !clone_seats_enabled(cfg!(test), dev_switch.as_deref()) {
+        anyhow::bail!(
+            "[contained] seat_tree = \"clone\" is not available yet: host status, reap and \
+             session-end paths still run git in a seat's tree, which is unsafe for a private \
+             clone. Set seat_tree = \"worktree\", or {DEV_ENABLE_ENV}=1 for development only."
+        );
+    }
+    Ok(kind)
+}
+
+/// Whether clone seats may be created: under test, or with the development
+/// switch set to exactly `1`.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn clone_seats_enabled(under_test: bool, dev_switch: Option<&str>) -> bool {
+    under_test || dev_switch.map(str::trim) == Some("1")
 }
 
 /// A fresh directory for a seat clone of `project_root` working `slug`:
@@ -121,9 +149,9 @@ pub(crate) fn clone_path(project_root: &Path, slug: &str) -> Result<PathBuf> {
     let parent = crate::worktree_gc::worktree_pool_config_worktree_parent(project_root);
     for n in 1..=50 {
         let name = if n == 1 {
-            format!("aida-seat-{project}-{slug}")
+            format!("{CLONE_DIR_PREFIX}{project}-{slug}")
         } else {
-            format!("aida-seat-{project}-{slug}-{n}")
+            format!("{CLONE_DIR_PREFIX}{project}-{slug}-{n}")
         };
         let path = aida_core::worktree_pool::worktree_placement_path(
             project_root,
@@ -175,6 +203,16 @@ pub(crate) struct CreatedClone {
     pub(crate) path: PathBuf,
     pub(crate) base_sha: String,
     pub(crate) pin: String,
+}
+
+/// The refusal for a path inside a seat clone that does not verify.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn unverified_refusal(clone_root: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{} is a contained seat's private clone, but its marker, alternates and lease do not \
+         agree on a main checkout, so it is not used as one. Run this from the main checkout.",
+        clone_root.display()
+    )
 }
 
 /// A git command tagged as this module's own. `dir` is passed with `-C`.
@@ -242,6 +280,18 @@ pub(crate) fn create(
         return Err(refusal(
             dest,
             anyhow::anyhow!("the directory already exists"),
+        ));
+    }
+    // Host code recognises a clone by this name even after the seat deletes
+    // its marker, so no clone is ever made under another name.
+    let named = dest
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX));
+    if !named {
+        return Err(refusal(
+            dest,
+            anyhow::anyhow!("a seat clone's directory name must start with `{CLONE_DIR_PREFIX}`"),
         ));
     }
     let Some(pin) = pin_ref(dest) else {
@@ -315,7 +365,15 @@ fn clone_and_checkout(
     let mut clone = std::process::Command::new("git");
     clone
         .env(ACCESSOR_ENV, "1")
-        .args(["clone", "--quiet", "--no-checkout", "--reference"]);
+        // `--no-hardlinks`: a local-path origin is otherwise hardlinked into the
+        // seat's objects, so the seat could rewrite origin's packs in place.
+        .args([
+            "clone",
+            "--quiet",
+            "--no-checkout",
+            "--no-hardlinks",
+            "--reference",
+        ]);
     clone.arg(main).arg("--").arg(origin_url).arg(dest);
     run(clone, &format!("clone {origin_url}"))?;
 
@@ -350,6 +408,83 @@ fn clone_and_checkout(
     Ok(())
 }
 
+/// Removes a just-made clone and releases its pin when dropped armed, so a
+/// `session_start` that fails after [`create`] (runtime links, env shim,
+/// lease write) leaves neither behind. Disarm once the lease is written.
+// trace:BUG-2169 | ai:claude
+pub(crate) struct CloneCleanupGuard {
+    main: PathBuf,
+    clone: PathBuf,
+    pin: String,
+    armed: bool,
+}
+
+impl CloneCleanupGuard {
+    pub(crate) fn new(main: &Path, made: &CreatedClone) -> Self {
+        Self {
+            main: main.to_path_buf(),
+            clone: made.path.clone(),
+            pin: made.pin.clone(),
+            armed: true,
+        }
+    }
+
+    /// The session now owns the clone; keep it.
+    pub(crate) fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for CloneCleanupGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Err(error) = std::fs::remove_dir_all(&self.clone) {
+            eprintln!(
+                "could not remove the unfinished seat clone {}: {error}",
+                self.clone.display()
+            );
+        }
+        if let Err(error) = release_pin(&self.main, &self.pin) {
+            eprintln!("{error:#}");
+        }
+    }
+}
+
+/// Test-only failure injection for the steps after [`create`].
+// trace:BUG-2169 | ai:claude
+#[cfg(test)]
+pub(crate) mod failpoint {
+    use std::cell::Cell;
+
+    thread_local! {
+        static FAIL_BEFORE_LEASE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Make the next `session_start` on this thread fail just before it
+    /// writes the lease.
+    pub(crate) fn fail_before_lease(on: bool) {
+        FAIL_BEFORE_LEASE.with(|f| f.set(on));
+    }
+
+    pub(crate) fn check_before_lease() -> anyhow::Result<()> {
+        if FAIL_BEFORE_LEASE.with(|f| f.replace(false)) {
+            anyhow::bail!("injected failure before the lease write");
+        }
+        Ok(())
+    }
+}
+
+/// Production no-op twin of [`failpoint::check_before_lease`].
+#[cfg(not(test))]
+pub(crate) mod failpoint {
+    #[inline]
+    pub(crate) fn check_before_lease() -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 /// Delete a base pin in `main`. Only `refs/aida/seats/*` is ever touched.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn release_pin(main: &Path, pin: &str) -> Result<()> {
@@ -366,9 +501,7 @@ pub(crate) fn release_pin(main: &Path, pin: &str) -> Result<()> {
 /// Runs no git. `None` for a worktree, the main checkout or any other repo.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn seat_clone_root(start: &Path) -> Option<PathBuf> {
-    let start = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
-    let root = start.ancestors().find(|dir| dir.join(".git").exists())?;
-    (root.join(".git").is_dir() && root.join(MARKER_RELATIVE).is_file()).then(|| root.to_path_buf())
+    aida_core::seat_clone_detect::seat_clone_root(start)
 }
 
 /// How [`main_for`] resolved a path.
@@ -379,8 +512,8 @@ pub(crate) enum MainFor {
     NotAClone,
     /// A seat clone whose marker, alternates and lease agree on this main.
     Verified(PathBuf),
-    /// A seat clone that does not verify. Callers treat it as its own root
-    /// and must NOT run git in it to find out more.
+    /// A seat clone that does not verify. Callers refuse: it is neither a
+    /// main checkout nor safe to run git in.
     Unverified(PathBuf),
 }
 
@@ -402,14 +535,14 @@ pub(crate) fn main_for(start: &Path) -> MainFor {
 }
 
 fn verified_main(clone_root: &Path) -> Option<PathBuf> {
-    let marker: SeatCloneMarker =
-        toml::from_str(&std::fs::read_to_string(clone_root.join(MARKER_RELATIVE)).ok()?).ok()?;
+    // Seat-controlled files: read only regular files (a FIFO would hang).
+    let read = aida_core::seat_clone_detect::read_regular_file;
+    let marker: SeatCloneMarker = toml::from_str(&read(&clone_root.join(MARKER_RELATIVE))?).ok()?;
     let main = marker.main.canonicalize().ok()?;
     if !main.join(".git").is_dir() || main == clone_root {
         return None;
     }
-    let alternates =
-        std::fs::read_to_string(clone_root.join(".git/objects/info/alternates")).ok()?;
+    let alternates = read(&clone_root.join(".git/objects/info/alternates"))?;
     let first = alternates.lines().map(str::trim).find(|l| !l.is_empty())?;
     let borrowed = Path::new(first).canonicalize().ok()?;
     if borrowed != main.join(".git").join("objects").canonicalize().ok()? {

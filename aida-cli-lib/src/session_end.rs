@@ -970,9 +970,12 @@ pub(crate) fn resolve_session_end_root(invocation_root: &std::path::Path) -> std
     // BUG-2169: a seat clone also has a real `.git` directory, but its leases
     // live in the main checkout its marker, alternates and lease agree on.
     // trace:BUG-2169 | ai:claude
-    if let crate::seat_clone::MainFor::Verified(main) = crate::seat_clone::main_for(invocation_root)
-    {
-        return main;
+    match crate::seat_clone::main_for(invocation_root) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(_) => {
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
     }
     if invocation_root.join(".git").is_dir() {
         return invocation_root.to_path_buf();
@@ -1012,7 +1015,15 @@ pub(crate) fn session_end(
     // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
     // peer guard, pool checks and store detection below never resolve against
     // the dying tree. trace:BUG-1952 | ai:claude
-    let project_root = resolve_session_end_root(&find_project_root()?);
+    let invocation_root = find_project_root()?;
+    // BUG-2169: a seat clone that does not verify is refused outright.
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) =
+        crate::seat_clone::main_for(&invocation_root)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
+    let project_root = resolve_session_end_root(&invocation_root);
     let leases = list_leases(&project_root);
     if leases.is_empty() {
         // BUG-779: a BARE `session end` with nothing to end is a benign no-op

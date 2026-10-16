@@ -88,9 +88,9 @@ fn write_lease(main: &Path, clone: &Path, kind: &str) {
         path,
         format!(
             "id = \"{id}\"\nscope = \"BUG-2169\"\nslug = \"bug-2169\"\nowner = \"test\"\n\
-             worktree_path = \"{}\"\nbranch = \"feat\"\nstarted_at = \"2026-10-16T00:00:00Z\"\n\
+             worktree_path = {}\nbranch = \"feat\"\nstarted_at = \"2026-10-16T00:00:00Z\"\n\
              hostname = \"h\"\ntree_kind = \"{kind}\"\n",
-            clone.display()
+            aida_core::toml_quote::toml_string(&clone.display().to_string())
         ),
     )
     .unwrap();
@@ -225,6 +225,7 @@ fn a_failed_clone_refuses_loudly_and_leaves_no_directory_and_no_pin() {
     assert!(!git_ok(&fx.main, &["worktree", "list", "--porcelain"]).contains("aida-seat"));
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unwritable_parent_refuses_before_pinning() {
     use std::os::unix::fs::PermissionsExt;
@@ -317,9 +318,22 @@ fn the_main_resolver_needs_marker_alternates_and_lease_to_agree() {
     );
     assert_eq!(main_for(&plain), MainFor::NotAClone);
 
-    // No lease yet: the clone is its own root, and git is never asked.
+    // No lease yet: refused. The infallible resolver points at a path where
+    // everything fails, never at the clone, and git is never asked.
     assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
-    assert_eq!(crate::worktree_gc::main_worktree_root_from(&clone), clone);
+    let sentinel = PathBuf::from(UNVERIFIED_MAIN_SENTINEL);
+    assert_eq!(
+        crate::worktree_gc::main_worktree_root_from(&clone),
+        sentinel
+    );
+    assert_eq!(
+        crate::session_end::resolve_session_end_root(&clone),
+        sentinel
+    );
+    assert!(
+        std::fs::read_dir(&sentinel).is_err()
+            && std::fs::create_dir_all(sentinel.join("x")).is_err()
+    );
 
     // A worktree-kind lease for the path does not verify a clone.
     write_lease(&fx.main, &clone, "worktree");
@@ -348,28 +362,154 @@ fn the_main_resolver_needs_marker_alternates_and_lease_to_agree() {
     std::fs::write(&marker_path, toml::to_string(&marker).unwrap()).unwrap();
     write_lease(&other.main, &clone, "clone");
     assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
+
+    // A seat that deletes its marker is still recognised by its directory
+    // name, and does not verify.
+    std::fs::remove_file(&marker_path).unwrap();
+    assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
+}
+
+/// The seat controls its marker and alternates: a FIFO in either place must
+/// not hang the host, and a FIFO marker still marks a clone.
+#[cfg(unix)]
+#[test]
+fn fifo_marker_or_alternates_never_hang_and_never_verify() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-fifo");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    write_lease(&fx.main, &clone, "clone");
+    assert_eq!(main_for(&clone), MainFor::Verified(fx.main.clone()));
+    let mkfifo = |path: &Path| {
+        std::fs::remove_file(path).unwrap();
+        assert!(Command::new("mkfifo").arg(path).status().unwrap().success());
+    };
+
+    let alternates = clone.join(".git/objects/info/alternates");
+    let saved = std::fs::read_to_string(&alternates).unwrap();
+    mkfifo(&alternates);
+    assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
+    std::fs::remove_file(&alternates).unwrap();
+    std::fs::write(&alternates, saved).unwrap();
+    assert_eq!(main_for(&clone), MainFor::Verified(fx.main.clone()));
+
+    mkfifo(&clone.join(MARKER_RELATIVE));
+    assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
+}
+
+#[test]
+fn the_clone_knob_is_a_dev_switch_until_s3() {
+    assert!(clone_seats_enabled(true, None));
+    assert!(clone_seats_enabled(false, Some("1")));
+    assert!(clone_seats_enabled(false, Some(" 1 ")));
+    assert!(!clone_seats_enabled(false, None));
+    assert!(!clone_seats_enabled(false, Some("true")));
+    assert!(!clone_seats_enabled(false, Some("0")));
+}
+
+/// A local-path origin must be copied, not hardlinked: a hardlinked pack
+/// would let the seat rewrite origin's objects through its own clone.
+#[cfg(unix)]
+#[test]
+fn clone_objects_are_copies_not_hardlinks() {
+    use std::os::unix::fs::MetadataExt;
+    let fx = fixture();
+    // An origin-only commit, so the clone must fetch a pack from origin.
+    let pusher = fx.root.join("pusher");
+    git_ok(
+        &fx.root,
+        &[
+            "clone",
+            "-q",
+            fx.origin.to_str().unwrap(),
+            pusher.to_str().unwrap(),
+        ],
+    );
+    git_ok(&pusher, &["config", "user.email", "test@example.com"]);
+    git_ok(&pusher, &["config", "user.name", "AIDA Test"]);
+    std::fs::write(pusher.join("only-on-origin.txt"), "x\n").unwrap();
+    git_ok(&pusher, &["add", "only-on-origin.txt"]);
+    git_ok(&pusher, &["commit", "-qm", "origin only"]);
+    git_ok(&pusher, &["push", "-q", "origin", "HEAD:refs/heads/side"]);
+    git_ok(&fx.origin, &["repack", "-adq"]);
+    let dest = fx.root.join("seats").join("aida-seat-aida-links");
+
+    create(&fx.main, &dest, "feat", "origin/main").unwrap();
+
+    let mut files = Vec::new();
+    let mut stack = vec![dest.join(".git/objects")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let meta = std::fs::symlink_metadata(&path).unwrap();
+            if meta.is_dir() {
+                stack.push(path);
+            } else if meta.is_file() {
+                files.push((path, meta.nlink()));
+            }
+        }
+    }
+    assert!(
+        files
+            .iter()
+            .any(|(p, _)| p.extension().is_some_and(|e| e == "pack")),
+        "the clone must have fetched a pack, or the check is vacuous: {files:?}"
+    );
+    let linked: Vec<_> = files.iter().filter(|(_, n)| *n != 1).collect();
+    assert!(linked.is_empty(), "hardlinked object files: {linked:?}");
+}
+
+#[test]
+fn host_git_builders_refuse_a_seat_clone() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-host");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let canary = fx.root.join("fsmonitor-ran");
+    git_ok(
+        &clone,
+        &[
+            "config",
+            "core.fsmonitor",
+            &format!("touch {}; false", canary.display()),
+        ],
+    );
+
+    let dirty = crate::status_sections::worktree_dirty_entries(&clone);
+    assert_eq!(dirty.len(), 1, "{dirty:?}");
+    assert!(dirty[0].contains("private clone"), "{dirty:?}");
+
+    let out = aida_core::git_ops::host_git_command(&clone)
+        .args(["status", "--porcelain"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("private clone"));
+    assert!(
+        !canary.exists(),
+        "seat-written core.fsmonitor ran on the host"
+    );
+
+    // Ordinary trees are unaffected.
+    assert!(crate::status_sections::worktree_dirty_entries(&fx.main).is_empty());
 }
 
 /// Condition 1: run the host-side paths S1 adds against a seat clone with a
 /// logging `git` first on PATH, and require that every git invocation whose
 /// repository or working directory is inside the clone came from this module.
 /// The negative control proves the check flags an untagged invocation.
+#[cfg(unix)]
 #[test]
 fn no_git_runs_in_a_seat_clone_outside_the_accessor_module() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let fx = fixture();
-    let real_git = String::from_utf8(
-        Command::new("sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap()
-            .stdout,
-    )
-    .unwrap()
-    .trim()
-    .to_string();
+    let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
+        .display()
+        .to_string();
     let shim_dir = fx.root.join("shim");
     std::fs::create_dir_all(&shim_dir).unwrap();
     let log = fx.root.join("git.log");
@@ -395,6 +535,11 @@ fn no_git_runs_in_a_seat_clone_outside_the_accessor_module() {
     assert_eq!(crate::worktree_gc::main_worktree_root_from(&clone), fx.main);
     let _ = crate::session_end::resolve_session_end_root(&clone);
     let _ = crate::worktree_gc::main_worktree_root_from(&clone.join(".aida"));
+    // The host git builders refuse without spawning git in the clone.
+    let _ = crate::status_sections::worktree_dirty_entries(&clone);
+    let _ = aida_core::git_ops::host_git_command(&clone)
+        .args(["status", "--porcelain"])
+        .output();
     let before_control = std::fs::read_to_string(&log).unwrap();
     // Negative control: an untagged host git in the clone.
     let _ = Command::new("git")
@@ -481,8 +626,8 @@ fn session_start_gives_a_contained_seat_a_private_clone() {
     std::fs::write(
         fx.main.join(".aida/config.toml"),
         format!(
-            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = \"{}\"\n",
-            seats.display()
+            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&seats.display().to_string())
         ),
     )
     .unwrap();
@@ -576,8 +721,8 @@ fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
     std::fs::write(
         fx.main.join(".aida/config.toml"),
         format!(
-            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = \"{}\"\n",
-            fx.root.join("seats").display()
+            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&fx.root.join("seats").display().to_string())
         ),
     )
     .unwrap();
@@ -615,4 +760,92 @@ fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
         .all(|l| l.scope != "TASK-2171"));
     let worktrees = git_ok(&fx.main, &["worktree", "list", "--porcelain"]);
     assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
+}
+
+/// A failure after the clone exists but before the lease is written removes
+/// the clone and releases its pin, so the next launch can reuse the name.
+#[test]
+fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
+    let fx = fixture();
+    let seats = fx.root.join("seats");
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        format!(
+            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&seats.display().to_string())
+        ),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    failpoint::fail_before_lease(true);
+
+    let err = crate::session_start::session_start(
+        "TASK-2172",
+        None,
+        None,
+        false,
+        None,
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        false,
+        Some(false),
+        /* self_claim */ true,
+        /* contained_seat */ true,
+    )
+    .unwrap_err();
+
+    assert!(format!("{err:#}").contains("injected failure"), "{err:#}");
+    let left: Vec<_> = std::fs::read_dir(&seats)
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    assert!(left.is_empty(), "the clone was left behind: {left:?}");
+    assert!(git_ok(&fx.main, &["for-each-ref", PIN_PREFIX]).is_empty());
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .all(|l| l.scope != "TASK-2172"));
+
+    crate::session_start::session_start(
+        "TASK-2172",
+        None,
+        None,
+        false,
+        None,
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        false,
+        Some(false),
+        /* self_claim */ true,
+        /* contained_seat */ true,
+    )
+    .unwrap();
+    let leases = crate::list_leases(&fx.main);
+    let lease = leases
+        .iter()
+        .find(|l| l.scope == "TASK-2172")
+        .expect("lease");
+    assert!(lease.worktree_path.exists());
+    assert_eq!(
+        git_ok(
+            &fx.main,
+            &["for-each-ref", "--format=%(refname)", PIN_PREFIX]
+        )
+        .lines()
+        .count(),
+        1
+    );
 }

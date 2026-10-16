@@ -1481,6 +1481,10 @@ pub(crate) fn session_start(
     let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
+    // BUG-2169: owns a just-made seat clone until the lease is written; any
+    // error in between removes the clone and releases its pin.
+    // trace:BUG-2169 | ai:claude
+    let mut clone_cleanup: Option<crate::seat_clone::CloneCleanupGuard> = None;
     if tree_kind == crate::seat_clone::TreeKind::Clone {
         // BUG-2169: a contained seat gets a private clone. There is no
         // worktree fallback: any failure refuses the launch.
@@ -1525,6 +1529,10 @@ pub(crate) fn session_start(
             branch_name,
             &created.base_sha[..created.base_sha.len().min(10)],
         );
+        clone_cleanup = Some(crate::seat_clone::CloneCleanupGuard::new(
+            &project_root,
+            &created,
+        ));
     } else if reuse_existing_worktree_path {
         let current = current_branch_at(&worktree_path);
         if current.as_deref() != Some(branch_name.as_str()) {
@@ -2199,7 +2207,12 @@ pub(crate) fn session_start(
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
+    // trace:BUG-2169 | ai:claude
+    crate::seat_clone::failpoint::check_before_lease()?;
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    if let Some(guard) = clone_cleanup.as_mut() {
+        guard.disarm();
+    }
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     review_authority::record_authoring_lease(&project_root, &lease);

@@ -725,12 +725,16 @@ pub(crate) fn warn_if_cwd_removed() -> bool {
 pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
     // BUG-2169: a contained seat's private clone is its own first `worktree
     // list` record, and git must never run inside it from here (its config
-    // and hooks are seat-writable). Resolve it from files instead; a clone
-    // that does not verify is treated as its own root.
+    // and hooks are seat-writable). Resolve it from files instead. A clone
+    // that does not verify is refused: this infallible resolver points it at
+    // a path where every read, write and `git -C` fails, never at the clone.
     // trace:BUG-2169 | ai:claude
     match crate::seat_clone::main_for(start) {
         crate::seat_clone::MainFor::Verified(main) => return main,
-        crate::seat_clone::MainFor::Unverified(clone_root) => return clone_root,
+        crate::seat_clone::MainFor::Unverified(clone_root) => {
+            eprintln!("{:#}", crate::seat_clone::unverified_refusal(&clone_root));
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
         crate::seat_clone::MainFor::NotAClone => {}
     }
     let out = std::process::Command::new("git")
@@ -753,6 +757,11 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
 /// Convenience wrapper that walks up from cwd. Same fallback semantics.
 pub(crate) fn find_main_worktree_root() -> Result<std::path::PathBuf> {
     let start = find_project_root()?;
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) = crate::seat_clone::main_for(&start)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
     Ok(main_worktree_root_from(&start))
 }
 
