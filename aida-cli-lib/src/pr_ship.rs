@@ -2174,6 +2174,62 @@ pub(crate) fn merge_gate_verdict_candidates(
     out
 }
 
+/// BUG-2164: An open PR with an APPROVED review decision.
+// trace:BUG-2164 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OpenApprovedPr {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+}
+
+/// BUG-2164: Parse open PRs with an APPROVED review decision from `gh pr list --json ...` stdout.
+// trace:BUG-2164 | ai:antigravity
+pub(crate) fn parse_open_approved_prs_json(json: &str) -> Vec<OpenApprovedPr> {
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(json) else {
+        return Vec::new();
+    };
+    let Some(arr) = val.as_array() else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter(|item| {
+            item.get("reviewDecision")
+                .and_then(|v| v.as_str())
+                .map(|s| s.eq_ignore_ascii_case("APPROVED"))
+                .unwrap_or(false)
+        })
+        .filter_map(|item| {
+            let number = item.get("number").and_then(|v| v.as_u64())?;
+            let title = item
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            Some(OpenApprovedPr { number, title })
+        })
+        .collect()
+}
+
+/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
+// trace:BUG-2164 | ai:antigravity
+pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+    if approved.is_empty() {
+        base.to_string()
+    } else {
+        let mut msg = format!("{base}\n\nOpen approved PRs:");
+        for pr in approved {
+            if pr.title.is_empty() {
+                msg.push_str(&format!("\n  PR-{}", pr.number));
+            } else {
+                msg.push_str(&format!("\n  PR-{} — {}", pr.number, pr.title));
+            }
+        }
+        msg
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // trace:TASK-1606 | ai:codex

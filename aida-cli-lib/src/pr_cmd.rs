@@ -2241,6 +2241,17 @@ pub(crate) fn pr_ship_handler(
         anyhow::bail!("could not detect current branch (detached HEAD?)");
     }
 
+    // BUG-2164: On the default branch with no explicit PR number, refuse before
+    // any push, trailer guard, or PR creation attempt.
+    // trace:BUG-2164 | ai:antigravity
+    if opts.pr_number.is_none() {
+        let default_branch = crate::forge::default_branch_of(&project_root);
+        if branch == default_branch {
+            let approved = find_open_approved_prs(&project_root);
+            anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+        }
+    }
+
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
     // Catch a hallucinated / typo'd / since-rejected `(SPEC-ID)` trailer BEFORE
     // the commit reaches the PR + shared history. Reuses the STORY-498 gate's
@@ -4365,6 +4376,43 @@ pub(crate) fn ship_completion_trailer(
         |id| pr_ship::spec_completion_hold_reason(store, id),
     )
 }
+
+/// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.
+// trace:BUG-2164 | ai:antigravity
+pub(crate) fn find_open_approved_prs(
+    project_root: &std::path::Path,
+) -> Vec<pr_ship::OpenApprovedPr> {
+    if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::GitHub {
+        return Vec::new();
+    }
+    let gh_bin = match crate::kernel::resolve_gh_binary() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    let mut cmd = std::process::Command::new(&gh_bin);
+    cmd.current_dir(project_root).args([
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "50",
+        "--json",
+        "number,title,reviewDecision",
+    ]);
+    let Some(out) = crate::kernel::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    pr_ship::parse_open_approved_prs_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+#[cfg(test)]
+#[path = "tests/bug_2164_default_branch_ship_refusal_tests.rs"]
+mod bug_2164_default_branch_ship_refusal_tests;
 
 #[cfg(test)]
 #[path = "tests/task_140_squash_subject_tests.rs"]
