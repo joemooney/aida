@@ -1,0 +1,34 @@
+id: 01a143c8-f8a8-7712-8b3a-3f23fa0e8bc1
+spec_id: STORY-1705
+agreed_id: STORY-1705
+title: 'Review PR-2690: [AI:claude] feat(schedule): hourly fleet heartbeat and relay stall guard (STORY-1699)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a142fc`) for branch `story-1699-heartbeat`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2690>
+  - Branch: `story-1699-heartbeat` → `main`
+
+  ## Covers
+
+  - STORY-1699
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2690` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T08:16:46.760521376Z
+modified_at: 2026-10-16T08:16:46.760521376Z
+req_type: Story
+filed_at:
+  code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 5fb188c522
+  vendor: claude
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
