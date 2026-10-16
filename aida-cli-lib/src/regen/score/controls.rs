@@ -810,10 +810,17 @@ mod tests {
         );
         std::fs::create_dir(project.path().join(".aida")).unwrap();
         std::fs::write(project.path().join(".aida/config.toml"), "[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\nrequired_tools=['tool']\nreference_repeats=1\n").unwrap();
+        // The installed tool must pass completeness (size + --help) or the reference control flags.
+        // trace:STORY-1677 | ai:claude
         let install = r#"#!/bin/sh
 set -eu
 test -z "${AIDA_REGEN_CHECK_RESULTS+x}"
-printf '#!/bin/sh\nprintf %s\n' "$(cat behavior)" > "$PREFIX/bin/tool"
+cat > "$PREFIX/bin/tool" <<EOS
+#!/bin/sh
+# Complete fixture component with enough substantive bytes and a help interface.
+if test "\${1-}" = --help; then echo Usage: tool; exit 0; fi
+printf '%s\n' $(cat behavior)
+EOS
 chmod +x "$PREFIX/bin/tool"
 "#;
         let oracle = r#"#!/bin/sh
