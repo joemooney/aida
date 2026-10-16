@@ -184,7 +184,10 @@ fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChang
             "--limit",
             "30",
             "--json",
-            "number,title,body,headRefName",
+            // BUG-2163: `state` is read live, unlike the `--state open`
+            // filter, which goes through GitHub's lagging search index.
+            // trace:BUG-2163 | ai:claude
+            "number,title,body,headRefName,state",
         ])
         .output_retrying_etxtbsy()
     {
@@ -209,7 +212,7 @@ fn exit_failure(out: &std::process::Output) -> EvidenceUnavailable {
     }
 }
 
-/// Validate the complete `gh pr list --json number,title,body,headRefName`
+/// Validate the complete `gh pr list --json number,title,body,headRefName,state`
 /// response. Only a JSON array whose every row carries a positive integer
 /// `number` and string `title` / `body` is an answer; `[]` is the
 /// authoritative "no open change".
@@ -243,6 +246,17 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
         let (Some(title), Some(body)) = (field("title"), field("body")) else {
             return OpenChangeCheck::Unavailable(EvidenceUnavailable::BadDiagnosticRow);
         };
+        // BUG-2163: `--state open` filters on GitHub's search index, which
+        // lags a merge by seconds to minutes. `aida pr ship` runs its pull
+        // about 20s after merging, so the PR it just merged came back as
+        // "open", its own `(SPEC-ID)` title named the spec, and the guard
+        // withheld the very completion that merge earned (TASK-1730..1733).
+        // The row's `state` is read live, so a row that says it is not OPEN
+        // is not an open change. A row without `state` (older fixtures)
+        // keeps the search filter's answer. trace:BUG-2163 | ai:claude
+        if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("OPEN")) {
+            continue;
+        }
         let branch = field("headRefName").unwrap_or("");
         let names_spec = crate::count_ids_mentioned(&format!("{title}\n{body}"), &ids) > 0
             || branch_names_spec(branch, spec_id);
@@ -703,6 +717,30 @@ mod tests {
         assert_eq!(
             check(br#"[{"number":7,"title":"x","body":""}]"#),
             OpenChangeCheck::Clear
+        );
+    }
+
+    /// BUG-2163: the search index still lists a just-merged PR as open, but
+    /// the row's live `state` says MERGED. That PR must not hold the spec its
+    /// own merge completed; a genuinely OPEN row still does, and a row with no
+    /// `state` keeps the old behaviour.
+    // trace:BUG-2163 | ai:claude
+    #[test]
+    fn open_change_rows_ignore_rows_whose_live_state_is_not_open() {
+        let check = |bytes: &[u8]| parse_open_change_rows(bytes, "TASK-1732");
+        assert_eq!(
+            check(br#"[{"number":2666,"title":"[AI:codex] feat(regen): score environment seam adapters (TASK-1732)","body":"","headRefName":"codex/task-1732","state":"MERGED"}]"#),
+            OpenChangeCheck::Clear
+        );
+        assert_eq!(
+            check(br#"[{"number":2666,"title":"x (TASK-1732)","body":"","headRefName":"y","state":"CLOSED"},{"number":2670,"title":"part two (TASK-1732)","body":"","headRefName":"z","state":"OPEN"}]"#),
+            OpenChangeCheck::Open(2670)
+        );
+        assert_eq!(
+            check(
+                br#"[{"number":2670,"title":"part two (TASK-1732)","body":"","headRefName":"z"}]"#
+            ),
+            OpenChangeCheck::Open(2670)
         );
     }
 

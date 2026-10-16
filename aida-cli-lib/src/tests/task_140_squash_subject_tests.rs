@@ -233,3 +233,51 @@ fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
     assert!(trailer.ids.is_empty(), "{trailer:?}");
     assert_eq!(subject, None);
 }
+
+/// BUG-2163: the merge-time completion scan reads a squash subject's spec ids
+/// from every trailing parenthesized group, skipping a final `(#N)` PR group.
+/// These are the exact subjects of the merges whose specs were closed by hand
+/// on 2026-10-15. The parser was not at fault (the BUG-1454 open-PR guard was),
+/// so these lock the parser half of the contract in place.
+// trace:BUG-2163 | ai:claude
+#[test]
+fn bug_2163_squash_subject_trailers_survive_a_pr_number_suffix() {
+    use crate::pr_lookup::extract_pr_number_from_commit_subject;
+    use crate::zen_drive_root::extract_spec_ids_from_commit;
+    let ids = |s: &str| extract_spec_ids_from_commit(s);
+    // `(SPEC) (#N)`
+    let s = "[AI:codex] feat(regen): score environment seam adapters (TASK-1732) (#2666)";
+    assert_eq!(ids(s), vec!["TASK-1732"]);
+    assert_eq!(extract_pr_number_from_commit_subject(s), Some(2666));
+    assert_eq!(
+        ids("[AI:codex] feat(regen): report diagnostic gap trends (TASK-1733) (#2667)"),
+        vec!["TASK-1733"]
+    );
+    assert_eq!(
+        ids(
+            "[AI:antigravity] fix(liveness): check start-time identity before killing \
+             processes on agent stop and session end (BUG-2148) (#2676)"
+        ),
+        vec!["BUG-2148"]
+    );
+    // `(A B) (#N)`, and the comma-separated form.
+    assert_eq!(
+        ids("[AI:claude] fix(ship): x (TASK-1730 TASK-1731) (#2700)"),
+        vec!["TASK-1730", "TASK-1731"]
+    );
+    assert_eq!(
+        ids("[AI:claude] fix(ship): x (TASK-1730, TASK-1731) (#2700)"),
+        vec!["TASK-1730", "TASK-1731"]
+    );
+    // One group per spec, then `(#N)`.
+    assert_eq!(
+        ids("fix: x (BUG-503) (BUG-504) (#794)"),
+        vec!["BUG-503", "BUG-504"]
+    );
+    // `(SPEC)` with no PR suffix (a direct push / pr ship's own subject).
+    let s = "[AI:codex] feat(regen): control batches and fresh scoring roots (TASK-1731)";
+    assert_eq!(ids(s), vec!["TASK-1731"]);
+    assert_eq!(extract_pr_number_from_commit_subject(s), None);
+    // A bare `(#N)` credits nothing.
+    assert!(ids("chore: bump deps (#2701)").is_empty());
+}
