@@ -1,0 +1,7 @@
+job: relay-stall-guard-route
+due_since: 2026-10-16T04:45:57.682036414Z
+due_reason: on CronJobFailed:relay-stall-guard
+due_failure:
+  trip_id: relay-stall-guard@2026-10-16T04:44:28.553466878Z
+  job: relay-stall-guard
+  error: 'exit 1: '
