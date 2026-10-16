@@ -2,6 +2,98 @@
 // trace:TASK-1733 | ai:codex
 use super::*;
 use std::fmt::Write;
+mod cache; // trace:TASK-1734 | ai:codex
+
+/// Latest scored ordinary R1, shared by the statusline and every digest format.
+// trace:TASK-1734 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegenerationSummary {
+    pub trial_id: Uuid,
+    pub completed_at: DateTime<Utc>,
+    pub passed: usize,
+    pub total: usize,
+    pub pass_rate: f64,
+    pub age_seconds: i64,
+    pub clean: bool,
+    pub flags: Vec<String>,
+}
+
+impl RegenerationSummary {
+    pub(crate) fn text(&self) -> String {
+        format!(
+            "regen {:.1}% age {}{}",
+            self.pass_rate * 100.0,
+            compact_age(self.age_seconds),
+            if !self.clean || !self.flags.is_empty() {
+                " !"
+            } else {
+                ""
+            }
+        )
+    }
+}
+
+fn compact_age(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    for (unit, suffix) in [(86400, "d"), (3600, "h"), (60, "m")] {
+        if seconds >= unit {
+            return format!("{}{suffix}", seconds / unit);
+        }
+    }
+    format!("{seconds}s")
+}
+
+// JSON round trips can move a finite ratio by a few ulps. This display-only
+// tolerance never feeds controls or eligibility; render the integer ratio.
+fn valid_rate(passed: usize, total: usize, rate: f64) -> bool {
+    total > 0
+        && passed <= total
+        && rate.is_finite()
+        && (rate - passed as f64 / total as f64).abs() <= 8.0 * f64::EPSILON
+}
+
+fn scored_aggregate(record: &TrialRecord) -> Option<&Aggregate> {
+    record
+        .discriminating
+        .as_ref()
+        .filter(|a| record.status == "scored" && valid_rate(a.passed, a.total, a.pass_rate))
+}
+
+fn summary(records: &[TrialRecord], now: DateTime<Utc>) -> Option<RegenerationSummary> {
+    let latest = records
+        .iter()
+        .filter(|r| {
+            r.format_version == 1
+                && r.kind == "trial"
+                && r.completed_at <= now
+                && scored_aggregate(r).is_some()
+        })
+        .max_by_key(|r| (r.completed_at, r.trial_id))?;
+    let aggregate = scored_aggregate(latest)?;
+    Some(RegenerationSummary {
+        trial_id: latest.trial_id,
+        completed_at: latest.completed_at,
+        passed: aggregate.passed,
+        total: aggregate.total,
+        pass_rate: aggregate.passed as f64 / aggregate.total as f64,
+        age_seconds: now
+            .signed_duration_since(latest.completed_at)
+            .num_seconds()
+            .max(0),
+        clean: latest.clean,
+        flags: latest.flags.clone(),
+    })
+}
+
+pub(crate) fn read_summary_for_project(
+    project: &Path,
+    now: DateTime<Utc>,
+) -> Option<RegenerationSummary> {
+    // Optional display only: local committed evidence and a derived local
+    // summary cache; no canonical writes, rebuild, fetch or authority decisions.
+    let store = cache::display_store(project)?;
+    cache::read(&store, &cache::path(&store)?, now)
+}
 
 pub(crate) fn read_report(store: &Path) -> Result<String> {
     Ok(render(&controls::read_records(store)?, Utc::now()))
@@ -20,15 +112,10 @@ fn render(records: &[TrialRecord], now: DateTime<Utc>) -> String {
         .signed_duration_since(latest.completed_at)
         .num_seconds()
         .max(0);
-    let mut out = match latest.discriminating.as_ref().filter(|a| {
-        latest.status == "scored"
-            && a.total > 0
-            && a.passed <= a.total
-            && a.pass_rate == a.passed as f64 / a.total as f64
-    }) {
+    let mut out = match scored_aggregate(latest) {
         Some(a) => format!(
             "Discriminating oracle pass rate (R1): {:.1}% ({}/{}), age {}s",
-            a.pass_rate * 100.0,
+            a.passed as f64 / a.total as f64 * 100.0,
             a.passed,
             a.total,
             age
@@ -197,7 +284,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn trial(id: u128, seconds: i64) -> TrialRecord {
+    pub(super) fn trial(id: u128, seconds: i64) -> TrialRecord {
         serde_json::from_value(json!({
             "format_version": 1, "trial_id": Uuid::from_u128(id),
             "content_sha256": "corpus", "store_sha": "store",
@@ -228,6 +315,159 @@ mod tests {
         // Persisted metadata survives disappearance of the original input.
         drop(root);
         captured.gap_snapshot().unwrap()
+    }
+
+    // trace:TASK-1734 | ai:codex
+    #[test]
+    fn regeneration_summary_selects_scored_ordinary_by_completion_then_uuid() {
+        let now = DateTime::from_timestamp(200, 0).unwrap();
+        assert!(summary(&[], now).is_none());
+        let old = trial(1, 100);
+        let mut latest = trial(3, 150);
+        latest.clean = false;
+        latest.flags = vec!["oracle_nonzero_exit".into()];
+        let mut tied = trial(2, 150);
+        tied.discriminating.as_mut().unwrap().pass_rate = 0.0; // invalid aggregate
+        let mut control = trial(4, 190);
+        control.kind = "control-reference".into();
+        let mut adapted = trial(5, 195);
+        adapted.kind = "trial-adapted".into();
+        let mut failed = trial(6, 199);
+        failed.status = "error".into();
+        let selected = summary(&[old, latest, tied, control, adapted, failed], now).unwrap();
+        assert_eq!(selected.trial_id, Uuid::from_u128(3));
+        assert_eq!(selected.text(), "regen 75.0% age 50s !");
+        let selected = summary(&[trial(9, 150), trial(8, 150)], now).unwrap();
+        assert_eq!(selected.trial_id, Uuid::from_u128(9));
+        assert!(summary(&[trial(1, 250)], now).is_none());
+    }
+
+    #[test]
+    fn regeneration_age_is_compact_and_future_cutoffs_select_only_completed_trials() {
+        for (seconds, expected) in [
+            (0, "0s"),
+            (59, "59s"),
+            (60, "1m"),
+            (12 * 60 + 5, "12m"),
+            (3 * 3600 + 40, "3h"),
+            (14 * 86400 + 23, "14d"),
+        ] {
+            assert_eq!(compact_age(seconds), expected);
+        }
+        let rows = [trial(1, 100), trial(2, 150), trial(3, 250)];
+        assert_eq!(
+            summary(&rows, DateTime::from_timestamp(120, 0).unwrap())
+                .unwrap()
+                .trial_id,
+            Uuid::from_u128(1)
+        );
+        assert_eq!(
+            summary(&rows, DateTime::from_timestamp(200, 0).unwrap())
+                .unwrap()
+                .trial_id,
+            Uuid::from_u128(2)
+        );
+        assert!(summary(&rows, DateTime::from_timestamp(99, 0).unwrap()).is_none());
+    }
+
+    // Both display paths use committed evidence and omit absent/corrupt data.
+    // trace:TASK-1734 | ai:codex
+    #[test]
+    fn regeneration_statusline_and_digest_cover_absent_flagged_and_invalid_records() {
+        use crate::digest::{DigestAudience, DigestFormat, DigestOptions};
+        let project = tempfile::tempdir().unwrap();
+        let git = |root: &Path, args: &[&str]| super::super::super::git(root, args).unwrap();
+        git(project.path(), &["init", "-b", "main"]);
+        git(project.path(), &["config", "user.name", "Test"]);
+        git(
+            project.path(),
+            &["config", "user.email", "test@example.com"],
+        );
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            "[deployment]\nmode='distributed'\nstore_path='.aida-store'\n",
+        )
+        .unwrap();
+        git(project.path(), &["add", "."]);
+        git(project.path(), &["commit", "-m", "project"]);
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir(&store).unwrap();
+        git(&store, &["init", "-b", "aida-store"]);
+        git(&store, &["config", "user.name", "Test"]);
+        git(&store, &["config", "user.email", "test@example.com"]);
+        git(&store, &["commit", "--allow-empty", "-m", "store"]);
+        let now = DateTime::from_timestamp(200, 0).unwrap();
+        let requirements = aida_core::RequirementsStore::default();
+        let check_surfaces = |expected: Option<&str>, clean: bool, flags: &[&str]| {
+            assert_eq!(
+                crate::statusline_cmd::regeneration_statusline_segment(project.path(), now)
+                    .as_deref(),
+                expected
+            );
+            for audience in [
+                DigestAudience::Customer,
+                DigestAudience::Team,
+                DigestAudience::Slf,
+                DigestAudience::Operator,
+            ] {
+                for format in [
+                    DigestFormat::Markdown,
+                    DigestFormat::Plain,
+                    DigestFormat::Brief,
+                    DigestFormat::Json,
+                ] {
+                    let opts = DigestOptions {
+                        since: DateTime::from_timestamp(0, 0).unwrap(),
+                        until: now,
+                        audience,
+                        format,
+                        include_next: false,
+                        include_process: false,
+                        out: None,
+                    };
+                    let out =
+                        crate::digest::render_string(&opts, project.path(), &requirements).unwrap();
+                    if format == DigestFormat::Json {
+                        let json: serde_json::Value = serde_json::from_str(&out).unwrap();
+                        if expected.is_some() {
+                            assert_eq!(json["regeneration"]["pass_rate"], 0.75);
+                            assert_eq!(json["regeneration"]["age_seconds"], 50);
+                            assert_eq!(json["regeneration"]["clean"], clean);
+                            assert_eq!(json["regeneration"]["flags"], json!(flags));
+                        } else {
+                            assert!(json.get("regeneration").is_none(), "{out}");
+                        }
+                    } else if let Some(text) = expected {
+                        assert!(out.contains(text), "{out}");
+                    } else {
+                        assert!(!out.contains("regen"), "{out}");
+                    }
+                }
+            }
+        };
+        check_surfaces(None, true, &[]);
+        std::fs::create_dir_all(store.join("regen/trials")).unwrap();
+        let path = store.join(format!("regen/trials/{}.json", Uuid::from_u128(1)));
+        for (clean, flags, text) in [
+            (false, vec![], "regen 75.0% age 50s !"),
+            (true, vec!["oracle_nonzero_exit"], "regen 75.0% age 50s !"),
+            (true, vec![], "regen 75.0% age 50s"),
+        ] {
+            let mut row = trial(1, 150);
+            row.clean = clean;
+            row.flags = flags.iter().map(|f| (*f).to_owned()).collect();
+            std::fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+            git(&store, &["add", "."]);
+            git(&store, &["commit", "-m", "scored trial"]);
+            std::fs::write(&path, "dirty invalid JSON").unwrap();
+            // Read surfaces normalize clean to false whenever any flag is present.
+            check_surfaces(Some(text), clean && flags.is_empty(), &flags);
+        }
+        git(&store, &["add", "."]);
+        git(&store, &["commit", "-m", "invalid committed record"]);
+        check_surfaces(None, true, &[]);
+        assert!(!project.path().join(".aida/cache.db").exists());
     }
 
     #[test]
