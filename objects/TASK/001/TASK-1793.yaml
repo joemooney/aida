@@ -3,13 +3,21 @@ spec_id: TASK-1793
 agreed_id: TASK-1793
 title: Launchers (aida agent new, relay) set AIDA_HARNESS_VERSION so write provenance records a real harness version
 description: 'Follow-up from the #2682 STORY-1674 review. The provenance ruling says AIDA_HARNESS_VERSION is set by the launcher (agent new, relay), but nothing in the tree sets it, so every harness_version is unknown. Set it from the vendor CLI version (e.g. ''claude --version'', ''codex --version'') at launch in agent_launch and relay.sh; test that a launched session''s write carries it. Optionally add an effort column to ledger v1.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-16T08:16:02.186958106Z
+modified_at: 2026-10-16T21:52:58.665544365Z
 req_type: Task
+history:
+- id: 01a146b4-3929-72b1-ad4a-786c535def20
+  author: aida-session-start
+  timestamp: 2026-10-16T21:52:58.665543753Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
