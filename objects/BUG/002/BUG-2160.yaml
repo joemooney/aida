@@ -11,8 +11,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T21:05:44.789566170Z
-modified_at: 2026-10-16T07:33:17.616962383Z
+modified_at: 2026-10-16T22:29:16.628345139Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+  created_at: 2026-10-16T22:29:16.628341157Z
+  created_by: joe
 comments:
 - id: 01a1429e-7989-7360-ba5a-9cb03d036f14
   author: joe
