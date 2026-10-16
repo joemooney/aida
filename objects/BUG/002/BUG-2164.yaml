@@ -1,0 +1,22 @@
+id: 01a1422d-e766-73b0-9a44-b931a34a594f
+spec_id: BUG-2164
+agreed_id: BUG-2164
+title: aida pr ship with no PR number on the default branch pushes main and tries 'gh pr create main->main' instead of refusing
+description: |-
+  Seen 2026-10-15 17:47: the operator ran 'aida pr ship' (omitting the number) in ~/ai/aida-host on main. It pushed main to origin ('Everything up-to-date'), ran the protocol check ('could not evaluate: on the default branch'), then failed with 'gh pr create failed: No commits between main and main'. No harm was done, but the message is confusing.
+  Acceptance: on the default branch with no PR argument, refuse BEFORE any push with 'aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)'. If there are open approved PRs, list them as suggestions. Add a test.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T00:47:47.046734591Z
+modified_at: 2026-10-16T00:47:47.046734591Z
+req_type: Bug
+filed_at:
+  code_sha: bf267ad5cba345faa0bd5ee2a301dc905b55300c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c419f6a5ef
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
