@@ -3,12 +3,12 @@ spec_id: BUG-2172
 agreed_id: BUG-2172
 title: 'Containment: nine more agent launch sites pass a literal contained=false; enforce at the spawn choke point'
 description: 'From the #2696 review (BUG-2171/2170 follow-up). These sites pass a literal contained=false to spawn helpers, which never consult the parent''s environment, so a contained parent can launch an uncontained child: questions.rs:1277 (research dispatch), questions.rs:1753 (remedy), plan_intent.rs:237 and :793, advisor_watch.rs:241 and :276, reconstitute.rs:935, harvest.rs:1225, phase_driver_trait.rs:3233. compete_cmd.rs:829 (judge) and :1011 (arms) hard-code containment_applied(_, false). Fix at the choke point: spawn_vendor_headless_with_seat_granted / compose_headless_command treat contained as contained || aida_contained_env()?, and the same for compete. Add a test that drives one real call site under AIDA_CONTAINED=1. Also from that review: refuse_uncontained_child_of_contained_parent is called with a hand-built config that always passes (burndown_run ~276, autopilot_intake ~784, questions ~1537); pass the real argv or remove the call. Factor the 4 duplicate refusal messages and the two identical resolve_*_posture fns into one session:: helper. burndown_run.rs:546 still prints ''BYPASSED permissions'' under a contained parent.'
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T21:29:04.729166298Z
+modified_at: 2026-10-16T22:24:06.524194289Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a146d0-b97c-7ba0-8140-e7d4b1d7567f
+  author: aida-orchestrator
+  timestamp: 2026-10-16T22:24:06.524228901Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: fc39d8f0bc76504a62b5733ebcc61ab9677f5121
   branch: main
@@ -102,7 +109,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STRICT r1: aida review reviewer path strips containment; compete contained posture lacks dontAsk; compete refuses after side effects'
+  detail: 'All six BUG-2172 acceptance items are implemented and their new tests pass, but PR CI Build/Run tests is red because of this PR: a pre-existing session test still expects the uncontained-control leg to strip an ambient AIDA_CONTAINED=1, and the new choke point now (correctly) forces containment.'
   recovery_hint: address the review findings, move BUG-2172 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-16T17:03:46.625456805Z
+  shelved_by: reviewer
+  shelved_at: 2026-10-16T22:24:06.524194289Z
