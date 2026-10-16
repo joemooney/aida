@@ -4,6 +4,8 @@
 
 // It is used to keep Rust and TypeScript types in sync.
 
+export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
+
 export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "Superseded" | "NeedsAttention";
 
 export type PuntCategory = "design-fork" | "ambiguous-spec" | "missing-context" | "blocked-dependency" | "other";
@@ -1157,6 +1159,11 @@ origin?: Origin | null,
  * existing stores round-trip unchanged. Optional, serde-default.
  */
 filed_at?: FilingProvenance | null, 
+/**
+ * Data-only constraint verification block. Validate only at the explicit
+ * verify command so malformed/unknown blocks remain loadable and reportable.
+ */
+verify?: JsonValue | null, 
 /**
  * Sticky pre-registration lock; tag, relationship and status edits never clear it.
  */
