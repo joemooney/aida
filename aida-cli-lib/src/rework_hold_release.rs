@@ -31,7 +31,8 @@ pub(crate) fn stamp_record_grant(root: &Path, obj: &mut Map<String, Value>) {
     }
 }
 
-fn sensitive(req: &aida_core::Requirement) -> Option<String> {
+// trace:STORY-1698 | ai:claude — shared with the mandate's excluded classes.
+pub(crate) fn sensitive(req: &aida_core::Requirement) -> Option<String> {
     use aida_core::ExecutionMode;
     if matches!(
         req.execution_mode,
