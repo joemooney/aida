@@ -192,17 +192,19 @@ fn missing_object_unpinned_revision_and_noncommit_refuse() {
 }
 
 #[test]
-fn source_symlinks_and_invalid_text_refuse_but_docs_are_not_source() {
+fn source_symlinks_and_invalid_text_refuse_and_all_text_paths_supply_evidence() {
     let r = Repo::new();
     r.put("README.md", "trace:TASK-999");
     let base = r.commit();
     r.put("notes.md", "trace:TASK-998");
     r.put("target/fake.rs", "// trace:TASK-997");
     let docs = r.commit();
-    assert!(collect(r.path(), &base, &docs, Scope::FullFile)
-        .unwrap()
-        .ids
-        .is_empty());
+    assert_eq!(
+        collect(r.path(), &base, &docs, Scope::FullFile)
+            .unwrap()
+            .ids,
+        ids(&["TASK-998", "TASK-997"])
+    );
     std::os::unix::fs::symlink("notes.md", r.path().join("a.rs")).unwrap();
     let link = r.commit();
     assert!(collect(r.path(), &docs, &link, Scope::FullFile).is_err());
@@ -310,4 +312,53 @@ fn unsupported_source_gitlink_cannot_be_hidden_by_host_diff_defaults() {
         err.to_string().contains("not an ordinary regular file"),
         "{err:#}"
     );
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn bare_cr_diff_lines_cannot_hide_guarded_trace() {
+    let r = Repo::new();
+    let source = concat!("// pad\r\r\r\r\r\r\r\r\n",
+        "// trace:SUP-1\nfn guarded() { let x = 1; }\n\n",
+        "// trace:OK-2\nfn benign() {\n let a = 0;\n let b = 0;\n let c = 0;\n let d = 0;\n let e = 0;\n}\n");
+    r.put("a.rs", source);
+    let base = r.commit();
+    r.put("a.rs", &source.replace("x = 1", "x = 2"));
+    let head = r.commit();
+    let evidence = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
+    assert!(evidence.ids.contains("SUP-1"), "{evidence:?}");
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn every_changed_text_path_and_case_insensitive_marker_is_scanned() {
+    let r = Repo::new();
+    let paths = [
+        "README.md",
+        "Cargo.toml",
+        "ci.yml",
+        "config.yaml",
+        "plugin.lua",
+        "api.proto",
+        "Makefile",
+        ".hooks/pre-commit",
+        "src/build/mod.rs",
+        "src/dist/mod.rs",
+        "src/target/mod.rs",
+        "src/.cache/mod.rs",
+        "src/venv/mod.rs",
+    ];
+    for (i, path) in paths.iter().enumerate() {
+        r.put(path, &format!("// TrAcE:SUP-{}\n", i + 1));
+    }
+    let base = r.commit();
+    for (i, path) in paths.iter().enumerate() {
+        r.put(path, &format!("// TRACE:NEW-{}\n", i + 1));
+    }
+    let head = r.commit();
+    let evidence = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
+    for i in 1..=paths.len() {
+        assert!(evidence.ids.contains(&format!("SUP-{i}")), "{evidence:?}");
+        assert!(evidence.ids.contains(&format!("NEW-{i}")), "{evidence:?}");
+    }
 }

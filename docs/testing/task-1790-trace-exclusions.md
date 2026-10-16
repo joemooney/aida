@@ -2,6 +2,13 @@
 
 <!-- trace:TASK-1790 | ai:codex -->
 
+The figures below describe the frozen collector delivered at `9386e30ebd`,
+using its then-current source allowlist. The subsequent STRICT rework removes
+that allowlist, scans all changed text paths and aligns diff lines with Rust
+spans. These historical figures are not a measurement of the revised collector.
+The advisor accepted the conservative fallback rate for this PR; the rework
+retains that fallback policy.
+
 For an ordinary mandate (without `--include-supervised`), the committed full-file
 collector adds refusals for **25 of 50 PRs (50%)**. Hunk/enclosing-item collection
 adds refusals for **24 of 50 (48%)**. The accepted >20% rule therefore selects
@@ -43,8 +50,9 @@ Full-file fallback occurs in 46 cases, across 191 case/path pairs. Other source
 languages use raw-token full-file fallback; Rust syntax/item attribution failures
 and hunks outside functions/impls also fall back. Consequently, fixtures or
 unrelated traces can still conservatively refuse coverage. This is evidence
-expansion, not complete ownership attribution. Unlisted languages and untraced
-code cannot identify unnamed specs.
+expansion, not complete ownership attribution. At that snapshot, unlisted languages and untraced code could not identify
+unnamed specs. The revised collector scans unlisted text formats too; untraced
+code still cannot identify unnamed specs.
 
 A fresh author checker compared the optimized collector with the reference:
 all 50 pinned cases matched IDs and fallback paths, and 1,813 adversarial

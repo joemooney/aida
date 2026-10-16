@@ -98,26 +98,19 @@ pub(crate) fn mandate_dir() -> Result<PathBuf> {
 /// `Err` says why not.
 // trace:STORY-1698 | ai:claude
 fn private_file_check(path: &Path) -> std::result::Result<(), String> {
-    let meta = std::fs::symlink_metadata(path).map_err(|e| format!("unreadable: {e}"))?;
-    if meta.file_type().is_symlink() {
-        return Err("is a symlink".into());
-    }
-    if !meta.file_type().is_file() {
-        return Err("is not a regular file".into());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let mode = meta.mode() & 0o777;
-        if mode != 0o600 {
-            return Err(format!("has mode {mode:o}, not 600"));
-        }
-        let uid = unsafe { libc::geteuid() } as u32;
-        if meta.uid() != uid {
-            return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
-        }
-    }
-    Ok(())
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                "is a symlink".to_owned()
+            } else {
+                format!("unreadable: {e}")
+            }
+        })?;
+    opened_private_file_check(&file)
 }
 
 /// Write `body` to `path` as a 0600 file, atomically (temp + rename).
@@ -460,11 +453,7 @@ pub(crate) fn read_exclusions(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
-    let meta = file
-        .metadata()
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    exclusion_metadata_check(&meta, unsafe { libc::geteuid() })
-        .map_err(|why| format!("{} {why}", path.display()))?;
+    opened_private_file_check(&file).map_err(|why| format!("{} {why}", path.display()))?;
     let mut text = String::new();
     file.read_to_string(&mut text)
         .map_err(|e| format!("{}: {e}", path.display()))?;
@@ -492,6 +481,12 @@ pub(crate) fn read_exclusions(
 }
 
 // trace:TASK-1790 | ai:codex
+fn opened_private_file_check(file: &std::fs::File) -> std::result::Result<(), String> {
+    let meta = file.metadata().map_err(|e| format!("unreadable: {e}"))?;
+    exclusion_metadata_check(&meta, unsafe { libc::geteuid() })
+}
+
+// trace:TASK-1790 | ai:codex
 fn exclusion_metadata_check(meta: &std::fs::Metadata, uid: u32) -> std::result::Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     if !meta.is_file() {
@@ -516,7 +511,8 @@ pub(crate) fn record_exclusions(
     now: DateTime<Utc>,
 ) -> Result<()> {
     use std::io::Write;
-    let existing = read_exclusions(dir).unwrap_or_default();
+    // A read failure may hide sticky exclusions. Never append through it.
+    let existing = read_exclusions(dir).map_err(anyhow::Error::msg)?;
     let mut lines = String::new();
     let mut added = std::collections::BTreeSet::new();
     for (spec, class, always_human) in seen {
@@ -545,9 +541,11 @@ pub(crate) fn record_exclusions(
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        opts.mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     let mut file = opts.open(dir.join(EXCLUSION_LEDGER))?;
+    opened_private_file_check(&file).map_err(anyhow::Error::msg)?;
     file.write_all(lines.as_bytes())?;
     Ok(())
 }

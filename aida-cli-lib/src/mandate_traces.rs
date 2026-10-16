@@ -140,9 +140,6 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         );
         let path = std::str::from_utf8(fields.next().context("missing raw diff path")?)
             .context("non-UTF8 changed path")?;
-        if !ordinary_source(path) {
-            continue;
-        }
         let mut sides = Vec::new();
         for (mode, id) in [(words[0], words[2]), (words[1], words[3])] {
             ensure!(oid(id), "invalid blob ID for {path}");
@@ -167,7 +164,11 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         }
         let old = sides[0].as_deref().unwrap_or("");
         let new = sides[1].as_deref().unwrap_or("");
-        let diff = similar::TextDiff::from_lines(old, new);
+        // syn spans and the comment map count LF lines; similar's default
+        // line tokenizer also splits bare CR, which can hide a guarded item.
+        let old_lines: Vec<_> = old.split_inclusive('\n').collect();
+        let new_lines: Vec<_> = new.split_inclusive('\n').collect();
+        let diff = similar::TextDiff::from_slices(&old_lines, &new_lines);
         for (index, text) in sides.iter().enumerate() {
             let Some(text) = text else { continue };
             let ranges: Vec<_> = diff
@@ -192,49 +193,6 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
     Ok(out)
 }
 
-/// Same source-language family as the existing trace scanner, without docs or
-/// data/config formats. Test sources are included. Generated/build/store trees
-/// are outside ordinary source scope. This is evidence expansion, not semantic
-/// ownership discovery: untraced code and unlisted languages cannot identify IDs.
-fn ordinary_source(path: &str) -> bool {
-    if path.split('/').any(|p| {
-        matches!(
-            p,
-            ".git"
-                | ".aida"
-                | ".aida-store"
-                | "target"
-                | "node_modules"
-                | "dist"
-                | "build"
-                | ".cache"
-                | ".venv"
-                | "venv"
-        )
-    }) {
-        return false;
-    }
-    matches!(
-        Path::new(path).extension().and_then(|s| s.to_str()),
-        Some(
-            "rs" | "py"
-                | "ts"
-                | "tsx"
-                | "js"
-                | "jsx"
-                | "go"
-                | "java"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "cs"
-                | "rb"
-                | "sh"
-        )
-    )
-}
-
 fn trace_ids(text: &str) -> BTreeSet<String> {
     // Strip criterion suffixes: exclusions belong to the owning spec, not ACs.
     // Multiple IDs in a trace run and the existing qualifier forms are retained.
@@ -244,7 +202,9 @@ fn trace_ids(text: &str) -> BTreeSet<String> {
             .expect("valid mandate trace ID regex")
     });
     let mut out = BTreeSet::new();
-    for run in text.split("trace:").skip(1) {
+    static MARKER: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let marker = MARKER.get_or_init(|| regex::Regex::new("(?i)trace:").unwrap());
+    for run in marker.split(text).skip(1) {
         for token in run.split(|c: char| c.is_whitespace() || c == ',') {
             if token.is_empty() {
                 continue;

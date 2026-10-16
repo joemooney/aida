@@ -1249,3 +1249,68 @@ fn additional_trace_spec_can_restrict_but_cannot_supply_ship_authority() {
     c.specs.push(spec("TASK-2"));
     assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
 }
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn named_union_trace_assembly_refuses_trace_only_supervised_spec() {
+    let mut c = Case::ok();
+    let named = vec!["TASK-1".to_owned()];
+    let traced = ["TASK-2".to_owned()].into_iter().collect();
+    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id| {
+        let mut value = spec(id);
+        if id == "TASK-2" {
+            value.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Guided);
+        }
+        value
+    });
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { spec, .. }) if spec == "TASK-2"));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_refuses_invalid_ledger_without_appending() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let seen = vec![("TASK-2".into(), "guided".into(), false)];
+    record_exclusions(tmp.path(), &seen, now()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    for mode in [0o644, 0o4600] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert!(private_file_check(&path).is_err());
+        assert!(record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now()
+        )
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::write(&path, b"malformed\n").unwrap();
+    assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), b"malformed\n");
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_fifo_refuses_within_deadline() {
+    use std::os::unix::ffi::OsStrExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let fifo = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let result = record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now(),
+        );
+        tx.send(result.is_err()).unwrap();
+    });
+    assert!(rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("FIFO writer blocked"));
+    worker.join().unwrap();
+}

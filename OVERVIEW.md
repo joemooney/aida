@@ -15,23 +15,25 @@ mandate ship; the event follows marker restoration and precedes label sync.
 Marker and label failures remain explicit.
 
 Mandate-only exclusion checks add trace IDs from both committed sides of changed
-ordinary source files, including deleted and renamed files. Source blobs come
+text files of every format, including deleted and renamed files. Source blobs come
 from pinned Git object IDs, never checkout contents. Rust comments are parsed
 separately from string fixtures. Changed hunks contribute their enclosing fn/impl
 traces; a hunk without safe item attribution, a mode-only change, an unparseable
-Rust file, or another supported source language falls back to full-file union.
-For other languages that fallback conservatively includes raw trace tokens,
-including strings. Ordinary source uses the existing trace scanner's language
-extensions, excluding documentation/data files and build/store directories.
-Files without traces and unlisted languages cannot identify unnamed specs.
+Rust file, or any other text format falls back to full-file union.
+For other formats that fallback conservatively includes raw trace tokens,
+including strings. Documentation, configuration, hooks and nested build paths
+are included. Trace markers are case insensitive. Diff ranges and Rust item
+maps both count LF lines, including when a file contains bare CR characters.
+Files without traces cannot identify unnamed specs.
 
 These IDs only add exclusions through the existing current/history/sticky-ledger
 classifier. Verdict candidates, author identity and completion credit still use
 named specs. An empty named subject stays unresolved even when traces exist.
 The forge head must match the checked head; a missing local origin base, ambiguous
-merge base, unreadable diff/blob/store, source symlink, invalid source text or
+merge base, unreadable diff/blob/store, changed symlink, invalid text or
 moving/dirty store refuses coverage. Retry after fetching missing evidence or
-finishing a store write. Store HEAD and ref tips are checked around collection;
+finishing a store write. A stale local origin base can exclude more specs by
+including older changes. Store HEAD and ref tips are checked around collection;
 the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
 
