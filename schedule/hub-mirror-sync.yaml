@@ -1,5 +1,5 @@
 job: hub-mirror-sync
-last_run: 2026-10-16T12:24:56.818718151Z
+last_run: 2026-10-16T13:34:26.805214775Z
 last_by:
   seat: substrate
   vendor: tick
@@ -46,4 +46,7 @@ failure_trips:
   status: 1
 - trip_id: hub-mirror-sync@2026-10-16T12:24:56.818718151Z
   at: 2026-10-16T12:24:56.818718151Z
+  status: 1
+- trip_id: hub-mirror-sync@2026-10-16T13:34:26.805214775Z
+  at: 2026-10-16T13:34:26.805214775Z
   status: 1
