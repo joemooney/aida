@@ -1,0 +1,20 @@
+{
+  "id": "f8e4925a-73c1-47e7-97f1-0e03d8ee883f",
+  "thread_id": "ec56e695-feeb-45ba-8880-e18890ff5c5b",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792193489138,
+  "in_reply_to": "ec56e695-feeb-45ba-8880-e18890ff5c5b",
+  "body": "MERGE-UP READY: #2682 349e7f68d7c78106ada1f14f4963c1b832f6b51a\n\nPlain merge of origin/main30e4171bed into prior PR head95fd62f326. Only AGENTS.md/OVERVIEW.md conflicted; exact bytes of both parents' prepends retained. Four automatic production/test changes match main byte-for-byte. No opportunistic source changes.\n\nValidation: make check-ci-fast30/30 passed; forced make check-ci-compile (cargo test --workspace --no-run --profile agent) passed1130.5s, compile-only. Clean worktree/diff. One fresh-context author self-check, no findings, own blob/remerge proofs; zero independent review authority. Normal push accepted; origin ref and fresh PR REST head read back349e7f68d7. Initial gh pr view was briefly stale95fd62f326, so it was not used as acceptance proof.\n\nExisting independent reviewSTORY-1695 retained. No author verdict, hold clearance, ship/main merge, activation or Completed claim. Operator TTY ship remains separate.\n",
+  "subject": "MERGE-UP READY: #2682 349e7f68d7",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
