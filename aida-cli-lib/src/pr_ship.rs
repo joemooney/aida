@@ -2174,6 +2174,62 @@ pub(crate) fn merge_gate_verdict_candidates(
     out
 }
 
+/// BUG-2164: An open PR with an APPROVED review decision.
+// trace:BUG-2164 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OpenApprovedPr {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+}
+
+/// BUG-2164: Parse open PRs with an APPROVED review decision from `gh pr list --json ...` stdout.
+// trace:BUG-2164 | ai:antigravity
+pub(crate) fn parse_open_approved_prs_json(json: &str) -> Vec<OpenApprovedPr> {
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(json) else {
+        return Vec::new();
+    };
+    let Some(arr) = val.as_array() else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter(|item| {
+            item.get("reviewDecision")
+                .and_then(|v| v.as_str())
+                .map(|s| s.eq_ignore_ascii_case("APPROVED"))
+                .unwrap_or(false)
+        })
+        .filter_map(|item| {
+            let number = item.get("number").and_then(|v| v.as_u64())?;
+            let title = item
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            Some(OpenApprovedPr { number, title })
+        })
+        .collect()
+}
+
+/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
+// trace:BUG-2164 | ai:antigravity
+pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+    if approved.is_empty() {
+        base.to_string()
+    } else {
+        let mut msg = format!("{base}\n\nOpen approved PRs:");
+        for pr in approved {
+            if pr.title.is_empty() {
+                msg.push_str(&format!("\n  PR-{}", pr.number));
+            } else {
+                msg.push_str(&format!("\n  PR-{} — {}", pr.number, pr.title));
+            }
+        }
+        msg
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // trace:TASK-1606 | ai:codex
@@ -2215,12 +2271,18 @@ mod tests {
     #[test]
     fn ship_release_site_gates_on_the_floor_before_clearing() {
         let src = include_str!("pr_cmd.rs");
+        // STORY-1698: the release step's gate is the last call site (the
+        // preflight's takes the authority the handler decided).
         let gate = src
-            .find("pr_ship::ship_hold_release_refusal_for(")
+            .rfind("pr_ship::ship_hold_release_refusal_for(")
             .expect("pr ship must gate the hold release");
+        // STORY-1698: the authority is the human floor, or an advisor an
+        // active fire-fighting mandate covers (re-read under the merge lease).
+        // trace:STORY-1698 | ai:claude
+        assert!(src.contains("let floor_authority = crate::has_integrity_floor_authority();"));
         let floor = src[gate..]
-            .find("crate::has_integrity_floor_authority()")
-            .expect("the gate must be fed the integrity-floor authority");
+            .find("floor_authority || mandate_release.is_some()")
+            .expect("the gate must be fed the integrity-floor (or mandate) authority");
         assert!(floor < 400, "authority must be the gate's own argument");
         let clear = src
             .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
@@ -2530,7 +2592,10 @@ mod tests {
             .expect("pr ship must consult the hold gate");
         let args = &src[gate..gate + 300];
         assert!(args.contains("read_hold_record(&main_worktree, pr_number)"));
-        assert!(args.contains("crate::has_integrity_floor_authority()"));
+        // STORY-1698: the human floor, or an active mandate's cover.
+        // trace:STORY-1698 | ai:claude
+        assert!(args.contains("floor_authority || mandate_cover.is_ok()"));
+        assert!(src.contains("let floor_authority = crate::has_integrity_floor_authority();"));
         assert!(!args.contains("drive_specs"));
         // Ship's single deadline now owns registration and settlement.
         // trace:TASK-1606 | ai:codex
