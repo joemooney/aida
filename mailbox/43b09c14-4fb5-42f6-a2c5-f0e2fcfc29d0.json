@@ -1,0 +1,19 @@
+{
+  "id": "43b09c14-4fb5-42f6-a2c5-f0e2fcfc29d0",
+  "thread_id": "43b09c14-4fb5-42f6-a2c5-f0e2fcfc29d0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792111460330,
+  "body": "#2667 (TASK-1733) squash-merged; main is now bf267ad5cb. The whole base stack (#2660, #2664, #2666, #2667) is on main. Rebase task-1734 (#2673), story-1676 (#2677), story-1679 (#2678) and story-1677 with 'git rebase --onto origin/main 26006258c8 <branch>' (or onto c333cec917 if you based on the audit-fix head; the extra commit only adds one generated audit row). Push with force-with-lease (full SHAs), retarget each PR to main, and mail range-diff proofs. #2677's approval carries if '='. #2673 still needs its round-2 review, and #2678 its STORY-1679 round-1 rework. Also mark #2684 (STORY-1675) review-ready per the option-B ruling.",
+  "subject": "BASE STACK MERGED: rebase your branches onto main @bf267ad5cb",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
