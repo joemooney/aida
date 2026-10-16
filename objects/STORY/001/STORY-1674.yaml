@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:25.357615988Z
-modified_at: 2026-10-15T20:08:48.720954843Z
+modified_at: 2026-10-16T04:37:19.213145855Z
 req_type: Story
 tags:
 - from:aida-host
@@ -144,6 +144,12 @@ comments:
   created_at: 2026-10-15T20:08:48.720954843Z
   modified_at: 2026-10-15T20:08:48.720954843Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14300-0ced-70a1-8c7a-886f08b31fa0
+  author: joe
+  content: 'Restacked onto main by advisor fixer: 03b132c107->34d75afa70; range-diff 3 ''='' + 1 ''!'' (c667b227c6: AGENTS.md top-of-file conflict with main''s TASK-1731..1733 paragraphs, resolved keeping both, STORY-1674 paragraph first; context-only diff); check-ci-fast 30/30 pass'
+  created_at: 2026-10-16T04:37:19.213145855Z
+  modified_at: 2026-10-16T04:37:19.213145855Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a130a2-dcb7-7752-8814-ade90d8e4777
   author: joe
