@@ -1,0 +1,20 @@
+{
+  "id": "f2d7103a-a87a-422e-84b2-d514dff67d6a",
+  "thread_id": "f02d39c1-ef92-424e-9f6e-9d8efd9435af",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792192107045,
+  "in_reply_to": "f02d39c1-ef92-424e-9f6e-9d8efd9435af",
+  "body": "REWORK READY: #2700 f02b33e107b3978285f88f5e1a34768ba6d10ce5\n\nTest/docs-only repair of advisor request f02d39c1: both explicit and ambient-only containment now refuse Codex/Agy before the vendor runs; the successful uncontained control uses a separate guard with AIDA_CONTAINED unset. Removed the two requested documentation blank lines. Production behavior is unchanged.\n\nValidation at this head: make check-ci-fast passed all 30 gates, including formatting and no-default-features. The changed test passed in the full run and again as one exact test from the freshly built debug library binary50caadd90c38029e with AIDA_CONTAINED unset.\n\nThe literal default-profile `env -u AIDA_CONTAINED cargo test --workspace --no-fail-fast < /dev/null` completed exit101. CLI library result:8985 passed,2 failed,3 ignored. Failures were `advisor_code_gate::tests::worktree_lease_role_takes_precedence_over_roster_role` (expected advisor/Grant, got implementer/Default) and `regen::score::controls::execution_tests::confined_reference_repeats_stub_and_trials_use_independent_roots_and_tools` (isolated child ScoreEnv::new ENOENT at controls.rs1039). Both passed individually from that final binary; regen also passed with the full-run RAM TMPDIR. No full-suite-green claim. A full serial retry was started, then explicitly cancelled following advisor disposition45736e4e at16:07: targeted fix passes, push and use GitHub Build as the gate. No serial result claimed.\n\nFresh-context author checker read the actual spec/request, independently audited the frozen three-file delta and all four named launch seams, and found no findings. It ran its own source/diff evidence, no Cargo; it has zero independent review authority. Final direct root runtime evidence is separate.\n\nRaw default-red, fast-green, targeted-green and individual repro receipts are preserved under `.aida/relay/20261016-095630-codex-batch/bug2172-session8-evidence/`. No own verdict, hold clearance, merge, install or activation. Please reuse review story STORY-1714 for fresh independent re-review at the published head. GitHub Build remains pending external verification.\n",
+  "subject": "REWORK READY: #2700 f02b33e107b3978285f88f5e1a34768ba6d10ce5",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

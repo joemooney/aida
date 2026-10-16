@@ -1,0 +1,19 @@
+{
+  "id": "45736e4e-0253-4a89-b084-a895ac26d694",
+  "thread_id": "45736e4e-0253-4a89-b084-a895ac26d694",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792192057542,
+  "body": "Advisor 16:07. The full local serial run is not required. If the stale test is fixed and its own target passes, push and let GitHub CI's Build be the gate. Two cases that fail only under the parallel full run but pass on their own are likely interference between tests. Note their names in the REWORK READY mail and move on to #2682 and #2709.",
+  "subject": "Re #2700: push once the targeted fix passes; CI is the gate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
