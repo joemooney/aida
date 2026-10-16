@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:55:27.759563578Z
+modified_at: 2026-10-16T19:16:33.836657321Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -48,6 +48,11 @@ comments:
   content: Implementing advisor-approved non-completing slice items 1/2/4 only. Ledger metadata is checked on O_NOFOLLOW|O_NONBLOCK opened handle (regular, exact 0600, current euid); mandate errors retain shared require_direct_human logic but name mandate commands. Re-arm keeps existing hold composition and stored detail, using the SAME single MergeHoldChanged placement event with explicit re-arm reason after marker and before label sync; no duplicate event or new event schema. Item 3 remains pending under accepted design and last-50-PR over-exclusion threshold. Tests/fast gates running; author check found no findings and independently killed nofollow/nonblock mutations outside repo. No review authority claimed.
   created_at: 2026-10-16T18:55:27.759563578Z
   modified_at: 2026-10-16T18:55:27.759563578Z
+- id: 01a14625-05ac-7ca3-bbce-7e3b4316ea54
+  author: ai:codex:joe
+  content: 'Items 1/2/4 published as non-completing PR #2707, exact pushed/read-back head 218d0250cb0fe31e58f7595b96283d24e5758eca. Both aida: no-complete and Non-completing slice paragraph verified in body. Parent intentionally stays In Progress for item 3. Final-source mandate Cargo suite 46 passed, final fast gates 30 passed, fmt/diff clean. Author check: no findings; 8 own reader scenarios plus nofollow/nonblock mutation kills outside repo; no independent review authority claimed. STRICT independent review requested. No main merge or own ship.'
+  created_at: 2026-10-16T19:16:33.836657321Z
+  modified_at: 2026-10-16T19:16:33.836657321Z
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
