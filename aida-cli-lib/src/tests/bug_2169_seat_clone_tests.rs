@@ -881,6 +881,11 @@ fn assert_host_git_refused(clone: &Path, fsmonitor: &Path, filter: &Path) {
         matches!(main_for(clone), MainFor::Unverified(_)),
         "a rewired .git must still be a seat clone and must not verify"
     );
+    assert_host_builders_refuse(clone, fsmonitor, filter);
+}
+
+/// Both host git builders refuse `dir`, and neither canary fires.
+fn assert_host_builders_refuse(clone: &Path, fsmonitor: &Path, filter: &Path) {
     let dirty = crate::status_sections::worktree_dirty_entries(clone);
     assert_eq!(dirty.len(), 1, "{dirty:?}");
     assert!(dirty[0].contains("private clone"), "{dirty:?}");
@@ -942,4 +947,111 @@ fn a_gitdir_file_is_still_refused() {
         .args(["add", "-A"])
         .output();
     assert!(filter.exists(), "control: the planted filter should fire");
+}
+
+/// Plain host git in `dir` with the planted filter: proves the layout is
+/// live, so the builders' refusal is what kept the canary quiet.
+fn control_filter_fires(dir: &Path, filter: &Path) {
+    let _ = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["add", "-A"])
+        .output();
+    assert!(
+        filter.exists(),
+        "control: the planted filter should fire in {}",
+        dir.display()
+    );
+}
+
+/// Round 3 (a): the seat deletes `.git` and lays its root out as the gitdir
+/// itself (`core.bare = false`, `core.worktree = <root>`).
+#[test]
+fn a_root_laid_out_as_a_gitdir_is_still_refused() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-flat");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    write_lease(&fx.main, &clone, "clone");
+    let (fsmonitor, filter) = (fx.root.join("fsmonitor-ran"), fx.root.join("filter-ran"));
+    plant_canaries(&clone, &fsmonitor, &filter);
+    for entry in std::fs::read_dir(clone.join(".git")).unwrap().flatten() {
+        std::fs::rename(entry.path(), clone.join(entry.file_name())).unwrap();
+    }
+    std::fs::remove_dir(clone.join(".git")).unwrap();
+    std::fs::remove_file(clone.join(MARKER_RELATIVE)).unwrap();
+    let config = clone.join("config");
+    for (key, value) in [
+        ("core.bare", "false"),
+        ("core.worktree", clone.to_str().unwrap()),
+    ] {
+        let ok = Command::new("git")
+            .args(["config", "--file"])
+            .arg(&config)
+            .args([key, value])
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok);
+    }
+
+    assert_host_git_refused(&clone, &fsmonitor, &filter);
+    control_filter_fires(&clone, &filter);
+}
+
+/// Round 3 (b): a nested `sub/.git` gitfile points at the clone's gitdir and
+/// host git runs from `sub`.
+#[test]
+fn a_nested_gitfile_inside_a_clone_is_still_refused() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-nested");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    write_lease(&fx.main, &clone, "clone");
+    let (fsmonitor, filter) = (fx.root.join("fsmonitor-ran"), fx.root.join("filter-ran"));
+    plant_canaries(&clone, &fsmonitor, &filter);
+    let sub = clone.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(
+        sub.join(".git"),
+        format!("gitdir: {}\n", clone.join(".git").display()),
+    )
+    .unwrap();
+    std::fs::write(sub.join(".gitattributes"), "* filter=evil\n").unwrap();
+    std::fs::write(sub.join("payload.txt"), "x\n").unwrap();
+
+    assert_eq!(seat_clone_root(&sub), Some(clone.clone()));
+    assert_host_builders_refuse(&sub, &fsmonitor, &filter);
+    control_filter_fires(&sub, &filter);
+}
+
+/// Round 3 (c): a clone under a name the prefix test misses and with its
+/// marker deleted is still caught by the host-side lease, and only by it.
+#[test]
+fn a_renamed_root_without_a_marker_is_caught_by_the_host_lease() {
+    let fx = fixture();
+    let made = fx.root.join("seats").join("aida-seat-aida-renamed");
+    create(&fx.main, &made, "feat", "origin/main").unwrap();
+    let (fsmonitor, filter) = (fx.root.join("fsmonitor-ran"), fx.root.join("filter-ran"));
+    plant_canaries(&made, &fsmonitor, &filter);
+    let renamed = fx.root.join("seats").join("renamed");
+    std::fs::rename(&made, &renamed).unwrap();
+    std::fs::remove_file(renamed.join(MARKER_RELATIVE)).unwrap();
+    let renamed = renamed.canonicalize().unwrap();
+    aida_core::seat_clone_detect::note_host_main(&fx.main);
+    assert_eq!(
+        seat_clone_root(&renamed),
+        None,
+        "without a lease nothing marks it"
+    );
+
+    write_lease(&fx.main, &renamed, "clone");
+
+    assert_eq!(seat_clone_root(&renamed), Some(renamed.clone()));
+    assert_eq!(
+        seat_clone_root(&renamed.join(".aida")),
+        Some(renamed.clone())
+    );
+    assert_host_git_refused(&renamed, &fsmonitor, &filter);
+    control_filter_fires(&renamed, &filter);
 }

@@ -42,26 +42,103 @@ fn is_real_dir(path: &Path) -> bool {
 // trace:BUG-2169 | ai:claude
 pub const CLONE_DIR_PREFIX: &str = "aida-seat-";
 
-/// The root of the seat clone `start` sits in: the nearest ancestor holding
-/// a `.git` entry of ANY type, when that directory is named `aida-seat-*` or
-/// a marker entry of any type exists in it. The `.git` entry's type is not
-/// consulted: a seat that turns its `.git` into a symlink or a `gitdir:` file
-/// is still a clone (and then fails verification). A marker the seat replaced
-/// with a FIFO or symlink still marks a clone; a deleted marker is caught by
-/// the name. `None` for a linked worktree, a main checkout or any other
-/// repository.
+/// Main checkouts this process has resolved on the host side. Their
+/// `.aida/sessions` leases are the host's own record of every seat clone, so
+/// a clone is recognised even after its seat renames or rewires everything
+/// inside it.
+static HOST_MAINS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Record `main` (a checkout with a real `.git` directory that is not itself a
+/// seat clone) as a host main whose clone leases [`seat_clone_root`] honours.
+// trace:BUG-2169 | ai:claude
+pub fn note_host_main(main: &Path) {
+    let Ok(main) = main.canonicalize() else {
+        return;
+    };
+    if !is_real_dir(&main.join(".git")) || clone_by_name_or_marker(&main).is_some() {
+        return;
+    }
+    if let Ok(mut mains) = HOST_MAINS.lock() {
+        if !mains.contains(&main) {
+            mains.push(main);
+        }
+    }
+}
+
+/// The recorded host mains plus the git root of this process's cwd.
+fn host_mains() -> Vec<PathBuf> {
+    let mut mains = HOST_MAINS.lock().map(|m| m.clone()).unwrap_or_default();
+    if let Ok(cwd) = std::env::current_dir().and_then(|c| c.canonicalize()) {
+        if let Some(root) = cwd
+            .ancestors()
+            .find(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())
+        {
+            if is_real_dir(&root.join(".git"))
+                && clone_by_name_or_marker(root).is_none()
+                && !mains.iter().any(|m| m == root)
+            {
+                mains.push(root.to_path_buf());
+            }
+        }
+    }
+    mains
+}
+
+/// The trees of `main`'s `clone` session leases, read from the host-side
+/// `<main>/.aida/sessions/*.toml` (never from a clone). FIFO-safe.
+// trace:BUG-2169 | ai:claude
+pub fn clone_lease_roots(main: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(main.join(".aida").join("sessions")) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
+        .filter_map(|p| read_regular_file(&p))
+        .filter_map(|body| toml::from_str::<toml::Value>(&body).ok())
+        .filter(|lease| lease.get("tree_kind").and_then(|v| v.as_str()) == Some("clone"))
+        .filter_map(|lease| lease.get("worktree_path")?.as_str().map(PathBuf::from))
+        .filter(|root| root.is_absolute() && root.parent().is_some())
+        .map(|root| root.canonicalize().unwrap_or(root))
+        .collect()
+}
+
+/// The nearest ancestor of `start` (itself included) named `aida-seat-*` or
+/// holding a marker entry of any type.
+fn clone_by_name_or_marker(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|dir| {
+            let named = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX));
+            named || std::fs::symlink_metadata(dir.join(MARKER_RELATIVE)).is_ok()
+        })
+        .map(Path::to_path_buf)
+}
+
+/// The seat clone `start` is inside, if any. A path counts when ANY ancestor
+/// of its canonical form, `start` included:
+///
+/// - is named `aida-seat-*`;
+/// - holds a marker entry of any type; or
+/// - is the tree of a `clone` lease in a host main's `.aida/sessions`.
+///
+/// Whether or what `.git` exists there is never consulted, so a seat that
+/// deletes, symlinks or rewires `.git`, lays its root out as a gitdir, nests
+/// a `sub/.git`, renames its root or deletes its marker is still a clone.
 // trace:BUG-2169 | ai:claude
 pub fn seat_clone_root(start: &Path) -> Option<PathBuf> {
     let start = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
-    let root = start
-        .ancestors()
-        .find(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())?;
-    let named = root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX));
-    let marked = std::fs::symlink_metadata(root.join(MARKER_RELATIVE)).is_ok();
-    (named || marked).then(|| root.to_path_buf())
+    if let Some(root) = clone_by_name_or_marker(&start) {
+        return Some(root);
+    }
+    host_mains()
+        .iter()
+        .flat_map(|main| clone_lease_roots(main))
+        .find(|root| start.starts_with(root))
 }
 
 /// Whether `clone_root`'s `.git` is a real directory, as the creator made

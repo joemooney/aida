@@ -746,7 +746,12 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
-                    return std::path::PathBuf::from(p);
+                    let main = std::path::PathBuf::from(p);
+                    // BUG-2169: its clone leases now mark seat clones for
+                    // every host git builder in this process.
+                    // trace:BUG-2169 | ai:claude
+                    aida_core::seat_clone_detect::note_host_main(&main);
+                    return main;
                 }
             }
         }

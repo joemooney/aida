@@ -525,6 +525,7 @@ fn test_session_show_displays_grant_ttl() {
     _env.set_key(crate::seat_authority::GRANT_ENV, grant_id.as_str());
 
     let lease = crate::leases::SessionLease {
+        tree_kind: Default::default(),
         id: "123456789012".to_string(),
         scope: "TASK-1787".to_string(),
         slug: "task-1787".to_string(),
