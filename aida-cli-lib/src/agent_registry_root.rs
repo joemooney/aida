@@ -193,6 +193,7 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
 }
 
 // trace:TASK-542 | ai:antigravity
+// trace:BUG-2148 | ai:antigravity
 pub(crate) fn agent_stop(name: &str) -> Result<()> {
     let name_trimmed = name.trim();
     if name_trimmed.is_empty() {
@@ -200,9 +201,17 @@ pub(crate) fn agent_stop(name: &str) -> Result<()> {
     }
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
-    let leases = list_leases(&project_root);
-    let agent_ctx = build_agent_classify_context(&project_root, &leases);
-    let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
+    agent_stop_in_project(&project_root, name_trimmed)
+}
+
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn agent_stop_in_project(
+    project_root: &std::path::Path,
+    name_trimmed: &str,
+) -> Result<()> {
+    let leases = list_leases(project_root);
+    let agent_ctx = build_agent_classify_context(project_root, &leases);
+    let registry_agents = agent_registry::list_agent_views(project_root, &agent_ctx);
 
     // BUG-1703: the registry is PID-keyed, so relaunching a name leaves SEVERAL entries under it.
     // Taking only the first match signalled a stale pid, reaped that entry, and printed success
@@ -226,20 +235,37 @@ pub(crate) fn agent_stop(name: &str) -> Result<()> {
         anyhow::bail!("no active agent found with name '{}'", name_trimmed);
     }
 
-    let all_pids: Vec<u32> = matches.iter().map(|a| a.pid).collect();
-    let alive = live_pids(&all_pids);
-
-    // AC4: an entry whose process is genuinely gone is reaped and reported as already gone —
-    // which is NOT the same as having stopped something.
-    for agent in matches.iter().filter(|a| !alive.contains(&a.pid)) {
-        println!(
-            "  pid {} was already gone — reaping its stale registry entry",
-            agent.pid
-        );
-        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+    // BUG-2148: Partition matches into:
+    // 1) genuinely gone from the OS -> reap stale entry.
+    // 2) alive in OS, but start-time identity is unconfirmed (recycled PID or unknown start) ->
+    //    do NOT signal (unknown => do not signal, report), and keep registry entry in place.
+    // 3) confirmed live matching process -> signal with grace.
+    let mut confirmed = Vec::new();
+    let mut unconfirmed = Vec::new();
+    for agent in &matches {
+        if !aida_core::liveness::pid_is_alive(agent.pid) {
+            println!(
+                "  pid {} was already gone — reaping its stale registry entry",
+                agent.pid
+            );
+            let _ = agent_registry::remove_agent(project_root, &agent.agent_type, agent.pid);
+        } else if agent.pid <= 1
+            || !agent.pid_start.as_deref().is_some_and(|start| {
+                aida_core::liveness::process_identity_matches_strict(agent.pid, start)
+            })
+        {
+            eprintln!(
+                "  pid {} was not signalled: its process identity could not be confirmed, \
+                 so it may be a different process.",
+                agent.pid
+            );
+            unconfirmed.push(agent);
+        } else {
+            confirmed.push(agent);
+        }
     }
 
-    if alive.is_empty() {
+    if confirmed.is_empty() && unconfirmed.is_empty() {
         println!(
             "{} Agent '{}' was already stopped; {} stale registry entr{} reaped.",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -250,42 +276,58 @@ pub(crate) fn agent_stop(name: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "Stopping agent '{}' (PID{} {})...",
-        name_trimmed,
-        if alive.len() == 1 { "" } else { "s" },
-        alive
+    if !confirmed.is_empty() {
+        println!(
+            "Stopping agent '{}' (PID{} {})...",
+            name_trimmed,
+            if confirmed.len() == 1 { "" } else { "s" },
+            confirmed
+                .iter()
+                .map(|a| a.pid.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let targets: Vec<status_sections::TerminateTarget> = confirmed
             .iter()
-            .map(u32::to_string)
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    let survivors = terminate_pids_with_grace(&alive, 5);
+            .map(|a| status_sections::TerminateTarget::new(a.pid, a.pid_start.clone()))
+            .collect();
+        let survivors = status_sections::terminate_pids_with_grace(&targets, 5);
 
-    for agent in matches
-        .iter()
-        .filter(|a| alive.contains(&a.pid) && !survivors.contains(&a.pid))
-    {
-        let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
+        for agent in confirmed.iter().filter(|a| !survivors.contains(&a.pid)) {
+            let _ = agent_registry::remove_agent(project_root, &agent.agent_type, agent.pid);
+        }
+
+        // AC1: never claim a stop that did not happen.
+        if !survivors.is_empty() {
+            anyhow::bail!(
+                "agent `{}` is STILL ALIVE after SIGTERM and SIGKILL: pid(s) {}. Its registry entries \
+                 were left in place. Check for a process that re-parents or respawns, and inspect the \
+                 tree with `ps -o pid,ppid,time,args -p {}`.",
+                name_trimmed,
+                survivors
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                survivors
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+        }
     }
 
-    // AC1: never claim a stop that did not happen.
-    if !survivors.is_empty() {
+    if !unconfirmed.is_empty() {
         anyhow::bail!(
-            "agent `{}` is STILL ALIVE after SIGTERM and SIGKILL: pid(s) {}. Its registry entries \
-             were left in place. Check for a process that re-parents or respawns, and inspect the \
-             tree with `ps -o pid,ppid,time,args -p {}`.",
+            "agent `{}` has live process(es) with unconfirmed identity: pid(s) {}. \
+             They were not signalled and their registry entries were left in place.",
             name_trimmed,
-            survivors
+            unconfirmed
                 .iter()
-                .map(u32::to_string)
+                .map(|a| a.pid.to_string())
                 .collect::<Vec<_>>()
-                .join(", "),
-            survivors
-                .iter()
-                .map(u32::to_string)
-                .collect::<Vec<_>>()
-                .join(",")
+                .join(", ")
         );
     }
 
@@ -293,10 +335,10 @@ pub(crate) fn agent_stop(name: &str) -> Result<()> {
         "{} Agent '{}' stopped (pid{} {}).",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         name_trimmed,
-        if alive.len() == 1 { "" } else { "s" },
-        alive
+        if confirmed.len() == 1 { "" } else { "s" },
+        confirmed
             .iter()
-            .map(u32::to_string)
+            .map(|a| a.pid.to_string())
             .collect::<Vec<_>>()
             .join(", ")
     );

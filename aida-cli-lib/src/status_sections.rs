@@ -1199,37 +1199,127 @@ pub(crate) fn live_pids(pids: &[u32]) -> Vec<u32> {
         .collect()
 }
 
+/// Target process for termination with recorded start time identity (BUG-2148).
+// trace:BUG-2148 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TerminateTarget {
+    pub(crate) pid: u32,
+    pub(crate) recorded_start_time: Option<String>,
+}
+
+impl TerminateTarget {
+    pub(crate) fn new(pid: u32, recorded_start_time: Option<String>) -> Self {
+        Self {
+            pid,
+            recorded_start_time,
+        }
+    }
+
+    pub(crate) fn from_live_process(pid: u32) -> Self {
+        Self {
+            pid,
+            recorded_start_time: aida_core::liveness::process_start_identity_exact(pid)
+                .or_else(|| aida_core::liveness::process_start_identity(pid)),
+        }
+    }
+}
+
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
 /// are still alive. trace:BUG-61 | ai:claude
 /// SIGTERM, wait, SIGKILL the survivors, then report who is STILL alive.
 ///
 /// BUG-1703: this used to return `()`, and `agent stop` printed success regardless. Callers must
 /// be able to tell a real stop from a signal that landed on nothing.
+///
+/// BUG-2148: signal only targets whose recorded start-time identity strictly matches
+/// the live process (`aida_core::liveness::process_identity_matches_strict`). A missing,
+/// unparsable, cross-scheme or mismatched identity is Unknown and is NEVER signalled:
+/// the pid may have been recycled onto an unrelated process.
 // trace:BUG-1703 | ai:claude
-pub(crate) fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) -> Vec<u32> {
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn terminate_pids_with_grace(targets: &[TerminateTarget], grace_secs: u64) -> Vec<u32> {
+    terminate_pids_with_grace_with(
+        targets,
+        grace_secs,
+        |pid, start| aida_core::liveness::process_identity_matches_strict(pid, start),
+        |pid, start| aida_core::liveness::process_identity_is_alive(pid, start),
+    )
+}
+
+/// BUG-2148: inner worker supporting injected identity matcher and survivor check.
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn terminate_pids_with_grace_with<F, S>(
+    targets: &[TerminateTarget],
+    grace_secs: u64,
+    mut matches_strict: F,
+    survivor_probe: S,
+) -> Vec<u32>
+where
+    F: FnMut(u32, &str) -> bool,
+    S: Fn(u32, Option<&str>) -> bool,
+{
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
     sys.refresh_processes_specifics(ProcessRefreshKind::new());
-    for &pid in pids {
-        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+    let mut confirmed_targets = Vec::new();
+    for target in targets {
+        if target.pid <= 1 {
+            continue;
+        }
+        let confirmed = target
+            .recorded_start_time
+            .as_deref()
+            .is_some_and(|start| matches_strict(target.pid, start));
+        if !confirmed {
+            if aida_core::liveness::pid_is_alive(target.pid) {
+                eprintln!(
+                    "  pid {} was not signalled: its process identity could not be confirmed, \
+                     so it may be a different process.",
+                    target.pid
+                );
+            }
+            continue;
+        }
+        confirmed_targets.push(target);
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(target.pid)) {
             let _ = p.kill_with(Signal::Term);
         }
     }
-    std::thread::sleep(std::time::Duration::from_secs(grace_secs));
+    if grace_secs > 0 {
+        std::thread::sleep(std::time::Duration::from_secs(grace_secs));
+    }
     sys.refresh_processes_specifics(ProcessRefreshKind::new());
-    for &pid in pids {
-        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+    for target in &confirmed_targets {
+        let confirmed = target
+            .recorded_start_time
+            .as_deref()
+            .is_some_and(|start| matches_strict(target.pid, start));
+        if !confirmed {
+            if aida_core::liveness::pid_is_alive(target.pid) {
+                eprintln!(
+                    "  pid {} was not signalled with SIGKILL: its process identity could not be confirmed, \
+                     so it may be a different process.",
+                    target.pid
+                );
+            }
+            continue;
+        }
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(target.pid)) {
             eprintln!(
                 "  pid {} still alive after SIGTERM — sending SIGKILL",
-                pid.to_string().yellow()
+                target.pid.to_string().yellow()
             );
             let _ = p.kill_with(Signal::Kill);
         }
     }
     // SIGKILL is not instantaneous; give the kernel a moment before judging.
     std::thread::sleep(std::time::Duration::from_millis(500));
-    live_pids(pids)
+    confirmed_targets
+        .into_iter()
+        .filter(|target| survivor_probe(target.pid, target.recorded_start_time.as_deref()))
+        .map(|t| t.pid)
+        .collect()
 }
 
 /// TASK-75: a status transition extracted from a commit's YAML diff,
@@ -1383,6 +1473,10 @@ mod bug_2133_contained_drain_children_tests;
 #[cfg(test)]
 #[path = "tests/bug_2144_2146_containment_refusal_tests.rs"]
 mod bug_2144_2146_containment_refusal_tests;
+// trace:BUG-2151 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2151_contained_parent_agent_new_tests.rs"]
+mod bug_2151_contained_parent_agent_new_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
@@ -1700,6 +1794,7 @@ pub(crate) fn lease_agent_view(
         id: format!("lease-{}", lease.id),
         agent_type: lease_agent_type(lease),
         pid: lease.creator_pid.unwrap_or(0),
+        pid_start: lease.creator_pid_start_time.clone(),
         name: None,
         description: None,
         tty: None,
@@ -3054,3 +3149,7 @@ mod task_490_status_in_progress_tests;
 #[cfg(test)]
 #[path = "tests/task_1750_liveness_primitive_guard_tests.rs"]
 mod task_1750_liveness_primitive_guard_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2148_liveness_kill_signal_tests.rs"]
+mod bug_2148_liveness_kill_signal_tests;

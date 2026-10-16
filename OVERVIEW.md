@@ -454,9 +454,122 @@ execution are recorded and forbid a clean result. Records include the trusted
 `oracle_sha`, `oracle_bundle_sha256`, `guard_bundle_sha256`, the env executable
 path and `survivors_detected` (older records default that count to zero). Trial timestamps support age
 reporting; per-check outcomes are retained for later controls and comparisons.
-Raw cleanliness describes execution conditions, not the pass rate or completed
-controls validation. Control gating is a subsequent slice.
+Raw cleanliness describes execution conditions, not the pass rate.
 <!-- trace:TASK-1730 | ai:codex -->
+
+Before ordinary scoring, generate controls with `aida regen score --control
+reference|stub --corpus <dir> --model <name> --vendor <name> --harness <name>`.
+The reference command exports the pinned trusted commit into a fresh directory
+per repeat. Trusted `[regen].reference_repeats` defaults to 3 and must be positive.
+Every repeat in the latest matching reference batch must be clean and pass 100%;
+an incomplete or failed new batch cannot borrow older successful repeats.
+The stub command starts empty, skips the project installer and generates no-op
+executables for `required_tools` in the private prefix, exposed through
+`AIDA_REGEN_PREFIX`. Oracles invoke these tools by locator; bare tool names
+reach immutable fallback guards on PATH. Ordinary trials receive no generated tools.
+
+Each trial copies the selected system's files into a fresh scoring root; installs
+cannot mutate the caller's directory or carry state between runs. Root git
+metadata is omitted. Special files and links to external, omitted or directory
+inputs refuse. A pre-run comparison asserts exactly the placed files, modes,
+links and directories, including empty directories. HOME/XDG/PREFIX are fresh too.
+`root_fresh` records this condition; it is execution evidence, not attestation
+against hostile code inside the existing writable scratch area.
+
+The gate reads committed controls with the same `oracle_sha`,
+`oracle_bundle_sha256`, corpus content hash and exact check-name set. Controls
+with errors, nonzero exits, dirty flags, guard hits, unconfined execution or
+missing fresh-root evidence refuse. Controls must also carry the current
+`guard_bundle_sha256` and env executable evidence with zero detected survivors;
+older executor records remain readable but cannot qualify. A trial with sandbox contamination refuses
+a reported score. An ordinary nonzero oracle exit with parsed checks retains its
+flagged discriminating score; a nonzero control exit invalidates the control.
+Raw R1 `aggregate` remains available in records; the separate
+`discriminating` aggregate excludes and lists stub-passing checks. An empty
+discriminating denominator refuses. Records retain the control IDs used, and
+reference batches retain their run ID and repeat identities. These are additive
+format-v1 fields; older records deserialize with absent evidence and cannot
+qualify as controls. A refused trial is stored as diagnostics without printing
+a score to stdout.
+<!-- trace:TASK-1731 | ai:codex -->
+
+
+Ordinary scoring optionally reads `GAPS.toml` from the private trial input
+snapshot before any execution. Missing input leaves raw R1 scoring unchanged;
+a present file must be a regular file with the strict shared v1 schema:
+
+```toml
+format_version = 1
+[environment]
+CONTRACT_ENDPOINT = "REGENERATED_ENDPOINT"
+
+[[gaps]]
+id = "renamed-endpoint"
+category = "interface"
+note = "The implementation uses a different environment name."
+```
+
+Unknown fields and unsupported versions refuse. Environment mappings are
+contract source name to regenerated target name; both must match
+`^[A-Z_][A-Z0-9_]{0,63}$`. This is a data-only environment adapter: there are
+no values, shell expressions, executable mappings or argument mappings in the
+file. Gap rows share this parser: IDs are unique `[a-z0-9-]{1,64}`, categories
+are `interface|missing|behavior|other`, and notes are optional plain text.
+
+`aida regen report` reads committed ordinary trial records from a pinned store
+commit, without a cache rebuild or rereading the caller's trial directory.
+The headline is the latest attempt's discriminating **R1 oracle pass rate** and
+age in seconds. An unsuccessful attempt reports unavailable rather than falling
+back to an older passing score. Status, clean state and flags remain visible.
+Controls and nested adapted runs are excluded from trial selection.
+
+Scoring stores a versioned `gaps` extension with the original GAPS.toml content
+SHA-256 and parsed rows (IDs and categories), captured from
+the private input before execution. Category counts are diagnostic information,
+never a quality score. Deltas compare the latest two ordinary trials with matching
+oracle SHA, oracle bundle hash and corpus hash; they are labelled diagnostics.
+Missing or invalid gap metadata displays “no gap data”, and no deltas are inferred
+from it. A valid GAPS.toml containing no gap rows explicitly records empty data.
+Older trial records without the extension remain readable. Invalid GAPS.toml
+input still refuses scoring before execution; reporting never reparses it from
+a mutable caller path. Optional notes are parsed as plain text but omitted from
+durable diagnostics. Gap IDs containing a captured mapping value refuse before
+execution, without printing the ID or value.
+<!-- trace:TASK-1733 | ai:codex -->
+
+Sources and targets cannot name PATH, HOME, SHELL, ENV, BASH_ENV, IFS, TMPDIR,
+PWD, OLDPWD, LANG, any oracle-owned variable, or a name starting with LD_,
+DYLD_, PYTHON, PERL, RUBY, NODE_, JAVA_, CLASSPATH, GIT_, XDG_, AIDA_ or LC_.
+Source names containing TOKEN, SECRET, PASSWORD or KEY (case-insensitive)
+refuse. A target that is another distinct source, or a target shared by two
+mappings, refuses with the conflicting mapping names. Self-maps are allowed
+and recorded as no-ops. The complete map is validated before any source is read. Only the
+explicitly named sources are captured from the caller, once. Missing values
+refuse with the mapping name; each value must be UTF-8, at most 4 KiB, and
+contain no NUL or newline. Values are copied verbatim without expansion.
+
+R1 receives captured sources in its oracle environment. R2 then starts a fresh
+private root and install from the same frozen input; its oracle receives those
+same sources plus target aliases. Installers receive the isolated base
+environment. Both runs use the exact same immutable oracle and independently
+pass the same controls. Different check-name sets refuse. A valid nonzero oracle
+exit retains its flagged scores in either run; installer and parser failures
+remain distinct. A passing R1 cannot conceal a refused or contaminated R2.
+
+Trial format v1 has an optional independently versioned `adapter` block:
+`format_version = 1`, `adapter_input_sha256` (hash of GAPS bytes only), sorted
+`mappings` with `source`, `target`, `source_present`, explicit `r1` raw and
+discriminating aggregates, full nested `r2` trial
+execution evidence, `raw_delta`, and `discriminating_delta`. Top-level
+checks, aggregates, flags and exits describe R1; status/cleanliness/completion
+time include both runs. Deltas are R2 minus R1 pass-rate fractions and are null
+unless both runs score with identical check identities. Captured values and
+their hashes are never stored. Child error diagnostics are withheld on mapped runs (status and exits remain);
+check identities containing captured values refuse with the output withheld.
+R2 setup failures are attached as `setup_failed` evidence with no fabricated
+exit, check, guard attestation or fresh-root claim. Older records
+remain readable with no adapter block.
+<!-- trace:TASK-1732 | ai:codex -->
 
 
 External wall displays and dashboards use a narrow, versioned read-only

@@ -12,9 +12,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-mod guards;
+mod adapter; // trace:TASK-1732 | ai:codex
+mod controls; // trace:TASK-1731 | ai:codex
+mod fresh; // trace:TASK-1731 | ai:codex
+mod guards; // trace:TASK-1730 | ai:codex
 mod oracle; // trace:TASK-1730 | ai:codex
-mod roots; // trace:TASK-1730 | ai:codex // trace:TASK-1730 | ai:codex
+pub(super) mod report; // trace:TASK-1733 | ai:codex
+mod roots; // trace:TASK-1730 | ai:codex
 use oracle::OracleBundle;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -22,9 +26,15 @@ use oracle::OracleBundle;
 struct RegenConfig {
     oracle_command: Vec<String>,
     oracle_paths: Vec<String>,
+    #[serde(default = "default_reference_repeats")]
+    reference_repeats: usize,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
+}
+
+fn default_reference_repeats() -> usize {
+    3
 }
 
 impl RegenConfig {
@@ -36,6 +46,10 @@ impl RegenConfig {
             .clone()
             .try_into()?;
         validate_argv(&config.oracle_command)?;
+        anyhow::ensure!(
+            config.reference_repeats >= 1,
+            "reference_repeats must be >= 1"
+        );
         anyhow::ensure!(
             !config.oracle_paths.is_empty(),
             "oracle_paths must not be empty"
@@ -113,7 +127,7 @@ pub(super) fn parse_checks(output: &str) -> Result<Vec<CheckOutcome>> {
         .collect())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct Aggregate {
     pub(super) passed: usize,
     pub(super) total: usize,
@@ -123,6 +137,35 @@ pub(super) struct Aggregate {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct TrialRecord {
     pub(super) format_version: u32,
+    // Diagnostic metadata is optional on older trials. Decode separately so an
+    // invalid diagnostic extension cannot hide an otherwise readable score.
+    // trace:TASK-1733 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) gaps: Option<serde_json::Value>,
+    // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
+    // trace:TASK-1732 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) adapter: Option<adapter::AdapterRecord>,
+    // Additive v1 extensions. Older records lack fresh-root/control evidence.
+    // trace:TASK-1731 | ai:codex
+    #[serde(default = "trial_kind")]
+    pub(super) kind: String,
+    #[serde(default)]
+    pub(super) root_fresh: bool,
+    #[serde(default)]
+    pub(super) control_run_id: Option<Uuid>,
+    #[serde(default)]
+    pub(super) control_repeat: Option<usize>,
+    #[serde(default)]
+    pub(super) control_repeats: Option<usize>,
+    #[serde(default)]
+    pub(super) stub_tools: Option<String>,
+    #[serde(default)]
+    pub(super) discriminating: Option<Aggregate>,
+    #[serde(default)]
+    pub(super) excluded_checks: Vec<String>,
+    #[serde(default)]
+    pub(super) control_ids: Vec<Uuid>,
     pub(super) trial_id: Uuid,
     pub(super) content_sha256: String,
     pub(super) store_sha: String,
@@ -151,7 +194,11 @@ pub(super) struct TrialRecord {
     pub(super) guard_bundle_sha256: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+fn trial_kind() -> String {
+    "trial".into()
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct Manifest {
     format_version: u32,
     store_sha: String,
@@ -201,6 +248,9 @@ struct ScoreEnv {
     path: std::ffi::OsString,
     bwrap: Option<PathBuf>,
     install_ran: std::cell::Cell<bool>,
+    // Explicitly captured interface inputs, supplied only to the oracle.
+    // trace:TASK-1732 | ai:codex
+    oracle_environment: BTreeMap<String, String>,
     #[cfg(test)]
     _guard_cache: tempfile::TempDir,
 }
@@ -268,6 +318,7 @@ impl ScoreEnv {
             path: Default::default(),
             bwrap,
             install_ran: std::cell::Cell::new(false),
+            oracle_environment: BTreeMap::new(),
             #[cfg(test)]
             _guard_cache: guard_cache,
         };
@@ -364,8 +415,11 @@ impl ScoreEnv {
             .env("LANG", "C.UTF-8");
         if bundle.is_none() {
             cmd.env("PREFIX", &self.prefix);
-        } else if self.install_ran.get() {
-            cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
+        } else {
+            cmd.envs(&self.oracle_environment);
+            if self.install_ran.get() {
+                cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
+            }
         }
         cmd.output()
             .with_context(|| format!("run regen command {}", argv[0]))
@@ -410,7 +464,7 @@ fn execute(
             .is_file()
             .then(|| vec!["./install.sh".into()])
     });
-    if let Some(installer) = installer {
+    if let Some(installer) = installer.filter(|_| record.kind != "control-stub") {
         env.install_ran.set(true);
         let install = match env.run(dir, &installer) {
             Ok(output) => output,
@@ -511,22 +565,22 @@ fn run_trial(
         OracleBundle::freeze_in_cache(repo.path(), sha, &config.oracle_paths, dir, cache.path())?;
     let env = ScoreEnv::new(&config, unconfined)?;
     run_trial_in_env(
-        &config, dir, manifest, model, vendor, harness, unconfined, env, &bundle,
+        &config, dir, manifest, model, vendor, harness, unconfined, env, &bundle, None,
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_trial_in_env(
-    config: &RegenConfig,
-    dir: &Path,
+// Empty evidence is also used when R2 cannot reach execution. No exits, checks,
+// guard attestation or fresh-root claim is borrowed from the completed R1.
+// trace:TASK-1732 | ai:codex
+fn initial_record(
     manifest: Manifest,
     model: &str,
     vendor: &str,
     harness: &str,
     unconfined: bool,
-    mut env: ScoreEnv,
     bundle: &OracleBundle,
-) -> Result<TrialRecord> {
+    guard_hash: Option<String>,
+) -> TrialRecord {
     let mut flags = Vec::new();
     if unconfined {
         flags.push("unconfined".into());
@@ -534,8 +588,19 @@ fn run_trial_in_env(
     if manifest.dirty {
         flags.push("dirty_corpus".into());
     }
-    let mut record = TrialRecord {
+    TrialRecord {
         format_version: 1,
+        gaps: None,
+        adapter: None,
+        kind: trial_kind(),
+        root_fresh: false,
+        control_run_id: None,
+        control_repeat: None,
+        control_repeats: None,
+        stub_tools: None,
+        discriminating: None,
+        excluded_checks: Vec::new(),
+        control_ids: Vec::new(),
         trial_id: Uuid::new_v4(),
         content_sha256: manifest.content_sha256,
         store_sha: manifest.store_sha,
@@ -557,9 +622,49 @@ fn run_trial_in_env(
         survivors_detected: 0,
         flags,
         error: None,
-        env_executable: Some("/usr/bin/env".into()),
-        guard_bundle_sha256: Some(env.guards.hash.clone()),
-    };
+        env_executable: guard_hash.as_ref().map(|_| "/usr/bin/env".into()),
+        guard_bundle_sha256: guard_hash,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_trial_in_env(
+    config: &RegenConfig,
+    dir: &Path,
+    manifest: Manifest,
+    model: &str,
+    vendor: &str,
+    harness: &str,
+    unconfined: bool,
+    mut env: ScoreEnv,
+    bundle: &OracleBundle,
+    setup: Option<controls::RunSetup>,
+) -> Result<TrialRecord> {
+    let mut record = initial_record(
+        manifest,
+        model,
+        vendor,
+        harness,
+        unconfined,
+        bundle,
+        Some(env.guards.hash.clone()),
+    );
+    if let Some(setup) = setup {
+        record.kind = setup.kind.into();
+        record.root_fresh = true;
+        record.control_run_id = setup.run_id;
+        record.control_repeat = setup.repeat;
+        record.control_repeats = setup.repeats;
+        if record.kind == "control-stub" {
+            record.stub_tools = Some("generated-noop".into());
+            env.install_ran.set(true);
+            for tool in &config.required_tools {
+                let path = env.prefix.join("bin").join(tool);
+                std::fs::write(&path, "#!/bin/sh\nexit 0\n")?;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
+            }
+        }
+    }
     // Stage before installation so every installed absolute path lives under
     // private /tmp, outside the helper's essential read mounts.
     let trial = env.run_root.join("trial");
@@ -575,6 +680,7 @@ fn run_trial_in_env(
             record.error = Some(format!("cannot collect guard evidence: {error}"));
         }
     }
+    adapter::sanitize_output(&mut record, &env.oracle_environment);
     finalize(&mut record);
     Ok(record)
 }
@@ -614,43 +720,120 @@ fn persist(store: &Path, record: &TrialRecord) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-1731 | ai:codex
 #[allow(clippy::too_many_arguments)]
 pub(super) fn handle_score(
     store: &Path,
-    dir: &Path,
+    dir: Option<&Path>,
+    control: Option<crate::cli::RegenControl>,
     corpus: &Path,
     model: &str,
     vendor: &str,
     harness: &str,
     unconfined: bool,
 ) -> Result<()> {
-    let project = crate::project_root_from_store_hint(store);
+    let project = crate::project_root_from_store_hint(store).canonicalize()?;
     let (config, oracle_sha) = load_config(&project)?;
     let manifest = read_manifest(corpus)?;
-    let environment = ScoreEnv::for_project(&config, unconfined, &project)?;
-    let dir = dir.canonicalize()?;
-    let bundle = OracleBundle::freeze(&project, oracle_sha, &config.oracle_paths, &dir)?;
-    environment.require_source_hidden(&dir, &project.canonicalize()?)?;
-    let record = run_trial_in_env(
-        &config,
-        &dir,
-        manifest,
-        model,
-        vendor,
-        harness,
-        unconfined,
-        environment,
-        &bundle,
-    )?;
-    persist(store, &record)?;
-    println!("{}", serde_json::to_string_pretty(&record)?);
+
     anyhow::ensure!(
-        record.status == "scored",
-        "trial {} recorded as {}: {}",
-        record.trial_id,
-        record.status,
-        record.error.as_deref().unwrap_or("scoring failed")
+        dir.is_some() != control.is_some(),
+        "provide a system directory or --control, exclusively"
     );
+    let repeats = if control == Some(crate::cli::RegenControl::Reference) {
+        config.reference_repeats
+    } else {
+        1
+    };
+    let run_id = Uuid::new_v4();
+    for repeat in 1..=repeats {
+        let root = match control {
+            Some(crate::cli::RegenControl::Reference) => {
+                fresh::FreshRoot::reference(&project, &oracle_sha)?
+            }
+            Some(crate::cli::RegenControl::Stub) => fresh::FreshRoot::empty()?,
+            None => fresh::FreshRoot::trial(dir.context("missing trial directory")?)?,
+        };
+        let bundle = OracleBundle::freeze(
+            &project,
+            oracle_sha.clone(),
+            &config.oracle_paths,
+            root.path(),
+        )?;
+        // Full validation precedes capture and all execution, including probes.
+        // Read from the private input snapshot once; neither install can change it.
+        let adapter = if control.is_none() {
+            adapter::CapturedAdapter::load(root.path())?
+        } else {
+            None
+        };
+        let mut env = ScoreEnv::for_project(&config, unconfined, &project)?;
+        if let Some(adapter) = &adapter {
+            env.oracle_environment = adapter.raw_environment();
+        }
+        let gate = if control.is_none() {
+            Some(controls::ControlGate::load(
+                store,
+                &bundle,
+                &manifest,
+                config.reference_repeats,
+                &env.guards.hash,
+            )?)
+        } else {
+            None
+        };
+        env.require_source_hidden(root.path(), &project)?;
+        root.assert_pristine()?;
+        let kind = match control {
+            Some(crate::cli::RegenControl::Reference) => "control-reference",
+            Some(crate::cli::RegenControl::Stub) => "control-stub",
+            None => "trial",
+        };
+        let mut record = run_trial_in_env(
+            &config,
+            root.path(),
+            manifest.clone(),
+            model,
+            vendor,
+            harness,
+            unconfined,
+            env,
+            &bundle,
+            Some(controls::RunSetup {
+                kind,
+                run_id: control.map(|_| run_id),
+                repeat: control.map(|_| repeat),
+                repeats: control.map(|_| repeats),
+            }),
+        )?;
+        adapter::apply_gate(&mut record, gate.as_ref());
+        if let Some(adapter) = adapter {
+            // Capture from the same private, pre-execution input as the adapter.
+            // Never reread a caller path after installation/scoring.
+            // trace:TASK-1733 | ai:codex
+            record.gaps = Some(adapter.gap_snapshot()?);
+            adapter::run_adapted(
+                &mut record,
+                adapter,
+                &root,
+                &config,
+                manifest.clone(),
+                &project,
+                &bundle,
+                gate.as_ref(),
+            )?;
+        }
+        persist(store, &record)?;
+        // A refused trial is durable diagnostic evidence, never a reported score.
+        anyhow::ensure!(
+            record.status == "scored",
+            "trial {} recorded as {}: {}",
+            record.trial_id,
+            record.status,
+            record.error.as_deref().unwrap_or("scoring failed")
+        );
+        println!("{}", serde_json::to_string_pretty(&record)?);
+    }
     Ok(())
 }
 
@@ -664,6 +847,7 @@ mod tests {
         RegenConfig {
             oracle_command: oracle.iter().map(|s| (*s).into()).collect(),
             oracle_paths: vec!["oracle.sh".into()],
+            reference_repeats: 3,
             install_command: None,
             required_tools: vec!["regen-fixture-tool".into()],
         }

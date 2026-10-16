@@ -1921,7 +1921,8 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
         write: Option<String>,
 
-        /// Print the seat's latest handoff note (the seed for a fresh session).
+        /// Print the seat's standing orders (if any), then its latest handoff
+        /// note (the seed for a fresh session).
         // trace:STORY-1464 | ai:claude
         #[clap(long, conflicts_with = "check")]
         show: bool,
@@ -1931,6 +1932,20 @@ pub enum SessionCommand {
         // trace:STORY-1464 | ai:claude
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
+
+        /// Manage the seat's repo-local standing orders
+        /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
+        /// entry, `list` prints them. `--show` prints standing orders before
+        /// the handoff.
+        // trace:STORY-1693 | ai:claude
+        #[clap(
+            long,
+            value_names = ["ACTION", "TEXT"],
+            num_args = 1..=2,
+            allow_hyphen_values = true,
+            conflicts_with_all = ["check", "write", "show"]
+        )]
+        standing_orders: Option<Vec<String>>,
     },
 
     /// Single-occupancy seats: see who drives the orchestrator loop, claim
@@ -15050,6 +15065,30 @@ mod tests {
         Cli::command().debug_assert();
     }
 
+    // trace:STORY-1693 | ai:claude
+    #[test]
+    fn session_handoff_standing_orders_parses_add_and_list() {
+        let so = |args: &[&str]| -> Option<Vec<String>> {
+            let cli = Cli::try_parse_from(args).unwrap();
+            match cli.command {
+                Command::Session(SessionCommand::Handoff {
+                    standing_orders, ..
+                }) => standing_orders,
+                _ => panic!("expected session handoff"),
+            }
+        };
+        let base = ["aida", "session", "handoff", "--seat", "advisor"];
+        let add = [&base[..], &["--standing-orders", "add", "-never page"]].concat();
+        assert_eq!(
+            so(&add),
+            Some(vec!["add".to_string(), "-never page".to_string()])
+        );
+        let list = [&base[..], &["--standing-orders", "list"]].concat();
+        assert_eq!(so(&list), Some(vec!["list".to_string()]));
+        let both = [&base[..], &["--show", "--standing-orders", "list"]].concat();
+        assert!(Cli::try_parse_from(both).is_err());
+    }
+
     #[test]
     fn digest_parses_without_format_collision() {
         // Previously panicked at parse. Bare invocation + the renamed flag.
@@ -16760,15 +16799,31 @@ mod seat_help_tests {
     }
 }
 
+/// Generated control kinds; callers cannot label arbitrary roots as controls.
+// trace:TASK-1731 | ai:codex
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegenControl {
+    Reference,
+    Stub,
+}
+
 /// Versioned regeneration artifacts.
 // trace:TASK-1729 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegenCommand {
+    /// Report the latest discriminating oracle score and diagnostic gap trends
+    // trace:TASK-1733 | ai:codex
+    Report,
+
     /// Run the declared installer and oracle, then record a raw R1 trial
     // trace:TASK-1730 | ai:codex
     Score {
-        /// Regenerated system directory (commands run relative to this root)
-        dir: PathBuf,
+        /// Regenerated system directory; copied into a fresh scoring root
+        #[clap(required_unless_present = "control", conflicts_with = "control")]
+        dir: Option<PathBuf>,
+        /// Run generated controls instead of a caller-supplied system
+        #[clap(long, value_enum)]
+        control: Option<RegenControl>,
         /// Corpus directory containing corpus.json and manifest.json
         #[clap(long)]
         corpus: PathBuf,

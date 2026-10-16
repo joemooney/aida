@@ -344,9 +344,17 @@ wait → red → re-trigger. The floor:
 
 1. `make check-ci-fast` before EVERY push, actually run, no
    exceptions.
-2. New or changed tests run locally, targeted, before the first push:
-   `cargo test -p <crate> <filter>` is cheap once anything has built
-   (the agent compile profile exists for exactly this).
+2. New or changed tests run locally, targeted, before the first push,
+   by the spec's testing tier. The full workspace suite runs only in CI;
+   never run `cargo test --workspace` locally.
+   - FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
+   - STANDARD: `make test-touched` (targeted `cargo test --profile agent
+     -p <crate> <filter>` for the touched modules) plus
+     `make check-ci-compile`.
+   - STRICT or heft >= 7: STANDARD plus the area's integration test
+     binaries (`cargo test --profile agent -p <crate> --test <name>`).
+   Use `--profile agent`: a fresh worktree's target is seeded from the
+   main checkout's warm agent-profile build. trace:TASK-1780 | ai:claude
 3. A red CI run is EVIDENCE TO READ, not a dice roll to re-throw.
    Re-triggering without a changed hypothesis and a local reproduction
    attempt is the named anti-pattern — runners are a shared queue, and

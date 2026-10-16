@@ -861,6 +861,20 @@ pub(crate) fn collect_session_handoff_facts(project_root: &std::path::Path) -> S
     }
 }
 
+/// The seat a handoff verb acts on: `--seat`, else `$AIDA_SESSION_ROLE`.
+fn resolve_handoff_seat(seat: Option<&str>) -> Result<String> {
+    match seat {
+        Some(s) => Ok(s.to_string()),
+        None => std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| canonical_role_name(&s))
+            .ok_or_else(|| {
+                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
+            }),
+    }
+}
+
 /// STORY-1464: write or show a seat handoff note (the rotation primitive).
 // trace:STORY-1464 | ai:claude
 pub(crate) fn session_handoff_seat(
@@ -868,16 +882,7 @@ pub(crate) fn session_handoff_seat(
     _show: bool,
     seat: Option<&str>,
 ) -> Result<()> {
-    let seat = match seat {
-        Some(s) => s.to_string(),
-        None => std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| canonical_role_name(&s))
-            .ok_or_else(|| {
-                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
-            })?,
-    };
+    let seat = resolve_handoff_seat(seat)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
     if let Some(src) = write {
         let body = if src == "-" {
@@ -898,11 +903,47 @@ pub(crate) fn session_handoff_seat(
         println!("Next session: aida session handoff --seat {seat} --show");
         return Ok(());
     }
-    match seat_rotation::read_latest_handoff(&project_root, &seat)? {
-        Some(text) => print!("{text}"),
-        None => println!("No handoff recorded for seat '{seat}'."),
-    }
+    // trace:STORY-1693 | ai:claude
+    let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
+    let handoff = seat_rotation::read_latest_handoff(&project_root, &seat)?;
+    print!(
+        "{}",
+        seat_rotation::compose_handoff_show(standing.as_deref(), handoff.as_deref(), &seat)
+    );
     Ok(())
+}
+
+/// STORY-1693: `aida session handoff --seat <seat> --standing-orders add
+/// "<text>" | list` — the repo-local operator rulings `--show` prints first.
+// trace:STORY-1693 | ai:claude
+pub(crate) fn session_handoff_standing_orders(args: &[String], seat: Option<&str>) -> Result<()> {
+    let seat = resolve_handoff_seat(seat)?;
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    match args {
+        [action, text] if action == "add" => {
+            let path =
+                seat_rotation::add_standing_order(&project_root, &seat, text, chrono::Utc::now())?;
+            println!("Standing order added for seat '{seat}': {}", path.display());
+            println!("Shown first by: aida session handoff --seat {seat} --show");
+            Ok(())
+        }
+        [action] if action == "list" => {
+            let entries = seat_rotation::list_standing_orders(&project_root, &seat)?;
+            if entries.is_empty() {
+                println!("No repo-local standing orders for seat '{seat}'.");
+            }
+            for entry in entries {
+                println!("{entry}");
+            }
+            Ok(())
+        }
+        [action] if action == "add" => {
+            anyhow::bail!(
+                "--standing-orders add needs the order text: --standing-orders add \"<text>\""
+            )
+        }
+        _ => anyhow::bail!("--standing-orders takes `add \"<text>\"` or `list`"),
+    }
 }
 
 pub(crate) fn session_handoff_check(_check: bool) -> Result<()> {

@@ -4,9 +4,9 @@ use super::*;
 use std::collections::BTreeMap;
 use std::os::unix::fs::symlink;
 
-struct Entry {
-    mode: String,
-    bytes: Vec<u8>,
+pub(super) struct Entry {
+    pub(super) mode: String,
+    pub(super) bytes: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ fn relative(value: &str) -> Result<PathBuf> {
         .collect())
 }
 
-fn hash(entries: &BTreeMap<String, Entry>) -> String {
+pub(super) fn hash(entries: &BTreeMap<String, Entry>) -> String {
     let mut digest = Sha256::new();
     for (path, entry) in entries {
         // Length framing prevents path/content ambiguity; mode authenticates
@@ -50,7 +50,11 @@ fn hash(entries: &BTreeMap<String, Entry>) -> String {
     format!("{:x}", digest.finalize())
 }
 
-fn frozen_entries(project: &Path, sha: &str, paths: &[String]) -> Result<BTreeMap<String, Entry>> {
+pub(super) fn frozen_entries(
+    project: &Path,
+    sha: &str,
+    paths: &[String],
+) -> Result<BTreeMap<String, Entry>> {
     anyhow::ensure!(!paths.is_empty(), "oracle_paths must not be empty");
     let allowed: Vec<_> = paths.iter().map(|p| relative(p)).collect::<Result<_>>()?;
     // Enumerate the pinned tree, not pathspecs (which interpret glob syntax).
@@ -92,9 +96,15 @@ fn frozen_entries(project: &Path, sha: &str, paths: &[String]) -> Result<BTreeMa
         matched.iter().all(|m| *m),
         "oracle_paths contains a missing or empty input"
     );
+    validate_links(&entries)?;
+    Ok(entries)
+}
+
+// trace:TASK-1731 | ai:codex
+pub(super) fn validate_links(entries: &BTreeMap<String, Entry>) -> Result<()> {
     // Validate links lexically before writing anything. A link must resolve to
     // another included file, never to the host, trial, or an omitted input.
-    for (name, entry) in &entries {
+    for (name, entry) in entries {
         if entry.mode != "120000" {
             continue;
         }
@@ -139,10 +149,14 @@ fn frozen_entries(project: &Path, sha: &str, paths: &[String]) -> Result<BTreeMa
             );
         }
     }
-    Ok(entries)
+    Ok(())
 }
 
-fn disk_entries(root: &Path, dir: &Path, entries: &mut BTreeMap<String, Entry>) -> Result<()> {
+pub(super) fn disk_entries(
+    root: &Path,
+    dir: &Path,
+    entries: &mut BTreeMap<String, Entry>,
+) -> Result<()> {
     for child in std::fs::read_dir(dir)? {
         let child = child?;
         let path = child.path();
@@ -372,23 +386,7 @@ impl OracleBundle {
                 .join(format!(".staging-{}", Uuid::new_v4()));
             std::fs::DirBuilder::new().mode(0o700).create(&staging)?;
             let result = (|| -> Result<()> {
-                for (name, entry) in &entries {
-                    let path = staging.join(name);
-                    std::fs::create_dir_all(path.parent().unwrap())?;
-                    if entry.mode == "120000" {
-                        symlink(std::str::from_utf8(&entry.bytes)?, &path)?;
-                    } else {
-                        std::fs::write(&path, &entry.bytes)?;
-                        std::fs::set_permissions(
-                            &path,
-                            std::fs::Permissions::from_mode(if entry.mode == "100755" {
-                                0o755
-                            } else {
-                                0o644
-                            }),
-                        )?;
-                    }
-                }
+                write_entries(&staging, &entries)?;
                 match std::fs::rename(&staging, &root) {
                     Ok(()) => Ok(()),
                     Err(_) if root.try_exists()? => Ok(()), // concurrent publisher; verify below
@@ -520,6 +518,7 @@ mod tests {
         let cfg = RegenConfig {
             oracle_command: vec!["./tests/oracle.sh".into()],
             oracle_paths: vec!["tests/".into()],
+            reference_repeats: 3,
             install_command: None,
             required_tools: vec![],
         };
@@ -538,6 +537,7 @@ mod tests {
             !confined,
             env,
             &bundle,
+            None,
         )
         .unwrap();
         assert_eq!(record.status, "scored", "{:?}", record.error);
@@ -697,6 +697,7 @@ mod tests {
         let cfg = RegenConfig {
             oracle_command: vec!["tests/oracle.sh".into()],
             oracle_paths: vec!["tests".into()],
+            reference_repeats: 3,
             install_command: None,
             required_tools: vec![],
         };
@@ -722,4 +723,22 @@ mod tests {
         );
         bundle.verify().unwrap();
     }
+}
+
+// trace:TASK-1731 | ai:codex
+pub(super) fn write_entries(root: &Path, entries: &BTreeMap<String, Entry>) -> Result<()> {
+    for (name, entry) in entries {
+        let path = root.join(name);
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        if entry.mode == "120000" {
+            symlink(std::str::from_utf8(&entry.bytes)?, &path)?;
+        } else {
+            std::fs::write(&path, &entry.bytes)?;
+            std::fs::set_permissions(
+                &path,
+                std::fs::Permissions::from_mode(if entry.mode == "100755" { 0o755 } else { 0o644 }),
+            )?;
+        }
+    }
+    Ok(())
 }

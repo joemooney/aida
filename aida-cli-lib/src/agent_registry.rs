@@ -159,6 +159,11 @@ pub(crate) struct AgentRegistryView {
     pub(crate) id: String,
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
+    /// Kernel start time of `pid`, so a recycled pid does not read as the
+    /// live agent or receive a signal (BUG-2148).
+    // trace:BUG-2148 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_start: Option<String>,
     pub(crate) name: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) tty: Option<String>,
@@ -1656,6 +1661,7 @@ fn view_for(
         id: entry.id,
         agent_type: entry.agent_type,
         pid: entry.pid,
+        pid_start: entry.pid_start,
         name: entry.name,
         description: entry.description,
         tty: entry.tty,
@@ -3345,6 +3351,7 @@ mod tests {
             id: "codex-42".to_string(),
             agent_type: "codex".to_string(),
             pid: 42,
+            pid_start: None,
             name: None,
             description: None,
             tty: None,
@@ -3396,6 +3403,7 @@ mod tests {
             id: "codex-42".to_string(),
             agent_type: "codex".to_string(),
             pid: 42,
+            pid_start: None,
             name: None,
             description: None,
             tty: None,
@@ -3613,6 +3621,7 @@ source = "mcp"
             id: "codex-42".to_string(),
             agent_type: "codex".to_string(),
             pid: 42,
+            pid_start: None,
             name: None,
             description: None,
             tty: None,

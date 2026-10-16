@@ -196,8 +196,8 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
         "STORY-742",
         None,
         None,
-        None,  // no existing lease
-        false, // not a registered worktree
+        None,       // no existing lease
+        |_p| false, // not a linked worktree
         |path, branch| {
             // The mint gets the epic-style path/branch the queue-work setup
             // would fork off origin/main.
@@ -232,7 +232,7 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
             "019f768atest".to_string(),
             true,
         )),
-        false,
+        |_p| true, // the lease path is a live linked worktree
         |_p, _b| panic!("mint must NOT run when a lease already exists"),
     )
     .expect("re-enter succeeds");
@@ -430,8 +430,8 @@ fn spec_worktree_core_registered_without_lease_reaffirms() {
         "TASK-100",
         None,
         None,
-        None, // no lease
-        true, // but already a registered git worktree
+        None,      // no lease
+        |_p| true, // but already a registered git worktree
         |_p, _b| panic!("mint must NOT run for an already-registered worktree"),
     )
     .expect("registered re-affirm succeeds");
@@ -456,7 +456,7 @@ fn spec_worktree_core_honors_path_and_branch_overrides() {
         Some(custom.to_str().unwrap()),
         Some("my-spec-branch"),
         None,
-        false,
+        |_p| false,
         |path, branch| {
             assert_eq!(path, custom.as_path());
             assert_eq!(branch, "my-spec-branch");
@@ -468,4 +468,183 @@ fn spec_worktree_core_honors_path_and_branch_overrides() {
     assert_eq!(out.path, custom);
     assert_eq!(out.branch, "my-spec-branch");
     assert_eq!(out.focus, "STORY-742");
+}
+
+/// BUG-2143: an existing lease with NO worktree (an `aida claim` lease) is not
+/// re-entered — the fresh mint runs and its real path is reported — and a mint
+/// that reports an empty path is an error, never a blank success.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn spec_worktree_core_ignores_worktreeless_lease_and_rejects_empty_path() {
+    let home = tempfile::tempdir().unwrap();
+    let minted = std::cell::Cell::new(false);
+    let out = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        Some((
+            std::path::PathBuf::new(),
+            "main".to_string(),
+            "01a13f58claim".to_string(),
+            false,
+        )),
+        |p| is_linked_worktree("", p, home.path()),
+        |path, branch| {
+            minted.set(true);
+            Ok((path.to_path_buf(), branch.to_string()))
+        },
+    )
+    .expect("a claim lease must not block creating the worktree");
+    assert!(
+        minted.get(),
+        "the worktree must be minted, not the claim re-entered"
+    );
+    assert!(out.created);
+    assert_eq!(
+        out.path,
+        crate::worktree::default_worktree_path(home.path(), "BUG-2143")
+    );
+
+    let Err(err) = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        None,
+        |_p| false,
+        |_p, _b| Ok((std::path::PathBuf::new(), String::new())),
+    ) else {
+        panic!("an empty minted path is never success");
+    };
+    assert!(err.to_string().contains("no path"), "{err}");
+
+    let missing = home.path().join("nope");
+    assert!(ensure_worktree_on_disk(&missing, "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(std::path::Path::new(""), "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(std::path::Path::new("  "), "BUG-2143").is_err());
+    // A bare dir holding only the focus marker's `.aida` is NOT a worktree —
+    // the after-the-fact `is_dir` check this replaces always read as good.
+    let bare = home.path().join("bare");
+    std::fs::create_dir_all(bare.join(".aida")).unwrap();
+    assert!(ensure_worktree_on_disk(&bare, "BUG-2143").is_err());
+    std::fs::write(bare.join(".git"), "gitdir: /x\n").unwrap();
+    assert!(ensure_worktree_on_disk(&bare, "BUG-2143").is_ok());
+}
+
+/// BUG-2143 end-to-end through the core with the PRODUCTION worktree check: a
+/// lease whose worktree directory was deleted by hand (git still lists it as
+/// prunable) is not re-entered — the check runs BEFORE the focus marker, so no
+/// bare `<path>/.aida` dir is left behind as "success" — and a fresh worktree
+/// is minted at the default path instead.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn spec_worktree_core_mints_fresh_when_lease_tree_was_deleted() {
+    let repo = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    init_main_repo(repo.path());
+    let path = crate::worktree::default_worktree_path(home.path(), "BUG-2143");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "bug-2143-work",
+            path.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_dir_all(&path).unwrap(); // deleted by hand
+    let porcelain = worktree_porcelain(repo.path());
+    assert!(
+        crate::worktree::is_registered(&porcelain, &path),
+        "git still lists the deleted tree (prunable) — the trap"
+    );
+
+    let minted = std::cell::Cell::new(false);
+    let out = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        Some((
+            path.clone(),
+            "bug-2143-work".to_string(),
+            "staleleaseid".to_string(),
+            false,
+        )),
+        |p| is_linked_worktree(&porcelain, p, repo.path()),
+        |p, branch| {
+            assert!(!p.exists(), "no bare dir may be created before the mint");
+            minted.set(true);
+            git(repo.path(), &["worktree", "prune"]);
+            git(
+                repo.path(),
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    p.to_str().unwrap(),
+                    "bug-2143-work",
+                ],
+            );
+            Ok((p.to_path_buf(), branch.to_string()))
+        },
+    )
+    .expect("a deleted lease tree must be re-minted, not reported");
+    assert!(minted.get(), "the stale lease must not be re-entered");
+    assert!(out.created);
+    assert_eq!(out.lease_id, None, "the stale lease id is not reported");
+    assert!(
+        path.join(".git").exists(),
+        "a real worktree, not a bare dir"
+    );
+    ensure_worktree_on_disk(&out.path, &out.focus).expect("on-disk guard agrees");
+}
+
+/// BUG-2143: the linked-worktree probe the re-entry relies on rejects every
+/// informational path an advisory claim can record.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn is_linked_worktree_rejects_blank_main_root_missing_and_bare_paths() {
+    let repo = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    init_main_repo(repo.path());
+    let wt = home.path().join("aida-bug-2143");
+    git(
+        repo.path(),
+        &["worktree", "add", "-q", "-b", "w", wt.to_str().unwrap()],
+    );
+    let porcelain = worktree_porcelain(repo.path());
+    let main = repo.path();
+    assert!(is_linked_worktree(&porcelain, &wt, main));
+    assert!(!is_linked_worktree(
+        &porcelain,
+        std::path::Path::new(""),
+        main
+    ));
+    assert!(!is_linked_worktree(
+        &porcelain,
+        std::path::Path::new("   "),
+        main
+    ));
+    assert!(
+        !is_linked_worktree(&porcelain, main, main),
+        "the primary checkout"
+    );
+    assert!(
+        !is_linked_worktree(&porcelain, &home.path().join("aida-bug-x"), main),
+        "a path that does not exist"
+    );
+    let bare = home.path().join("bare");
+    std::fs::create_dir_all(bare.join(".aida")).unwrap();
+    assert!(
+        !is_linked_worktree(&porcelain, &bare, main),
+        "a non-git dir"
+    );
 }

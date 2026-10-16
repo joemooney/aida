@@ -1278,7 +1278,8 @@ pub(crate) fn session_start(
     // Genuine create failures (worktree add, fetch, bad arg) stay non-zero.
     // Mirrors the BUG-573 contract (a completing read-only op exits 0).
     // trace:BUG-574 | ai:claude
-    let existing_leases = list_leases(&project_root);
+    // BUG-2143: only a lease holding a live linked worktree is re-entered.
+    let existing_leases = crate::worktree_gc::reenterable_leases(&project_root);
     if let Some(existing) = existing_lease_for_scope(&existing_leases, owns) {
         {
             eprintln!(
@@ -1422,7 +1423,12 @@ pub(crate) fn session_start(
     //   - DEAD/stale claims → ignored (a crashed agent can't lock its spec).
     // trace:BUG-637 | ai:claude
     if !force_claim_effective && !is_review_session {
-        let leases = list_leases(&project_root);
+        // BUG-2143: the caller's OWN `aida claim` never blocks its own pickup —
+        // `aida claim <spec>` then `aida worktree add <spec>` from one shell
+        // is the documented fixer flow.
+        // trace:BUG-2143 | ai:claude
+        let my_pid = creator_shell_pid();
+        let leases = crate::claim::without_own_claims(list_leases(&project_root), owns, my_pid);
         if !leases.is_empty() {
             let self_lease = std::env::current_dir()
                 .ok()

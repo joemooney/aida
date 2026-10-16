@@ -1178,8 +1178,8 @@ pub(crate) fn session_end(
     // trace:BUG-61 | ai:claude
     // BUG-734: worktree-less lease ⇒ no process-leak check — nothing to
     // remove, so nothing can leak. trace:BUG-734 | ai:claude
-    let leaked = if has_worktree {
-        probe_live_claudes_in_worktree(&target.worktree_path)
+    let leaked: Vec<(process_probe::LiveSession, Option<String>)> = if has_worktree {
+        collect_leaked_claude_targets(probe_live_claudes_in_worktree(&target.worktree_path))
     } else {
         Vec::new()
     };
@@ -1191,7 +1191,7 @@ pub(crate) fn session_end(
                 if leaked.len() == 1 { "" } else { "es" },
                 target.worktree_path.display()
             );
-            for p in &leaked {
+            for (p, _) in &leaked {
                 msg.push_str(&format!("\n  pid {} cwd {}", p.pid, p.cwd.display()));
             }
             msg.push_str(
@@ -1392,13 +1392,15 @@ pub(crate) fn session_end(
     // BUG-61 under --include-in-use: terminate live claudes in the tree only
     // now, once the confirmation and the dirty gate have both passed.
     // trace:BUG-1986 | ai:claude
+    // trace:BUG-2148 | ai:antigravity
     if !leaked.is_empty() {
         eprintln!(
             "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
             "→".dimmed(),
             leaked.len()
         );
-        let _ = terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+        let targets = leaked_to_terminate_targets(&leaked);
+        let _ = status_sections::terminate_pids_with_grace(&targets, 5);
     }
 
     // BUG-1986: the last holder check before the tree is removed or reset.
@@ -2149,6 +2151,46 @@ pub(crate) fn without_own_claim(
         .iter()
         .filter(|l| Some(l.id.as_str()) != own_claim_id)
         .cloned()
+        .collect()
+}
+
+/// Capture start-time identity for leaked claude sessions in a dying worktree (BUG-2148).
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn collect_leaked_claude_targets(
+    leaked_sessions: Vec<process_probe::LiveSession>,
+) -> Vec<(process_probe::LiveSession, Option<String>)> {
+    collect_leaked_claude_targets_with(leaked_sessions, |pid| {
+        aida_core::liveness::process_start_identity_exact(pid)
+            .or_else(|| aida_core::liveness::process_start_identity(pid))
+    })
+}
+
+/// Inner worker for test injection of start-time identity lookup (BUG-2148).
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn collect_leaked_claude_targets_with<F>(
+    leaked_sessions: Vec<process_probe::LiveSession>,
+    mut start_identity: F,
+) -> Vec<(process_probe::LiveSession, Option<String>)>
+where
+    F: FnMut(u32) -> Option<String>,
+{
+    leaked_sessions
+        .into_iter()
+        .map(|s| {
+            let start = start_identity(s.pid);
+            (s, start)
+        })
+        .collect()
+}
+
+/// Convert leaked session pairs into termination targets (BUG-2148).
+// trace:BUG-2148 | ai:antigravity
+pub(crate) fn leaked_to_terminate_targets(
+    leaked: &[(process_probe::LiveSession, Option<String>)],
+) -> Vec<status_sections::TerminateTarget> {
+    leaked
+        .iter()
+        .map(|(p, start)| status_sections::TerminateTarget::new(p.pid, start.clone()))
         .collect()
 }
 
