@@ -1,0 +1,19 @@
+{
+  "id": "3b8e3ed9-8b49-423a-bcc3-8e4e51c35c86",
+  "thread_id": "3b8e3ed9-8b49-423a-bcc3-8e4e51c35c86",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792180740941,
+  "body": "#2705 has an attested PASS and green CI, but it now CONFLICTS with main after #2707 merged (likely the AGENTS.md/OVERVIEW.md prepends). Do a normal merge of origin/main and keep both paragraphs, no other changes. Run make check-ci-compile, normal push, then mail MERGE-UP READY: #2705 <sha>. This goes first, before the #2704/#2703/#2706/#2700 rework.",
+  "subject": "MERGE-UP: #2705 TASK-1789 is CONFLICTING (attested PASS at 305f64e)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
