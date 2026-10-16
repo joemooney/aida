@@ -10892,6 +10892,20 @@ pub(crate) fn honour_auto_complete_sandbox(
     sandbox: bool,
     permission_mode: Option<&str>,
 ) -> Result<()> {
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    let contained_env = session::aida_contained_env()?;
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
     if !sandbox {
         return Ok(());
     }
@@ -10918,6 +10932,84 @@ pub(crate) fn apply_queue_work_contained_env(contained: bool) {
 // trace:BUG-2010 | ai:antigravity
 pub(crate) fn queue_work_self_claim(no_launch: bool) -> bool {
     no_launch
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueWorkPosture {
+    pub(crate) contained: bool,
+    pub(crate) permission_mode: Option<String>,
+    pub(crate) permission_mode_origin: &'static str,
+}
+
+// BUG-2166: monotonic containment — a contained parent's env always wins
+// (BUG-2151 ruling). `--plan-only` must not disable containment, and
+// `--permission-mode` must be refused under a contained parent.
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn resolve_queue_work_posture(
+    permission_mode: Option<&str>,
+    sandbox: bool,
+    contained_env: bool,
+    contained_knob: bool,
+    bypass_knob: bool,
+    plan_only: bool,
+    env_mode: Option<&str>,
+    config_mode: Option<&str>,
+) -> Result<QueueWorkPosture> {
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained = sandbox || contained_env || contained_knob;
+    if contained && bypass_knob {
+        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
+    }
+    let (permission_mode, permission_mode_origin) = if contained {
+        (Some("dontAsk".to_string()), "contained sandbox")
+    } else {
+        resolve_queue_work_permission_mode(
+            permission_mode,
+            env_mode,
+            config_mode,
+            bypass_knob,
+            plan_only,
+        )
+    };
+    Ok(QueueWorkPosture {
+        contained,
+        permission_mode,
+        permission_mode_origin,
+    })
+}
+
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn build_queue_work_claude_command(
+    posture: &QueueWorkPosture,
+    name: Option<&str>,
+    prompt: &str,
+    session_id: &str,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> std::process::Command {
+    session::build_claude_exec_command(
+        posture.permission_mode.as_deref(),
+        name,
+        Some(prompt),
+        Some(session_id),
+        posture.contained,
+        model,
+        grant_id,
+    )
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -11179,17 +11271,34 @@ pub(crate) fn handle_queue_work(
         .unwrap_or(false);
     // trace:BUG-2146 | ai:claude
     let contained_env = session::aida_contained_env()?;
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--plan-only` must not disable containment, and
+    // `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained = sandbox || contained_env || contained_knob;
     // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
     // on a vendor that cannot apply it is refused HERE — before the queue_add
     // row, the calibration/effort tags, any lease or worktree — rather than
     // silently running uncontained. `contained` below uses the same inputs.
     // trace:BUG-2144 | ai:claude
+    // trace:BUG-2166 | ai:antigravity
     if !no_launch && !list_sessions {
-        session::require_vendor_containment(
-            launch_vendor,
-            !plan_only && (sandbox || contained_env || contained_knob),
-            "queue-work session",
-        )?;
+        session::require_vendor_containment(launch_vendor, contained, "queue-work session")?;
     }
     let model_root = project_root_for_config
         .clone()
@@ -11368,15 +11477,17 @@ pub(crate) fn handle_queue_work(
         .as_deref()
         .map(|r| load_agents_bypass(r).unwrap_or(false))
         .unwrap_or(false);
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    let contained = !plan_only && (sandbox || contained_env || contained_knob);
-    if contained && bypass_knob {
-        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
-    }
+    let posture = resolve_queue_work_posture(
+        permission_mode,
+        sandbox,
+        contained_env,
+        contained_knob,
+        bypass_knob,
+        plan_only,
+        env_mode.as_deref(),
+        config_mode.as_deref(),
+    )?;
+    let contained = posture.contained;
     // trace:BUG-2131 | ai:claude
     if contained {
         aida_core::git_ops::ensure_git_supports_contained()?;
@@ -11384,20 +11495,14 @@ pub(crate) fn handle_queue_work(
     apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;
-    let (mut permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
-    } else {
-        resolve_queue_work_permission_mode(
-            permission_mode,
-            env_mode.as_deref(),
-            config_mode.as_deref(),
-            bypass_knob,
-            plan_only,
-        )
-    };
+    let (mut permission_mode, permission_mode_origin) =
+        (posture.permission_mode, posture.permission_mode_origin);
     // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
     // orchestrated children already passed dispatch authority and must not hang.
-    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+    // BUG-2166: `--plan-only` must not skip the bypass consent prompt if an
+    // uncontained interactive session resolves to bypassPermissions.
+    // trace:BUG-2166 | ai:antigravity
+    if !no_human && permission_mode.as_deref() == Some("bypassPermissions") {
         let orchestrated = project_root_for_config
             .as_deref()
             .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
