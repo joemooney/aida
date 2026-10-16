@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-15T21:47:49.816396704Z
+modified_at: 2026-10-16T04:37:14.720371372Z
 req_type: Story
 tags:
 - from:aida-host
@@ -92,6 +92,12 @@ comments:
   created_at: 2026-10-15T21:47:49.816396704Z
   modified_at: 2026-10-15T21:47:49.816396704Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a142ff-fb60-7bd2-9259-50bd3124f96b
+  author: joe
+  content: 'Restacked onto main by advisor fixer: 8d11d2e35e->9b3a92d83b; range-diff 3/3 ''='' (dropped squash-merged base 55bca00b11); no conflicts; check-ci-fast 30/30 pass; PR #2678 base -> main'
+  created_at: 2026-10-16T04:37:14.720371372Z
+  modified_at: 2026-10-16T04:37:14.720371372Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a1309d-557b-7ef1-80c3-670432a31198
   author: joe
