@@ -1,0 +1,19 @@
+{
+  "id": "993c8af0-d72b-45e9-8ffa-35353f9c8e75",
+  "thread_id": "993c8af0-d72b-45e9-8ffa-35353f9c8e75",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792125488022,
+  "body": "All 7 codex PRs are restacked onto main 463b81d027 (range-diffs '=', or an AGENTS.md-context '!'; check-ci-fast 30/30; the old session's restack fixer did NOT claim the specs, so you or anyone independent can review). #2677 STORY-1676: re-approved by the old session, shipping now. YOUR LANES:\n(a) STANDARD reviews: #2679 STORY-1677 (base still codex/task-1734, so retarget to main after #2673 merges), #2682 STORY-1674 (STRICT: write-path schema), #2683 STORY-1673 (STRICT: security, operator merges per the ruling; under ADR-77 the mandate covers it), #2684 STORY-1675.\n(b) #2673 TASK-1734 round-2 delta review.\n(c) #2678 STORY-1679 round-1 rework (float compare plus dedup; verdict on record): dispatch a fixer.\nNote: #2682/#2683/#2684 each add a paragraph at the top of AGENTS.md, so each later merge needs a tiny rebase.",
+  "subject": "RESULT: codex restack DONE; #2677 re-approved and shipping; 5 codex PRs need review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "3de622ce-0c89-4d97-bf75-634ba0595a08",
+  "thread_id": "3de622ce-0c89-4d97-bf75-634ba0595a08",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792125163898,
+  "body": "BUG-1918 refuses approvals from the session that claimed or implemented the work, and the old session's Agent-tool fixers share its session identity (lease 01a14243aa45 etc.). So the OLD session cannot approve: #2685 (BUG-2163), #2686 (BUG-2160/2161), #2687 (STORY-1698), #2688 (BUG-2139), #2689 (BUG-2157/2158), STORY-1699 and TASK-1787. YOU (an independent session) must record those verdicts.\nReady to record now: #2686 is APPROVED by an independent reviewer (round 2 at 850f91d797; base-only main merge 9c7ba29c81 with an empty remerge-diff; the reviewer report says the survivor skip requires PPid plus exe dev/ino, fails closed, and the CLONE_PARENT test bites). Record: aida review record BUG-2160 --pr 2686 --sha $(gh pr view 2686 --json headRefOid -q .headRefOid) --branch bug-2160-2161-deflake --verdict approved --summary '...'. Then 'aida merge-hold auto-release 2686', then ship.\n#2687 (mandate): the adversarial review found B1-B5. The rulings are in the old session's message to the fixer: validate on load, 0600, monotonic stop, honest trust-boundary docs, B2 accepted risk, B3 exclusion ledger, B4 refuse a missing marker plus re-arm on all errors, B5 Decide always human; CI audit-doc regen. The fixer is working; you re-review.",
+  "subject": "IMPORTANT for the new advisor: you must record approvals for PRs the old session's fixers built",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "b9120cad-35bd-400f-b6a5-9ee74e2d07a6",
+  "thread_id": "b9120cad-35bd-400f-b6a5-9ee74e2d07a6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792127043311,
+  "body": "The operator stopped the old session's STORY-1699 digest implementer at 22:03 while it was writing the hook script. Its WIP is UNCOMMITTED in /home/joe/ai/aida-story-1699 (branch feat/story-1699-fleet-digest, base 463b81d027, 13 changed files). Salvage it (review the diff, commit as WIP) or restart, at your judgment. The scope is STORY-1699 acceptance 1-7 (comments include the operator's builds.jsonl last-activity and harness-worktree rendering). Separate lane, still running in the old session: the heartbeat quick win in /home/joe/ai/aida-story1699 (branch story-1699-heartbeat). Don't touch it until its RESULT arrives.",
+  "subject": "RESULT STORY-1699 digest: agent stopped by operator mid-work; uncommitted WIP, now YOUR lane",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

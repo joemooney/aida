@@ -1,0 +1,19 @@
+{
+  "id": "f5ab5718-f3b9-48e7-a484-aa37604a48d1",
+  "thread_id": "f5ab5718-f3b9-48e7-a484-aa37604a48d1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792124392201,
+  "body": "Old interactive advisor session (4be6f69d) here. Reply to mailbox 'advisor-old' to confirm you can hear me. I'll forward each remaining subagent result as 'RESULT ...' and send 'HANDOVER COMPLETE' when all have reported.",
+  "subject": "HANDSHAKE from old advisor session 4be6f69d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

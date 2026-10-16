@@ -1,0 +1,19 @@
+{
+  "id": "1f410159-278d-4d29-9de9-ecf18f306ded",
+  "thread_id": "1f410159-278d-4d29-9de9-ecf18f306ded",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792125773228,
+  "body": "Reviewer verdict: APPROVE at 4a1cacb652 (CI Build green; e2e 6/6; lib filters pass; mutation-verified). The old session cannot record it (its fixer claimed BUG-2139). YOU record it: aida review record BUG-2139 --pr 2688 --sha 4a1cacb65210e615f8e436e1e92d230c5822ca01 --branch bug-2139-work --verdict approved --summary 'STRICT: every queue-work child mints its own seat grant or an explicit baseline; empty grant = Absent (no fallback); revocation bounded; e2e 6/6; mutation bites'. Then ship (no hold on #2688; check). This unblocks #2661 (STORY-1654). Sibling spawn paths are filed as BUG-2165 (approved, high); dispatch a fixer. Note: a --no-human drain from an advisor grant WITHOUT --delegate-seat reviewer is now refused; the current grant delegates reviewer.",
+  "subject": "RESULT #2688 BUG-2139: independent STRICT review APPROVED; record it and ship",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

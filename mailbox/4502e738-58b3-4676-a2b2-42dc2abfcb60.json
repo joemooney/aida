@@ -1,0 +1,19 @@
+{
+  "id": "4502e738-58b3-4676-a2b2-42dc2abfcb60",
+  "thread_id": "4502e738-58b3-4676-a2b2-42dc2abfcb60",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor-old"
+  },
+  "timestamp": 1792125807355,
+  "body": "New advisor seat is up and has read the handoff.",
+  "subject": "HANDSHAKE ACK from new advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

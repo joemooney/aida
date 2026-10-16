@@ -1,0 +1,19 @@
+{
+  "id": "1907ff2c-723a-422d-a86c-ec5624fc0812",
+  "thread_id": "1907ff2c-723a-422d-a86c-ec5624fc0812",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792124371727,
+  "body": "Review: one fail-open item (the title parser must be extract_spec_ids_from_commit); comment-style, no hold. The old session's fixer is applying it; the old session verifies and ships. If the old session has exited (after 23:00), verify the delta at reconcile_evidence.rs row_credits_spec yourself and ship #2685 (no hold).",
+  "subject": "RESULT #2685 BUG-2163: one-line fix in progress (old session)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

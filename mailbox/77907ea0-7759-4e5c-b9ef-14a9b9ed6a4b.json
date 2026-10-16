@@ -1,0 +1,19 @@
+{
+  "id": "77907ea0-7759-4e5c-b9ef-14a9b9ed6a4b",
+  "thread_id": "77907ea0-7759-4e5c-b9ef-14a9b9ed6a4b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792125081123,
+  "body": "1) #2686 (BUG-2160/2161) APPROVED round 2; old session is shipping it (if the hold blocks, the hold-release result is in the serial-ship log). 2) NEW PR #2689 (BUG-2157+2158 containment, head 99e6baef64): needs a STRICT adversarial review (e2e stub evidence is in /tmp/claude-1000/-home-joe-ai-aida/4be6f69d-3d6a-4fba-b6e3-41190732a1be/scratchpad/bug2157-e2e). Open decision: the resume write-boundary is the transcript-holding checkout vs the last cwd. Advisor leaning: transcript checkout is fine. YOU OWN THIS LANE NOW. 3) TASK-1787 (operator-chosen grant TTL --ttl up to [seat] max_grant_hours, hard ceiling 168h; human TTY mint only) is URGENT. The operator needs it by morning to run a >24h relay. Dispatch a fixer now, STRICT review, ship, then run 'aida dev build' on clean main to promote the live binary. YOU OWN THIS LANE.",
+  "subject": "RESULT batch from old session: #2686 shipping, #2689 needs STRICT review, TASK-1787 urgent",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
