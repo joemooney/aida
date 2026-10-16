@@ -204,6 +204,14 @@ pub(crate) fn agent_stop(name: &str) -> Result<()> {
     agent_stop_in_project(&project_root, name_trimmed)
 }
 
+// trace:BUG-2148 trace:TASK-1782 | ai:antigravity
+fn join_pids(pids: impl IntoIterator<Item = u32>, sep: &str) -> String {
+    pids.into_iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(sep)
+}
+
 // trace:BUG-2148 | ai:antigravity
 pub(crate) fn agent_stop_in_project(
     project_root: &std::path::Path,
@@ -237,11 +245,17 @@ pub(crate) fn agent_stop_in_project(
 
     // BUG-2148: Partition matches into:
     // 1) genuinely gone from the OS -> reap stale entry.
-    // 2) alive in OS, but start-time identity is unconfirmed (recycled PID or unknown start) ->
-    //    do NOT signal (unknown => do not signal, report), and keep registry entry in place.
+    // 2) alive in OS, but start-time identity is unconfirmed:
+    //    - Recycled (recorded start identity differs from live process): agent is gone; suggest `aida agent gc`.
+    //    - Unknown (pid_start missing/unreadable): may be the agent; suggest `ps -p <pid>`, then manual kill.
+    //    - Corrupt (pid <= 1): invalid PID in registry entry; remove manually.
+    //    Neither is signalled, and registry entries are kept in place (TASK-1782).
     // 3) confirmed live matching process -> signal with grace.
+    // trace:BUG-2148 trace:TASK-1782 | ai:antigravity
     let mut confirmed = Vec::new();
-    let mut unconfirmed = Vec::new();
+    let mut recycled = Vec::new();
+    let mut unknown = Vec::new();
+    let mut corrupt = Vec::new();
     for agent in &matches {
         if !aida_core::liveness::pid_is_alive(agent.pid) {
             println!(
@@ -249,23 +263,37 @@ pub(crate) fn agent_stop_in_project(
                 agent.pid
             );
             let _ = agent_registry::remove_agent(project_root, &agent.agent_type, agent.pid);
-        } else if agent.pid <= 1
-            || !agent.pid_start.as_deref().is_some_and(|start| {
-                aida_core::liveness::process_identity_matches_strict(agent.pid, start)
-            })
-        {
+        } else if agent.pid <= 1 {
             eprintln!(
-                "  pid {} was not signalled: its process identity could not be confirmed, \
-                 so it may be a different process.",
+                "  pid {} was not signalled: registry entry has an invalid PID (<= 1). \
+                 Remove the corrupt entry manually.",
                 agent.pid
             );
-            unconfirmed.push(agent);
-        } else {
+            corrupt.push(agent);
+        } else if agent.pid_start.as_deref().is_some_and(|start| {
+            aida_core::liveness::process_identity_matches_strict(agent.pid, start)
+        }) {
             confirmed.push(agent);
+        } else if agent.pid_start.as_deref().is_some_and(|start| {
+            !aida_core::liveness::process_identity_is_alive(agent.pid, Some(start))
+        }) {
+            eprintln!(
+                "  pid {} was not signalled: the recorded agent process is gone and its PID has been \
+                 recycled onto an unrelated process. Run `aida agent gc` to reap stale registry entries.",
+                agent.pid
+            );
+            recycled.push(agent);
+        } else {
+            eprintln!(
+                "  pid {} was not signalled: its process identity could not be confirmed, \
+                 so it may be an unrelated process. Inspect with `ps -p {}`, then kill manually if it is the agent.",
+                agent.pid, agent.pid
+            );
+            unknown.push(agent);
         }
     }
 
-    if confirmed.is_empty() && unconfirmed.is_empty() {
+    if confirmed.is_empty() && recycled.is_empty() && unknown.is_empty() && corrupt.is_empty() {
         println!(
             "{} Agent '{}' was already stopped; {} stale registry entr{} reaped.",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -281,11 +309,7 @@ pub(crate) fn agent_stop_in_project(
             "Stopping agent '{}' (PID{} {})...",
             name_trimmed,
             if confirmed.len() == 1 { "" } else { "s" },
-            confirmed
-                .iter()
-                .map(|a| a.pid.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
+            join_pids(confirmed.iter().map(|a| a.pid), ", ")
         );
         let targets: Vec<status_sections::TerminateTarget> = confirmed
             .iter()
@@ -304,31 +328,36 @@ pub(crate) fn agent_stop_in_project(
                  were left in place. Check for a process that re-parents or respawns, and inspect the \
                  tree with `ps -o pid,ppid,time,args -p {}`.",
                 name_trimmed,
-                survivors
-                    .iter()
-                    .map(u32::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                survivors
-                    .iter()
-                    .map(u32::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
+                join_pids(survivors.iter().copied(), ", "),
+                join_pids(survivors.iter().copied(), ",")
             );
         }
     }
 
-    if !unconfirmed.is_empty() {
-        anyhow::bail!(
-            "agent `{}` has live process(es) with unconfirmed identity: pid(s) {}. \
-             They were not signalled and their registry entries were left in place.",
-            name_trimmed,
-            unconfirmed
-                .iter()
-                .map(|a| a.pid.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+    if !recycled.is_empty() || !unknown.is_empty() || !corrupt.is_empty() {
+        let mut msg = format!("agent `{}` was not stopped:", name_trimmed);
+        if !recycled.is_empty() {
+            msg.push_str(&format!(
+                "\n  recycled PID(s) {}: the recorded agent process is gone. Run `aida agent gc` to clean up.",
+                join_pids(recycled.iter().map(|a| a.pid), ", ")
+            ));
+        }
+        if !unknown.is_empty() {
+            let pids = join_pids(unknown.iter().map(|a| a.pid), ", ");
+            let pids_comma = join_pids(unknown.iter().map(|a| a.pid), ",");
+            msg.push_str(&format!(
+                "\n  unknown identity for live PID(s) {}: inspect with `ps -p {}`, then kill manually if it is the agent.",
+                pids, pids_comma
+            ));
+        }
+        if !corrupt.is_empty() {
+            msg.push_str(&format!(
+                "\n  corrupt registry entry with invalid PID(s) {}: remove manually.",
+                join_pids(corrupt.iter().map(|a| a.pid), ", ")
+            ));
+        }
+        msg.push_str("\nIts registry entries were left in place.");
+        anyhow::bail!("{msg}");
     }
 
     println!(
@@ -336,11 +365,7 @@ pub(crate) fn agent_stop_in_project(
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         name_trimmed,
         if confirmed.len() == 1 { "" } else { "s" },
-        confirmed
-            .iter()
-            .map(|a| a.pid.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+        join_pids(confirmed.iter().map(|a| a.pid), ", ")
     );
     Ok(())
 }
