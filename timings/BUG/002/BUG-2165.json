@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2165",
+  "publishes": [
+    {
+      "at": "2026-10-16T18:06:35.840769501Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T04:42:51.289796004Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:09:50.281858664Z",
+      "spec": "BUG-2165",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2165",
+        "branch": "bug-2165-work",
+        "first_seen": "2026-10-16T08:09:50.281801837+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:00:24.343169848Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2692,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "51f3468c38dfee161514eef8880f09e1961c6418"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:00:25.582311326Z",
+      "spec": "BUG-2165",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT: authority fix correct; restore replaced BUG-2124 trace lines; ruling: advisor consult inherits launcher grant intentionally",
+        "recovery_hint": "address the review findings, move BUG-2165 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:44:39.479252116Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2692,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c857497d823c62ff24e1039fa582b062b9e74ce8"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:11:40.795380325Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2692,
+        "verdict": "APPROVED",
+        "reviewed_sha": "970d1df0aa3b30471dd800cbed6193a2ddf18e93"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:05:58.341219224Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T18:06:23.089811007Z",
+      "spec": "BUG-2165",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2692
+      }
+    },
+    {
+      "ts": "2026-10-16T18:06:35.822301185Z",
+      "spec": "BUG-2165",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "502aa04ca4ea03483d57588366a6a67b1f058512",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
