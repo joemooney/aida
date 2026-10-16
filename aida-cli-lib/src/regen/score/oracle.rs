@@ -501,6 +501,11 @@ mod tests {
 
     #[test]
     fn trusted_fail_cannot_be_shadowed_by_trial_or_dirty_source() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let f = Fixture::new("#!/bin/sh\ntest \"$PWD\" != \"$AIDA_REGEN_TRIAL_ROOT\" || exit 5\nprintf 'FAIL - held-out behavior\\n'\nexit 1\n");
         std::fs::create_dir(f.trial.path().join("tests")).unwrap();
         let fake = "#!/bin/sh\nprintf 'ok   - held-out behavior\\n'\n";
@@ -523,6 +528,8 @@ mod tests {
             reference_repeats: 3,
             crash_failure_share_percent: 50,
             install_command: Some(vec!["/bin/true".into()]),
+            min_bytes: 64,
+            components: BTreeMap::new(),
             required_tools: vec![],
         };
         let confined = matches!(
@@ -702,6 +709,8 @@ mod tests {
             oracle_paths: vec!["tests".into()],
             reference_repeats: 3,
             crash_failure_share_percent: 50,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             install_command: None,
             required_tools: vec![],
         };
