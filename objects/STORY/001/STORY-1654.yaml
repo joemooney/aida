@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-15T17:55:54.861302605Z
+modified_at: 2026-10-16T17:52:20.167049200Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -185,6 +185,34 @@ comments:
   created_at: 2026-10-15T08:14:18.177883933Z
   modified_at: 2026-10-15T08:14:18.177883933Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a145d7-e8c7-7911-a79b-4806252eb31e
+  author: joe
+  content: |-
+    E2E (A2) re-run, fix-2661, 2026-10-16. Build: claude/story-1654 merged with origin/main (e0713fdb5e; includes BUG-1918, BUG-2139 #2688, BUG-2149/2150 463b81d027). Merge was clean, no conflicts. Pushed as 1ea072bc2d. Vehicle: throwaway PR #2702 (one scratch docs file, head 7242b48c09) against scratch base `e2e/story-1654-base`, never main. PR closed; both branches and both worktrees deleted.
+
+    RESULT: negative path clean. Positive path NOT completed. It is blocked by the launching seat, not by a product defect.
+
+    IMPLEMENTER: `aida claim STORY-1654` -> lease 01a145c26337. Ledger tokens: session:01a145c26337, session:01a143ac0514, session:dfcac0fe…, shell:982237, proc:982352, proc:964629.
+
+    NEGATIVE (the implementer's own session records an approval):
+      aida review record PR-2702 --pr 2702 --sha 7242b48c09 --branch e2e/story-1654-impl --verdict approved
+      -> error: "refused: implementer seat cannot record a review verdict (self-review)"  exit=1
+      The seat check fires before the identity/AuthorSession check now.
+      aida pr ship 2702 --no-pull --no-cleanup --no-complete -> "STORY-1654 is marked unset (supervised) — auto-merge refused"; PR-2702 left open, exit=23. No merge.
+
+    POSITIVE (Bash-launched reviewer, run from the main checkout):
+      aida queue work PR-2702 --role reviewer --no-human --vendor claude   (no --force-claim, no queue add)
+      -> error: "child-seat delegation refused before any pickup state changed: queue selection succeeded (--role flag chose role `reviewer`), but this launcher may not start a `reviewer` child session: the active `implementer` grant does not delegate `reviewer`"  exit=1, wall 6.2 s
+      The launching grant was d062d20e (seat implementer, delegable_seats []; parent 58784e9f is the advisor). On 2026-10-15 this same launch silently ran under the parent advisor grant. Now it fails closed before any pickup mutation, which is BUG-2139's fix working. The PR-scoped pickup was accepted with no queued story and no --force-claim (BUG-2150), up to the delegation check. I did not borrow the advisor grant to get past the refusal, because that would bypass the boundary under test.
+      Not exercised: child reviewer grant id, the verdict path (.aida/review-verdicts/PR-2702.json), review wall-clock and token cost, and a ship with no override.
+
+    TO FINISH A2: rerun from a seat entered at a TTY with `aida role enter <seat> --delegate-seat reviewer` (for example the advisor). Second blocker for the ship step: STORY-1654 is now supervised (autonomy unset), so `aida pr ship` leaves the vehicle PR open even with a valid approval. Either back the vehicle PR with a non-supervised scratch spec, or count "ship accepts the approval and stops only at the supervised hold" as the pass.
+
+    TEMPLATES: they still match main's flow: a Bash-launched `aida queue work PR-<n> --role reviewer --no-human`, the verdict read from `.aida/review-verdicts/PR-<n>.json` in the launcher checkout, no --force-claim, and reviewer delegation required (BASELINE_SEATS = implementer/guest/requester, so reviewer is not baseline). One change, to aida-burndown.md: the verdict file appears only after the reviewer exits and the launcher verifies it; no file after exit means no verified verdict, so launch a new reviewer.
+    GATES: make check-ci-fast 30/30 OK (8m45s); make check-ci-compile OK (11m57s); make check-templates OK.
+  created_at: 2026-10-16T17:52:20.167049200Z
+  modified_at: 2026-10-16T17:52:20.167049200Z
+  session_id: 01a143ac0514
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
   author: aida-lease-take
