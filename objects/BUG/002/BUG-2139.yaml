@@ -3,12 +3,12 @@ spec_id: BUG-2139
 agreed_id: BUG-2139
 title: A fresh headless queue-work child inherits the launcher's full grant (including delegable seats), so an advisor running implementer work headless does it with advisor authority
 description: 'From the #2645 (BUG-1808) STRICT review. exec_vendor_headless (session.rs:3041) neither sets nor clears AIDA_SESSION_GRANT, so the fresh headless child runs under the launcher''s grant: same subject, same seat, same delegable_seats. AIDA_SESSION_ROLE shows the routed role but is display-only, and classify_role_display shows ''Ungranted''. This predates BUG-1808. Decide whether a fresh headless child should get a minted child grant scoped to the routed role (which would bring it under the delegation preflight) or run with a reduced grant. Security/authority review required.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:46:28.056514199Z
-modified_at: 2026-10-16T04:00:05.527887243Z
+modified_at: 2026-10-16T07:28:39.688571004Z
 req_type: Bug
 tags:
 - capture
@@ -101,6 +101,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1439c-ead7-7e12-afdc-34871682227c
+  author: aida-auto-bump
+  timestamp: 2026-10-16T07:28:39.639258371Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1439c-eb08-7fc2-995a-db4e51cb22f0
+  timestamp: 2026-10-16T07:28:39.688564639Z
+  agent: implementer
+  commit_sha: b8784ba39419f2dedfb0acd95e33eef3a865d084
+  summary: 'STRICT independent review: headless children get an issue_child grant (routed seat, no delegation, parent-bounded expiry); PURPOSE scrubbed; e2e 6/6 assert real child env. Follow-ups filed (burndown quiet path, lease stamp loss, revoke skip).'
+  review_verdict: approved
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
@@ -109,3 +123,7 @@ filed_at:
   aida_build_sha: 84a4942786
   vendor: claude
   session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T07:28:39.639254250Z
+  completion_sha: b8784ba39419f2dedfb0acd95e33eef3a865d084
