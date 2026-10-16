@@ -1,0 +1,20 @@
+id: 01a146f1-9c83-7073-8741-23c712fc9b22
+spec_id: TASK-1800
+agreed_id: TASK-1800
+title: Measure and reduce mandate trace-exclusion fallback rate (semantic false positives)
+description: 'Follow-up from the TASK-1790 item 3 review (#2709). Trace-derived exclusions refuse about 24/50 ordinary-mandate PRs beyond the named checks; hunk scope gains 1 case and 46/50 fall back to the full file, so the mandate is close to inert. Acceptance: (1) classify the refusals on the frozen last-50 set as true supervised touches vs incidental co-location; (2) cut the full-file fallback rate (e.g. module-level item attribution, non-Rust hunk scoping) without dropping any true touch; (3) keep ADD-only and fail-closed. STANDARD review unless authority code changes.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T23:00:01.795083421Z
+modified_at: 2026-10-16T23:00:01.795083421Z
+req_type: Task
+filed_at:
+  code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7dd7aee9de
+  vendor: claude
+  session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
