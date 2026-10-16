@@ -918,6 +918,21 @@ source_hash: string,
  */
 model: string, };
 
+export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
+
+export type Origin = { 
+/**
+ * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
+ * repo entry in the workspace manifest (`.aida-workspace`); validated as
+ * a lowercase slug so it is stable as a map key and a filter value.
+ */
+repo: string, 
+/**
+ * Optional finer-grained component within the repo (e.g. "orchestrator").
+ * Free-form within the repo; `None` = the whole repo.
+ */
+component?: string | null, };
+
 export type FilingProvenance = { 
 /**
  * HEAD of the CODE repo the spec was filed from (full SHA; not the
@@ -949,20 +964,11 @@ vendor?: string | null,
  */
 session?: string | null, };
 
-export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
-
-export type Origin = { 
+export type HypothesisLock = { locked_at: string, 
 /**
- * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
- * repo entry in the workspace manifest (`.aida-workspace`); validated as
- * a lowercase slug so it is stable as a map key and a filter value.
+ * SHA-256 of the UTF-8 description before the first completed result.
  */
-repo: string, 
-/**
- * Optional finer-grained component within the repo (e.g. "orchestrator").
- * Free-form within the repo; `None` = the whole repo.
- */
-component?: string | null, };
+description_sha256: string, };
 
 export type Requirement = { 
 /**
@@ -1158,6 +1164,10 @@ filed_at?: FilingProvenance | null,
  * verify command so malformed/unknown blocks remain loadable and reportable.
  */
 verify?: JsonValue | null, 
+/**
+ * Sticky pre-registration lock; tag, relationship and status edits never clear it.
+ */
+hypothesis_lock?: HypothesisLock | null, 
 /**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field

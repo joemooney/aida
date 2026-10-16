@@ -1416,6 +1416,7 @@ mod tests {
             origin: None,
             filed_at: None,
             verify: None,
+            hypothesis_lock: None, // trace:STORY-1675 | ai:codex
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),

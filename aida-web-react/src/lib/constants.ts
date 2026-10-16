@@ -1,7 +1,8 @@
+// trace:STORY-1675 | ai:codex — support the complete regenerated Rust enums.
 import type { RequirementStatus, RequirementPriority, RequirementType } from '@shared/types';
 
 export const STATUS_ORDER: RequirementStatus[] = [
-  'Draft', 'Approved', 'Planned', 'InProgress', 'NeedsAttention', 'Done', 'Completed', 'Rejected',
+  'Draft', 'Approved', 'Planned', 'InProgress', 'NeedsAttention', 'Done', 'Completed', 'Rejected', 'Superseded',
 ];
 
 // STORY-86: Done sits between InProgress and Completed. Lime-400 reads
@@ -19,7 +20,6 @@ export const STATUS_CONFIG: Record<RequirementStatus, { color: string; bg: strin
   Done:           { color: 'text-lime-400',    bg: 'bg-lime-500/10',    dot: 'bg-lime-400',    label: 'Done' },
   Completed:      { color: 'text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-400', label: 'Completed' },
   Rejected:       { color: 'text-red-400',     bg: 'bg-red-500/10',     dot: 'bg-red-400',     label: 'Rejected' },
-  // trace:STORY-1673 | ai:claude — terminal hand-off state; muted zinc
   Superseded:     { color: 'text-zinc-400',    bg: 'bg-zinc-500/10',    dot: 'bg-zinc-400',    label: 'Superseded' },
 };
 
@@ -65,8 +65,7 @@ export const TYPE_CONFIG: Record<RequirementType, { color: string; bg: string; l
   Decision:      { color: 'text-amber-300',   bg: 'bg-amber-500/10',   label: 'Decision' },
   Term:          { color: 'text-emerald-300', bg: 'bg-emerald-500/10', label: 'Term' },
   Doc:           { color: 'text-stone-300',   bg: 'bg-stone-500/10',   label: 'Doc' },
-  // trace:STORY-1673 | ai:claude
-  Faq:           { color: 'text-lime-300',    bg: 'bg-lime-500/10',    label: 'FAQ' },
+  Faq:           { color: 'text-zinc-300',    bg: 'bg-zinc-500/10',    label: 'FAQ' },
 };
 
 export const AVATAR_COLORS = [

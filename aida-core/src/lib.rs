@@ -99,6 +99,7 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+mod hypothesis;
 mod store_hooks;
 // trace:TASK-1513 | ai:claude
 pub mod home;

@@ -1,3 +1,4 @@
+// trace:STORY-1675 | ai:codex — support the complete regenerated Rust enums.
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { RuleGroupType } from 'react-querybuilder';

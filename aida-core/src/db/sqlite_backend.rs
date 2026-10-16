@@ -595,6 +595,7 @@ impl SqliteBackend {
                 origin: None,
                 filed_at: None,
                 verify: None,
+                hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -1571,6 +1572,7 @@ impl DatabaseBackend for SqliteBackend {
                     origin: None,
                     filed_at: None,
                     verify: None,
+                    hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                     custom_status,
                     custom_priority,
                     custom_fields,

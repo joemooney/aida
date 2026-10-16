@@ -1,3 +1,4 @@
+// trace:STORY-1675 | ai:codex — support the complete regenerated Rust enums.
 import type { Requirement, RequirementStatus } from '@shared/types';
 import { STATUS_ORDER, STATUS_CONFIG } from '../../lib/constants';
 

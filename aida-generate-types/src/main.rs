@@ -88,11 +88,14 @@ fn generate_types_content() -> String {
         // STORY-631 cached intent. trace:STORY-648 | ai:claude
         models::ProcessingRecord::decl(),
         models::SpecIntent::decl(),
-        // Requirement references these existing optional fields and verify data.
+        // Regenerating Requirement must emit every nested model it names
+        // (optional fields, verify data, hypothesis locks).
         // trace:STORY-1673 | ai:codex
-        models::FilingProvenance::decl(),
+        // trace:STORY-1675 | ai:codex
         models::ExecutionMode::decl(),
         models::Origin::decl(),
+        models::FilingProvenance::decl(),
+        models::HypothesisLock::decl(),
         models::Requirement::decl(),
         // BUG-571: lightweight web-DTO projection of Requirement (list/board/
         // dashboard fetch this via GET /api/v2/requirements?view=summary so the
