@@ -519,7 +519,8 @@ mod tests {
             oracle_command: vec!["./tests/oracle.sh".into()],
             oracle_paths: vec!["tests/".into()],
             reference_repeats: 3,
-            install_command: None,
+            crash_failure_share_percent: 50,
+            install_command: Some(vec!["/bin/true".into()]),
             required_tools: vec![],
         };
         let confined = matches!(
@@ -698,6 +699,7 @@ mod tests {
             oracle_command: vec!["tests/oracle.sh".into()],
             oracle_paths: vec!["tests".into()],
             reference_repeats: 3,
+            crash_failure_share_percent: 50,
             install_command: None,
             required_tools: vec![],
         };

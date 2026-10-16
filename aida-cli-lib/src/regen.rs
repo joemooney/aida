@@ -305,6 +305,7 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
             control,
             corpus,
             model,
+            model_family,
             vendor,
             harness,
             unconfined,
@@ -315,6 +316,7 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
                 *control,
                 corpus,
                 model,
+                model_family.as_deref(),
                 vendor,
                 harness,
                 *unconfined,
@@ -621,5 +623,36 @@ mod tests {
                 ..
             })
         ));
+    }
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn score_cli_preserves_optional_explicit_model_family() {
+        use clap::Parser;
+        for family in [None, Some("explicit-family")] {
+            let mut args = vec![
+                "aida",
+                "regen",
+                "score",
+                "system",
+                "--corpus",
+                "corpus",
+                "--model",
+                "model",
+                "--vendor",
+                "vendor",
+                "--harness",
+                "harness",
+            ];
+            if let Some(family) = family {
+                args.extend(["--model-family", family]);
+            }
+            let parsed = crate::cli::Cli::try_parse_from(args).unwrap();
+            match parsed.command {
+                crate::cli::Command::Regen(RegenCommand::Score { model_family, .. }) => {
+                    assert_eq!(model_family.as_deref(), family)
+                }
+                _ => panic!("expected regen score"),
+            }
+        }
     }
 }
