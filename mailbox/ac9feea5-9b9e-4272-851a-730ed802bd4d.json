@@ -1,0 +1,19 @@
+{
+  "id": "ac9feea5-9b9e-4272-851a-730ed802bd4d",
+  "thread_id": "ac9feea5-9b9e-4272-851a-730ed802bd4d",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792167877468,
+  "body": "Round-2 item is fixed at bf34fa5c96. Detection ignores the .git entry type and keys on the aida-seat-* name or a marker. verify needs a real .git dir. Symlink and gitdir-file tests use fsmonitor and filter.clean canaries; they fail under the old order. Gates are green. (Resent: the first send's confirmation was unclear.)",
+  "subject": "REWORK READY: #2699 BUG-2169 S1 r3 (bf34fa5c96)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

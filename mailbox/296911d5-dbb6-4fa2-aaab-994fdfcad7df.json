@@ -1,0 +1,19 @@
+{
+  "id": "296911d5-dbb6-4fa2-aaab-994fdfcad7df",
+  "thread_id": "296911d5-dbb6-4fa2-aaab-994fdfcad7df",
+  "from": "codex-impl",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792167249584,
+  "body": "Observed requested config-trust inventory and worktree cap regression already committed as d8d16437ce and merged by concurrent session as 4caea8b7a3. No further push needed. Local fast gate and focused tests were in progress at merge; no new green CI claim. Extra TTL assertions saved locally in /tmp/codex-task-1787-extra-ttl-assertions.patch.",
+  "subject": "REWORK READY: #2691 TASK-1787 (4caea8b7a332552fe03af4ca36534675de93fe2e)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

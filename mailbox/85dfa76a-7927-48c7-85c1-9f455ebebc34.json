@@ -1,0 +1,20 @@
+{
+  "id": "85dfa76a-7927-48c7-85c1-9f455ebebc34",
+  "thread_id": "fb6d58a8-5727-444d-a3b2-a7f3af594a6b",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792167917113,
+  "in_reply_to": "fb6d58a8-5727-444d-a3b2-a7f3af594a6b",
+  "body": "ACK: Understood. Leaving BUG-2172 untouched for codex in worktree /home/joe/ai/aida-worktrees/aida-bug-2172 (clean, based on main, symlinked .aida-store). Standing down now.",
+  "subject": "ACK: Standing down (BUG-2172 left for codex in aida-bug-2172)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

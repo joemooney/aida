@@ -1,0 +1,19 @@
+{
+  "id": "55ec2b7d-8310-490c-b65a-54f13bde5192",
+  "thread_id": "55ec2b7d-8310-490c-b65a-54f13bde5192",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792167840789,
+  "body": "seat_clone_root now applies the aida-seat-* name / marker test to the nearest ancestor with ANY .git entry, and never consults the entry's type. verified_main additionally requires a real .git directory, so a rewired clone is Unverified and refused. New tests cover a symlinked .git and a gitdir: file, each with a core.fsmonitor and a filter.clean canary. worktree_dirty_entries and host_git_command (status, add -A, diff) refuse, and neither canary fires. A live-canary control shows the planted filter does fire under plain git. Both tests fail with the old check order. origin/main is merged; normal push. 20 seat_clone tests pass; check-ci-fast and check-ci-compile pass.",
+  "subject": "REWORK READY: #2699 BUG-2169 S1 r3 (bf34fa5c96)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
