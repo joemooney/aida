@@ -570,6 +570,13 @@ pub(crate) fn handle_burndown_run(
                 "implementer",
                 &current_user_id(None),
             )?;
+            if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    queue_cmd::headless_baseline_notice("implementer", cause)
+                );
+            }
             let res = build_burndown_quiet_command(
                 &current_prompt,
                 mode,
@@ -2015,6 +2022,13 @@ pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::proc
     // trace:BUG-2165 | ai:antigravity
     let child_grant =
         seat_authority::issue_headless_child(&project_root, "implementer", &current_user_id(None))?;
+    if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            queue_cmd::headless_baseline_notice("implementer", cause)
+        );
+    }
     let status_code = build_burndown_verbose_command(
         prompt,
         mode,
@@ -2039,6 +2053,7 @@ pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::proc
     status_code
 }
 
+// trace:BUG-2124 | ai:antigravity
 // trace:BUG-2165 | ai:antigravity
 pub(crate) fn build_burndown_quiet_command(
     current_prompt: &str,
@@ -2063,6 +2078,7 @@ pub(crate) fn build_burndown_quiet_command(
     cmd
 }
 
+// trace:BUG-2124 | ai:antigravity
 // trace:BUG-2165 | ai:antigravity
 pub(crate) fn build_burndown_verbose_command(
     prompt: &str,

@@ -3738,7 +3738,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             "implementer",
             &crate::current_user_id(None),
         ) {
-            Ok(g) => g,
+            Ok(g) => {
+                if let crate::seat_authority::HeadlessChildGrant::Baseline { cause } = &g {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                        crate::queue_cmd::headless_baseline_notice("implementer", cause)
+                    );
+                }
+                g
+            }
             Err(e) => {
                 tee.stop();
                 eprintln!(
@@ -3873,6 +3882,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 }
 
+// trace:BUG-2124 | ai:antigravity
 // trace:BUG-2165 | ai:antigravity
 // Builds CI fix command for headless_vendor_args argv.
 pub(crate) fn build_phase_driver_ci_fix_command(

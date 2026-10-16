@@ -104,8 +104,9 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
 
 #[test]
 fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
+    let tmp = tempfile::tempdir().unwrap();
     let cmd = build_phase_driver_ci_fix_command(
-        Path::new("/tmp"),
+        tmp.path(),
         "claude",
         &["-p".into(), "fix".into()],
         "CEILING_KEY",
@@ -135,12 +136,15 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
 
 #[test]
 fn phase_driver_advisor_command_scrubs_purpose() {
+    let tmp = tempfile::tempdir().unwrap();
+    let req = tmp.path().join("req.json");
+    let resp = tmp.path().join("resp.json");
     let cmd = build_phase_driver_advisor_command(
-        Path::new("/tmp"),
+        tmp.path(),
         "claude",
         &["-p".into(), "advisor".into()],
-        Path::new("/tmp/req.json"),
-        Path::new("/tmp/resp.json"),
+        &req,
+        &resp,
         "CEILING_KEY",
         "100",
         HeadlessVendor::Claude,
