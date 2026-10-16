@@ -4086,13 +4086,20 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 3. burndown quiet
-    let burndown_quiet_cmd =
-        crate::burndown_run::build_burndown_quiet_command("prompt", "mode", "", "CEILING", "10");
+    let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
+        "prompt", "mode", "", "CEILING", "10", false,
+    );
     assert!(
         burndown_quiet_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown quiet command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        burndown_quiet_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "burndown quiet command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 4. burndown verbose
@@ -4102,12 +4109,19 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "child-grant-id",
         "CEILING",
         "10",
+        false,
     );
     assert!(
         burndown_verbose_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown verbose command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        burndown_verbose_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "burndown verbose command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 5. autopilot intake
@@ -4123,6 +4137,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "none",
         crate::backlog::RiskLevel::Low,
         None,
+        false,
     );
     assert!(
         intake_cmd
@@ -4130,14 +4145,27 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "autopilot intake command must strip AIDA_CONTAINED"
     );
+    assert!(
+        intake_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "autopilot intake command must strip AIDA_SESSION_PURPOSE"
+    );
 
     // 6. questions clarify
-    let clarify_cmd = crate::questions::build_questions_clarify_command("prompt", "child-grant-id");
+    let clarify_cmd =
+        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false);
     assert!(
         clarify_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "questions clarify command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        clarify_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "questions clarify command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 7. compete judge

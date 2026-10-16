@@ -352,8 +352,9 @@ impl MergeHoldRecord {
                 .as_ref()
                 .map(|r| r.key.clone())
                 .unwrap_or_else(|| format!("PR-{pr}"));
+            // trace:STORY-1697 | ai:claude
             format!(
-                "a fresh APPROVED verdict for {key} recorded at the PR's current head; then a human ships it"
+                "a fresh APPROVED verdict for {key} recorded at the PR's current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
             )
         } else {
             match self.reason_kind {
@@ -2789,8 +2790,9 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
     if !arm.key.starts_with("PR-") {
         hold.spec = Some(arm.key.clone());
     }
+    // trace:STORY-1697 | ai:claude
     hold.release_condition = Some(format!(
-        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head; then a human ships it",
+        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)",
         arm.key
     ));
     if let Err(err) = write_typed_hold(project_root, &hold) {

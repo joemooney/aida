@@ -2497,6 +2497,15 @@ pub struct IdConfigValidation {
     pub affected_count: usize,
 }
 
+/// Permanent pre-registration evidence, stamped by canonical store mutations.
+// trace:STORY-1675 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct HypothesisLock {
+    pub locked_at: DateTime<Utc>,
+    /// SHA-256 of the UTF-8 description before the first completed result.
+    pub description_sha256: String,
+}
+
 /// Represents a relationship between two requirements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct Relationship {
@@ -4421,6 +4430,11 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filed_at: Option<FilingProvenance>,
 
+    /// Sticky pre-registration lock; tag, relationship and status edits never clear it.
+    // trace:STORY-1675 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis_lock: Option<HypothesisLock>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4690,6 +4704,7 @@ impl Requirement {
             origin: None,
             // trace:CR-8 | ai:claude
             filed_at: None,
+            hypothesis_lock: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),

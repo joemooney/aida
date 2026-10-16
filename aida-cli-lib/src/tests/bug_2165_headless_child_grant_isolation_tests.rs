@@ -26,6 +26,7 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
         "child-grant-quiet-123",
         "CEILING_KEY",
         "100",
+        false,
     );
 
     assert_eq!(
@@ -51,8 +52,14 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
 
 #[test]
 fn burndown_quiet_command_supports_baseline_child() {
-    let cmd =
-        build_burndown_quiet_command("test prompt", "bypassPermissions", "", "CEILING_KEY", "100");
+    let cmd = build_burndown_quiet_command(
+        "test prompt",
+        "bypassPermissions",
+        "",
+        "CEILING_KEY",
+        "100",
+        false,
+    );
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -79,6 +86,7 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
         "child-grant-verbose-456",
         "CEILING_KEY",
         "100",
+        false,
     );
 
     assert_eq!(

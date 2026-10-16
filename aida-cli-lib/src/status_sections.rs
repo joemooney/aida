@@ -1489,6 +1489,10 @@ mod bug_2165_headless_child_grant_isolation_tests;
 #[cfg(test)]
 #[path = "tests/bug_2166_contained_parent_escape_tests.rs"]
 mod bug_2166_contained_parent_escape_tests;
+// trace:BUG-2171 trace:BUG-2170 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2171_2170_contained_builders_tests.rs"]
+mod bug_2171_2170_contained_builders_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
