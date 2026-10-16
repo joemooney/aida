@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T17:03:46.625456805Z
+modified_at: 2026-10-16T20:24:22.862710625Z
 req_type: Bug
 comments:
 - id: 01a14583-0b4c-7293-af23-414a33f14c87
@@ -21,6 +21,11 @@ comments:
   content: 'Implementation ready in PR #2700 at e7ae7dcc70b3bd8d92e3a1dbb61448e36e7fda98. Strict parent containment covers compose/spawn/resume/exec and compete; shared posture/refusal helpers replace duplicates and synthetic checks. Validation: make check-ci-fast 30/30; 23 containment tests and 16 adjacent tests under inherited AIDA_CONTAINED=1 passed. Includes real advisor-watch launch capture. Advisor notified for independent review.'
   created_at: 2026-10-16T16:51:25.734176420Z
   modified_at: 2026-10-16T16:51:25.734176420Z
+- id: 01a14663-1c4e-7922-9666-62855048da87
+  author: joe
+  content: Commit 652423b0e4 references this requirement
+  created_at: 2026-10-16T20:24:22.862710625Z
+  modified_at: 2026-10-16T20:24:22.862710625Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
