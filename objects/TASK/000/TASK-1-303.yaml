@@ -9,12 +9,12 @@ description: |-
 
   PR: #2604
   Reviewed sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T06:23:07.965638850Z
-modified_at: 2026-10-16T20:33:46.617330938Z
+modified_at: 2026-10-16T20:44:39.796989142Z
 req_type: Task
 tags:
 - carried-from:BUG-2011
@@ -36,6 +36,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14675-adf4-7a00-9756-fbbd3245cb6d
+  author: ai:codex:joe
+  timestamp: 2026-10-16T20:44:39.796983788Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
   branch: main
