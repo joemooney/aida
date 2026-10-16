@@ -862,6 +862,10 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
         return failure.reason as i32;
     }
+    // trace:BUG-2149 | ai:claude
+    if err.downcast_ref::<queue_cmd::NoReviewVerdict>().is_some() {
+        return queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE;
+    }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| sig.code)
         .unwrap_or(1)
