@@ -1219,3 +1219,33 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
     assert!(err.contains("marker could not be rewritten") && err.contains("label unavailable"));
     assert_eq!(crate::events::read_all(tmp.path()).len(), before);
 }
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn additional_trace_spec_can_restrict_but_cannot_supply_ship_authority() {
+    let mut c = Case::ok();
+    assert!(c.decide().is_ok());
+    c.specs.push(tagged("TASK-2", "operator-only"));
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::AlwaysHuman { spec, .. }) if spec == "TASK-2")
+    );
+
+    let mut c = Case::ok();
+    c.specs.push(spec("TASK-2"));
+    c.specs_resolved = false; // No resolved named subject, even with trace IDs.
+    assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
+
+    let mut c = Case::ok();
+    c.candidates.clear();
+    let before = c.decide();
+    assert!(before.is_err());
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), before, "extra exclusions supply no approval");
+
+    let mut c = Case::ok();
+    c.candidates = vec![approval_by(HEAD, ADVISOR)];
+    c.policy = policy(&c.candidates);
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+}

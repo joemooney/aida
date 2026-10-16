@@ -382,6 +382,17 @@ excluded class, in any stored version or in the local exclusion ledger
 tag is removed. A mandate releases only a typed hold marker; a missing marker,
 a label-only hold or a recusal hold always needs a human.
 
+Mandate exclusions also consider committed trace IDs in changed source hunks and
+their enclosing Rust functions/impls, on both base and head. Deletions and renames
+retain the old traces. When a hunk cannot be attributed safely, the check uses
+the full source file; other source languages use that conservative fallback.
+These IDs only add exclusions, with the same sticky history/ledger rules. They
+grant no completion credit or author/reviewer authority. Unreadable evidence or
+a changed/dirty store refuses mandate coverage; fetch missing source commits or
+finish the store write before retrying. See OVERVIEW.md for source scope and
+fallback limits.
+<!-- trace:TASK-1790 | ai:codex -->
+
 **Stopping.** `aida mandate stop` (human at a terminal) ends it at once. Expiry
 is checked by every ship at the moment it decides, again under the merge lease,
 and once more immediately before the merge call. `aida mandate status [--json]`

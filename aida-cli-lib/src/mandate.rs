@@ -783,6 +783,8 @@ pub(crate) enum MandateRefusal {
     PrincipalMismatch { mandate: String, grant: String },
     OverrideStale,
     SpecsUnresolved,
+    // trace:TASK-1790 | ai:codex
+    TraceEvidenceUnreadable(String),
     AlwaysHuman { spec: String, class: String },
     LedgerUnreadable(String),
     NoHoldMarker,
@@ -817,6 +819,9 @@ impl MandateRefusal {
             Self::SpecsUnresolved => {
                 "what the PR ships could not be resolved to specs in the store".to_string()
             }
+            Self::TraceEvidenceUnreadable(why) => format!(
+                "the PR's mandate exclusion evidence could not be read ({why})"
+            ),
             Self::HistoryUnreadable { spec, why } => format!(
                 "{spec}'s store history could not be read ({why}), so it is treated as excluded"
             ),

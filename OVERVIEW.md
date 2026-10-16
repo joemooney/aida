@@ -5,8 +5,27 @@ coverage. Mandate start/stop retains the shared direct-human authority check,
 with mandate-specific recovery commands. Hold re-arm uses the same composition
 and marker write, but its single placement event explicitly names the failed
 mandate ship; the event follows marker restoration and precedes label sync.
-Marker and label failures remain explicit. Trace-derived mandate exclusions are
-not part of this slice.
+Marker and label failures remain explicit.
+
+Mandate-only exclusion checks add trace IDs from both committed sides of changed
+ordinary source files, including deleted and renamed files. Source blobs come
+from pinned Git object IDs, never checkout contents. Rust comments are parsed
+separately from string fixtures. Changed hunks contribute their enclosing fn/impl
+traces; a hunk without safe item attribution, a mode-only change, an unparseable
+Rust file, or another supported source language falls back to full-file union.
+For other languages that fallback conservatively includes raw trace tokens,
+including strings. Ordinary source uses the existing trace scanner's language
+extensions, excluding documentation/data files and build/store directories.
+Files without traces and unlisted languages cannot identify unnamed specs.
+
+These IDs only add exclusions through the existing current/history/sticky-ledger
+classifier. Verdict candidates, author identity and completion credit still use
+named specs. An empty named subject stays unresolved even when traces exist.
+The forge head must match the checked head; a missing local origin base, ambiguous
+merge base, unreadable diff/blob/store, source symlink, invalid source text or
+moving/dirty store refuses coverage. Retry after fetching missing evidence or
+finishing a store write. Store HEAD and ref tips are checked around collection;
+the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
 
 C7 lifecycle commands resolve invoking caller authority after acquiring the
