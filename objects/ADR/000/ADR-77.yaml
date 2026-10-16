@@ -12,13 +12,21 @@ description: |-
   3. Integrity floors that remain under a mandate: independent attested review for every merge, never merging one's own work, no force-push to main/shared branches, no history rewrite of shared branches, and the mandate itself is minted/stopped only by a human. These protect correctness, not human attention.
   4. Escalation becomes notification, not blocking: when the system needs a human it notifies and keeps working other lanes.
   Related: STORY-1698 (mandate), STORY-1697 (auto-release review holds), STORY-1699 (fleet digest/heartbeat).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:04:58.687605296Z
-modified_at: 2026-10-16T04:04:58.687605296Z
+modified_at: 2026-10-16T04:05:10.818750245Z
 req_type: Decision
+history:
+- id: 01a142e2-a022-7992-a7aa-74e290407766
+  author: joe
+  timestamp: 2026-10-16T04:05:10.818740190Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 463b81d02796148deba3c59c47daefce584c35f4
   branch: main
