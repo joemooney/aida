@@ -165,8 +165,9 @@ aida queue work PR-<N> --role reviewer --no-human
 It starts a headless reviewer with its own session, a PR-scoped lease, a
 review worktree, a child reviewer grant and the AIDA-generated review prompt
 (which already carries the strict authority checklist). It records its
-verdict and writes `.aida/review-verdicts/PR-<N>.json`; read that file when
-the job exits.
+verdict and writes `.aida/review-verdicts/PR-<N>.json`. Read that file only
+when the job exits 0 with a `verdict:` line; exit 30 or any other non-zero
+exit means no verified verdict, even if the file exists.
 
 - Don't write the reviewer's prompt and don't pass it conclusions. If the PR
   needs operator-specific checks, leave them as a comment on the spec; the

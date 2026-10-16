@@ -35,8 +35,9 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    child's model explicitly; a child that runs out is stopped and re-dispatched
    once, never retried silently. <!-- trace:BUG-1816 | ai:claude -->
 5. Give every branch a fresh reviewer as a separate process launched from
-   Bash: `aida queue work PR-<n> --role reviewer --no-human`, then read
-   `.aida/review-verdicts/PR-<n>.json`. Never review through the Agent tool,
+   Bash: `aida queue work PR-<n> --role reviewer --no-human`. Only when it
+   exits 0 with a `verdict:` line, read `.aida/review-verdicts/PR-<n>.json`;
+   any non-zero exit (30 = no verified verdict) means launch a new reviewer. Never review through the Agent tool,
    never write the reviewer's prompt, and never record a verdict yourself.
    Your seat must be entered with `--delegate-seat reviewer`. On
    RequestChanges, return the findings to the same implementer, then launch a

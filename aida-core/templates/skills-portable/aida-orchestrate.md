@@ -340,8 +340,10 @@ aida queue work PR-<n> --role reviewer --no-human --vendor codex
 
 It creates a PR-scoped lease and review worktree, mints a child reviewer
 grant, starts the reviewer headless with the AIDA-generated review prompt, and
-waits. The reviewer records its own verdict with `aida review record`; read it
-from `.aida/review-verdicts/PR-<n>.json` after the command exits.
+waits. The reviewer records its own verdict with `aida review record`. Read it
+from `.aida/review-verdicts/PR-<n>.json` only when the command exits 0 with a
+`verdict:` line; exit 30 or any other non-zero exit means no verified verdict,
+even if the file exists.
 `aida pr ship` accepts only an approval recorded this way.
 
 - Your seat must delegate the reviewer seat. The operator enters it once at a

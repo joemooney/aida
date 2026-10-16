@@ -215,20 +215,30 @@ merge gate accepts only an approval recorded at the PR's head by a reviewer
 process with its own identity. Your implementer subagents run inside your
 session, so you are an author of every wave PR: an approval you record, or
 one recorded by an Agent-tool reviewer, is refused at merge. Launch
-each reviewer from Bash, detached, and wait for its verdict file in bounded
-foreground polls:
+each reviewer from Bash as its own `run_in_background` job, one job per PR,
+and wait for the job to exit. The job's exit status is the signal, not the
+verdict file:
 
 ```bash
-nohup aida queue work PR-<n> --role reviewer --no-human \
-  > .aida/burndown-review-PR-<n>.log 2>&1 &
-# then, in bounded steps (a minute or so per call) until it exists:
-cat .aida/review-verdicts/PR-<n>.json
+aida queue work PR-<n> --role reviewer --no-human \
+  > .aida/burndown-review-PR-<n>.log 2>&1
+echo "exit=$?" >> .aida/burndown-review-PR-<n>.log
 ```
 
-The verdict file appears only after the reviewer exits and the launcher has
-checked it against the PR head and this launch's reviewer grant. If the job
-has exited and there is no verdict file, no verified verdict was produced:
-read the log and launch a new reviewer; never record one yourself.
+When the job's completion arrives, read the `exit=` line and the summary's
+`verdict:` line from that log. A shell `&` plus `wait` works only inside a
+single Bash call, so don't split the launch and the wait across calls.
+
+- **Exit 0 and a `verdict:` line** (not `UNKNOWN`): the launcher checked the
+  verdict against the PR head and this launch's reviewer grant. Only now
+  read `.aida/review-verdicts/PR-<n>.json`.
+- **Exit 30, or any other non-zero exit**: no verified verdict. Read the
+  log and launch a new reviewer; never record one yourself.
+
+Never poll for the verdict file or treat its existence as completion. The
+reviewer writes that file in place while it is still running, a file that
+fails the launcher's checks stays on disk, and in a rework round the file
+from the previous round is there until the new launcher replaces it.
 
 - Never use the Agent tool for review, never write the reviewer's prompt, and
   never run `aida review record` yourself. The reviewer process reads the spec

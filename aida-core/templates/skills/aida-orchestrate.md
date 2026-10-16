@@ -257,7 +257,10 @@ implementer subagents wrote, so its approval is refused at ship.
    It starts a headless reviewer in its own review worktree with a child
    reviewer grant and the AIDA-generated review prompt. When it exits it
    prints a summary.
-3. Read the verdict from `.aida/review-verdicts/PR-<n>.json`.
+3. The job's exit status is the signal. Exit 0 with a `verdict:` line in
+   its summary means a verified verdict: read it from
+   `.aida/review-verdicts/PR-<n>.json`. Exit 30 or any other non-zero exit
+   means no verified verdict, even if that file exists; launch a new reviewer.
 
 Rules for the review launch:
 - **Don't write the reviewer's prompt.** No `claude -p "<your text>"`, no
