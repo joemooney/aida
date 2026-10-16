@@ -3,12 +3,12 @@ spec_id: TASK-1790
 agreed_id: TASK-1790
 title: 'STORY-1698 follow-ups: exclusions ledger perms/owner check, require_direct_tty wording, operator-only exclusion beyond named IDs, re-arm audit ordering'
 description: 'From the #2687 STRICT round-2 review (non-blocking): (1) read_exclusions in mandate.rs only checks for a regular file; enforce 0600 and own-uid as the docs claim. (2) require_direct_tty''s error text says ''role grants''; reword for mandates. (3) A PR''s specs come only from IDs in its branch, title and trailers, so a PR touching an operator-only spec without naming it isn''t excluded; consider deriving from changed files'' trace comments. (4) Re-arm rewrites the marker after record_mandate_clearance logs a clearance; log the re-arm as an explicit event so the audit order is clear.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:50:14.432983134Z
+modified_at: 2026-10-16T18:51:00.770769847Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -43,6 +43,14 @@ comments:
   content: 'Pre-slice investigation: rearm_mandate_hold_with already calls merge_hold::write_typed_hold, whose write_marker (merge_hold.rs around 492) emits MergeHoldChanged { placed: true } after the marker write and deletes the clearance file first. Before adding another event for item 4, check whether the missing piece is explicit re-arm context/order regression rather than absent generic placement logging. Mandate CLI at mandate.rs around 1218 uses shared require_direct_human; its inherited require_direct_tty role-grant wording is the item-2 source. No implementation edit made.'
   created_at: 2026-10-16T18:50:14.432983134Z
   modified_at: 2026-10-16T18:50:14.432983134Z
+history:
+- id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
+  author: aida-session-start
+  timestamp: 2026-10-16T18:51:00.770768559Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
