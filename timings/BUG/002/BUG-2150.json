@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2150",
+  "publishes": [
+    {
+      "at": "2026-10-16T01:43:16.381441533Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T17:56:12.580665948Z",
+      "spec": "BUG-2150",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:05:33.433857538Z",
+      "spec": "BUG-2150",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2680,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "9d2fb3644f726ae923a12a0c7cfe0629cb54c8f9"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:05:34.706985883Z",
+      "spec": "BUG-2150",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT round 1: the lease coexistence and exit status are correct, but CI is red, the authority checks for conditions (a)/(b) are untested (a mutation removing all three passes), and identity is not bound to this launch's child grant",
+        "recovery_hint": "address the review findings, move BUG-2150 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T23:04:50.154058157Z",
+      "spec": "BUG-2150",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2680,
+        "verdict": "APPROVED",
+        "reviewed_sha": "bbb2c83c3e7c45b1d9f465cf8bc199ad5e6d3fab"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:49:15.936096876Z",
+      "spec": "BUG-2150",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2680,
+        "verdict": "APPROVED",
+        "reviewed_sha": "bbb2c83c3e7c45b1d9f465cf8bc199ad5e6d3fab"
+      }
+    },
+    {
+      "ts": "2026-10-16T01:10:12.564006103Z",
+      "spec": "BUG-2150",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2680,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b285957b9f9223cfe2e2c2b5643cb51377b4e896"
+      }
+    },
+    {
+      "ts": "2026-10-16T01:43:01.907966342Z",
+      "spec": "BUG-2150",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2680
+      }
+    },
+    {
+      "ts": "2026-10-16T01:43:16.362881957Z",
+      "spec": "BUG-2150",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "463b81d02796148deba3c59c47daefce584c35f4",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
