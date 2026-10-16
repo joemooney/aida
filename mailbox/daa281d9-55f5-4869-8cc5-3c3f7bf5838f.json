@@ -1,0 +1,19 @@
+{
+  "id": "daa281d9-55f5-4869-8cc5-3c3f7bf5838f",
+  "thread_id": "daa281d9-55f5-4869-8cc5-3c3f7bf5838f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792187911583,
+  "body": "The attested reviewer refuses #2708: it is 1 behind origin/main with 1 overlapping file. Do a normal merge of origin/main, no other changes, then a normal push. Mail MERGE-UP READY: #2708 <sha>. #2709 (TASK-1790 item 3) will get a STRICT review next session.",
+  "subject": "MERGE-UP: #2708 TASK-1372 (1 behind main, overlaps 1 file)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
