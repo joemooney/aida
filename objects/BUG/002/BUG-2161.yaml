@@ -3,12 +3,12 @@ spec_id: BUG-2161
 agreed_id: BUG-2161
 title: 'Flaky CI test: supervise_cmd::bug_1621_watch_redrive_tests::watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock'
 description: 'It failed on PR #2664 CI (run 38808659361, head 79ee6c0887, 8725 passed / 1 failed) at aida-cli-lib/src/tests/bug_1621_watch_redrive_tests.rs:767, then passed on rerun at the SAME sha. #2664 only touches regen code. The same run also panicked in global_queue::tests::bug_1682_process_child (bug_1682_global_queue_tests.rs:77), which is a child-process helper and possibly related. Investigate timing or shared-state assumptions at :767 under parallel test load; make it deterministic.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:05:42.747895563Z
-modified_at: 2026-10-16T02:50:47.347616288Z
+modified_at: 2026-10-16T07:33:18.505246713Z
 req_type: Bug
 comments:
 - id: 01a1429e-84b3-7881-a891-011d35c545c8
@@ -25,6 +25,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a143a1-2c25-7522-b8b3-8d790f628b1a
+  author: aida-auto-bump
+  timestamp: 2026-10-16T07:33:18.501056783Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a143a1-2c29-7c41-ae03-7e093df997c9
+  timestamp: 2026-10-16T07:33:18.505242255Z
+  agent: aida
+  commit_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
+  summary: 'Round-2 delta review: round-1 blocker fixed (is_own_pre_exec_fork compares dev+ino, fails toward count/kill); CLONE_PARENT regression test asserts counted+SIGKILLed; 3/3 runs green. Non-blocking: document exec-own-binary residual; clone test should not silently return.'
+  review_verdict: approved
 filed_at:
   code_sha: 34280b1914159dad6f03798ba68ff0c0f64262b4
   branch: main
@@ -33,3 +47,7 @@ filed_at:
   aida_build_sha: 34280b1914
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T07:33:18.501052165Z
+  completion_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
