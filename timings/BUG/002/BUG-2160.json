@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2160",
+  "publishes": [
+    {
+      "at": "2026-10-16T07:33:19.986467150Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T21:06:02.160334910Z",
+      "spec": "BUG-2160",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T03:04:25.912955010Z",
+      "spec": "BUG-2160",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2686,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "42c28af8d229cce423bee42765c3be94e681ebd7"
+      }
+    },
+    {
+      "ts": "2026-10-16T03:04:27.546495013Z",
+      "spec": "BUG-2160",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STANDARD round 1: ShiftLock, test (a), error context and the bug_1682 changes are sound; the survivor-scan skip is fail-open (CLONE_PARENT evasion in unconfined mode).",
+        "recovery_hint": "address the review findings, move BUG-2160 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T06:31:35.727774253Z",
+      "spec": "BUG-2160",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2686,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9c7ba29c813eb3ee907a2772e705d9224037444e"
+      }
+    },
+    {
+      "ts": "2026-10-16T06:32:33.024748814Z",
+      "spec": "BUG-2160",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2686,
+        "verdict": "APPROVED",
+        "reviewed_sha": "9c7ba29c813eb3ee907a2772e705d9224037444e"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:33:05.259951482Z",
+      "spec": "BUG-2160",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2686
+      }
+    },
+    {
+      "ts": "2026-10-16T07:33:19.970528971Z",
+      "spec": "BUG-2160",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
