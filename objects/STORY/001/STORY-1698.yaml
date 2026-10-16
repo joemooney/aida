@@ -23,12 +23,12 @@ description: |-
   - Refused cases: expired mandate; missing attestation; stale sha; advisor-authored PR; excluded spec class without --include-supervised; non-advisor seat.
   - 'mandate stop' takes effect immediately, and the ledger entries exist.
   Tier: STRICT (merge authority). Rules: architecture change, so the implementer posts IMPLEMENTER SKETCH on this story and gets advisor signoff before implementing.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:42.111598429Z
-modified_at: 2026-10-16T07:51:17.697424428Z
+modified_at: 2026-10-16T08:43:28.862196169Z
 req_type: Story
 tags:
 - docs:impacted
@@ -113,6 +113,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a143e1-6ada-7801-bbc6-431c1f21b259
+  author: aida-auto-bump
+  timestamp: 2026-10-16T08:43:28.858629227Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a143e1-6ade-7a32-ad9e-5dd698908983
+  timestamp: 2026-10-16T08:43:28.862186092Z
+  agent: implementer
+  commit_sha: 76790181a08a33a50ec1228acb9ab9b0104e8a21
+  summary: Delta from approved d13a4939e7 is exactly MandateChanged added to docs/monitor-contract-fixtures/events-follow.json (drift guard fix); prior STRICT approval carried.
+  review_verdict: approved
 filed_at:
   code_sha: 84a04dc111d04db11f26375d2a7d12d68f1ed930
   branch: main
@@ -121,3 +135,7 @@ filed_at:
   aida_build_sha: c419f6a5ef
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T08:43:28.858625396Z
+  completion_sha: 76790181a08a33a50ec1228acb9ab9b0104e8a21
