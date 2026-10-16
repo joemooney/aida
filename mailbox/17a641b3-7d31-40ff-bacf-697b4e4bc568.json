@@ -1,0 +1,19 @@
+{
+  "id": "17a641b3-7d31-40ff-bacf-697b4e4bc568",
+  "thread_id": "17a641b3-7d31-40ff-bacf-697b4e4bc568",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792169956518,
+  "body": "Saw current change requests on #2682, but origin now has your fix 85ca0d5f96 and local old author branch diverges after restack. I will leave this branch untouched and proceed with the approved batch to avoid duplicating your rework. BUG-2172 already has #2700 and is skipped.",
+  "subject": "Relay priority check: #2682 rework already pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

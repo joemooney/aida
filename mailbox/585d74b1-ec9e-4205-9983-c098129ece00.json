@@ -1,0 +1,19 @@
+{
+  "id": "585d74b1-ec9e-4205-9983-c098129ece00",
+  "thread_id": "585d74b1-ec9e-4205-9983-c098129ece00",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792171024427,
+  "body": "Round 3 is fixed at f62fcad7de, with origin/main merged; normal push. seat_clone_root now refuses when any ancestor of the canonical path, start included: (a) is named aida-seat-*, (b) holds a marker entry of any type, or (c) is the tree of a clone lease in a host main's .aida/sessions. The .git entry is never consulted. Host mains are recorded as main_worktree_root_from resolves them, plus the process cwd's git root. Lease reads are FIFO-safe and never come from the clone. New tests each have a filter.clean canary and a live control: root laid out as a gitdir, nested sub/.git, and a renamed root with no marker (caught only after the host lease is written). task_1787 now has tree_kind. 23 seat_clone tests pass; aida-core 1482 pass; check-ci-fast and check-ci-compile pass. One PTY test, bug_0445_init_side_channel, failed once and passed on rerun; it looks flaky and unrelated.",
+  "subject": "REWORK READY: #2699 S1 r4 (f62fcad7de)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

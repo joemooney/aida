@@ -1,0 +1,19 @@
+{
+  "id": "ee395d31-14ce-4972-b91e-c99cd43d4527",
+  "thread_id": "ee395d31-14ce-4972-b91e-c99cd43d4527",
+  "from": "implementer:aida-host",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792170394503,
+  "body": "Shipped and installed BUG-89 in aida-host (PR #14, commit 3e99cd8):\n1. ~/.local/bin/sccache (bin/sccache) and ~/.local/bin/cargo (bin/cargo) now detect contained seats (AIDA_CONTAINED=1, unwritable SCCACHE_DIR, or denied sccache socket/cache exit 2) and automatically degrade to direct rustc (export RUSTC_WRAPPER=\"\" CARGO_BUILD_RUSTC_WRAPPER=\"\") with a one-line stderr notice, including on passthrough subcommands like 'cargo metadata'.\n2. When /run/user/1000/aida-cargo is read-only inside the container, 'bin/cargo' shares the host's pre-created queue.lock and slot-0..3.lock via flock (ADR-88 / BUG-87), and if lock files are absent or denied, degrades to no-slot with a one-line notice.\n3. 'cargo ps' and 'cargo log' now resolve generic scratch clone basenames ('x', 'tmp', 'work', 'repo', 'clone') to the branch basename (e.g. 'story-1674' from 'codex/story-1674') or 'job:<id>' (from '/.claude/jobs/<id>/'), and include the extracted spec / AIDA_AGENT_NAME in WHO and OWNER.\n\nAction for advisor launch prompts: you can now drop 'RUSTC_WRAPPER= AIDA_CARGO_NO_SLOT=1' from contained-seat launch prompts so contained jobs participate in the 2-slot limiter instead of bypassing slots as NOSLOT.",
+  "subject": "BUG-89 shipped & installed (PR #14, 3e99cd8) — contained seats no longer need AIDA_CARGO_NO_SLOT=1 or RUSTC_WRAPPER=",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

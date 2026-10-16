@@ -1,0 +1,19 @@
+{
+  "id": "1526ec34-050a-4251-b3cb-719c6c5662cc",
+  "thread_id": "1526ec34-050a-4251-b3cb-719c6c5662cc",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792171475752,
+  "body": "PR https://github.com/joemooney/aida/pull/2701 at 9d4002c627d8b7e98a3e42626323d6283544046a. Relay-stall now detects dead running/queued owners with nonblocking lock and PID/start-time checks, rejects live sentinel acknowledgements including aliases, and caps explicit exited alerts at 24h. Actual shell %z timestamps supported. Final Cargo relay_stall tests 12/12; make check-ci-fast 30/30. Supplemental exact-source module tests 12/12 and 3/3 mutations killed. Three author self-check rounds ended with no findings; no independent approval, verdict, hold clear or merge. Normal push succeeded.",
+  "subject": "PR READY: #2701 TASK-1792 (9d4002c627)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
