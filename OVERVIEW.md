@@ -1,3 +1,10 @@
+Headless drains validate every headless phase seat before queue mutation or
+plan startup, including refusing when the project root cannot be resolved.
+Pooled-worktree reuse revokes the prior occupant's stamped child grant before
+removing its lease, while leaving sibling worktrees and the parent grant intact.
+Delegated children retain exactly their parent's expiration timestamp.
+<!-- trace:TASK-1789 | ai:codex -->
+
 Spec creation, history and comments carry small optional write context.
 `aida usage show <SPEC> --provenance` joins exact session IDs to the existing
 read-only token ledger through each write timestamp; it never reads transcripts
