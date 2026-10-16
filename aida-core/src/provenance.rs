@@ -231,6 +231,17 @@ pub fn stamp_write(
     stamp_write_impl(incoming, disk, context, true)
 }
 
+/// Write-event rule (STORY-1674): a history entry with no field changes is a
+/// *write event*. It records which session/harness persisted a write that had
+/// no field-history builder; it is never a content change. Hence:
+/// - history consumers that count changes (analytics churn, contributions,
+///   the NeedsAttention exit recheck in `aida edit`) skip it
+///   ([`crate::models::HistoryEntry::is_write_event`]);
+/// - a write event already on disk is re-appended when the incoming copy
+///   lacks it, so a caller cannot remove one (a stale pre-stamp retry keeps
+///   it rather than adding a fresh event per save);
+/// - a true no-op write adds none.
+// trace:STORY-1674 | ai:claude
 fn stamp_write_impl(
     incoming: &mut Requirement,
     disk: Option<&Requirement>,
@@ -308,13 +319,20 @@ fn stamp_write_impl(
     Ok(())
 }
 
+/// The CLI's author for a write: `AIDA_AUTHOR` (e.g. `ai:codex:joe`), then
+/// the system user, then `"Unknown"`. The single resolution every CLI write
+/// and the write event share.
+// trace:STORY-1674 | ai:claude
+pub fn default_author() -> String {
+    std::env::var("AIDA_AUTHOR")
+        .or_else(|_| std::env::var("USER"))
+        .or_else(|_| std::env::var("USERNAME")) // Windows fallback
+        .unwrap_or_else(|_| "Unknown".to_string())
+}
+
 fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {
-    let mut event = crate::models::HistoryEntry::new(
-        nonempty(std::env::var("AIDA_AUTHOR").ok())
-            .or_else(|| nonempty(std::env::var("USER").ok()))
-            .unwrap_or_else(|| "unknown".into()),
-        Vec::new(),
-    );
+    // trace:STORY-1674 | ai:claude
+    let mut event = crate::models::HistoryEntry::new(default_author(), Vec::new());
     event.session_id = context.session_id.clone();
     event.harness_version = context.harness_version.clone();
     event
@@ -601,6 +619,19 @@ mod tests {
             serde_yaml::to_string(&caller).unwrap(),
             serde_yaml::to_string(&persisted).unwrap()
         );
+    }
+
+    // The write event's author is the CLI's normal author (AIDA_AUTHOR
+    // first), not a separate cascade. trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_write_event_uses_the_cli_author() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_AUTHOR", "ai:codex:joe")]);
+        let old = Requirement::new("old".into(), "body".into());
+        let mut next = old.clone();
+        next.title = "new".into();
+        stamp_write(&mut next, Some(&old), &write_context()).unwrap();
+        assert_eq!(next.history[0].author, "ai:codex:joe");
+        assert_eq!(default_author(), "ai:codex:joe");
     }
 
     #[test]

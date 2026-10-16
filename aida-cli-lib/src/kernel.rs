@@ -6,14 +6,9 @@ use crate::*;
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
 pub(crate) fn get_default_author() -> String {
-    if let Ok(author) = std::env::var("AIDA_AUTHOR") {
-        author
-    } else {
-        // Fall back to system username
-        std::env::var("USER")
-            .or_else(|_| std::env::var("USERNAME")) // Windows fallback
-            .unwrap_or_else(|_| "Unknown".to_string())
-    }
+    // One resolution shared with the store's write events.
+    // trace:STORY-1674 | ai:claude
+    aida_core::provenance::default_author()
 }
 
 /// Short build SHA for telemetry tagging. Reads the same banner that

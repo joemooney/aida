@@ -2564,6 +2564,14 @@ impl HistoryEntry {
             changes,
         }
     }
+
+    /// An empty-change entry is a write event: it records the writing
+    /// session/harness context only, never a content change. History
+    /// consumers that count changes (churn, contributions) skip it.
+    // trace:STORY-1674 | ai:claude
+    pub fn is_write_event(&self) -> bool {
+        self.changes.is_empty()
+    }
 }
 
 /// STORY-582: a durable, committed audit record of WHAT an agent did to

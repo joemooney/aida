@@ -418,14 +418,14 @@ impl SqliteBackend {
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version, filed_at
              FROM requirements ORDER BY created_at"
         } else {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
-                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
+                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version, filed_at
              FROM requirements ORDER BY created_at"
         };
 
@@ -462,6 +462,8 @@ impl SqliteBackend {
             let attachments_json: String = row.get(27)?;
             let gitlab_issues_json: String = row.get(28)?;
             let version: i64 = row.get(29)?;
+            // trace:STORY-1674 | ai:claude — read with the row, no per-row SELECT.
+            let filed_at_json: Option<String> = row.get(30)?;
 
             Ok((
                 id_str,
@@ -494,6 +496,7 @@ impl SqliteBackend {
                 attachments_json,
                 gitlab_issues_json,
                 version,
+                filed_at_json,
             ))
         })?;
 
@@ -530,6 +533,7 @@ impl SqliteBackend {
                 attachments_json,
                 gitlab_issues_json,
                 version,
+                filed_at_json,
             ) = row_result?;
 
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
@@ -603,12 +607,7 @@ impl SqliteBackend {
                 execution_mode: None,
                 // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                 origin: None,
-                filed_at: conn
-                    .query_row(
-                        "SELECT filed_at FROM requirements WHERE id=?1",
-                        [id.to_string()],
-                        |row| row.get::<_, Option<String>>(0),
-                    )?
+                filed_at: filed_at_json
                     .map(|json| Self::from_json(&json))
                     .transpose()?,
                 custom_status,
@@ -883,14 +882,14 @@ impl SqliteBackend {
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version, filed_at
              FROM requirements WHERE id = ?1"
         } else {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
-                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
+                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version, filed_at
              FROM requirements WHERE id = ?1"
         };
 
@@ -926,6 +925,8 @@ impl SqliteBackend {
                 let attachments_json: String = row.get(27)?;
                 let gitlab_issues_json: String = row.get(28)?;
                 let version: i64 = row.get(29)?;
+                // trace:STORY-1674 | ai:claude — read with the row, no per-row SELECT.
+                let filed_at_json: Option<String> = row.get(30)?;
 
                 Ok((
                     id_str,
@@ -958,6 +959,7 @@ impl SqliteBackend {
                     attachments_json,
                     gitlab_issues_json,
                     version,
+                    filed_at_json,
                 ))
             })
             .optional()?;
@@ -994,6 +996,7 @@ impl SqliteBackend {
                 attachments_json,
                 gitlab_issues_json,
                 version,
+                filed_at_json,
             )) => {
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
                 let status = Self::str_to_status(&status_str);
@@ -1067,12 +1070,7 @@ impl SqliteBackend {
                     execution_mode: None,
                     // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                     origin: None,
-                    filed_at: conn
-                        .query_row(
-                            "SELECT filed_at FROM requirements WHERE id=?1",
-                            [id.to_string()],
-                            |row| row.get::<_, Option<String>>(0),
-                        )?
+                    filed_at: filed_at_json
                         .map(|json| Self::from_json(&json))
                         .transpose()?,
                     custom_status,

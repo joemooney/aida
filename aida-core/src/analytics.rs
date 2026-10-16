@@ -210,7 +210,9 @@ fn compute_churn(reqs: &[Requirement]) -> ChurnMetrics {
     let mut per_req_changes: Vec<(String, usize)> = Vec::new();
 
     for req in reqs {
-        let changes = req.history.len();
+        // Write events record session context, not a change.
+        // trace:STORY-1674 | ai:claude
+        let changes = req.history.iter().filter(|h| !h.is_write_event()).count();
         total_changes += changes;
 
         if changes == 0 {
@@ -376,7 +378,8 @@ fn compute_top_contributors(reqs: &[Requirement]) -> Vec<(String, usize)> {
             *contributions.entry(req.owner.clone()).or_insert(0) += 1;
         }
         // Count by history authors
-        for entry in &req.history {
+        // trace:STORY-1674 | ai:claude
+        for entry in req.history.iter().filter(|h| !h.is_write_event()) {
             if !entry.author.is_empty() {
                 *contributions.entry(entry.author.clone()).or_insert(0) += 1;
             }
@@ -476,6 +479,21 @@ mod tests {
         assert_eq!(churn.total_changes, 10);
         assert_eq!(churn.stable_count, 1);
         assert_eq!(churn.high_churn_count, 1);
+    }
+
+    // A write event (empty changes) records session context, not a change:
+    // it moves neither churn nor stability. trace:STORY-1674 | ai:claude
+    #[test]
+    fn test_churn_skips_write_events() {
+        let mut req = make_req("Touched", RequirementStatus::Draft, 5);
+        for _ in 0..7 {
+            req.history
+                .push(crate::models::HistoryEntry::new("joe".into(), Vec::new()));
+        }
+        let churn = compute_churn(&[req]);
+        assert_eq!(churn.total_changes, 0);
+        assert_eq!(churn.stable_count, 1);
+        assert_eq!(churn.high_churn_count, 0);
     }
 
     #[test]

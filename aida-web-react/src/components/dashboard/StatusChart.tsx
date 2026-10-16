@@ -28,6 +28,8 @@ export function StatusChart({ requirements }: StatusChartProps) {
     Done: '#84cc16',
     Completed: '#10b981',
     Rejected: '#ef4444',
+    // trace:STORY-1674 | ai:claude — terminal, replaced by another spec.
+    Superseded: '#78716c',
   };
 
   let cumulative = 0;

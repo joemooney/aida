@@ -375,6 +375,13 @@ entry records a write event with an empty change list; no-op retries add none.
 Comment creation context stays attached to its original identity; later edits
 receive a new write event.
 
+A write event (a history entry with an empty change list) records session
+context only, never a content change: churn and contribution metrics skip it,
+and `aida edit` does not treat it as a concurrent change when leaving
+NeedsAttention. A write event already on disk is re-appended on save, so a
+caller cannot remove one.
+<!-- trace:STORY-1674 | ai:claude -->
+
 Only `AIDA_HARNESS_VERSION`, explicitly supplied to the writing process by its
 launcher, supplies a captured harness version. Missing or blank values mean
 unknown. This change does not configure launchers to provide that variable.
@@ -398,7 +405,11 @@ Legacy YAML preserves optional fields through its write paths. Legacy SQLite
 schema v9 adds nullable `filed_at` JSON; existing rows remain un-attributed and
 history/comments retain their optional JSON context. Migration, export and tree
 import preserve historical event context, including unknowns; the current import
-receives its own write event. This is compatibility for
+receives its own write event. Binaries older than this change do not know
+`session_id` / `harness_version` and drop them when they rewrite an entry, so
+mixed-version fleets can lose that context. The legacy YAML save now refuses
+to overwrite a non-empty file it cannot parse (an empty file is still
+initialized). This is compatibility for
 archived stores, not a new storage mode. The opt-in archived PostgreSQL backend
 is outside this implementation and validation scope; it still lacks filing-context
 persistence.

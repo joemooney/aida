@@ -1241,6 +1241,14 @@ impl GitBackend {
         // A new path may be an existing UUID renamed by ID migration. Resolve
         // that identity once per full save, so old unknown events remain old.
         // trace:STORY-1674 | ai:codex
+        // Only an on-disk spec missing from the incoming store can be a
+        // rename's old path, so the map reads just those (none: no reads).
+        // trace:STORY-1674 | ai:claude
+        let incoming_specs: std::collections::HashSet<&str> = store
+            .requirements
+            .iter()
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
         let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
         for req in &store.requirements {
@@ -1303,7 +1311,10 @@ impl GitBackend {
                 _ => {
                     if previous_by_uuid.is_none() {
                         let mut by_uuid = std::collections::HashMap::new();
-                        for (old_id, _) in &existing {
+                        for (old_id, _) in existing
+                            .iter()
+                            .filter(|(id, _)| !incoming_specs.contains(id.as_str()))
+                        {
                             if let Ok(old) = object_store::read_object(&self.objects_root, old_id) {
                                 if by_uuid.insert(old.id, old).is_some() {
                                     anyhow::bail!("cannot resolve renamed requirement: duplicate UUID in store");

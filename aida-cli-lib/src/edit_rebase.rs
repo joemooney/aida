@@ -89,9 +89,13 @@ pub(crate) fn rebase_edit(
     let (r, p, c) = (as_map(read)?, as_map(planned)?, as_map(current)?);
     let null = Value::Null;
     // Leaving NeedsAttention acts on the parked spec as it was read; any
-    // concurrent change (a new tag, a comment, …) refuses.
+    // concurrent change (a new tag, a comment, …) refuses. An empty-change
+    // write event only records session/harness context, not a content
+    // change, so it never counts as one.
     // trace:TASK-1506 | ai:claude
+    // trace:STORY-1674 | ai:claude
     if opts.leaving_needs_attention {
+        let (r, c) = (without_write_events(&r), without_write_events(&c));
         let mut changed: Vec<String> = Vec::new();
         for k in c.keys().chain(r.keys()) {
             let Some(name) = k.as_str() else { continue };
@@ -124,6 +128,24 @@ pub(crate) fn rebase_edit(
         return Ok(Err(conflicts));
     }
     Ok(Ok(serde_yaml::from_value(Value::Mapping(merged))?))
+}
+
+/// `m` with the empty-change write events dropped from its history: those
+/// record the writing session's context only (STORY-1674) and are never a
+/// content change.
+// trace:STORY-1674 | ai:claude
+fn without_write_events(m: &Mapping) -> Mapping {
+    let mut out = m.clone();
+    if let Some(Value::Sequence(history)) = out.get_mut("history") {
+        history.retain(
+            |entry| matches!(entry.get("changes"), Some(Value::Sequence(c)) if !c.is_empty()),
+        );
+        // An empty history is not serialized, so match the absent key.
+        if history.is_empty() {
+            out.remove("history");
+        }
+    }
+    out
 }
 
 fn merge_maps(
@@ -621,6 +643,49 @@ mod tests {
             .output()
             .unwrap();
         assert!(String::from_utf8_lossy(&log.stdout).contains("test subject"));
+    }
+
+    // An empty-change write event (session context only) is not a content
+    // change, so the exit still applies; a real field change by another
+    // writer while the spec stays parked still refuses it.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn needs_attention_exit_ignores_write_events_but_refuses_real_changes() {
+        let f = fixture();
+        let mut parked = spec();
+        parked.status = RequirementStatus::NeedsAttention;
+        let read = f.backend.add_requirement(parked).unwrap();
+        let mut planned = read.clone();
+        planned.status = RequirementStatus::Approved;
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.priority = Priority::High;
+        other.update_requirement(&theirs).unwrap();
+        let after = on_disk(&f, "TASK-1");
+        assert!(
+            after.history.iter().any(|e| e.changes.is_empty()),
+            "the untracked write recorded a write event"
+        );
+
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            Some(&RequirementStatus::Approved),
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("priority"), "{err}");
+        assert!(!err.contains("history"), "{err}");
+        assert_eq!(
+            on_disk(&f, "TASK-1").status,
+            RequirementStatus::NeedsAttention
+        );
     }
 
     // Review probe (a): the read copy has tags {keep}; the user runs

@@ -87,36 +87,54 @@ fn exact_identity(value: Option<&str>) -> Option<String> {
     value.filter(|v| !v.trim().is_empty()).map(str::to_owned)
 }
 
-fn session_evidence(
-    conn: Option<&Connection>,
-    session: Option<&str>,
+/// One measured ledger row for a session: when it occurred, its model, and
+/// its token columns (in [`TOKEN_NAMES`] order).
+// trace:STORY-1674 | ai:claude
+struct LedgerRow {
     at: DateTime<Utc>,
-) -> Result<SessionEvidence> {
-    let mut evidence = SessionEvidence::default();
-    let (Some(conn), Some(session)) = (conn, session) else {
-        return Ok(evidence);
-    };
+    model: Option<String>,
+    tokens: [Option<i64>; 5],
+}
+
+/// Every measured row for `session`, read once; the per-write cutoff is
+/// applied in memory by [`evidence_at`].
+// trace:STORY-1674 | ai:claude
+fn session_rows(conn: &Connection, session: &str) -> Result<Vec<LedgerRow>> {
     // Both persisted identity fields are exact matches, never prefixes. A LEFT
     // JOIN retains vendor-session evidence even without an attribution row.
     let mut stmt = conn.prepare("SELECT u.occurred_at,u.raw_model,u.input_uncached,u.input_cache_write,u.input_cache_read,u.output,u.output_reasoning FROM usage_record u LEFT JOIN attribution a USING(record_id) WHERE (u.vendor_session_id=?1 OR a.aida_session_id=?1) AND u.collection_status='measured' ORDER BY u.record_id")?;
     let mut rows = stmt.query([session])?;
+    let mut out = Vec::new();
     while let Some(row) = rows.next()? {
         let time: Option<String> = row.get(0)?;
         let Some(time) = time.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()) else {
             continue;
         };
-        if time.with_timezone(&Utc) > at {
-            continue;
+        let mut tokens = [None; 5];
+        for (i, slot) in tokens.iter_mut().enumerate() {
+            *slot = row.get(i + 2)?;
         }
+        out.push(LedgerRow {
+            at: time.with_timezone(&Utc),
+            model: row.get(1)?,
+            tokens,
+        });
+    }
+    Ok(out)
+}
+
+/// The session's evidence at or before `at`.
+// trace:STORY-1674 | ai:claude
+fn evidence_at(rows: &[LedgerRow], at: DateTime<Utc>) -> Result<SessionEvidence> {
+    let mut evidence = SessionEvidence::default();
+    for row in rows.iter().filter(|r| r.at <= at) {
         evidence.measured_records += 1;
-        let model: Option<String> = row.get(1)?;
-        if let Some(model) = present(model.as_deref()) {
+        if let Some(model) = present(row.model.as_deref()) {
             evidence.models.insert(model);
         } else {
             evidence.unknown_model_records += 1;
         }
-        for (i, name) in TOKEN_NAMES.iter().enumerate() {
-            let value: Option<i64> = row.get(i + 2)?;
+        for (name, value) in TOKEN_NAMES.iter().zip(row.tokens) {
             let item = evidence.tokens.get_mut(name).expect("fixed token names");
             match value {
                 Some(value) => {
@@ -134,6 +152,18 @@ fn session_evidence(
         }
     }
     Ok(evidence)
+}
+
+#[cfg(test)]
+fn session_evidence(
+    conn: Option<&Connection>,
+    session: Option<&str>,
+    at: DateTime<Utc>,
+) -> Result<SessionEvidence> {
+    let (Some(conn), Some(session)) = (conn, session) else {
+        return Ok(SessionEvidence::default());
+    };
+    evidence_at(&session_rows(conn, session)?, at)
 }
 
 fn query(req: &Requirement, conn: Option<&Connection>) -> Result<ProvenanceView> {
@@ -185,8 +215,20 @@ fn query(req: &Requirement, conn: Option<&Connection>) -> Result<ProvenanceView>
     }
     comments(&mut events, &req.comments);
     events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then(a.id.cmp(&b.id)));
-    for event in &mut events {
-        event.session_usage = session_evidence(conn, event.session_id.as_deref(), event.timestamp)?;
+    // One ledger query per distinct session; cutoffs apply in memory.
+    // trace:STORY-1674 | ai:claude
+    if let Some(conn) = conn {
+        let mut by_session: std::collections::HashMap<String, Vec<LedgerRow>> =
+            std::collections::HashMap::new();
+        for event in &mut events {
+            let Some(session) = event.session_id.as_deref() else {
+                continue;
+            };
+            if !by_session.contains_key(session) {
+                by_session.insert(session.to_owned(), session_rows(conn, session)?);
+            }
+            event.session_usage = evidence_at(&by_session[session], event.timestamp)?;
+        }
     }
     Ok(ProvenanceView {
         spec_id: req.display_id().into(),

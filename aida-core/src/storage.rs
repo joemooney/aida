@@ -1796,7 +1796,6 @@ mod tests {
     }
 
     // trace:STORY-1674 | ai:codex
-    // trace:STORY-1674 | ai:codex
     #[test]
     fn story1674_yaml_initial_empty_file_and_invalid_nonempty_guard() {
         let dir = tempfile::tempdir().unwrap();
