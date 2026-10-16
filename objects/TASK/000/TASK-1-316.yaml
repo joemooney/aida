@@ -1,0 +1,28 @@
+id: 01a1460a-3c46-7722-8bcd-694d1283ed27
+spec_id: TASK-1-316
+title: 'cosmetic: adapter::attach computes R1/R2 raw_delta and discriminating_delta whi…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: adapter::attach computes R1/R2 raw_delta and discriminating_delta while both are still 'scored' (adapter.rs:287), before completeness::finish can flip either to incomplete, so the stored delta looks comparable even when one side is incomplete. It is diagnostic-only and not rendered as a headline, but it could mislead JSON consumers.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-16T18:47:18.342924335Z
+modified_at: 2026-10-16T18:47:18.342924335Z
+req_type: Task
+tags:
+- carried-from:STORY-1677
+- finding-hash:9eb81bae
+- from-review:STORY-1677
+- kind:carried-forward
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6
