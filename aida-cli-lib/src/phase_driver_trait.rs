@@ -3732,6 +3732,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
+        // trace:BUG-2165 | ai:antigravity
+        let child_grant = match crate::seat_authority::issue_headless_child(
+            &self.project_root,
+            "implementer",
+            &crate::current_user_id(None),
+        ) {
+            Ok(g) => g,
+            Err(e) => {
+                tee.stop();
+                eprintln!(
+                    "  {} could not issue child grant for CI-fix session ({e:#}) — \
+                     leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
         let mut child_cmd = build_phase_driver_ci_fix_command(
             &worktree,
             &program,
@@ -3740,11 +3757,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &ceiling_value,
             vendor,
             self.contained,
+            child_grant.env_value(),
         );
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
             .status_retrying_etxtbsy();
         tee.stop();
+        if let Some(id) = child_grant.id() {
+            session::revoke_headless_child_grant(id);
+        }
         match status {
             Ok(s) if s.success() => {}
             Ok(s) => {
@@ -3852,7 +3873,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 }
 
-// trace:BUG-2124 | ai:antigravity
+// trace:BUG-2165 | ai:antigravity
 // Builds CI fix command for headless_vendor_args argv.
 pub(crate) fn build_phase_driver_ci_fix_command(
     worktree: &std::path::Path,
@@ -3863,12 +3884,14 @@ pub(crate) fn build_phase_driver_ci_fix_command(
     vendor: session::HeadlessVendor,
     // trace:BUG-2133 | ai:claude
     contained: bool,
+    grant_env: &str,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     cmd.current_dir(worktree)
         .args(fix_args)
         .env("AIDA_HEADLESS", "1")
         .env(ceiling_key, ceiling_value);
+    session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
     if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {

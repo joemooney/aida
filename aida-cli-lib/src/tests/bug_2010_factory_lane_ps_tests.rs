@@ -32,6 +32,7 @@ fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLea
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

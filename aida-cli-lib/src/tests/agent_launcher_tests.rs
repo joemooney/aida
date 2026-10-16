@@ -4076,6 +4076,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "10",
         session::HeadlessVendor::Claude,
         false,
+        "",
     );
     assert!(
         ci_fix_cmd
@@ -4086,7 +4087,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 3. burndown quiet
     let burndown_quiet_cmd =
-        crate::burndown_run::build_burndown_quiet_command("prompt", "mode", "CEILING", "10");
+        crate::burndown_run::build_burndown_quiet_command("prompt", "mode", "", "CEILING", "10");
     assert!(
         burndown_quiet_cmd
             .get_envs()
