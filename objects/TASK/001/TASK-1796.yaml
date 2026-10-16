@@ -1,0 +1,20 @@
+id: 01a1450c-8bf1-7833-958b-605c5d2ea452
+spec_id: TASK-1796
+agreed_id: TASK-1796
+title: 'verify constraints: reject leading // in path probes and add opt-in --fail-on-unknown'
+description: 'Follow-up from the #2683 re-review (STORY-1673). (1) In constraints.rs:152, valid_path accepts ''//host/share/...''. On Windows, try_exists against a hostile shared store could open an outbound SMB connection. Reject a leading //. (2) fails_on_drift (verify_cmd.rs:98) passes unknown and invalid rows, as designed. Add an opt-in --fail-on-unknown (or --strict) so CI gates can''t go green on a host without /proc or with a typo''d block. (3) AGENTS.md still says ''six closed built-in Linux probes'', but two probes are now portable.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T14:10:12.593588299Z
+modified_at: 2026-10-16T14:10:12.593588299Z
+req_type: Task
+filed_at:
+  code_sha: fc39d8f0bc76504a62b5733ebcc61ab9677f5121
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fc39d8f0bc
+  vendor: claude
+  session: b307b6fe-d611-428b-bc2a-5df6287d4592
