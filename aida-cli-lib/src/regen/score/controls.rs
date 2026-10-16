@@ -265,6 +265,7 @@ mod tests {
         let passed = values.iter().filter(|(_, pass)| *pass).count();
         TrialRecord {
             gaps: None,
+            completeness: None,
             format_version: 1,
             adapter: None,
             trial_id: Uuid::new_v4(),
@@ -809,10 +810,17 @@ mod tests {
         );
         std::fs::create_dir(project.path().join(".aida")).unwrap();
         std::fs::write(project.path().join(".aida/config.toml"), "[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\nrequired_tools=['tool']\nreference_repeats=1\n").unwrap();
+        // The installed tool must pass completeness (size + --help) or the reference control flags.
+        // trace:STORY-1677 | ai:claude
         let install = r#"#!/bin/sh
 set -eu
 test -z "${AIDA_REGEN_CHECK_RESULTS+x}"
-printf '#!/bin/sh\nprintf %s\n' "$(cat behavior)" > "$PREFIX/bin/tool"
+cat > "$PREFIX/bin/tool" <<EOS
+#!/bin/sh
+# Complete fixture component with enough substantive bytes and a help interface.
+if test "\${1-}" = --help; then echo Usage: tool; exit 0; fi
+printf '%s\n' $(cat behavior)
+EOS
 chmod +x "$PREFIX/bin/tool"
 "#;
         let oracle = r#"#!/bin/sh
@@ -969,6 +977,11 @@ mod execution_tests {
     use super::*;
     #[test]
     fn confined_reference_repeats_stub_and_trials_use_independent_roots_and_tools() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1003,6 +1016,8 @@ mod execution_tests {
             required_tools: vec!["regen-fixture-tool".into()],
             reference_repeats: 3,
             crash_failure_share_percent: 50,
+            min_bytes: 64,
+            components: BTreeMap::new(),
         };
         let cache = tempfile::tempdir_in("/var/tmp").unwrap();
         let bundle_trial = fresh::FreshRoot::empty().unwrap();
