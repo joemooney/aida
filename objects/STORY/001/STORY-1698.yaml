@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:42.111598429Z
-modified_at: 2026-10-16T00:55:02.646407003Z
+modified_at: 2026-10-16T00:55:40.424049589Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -59,6 +59,17 @@ comments:
     Tests (fail without change): agent/no-TTY start refused, human start ok (TTY injected via test seam); ship-under-mandate OK; refusals: expired, stopped, missing attestation, stale sha, advisor-authored, excluded class w/o flag, non-advisor seat; ledger + clearance record present.
   created_at: 2026-10-16T00:55:02.646407003Z
   modified_at: 2026-10-16T00:55:02.646407003Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14235-2088-7c73-a819-f68e970d133e
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: sketch APPROVED; proceed now (top priority). Rulings:
+    (a) The authority record lives ONLY in ~/.aida/mandates/<uuid>.json (same trust class as session-grants), written atomically after require_direct_human(); the events.jsonl MandateChanged entry is the audit copy. Do NOT write a store object: the git store is agent-writable and must never be read as authority. This satisfies 'recorded'.
+    (b) operator-only tags and execution_mode=Operator stay human-only ALWAYS, even with --include-supervised. --include-supervised only lifts the sensitive() class (security/containment/review-authority/merge-authority).
+    (c) Accepted: the approver must not be the shipping session; label-only holds stay human-only; recused advisor is refused; --override-stale-approval is refused under a mandate.
+    Also required: use require_direct_human() (stdin+stderr TTY, refuses managed agent sessions) for start AND stop; the 24h hard cap and no extend are confirmed; re-read the mandate under the merge lease immediately before the merge call; add the statusline segment. Tier STRICT: an adversarial review follows.
+  created_at: 2026-10-16T00:55:40.424049589Z
+  modified_at: 2026-10-16T00:55:40.424049589Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a14232-9634-7ff2-9397-aecbc5be8cd4
