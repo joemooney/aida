@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1733",
+  "publishes": [
+    {
+      "at": "2026-10-16T00:44:17.531432970Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T14:55:14.414172212Z",
+      "spec": "TASK-1733",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1733",
+        "branch": "codex/story-1676",
+        "first_seen": "2026-10-15T14:55:14.414100416+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T21:05:44.524394301Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2667,
+        "verdict": "APPROVED",
+        "reviewed_sha": "55bca00b1162a4cedeaa1e6c96e03d5563931880"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:29:33.448352365Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2667,
+        "verdict": "APPROVED",
+        "reviewed_sha": "538ca9419d9ec09a14d25f7186b7535a316b1aeb"
+      }
+    },
+    {
+      "ts": "2026-10-15T23:02:31.750576257Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2667,
+        "verdict": "APPROVED",
+        "reviewed_sha": "26006258c83d5b424404caaf09f8921d7a069753"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:09:34.855398809Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2667,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c333cec91771650a9c76799688ae8d24745b7137"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:41:50.266269790Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T00:42:01.075159692Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2667
+      }
+    },
+    {
+      "ts": "2026-10-16T00:44:17.493651064Z",
+      "spec": "TASK-1733",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:44:17.494729878Z",
+      "spec": "TASK-1733",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
