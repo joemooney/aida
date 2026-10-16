@@ -1,5 +1,6 @@
 id: 01a141e9-f964-7072-bfb0-07774d0d9238
 spec_id: TASK-1-309
+agreed_id: TASK-1378
 title: 'serial-ship.sh deadlocks on draft PRs: it waits for Build before ''gh pr ready'', but CI skips Build on drafts'
 description: '~/.local/share/aida/ops/serial-ship.sh waits up to 70 min for a Build conclusion, then runs ''gh pr ready''. Draft PRs never get a Build run (only merge-hold-gate runs), so a draft PR waits the full 70 min and stops. Seen 2026-10-15 with #2667 (codex drafts). Fix: run ''gh pr ready'' right after the update-branch step and before polling Build (the advisor has already approved by then), or fail fast with a ''PR is draft'' message. Consider moving serial-ship into the repo (scripts/ or aida pr ship --serial) so it is versioned and tested.'
 status: Draft
