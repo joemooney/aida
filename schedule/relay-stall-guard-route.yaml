@@ -1,7 +1,8 @@
 job: relay-stall-guard-route
-due_since: 2026-10-16T04:45:57.682036414Z
-due_reason: on CronJobFailed:relay-stall-guard
-due_failure:
-  trip_id: relay-stall-guard@2026-10-16T04:44:28.553466878Z
-  job: relay-stall-guard
-  error: 'exit 1: '
+last_run: 2026-10-16T09:25:37.142800808Z
+last_by:
+  seat: advisor
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
+  vendor: claude
+result: done
+note: 'Promoted binary predates #2690; the guard command is unsupported until the next dev build. Rebuilding.'
