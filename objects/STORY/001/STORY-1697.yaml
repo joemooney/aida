@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:35.869257314Z
-modified_at: 2026-10-16T00:52:52.658836223Z
+modified_at: 2026-10-16T04:14:43.965429701Z
 req_type: Story
 comments:
 - id: 01a14232-9132-70d3-acc4-621f71a68d16
@@ -28,6 +28,12 @@ comments:
   content: 'Operator decision 2026-10-15 17:52: ''file option 1 as a story'' (recorded by advisor).'
   created_at: 2026-10-16T00:52:52.658836223Z
   modified_at: 2026-10-16T00:52:52.658836223Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a142eb-5efd-7b50-ad1e-6c94f861ce0c
+  author: joe
+  content: 'Advisor note 2026-10-15: ''aida merge-hold auto-release'' (STORY-1687) already releases REWORK-only holds on a fresh recorded approval, but refuses holds on ''sensitive'' specs (e.g. identity, security metadata), which still need a human clear. STORY-1697 should therefore be re-scoped to: (a) make auto-release happen automatically when the approval is recorded (no separate command), and (b) under ADR-77/STORY-1698 mandate, let the advisor release sensitive rework holds too. Check rework_hold_release.rs before implementing to avoid duplication.'
+  created_at: 2026-10-16T04:14:43.965429701Z
+  modified_at: 2026-10-16T04:14:43.965429701Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a14232-855d-74b0-bf0b-897e0ff2a857
