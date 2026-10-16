@@ -26,12 +26,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), docs/regeneration/aida-feedback.md at commit e9521ab; results in docs/regeneration/results-2026-10-11-round2.md and -round3.md. Round 3: from the AIDA store, 6 of 8 models across Anthropic, OpenAI and Google regenerate the system to 86-96% of discriminating oracle checks; two checks fail for every model.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:22.923740686Z
-modified_at: 2026-10-16T07:48:15.492934216Z
+modified_at: 2026-10-16T10:28:00.201412895Z
 req_type: Story
 tags:
 - from:aida-host
@@ -144,6 +144,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14441-1c0c-7883-87b4-56eafe3a84af
+  author: aida-auto-bump
+  timestamp: 2026-10-16T10:28:00.140796068Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a14441-1c49-7233-8d62-042d116bfa2f
+  timestamp: 2026-10-16T10:28:00.201395984Z
+  agent: implementer
+  commit_sha: 5aa7198cfe4e3a3f5055480c06d7095208e7080b
+  summary: Merge-up of approved 9b3a92d83b; conflict resolution reviewed via remerge-diff (both sides kept)
+  punted:
+  - 'punted: STANDARD round 1: atomic dedup and mapping fallback are correct, but an exact float compare refuses valid trials (43/44), and dedup only checks Draft'
+  review_verdict: approved
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
@@ -152,3 +168,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T10:28:00.140790779Z
+  completion_sha: 5aa7198cfe4e3a3f5055480c06d7095208e7080b
