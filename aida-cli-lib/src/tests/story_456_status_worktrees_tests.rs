@@ -2,6 +2,7 @@ use super::*;
 
 fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "019elease456".to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

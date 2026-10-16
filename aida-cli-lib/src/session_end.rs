@@ -967,6 +967,13 @@ mod bug_2005_wrapper_staleness_tests;
 /// pre-fix behavior.
 // trace:BUG-1952 | ai:claude
 pub(crate) fn resolve_session_end_root(invocation_root: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a seat clone also has a real `.git` directory, but its leases
+    // live in the main checkout its marker, alternates and lease agree on.
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Verified(main) = crate::seat_clone::main_for(invocation_root)
+    {
+        return main;
+    }
     if invocation_root.join(".git").is_dir() {
         return invocation_root.to_path_buf();
     }
@@ -1025,6 +1032,22 @@ pub(crate) fn session_end(
     }
 
     let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
+    // BUG-2169: ending a seat clone (probe, salvage, remove, unpin) is slice
+    // S3. Everything below runs git in the session's tree, which for a clone
+    // would execute seat-controlled config on the host, so refuse first.
+    // trace:BUG-2169 | ai:claude
+    if target.tree_kind == crate::seat_clone::TreeKind::Clone {
+        anyhow::bail!(
+            "session {} works in a contained seat's private clone ({}). `session end` cannot \
+             end a seat clone yet; the clone and its base pin are left in place. Push its branch \
+             from inside the seat, then remove the directory and run `git update-ref -d {}` in \
+             the main checkout.",
+            &target.id[..target.id.len().min(8)],
+            target.worktree_path.display(),
+            crate::seat_clone::pin_ref(&target.worktree_path)
+                .unwrap_or_else(|| format!("{}<seat>", crate::seat_clone::PIN_PREFIX)),
+        );
+    }
 
     // BUG-361: visibility-first guard for the ceiling variant where an agent
     // commits locally and exits without any lifecycle command (`queue done`,

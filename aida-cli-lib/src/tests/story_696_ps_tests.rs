@@ -2,6 +2,7 @@ use super::*;
 
 fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

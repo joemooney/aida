@@ -2,6 +2,7 @@ use super::*;
 
 fn claim_lease(id: &str, scope: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

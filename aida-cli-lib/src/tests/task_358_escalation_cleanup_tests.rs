@@ -11,6 +11,7 @@ fn write_test_lease(
     let sessions = leases_dir(project_root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),

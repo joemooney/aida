@@ -723,6 +723,16 @@ pub(crate) fn warn_if_cwd_removed() -> bool {
 /// Uses `git worktree list --porcelain`; the first record is always the
 /// main worktree. Falls back to `start` when git can't be invoked.
 pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a contained seat's private clone is its own first `worktree
+    // list` record, and git must never run inside it from here (its config
+    // and hooks are seat-writable). Resolve it from files instead; a clone
+    // that does not verify is treated as its own root.
+    // trace:BUG-2169 | ai:claude
+    match crate::seat_clone::main_for(start) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(clone_root) => return clone_root,
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
@@ -1784,6 +1794,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* force_claim */ false,
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
+                /* contained_seat */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()

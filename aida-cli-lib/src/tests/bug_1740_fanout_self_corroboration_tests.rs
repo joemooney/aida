@@ -41,6 +41,7 @@ const NEVER_A_LIVE_START: &str = "1970-01-01T00:00:00+00:00";
 /// reach each other's private helpers (see `task_1451_mail_identity_ps_tests`).
 fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

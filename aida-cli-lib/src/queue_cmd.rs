@@ -12507,6 +12507,9 @@ pub(crate) fn handle_queue_work(
             None,
             /* self_claim */
             queue_work_self_claim(no_launch),
+            // trace:BUG-2169 | ai:claude
+            /* contained_seat */
+            contained,
         )
     };
     if no_launch {

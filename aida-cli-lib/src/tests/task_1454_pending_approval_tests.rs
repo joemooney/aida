@@ -85,6 +85,7 @@ fn collect_blocked_seat_items_empty_when_no_marker_dir() {
 
 fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

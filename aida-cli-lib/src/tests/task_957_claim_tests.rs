@@ -4,6 +4,7 @@ use super::*;
 /// liveness signal). No worktree — exactly what `aida claim` writes.
 fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

@@ -370,6 +370,7 @@ fn mock_gh(dir: &std::path::Path) -> std::path::PathBuf {
 
 fn lease_with_role(id: &str, scope: &str, role: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),

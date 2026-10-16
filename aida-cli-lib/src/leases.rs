@@ -187,6 +187,15 @@ pub(crate) struct SessionLease {
     // trace:STORY-1653 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) driver: Option<String>,
+    /// BUG-2169: whether `worktree_path` is a linked worktree of the main
+    /// checkout or a contained seat's private clone. Absent on older leases,
+    /// which read as `worktree`; a worktree lease never writes the key.
+    // trace:BUG-2169 | ai:claude
+    #[serde(
+        default,
+        skip_serializing_if = "crate::seat_clone::TreeKind::is_worktree"
+    )]
+    pub(crate) tree_kind: crate::seat_clone::TreeKind,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -269,6 +278,7 @@ pub(crate) fn session_harness_worktree_register(
         .unwrap_or_else(|| "unknown".to_string());
     let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: spec.scope.clone(),
         slug: slugify(&spec.scope),

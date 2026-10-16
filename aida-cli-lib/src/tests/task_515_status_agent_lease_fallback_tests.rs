@@ -3,6 +3,7 @@ use chrono::TimeZone;
 
 fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "019elease515".to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
