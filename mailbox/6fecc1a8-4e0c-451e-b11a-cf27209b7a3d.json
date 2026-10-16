@@ -1,0 +1,19 @@
+{
+  "id": "6fecc1a8-4e0c-451e-b11a-cf27209b7a3d",
+  "thread_id": "6fecc1a8-4e0c-451e-b11a-cf27209b7a3d",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792140441260,
+  "body": "PR READY: #2692 BUG-2165 (51f3468c38): routed headless CI-fix and quiet burndown through child grant and scrub PURPOSE. Added child_grant_id to SessionLease. 6/6 unit tests passed, make check-ci-fast passed (30/30).",
+  "subject": "PR READY: #2692 BUG-2165 (51f3468c38)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
