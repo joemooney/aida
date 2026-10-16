@@ -3,12 +3,12 @@ spec_id: TASK-1792
 agreed_id: TASK-1792
 title: 'relay-stall check: detect SIGKILL/OOM-dead relays still marked running, ignore run-dir handoff.md.done as an ack, and age-cap or distinguish deliberate Ctrl-C exits'
 description: 'From the #2690 (STORY-1699 heartbeat) review, non-blocking. (1) relay_stall.rs:246 trusts the raw state file, so a relay killed with -9 or by the OOM killer stays state=running and is never flagged; check the pid/lock (with start-time identity) as relay.sh:1277 does. (2) relay_stall.rs:207 treats the run-dir handoff.md.done (relay.sh''s live sentinel) as an operator ack; only the seat handoff''s .done should count. (3) state=exited covers a deliberate Ctrl-C stop and has no age cap, so an intentionally stopped relay pages forever; add an age cap or a ''stopped by operator'' distinction. Tests for each.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:09:06.232700696Z
-modified_at: 2026-10-16T17:28:19.862714434Z
+modified_at: 2026-10-16T18:11:11.077904363Z
 req_type: Task
 comments:
 - id: 01a145af-bc3b-7f62-bc43-b03832172142
@@ -36,6 +36,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a145e9-2a60-7cf3-b7bd-2354b7a4b0a5
+  author: aida-auto-bump
+  timestamp: 2026-10-16T18:11:11.072165415Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a145e9-2a65-7832-8986-90d14e97c5fd
+  timestamp: 2026-10-16T18:11:11.077895311Z
+  agent: aida
+  commit_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
+  summary: 'TASK-1792 all 4 acceptance items met: dead running/queued owners detected via lock+pid+start identity, run-dir handoff.md.done no longer acks, exited capped at 24h, tests for each; CI Build (cargo test --workspace) green on head. 3 non-blocking follow-ups.'
+  review_verdict: approved
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -44,3 +58,7 @@ filed_at:
   aida_build_sha: 5fb188c522
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T18:11:11.072160730Z
+  completion_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
