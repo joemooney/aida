@@ -1,0 +1,20 @@
+id: 01a144c5-3a52-7db0-a228-9d32eb62e09e
+spec_id: TASK-1795
+agreed_id: TASK-1795
+title: 'pr ship: default-branch guard calls an unbounded gh repo view on every no-arg ship; check local main/master/origin HEAD first'
+description: 'Follow-up from the #2697 review (BUG-2164, non-blocking). pr_cmd.rs:2248 calls forge::default_branch_of on every ''aida pr ship'' run with no PR number, including a resume from a feature branch. forge.rs:3935 runs a raw ''gh repo view'' with no timeout and no forge-kind check, so a hung network can now stall resume. Fix: compare against local signals first (main/master, origin/HEAD), and wrap the gh call in command_output_with_timeout. If gh fails and origin/HEAD is unset on a master-default repo, the fallback to ''main'' misses the guard. Also print suggestions as ''aida pr ship 8 — title'' instead of PR-8.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T12:52:18.642596834Z
+modified_at: 2026-10-16T12:52:18.642596834Z
+req_type: Task
+filed_at:
+  code_sha: e0713fdb5e41eccc3806aa28ddef719caa08f48c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e0713fdb5e
+  vendor: claude
+  session: b307b6fe-d611-428b-bc2a-5df6287d4592
