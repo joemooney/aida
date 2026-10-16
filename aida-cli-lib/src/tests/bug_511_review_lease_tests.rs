@@ -2,6 +2,7 @@ use super::*;
 
 fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),

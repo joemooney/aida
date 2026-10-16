@@ -69,6 +69,20 @@ fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitR
 // trace:BUG-1929 | ai:claude
 pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     let cwd = cwd.as_ref();
+    // BUG-2169: a contained seat's private clone runs seat-written config and
+    // hooks; host git never runs there. Same fixed refusal process as below.
+    // trace:BUG-2169 | ai:claude
+    if let Some(clone_root) = crate::seat_clone_detect::seat_clone_root(cwd) {
+        let mut refused = Command::new("sh");
+        refused
+            .args([
+                "-c",
+                "printf '%s\n' \"$1\" >&2; exit 1",
+                "aida-seat-clone-refusal",
+            ])
+            .arg(crate::seat_clone_detect::host_git_refusal(&clone_root));
+        return refused;
+    }
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
         .args(host_git_hardening(cwd))
