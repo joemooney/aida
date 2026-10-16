@@ -113,6 +113,7 @@ fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> 
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

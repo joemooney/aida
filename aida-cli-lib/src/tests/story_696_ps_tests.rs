@@ -30,6 +30,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 
@@ -1019,6 +1020,61 @@ fn pool_reuse_leaves_other_worktree_leases_alone() {
         vec!["STORY-1".to_string()],
         "only the acquired tree's lease is reset; the sibling survives"
     );
+}
+
+/// Pool reuse revokes only the acquired tree's stamped child grant, before
+/// removing the lease that stores its handle. Sibling and parent survive.
+// trace:TASK-1789 | ai:codex
+#[test]
+fn pool_reuse_revokes_only_the_prior_occupants_child_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(root, "advisor", &["implementer"]);
+    let parent = std::env::var(crate::seat_authority::GRANT_ENV).unwrap();
+    let subject = crate::test_env::HERMETIC_TEST_USER;
+    let mint_child = || {
+        let crate::seat_authority::HeadlessChildGrant::Issued(child) =
+            crate::seat_authority::issue_headless_child(root, "implementer", subject).unwrap()
+        else {
+            panic!("fixture must mint a delegated child");
+        };
+        child.id
+    };
+    let mine = mint_child();
+    let sibling = mint_child();
+    for (id, grant, tree) in [
+        ("old", Some(mine.as_str()), "pool-0"),
+        ("plain", None, "pool-0"),
+        ("sibling", Some(sibling.as_str()), "pool-1"),
+    ] {
+        let wt = root.join(tree);
+        std::fs::create_dir_all(&wt).unwrap();
+        let mut lease = ps_lease(id, "TASK-1789", wt.canonicalize().unwrap());
+        lease.child_grant_id = grant.map(str::to_owned);
+        persist_lease(root, &lease);
+    }
+    let valid = |id: &str| {
+        matches!(
+            crate::seat_authority::grant_check_for(root, id, subject),
+            crate::seat_authority::GrantCheck::Valid(_)
+        )
+    };
+    assert!(valid(&mine) && valid(&sibling) && valid(&parent));
+    assert_eq!(clear_worktree_session_leases(root, &root.join("pool-0")), 2);
+    assert!(!lease_path(root, "old").exists());
+    assert!(!lease_path(root, "plain").exists());
+    assert!(crate::seat_authority::read_grant(&mine)
+        .unwrap()
+        .revoked_at
+        .is_some());
+    assert!(
+        !valid(&mine),
+        "the old child must lose authority on pool reuse"
+    );
+    assert!(valid(&sibling) && valid(&parent));
+    assert!(lease_path(root, "sibling").exists());
+    assert_eq!(clear_worktree_session_leases(root, &root.join("pool-0")), 0);
 }
 
 /// BUG-763: the started cell — time-of-day for a lease started today,
