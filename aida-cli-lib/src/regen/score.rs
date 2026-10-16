@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 mod adapter; // trace:TASK-1732 | ai:codex
+mod completeness; // trace:STORY-1677 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
 mod diagnostics; // trace:STORY-1676 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
@@ -31,6 +32,10 @@ struct RegenConfig {
     reference_repeats: usize,
     #[serde(default = "diagnostics::default_crash_share")]
     crash_failure_share_percent: u8,
+    #[serde(default = "completeness::default_min_bytes")]
+    min_bytes: usize,
+    #[serde(default)]
+    components: BTreeMap<String, completeness::ComponentConfig>,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -76,6 +81,7 @@ impl RegenConfig {
             );
             anyhow::ensure!(tools.insert(tool), "duplicate required tool: {tool}");
         }
+        completeness::validate_config(&config)?;
         Ok(config)
     }
 }
@@ -149,6 +155,10 @@ pub(super) struct TrialRecord {
     // trace:TASK-1733 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) gaps: Option<serde_json::Value>,
+    // Independently versioned completeness evidence; absent on older trials.
+    // trace:STORY-1677 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) completeness: Option<serde_json::Value>,
     // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
     // trace:TASK-1732 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -530,6 +540,17 @@ fn execute(
         true,
     )?;
     let _snapshot = roots::Quarantine::snapshot(&[dir.to_path_buf(), env.prefix.clone()])?;
+    // No host file inspection before installer roots have been quarantined.
+    // Help uses the same score confinement; isolate its survivors before oracle.
+    // trace:STORY-1677 | ai:codex
+    let _help_snapshots = if record.kind != "control-stub" {
+        let (completeness, survivors, snapshots) = completeness::check(config, dir, env)?;
+        record.survivors_detected += survivors;
+        record.completeness = Some(serde_json::to_value(completeness)?);
+        snapshots
+    } else {
+        Vec::new()
+    };
     let oracle = env
         .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
         .context(
@@ -637,6 +658,7 @@ fn initial_record(
     TrialRecord {
         format_version: 1,
         gaps: None,
+        completeness: None,
         adapter: None,
         kind: trial_kind(),
         root_fresh: false,
@@ -883,10 +905,11 @@ pub(super) fn handle_score(
         // contaminate generated controls or turn a score into gate refusal.
         // trace:STORY-1676 | ai:codex
         diagnostics::flag_trial(&mut record);
+        completeness::finish(&mut record);
         persist(store, &record)?;
         // A refused trial is durable diagnostic evidence, never a reported score.
         anyhow::ensure!(
-            record.status == "scored",
+            matches!(record.status.as_str(), "scored" | "incomplete"),
             "trial {} recorded as {}: {}",
             record.trial_id,
             record.status,
@@ -916,6 +939,8 @@ mod tests {
             reference_repeats: 3,
             crash_failure_share_percent: 50,
             install_command: Some(vec!["/bin/true".into()]),
+            min_bytes: 64,
+            components: BTreeMap::new(),
             required_tools: vec!["regen-fixture-tool".into()],
         }
     }
@@ -973,6 +998,11 @@ mod tests {
 
     #[test]
     fn execution_has_private_env_and_installer_prefix_and_records_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "test \"$HOME\" != /root && test -d \"$HOME\" && test -d \"$XDG_CONFIG_HOME\" && test -d \"$XDG_RUNTIME_DIR\" && test -z \"${CARGO_HOME+x}\" && test -z \"${RUSTUP_HOME+x}\" && \"$AIDA_REGEN_PREFIX/bin/regen-fixture-tool\" && printf 'ok   - private environment\\nFAIL - assertion\\n'"]);
         cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), "printf '#!/bin/sh\\nexit 0\\n' > \"$PREFIX/bin/regen-fixture-tool\"; chmod +x \"$PREFIX/bin/regen-fixture-tool\"".into()]);
@@ -999,6 +1029,11 @@ mod tests {
 
     #[test]
     fn guard_fallback_is_reported_and_can_never_be_clean_even_with_passing_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let cfg = config(&[
             "/bin/sh",
@@ -1030,6 +1065,11 @@ mod tests {
 
     #[test]
     fn oracle_ignores_prefix_shadow_and_uses_fresh_python_home() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1072,6 +1112,11 @@ PYTHON
 
     #[test]
     fn confined_installer_survivor_is_recorded_without_suppressing_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1165,6 +1210,11 @@ os.close(f)
 
     #[test]
     fn bare_required_system_tool_uses_guard_and_forbids_clean() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1187,6 +1237,11 @@ os.close(f)
 
     #[test]
     fn python_default_subprocess_records_guard_hit_without_inherited_fd() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1214,6 +1269,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn exit_policy_distinguishes_installer_failure_oracle_checks_and_scoring_errors() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "printf 'ok   - check\\n'; exit 7"]);
         let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
@@ -1240,6 +1300,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn default_installer_runs_when_present_and_manifest_tampering_refuses() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("install.sh");
         std::fs::write(&path, "#!/bin/sh\nexit 12\n").unwrap();
@@ -1393,6 +1458,11 @@ cp {layout}/tool "$PREFIX/{layout}/tool"
 
     #[test]
     fn confined_run_uses_existing_helper_when_available() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1482,6 +1552,11 @@ cp {layout}/tool "$PREFIX/{layout}/tool"
 
     #[test]
     fn trial_persistence_keeps_unrelated_staged_edits_and_roundtrips_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let store = TempDir::new().unwrap();
         super::super::git(store.path(), &["init", "-b", "main"]).unwrap();
         super::super::git(store.path(), &["config", "user.email", "test@example.com"]).unwrap();
