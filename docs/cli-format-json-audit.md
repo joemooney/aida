@@ -174,6 +174,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida merge-hold list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida merge-hold add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida merge-hold clear` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mandate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mandate start` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mandate stop` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mandate status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida tail` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida integrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida watch` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

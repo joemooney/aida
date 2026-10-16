@@ -1477,6 +1477,14 @@ mod bug_2144_2146_containment_refusal_tests;
 #[cfg(test)]
 #[path = "tests/bug_2151_contained_parent_agent_new_tests.rs"]
 mod bug_2151_contained_parent_agent_new_tests;
+// trace:BUG-2157 BUG-2158 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2157_2158_contained_session_tests.rs"]
+mod bug_2157_2158_contained_session_tests;
+// trace:BUG-2166 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2166_contained_parent_escape_tests.rs"]
+mod bug_2166_contained_parent_escape_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
