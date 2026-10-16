@@ -3,13 +3,28 @@ spec_id: BUG-2170
 agreed_id: BUG-2170
 title: Autopilot intake and questions-clarify children do not scrub AIDA_SESSION_PURPOSE, and the intake child grant is not revoked on exit
 description: 'From the #2692 BUG-2165 STRICT review (non-blocking). autopilot_intake.rs:1006 spawns a headless ''claude -p'' with its own advisor child grant. It neither scrubs AIDA_SESSION_PURPOSE nor revokes that grant when the child exits. questions.rs:1648 (interactive clarify child) also leaves PURPOSE unscrubbed. Neither inherits the launcher grant. Apply the BUG-2139/BUG-2165 helpers: env_remove PURPOSE, then revoke_headless_child_grant on exit and on spawn failure. Test via Command get_envs(), with no process-env mutation.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T09:00:27.118636124Z
-modified_at: 2026-10-16T09:00:27.118636124Z
+modified_at: 2026-10-16T14:53:09.932181556Z
 req_type: Bug
+history:
+- id: 01a14533-dfa7-7992-adda-209b25c7242e
+  author: aida-auto-bump
+  timestamp: 2026-10-16T14:53:09.927983244Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a14533-dfac-7491-85c6-ca57285a02d9
+  timestamp: 2026-10-16T14:53:09.932171226Z
+  agent: aida
+  commit_sha: 0ef2f8227a8b9b4d378db939b4f3c85313200c65
+  summary: 'Covered by #2696 with BUG-2171'
+  review_verdict: approved
 filed_at:
   code_sha: 76790181a08a33a50ec1228acb9ab9b0104e8a21
   branch: main
@@ -18,3 +33,7 @@ filed_at:
   aida_build_sha: 76790181a0
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T14:53:09.927978109Z
+  completion_sha: 0ef2f8227a8b9b4d378db939b4f3c85313200c65
