@@ -1,3 +1,12 @@
+No-number `aida pr ship` resolves default-branch protection from local
+main/master or origin/HEAD evidence before asking the forge. Feature-branch
+resumes with local mainline evidence avoid a default-branch network lookup.
+The GitHub fallback uses the shared helper with a three-second child-exit
+deadline and local origin/HEAD or main/master refs on failure; GitLab and pure-git projects do not
+invoke gh for this probe. Output collection retains the shared helper's existing
+bounds. Approved-change suggestions use numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.

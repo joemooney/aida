@@ -3933,48 +3933,39 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
 }
 
 pub(crate) fn default_branch_of(project_root: &Path) -> String {
-    // BUG-417: ask the forge for origin's live default branch first. `gh repo
-    // view --json defaultBranchRef` is authoritative even on a fresh clone where
-    // `refs/remotes/origin/HEAD` was never set (the quizdom `master`-default
-    // case that produced a GraphQL base-ref error when AIDA assumed `main`).
-    // Fall back to the local origin/HEAD probe, then `main`. trace:BUG-417 | ai:claude
-    if let Ok(out) = Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "repo",
-            "view",
-            "--json",
-            "defaultBranchRef",
-            "-q",
-            ".defaultBranchRef.name",
-        ])
-        .output()
-    {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
-                return name;
-            }
-        }
-    }
-
-    // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
-    if let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .output()
-    {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if let Some(b) = s.strip_prefix("origin/") {
-                if !b.is_empty() {
-                    return b.to_string();
+    // Keep the live GitHub answer for PR base selection, but bound network
+    // latency and never invoke gh for a GitLab or pure-git project. Ship's
+    // no-number guard checks local signals before calling this fallback.
+    // trace:BUG-417 trace:TASK-1795 | ai:codex
+    if resolve_forge_kind(project_root) == ForgeKind::GitHub {
+        if let Some(gh) = crate::kernel::resolve_gh_binary() {
+            let mut cmd = Command::new(gh);
+            cmd.current_dir(project_root).args([
+                "repo",
+                "view",
+                "--json",
+                "defaultBranchRef",
+                "-q",
+                ".defaultBranchRef.name",
+            ]);
+            if let Some(out) =
+                crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)
+            {
+                if out.status.success() {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
+                        return name;
+                    }
                 }
             }
         }
     }
-    "main".to_string()
+
+    // origin/HEAD, then conventional local/remote refs. In particular, a
+    // master-default clone without origin/HEAD must not fall back to main.
+    crate::detect_default_branch_ref(project_root)
+        .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+        .unwrap_or_else(|| "main".to_owned())
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from

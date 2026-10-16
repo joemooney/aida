@@ -2249,12 +2249,9 @@ pub(crate) fn pr_ship_handler(
     // BUG-2164: On the default branch with no explicit PR number, refuse before
     // any push, trailer guard, or PR creation attempt.
     // trace:BUG-2164 | ai:antigravity
-    if opts.pr_number.is_none() {
-        let default_branch = crate::forge::default_branch_of(&project_root);
-        if branch == default_branch {
-            let approved = find_open_approved_prs(&project_root);
-            anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
-        }
+    if opts.pr_number.is_none() && ship_is_default_branch(&project_root, &branch) {
+        let approved = find_open_approved_prs(&project_root);
+        anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
     }
 
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
@@ -4381,6 +4378,20 @@ pub(crate) fn ship_completion_trailer(
         |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
         |id| pr_ship::spec_completion_hold_reason(store, id),
     )
+}
+
+/// Prefer local branch evidence so ordinary feature-branch resumes do not
+/// need a forge request. Protect the conventional mainlines even if the local
+/// origin/HEAD symref is absent or stale.
+// trace:TASK-1795 | ai:codex
+pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+    if matches!(branch, "main" | "master") {
+        return true;
+    }
+    if let Some(default) = detect_default_branch_ref(project_root) {
+        return branch == default.strip_prefix("origin/").unwrap_or(&default);
+    }
+    branch == crate::forge::default_branch_of(project_root)
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.
