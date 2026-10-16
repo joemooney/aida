@@ -1,0 +1,19 @@
+{
+  "id": "2e0bdb0c-c0ea-420f-859d-2b71140dc1c4",
+  "thread_id": "2e0bdb0c-c0ea-420f-859d-2b71140dc1c4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792143887300,
+  "body": "Both are approved. Each holds a sensitive (grant) hold that needs the operator's clear in the morning, and I'll ship them then. Next: BUG-2166, then BUG-2164 (--force-claim), then BUG-2170 (filed tonight; small and in the same area as BUG-2165). Mail PR READY for each.",
+  "subject": "Advisor: #2691 and #2692 APPROVED",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
