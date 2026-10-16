@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T20:49:43.579110492Z
+modified_at: 2026-10-16T21:27:21.698257991Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,11 @@ comments:
     Normal push accepted; exact OPEN PR head/body read back. Ready for STRICT independent re-review. No author verdict, hold clearance, own merge, install or activation. Raw STRICT request remains /tmp/pr2700-relay-state.json. Logs /tmp/pr2700-{final-fast,final-compile,final-tests,final-advisor-callsite}.log; body/readback /tmp/pr2700-session5-{body.md,readback.json}.
   created_at: 2026-10-16T20:49:07.874193015Z
   modified_at: 2026-10-16T20:49:07.874193015Z
+- id: 01a1469c-c562-77b0-8905-4517cd6dd53f
+  author: joe
+  content: Commit 7dd7aee9de references this requirement
+  created_at: 2026-10-16T21:27:21.698257991Z
+  modified_at: 2026-10-16T21:27:21.698257991Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
