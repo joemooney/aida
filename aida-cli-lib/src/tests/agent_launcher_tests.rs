@@ -2061,6 +2061,7 @@ fn launcher_view(
         id: id.to_string(),
         agent_type: agent_type.to_string(),
         pid: 42,
+        pid_start: None,
         name: Some(id.to_string()),
         description: Some(format!("title {id}")),
         tty: Some("/dev/pts/7".to_string()),
@@ -3669,7 +3670,8 @@ fn terminate_reports_survivors_and_live_pids_tracks_real_processes() {
     let pid = child.id();
     assert_eq!(live_pids(&[pid]), vec![pid], "the child should be alive");
 
-    let survivors = terminate_pids_with_grace(&[pid], 0);
+    let start = aida_core::liveness::process_start_identity(pid);
+    let survivors = terminate_pids_with_grace(&[TerminateTarget::new(pid, start)], 0);
     assert!(
         survivors.is_empty(),
         "a plain `sleep` must not survive SIGTERM+SIGKILL: {survivors:?}"
@@ -3682,7 +3684,7 @@ fn terminate_reports_survivors_and_live_pids_tracks_real_processes() {
 
     // Terminating something already gone is a no-op that reports no survivors, which is what
     // lets `agent stop` distinguish "already gone" from "stopped it".
-    assert!(terminate_pids_with_grace(&[u32::MAX], 0).is_empty());
+    assert!(terminate_pids_with_grace(&[TerminateTarget::new(u32::MAX, None)], 0).is_empty());
 }
 
 // trace:BUG-2124 | ai:antigravity
