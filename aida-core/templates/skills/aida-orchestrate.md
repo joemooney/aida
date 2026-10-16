@@ -251,7 +251,7 @@ implementer subagents wrote, so its approval is refused at ship.
    it to exit:
 
    ```bash
-   aida queue work PR-<n> --role reviewer --no-human
+   aida queue work PR-<n> --role reviewer --no-human --vendor claude
    ```
 
    It starts a headless reviewer in its own review worktree with a child
@@ -272,6 +272,13 @@ Rules for the review launch:
   reviewer process, never from your shell.
 - At most 3 reviewer processes at once, one per PR, counted with
   implementers against the concurrency cap. Don't pass `--sandbox`.
+- Always pass `--vendor claude`: under `AIDA_CONTAINED` the codex vendor
+  refuses.
+- If the launch refuses with "branch pr-<n> is held by worktree ..." (a previous
+  reviewer died or ran without `--no-human`), run
+  `aida session end --spec PR-<n> --remove --skip-ci --yes` and
+  `git branch -D pr-<n>`, then relaunch. If it refuses with "base is N commits
+  behind ... overlaps", have the author merge main into the branch first.
 
 The reviewer applies the strict tier itself when the diff touches drain logic,
 merge gates, store and cache writes, locks, authority and identity, or
@@ -324,7 +331,7 @@ Put the approved branches into one integration branch based on
   probes.
 - The ship gate accepts an approval only at the PR's exact head, recorded by
   a reviewer process. A batch PR's head is a new commit, so launch a reviewer
-  for it (`aida queue work PR-N --role reviewer --no-human`, step 5) and wait
+  for it (`aida queue work PR-N --role reviewer --no-human --vendor claude`, step 5) and wait
   for `Approved` at that head. A single-branch batch whose head a reviewer
   already approved needs no second review.
 - Ship with `aida pr ship N`. It checks the approval and CI, squash-merges,

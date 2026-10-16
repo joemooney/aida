@@ -75,7 +75,7 @@ AIDA provides every mechanic you need.
 |---|---|
 | Start an implementer headless (no terminal needed; the spec must be queued) | `aida queue work <SPEC> --vendor <claude\|codex\|agy> --no-human --strict` |
 | Start an interactive seat in another terminal | `aida agent new <claude\|codex\|antigravity> --role <implementer\|reviewer\|advisor> --spec <SPEC> --prompt "<brief>"` |
-| Review a PR in a separate reviewer process (waits for the verdict) | `aida queue work PR-<n> --role reviewer --no-human --vendor <claude\|codex\|agy>` |
+| Review a PR in a separate reviewer process (waits for the verdict) | `aida queue work PR-<n> --role reviewer --no-human --vendor claude` (codex refuses under `AIDA_CONTAINED`) |
 | Hand a session its brief or findings | `aida brief <agent> <SPEC> --note - --notify` (the note is read from stdin) |
 | Message a named agent | `aida mailbox send --to <agent> --subject "<SPEC> findings" --stdin` |
 | Type into a live interactive session | `aida session send <session-or-SPEC> "<text>" --enter` |
@@ -335,7 +335,7 @@ process**, never the implementer and never you. Open the branch's PR if it
 has none (`gh pr create --draft --head <branch> ...`), then run:
 
 ```bash
-aida queue work PR-<n> --role reviewer --no-human --vendor codex
+aida queue work PR-<n> --role reviewer --no-human --vendor claude
 ```
 
 It creates a PR-scoped lease and review worktree, mints a child reviewer
@@ -346,6 +346,12 @@ from `.aida/review-verdicts/PR-<n>.json` only when the command exits 0 with a
 even if the file exists.
 `aida pr ship` accepts only an approval recorded this way.
 
+- Pass `--vendor claude`: under `AIDA_CONTAINED` the codex vendor refuses.
+- If the launch refuses with "branch pr-<n> is held by worktree ..." (a previous
+  reviewer died or ran without `--no-human`), run
+  `aida session end --spec PR-<n> --remove --skip-ci --yes` and
+  `git branch -D pr-<n>`, then relaunch. If it refuses with "base is N commits
+  behind ... overlaps", have the author merge main into the branch first.
 - Your seat must delegate the reviewer seat. The operator enters it once at a
   terminal: `aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer`.
   Without it the launch fails closed; report that, don't work around it.
@@ -429,7 +435,7 @@ Put the approved branches into one integration branch based on
   forge CLI.
 - The ship gate accepts an approval only at the PR's exact head, recorded by
   a reviewer process. A batch PR's head is a new commit, so launch a reviewer
-  for it (`aida queue work PR-N --role reviewer --no-human`, step 5) and wait
+  for it (`aida queue work PR-N --role reviewer --no-human --vendor claude`, step 5) and wait
   for `Approved` at that head.
 - Ship with `aida pr ship N`. It checks the approval and CI, squash-merges,
   and pulls. In the PR body, end a line with `(SPEC-ID)` **only when this

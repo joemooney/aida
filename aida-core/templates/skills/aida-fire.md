@@ -159,7 +159,7 @@ wrote, so a verdict you record, or one an Agent-tool reviewer records inside
 your session, is refused at ship. Launch each reviewer from Bash:
 
 ```bash
-aida queue work PR-<N> --role reviewer --no-human
+aida queue work PR-<N> --role reviewer --no-human --vendor claude
 ```
 
 It starts a headless reviewer with its own session, a PR-scoped lease, a
@@ -177,6 +177,13 @@ exit means no verified verdict, even if the file exists.
   fails closed; ask the operator to re-enter the seat.
 - Reviewer processes count toward the wave cap; run at most 3 at once. Don't
   pass `--sandbox`.
+- Always pass `--vendor claude`: under `AIDA_CONTAINED` the codex vendor
+  refuses.
+- If the launch refuses with "branch pr-<N> is held by worktree ..." (a previous
+  reviewer died or ran without `--no-human`), run
+  `aida session end --spec PR-<N> --remove --skip-ci --yes` and
+  `git branch -D pr-<N>`, then relaunch. If it refuses with "base is N commits
+  behind ... overlaps", have the author merge main into the branch first.
 <!-- trace:STORY-1654 | ai:claude -->
 
 #### Functional verification: security, sandbox and containment PRs

@@ -220,7 +220,7 @@ and wait for the job to exit. The job's exit status is the signal, not the
 verdict file:
 
 ```bash
-aida queue work PR-<n> --role reviewer --no-human \
+aida queue work PR-<n> --role reviewer --no-human --vendor claude \
   > .aida/burndown-review-PR-<n>.log 2>&1
 echo "exit=$?" >> .aida/burndown-review-PR-<n>.log
 ```
@@ -244,6 +244,13 @@ from the previous round is there until the new launcher replaces it.
   never run `aida review record` yourself. The reviewer process reads the spec
   and any operator checklist comments itself.
 - At most 3 reviewer processes at once, one per PR. Don't pass `--sandbox`.
+- Always pass `--vendor claude`: under `AIDA_CONTAINED` the codex vendor
+  refuses.
+- If the launch refuses with "branch pr-<n> is held by worktree ..." (a previous
+  reviewer died or ran without `--no-human`), run
+  `aida session end --spec PR-<n> --remove --skip-ci --yes` and
+  `git branch -D pr-<n>`, then relaunch. If it refuses with "base is N commits
+  behind ... overlaps", have the author merge main into the branch first.
 - The burndown seat must have been entered with
   `aida role enter <seat> --delegate-seat reviewer`; without it the launch
   fails closed. Report that as a blocker; don't work around it.
