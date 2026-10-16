@@ -239,6 +239,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
         project_root: project.clone(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
     crate::session::set_headless_vendor_override(None);
 
