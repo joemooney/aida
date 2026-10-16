@@ -374,9 +374,13 @@ mandate.
 **Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
 accepted, at most `24h`). A mandate cannot be extended: stop it and start
 another. `--reason` records why. `--include-supervised` also covers sensitive
-specs (security, containment, review or merge authority, guided, keystone);
-specs tagged `operator-only` or with execution mode `operator` always stay
-human-only.
+specs (security, containment, review or merge authority, guided, keystone).
+Specs tagged `operator-only` or with execution mode `operator` or `decide`
+always stay human-only. Exclusion is sticky: a spec that was ever in an
+excluded class, in any stored version or in the local exclusion ledger
+(`~/.aida/mandates/exclusions.jsonl`, append-only), stays excluded after the
+tag is removed. A mandate releases only a typed hold marker; a missing marker,
+a label-only hold or a recusal hold always needs a human.
 
 **Stopping.** `aida mandate stop` (human at a terminal) ends it at once. Expiry
 is checked by every ship at the moment it decides, again under the merge lease,
@@ -387,5 +391,16 @@ is active.
 **Audit.** Each release is recorded in the merge-hold clearance ledger and in a
 PR comment as "released under mandate <id> by advisor"; start and stop are
 recorded in `.aida/events.jsonl`. The authority record lives only in the
-user's AIDA home (`~/.aida/mandates/`), never in the shared store.
+user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
+Each record is re-validated on every read (24h cap, no future issue time,
+advisor seat, current user, a 0600 regular file you own, never a symlink); an
+invalid record is ignored with a warning. Stopping writes a `<id>.stopped`
+tombstone that is never removed, so editing a record cannot revive it.
+
+**Trust boundary.** Start and stop require a human at an interactive
+terminal. A same-uid process that forges files in the AIDA home is outside the
+threat model, the same as for session grants: the mandate keeps work moving
+while the operator is away, and is not a defense against a malicious agent
+running as the same user. Accepted risk: a process that wraps itself in a
+pseudo-terminal passes the terminal check, as it does for `aida role enter`.
 <!-- trace:STORY-1698 | ai:claude -->

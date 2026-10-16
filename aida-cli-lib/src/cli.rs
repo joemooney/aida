@@ -206,8 +206,10 @@ pub enum InternalCommand {
 #[derive(Subcommand, Debug)]
 pub enum MandateAction {
     /// Start a time-boxed mandate that lets the advisor seat ship held PRs
-    /// with an attested, independent approval and green CI. Human at an
-    /// interactive terminal only; agents can never start one.
+    /// with an attested, independent approval and green CI. Start and stop
+    /// require a human at an interactive terminal; a same-uid process that
+    /// forges files in the AIDA home is outside the threat model (the same
+    /// as session grants).
     Start {
         /// Cover shipping held PRs (the only scope today; required).
         #[clap(long)]

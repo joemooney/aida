@@ -2,14 +2,27 @@
 //! that lets the advisor seat ship held PRs carrying an attested, independent
 //! approval while the operator is away.
 //!
-//! Authority lives ONLY in the user's AIDA home (`~/.aida/mandates/<uuid>.json`,
-//! the same trust class as session grants and human-review receipts), written
-//! atomically after [`crate::seat_authority::require_direct_human`]. The git
-//! store is never consulted for authority: any agent can write it.
-//! `.aida/events.jsonl` carries the audit copy (`MandateChanged`).
+//! Records live ONLY in the user's AIDA home (`~/.aida/mandates/<uuid>.json`,
+//! mode 0600), written after [`crate::seat_authority::require_direct_human`].
+//! The git store is never consulted for authority. `.aida/events.jsonl`
+//! carries the audit copy (`MandateChanged`).
+//!
+//! Every load re-validates each record (24h cap, no future issue time, the
+//! advisor seat and known scope, the current user as principal, a 0600
+//! regular file owned by this uid, never a symlink); an invalid record is
+//! ignored with a warning and never shadows a valid one. Revocation is
+//! monotonic: `aida mandate stop` writes a `<id>.stopped` tombstone that is
+//! never removed, and any revocation evidence wins.
+//!
+//! Trust boundary (the same as session grants): start and stop require a
+//! human at an interactive terminal. A same-uid process that forges files in
+//! the AIDA home is outside the threat model; the mandate is a liveness
+//! mechanism, not a defense against a malicious same-uid agent. Accepted
+//! risk: a process that wraps itself in a pseudo-terminal passes the
+//! terminal check, exactly as it does for `aida role enter`.
 //!
 //! Expiry is never cached: every ship decision re-reads the records and
-//! compares `expires_at` / `revoked_at` against the clock at that instant.
+//! compares them against the clock at that instant.
 // trace:STORY-1698 | ai:claude
 
 use anyhow::{bail, Context, Result};
@@ -19,12 +32,15 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 const MANDATE_DIR: &str = "mandates";
+const EXCLUSION_LEDGER: &str = "exclusions.jsonl";
 /// The only scope a mandate can carry today.
 pub(crate) const SCOPE_SHIP_HELD: &str = "ship-held";
 /// The only seat a mandate covers.
 pub(crate) const MANDATE_SEAT: &str = "advisor";
 pub(crate) const DEFAULT_TTL: Duration = Duration::hours(8);
 pub(crate) const MAX_TTL: Duration = Duration::hours(24);
+/// Clock skew tolerated on a record's `issued_at`.
+pub(crate) const ISSUE_SKEW: Duration = Duration::minutes(5);
 /// The tag that keeps a spec human-only whatever the mandate says.
 pub(crate) const OPERATOR_ONLY_TAG: &str = "operator-only";
 
@@ -39,7 +55,7 @@ pub(crate) struct Mandate {
     pub seat: String,
     /// Always [`SCOPE_SHIP_HELD`].
     pub scope: String,
-    /// Lifts the sensitive spec classes (never operator-only).
+    /// Lifts the sensitive spec classes (never operator-only or decide).
     #[serde(default)]
     pub include_supervised: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,7 +78,7 @@ impl Mandate {
 // trace:STORY-1698 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MandateState {
-    /// No mandate was ever minted.
+    /// No valid mandate record exists.
     None,
     Active(Mandate),
     /// The newest mandate ran out.
@@ -78,28 +94,167 @@ pub(crate) fn mandate_dir() -> Result<PathBuf> {
     Ok(home.join(".aida").join(MANDATE_DIR))
 }
 
-/// Every well-formed record in `dir`. A file whose name is not its record's
-/// uuid is ignored, so a copied record cannot impersonate another id.
+/// Is `path` a regular file (never a symlink), mode 0600, owned by this uid?
+/// `Err` says why not.
 // trace:STORY-1698 | ai:claude
-pub(crate) fn load_all(dir: &Path) -> Vec<Mandate> {
+fn private_file_check(path: &Path) -> std::result::Result<(), String> {
+    let meta = std::fs::symlink_metadata(path).map_err(|e| format!("unreadable: {e}"))?;
+    if meta.file_type().is_symlink() {
+        return Err("is a symlink".into());
+    }
+    if !meta.file_type().is_file() {
+        return Err("is not a regular file".into());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let mode = meta.mode() & 0o777;
+        if mode != 0o600 {
+            return Err(format!("has mode {mode:o}, not 600"));
+        }
+        let uid = unsafe { libc::geteuid() } as u32;
+        if meta.uid() != uid {
+            return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
+        }
+    }
+    Ok(())
+}
+
+/// Write `body` to `path` as a 0600 file, atomically (temp + rename).
+// trace:STORY-1698 | ai:claude
+fn write_private(path: &Path, body: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let dir = path.parent().context("mandate path has no parent")?;
+    std::fs::create_dir_all(dir)?;
+    let tmp = dir.join(format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("mandate"),
+        Uuid::new_v4()
+    ));
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut file = opts.open(&tmp)?;
+    file.write_all(body)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// The `<id>.stopped` tombstone path.
+fn tombstone_path(dir: &Path, id: &str) -> PathBuf {
+    dir.join(format!("{id}.stopped"))
+}
+
+/// Revocation evidence for `id`: the tombstone's recorded time and author,
+/// or (when present but unreadable) the moment of the read. Any tombstone at
+/// all — whatever its mode or content — revokes.
+// trace:STORY-1698 | ai:claude
+fn tombstone(dir: &Path, id: &str) -> Option<(DateTime<Utc>, Option<String>)> {
+    let path = tombstone_path(dir, id);
+    std::fs::symlink_metadata(&path).ok()?;
+    let parsed = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+    let at = parsed
+        .as_ref()
+        .and_then(|v| v.get("stopped_at")?.as_str()?.parse().ok())
+        .unwrap_or_else(Utc::now);
+    let by = parsed
+        .as_ref()
+        .and_then(|v| v.get("stopped_by")?.as_str().map(str::to_string));
+    Some((at, by))
+}
+
+/// Why a parsed record is not a valid mandate for `principal` at `now`.
+// trace:STORY-1698 | ai:claude
+fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) -> Option<String> {
+    if m.id != stem {
+        return Some("its id does not match its file name".into());
+    }
+    if m.seat != MANDATE_SEAT {
+        return Some(format!("seat `{}` is not the advisor seat", m.seat));
+    }
+    if m.scope != SCOPE_SHIP_HELD {
+        return Some(format!("unknown scope `{}`", m.scope));
+    }
+    if m.principal.trim() != principal.trim() || principal.trim().is_empty() {
+        return Some(format!(
+            "principal `{}` is not the current user",
+            m.principal
+        ));
+    }
+    let ttl = m.expires_at - m.issued_at;
+    if ttl <= Duration::zero() || ttl > MAX_TTL {
+        return Some("its lifetime exceeds the 24h cap".into());
+    }
+    if m.issued_at > now + ISSUE_SKEW {
+        return Some("it claims to be issued in the future".into());
+    }
+    None
+}
+
+/// Every mandate record in `dir`, validated: `(valid, warnings)`. Valid
+/// records carry any tombstone's revocation; invalid ones are only named in
+/// a warning, so they never shadow a valid mandate.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn load_valid(
+    dir: &Path,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> (Vec<Mandate>, Vec<String>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     };
-    let mut out: Vec<Mandate> = entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            let stem = path.file_stem()?.to_str()?.to_string();
-            if path.extension()?.to_str()? != "json" || Uuid::parse_str(&stem).is_err() {
-                return None;
+    let mut valid = Vec::new();
+    let mut warnings = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let (Some(stem), Some(ext)) = (
+            path.file_stem().and_then(|s| s.to_str()),
+            path.extension().and_then(|s| s.to_str()),
+        ) else {
+            continue;
+        };
+        if ext != "json" || Uuid::parse_str(stem).is_err() {
+            continue;
+        }
+        let name = path.display();
+        if let Err(why) = private_file_check(&path) {
+            warnings.push(format!("ignoring mandate record {name}: it {why}"));
+            continue;
+        }
+        let mut m: Mandate = match std::fs::read(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string()))
+        {
+            Ok(m) => m,
+            Err(e) => {
+                warnings.push(format!("ignoring mandate record {name}: unreadable ({e})"));
+                continue;
             }
-            let mandate: Mandate = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
-            (mandate.id == stem && mandate.seat == MANDATE_SEAT && mandate.scope == SCOPE_SHIP_HELD)
-                .then_some(mandate)
-        })
-        .collect();
-    out.sort_by_key(|m| m.issued_at);
-    out
+        };
+        if let Some(why) = record_problem(&m, stem, principal, now) {
+            warnings.push(format!("ignoring mandate record {name}: {why}"));
+            continue;
+        }
+        if let Some((at, by)) = tombstone(dir, &m.id) {
+            if m.revoked_at.is_none() {
+                m.revoked_at = Some(at);
+                m.revoked_by = by;
+            }
+        }
+        valid.push(m);
+    }
+    valid.sort_by_key(|m| m.issued_at);
+    (valid, warnings)
 }
 
 /// The state at `now`: the newest active mandate if any, else what became
@@ -120,20 +275,26 @@ pub(crate) fn state_at(mandates: &[Mandate], now: DateTime<Utc>) -> MandateState
     }
 }
 
-/// The state read from disk now — never cached.
+/// The state read from disk now — never cached. `warn` prints the records
+/// it ignored to stderr.
 // trace:STORY-1698 | ai:claude
-pub(crate) fn current_state() -> MandateState {
-    match mandate_dir() {
-        Ok(dir) => state_at(&load_all(&dir), Utc::now()),
-        Err(_) => MandateState::None,
+pub(crate) fn current_state_reporting(warn: bool) -> MandateState {
+    let Ok(dir) = mandate_dir() else {
+        return MandateState::None;
+    };
+    let now = Utc::now();
+    let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+    if warn {
+        for w in &warnings {
+            eprintln!("  warning: {w}");
+        }
     }
+    state_at(&valid, now)
 }
 
-fn write(dir: &Path, mandate: &Mandate) -> Result<()> {
-    std::fs::create_dir_all(dir)?;
-    let body = serde_json::to_vec_pretty(mandate)?;
-    aida_core::fs_atomic::write_atomic(&dir.join(format!("{}.json", mandate.id)), &body)?;
-    Ok(())
+/// [`current_state_reporting`] without warnings (the statusline).
+pub(crate) fn current_state() -> MandateState {
+    current_state_reporting(false)
 }
 
 /// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`MAX_TTL`].
@@ -158,7 +319,7 @@ pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
     Ok(ttl)
 }
 
-/// Mint a mandate. `human` is the integrity floor
+/// Mint a mandate. `human` is the terminal floor
 /// ([`crate::seat_authority::require_direct_human`] in production) and runs
 /// before anything is read or written. Refuses while one is active: there is
 /// no extension, only stop and mint again.
@@ -173,7 +334,7 @@ pub(crate) fn start(
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
     if let Err(err) = human() {
-        bail!("a mandate can only be started by a human at an interactive terminal, never by an agent ({err})");
+        bail!("a mandate can only be started by a human at an interactive terminal ({err})");
     }
     if ttl <= Duration::zero() || ttl > MAX_TTL {
         bail!("a mandate lasts more than zero and at most 24h");
@@ -182,7 +343,7 @@ pub(crate) fn start(
     if principal.is_empty() {
         bail!("cannot start a mandate: the human user identity is unknown");
     }
-    if let MandateState::Active(active) = state_at(&load_all(dir), now) {
+    if let MandateState::Active(active) = state_at(&load_valid(dir, principal, now).0, now) {
         bail!(
             "mandate {} is already active until {}; stop it with `aida mandate stop` before starting another (mandates cannot be extended)",
             active.id,
@@ -203,12 +364,17 @@ pub(crate) fn start(
         revoked_at: None,
         revoked_by: None,
     };
-    write(dir, &mandate)?;
+    write_private(
+        &dir.join(format!("{}.json", mandate.id)),
+        &serde_json::to_vec_pretty(&mandate)?,
+    )?;
     Ok(mandate)
 }
 
-/// Stop every active mandate now. Same floor as [`start`]. Returns the
-/// mandates it stopped (empty when none was active).
+/// Stop mandates now: writes a never-removed `<id>.stopped` tombstone for
+/// EVERY record file in `dir` not already tombstoned (valid or not), so no
+/// edit to a record can revive it. Same floor as [`start`]. Returns the
+/// valid mandates that were active.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn stop(
     dir: &Path,
@@ -217,16 +383,172 @@ pub(crate) fn stop(
     now: DateTime<Utc>,
 ) -> Result<Vec<Mandate>> {
     if let Err(err) = human() {
-        bail!("a mandate can only be stopped by a human at an interactive terminal, never by an agent ({err})");
+        bail!("a mandate can only be stopped by a human at an interactive terminal ({err})");
     }
-    let mut stopped = Vec::new();
-    for mut m in load_all(dir).into_iter().filter(|m| m.is_active_at(now)) {
-        m.revoked_at = Some(now);
-        m.revoked_by = Some(by.trim().to_string());
-        write(dir, &m)?;
-        stopped.push(m);
+    let (valid, _) = load_valid(dir, by, now);
+    let active: Vec<Mandate> = valid.into_iter().filter(|m| m.is_active_at(now)).collect();
+    let ids: Vec<String> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|e| {
+                    let p = e.path();
+                    let stem = p.file_stem()?.to_str()?.to_string();
+                    (p.extension()?.to_str()? == "json" && Uuid::parse_str(&stem).is_ok())
+                        .then_some(stem)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    for id in ids {
+        let path = tombstone_path(dir, &id);
+        if std::fs::symlink_metadata(&path).is_ok() {
+            continue;
+        }
+        let body = serde_json::json!({
+            "id": id,
+            "stopped_at": now.to_rfc3339(),
+            "stopped_by": by.trim(),
+        });
+        write_private(&path, &serde_json::to_vec_pretty(&body)?)
+            .with_context(|| format!("could not write the stop tombstone for mandate {id}"))?;
     }
-    Ok(stopped)
+    Ok(active
+        .into_iter()
+        .map(|mut m| {
+            m.revoked_at = Some(now);
+            m.revoked_by = Some(by.trim().to_string());
+            m
+        })
+        .collect())
+}
+
+// ── Exclusion ledger ────────────────────────────────────────────────────────
+
+/// One append-only exclusion: once a spec is seen in an excluded class, a
+/// mandate never covers it again, whatever its history shows later.
+// trace:STORY-1698 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Exclusion {
+    pub spec: String,
+    pub class: String,
+    /// Operator-only or decide: never lifted, even by --include-supervised.
+    #[serde(default)]
+    pub always_human: bool,
+    pub first_seen: DateTime<Utc>,
+}
+
+/// The ledger by spec: the strongest exclusion seen for each. `Err` when the
+/// ledger exists but cannot be trusted to be complete (not a regular file,
+/// unreadable, or a malformed line) — the caller refuses.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn read_exclusions(
+    dir: &Path,
+) -> std::result::Result<std::collections::BTreeMap<String, Exclusion>, String> {
+    let path = dir.join(EXCLUSION_LEDGER);
+    let meta = match std::fs::symlink_metadata(&path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    if !meta.file_type().is_file() {
+        return Err(format!("{} is not a regular file", path.display()));
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut out = std::collections::BTreeMap::<String, Exclusion>::new();
+    for (n, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let e: Exclusion = serde_json::from_str(line).map_err(|err| {
+            format!(
+                "{} line {} is malformed ({err}); fix or remove that line by hand",
+                path.display(),
+                n + 1
+            )
+        })?;
+        let key = e.spec.to_ascii_uppercase();
+        let keep_old = out
+            .get(&key)
+            .is_some_and(|old| old.always_human || !e.always_human);
+        if !keep_old {
+            out.insert(key, e);
+        }
+    }
+    Ok(out)
+}
+
+/// Append each `(spec, class, always_human)` not already covered by an equal
+/// or stronger ledger entry. Mode 0600; never follows a symlink.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn record_exclusions(
+    dir: &Path,
+    seen: &[(String, String, bool)],
+    now: DateTime<Utc>,
+) -> Result<()> {
+    use std::io::Write;
+    let existing = read_exclusions(dir).unwrap_or_default();
+    let mut lines = String::new();
+    let mut added = std::collections::BTreeSet::new();
+    for (spec, class, always_human) in seen {
+        let key = spec.to_ascii_uppercase();
+        let covered = existing
+            .get(&key)
+            .is_some_and(|e| e.always_human || !always_human);
+        if covered || !added.insert((key.clone(), *always_human)) {
+            continue;
+        }
+        let entry = Exclusion {
+            spec: key,
+            class: class.clone(),
+            always_human: *always_human,
+            first_seen: now,
+        };
+        lines.push_str(&serde_json::to_string(&entry)?);
+        lines.push('\n');
+    }
+    if lines.is_empty() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dir)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.append(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = opts.open(dir.join(EXCLUSION_LEDGER))?;
+    file.write_all(lines.as_bytes())?;
+    Ok(())
+}
+
+/// The exclusion a requirement version carries: `(class, always_human)`.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn exclusion_of(req: &aida_core::Requirement) -> Option<(String, bool)> {
+    if let Some(class) = always_human_class(req) {
+        return Some((class, true));
+    }
+    excluded_class(req).map(|why| (why, false))
+}
+
+/// Record every exclusion any of `versions` of `spec` carries in the ledger
+/// under `dir`. Best-effort: a ledger write failure is warned about, and the
+/// git-history check still applies.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn note_exclusions<'a>(
+    dir: &Path,
+    spec: &str,
+    versions: impl IntoIterator<Item = &'a aida_core::Requirement>,
+) {
+    let seen: Vec<(String, String, bool)> = versions
+        .into_iter()
+        .filter_map(exclusion_of)
+        .map(|(class, always)| (spec.to_string(), class, always))
+        .collect();
+    if let Err(err) = record_exclusions(dir, &seen, Utc::now()) {
+        eprintln!("  warning: could not record a mandate exclusion for {spec}: {err:#}");
+    }
 }
 
 // ── Ship decision ───────────────────────────────────────────────────────────
@@ -386,6 +708,41 @@ pub(crate) struct ShipCheck<'a> {
     pub policy: &'a crate::pr_ship::ShipApprovalPolicy,
     pub head: Option<&'a str>,
     pub override_stale_approval: bool,
+    /// The append-only exclusion ledger; `Err` = untrustworthy (refuses).
+    pub ledger: &'a std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
+    /// The PR's merge-hold as the release step will see it.
+    pub hold: &'a HoldFacts,
+}
+
+/// STORY-1698: the merge-hold a mandate would release. A mandate only ever
+/// releases a typed marker of a releasable kind.
+// trace:STORY-1698 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HoldFacts {
+    /// No marker at all.
+    None,
+    /// AIDA recorded placing a hold whose marker vanished without a clearance.
+    MarkerMissing,
+    Marker {
+        kind: crate::merge_hold::HoldReasonKind,
+        legacy: bool,
+    },
+}
+
+impl HoldFacts {
+    pub(crate) fn of(
+        record: Option<&crate::merge_hold::MergeHoldRecord>,
+        reason: Option<&str>,
+    ) -> Self {
+        match record {
+            Some(r) => Self::Marker {
+                kind: r.reason_kind,
+                legacy: r.legacy,
+            },
+            None if reason == Some(crate::merge_hold::MARKER_MISSING_REASON) => Self::MarkerMissing,
+            None => Self::None,
+        }
+    }
 }
 
 /// Why a mandate does not cover this ship.
@@ -399,7 +756,11 @@ pub(crate) enum MandateRefusal {
     PrincipalMismatch { mandate: String, grant: String },
     OverrideStale,
     SpecsUnresolved,
-    OperatorOnly { spec: String },
+    AlwaysHuman { spec: String, class: String },
+    LedgerUnreadable(String),
+    NoHoldMarker,
+    MarkerMissing,
+    HoldNotReleasable { kind: String },
     HistoryUnreadable { spec: String, why: String },
     Excluded { spec: String, why: String },
     ShipperUnanchored,
@@ -431,8 +792,21 @@ impl MandateRefusal {
             Self::HistoryUnreadable { spec, why } => format!(
                 "{spec}'s store history could not be read ({why}), so it is treated as excluded"
             ),
-            Self::OperatorOnly { spec } => {
-                format!("{spec} is operator-only; it always needs a human merge")
+            Self::AlwaysHuman { spec, class } => {
+                format!("{spec} is {class}; it always needs a human merge")
+            }
+            Self::LedgerUnreadable(why) => {
+                format!("the mandate exclusion ledger cannot be trusted: {why}")
+            }
+            Self::NoHoldMarker => {
+                "the PR has no typed merge-hold marker for a mandate to release; a human must ship it".to_string()
+            }
+            Self::MarkerMissing => format!(
+                "the PR's merge-hold marker is missing without a recorded clearance ({}); a human must run `aida merge-hold clear`",
+                crate::merge_hold::MARKER_MISSING_REASON
+            ),
+            Self::HoldNotReleasable { kind } => {
+                format!("a {kind} hold is never released under a mandate; a human must clear it")
             }
             Self::Excluded { spec, why } => format!(
                 "{spec} is in an excluded class ({why}); the mandate was not minted with --include-supervised"
@@ -472,15 +846,20 @@ pub(crate) fn excluded_class(req: &aida_core::Requirement) -> Option<String> {
         })
 }
 
-/// STORY-1698: operator-only specs — `execution_mode = operator` or the
-/// `operator-only` tag. Never covered, whatever the mandate's flags.
+/// STORY-1698: always-human specs — `execution_mode` operator or decide, or
+/// the `operator-only` tag. Never covered, whatever the mandate's flags.
+/// `Some(class)` names which.
 // trace:STORY-1698 | ai:claude
-pub(crate) fn is_operator_only(req: &aida_core::Requirement) -> bool {
-    req.execution_mode == Some(aida_core::ExecutionMode::Operator)
-        || req
-            .tags
-            .iter()
-            .any(|t| t.trim().eq_ignore_ascii_case(OPERATOR_ONLY_TAG))
+pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String> {
+    match req.execution_mode {
+        Some(aida_core::ExecutionMode::Operator) => return Some("operator-only".into()),
+        Some(aida_core::ExecutionMode::Decide) => return Some("decide-mode".into()),
+        _ => {}
+    }
+    req.tags
+        .iter()
+        .any(|t| t.trim().eq_ignore_ascii_case(OPERATOR_ONLY_TAG))
+        .then(|| "operator-only".into())
 }
 
 /// STORY-1698: does an active mandate cover this ship? `Ok(mandate id)` =
@@ -522,9 +901,32 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
     if c.override_stale_approval {
         return Err(MandateRefusal::OverrideStale);
     }
+    // A mandate releases only a typed marker of a releasable kind.
+    // trace:STORY-1698 | ai:claude
+    match c.hold {
+        HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
+        HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+        HoldFacts::Marker { legacy: true, .. } => {
+            return Err(MandateRefusal::HoldNotReleasable {
+                kind: "untyped legacy".into(),
+            })
+        }
+        HoldFacts::Marker { kind, .. } => {
+            use crate::merge_hold::HoldReasonKind as K;
+            if !matches!(kind, K::Supervision | K::Decision | K::Rework) {
+                return Err(MandateRefusal::HoldNotReleasable {
+                    kind: kind.as_str().to_string(),
+                });
+            }
+        }
+    }
     if !c.specs_resolved || c.specs.is_empty() {
         return Err(MandateRefusal::SpecsUnresolved);
     }
+    let ledger = c
+        .ledger
+        .as_ref()
+        .map_err(|why| MandateRefusal::LedgerUnreadable(why.clone()))?;
     // Exclusion is STICKY: a spec is judged by every version it ever had —
     // now, in the store's git history, and in its recorded field changes —
     // so stripping a tag never lifts it. Unreadable history refuses.
@@ -547,10 +949,27 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
         let versions = std::iter::once(current)
             .chain(current_changes.iter())
             .chain(history.iter());
+        // The ledger is the first source: once seen excluded, always excluded.
         let mut excluded: Option<String> = None;
+        if let Some(entry) = ledger.get(&id.to_ascii_uppercase()) {
+            if entry.always_human {
+                return Err(MandateRefusal::AlwaysHuman {
+                    spec: id.clone(),
+                    class: entry.class.clone(),
+                });
+            }
+            excluded = Some(format!(
+                "{}, recorded {}",
+                entry.class,
+                entry.first_seen.to_rfc3339()
+            ));
+        }
         for (i, version) in versions.enumerate() {
-            if is_operator_only(version) {
-                return Err(MandateRefusal::OperatorOnly { spec: id.clone() });
+            if let Some(class) = always_human_class(version) {
+                return Err(MandateRefusal::AlwaysHuman {
+                    spec: id.clone(),
+                    class,
+                });
             }
             if excluded.is_none() {
                 excluded = excluded_class(version).map(|why| {
@@ -761,7 +1180,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             if !m.include_supervised {
                 println!("Sensitive specs (security, containment, authority, guided, keystone) stay human-only.");
             }
-            println!("Operator-only specs always stay human-only. Stop it any time: `aida mandate stop`.");
+            println!("Operator-only and decide-mode specs always stay human-only. Stop it any time: `aida mandate stop`.");
             Ok(())
         }
         crate::cli::MandateAction::Stop => {
@@ -782,7 +1201,11 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         }
         crate::cli::MandateAction::Status { json } => {
             let now = Utc::now();
-            let state = state_at(&load_all(&dir), now);
+            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            for w in &warnings {
+                eprintln!("warning: {w}");
+            }
+            let state = state_at(&valid, now);
             if *json {
                 println!("{}", status_json(&state, now));
             } else {

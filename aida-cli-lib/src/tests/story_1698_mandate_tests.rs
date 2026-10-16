@@ -108,6 +108,8 @@ struct Case {
     head: Option<&'static str>,
     override_stale: bool,
     now: DateTime<Utc>,
+    ledger: std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
+    hold: HoldFacts,
 }
 
 impl Case {
@@ -125,6 +127,11 @@ impl Case {
             head: Some(HEAD),
             override_stale: false,
             now: now(),
+            ledger: Ok(Default::default()),
+            hold: HoldFacts::Marker {
+                kind: crate::merge_hold::HoldReasonKind::Supervision,
+                legacy: false,
+            },
         }
     }
 
@@ -139,6 +146,8 @@ impl Case {
             policy: &self.policy,
             head: self.head,
             override_stale_approval: self.override_stale,
+            ledger: &self.ledger,
+            hold: &self.hold,
         })
     }
 }
@@ -154,7 +163,7 @@ fn an_agent_without_a_tty_cannot_start_or_stop_a_mandate() {
         "{err:#}"
     );
     assert!(
-        load_all(tmp.path()).is_empty(),
+        load_valid(tmp.path(), "joe", now()).0.is_empty(),
         "a refused start writes nothing"
     );
 
@@ -170,7 +179,7 @@ fn an_agent_without_a_tty_cannot_start_or_stop_a_mandate() {
     .unwrap();
     assert!(stop(tmp.path(), &no_tty, "agent", now()).is_err());
     assert!(matches!(
-        state_at(&load_all(tmp.path()), now()),
+        state_at(&load_valid(tmp.path(), "joe", now()).0, now()),
         MandateState::Active(_)
     ));
 }
@@ -183,7 +192,7 @@ fn require_direct_human_refuses_a_managed_agent_session() {
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_AGENT_NAME", "drain-worker")]);
     let gate = || crate::seat_authority::require_direct_human();
     assert!(start(tmp.path(), &gate, "joe", DEFAULT_TTL, None, false, now()).is_err());
-    assert!(load_all(tmp.path()).is_empty());
+    assert!(load_valid(tmp.path(), "joe", now()).0.is_empty());
 }
 
 #[test]
@@ -206,7 +215,7 @@ fn a_human_can_start_a_mandate_and_it_is_recorded() {
     assert_eq!(m.reason.as_deref(), Some("outage"));
     assert!(tmp.path().join(format!("{}.json", m.id)).is_file());
     assert_eq!(
-        state_at(&load_all(tmp.path()), now()),
+        state_at(&load_valid(tmp.path(), "joe", now()).0, now()),
         MandateState::Active(m)
     );
 }
@@ -412,11 +421,11 @@ fn stop_takes_effect_immediately() {
     )
     .unwrap();
     let mut c = Case::ok();
-    c.state = state_at(&load_all(tmp.path()), now());
+    c.state = state_at(&load_valid(tmp.path(), "joe", now()).0, now());
     assert_eq!(c.decide(), Ok(m.id.clone()));
     let stopped = stop(tmp.path(), &human_ok, "joe", now()).unwrap();
     assert_eq!(stopped.len(), 1);
-    c.state = state_at(&load_all(tmp.path()), now());
+    c.state = state_at(&load_valid(tmp.path(), "joe", now()).0, now());
     assert_eq!(c.decide(), Err(MandateRefusal::Stopped { id: m.id }));
 }
 
@@ -462,8 +471,9 @@ fn operator_only_specs_are_never_covered_even_with_include_supervised() {
     c.specs = vec![tagged("TASK-3", OPERATOR_ONLY_TAG)];
     assert_eq!(
         c.decide(),
-        Err(MandateRefusal::OperatorOnly {
-            spec: "TASK-3".into()
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-3".into(),
+            class: "operator-only".into(),
         })
     );
     let mut s4 = spec("TASK-4");
@@ -471,8 +481,9 @@ fn operator_only_specs_are_never_covered_even_with_include_supervised() {
     c.specs = vec![s4];
     assert_eq!(
         c.decide(),
-        Err(MandateRefusal::OperatorOnly {
-            spec: "TASK-4".into()
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-4".into(),
+            class: "operator-only".into(),
         })
     );
 }
@@ -613,8 +624,9 @@ fn operator_mode_anywhere_in_history_is_always_refused() {
     }];
     assert_eq!(
         c.decide(),
-        Err(MandateRefusal::OperatorOnly {
-            spec: "TASK-7".into()
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-7".into(),
+            class: "operator-only".into(),
         })
     );
 }
@@ -690,4 +702,334 @@ fn store_git_history_keeps_a_stripped_tag_visible() {
     assert!(store_history_versions(root, "TASK-10").is_err());
     let not_a_repo = tempfile::tempdir().unwrap();
     assert!(store_history_versions(not_a_repo.path(), "TASK-9").is_err());
+}
+
+// ── Review B1: every record is validated on load; revocation is monotonic ──
+
+/// Write `m` as a mandate record the way an attacker (or a buggy tool)
+/// might: plain `std::fs::write`, then the given mode.
+#[cfg(unix)]
+fn plant(dir: &Path, m: &Mandate, mode: u32) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(dir).unwrap();
+    let path = dir.join(format!("{}.json", m.id));
+    std::fs::write(&path, serde_json::to_vec(m).unwrap()).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+    path
+}
+
+#[cfg(unix)]
+#[test]
+fn a_forged_long_ttl_record_is_ignored_and_never_shadows_a_valid_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let valid = start(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        Duration::hours(2),
+        None,
+        false,
+        now(),
+    )
+    .unwrap();
+    let mut forged = active(true);
+    forged.id = "6f1c1d6e-0000-4000-8000-0000000000ff".into();
+    forged.issued_at = now();
+    forged.expires_at = now() + Duration::days(30);
+    plant(tmp.path(), &forged, 0o600);
+    let (mandates, warnings) = load_valid(tmp.path(), "joe", now());
+    assert_eq!(mandates, vec![valid.clone()]);
+    assert!(
+        warnings.iter().any(|w| w.contains("24h cap")),
+        "{warnings:?}"
+    );
+    assert_eq!(state_at(&mandates, now()), MandateState::Active(valid));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_record_issued_in_the_future_is_ignored() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut m = active(false);
+    m.issued_at = now() + Duration::hours(1);
+    m.expires_at = now() + Duration::hours(2);
+    plant(tmp.path(), &m, 0o600);
+    let (mandates, warnings) = load_valid(tmp.path(), "joe", now());
+    assert!(mandates.is_empty());
+    assert!(warnings[0].contains("future"), "{warnings:?}");
+    // Within the 5-minute skew is fine.
+    m.issued_at = now() + Duration::minutes(4);
+    plant(tmp.path(), &m, 0o600);
+    assert_eq!(load_valid(tmp.path(), "joe", now()).0.len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn records_for_another_principal_seat_or_scope_are_ignored() {
+    let tmp = tempfile::tempdir().unwrap();
+    plant(tmp.path(), &active(false), 0o600);
+    assert!(load_valid(tmp.path(), "mallory", now()).0.is_empty());
+    let mut m = active(false);
+    m.seat = "reviewer".into();
+    plant(tmp.path(), &m, 0o600);
+    assert!(load_valid(tmp.path(), "joe", now()).0.is_empty());
+    m.seat = MANDATE_SEAT.into();
+    m.scope = "ship-everything".into();
+    plant(tmp.path(), &m, 0o600);
+    assert!(load_valid(tmp.path(), "joe", now()).0.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_world_readable_or_symlinked_record_is_ignored() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = plant(tmp.path(), &active(false), 0o644);
+    let (mandates, warnings) = load_valid(tmp.path(), "joe", now());
+    assert!(mandates.is_empty());
+    assert!(warnings[0].contains("mode 644"), "{warnings:?}");
+
+    std::fs::remove_file(&path).unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let target = plant(elsewhere.path(), &active(false), 0o600);
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+    let (mandates, warnings) = load_valid(tmp.path(), "joe", now());
+    assert!(mandates.is_empty());
+    assert!(warnings[0].contains("symlink"), "{warnings:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn start_writes_a_0600_record() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let m = start(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        DEFAULT_TTL,
+        None,
+        false,
+        now(),
+    )
+    .unwrap();
+    let mode = std::fs::metadata(tmp.path().join(format!("{}.json", m.id)))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stopped_mandate_stays_stopped_when_revoked_at_is_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = start(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        DEFAULT_TTL,
+        None,
+        false,
+        now(),
+    )
+    .unwrap();
+    stop(tmp.path(), &human_ok, "joe", now()).unwrap();
+    // Rewrite the record with no revocation at all: the tombstone still wins.
+    let mut revived = m.clone();
+    revived.revoked_at = None;
+    revived.revoked_by = None;
+    plant(tmp.path(), &revived, 0o600);
+    let state = state_at(&load_valid(tmp.path(), "joe", now()).0, now());
+    assert!(
+        matches!(state, MandateState::Stopped(ref s) if s.id == m.id),
+        "{state:?}"
+    );
+    // And a fresh start is still possible.
+    assert!(start(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        DEFAULT_TTL,
+        None,
+        false,
+        now()
+    )
+    .is_ok());
+}
+
+// ── Review B3: the append-only exclusion ledger ────────────────────────────
+
+#[test]
+fn a_spec_in_the_ledger_is_refused_after_its_tag_is_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut secure = plain();
+    secure.tags.insert("security".into());
+    note_exclusions(tmp.path(), "TASK-11", [&secure]);
+    let ledger = read_exclusions(tmp.path());
+    assert!(ledger.as_ref().unwrap().contains_key("TASK-11"));
+    // Now every version anywhere is clean: the ledger still excludes it.
+    let mut c = Case::ok();
+    c.specs = vec![spec("TASK-11")];
+    c.ledger = ledger;
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::Excluded { .. })),
+        "{:?}",
+        c.decide()
+    );
+    c.state = MandateState::Active(active(true));
+    assert!(
+        c.decide().is_ok(),
+        "a sensitive class is lifted by --include-supervised"
+    );
+}
+
+#[test]
+fn an_always_human_ledger_entry_is_never_lifted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut decide = plain();
+    decide.execution_mode = Some(aida_core::ExecutionMode::Decide);
+    note_exclusions(tmp.path(), "TASK-12", [&decide]);
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.specs = vec![spec("TASK-12")];
+    c.ledger = read_exclusions(tmp.path());
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::AlwaysHuman { .. })
+    ));
+}
+
+#[test]
+fn the_ledger_is_append_only_and_an_untrustworthy_one_refuses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut secure = plain();
+    secure.tags.insert("security".into());
+    note_exclusions(tmp.path(), "TASK-13", [&secure]);
+    note_exclusions(tmp.path(), "TASK-13", [&secure]);
+    let text = std::fs::read_to_string(tmp.path().join("exclusions.jsonl")).unwrap();
+    assert_eq!(text.lines().count(), 1, "a repeat sighting appends nothing");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(tmp.path().join("exclusions.jsonl"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+    std::fs::write(
+        tmp.path().join("exclusions.jsonl"),
+        format!("{text}{{not json\n"),
+    )
+    .unwrap();
+    let mut c = Case::ok();
+    c.ledger = read_exclusions(tmp.path());
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::LedgerUnreadable(_))
+    ));
+}
+
+// ── Review B4: only a typed, releasable marker; re-arm on every failure ────
+
+#[test]
+fn a_missing_or_untyped_marker_is_refused() {
+    let mut c = Case::ok();
+    c.hold = HoldFacts::None;
+    assert_eq!(c.decide(), Err(MandateRefusal::NoHoldMarker));
+    c.hold = HoldFacts::of(None, Some(crate::merge_hold::MARKER_MISSING_REASON));
+    assert_eq!(c.decide(), Err(MandateRefusal::MarkerMissing));
+    c.hold = HoldFacts::Marker {
+        kind: crate::merge_hold::HoldReasonKind::Supervision,
+        legacy: true,
+    };
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::HoldNotReleasable { .. })
+    ));
+    for kind in [
+        crate::merge_hold::HoldReasonKind::Recusal,
+        crate::merge_hold::HoldReasonKind::Unknown,
+    ] {
+        c.hold = HoldFacts::Marker {
+            kind,
+            legacy: false,
+        };
+        assert!(matches!(
+            c.decide(),
+            Err(MandateRefusal::HoldNotReleasable { .. })
+        ));
+    }
+    for kind in [
+        crate::merge_hold::HoldReasonKind::Decision,
+        crate::merge_hold::HoldReasonKind::Rework,
+    ] {
+        c.hold = HoldFacts::Marker {
+            kind,
+            legacy: false,
+        };
+        assert!(c.decide().is_ok(), "{kind:?}");
+    }
+}
+
+#[test]
+fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let hold = crate::merge_hold::typed_hold(
+        44,
+        crate::merge_hold::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    crate::merge_hold::write_typed_hold(tmp.path(), &hold).unwrap();
+    crate::merge_hold::clear_hold(tmp.path(), 44).unwrap();
+    assert!(crate::merge_hold::read_hold_record(tmp.path(), 44).is_none());
+    crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || Ok(())).unwrap();
+    let back = crate::merge_hold::read_hold_record(tmp.path(), 44).expect("re-armed");
+    assert_eq!(
+        back.reason_kind,
+        crate::merge_hold::HoldReasonKind::Supervision
+    );
+    // A label that cannot be restored is reported, never swallowed.
+    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || Err("gh down".into()))
+        .unwrap_err();
+    assert!(err.contains("gh down"), "{err}");
+}
+
+#[test]
+fn every_failure_after_a_mandate_release_re_arms_the_hold() {
+    let src = include_str!("../pr_cmd.rs");
+    let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
+    let release = handler
+        .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+        .unwrap();
+    let after = &handler[release..];
+    let merged = after.find("merged_this_run = true;").unwrap();
+    let window = &after[..merged + 2000];
+    assert!(window.contains("Ok(false) if mandate_release.is_some()"));
+    assert!(window.contains("ended before the merge"));
+    assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
+    assert_eq!(
+        window.matches("rearm_after_mandate_failure(").count(),
+        3,
+        "gate timeout, lapse and merge failure each re-arm"
+    );
+}
+
+// ── Review B5: decide mode is always human ─────────────────────────────────
+
+#[test]
+fn decide_mode_is_refused_even_with_include_supervised() {
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    let mut s = spec("TASK-14");
+    s.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Decide);
+    c.specs = vec![s];
+    assert_eq!(
+        c.decide(),
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-14".into(),
+            class: "decide-mode".into(),
+        })
+    );
 }

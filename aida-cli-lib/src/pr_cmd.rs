@@ -1149,11 +1149,21 @@ pub(crate) fn supervised_specs_for_ship(
     project_root: &std::path::Path,
     interactive_tty: bool,
 ) -> Vec<(String, String)> {
-    let specs: Vec<(String, Option<aida_core::ExecutionMode>)> =
-        ship_gate_spec_records(project_root)
-            .into_iter()
-            .map(|(id, _, mode)| (id, mode))
-            .collect();
+    let records = ship_gate_spec_records(project_root);
+    // STORY-1698: every spec read during a ship feeds the mandate's
+    // append-only exclusion ledger. trace:STORY-1698 | ai:claude
+    if let Ok(dir) = crate::mandate::mandate_dir() {
+        for (id, tags, mode) in &records {
+            let mut req = aida_core::Requirement::new(String::new(), String::new());
+            req.tags = tags.iter().cloned().collect();
+            req.execution_mode = *mode;
+            crate::mandate::note_exclusions(&dir, id, [&req]);
+        }
+    }
+    let specs: Vec<(String, Option<aida_core::ExecutionMode>)> = records
+        .into_iter()
+        .map(|(id, _, mode)| (id, mode))
+        .collect();
     pr_ship::supervised_merge_holds(&specs, interactive_tty)
 }
 
@@ -1739,17 +1749,19 @@ pub(crate) struct MandateCover {
 /// instant (never cached); only when one is active does it read the forge,
 /// the verdicts and the store. `head` is read lazily for the same reason.
 // trace:STORY-1698 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn mandate_ship_cover(
     project_root: &std::path::Path,
     main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
     pr: u64,
     known_ids: &[String],
     head_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
     override_stale_approval: bool,
 ) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
-    use crate::mandate::{MandateRefusal, MandateState, ShipCheck};
-    let state = crate::mandate::current_state();
+    use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
+    let state = crate::mandate::current_state_reporting(true);
     if !matches!(state, MandateState::Active(_)) {
         return Err(match state {
             MandateState::Expired(m) => MandateRefusal::Expired { id: m.id },
@@ -1804,6 +1816,35 @@ pub(crate) fn mandate_ship_cover(
             }
         })
         .collect();
+    // STORY-1698: every excluded class seen in any version goes into the
+    // append-only ledger first, then the ledger is read back as the first
+    // source of exclusion. trace:STORY-1698 | ai:claude
+    let mandate_dir = crate::mandate::mandate_dir();
+    if let Ok(dir) = &mandate_dir {
+        for spec in &specs {
+            let changes = spec
+                .current
+                .as_ref()
+                .map(crate::mandate::field_change_versions)
+                .unwrap_or_default();
+            let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
+            crate::mandate::note_exclusions(
+                dir,
+                &spec.id,
+                spec.current
+                    .iter()
+                    .chain(changes.iter())
+                    .chain(history.iter()),
+            );
+        }
+    }
+    let ledger = match &mandate_dir {
+        Ok(dir) => crate::mandate::read_exclusions(dir),
+        Err(e) => Err(format!("{e:#}")),
+    };
+    let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
+    let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
+    let hold = HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref());
     let id = crate::mandate::ship_decision(&ShipCheck {
         state: &state,
         now: chrono::Utc::now(),
@@ -1814,11 +1855,57 @@ pub(crate) fn mandate_ship_cover(
         policy: &policy,
         head: head.as_deref(),
         override_stale_approval,
+        ledger: &ledger,
+        hold: &hold,
     })?;
     Ok(MandateCover {
         id,
         principal: grant.map(|(_, p)| p).unwrap_or_default(),
     })
+}
+
+/// STORY-1698: put a mandate-released hold back after any failure between
+/// the release and a landed merge — the marker, then the forge label. `Err`
+/// names whichever half could not be restored, for the refusal text.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn rearm_mandate_hold_with(
+    hold_root: &std::path::Path,
+    record: &crate::merge_hold::MergeHoldRecord,
+    sync_label: impl FnOnce() -> std::result::Result<(), String>,
+) -> std::result::Result<(), String> {
+    let mut failed = Vec::new();
+    if let Err(e) = crate::merge_hold::write_typed_hold(hold_root, record) {
+        failed.push(format!("the hold marker could not be rewritten ({e})"));
+    }
+    if let Err(e) = sync_label() {
+        failed.push(format!("the merge-hold label could not be restored ({e})"));
+    }
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(failed.join("; "))
+    }
+}
+
+/// [`rearm_mandate_hold_with`] against the real forge, as refusal text: what
+/// to append to the error the ship returns.
+// trace:STORY-1698 | ai:claude
+fn rearm_after_mandate_failure(
+    hold_root: &std::path::Path,
+    record: Option<&crate::merge_hold::MergeHoldRecord>,
+    pr: u64,
+) -> String {
+    let Some(record) = record else {
+        return " The mandate-released hold had no record to re-arm; a human must re-place it with `aida merge-hold add`.".to_string();
+    };
+    match rearm_mandate_hold_with(hold_root, record, || {
+        crate::merge_hold::sync_label(hold_root, pr, true).map_err(|e| e.to_string())
+    }) {
+        Ok(()) => " The merge-hold is re-armed.".to_string(),
+        Err(why) => format!(
+            " RE-ARMING THE MERGE-HOLD FAILED: {why}. A human must re-place it with `aida merge-hold add {pr}`."
+        ),
+    }
 }
 
 /// STORY-1698: is mandate `id` still active at this instant? Re-read from
@@ -2517,6 +2604,7 @@ pub(crate) fn pr_ship_handler(
         mandate_ship_cover(
             &project_root,
             &main_worktree,
+            &hold_root,
             pr_number,
             &mandate_ids(),
             Some(&ship_branch),
@@ -3229,6 +3317,13 @@ pub(crate) fn pr_ship_handler(
                     std::time::Duration::from_secs(10),
                 ) {
                     Ok(true) => {}
+                    // STORY-1698: a mandate release never stays released on
+                    // a failure. trace:STORY-1698 | ai:claude
+                    Ok(false) if mandate_release.is_some() => anyhow::bail!(
+                        "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                        crate::ci_gate::HOLD_GATE_CHECK,
+                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                    ),
                     Ok(false) => anyhow::bail!(
                         "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
                          180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
@@ -3249,13 +3344,10 @@ pub(crate) fn pr_ship_handler(
         // trace:STORY-1698 | ai:claude
         if let Some(cover) = &mandate_release {
             if !mandate_still_active(&cover.id) {
-                if let Some(record) = &hold_record {
-                    let _ = crate::merge_hold::write_typed_hold(&hold_root, record);
-                    let _ = crate::merge_hold::sync_label(&hold_root, pr_number, true);
-                }
                 let refusal = format!(
-                    "PR-{pr_number} left OPEN — mandate {} ended before the merge; the merge-hold is re-armed.",
-                    cover.id
+                    "PR-{pr_number} left OPEN — mandate {} ended before the merge.{}",
+                    cover.id,
+                    rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
                 );
                 crate::events::record_gate_held(
                     &hold_root,
@@ -3311,6 +3403,13 @@ pub(crate) fn pr_ship_handler(
                     stderr_text
                 );
                 eprintln!("  {}", hint);
+                // STORY-1698: re-arm a mandate-released hold on a failed merge.
+                // trace:STORY-1698 | ai:claude
+                if mandate_release.is_some() && marker_reason.is_some() {
+                    let rearm =
+                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number);
+                    return Err(e.context(format!("`gh pr merge` failed.{rearm}")));
+                }
                 return Err(e.context("`gh pr merge` failed"));
             }
         } else {
