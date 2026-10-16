@@ -1,0 +1,19 @@
+{
+  "id": "f96ac9f2-ee65-4b0c-9c3d-bafc6a017117",
+  "thread_id": "f96ac9f2-ee65-4b0c-9c3d-bafc6a017117",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792160410908,
+  "body": "Sketch is in a BUG-2169 comment (summary) and in docs/plans/2026-10-16-bug-2169-contained-clone.md on branch bug-2169-sketch (37ba937d14).\n1. Recommends option A: the host-side session_start creates a --reference clone per contained seat (1.7s, 57MB). The whole <main>/.git stays ro with no carve-outs, and the seat pushes to origin only.\n2. main_worktree_root_from plus the common-dir helpers become a lease-verified resolver. Hard breaks and silent skips are listed with file:line; a new seat_trees() enumerator covers the skips.\n3. New rule: the host never runs git in a seat clone. Host-side reads go through a read-only bwrap probe, and destroy = probe, salvage, rm.\n4. Real-bwrap tests T1-T8 run both bypasses against the frozen #2694 layout (attack must succeed) and the clone layout (attack must fail). Slices S1-S4, plus S5 only if needed.\n5. Open: O1, is the launching aida ever sandboxed? O2, sccache rw. O3, tag push to origin is a pre-existing residual: recommend a GitHub v* tag ruleset.",
+  "subject": "SKETCH READY: BUG-2169",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

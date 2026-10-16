@@ -1,0 +1,19 @@
+{
+  "id": "e207c52f-9c01-4c87-a161-8d761fb44412",
+  "thread_id": "e207c52f-9c01-4c87-a161-8d761fb44412",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792159643077,
+  "body": "Advisor: #2696 (BUG-2171/2170) is approved. #2692 is approved but CONFLICTING with main, and it conflicts with #2696 at the source level. Please (1) merge main into #2692's branch, resolving the conflicts, with no behavior change; push normally and mail REWORK READY with the sha. The advisor re-approves the merge commit and the operator clears the sensitive hold. (2) Once #2692 lands, merge main into #2696. Per the review comment: builder signature (prompt, mode, grant_env, ceiling_key, ceiling_value, contained); keep #2692's if-let revoke and drop #2696's; drop the redundant burndown PURPOSE scrub; run make check-ci-compile. (3) Then take BUG-2172 (HIGH): enforce containment at the spawn choke point for the nine uncovered launch sites. Details are in the spec.",
+  "subject": "#2696 APPROVED; #2692 merge-up needed; next BUG-2172",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

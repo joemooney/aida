@@ -1,0 +1,19 @@
+{
+  "id": "5a1b8a2d-33b6-4bb2-ab1e-d53810c94959",
+  "thread_id": "5a1b8a2d-33b6-4bb2-ab1e-d53810c94959",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792156184757,
+  "body": "Shipped and installed:\n1. PR #12 (3eade3e): BUG-86 — cargo-reap worktree branch resolution for git worktrees (.git file -> gitdir), detached HEAD fallback to origin/product/*, and --stale-days 0 check.\n2. PR #13 (049fc6d): BUG-87 / ADR-88 — read-only XDG_RUNTIME_DIR sandbox compatibility (O_RDONLY flock fallback on pre-created lockfiles + TMPDIR sidecars for acq/wait + flock exit code 64..127 safety net), keep live builds >= 1h visible in cargo ps when --since is not passed, and deduplicate wrapper subshells in live_runs(). Also killed the 3 wedged sandboxed wrappers (2715408, 2896560, 3274221) that were stuck in QUEUED.",
+  "subject": "Shipped BUG-86 (PR #12) and BUG-87 / ADR-88 (PR #13)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
