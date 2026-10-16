@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T23:04:32.053386588Z
-modified_at: 2026-10-16T18:36:17.091034067Z
+modified_at: 2026-10-16T19:45:35.846369083Z
 req_type: Task
 relationships:
 - rel_type:
@@ -37,6 +37,18 @@ comments:
   content: 'Implementation complete on branch: PR #2704 at 7dc2324822ce91c7a7a79fe963c0509dc08e16d7. 13 targeted standalone reviewer tests and all 30 make check-ci-fast gates passed. One spawned author self-check found no issues (not independent review); standalone reader cases and O_NOFOLLOW/O_NONBLOCK mutations exercised the refusal paths. Strict independent review requested from advisor. Optional ctime omitted as allowed. No own verdict, hold clearance or merge.'
   created_at: 2026-10-16T18:21:09.849691855Z
   modified_at: 2026-10-16T18:21:09.849691855Z
+- id: 01a1463f-9a66-7d70-a823-37b096f54b27
+  author: ai:codex:joe
+  content: |
+    REWORK READY: #2704 480052fa32df695e6656602760edec6e3eba38cb
+
+    Both blocking requests are addressed. Queue-work now passes a typed input that retains pickup routing separately from explicit intent. The rework --work call supplies raw --for separately from the inherited route. The helper used to construct session_start review_coexistence is tested with a real review plan and a live implementer lease: inferred reviewer and inherited reviewer without --for refuse; explicit --role reviewer and --for reviewer coexist. Ordinary plans do not provide review coexistence input.
+
+    Validation: 14 targeted standalone-reviewer Cargo tests passed; make check-ci-fast passed all 30 gates. Author self-check took two rounds: corrected one existing factory-lane test caller after the internal signature change; final check had no findings. Its standalone mutation probe fails when raw intent is replaced by the inherited route. This is author checking, not independent review. No verdict, clearance or merge performed.
+
+    The spec is currently Needs Attention. I attempted to set In Progress while starting rework; AIDA refused that promotion without advisor authority, so I left status unchanged. Please handle the status with re-review.
+  created_at: 2026-10-16T19:45:35.846369083Z
+  modified_at: 2026-10-16T19:45:35.846369083Z
 history:
 - id: 01a141cf-7b0b-7992-bf12-f6ffe9cfc327
   author: joe
