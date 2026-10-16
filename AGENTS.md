@@ -4,6 +4,17 @@ file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
 process watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
 
+Pooled-worktree lease cleanup revokes its stamped headless child grant before
+removing the lease. Headless drains refuse unresolved project roots before
+queueing or phase startup; delegated child expiry matches its parent.
+<!-- trace:TASK-1789 | ai:codex -->
+
+Mandate exclusion-ledger reads validate the opened non-symlink regular file,
+mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
+mandate ships restore holds with explicit re-arm context in the placement event.
+Trace-derived exclusions remain separate pending work.
+<!-- trace:TASK-1790 | ai:codex -->
+
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
 closed built-in Linux probes. It never runs stored shell commands or probes
 from sync/drain/hooks, and reports match/drift/unknown/invalid without status
@@ -11,6 +22,12 @@ mutation. Canonical `edit --verify <JSON>` / `--clear-verify` author blocks;
 archived writers refuse unsupported blocks. See
 [constraint verification](docs/cli/08-reporting.md#aida-verify).
 <!-- trace:STORY-1673 | ai:codex -->
+
+Regeneration completeness checks installed required tools before the oracle and
+rechecks file content after quarantining helper writes. Incomplete trials keep
+overall and trusted-component split diagnostics but never supply a headline
+score. Harness continuation is separate launcher work. See OVERVIEW.md.
+<!-- trace:STORY-1677 | ai:codex -->
 
 `aida statusline` and every `aida digest` format show the latest scored ordinary
 discriminating R1 percentage and age, with `!` for non-clean or flagged trials.

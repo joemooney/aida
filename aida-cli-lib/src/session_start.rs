@@ -1032,8 +1032,14 @@ pub(crate) fn clear_worktree_session_leases(
             .worktree_path
             .canonicalize()
             .unwrap_or_else(|_| lease.worktree_path.clone());
-        if lease_wt == target && std::fs::remove_file(lease_path(project_root, &lease.id)).is_ok() {
-            removed += 1;
+        if lease_wt == target {
+            let path = lease_path(project_root, &lease.id);
+            // Revoke while the grant handle is still readable in the lease.
+            // trace:TASK-1789 | ai:codex
+            crate::session::revoke_lease_child_grant(&path);
+            if std::fs::remove_file(path).is_ok() {
+                removed += 1;
+            }
         }
     }
     removed
