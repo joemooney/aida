@@ -404,7 +404,9 @@ fn source_ids(
             }
         }
     }
-    let mut selected = BTreeSet::new();
+    // Select item ranges first, then parse each selected comment ONCE. A new
+    // large file must not rescan an entire impl for every changed source line.
+    let mut selected_items = BTreeSet::new();
     for change in changes {
         // Empty-side insertion/deletion boundaries are evidence too. Either
         // adjacent line must attribute to an item; otherwise use the full file.
@@ -420,28 +422,25 @@ fn source_ids(
             change.clone().collect()
         };
         for line in touched {
-            let enclosing: Vec<_> = items.0.iter().filter(|r| r.contains(&line)).collect();
-            if enclosing.is_empty() {
+            let mut attributed = false;
+            for item in items.0.iter().filter(|r| r.contains(&line)) {
+                attributed = true;
+                selected_items.insert((item.start, item.end));
+            }
+            if !attributed {
                 return (full(), true);
             }
-            for item in enclosing {
-                selected.extend(
-                    comments
-                        .iter()
-                        .filter(|(i, _)| item.contains(i))
-                        .flat_map(|(_, c)| trace_ids(c)),
-                );
-            }
         }
-        // Include traces changed directly even if an item's span excludes its
-        // leading comment. Unattributable lines already caused full fallback.
-        selected.extend(
-            comments
-                .iter()
-                .filter(|(i, _)| change.contains(i))
-                .flat_map(|(_, c)| trace_ids(c)),
-        );
     }
+    let mut selected_lines = vec![false; comments.len()];
+    for (start, end) in selected_items {
+        selected_lines[start..end.min(comments.len())].fill(true);
+    }
+    let selected = comments
+        .iter()
+        .filter(|(line, _)| selected_lines[*line])
+        .flat_map(|(_, comment)| trace_ids(comment))
+        .collect();
     (selected, false)
 }
 
