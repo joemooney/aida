@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: '03:34: shipped #2678. #2693 is shipping. #2691 and #2692 are approved and await the operator''s hold clear. 5 claude fixers (TASK-1784, BUG-2169, #2673 merge-up, STORY-1697, #2684 rework) plus agy (BUG-2171).'
+due_since: 2026-10-16T11:38:26.773059735Z
+due_reason: every 1h
