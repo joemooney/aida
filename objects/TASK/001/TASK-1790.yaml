@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:33:23.313908239Z
+modified_at: 2026-10-16T18:36:56.617030009Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -33,6 +33,11 @@ comments:
   created_at: 2026-10-16T18:33:23.313908239Z
   modified_at: 2026-10-16T18:33:23.313908239Z
   session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
+- id: 01a14600-bfa9-77c2-97ea-710b52488a3b
+  author: ai:codex:joe
+  content: 'Advisor ruling received via mailbox 1a40cba8 (2026-10-16 11:33): split items 1/2/4 into a non-completing PR with body line aida: no-complete, then item 3 under this SAME task. Base+head changed-file trace-ID union may only add mandate exclusions, never completion/author/reviewer authority; unreadable required evidence refuses coverage. Measure last 50 merged PRs: report newly excluded fraction; above 20% use changed-hunk plus enclosing fn/impl IDs with full-file union fallback when attribution fails. Item 3 requires STRICT review. No new spec; no TASK-1790 code edited in this session yet.'
+  created_at: 2026-10-16T18:36:56.617030009Z
+  modified_at: 2026-10-16T18:36:56.617030009Z
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
