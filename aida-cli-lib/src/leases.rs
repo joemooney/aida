@@ -196,6 +196,12 @@ pub(crate) struct SessionLease {
         skip_serializing_if = "crate::seat_clone::TreeKind::is_worktree"
     )]
     pub(crate) tree_kind: crate::seat_clone::TreeKind,
+    /// BUG-2139 / BUG-2165: child grant id stamped on the lease for a
+    /// headless child session. Preserved across lease updates so
+    /// `update_lease_branch` and `mark_lease_escalated_to_human` do not drop it.
+    // trace:BUG-2165 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) child_grant_id: Option<String>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -325,6 +331,7 @@ pub(crate) fn session_harness_worktree_register(
         interrupted_at: None,
         interrupted_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
+        child_grant_id: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;

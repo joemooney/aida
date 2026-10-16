@@ -554,6 +554,8 @@ fn test_session_show_displays_grant_ttl() {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        // trace:BUG-2165 | ai:codex
+        child_grant_id: None,
     };
     let leases_dir = aida_dir.join("leases");
     fs::create_dir_all(&leases_dir).unwrap();

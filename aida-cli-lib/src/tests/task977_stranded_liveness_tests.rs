@@ -34,6 +34,7 @@ fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

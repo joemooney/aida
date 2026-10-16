@@ -5498,6 +5498,7 @@ fn entry_scope_session_match_decision_table() {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     };
 
     // No routing tags = visible everywhere.
@@ -5942,6 +5943,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     };
     std::fs::write(
         leases.join("abcdef123456.toml"),

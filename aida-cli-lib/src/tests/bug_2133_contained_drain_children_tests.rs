@@ -232,8 +232,16 @@ fn contained_child_commands_export_aida_contained() {
     let tmp = tempfile::tempdir().unwrap();
     let p = tmp.path();
 
-    let ci_fix =
-        build_phase_driver_ci_fix_command(p, "claude", &[], "K", "V", HeadlessVendor::Claude, true);
+    let ci_fix = build_phase_driver_ci_fix_command(
+        p,
+        "claude",
+        &[],
+        "K",
+        "V",
+        HeadlessVendor::Claude,
+        true,
+        "",
+    );
     assert_eq!(env_value(&ci_fix, "AIDA_CONTAINED"), Some(Some("1".into())));
     let advisor = build_phase_driver_advisor_command(
         p,
@@ -260,6 +268,7 @@ fn contained_child_commands_export_aida_contained() {
         "V",
         HeadlessVendor::Claude,
         false,
+        "",
     );
     assert_eq!(env_value(&ci_fix_plain, "AIDA_CONTAINED"), Some(None));
 }

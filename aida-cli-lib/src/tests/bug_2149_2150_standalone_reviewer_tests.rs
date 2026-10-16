@@ -399,6 +399,7 @@ fn lease_with_role(id: &str, scope: &str, role: &str) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

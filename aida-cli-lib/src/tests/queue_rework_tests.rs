@@ -1235,6 +1235,7 @@ fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

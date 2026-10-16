@@ -32,6 +32,7 @@ fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLe
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

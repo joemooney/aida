@@ -60,6 +60,7 @@ fn lease_at(
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

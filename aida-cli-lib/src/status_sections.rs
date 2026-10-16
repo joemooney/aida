@@ -1491,6 +1491,10 @@ mod bug_2151_contained_parent_agent_new_tests;
 #[cfg(test)]
 #[path = "tests/bug_2157_2158_contained_session_tests.rs"]
 mod bug_2157_2158_contained_session_tests;
+// trace:BUG-2165 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2165_headless_child_grant_isolation_tests.rs"]
+mod bug_2165_headless_child_grant_isolation_tests;
 // trace:BUG-2166 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/bug_2166_contained_parent_escape_tests.rs"]

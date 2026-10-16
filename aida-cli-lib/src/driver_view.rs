@@ -552,6 +552,7 @@ mod tests {
             interrupted_at: None,
             interrupted_reason: None,
             driver: driver.map(String::from),
+            child_grant_id: None,
         }
     }
 
