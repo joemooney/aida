@@ -9,12 +9,12 @@ description: |-
     - Unknown (pid_start missing/unreadable): it may really be the agent. Suggest 'ps -p <pid>', then a manual kill.
   - Add an agent_stop_in_project test: a live sleep with pid_start=None gives Err, no signal, and the entry kept.
   - Also fix the SIGKILL re-check test race: have the TERM-ignoring sh write a ready marker after 'trap' and wait for it before sending TERM.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T18:54:51.040293500Z
-modified_at: 2026-10-16T02:33:53.524430420Z
+modified_at: 2026-10-16T04:16:08.231940503Z
 req_type: Task
 relationships:
 - rel_type:
@@ -44,6 +44,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a142ec-a823-7f63-b3d8-d7346dc4cb43
+  author: aida-auto-bump
+  timestamp: 2026-10-16T04:16:08.227531840Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a142ec-a827-74b1-8f0e-35f1b2854d9b
+  timestamp: 2026-10-16T04:16:08.231930089Z
+  agent: implementer
+  commit_sha: 696c90c4f4e6a486035759b30bd2f0e6a99cd02c
+  summary: 'STANDARD round 2: recycled == !process_identity_is_alive on an alive pid (matches gc); None/inconclusive go to unknown, pid<=1 to corrupt; the garbage test bites; no signal to unconfirmed; CI Build green.'
+  punted:
+  - 'punted: STANDARD round 1: never signals unconfirmed (no BUG-2148 regression), but ''recycled'' includes inconclusive comparisons, so a possibly-live agent is reported gone with a gc hint that gc won''t act on'
+  review_verdict: approved
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
@@ -52,11 +68,7 @@ filed_at:
   aida_build_sha: bfddcbee42
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STANDARD round 1: never signals unconfirmed (no BUG-2148 regression), but ''recycled'' includes inconclusive comparisons, so a possibly-live agent is reported gone with a gc hint that gc won''t act on'
-  recovery_hint: address the review findings, move TASK-1782 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-16T02:33:53.524430420Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T04:16:08.227526600Z
+  completion_sha: 696c90c4f4e6a486035759b30bd2f0e6a99cd02c
