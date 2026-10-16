@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2164",
+  "publishes": [
+    {
+      "at": "2026-10-16T13:00:22.032134885Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T00:48:02.561306703Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:04:04.130761097Z",
+      "spec": "BUG-2164",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T05:06:29.687163568Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:06:42.322133091Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T10:41:02.584255768Z",
+      "spec": "BUG-2164",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2164",
+        "branch": "bug-2164-work",
+        "first_seen": "2026-10-16T10:41:02.581327270+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T12:52:18.358265455Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a"
+      }
+    },
+    {
+      "ts": "2026-10-16T12:59:42.314281420Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T13:00:00.188390943Z",
+      "spec": "BUG-2164",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2697
+      }
+    },
+    {
+      "ts": "2026-10-16T13:00:22.012683478Z",
+      "spec": "BUG-2164",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+        "pr": 2697,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
