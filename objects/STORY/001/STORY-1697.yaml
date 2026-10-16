@@ -1,0 +1,32 @@
+id: 01a14232-4f9d-7452-8662-8d919a15ca1a
+spec_id: STORY-1697
+agreed_id: STORY-1697
+title: Auto-release a review-placed merge hold when an attested approval is recorded at the PR's current head
+description: |-
+  ## Why
+  On 2026-10-15, nine advisor-approved PRs sat waiting for an operator TTY because every CHANGES REQUESTED verdict placed a supervised merge hold, and only 'aida merge-hold clear' or a human 'aida pr ship' can release one. The review process itself turned every reworked PR into an operator-only merge.
+
+  ## Acceptance
+  - A merge hold records its ORIGIN: 'review' (placed by a request-changes/rejected verdict) vs 'supervised' (spec marked supervised, security/keystone class, explicit operator hold).
+  - A 'review'-origin hold auto-releases when a fresh APPROVED verdict with a valid BUG-1918 recorder_attestation is recorded for the PR at its current head, by an identity independent of the PR's implementer. The release is recorded in the hold ledger (who, verdict, sha, time) and the label is removed.
+  - 'supervised'-origin holds NEVER auto-release; they still require a human at a TTY.
+  - A head move after the approval re-arms nothing new but invalidates the release condition (the approval must match the head at ship time).
+  - 'aida merge-hold list' shows the origin and whether auto-release applies.
+  - Existing holds are migrated as 'review' only when their reason text is the CHANGES REQUESTED pattern; anything else is 'supervised' (fail closed).
+  - Tests: auto-release on attested approval; no release without attestation, for a stale sha, or for an implementer self-approval; supervised never auto-releases; migration fail-closed.
+  Tier: STRICT (merge authority).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T00:52:35.869257314Z
+modified_at: 2026-10-16T00:52:35.869257314Z
+req_type: Story
+filed_at:
+  code_sha: 84a04dc111d04db11f26375d2a7d12d68f1ed930
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c419f6a5ef
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
