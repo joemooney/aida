@@ -5,6 +5,17 @@ removing its lease, while leaving sibling worktrees and the parent grant intact.
 Delegated children retain exactly their parent's expiration timestamp.
 <!-- trace:TASK-1789 | ai:codex -->
 
+Mandate exclusion ledgers require a regular file owned by the current uid with
+exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
+An absent ledger stays empty; invalid metadata or content refuses mandate
+coverage. Mandate start/stop retains the shared direct-human authority check,
+with mandate-specific recovery commands. Hold re-arm uses the same composition
+and marker write, but its single placement event explicitly names the failed
+mandate ship; the event follows marker restoration and precedes label sync.
+Marker and label failures remain explicit. Trace-derived mandate exclusions are
+not part of this slice.
+<!-- trace:TASK-1790 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.
