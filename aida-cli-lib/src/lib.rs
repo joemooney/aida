@@ -404,6 +404,8 @@ mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+// trace:STORY-1698 | ai:claude — the fire-fighting mandate.
+mod mandate;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;

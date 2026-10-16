@@ -2425,6 +2425,12 @@ pub(crate) fn run() -> Result<()> {
         return handle_merge_hold(action);
     }
 
+    // STORY-1698: the fire-fighting mandate reads/writes only the user's AIDA
+    // home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
+    if let Command::Mandate { action } = &cli.command {
+        return crate::mandate::handle_mandate(action);
+    }
+
     // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
     // spec / drain id to the ONE log file that work streams into and tails it.
     // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
@@ -4143,6 +4149,10 @@ pub(crate) fn run() -> Result<()> {
         }
         Command::MergeHold { .. } => {
             unreachable!("merge-hold is dispatched before storage init")
+        }
+        // trace:STORY-1698 | ai:claude
+        Command::Mandate { .. } => {
+            unreachable!("mandate is dispatched before storage init")
         }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
