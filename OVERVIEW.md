@@ -383,6 +383,14 @@ aida/
 
 ---
 
+Hypothesis pre-registration uses a `hypothesis` tag on an existing spike or
+decision. Canonical store transactions persist a sticky timestamp and description
+hash when a `references` or `verified-by` neighbor is Completed; later description
+edits direct amendments to comments. CLI and MCP share this preflight, including
+indirect lock writes when an experiment completes. See
+[pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 ## Feature surface (high level)
 
 `aida regen corpus <dir>` freezes committed requirements and knowledge rows,

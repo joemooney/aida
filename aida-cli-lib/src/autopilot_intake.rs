@@ -764,6 +764,37 @@ pub(crate) fn handle_autopilot_challenge(target: &str, note: Option<&str>) -> Re
     Ok(())
 }
 
+// BUG-2171: monotonic containment — a contained parent's env always wins
+// (BUG-2151 ruling). Under a contained parent, `--permission-mode` must be
+// refused and the mode defaults to `dontAsk`.
+// trace:BUG-2171 | ai:antigravity
+pub(crate) fn resolve_autopilot_intake_posture(
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<String> {
+    if contained {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+        let config = crate::agent_launch::AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: crate::session::claude_contained_flags(),
+            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+            contained: true,
+        };
+        crate::agent_launch::refuse_uncontained_child_of_contained_parent(&config)?;
+        Ok("dontAsk".to_string())
+    } else {
+        Ok(permission_mode.unwrap_or("bypassPermissions").to_string())
+    }
+}
+
 /// STORY-560: `aida groom` self-loads the store, computes its candidate fence
 /// (P1/P2/P3 policy + always-on tag exclusions + keystone/deferred fences applied
 /// HERE, programmatically — the agent never sees them as actionable), then
@@ -917,7 +948,9 @@ pub(crate) fn handle_intake_command(
     // Seed the cold-boot prompt with the live advisor's context file when present,
     // so the headless advisor doesn't re-derive priorities from scratch. trace:STORY-626
     let prompt = intake::seeded_assess_prompt(&project_root, apply);
-    let mode = permission_mode.unwrap_or("bypassPermissions");
+    let contained = session::aida_contained_env()?;
+    let mode_str = resolve_autopilot_intake_posture(permission_mode, contained)?;
+    let mode = &mode_str;
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
@@ -930,7 +963,7 @@ pub(crate) fn handle_intake_command(
         return Ok(());
     }
 
-    if permission_mode.is_none() {
+    if !contained && permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -972,6 +1005,7 @@ pub(crate) fn handle_intake_command(
         effective_on_apply.as_str(),
         max_risk,
         max_approvals,
+        contained,
     );
 
     let status_code = command.status().map_err(|e| {
@@ -979,7 +1013,10 @@ pub(crate) fn handle_intake_command(
             "failed to launch `claude -p` ({e}) — the headless intake pass needs the Claude Code \
              CLI on PATH. Install it, or run `/aida-backlog-groom` interactively instead."
         )
-    })?;
+    });
+    // trace:BUG-2170 | ai:antigravity
+    crate::session::revoke_headless_child_grant(&child_grant.id);
+    let status_code = status_code?;
 
     if status_code.success() {
         Ok(())
@@ -989,7 +1026,7 @@ pub(crate) fn handle_intake_command(
     }
 }
 
-// trace:BUG-2124 | ai:antigravity
+// trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_autopilot_intake_command(
     prompt: &str,
@@ -1002,13 +1039,18 @@ pub(crate) fn build_autopilot_intake_command(
     effective_on_apply: &str,
     max_risk: backlog::RiskLevel,
     max_approvals: Option<usize>,
+    contained: bool,
 ) -> std::process::Command {
     let mut command = std::process::Command::new("claude");
     command
         .arg("-p")
         .arg(prompt)
         .arg("--permission-mode")
-        .arg(mode)
+        .arg(mode);
+    if contained {
+        command.args(crate::session::claude_contained_flags());
+    }
+    command
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(seat_authority::GRANT_ENV, child_grant_id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
@@ -1027,7 +1069,8 @@ pub(crate) fn build_autopilot_intake_command(
     if let Some(n) = max_approvals {
         command.env("AIDA_INTAKE_MAX_APPROVALS", n.to_string());
     }
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    crate::session::scrub_launcher_session_env(&mut command);
+    if contained {
         command.env("AIDA_CONTAINED", "1");
     } else {
         command.env_remove("AIDA_CONTAINED");

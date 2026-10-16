@@ -3112,7 +3112,10 @@ mod tests {
     }
 
     /// BUG-1612: the cached per-spec update is a targeted write-through: the
-    /// row is refreshed without listing the store.
+    /// row is refreshed without listing the store for ordinary refinements.
+    /// STORY-1675: completing a result now consults incoming hypothesis edges;
+    /// that graph-affecting operation intentionally needs one canonical scan.
+    // trace:STORY-1675 | ai:codex
     // trace:BUG-1612 | ai:claude
     #[test]
     fn bug1612_cached_update_spec_atomically_refreshes_row_without_scan() {
@@ -3136,12 +3139,27 @@ mod tests {
         FULL_SCAN_COUNT.with(|c| c.set(0));
         backend
             .update_spec_atomically(&target, |r| {
-                r.status = crate::models::RequirementStatus::Completed;
+                r.title = "ordinary refinement".into();
             })
             .unwrap()
             .unwrap();
         assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
         assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
+        assert_eq!(
+            cached_status(&backend, target.id),
+            target.status.to_string()
+        );
+        backend
+            .update_spec_atomically(&target, |r| {
+                r.status = crate::models::RequirementStatus::Completed;
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            OBJECT_LIST_COUNT.with(|c| c.get()),
+            1,
+            "result completion must consult the canonical incoming hypothesis graph"
+        );
         assert_eq!(cached_status(&backend, target.id), "Completed");
     }
 
