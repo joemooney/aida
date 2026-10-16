@@ -3,13 +3,21 @@ spec_id: BUG-2165
 agreed_id: BUG-2165
 title: Headless CI-fix and quiet-burndown children still inherit the launcher grant and PURPOSE (BUG-2139 sibling spawn paths)
 description: 'Found in the #2688 (BUG-2139) STRICT review. queue-work children are fixed, but: phase_driver_trait.rs:3857 build_phase_driver_ci_fix_command (the orchestrator''s in-drain CI-fix child writes code in the implementer worktree with the FULL advisor grant) and burndown_run.rs:2018 build_burndown_quiet_command (the verbose variant mints a child grant, the quiet one doesn''t). The phase_driver.rs:2297 advisor-tier consult inherits the grant, arguably by intent; rule on it. Fix: route both through issue_headless_child (or the explicit '''' baseline grant) plus scrub_launcher_session_env, with tests that fail without the fix. Also: add a #[serde(default)] child_grant_id field to SessionLease so update_lease_branch / mark_lease_escalated_to_human can''t drop it. Tier STRICT.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:42:39.504020077Z
-modified_at: 2026-10-16T04:42:39.504020077Z
+modified_at: 2026-10-16T04:42:50.188858994Z
 req_type: Bug
+history:
+- id: 01a14305-19cc-7e80-9138-cf0653278ea7
+  author: joe
+  timestamp: 2026-10-16T04:42:50.188852816Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 696c90c4f4e6a486035759b30bd2f0e6a99cd02c
   branch: main
