@@ -3932,40 +3932,44 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn default_branch_of(project_root: &Path) -> String {
-    // Keep the live GitHub answer for PR base selection, but bound network
-    // latency and never invoke gh for a GitLab or pure-git project. Ship's
-    // no-number guard checks local signals before calling this fallback.
-    // trace:BUG-417 trace:TASK-1795 | ai:codex
-    if resolve_forge_kind(project_root) == ForgeKind::GitHub {
-        if let Some(gh) = crate::kernel::resolve_gh_binary() {
-            let mut cmd = Command::new(gh);
-            cmd.current_dir(project_root).args([
-                "repo",
-                "view",
-                "--json",
-                "defaultBranchRef",
-                "-q",
-                ".defaultBranchRef.name",
-            ]);
-            if let Some(out) =
-                crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)
-            {
-                if out.status.success() {
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
-                        return name;
-                    }
-                }
-            }
-        }
+/// Bounded, read-only forge evidence. Unknown is distinct from a guessed PR base.
+// trace:TASK-1795 | ai:codex
+pub(crate) fn probe_default_branch(project_root: &Path) -> Option<String> {
+    if resolve_open_change_forge_kind(project_root) != ForgeKind::GitHub {
+        return None;
     }
+    // Keep the test-binary override out of this production authority probe.
+    #[cfg(test)]
+    let mut cmd = Command::new(crate::kernel::resolve_gh_binary()?);
+    #[cfg(not(test))]
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(project_root).args([
+        "repo",
+        "view",
+        "--json",
+        "defaultBranchRef",
+        "-q",
+        ".defaultBranchRef.name",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let name = std::str::from_utf8(&out.stdout).ok()?.trim();
+    // Validate the entire response: a first-line parser could silently accept
+    // malformed or multi-line evidence and let the guard miss the real default.
+    crate::git_arg_guard::is_shell_safe_branch_name(name).then(|| name.to_owned())
+}
 
-    // origin/HEAD, then conventional local/remote refs. In particular, a
-    // master-default clone without origin/HEAD must not fall back to main.
-    crate::detect_default_branch_ref(project_root)
-        .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
-        .unwrap_or_else(|| "main".to_owned())
+pub(crate) fn default_branch_of(project_root: &Path) -> String {
+    // PR base callers retain the conventional-ref/main fallback; authority
+    // guards must use probe_default_branch, where unknown never becomes main.
+    // trace:BUG-417 trace:TASK-1795 | ai:codex
+    probe_default_branch(project_root).unwrap_or_else(|| {
+        crate::detect_default_branch_ref(project_root)
+            .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+            .unwrap_or_else(|| "main".to_owned())
+    })
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from

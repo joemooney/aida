@@ -215,6 +215,7 @@ fn pr_ship_handler_bypasses_default_branch_guard_on_feature_branch() {
         "git checkout failed"
     );
 
+    set_origin_head(dir.path(), "main");
     let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None);
 
     // On feature branch without PR number in dry run, it proceeds to step 1 (would create new PR)
@@ -228,6 +229,23 @@ fn pr_ship_handler_bypasses_default_branch_guard_on_feature_branch() {
             !err_str.contains("aida pr ship: on the default branch; pass a PR number"),
             "should not fail with default branch refusal on feature branch, got: {err_str}"
         );
+    }
+}
+
+// trace:TASK-1795 | ai:codex
+fn set_origin_head(root: &std::path::Path, default: &str) {
+    let target = format!("refs/remotes/origin/{default}");
+    for args in [
+        vec!["update-ref", target.as_str(), "HEAD"],
+        vec!["symbolic-ref", "refs/remotes/origin/HEAD", target.as_str()],
+    ] {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
     }
 }
 
@@ -267,6 +285,8 @@ fn task_1795_local_mainlines_and_feature_resume_skip_gh() {
             &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
         );
         assert!(ship_is_default_branch(dir.path(), branch));
+        assert!(!dir.path().join("gh-calls").exists());
+        set_origin_head(dir.path(), branch);
         assert!(!ship_is_default_branch(dir.path(), "feature-work"));
         assert!(!dir.path().join("gh-calls").exists());
     }
@@ -372,4 +392,78 @@ fn task_1795_unknown_local_default_uses_forge_fallback() {
     assert!(ship_is_default_branch(dir.path(), "trunk"));
     assert!(!ship_is_default_branch(dir.path(), "feature-work"));
     assert!(dir.path().join("gh-calls").exists());
+}
+
+// trace:TASK-1795 | ai:codex
+#[test]
+fn task_1795_leftover_main_ref_is_not_default_branch_evidence() {
+    let dir = create_test_repo_on_branch("develop");
+    assert!(std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir.path())
+        .args(["update-ref", "refs/remotes/origin/main", "HEAD"])
+        .status()
+        .unwrap()
+        .success());
+    let gh = fake_default_branch_gh(dir.path(), "github", "echo develop");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        dir.path(),
+        "implementer",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+    let error = pr_ship_handler(
+        None, false, false, true, false, None, None, false, false, false, None, false,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("pass a PR number"), "{error:#}");
+    assert!(dir.path().join("gh-calls").exists());
+}
+
+// trace:TASK-1795 | ai:codex
+#[test]
+fn task_1795_hung_probe_without_evidence_refuses_instead_of_guessing_main() {
+    let dir = create_test_repo_on_branch("trunk");
+    let gh = fake_default_branch_gh(
+        dir.path(),
+        "github",
+        "case \"$1\" in repo) exec /bin/sleep 10;; *) printf '[]\\n';; esac",
+    );
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        dir.path(),
+        "implementer",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+    let start = std::time::Instant::now();
+    let error = pr_ship_handler(
+        None, false, false, true, false, None, None, false, false, false, None, false,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("pass a PR number"), "{error:#}");
+    assert!(start.elapsed() >= std::time::Duration::from_secs(2));
+    assert!(start.elapsed() < std::time::Duration::from_secs(8));
+    assert!(dir.path().join("gh-calls").exists());
+}
+
+// trace:TASK-1795 | ai:codex
+#[test]
+fn task_1795_probe_errors_and_bad_answers_remain_unknown() {
+    for body in [
+        "exit 1",
+        "echo 'bad branch'",
+        "printf 'trunk\\nmain\\n'",
+        "printf ''",
+    ] {
+        let dir = create_test_repo_on_branch("trunk");
+        let gh = fake_default_branch_gh(dir.path(), "github", body);
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            dir.path(),
+            "implementer",
+            &[],
+            &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+        );
+        assert!(crate::forge::probe_default_branch(dir.path()).is_none());
+        assert!(ship_is_default_branch(dir.path(), "trunk"), "{body}");
+    }
 }

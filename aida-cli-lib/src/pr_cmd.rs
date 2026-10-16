@@ -4380,18 +4380,35 @@ pub(crate) fn ship_completion_trailer(
     )
 }
 
-/// Prefer local branch evidence so ordinary feature-branch resumes do not
-/// need a forge request. Protect the conventional mainlines even if the local
-/// origin/HEAD symref is absent or stale.
+/// Protect conventional mainlines; otherwise require evidence of the default.
+/// Unknown evidence also requires an explicit PR number.
 // trace:TASK-1795 | ai:codex
 pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
     if matches!(branch, "main" | "master") {
         return true;
     }
-    if let Some(default) = detect_default_branch_ref(project_root) {
-        return branch == default.strip_prefix("origin/").unwrap_or(&default);
+    // Only origin/HEAD is local evidence, never a guess from leftover refs.
+    // A stale origin/HEAD still wins over the forge, so refresh it when the
+    // remote default changes (git remote set-head origin --auto).
+    let local = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
+        .filter(|name| !name.is_empty());
+    match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
+        Some(default) => branch == default,
+        None => true,
     }
-    branch == crate::forge::default_branch_of(project_root)
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.

@@ -1,10 +1,11 @@
-No-number `aida pr ship` resolves default-branch protection from local
-main/master or origin/HEAD evidence before asking the forge. Feature-branch
-resumes with local mainline evidence avoid a default-branch network lookup.
-The GitHub fallback uses the shared helper with a three-second child-exit
-deadline and local origin/HEAD or main/master refs on failure; GitLab and pure-git projects do not
-invoke gh for this probe. Output collection retains the shared helper's existing
-bounds. Approved-change suggestions use numeric ship commands.
+No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
+symref before asking the forge. A stale origin/HEAD wins over forge evidence;
+refresh it after a remote default change. Without that symref, the read-only
+GitHub probe uses a three-second child-exit deadline. Unknown evidence (including
+timeout, errors, or unsupported forges) requires an explicit PR number. Output
+collection retains the shared helper's existing bounds. PR-base callers retain
+conventional local/remote refs and a final main fallback after the probe fails.
+Approved-change suggestions use numeric ship commands.
 <!-- trace:TASK-1795 | ai:codex -->
 
 C7 lifecycle commands resolve invoking caller authority after acquiring the

@@ -1,7 +1,7 @@
-No-number `pr ship` protects main/master and checks local default-branch refs
-before a forge lookup. GitHub default-branch fallback uses the shared
-command helper with a three-second child-exit deadline; other forges skip gh. Refusal suggestions show numeric ship
-commands.
+No-number `pr ship` protects main/master, then uses only origin/HEAD as local
+default-branch evidence before a bounded, read-only forge probe. Unknown evidence
+requires a PR number. PR-base callers retain conventional-ref/main fallbacks.
+Refusal suggestions show numeric ship commands.
 <!-- trace:TASK-1795 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
