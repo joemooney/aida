@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-16T21:54:54.909698408Z
+modified_at: 2026-10-16T22:26:46.793580969Z
 req_type: Task
 comments:
 - id: 01a146b5-4ca9-7103-9cc2-e86f31a0bc7c
@@ -21,6 +21,23 @@ comments:
   content: Commit 7dd7aee9de references this requirement
   created_at: 2026-10-16T21:54:54.909698408Z
   modified_at: 2026-10-16T21:54:54.909698408Z
+- id: 01a146d3-2b89-75b3-9b25-9417d2422c32
+  author: ai:codex:joe
+  content: |
+    `aida agent new` now supplies the selected executable's reported `--version` as `AIDA_HARNESS_VERSION` to foreground and background children. The probe uses the launch cwd, null stdin/stderr, a two-second deadline covering both process and stdout, and a 257-byte output cap. Failed, empty, invalid or oversized results remove inherited version context, leaving provenance unknown. Previews perform no probe.
+
+    Non-completing slice
+    aida: no-complete
+
+    This delivers the AIDA launcher half of TASK-1793. The relay half lives in `joemooney/aida-relay` and is tracked there as Draft TASK-119; its approval was refused without advisor authority, so relay code has not been changed. TASK-1793 must remain incomplete. Optional effort-column work is excluded.
+
+    This draft is stacked on #2682 (`codex/story-1674`, pinned at `95fd62f3260d`) because the child-write regression needs that provenance schema. The normal merge also preserves current main `7dd7aee9de`; the two prepend conflicts in AGENTS.md/OVERVIEW.md retained both paragraphs. Retarget to main after #2682 lands; its independent STRICT gate remains separate.
+
+    Validation at frozen source `82766c5b58`: `make check-ci-fast` passed all 30 gates; `make check-ci-compile` compiled every workspace test target (1380.3s including queue; compile-only); the final named libtest executable passed all 6 new fixtures and all 102 existing launcher tests. The child fixture verifies canonical creation plus edit context in both launch paths, including failed/empty/multiline unknown fallback and a distinct launch cwd. Additional fixtures cover invalid UTF-8, control characters, oversized/continuous output, exact byte boundary and sleeping/inherited-pipe deadlines. No GitHub CI-green claim.
+
+    Author self-check: three fresh-context rounds. Round 1 independently reproduced an early-exited leader's inherited-pipe timeout bypass and a wrong-cwd version stamp; both were fixed. Round 2 found no further issues and ran eight standalone probe cases. Subsequent bounded fixture corrections add explicit Unix annotations and give the launched child its own identity plus a real edit. Final round 3 inspected the frozen five-file delta and independently reran all 6 new and 102 existing launcher tests, with no actionable findings. These author checks provide no independent review authority. Independent review is required; no author verdict, hold clearance, main merge or activation is included.
+  created_at: 2026-10-16T22:26:46.793580969Z
+  modified_at: 2026-10-16T22:26:46.793580969Z
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
   author: aida-session-start
