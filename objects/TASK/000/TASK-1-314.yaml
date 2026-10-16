@@ -1,5 +1,6 @@
 id: 01a1460a-238d-7953-b874-3c5929d9cc8a
 spec_id: TASK-1-314
+agreed_id: TASK-1385
 title: 'minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

@@ -1,5 +1,6 @@
 id: 01a1460a-300c-7d41-85f5-7dc191f61733
 spec_id: TASK-1-315
+agreed_id: TASK-1383
 title: 'minor/design: the marker heuristic also applies to the reference control (score…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
