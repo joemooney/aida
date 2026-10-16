@@ -359,6 +359,7 @@ fn spawned_agy_process_receives_the_ordered_argv() {
         project_root: project.clone(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
 
     let prompt = "/aida-pickup BUG-1680";
