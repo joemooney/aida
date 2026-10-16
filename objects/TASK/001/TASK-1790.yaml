@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T08:46:55.903997978Z
+modified_at: 2026-10-16T18:30:41.938255108Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -17,6 +17,16 @@ comments:
   created_at: 2026-10-16T08:46:55.903997978Z
   modified_at: 2026-10-16T08:46:55.903997978Z
   session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
+- id: 01a145fb-0812-7723-a3e6-3d518c219e9f
+  author: ai:codex:joe
+  content: |-
+    TASK-1790 design fork / proposed sketch (no code edited): items 1, 2 and 4 are bounded: validate exclusions.jsonl with an opened non-symlink regular-file handle, current euid and exactly 0600; give mandate commands mandate-specific direct-TTY wording; log a hold re-arm event after marker restoration, with partial label/marker failures explicit. Item 3 expands the authority subject beyond the existing pr_gate_subject branch/title/trailer IDs (pr_cmd.rs around 1790), so it needs sign-off.
+
+    Proposed item 3: pin the change base and head; collect trace IDs from BOTH committed versions of every changed ordinary source file (including deleted/renamed files). Union those IDs with named IDs ONLY for mandate exclusion evaluation, resolve current plus stored historical classes through the existing sticky exclusion path, and refuse mandate coverage on unreadable required diff/blob/store evidence. Do not grant completion credit or reviewer/author authority from trace IDs. Base-side collection prevents deleting an operator-only trace to launder coverage; full-file collection intentionally produces conservative refusals when a shared file carries an unrelated operator-only trace. Files without traces still cannot identify an unnamed spec, so this is evidence expansion, not a claim of complete semantic attribution.
+
+    Decision requested: accept conservative full-file base/head trace union with that documented scope, or require a different durable ownership mapping? Please also confirm whether item 3 should ship in the same acceptance or as a separately approved slice. I will not introduce the new authority-subject convention without sign-off; continuing other batch items meanwhile.
+  created_at: 2026-10-16T18:30:41.938255108Z
+  modified_at: 2026-10-16T18:30:41.938255108Z
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
