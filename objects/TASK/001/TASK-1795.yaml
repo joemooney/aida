@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T12:52:18.642596834Z
-modified_at: 2026-10-16T20:16:10.545054474Z
+modified_at: 2026-10-16T20:30:18.363606298Z
 req_type: Task
 relationships:
 - rel_type:
@@ -38,6 +38,18 @@ comments:
     Current code includes main a8bfa2d7d7 through merge ceb0c2ef54. Main advanced to 652423b0e4 (#2707) during verification, and advisor mail 3b8e3ed9 prioritized a new #2705 merge-up first. Retaining this clean committed worktree/cache for the relay: merge latest main, rerun required fast/compile gates and targeted tests, then normal push/readback and REWORK READY handoff. No PR body update, ready handoff, verdict, clearance or own merge has been performed for this rework yet. Status remains Needs Attention.
   created_at: 2026-10-16T20:16:10.545054474Z
   modified_at: 2026-10-16T20:16:10.545054474Z
+- id: 01a14668-88fb-7b33-aed6-b70af9061b02
+  author: ai:codex:joe
+  content: |
+    REWORK READY: #2706 93ac20d623d827f0bfc5acd4d67afa315e41203c
+
+    Both STRICT blocking findings fixed: only origin/HEAD is local evidence; unknown forge probe results require a PR number. Whole-response validation rejects malformed/multiline answers. Production authority probe ignores AIDA_TEST_GH_BINARY, uses read-only origin-preferring forge classification; docs disclose stale-symref precedence and deadline limits. Shared default_branch_of order/callers documented in final PR body.
+
+    Normal main merge includes 652423b0e4. Both doc prepends preserved; checker independently proved all non-doc files equal automatic merge. Final make check-ci-fast: 30 passed; make check-ci-compile: every workspace test target compiled (384.8s). Fresh workspace libtest suite: 16 passed with RUST_MIN_STACK=8388608. Author self-check: prior two rounds plus fresh post-merge check, final no findings. No independent-review or current-head GitHub CI claim.
+
+    Normal push accepted; exact OPEN PR head and body read back. Ready for STRICT independent re-review. Spec remains Needs Attention; no author verdict, hold clearance, merge, install or activation.
+  created_at: 2026-10-16T20:30:18.363606298Z
+  modified_at: 2026-10-16T20:30:18.363606298Z
 history:
 - id: 01a14509-e700-77d0-9fc7-75cd6a626bfb
   author: joe
