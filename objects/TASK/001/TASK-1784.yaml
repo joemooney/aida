@@ -8,12 +8,12 @@ description: |-
   - Fix: when the only lease holding the spec is a non-advisory lease whose tree is gone, treat it as the caller's own (end it, then mint fresh). Otherwise, name that lease and 'aida session end <id>' in the error.
   - Add a test that mints through the real session_start; the current e2e stubs the mint and uses a repo-wide prune.
   - Document in the PR/CLI docs that spec leases at the project root are no longer re-entered.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:51:44.146542081Z
-modified_at: 2026-10-16T05:06:43.211137501Z
+modified_at: 2026-10-16T05:06:51.726875780Z
 req_type: Task
 history:
 - id: 01a1411f-08b0-7892-97a7-cee37f7b5596
@@ -37,6 +37,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1431b-18ce-7c43-bff4-8cc38a55e8ea
+  author: aida-session-start
+  timestamp: 2026-10-16T05:06:51.726874820Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
   branch: main
