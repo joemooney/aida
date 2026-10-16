@@ -13,12 +13,12 @@ description: |
   - The SessionStart hook output that names the role also points at the standing orders when present (one line).
   - Seed advisor standing orders in the template: fire-mode ship authority; never hand the operator commands the advisor can run itself; hold clears are the only TTY-only act, batched in one line; keep fixers busy (never zero fixers running during a mandate); use serial-ship; rule on implementer sketches rather than letting a lane block.
   - Tests: ordering, both sources, the absent cases, the add/list round-trip.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:00:48.072168455Z
-modified_at: 2026-10-15T16:24:43.308374604Z
+modified_at: 2026-10-16T00:56:21.321512290Z
 req_type: Story
 comments:
 - id: 01a13f70-236c-78a1-8d63-e85a1bca1622
@@ -49,6 +49,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a14235-c043-70e2-b293-284dcd5e515f
+  author: aida-auto-bump
+  timestamp: 2026-10-16T00:56:21.315265813Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a14235-c049-7c93-8f73-12f399ebe7d1
+  timestamp: 2026-10-16T00:56:21.321501379Z
+  agent: advisor
+  commit_sha: 1e6449feed61e71c7bcd9b00ecd15987675f915f
+  summary: 'Re-recorded with the BUG-1918-attesting binary (c419f6a5ef); same reviewed sha and verdict as the earlier advisor approval. STANDARD round 2: nested discipline keys scaffold on init and refresh (68/68 targeted); the embedded orders are generic and order 6 agrees with the launch prompt; --show prints tracked then repo-local'
+  punted:
+  - 'punted: STANDARD round 1: the --show behavior meets acceptance, but the nested standing-orders/ dir breaks discipline-pack scaffolding (ENOENT); CI is red with 7 failures'
+  review_verdict: approved
 filed_at:
   code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
   branch: main
@@ -57,11 +73,7 @@ filed_at:
   aida_build_sha: 6ddf336ddd
   vendor: claude
   session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STANDARD round 1: the --show behavior meets acceptance, but the nested standing-orders/ dir breaks discipline-pack scaffolding (ENOENT); CI is red with 7 failures'
-  recovery_hint: address the review findings, move STORY-1693 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-15T16:24:43.308374604Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T00:56:21.315259245Z
+  completion_sha: 1e6449feed61e71c7bcd9b00ecd15987675f915f
