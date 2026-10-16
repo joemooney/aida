@@ -384,7 +384,14 @@ caller cannot remove one.
 
 Only `AIDA_HARNESS_VERSION`, explicitly supplied to the writing process by its
 launcher, supplies a captured harness version. Missing or blank values mean
-unknown. This change does not configure launchers to provide that variable.
+unknown. `aida agent new` probes the selected executable with `--version`
+(noninteractive, two-second process timeout) before foreground or background
+launch. The probe retains at most 257 output bytes, including a trailing newline. A
+successful UTF-8 single-line value of at most 256 bytes supplies the value;
+failed, empty or invalid output clears an inherited value and leaves provenance
+unknown. Launch previews do not run this probe. Other launchers must supply the
+variable themselves.
+<!-- trace:TASK-1793 | ai:codex -->
 
 The query opens `.aida/derived/token-ledger-v1.sqlite` read-only. It includes
 measured rows whose vendor session ID **or** attributed AIDA session ID matches
