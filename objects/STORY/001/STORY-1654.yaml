@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-16T21:13:20.368622001Z
+modified_at: 2026-10-16T21:17:42.886303043Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -298,7 +298,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Template changes are correct and CI is green, but 2 of 3 acceptance criteria are not fully met (relay prompts unchanged; no 'before' throughput number), and the burndown poll recipe can act on an unverified or stale verdict file
+  detail: 'All 3 STORY-1654 criteria have recorded evidence (e2e neg+pos, templates/relay prompts, throughput), but the template launch commands miss two of the advisor''s documented e2e gotchas: no --vendor claude, and no recovery when a launch fails'
   recovery_hint: address the review findings, move STORY-1654 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-16T21:00:22.373874350Z
+  shelved_at: 2026-10-16T21:17:42.886303043Z
