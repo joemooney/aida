@@ -650,54 +650,137 @@ fn is_linked_worktree_rejects_blank_main_root_missing_and_bare_paths() {
 }
 
 fn task_1784_lease(id: &str, path: &str, started: &str) -> SessionLease {
-    let mut lease: SessionLease = toml::from_str(&format!(
-        "id = \"{id}\"\nscope = \"TASK-1784\"\nslug = \"task-1784\"\nowner = \"u\"\n\
-         worktree_path = \"\"\nbranch = \"task-1784\"\n\
-         started_at = \"{started}\"\nhostname = \"h\"\n"
-    ))
-    .unwrap();
-    lease.worktree_path = std::path::PathBuf::from(path);
-    lease
+    let mut t = toml::Table::new();
+    for (k, v) in [
+        ("id", id),
+        ("scope", "TASK-1784"),
+        ("slug", "task-1784"),
+        ("owner", "u"),
+        ("worktree_path", path),
+        ("branch", "task-1784"),
+        ("started_at", started),
+        ("hostname", "h"),
+    ] {
+        t.insert(k.to_string(), toml::Value::String(v.to_string()));
+    }
+    t.try_into().unwrap()
 }
 
-/// TASK-1784: only a lease whose recorded tree is GONE is ended implicitly;
-/// a project-root (existing) or blank path blocks and is named.
+/// Facts for a lease that is provably dead: same host, path gone, owner gone.
+fn task_1784_dead() -> LeaseDeathFacts {
+    LeaseDeathFacts {
+        same_host: true,
+        tree_exists: Some(false),
+        owner_gone: Some(true),
+        owner_is_caller: false,
+        tree_active: false,
+    }
+}
+
+/// TASK-1784: only a lease that is provably dead — absolute path confirmed
+/// gone, same host, owner gone (or the caller itself), nothing active there —
+/// is ended implicitly. Anything else blocks and is named.
 // trace:TASK-1784 | ai:claude
 #[test]
-fn classify_unreenterable_leases_ends_only_deleted_trees() {
+fn classify_unreenterable_leases_ends_only_provably_dead_sessions() {
     let root = tempfile::tempdir().unwrap();
     let gone = root.path().join("aida-task-1784");
     let gone = gone.to_str().unwrap();
     let here = root.path().to_str().unwrap();
+    let dead_lease = task_1784_lease("aaaaaaaaaaaa", gone, "2026-10-01T00:00:00Z");
 
     assert!(matches!(
-        classify_unreenterable_leases(Vec::new()),
+        classify_unreenterable_leases(Vec::new(), |_| task_1784_dead()),
         UnreenterableLeases::None
     ));
-    match classify_unreenterable_leases(vec![task_1784_lease(
-        "aaaaaaaaaaaa",
-        gone,
-        "2026-10-01T00:00:00Z",
-    )]) {
+    match classify_unreenterable_leases(vec![dead_lease.clone()], |_| task_1784_dead()) {
         UnreenterableLeases::Dead(d) => assert_eq!(d.len(), 1),
-        other => panic!("a deleted tree is dead, got {other:?}"),
+        other => panic!("a deleted tree with a gone owner is dead, got {other:?}"),
     }
-    // Mixed: the dead lease is not ended while a live-path holder exists.
-    match classify_unreenterable_leases(vec![
-        task_1784_lease("aaaaaaaaaaaa", gone, "2026-10-01T00:00:00Z"),
-        task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
-    ]) {
+    // The caller's own shell as owner counts as gone.
+    let own = LeaseDeathFacts {
+        owner_gone: Some(false),
+        owner_is_caller: true,
+        ..task_1784_dead()
+    };
+    assert!(lease_is_dead(&dead_lease, own), "the caller's own lease");
+
+    // Each missing proof of death blocks on its own.
+    for (why, f) in [
+        (
+            "owner alive",
+            LeaseDeathFacts {
+                owner_gone: Some(false),
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "owner unknown",
+            LeaseDeathFacts {
+                owner_gone: None,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "foreign host",
+            LeaseDeathFacts {
+                same_host: false,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path exists",
+            LeaseDeathFacts {
+                tree_exists: Some(true),
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path unprobeable (EACCES/unmounted)",
+            LeaseDeathFacts {
+                tree_exists: None,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path still active",
+            LeaseDeathFacts {
+                tree_active: true,
+                ..task_1784_dead()
+            },
+        ),
+    ] {
+        match classify_unreenterable_leases(vec![dead_lease.clone()], |_| f) {
+            UnreenterableLeases::Blocking(l) => assert_eq!(l.id, "aaaaaaaaaaaa", "{why}"),
+            other => panic!("{why} must block, got {other:?}"),
+        }
+    }
+
+    // Mixed: the dead lease is not ended while a live holder exists.
+    match classify_unreenterable_leases(
+        vec![
+            dead_lease.clone(),
+            task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
+        ],
+        |l| LeaseDeathFacts {
+            tree_exists: Some(l.id != "aaaaaaaaaaaa"),
+            ..task_1784_dead()
+        },
+    ) {
         UnreenterableLeases::Blocking(l) => assert_eq!(l.id, "bbbbbbbbbbbb"),
         other => panic!("project-root lease blocks, got {other:?}"),
     }
     for path in ["", "  ", "relative/path"] {
         assert!(
             matches!(
-                classify_unreenterable_leases(vec![task_1784_lease(
-                    "cccccccccccc",
-                    path,
-                    "2026-10-01T00:00:00Z"
-                )]),
+                classify_unreenterable_leases(
+                    vec![task_1784_lease(
+                        "cccccccccccc",
+                        path,
+                        "2026-10-01T00:00:00Z"
+                    )],
+                    |_| task_1784_dead()
+                ),
                 UnreenterableLeases::Blocking(_)
             ),
             "{path:?} is never treated as a deleted tree"
@@ -715,4 +798,45 @@ fn classify_unreenterable_leases_ends_only_deleted_trees() {
         &task_1784_lease("cccccccccccc", "", "2026-10-01T00:00:00Z"),
     );
     assert!(blank.contains("with no worktree"), "{blank}");
+}
+
+/// TASK-1784: the caller match needs the pid AND its start identity, and never
+/// applies to an agent-backed lease (its active pid is authoritative).
+// trace:TASK-1784 | ai:claude
+#[test]
+fn probe_lease_death_facts_matches_the_caller_only_by_pid_and_start_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("aida-task-1784");
+    let mut lease = task_1784_lease(
+        "aaaaaaaaaaaa",
+        gone.to_str().unwrap(),
+        "2026-10-01T00:00:00Z",
+    );
+    lease.creator_pid = Some(4242);
+    lease.creator_pid_start_time = Some("t0".into());
+    let active = std::collections::HashSet::new();
+    let probe = |l: &SessionLease, caller| probe_lease_death_facts(l, "h", caller, &active);
+
+    let f = probe(&lease, Some((4242, Some("t0"))));
+    assert!(f.owner_is_caller && f.same_host);
+    assert_eq!(f.tree_exists, Some(false));
+    assert!(
+        !probe(&lease, Some((4242, Some("t1")))).owner_is_caller,
+        "recycled pid"
+    );
+    assert!(
+        !probe(&lease, Some((4242, None))).owner_is_caller,
+        "no start identity"
+    );
+    assert!(
+        !probe(&lease, Some((1, Some("t0")))).owner_is_caller,
+        "another pid"
+    );
+    assert!(!probe(&lease, None).owner_is_caller);
+    assert!(!probe_lease_death_facts(&lease, "other-host", None, &active).same_host);
+    lease.active_pid = Some(4242);
+    assert!(
+        !probe(&lease, Some((4242, Some("t0")))).owner_is_caller,
+        "agent lease"
+    );
 }

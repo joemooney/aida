@@ -267,19 +267,16 @@ fn worktree_add_names_a_project_root_lease_and_how_to_end_it() {
     // Point the lease at the project root — a path that exists but is never
     // re-entered.
     let body = std::fs::read_to_string(&lease_file).unwrap();
-    let patched: String = body
-        .lines()
-        .map(|l| {
-            if l.trim_start().starts_with("worktree_path =") {
-                format!("worktree_path = \"{}\"", repo.display())
-            } else {
-                l.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_ne!(body, patched, "lease records a worktree_path");
-    std::fs::write(&lease_file, patched).unwrap();
+    let mut lease: toml::Table = toml::from_str(&body).unwrap();
+    assert!(
+        lease.contains_key("worktree_path"),
+        "lease records a worktree_path"
+    );
+    lease.insert(
+        "worktree_path".to_string(),
+        toml::Value::String(repo.to_string_lossy().into_owned()),
+    );
+    std::fs::write(&lease_file, toml::to_string(&lease).unwrap()).unwrap();
 
     let again = worktree_add(&repo, &home, &spec);
     assert!(!again.status.success(), "must refuse: {}", describe(&again));
@@ -297,4 +294,95 @@ fn worktree_add_names_a_project_root_lease_and_how_to_end_it() {
         lease_file.exists(),
         "a live-path lease is never ended implicitly"
     );
+}
+
+/// The common case: the branch was never pushed before the tree was deleted.
+/// The re-mint reuses the local-only branch (origin confirms it has no such
+/// ref, so there is nothing to refresh from), keeping the unpushed commit, and
+/// the dead lease is ended only once that mint succeeded.
+#[test]
+fn worktree_add_after_rm_rf_of_an_unpushed_branch_re_mints_from_the_local_branch() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize");
+    let (repo, home, spec) = project(&base_dir);
+
+    let first = worktree_add(&repo, &home, &spec);
+    assert!(first.status.success(), "first add: {}", describe(&first));
+    let tree = single_worktree(&repo);
+    // Local-only work: committed, never pushed.
+    git(
+        &tree,
+        &["commit", "-q", "--allow-empty", "-m", "unpushed work"],
+    );
+    let dead_lease = spec_lease_files(&repo, &spec).pop().expect("one lease");
+
+    std::fs::remove_dir_all(&tree).expect("rm -rf the worktree");
+
+    let again = worktree_add(&repo, &home, &spec);
+    let text = describe(&again);
+    assert!(again.status.success(), "re-add must re-mint: {text}");
+    assert!(
+        !text.contains("no local lease holds it"),
+        "never the misleading refusal: {text}"
+    );
+    assert!(tree.join(".git").exists(), "a real worktree was re-minted");
+    let log = Command::new("git")
+        .current_dir(&tree)
+        .args(["log", "-1", "--format=%s"])
+        .output()
+        .expect("git log");
+    assert_eq!(
+        String::from_utf8_lossy(&log.stdout).trim(),
+        "unpushed work",
+        "the unpushed commit survives the re-mint"
+    );
+    assert!(!dead_lease.exists(), "the superseded lease was ended");
+    assert_eq!(spec_lease_files(&repo, &spec).len(), 1);
+}
+
+/// A failed mint must never strand the spec: the dead lease stays until a mint
+/// succeeds, so a retry sees the same lease rather than "InProgress but no
+/// local lease holds it". The mint is made to fail by an unreachable origin.
+#[test]
+fn a_failed_re_mint_keeps_the_dead_lease() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize");
+    let (repo, home, spec) = project(&base_dir);
+
+    let first = worktree_add(&repo, &home, &spec);
+    assert!(first.status.success(), "first add: {}", describe(&first));
+    let tree = single_worktree(&repo);
+    let dead_lease = spec_lease_files(&repo, &spec).pop().expect("one lease");
+    std::fs::remove_dir_all(&tree).expect("rm -rf the worktree");
+    let gone = base_dir.join("no-such-origin.git");
+    git(
+        &repo,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+
+    for attempt in 1..=2 {
+        let again = worktree_add(&repo, &home, &spec);
+        let text = describe(&again);
+        assert!(
+            !again.status.success(),
+            "attempt {attempt} must fail: {text}"
+        );
+        assert!(
+            text.contains("claiming it anyway"),
+            "attempt {attempt}: the failure is the mint itself: {text}"
+        );
+        assert!(
+            !text.contains("no local lease holds it"),
+            "attempt {attempt}: never the misleading refusal: {text}"
+        );
+        assert!(
+            dead_lease.exists(),
+            "attempt {attempt}: a failed mint keeps the dead lease: {text}"
+        );
+        assert_eq!(
+            spec_lease_files(&repo, &spec).len(),
+            1,
+            "no half-minted lease"
+        );
+    }
 }
