@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T06:30:59.129256631Z
-modified_at: 2026-10-16T18:42:32.257424877Z
+modified_at: 2026-10-16T19:23:54.386538196Z
 req_type: Task
 relationships:
 - rel_type:
@@ -34,6 +34,11 @@ comments:
   created_at: 2026-10-16T18:41:44.295934357Z
   modified_at: 2026-10-16T18:41:44.295934357Z
   session_id: 01a145f62138
+- id: 01a1462b-be92-7153-93b5-73cb960ab7ab
+  author: ai:codex:joe
+  content: 'Advisor-requested base-only #2705 merge-up published/read back at 305f64e67b62aeaafbb446d98f6f2b3ff413c296. Normal merge of approved 75746244c3 and main a8bfa2d7d7; tree exactly matches automatic merge-tree proof. No follow-up source changes. Fast gates 30 passed; every workspace test target compiled (make check-ci-compile); new merge-head test binary headless 159 and pool reuse 3 passed. MERGE-UP READY sent to advisor. No own review verdict, clearance or merge; status remains Done pending actual merge.'
+  created_at: 2026-10-16T19:23:54.386538196Z
+  modified_at: 2026-10-16T19:23:54.386538196Z
 history:
 - id: 01a145f6-23e0-7152-b138-ccc953d64675
   author: aida-session-start
