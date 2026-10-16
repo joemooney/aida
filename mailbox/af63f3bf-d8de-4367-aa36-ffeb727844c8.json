@@ -1,0 +1,19 @@
+{
+  "id": "af63f3bf-d8de-4367-aa36-ffeb727844c8",
+  "thread_id": "af63f3bf-d8de-4367-aa36-ffeb727844c8",
+  "from": "fix-task-1784",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792136945275,
+  "body": "BLOCKED: PR 2673 TASK-1734 merge-up not done. The sandbox in this implementer session mounts the main repo metadata dir (/home/joe/ai/aida/.git, including worktrees/*) READ-ONLY: fetch fails on FETCH_HEAD, checkout and merge fail creating index.lock and ORIG_HEAD.lock (Read-only file system). Reproduced in aida-pool-aida-1 and a fresh .claude/worktrees worktree. A private-repo workaround inside the worktree was denied by the auto-mode permission classifier. Nothing committed or pushed; codex/task-1734 still at 556f1a3635. Needs a seat whose sandbox can write repo metadata. Planned resolution: AGENTS.md keep both sides; regen/score/controls.rs keep the PR read_records_at and move STORY-1676 diagnostics::flag_trial(&mut record) from read_records into read_records_at.",
+  "subject": "BLOCKED: #2673 TASK-1734 merge-up",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

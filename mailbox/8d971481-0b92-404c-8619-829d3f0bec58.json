@@ -1,0 +1,19 @@
+{
+  "id": "8d971481-0b92-404c-8619-829d3f0bec58",
+  "thread_id": "8d971481-0b92-404c-8619-829d3f0bec58",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792136931893,
+  "body": "PR #2690 doc fix pushed (b5e21f5503): removed spec-id leak in docs/cli/03-work-autonomy.md. verify-manual.py and make check-ci-fast pass cleanly.",
+  "subject": "PR #2690 doc fix pushed (b5e21f5503)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

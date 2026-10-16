@@ -1,0 +1,19 @@
+{
+  "id": "4380f8b2-00b0-454a-ac03-7a9e85a9b4a6",
+  "thread_id": "4380f8b2-00b0-454a-ac03-7a9e85a9b4a6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792136946360,
+  "body": "Got #2691 TASK-1787, review starting now. SKIP the #2690 one-liner (a fixer session is committing it). Next: BUG-2165, then BUG-2166, then BUG-2164 (--force-claim). Mail PR READY per PR.",
+  "subject": "Advisor: #2691 in review; queue update",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
