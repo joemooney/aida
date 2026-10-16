@@ -6,6 +6,7 @@ use aida_core::models::Requirement;
 use std::path::Path;
 
 // Invoked by the fake vendor CLI in a separate, actually launched session.
+#[cfg(unix)]
 #[test]
 fn task1793_launched_write_child() {
     let Some(root) = std::env::var_os("AIDA_TEST_1793_STORE") else {
@@ -19,6 +20,7 @@ fn task1793_launched_write_child() {
     backend.add_requirement(req).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn task1793_foreground_and_background_versions_reach_canonical_writes() {
     if crate::test_env::run_path_isolated_test() {
@@ -103,6 +105,7 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn task1793_sleeping_version_probe_is_bounded_and_launch_remains_usable() {
     let tmp = tempfile::tempdir().unwrap();
@@ -118,6 +121,7 @@ fn task1793_sleeping_version_probe_is_bounded_and_launch_remains_usable() {
     assert_eq!(output.stdout, b"unset");
 }
 
+#[cfg(unix)]
 #[test]
 fn task1793_exited_probe_with_inherited_pipe_is_bounded() {
     let tmp = tempfile::tempdir().unwrap();
@@ -131,6 +135,7 @@ fn task1793_exited_probe_with_inherited_pipe_is_bounded() {
     assert!(start.elapsed() < std::time::Duration::from_secs(5));
 }
 
+#[cfg(unix)]
 #[test]
 fn task1793_invalid_or_oversized_output_is_unknown() {
     let tmp = tempfile::tempdir().unwrap();
@@ -153,6 +158,7 @@ fn task1793_invalid_or_oversized_output_is_unknown() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn task1793_version_accepts_256_bytes_plus_newline() {
     let tmp = tempfile::tempdir().unwrap();
