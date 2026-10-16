@@ -3,12 +3,12 @@ spec_id: BUG-2172
 agreed_id: BUG-2172
 title: 'Containment: nine more agent launch sites pass a literal contained=false; enforce at the spawn choke point'
 description: 'From the #2696 review (BUG-2171/2170 follow-up). These sites pass a literal contained=false to spawn helpers, which never consult the parent''s environment, so a contained parent can launch an uncontained child: questions.rs:1277 (research dispatch), questions.rs:1753 (remedy), plan_intent.rs:237 and :793, advisor_watch.rs:241 and :276, reconstitute.rs:935, harvest.rs:1225, phase_driver_trait.rs:3233. compete_cmd.rs:829 (judge) and :1011 (arms) hard-code containment_applied(_, false). Fix at the choke point: spawn_vendor_headless_with_seat_granted / compose_headless_command treat contained as contained || aida_contained_env()?, and the same for compete. Add a test that drives one real call site under AIDA_CONTAINED=1. Also from that review: refuse_uncontained_child_of_contained_parent is called with a hand-built config that always passes (burndown_run ~276, autopilot_intake ~784, questions ~1537); pass the real argv or remove the call. Factor the 4 duplicate refusal messages and the two identical resolve_*_posture fns into one session:: helper. burndown_run.rs:546 still prints ''BYPASSED permissions'' under a contained parent.'
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T20:24:22.862710625Z
+modified_at: 2026-10-16T20:48:54.182564361Z
 req_type: Bug
 comments:
 - id: 01a14583-0b4c-7293-af23-414a33f14c87
@@ -48,6 +48,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a14679-8fa6-7790-ab30-0613defda559
+  author: ai:codex:joe
+  timestamp: 2026-10-16T20:48:54.182557521Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: fc39d8f0bc76504a62b5733ebcc61ab9677f5121
   branch: main
