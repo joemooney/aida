@@ -879,3 +879,11 @@ blocks:
   range_end: 106
   next: 8
   allocated_at: 2026-10-13T04:48:00.704739240Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: TASK
+  range_start: 1915
+  range_end: 2014
+  next: 1915
+  allocated_at: 2026-10-16T14:10:13.616819543Z
