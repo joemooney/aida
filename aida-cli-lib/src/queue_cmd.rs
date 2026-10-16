@@ -5953,6 +5953,16 @@ pub(crate) fn handle_queue_command(
                     }
                     if lookup.as_ref().is_some_and(|l| l.is_found()) || lookup_failed {
                         None
+                    } else if reviewer_pickup_keeps_pr_scope(role.as_deref())
+                        && !orchestrator_review_envelope_for_pr(pr)
+                    {
+                        // BUG-2150: an explicit `--role reviewer` pickup is a
+                        // REVIEW of PR-N, never an implementer pickup of the
+                        // backing spec. Keep the PR scope so the plan resolver
+                        // synthesizes a PR-scoped review plan — no queue step,
+                        // and no conflict with the implementer's spec lease.
+                        // trace:BUG-2150 | ai:claude
+                        None
                     } else if orchestrator_review_envelope_for_pr(pr) {
                         let why = lookup
                             .as_ref()
@@ -6043,6 +6053,13 @@ pub(crate) fn handle_queue_command(
             // exit code), so the `queue work` logic below is reached only
             // when `--auto-complete` is absent. trace:STORY-246 | ai:claude
             if auto_complete.is_some() {
+                // BUG-2145: `--sandbox` used to be read only on the plain
+                // queue-work path below, so `--auto-complete --sandbox` ran
+                // the whole drain uncontained. Honour it here: AIDA_CONTAINED
+                // is what `session::drain_contained` (RealPhaseDriver's
+                // contained flag) and every phase child read.
+                // trace:BUG-2145 | ai:claude
+                honour_auto_complete_sandbox(*sandbox, permission_mode.as_deref())?;
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
@@ -9359,6 +9376,19 @@ pub(crate) fn resolve_queue_work_plan(
             })
             .cloned()
             .collect();
+        // BUG-2150: an explicit reviewer pickup with no queued review story
+        // reviews the PR against its backing spec directly — the review
+        // lease is PR-scoped, so it needs neither a queue entry nor the
+        // implementer's spec lease released. trace:BUG-2150 | ai:claude
+        if matches.is_empty() && reviewer_pickup_keeps_pr_scope(role_hint) {
+            if let Some(project_root) = storage.path().parent() {
+                if let Ok(spec) = resolve_pr_to_spec(project_root, n as u32, &store) {
+                    if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, &spec)) {
+                        return Ok(standalone_review_plan(forge, n, req, user_id));
+                    }
+                }
+            }
+        }
         match matches.len() {
             0 => {
                 let label = format_review_label(forge, n);
@@ -9837,6 +9867,55 @@ pub(crate) fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> Q
         entries: vec![resolved],
         scope,
         review_target,
+        anchor_display,
+        anchor_title: req.title.clone(),
+    }
+}
+
+/// BUG-2150: does this `queue work PR-N` pickup ask for the reviewer seat
+/// explicitly (`--role reviewer`)? Only then does a PR scope with no queued
+/// review story stay a PR-scoped review instead of resolving to the backing
+/// spec (TASK-518's convenience for a human who wants to keep implementing).
+// trace:BUG-2150 | ai:claude
+pub(crate) fn reviewer_pickup_keeps_pr_scope(role_flag: Option<&str>) -> bool {
+    role_flag.is_some_and(|r| canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
+}
+
+/// BUG-2150: the plan for a standalone reviewer pickup of PR-N whose backing
+/// spec is `req` and which has no queued review story. The scope is the PR
+/// (`PR-N` / `MR-N`), so `session_start` takes a PR-scoped review lease that
+/// does not collide with the implementer's spec-scoped lease, while a second
+/// reviewer on the same PR still hits the PR-scope conflict. The entry is
+/// synthesized at position 0, so nothing is written to the queue.
+// trace:BUG-2150 | ai:claude
+pub(crate) fn standalone_review_plan(
+    forge: ReviewForge,
+    n: u64,
+    req: &aida_core::Requirement,
+    user_id: &str,
+) -> QueueWorkPlan {
+    let synthetic = aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id,
+        position: 0,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("reviewer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    let anchor_display = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| format_review_label(forge, n));
+    QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![build_resolved_entry(synthetic, req)],
+        scope: format_review_label(forge, n),
+        review_target: Some((forge, n)),
         anchor_display,
         anchor_title: req.title.clone(),
     }
@@ -10657,18 +10736,36 @@ pub(crate) fn is_standalone_reviewer(role: &str, has_review_target: bool) -> boo
 /// via `seat_authority::issue_child`, and so must preflight delegation before
 /// any mutation. Mirrors the launch arms of `handle_queue_work`:
 /// - `--no-launch` launches nothing, so no child grant;
-/// - every interactive launch mints one for the pickup role;
-/// - `--no-human` mints one on a resume (`spawn_claude_headless_resume`) and
-///   on a standalone reviewer (`run_standalone_reviewer`); a fresh headless
-///   pickup execs the vendor without a child grant.
+/// - every other launch — interactive, headless resume, standalone reviewer
+///   and (BUG-2139) a fresh headless pickup — mints one for the pickup role.
+///   A fresh headless pickup never runs under the launcher's grant.
 // trace:BUG-1808 | ai:claude
-pub(crate) fn queue_work_issues_child_grant(
-    no_launch: bool,
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_issues_child_grant(no_launch: bool) -> bool {
+    !no_launch
+}
+
+/// BUG-2139: whether this launch is a fresh headless pickup — the arm that
+/// execs the vendor through `session::exec_vendor_headless`. It is the one
+/// arm where a launcher that cannot delegate a BASELINE seat still launches,
+/// with the child at baseline authority (`AIDA_SESSION_GRANT=""`); every other
+/// arm requires delegation.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_is_fresh_headless(
     no_human: bool,
     resume: bool,
     standalone_reviewer: bool,
 ) -> bool {
-    !no_launch && (!no_human || resume || standalone_reviewer)
+    no_human && !resume && !standalone_reviewer
+}
+
+/// BUG-2139: the one line a baseline headless launch prints.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
+    format!(
+        "headless `{seat}` child runs ungranted at baseline authority (AIDA_SESSION_GRANT=\"\"): \
+         the launcher cannot delegate `{seat}` ({cause})"
+    )
 }
 
 /// The refusal printed when the launcher's grant cannot delegate the child
@@ -10785,6 +10882,42 @@ pub(crate) fn preflight_queue_work_branch(
     Ok(())
 }
 
+/// BUG-2145: `aida queue work --auto-complete --sandbox` contains the whole
+/// drain. `--sandbox` exports `AIDA_CONTAINED=1` before the drain starts, so
+/// the drain's own contained flag ([`session::drain_contained`]) and every
+/// phase child it spawns resolve contained. Without `--sandbox` this is a
+/// no-op: the env / `[agents] contained` knob still apply as before.
+// trace:BUG-2145 | ai:claude
+pub(crate) fn honour_auto_complete_sandbox(
+    sandbox: bool,
+    permission_mode: Option<&str>,
+) -> Result<()> {
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    let contained_env = session::aida_contained_env()?;
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    if !sandbox {
+        return Ok(());
+    }
+    if permission_mode.is_some_and(|m| !m.is_empty()) {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    apply_queue_work_contained_env(true);
+    Ok(())
+}
+
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn apply_queue_work_contained_env(contained: bool) {
     if contained {
@@ -10792,6 +10925,91 @@ pub(crate) fn apply_queue_work_contained_env(contained: bool) {
     } else {
         std::env::remove_var("AIDA_CONTAINED");
     }
+}
+
+/// BUG-2010: true when caller is working the lease itself (self-claim under `--no-launch`).
+/// false when launching/spawning another agent.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn queue_work_self_claim(no_launch: bool) -> bool {
+    no_launch
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueWorkPosture {
+    pub(crate) contained: bool,
+    pub(crate) permission_mode: Option<String>,
+    pub(crate) permission_mode_origin: &'static str,
+}
+
+// BUG-2166: monotonic containment — a contained parent's env always wins
+// (BUG-2151 ruling). `--plan-only` must not disable containment, and
+// `--permission-mode` must be refused under a contained parent.
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn resolve_queue_work_posture(
+    permission_mode: Option<&str>,
+    sandbox: bool,
+    contained_env: bool,
+    contained_knob: bool,
+    bypass_knob: bool,
+    plan_only: bool,
+    env_mode: Option<&str>,
+    config_mode: Option<&str>,
+) -> Result<QueueWorkPosture> {
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained = sandbox || contained_env || contained_knob;
+    if contained && bypass_knob {
+        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
+    }
+    let (permission_mode, permission_mode_origin) = if contained {
+        (Some("dontAsk".to_string()), "contained sandbox")
+    } else {
+        resolve_queue_work_permission_mode(
+            permission_mode,
+            env_mode,
+            config_mode,
+            bypass_knob,
+            plan_only,
+        )
+    };
+    Ok(QueueWorkPosture {
+        contained,
+        permission_mode,
+        permission_mode_origin,
+    })
+}
+
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn build_queue_work_claude_command(
+    posture: &QueueWorkPosture,
+    name: Option<&str>,
+    prompt: &str,
+    session_id: &str,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> std::process::Command {
+    session::build_claude_exec_command(
+        posture.permission_mode.as_deref(),
+        name,
+        Some(prompt),
+        Some(session_id),
+        posture.contained,
+        model,
+        grant_id,
+    )
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -11044,6 +11262,44 @@ pub(crate) fn handle_queue_work(
     let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
         session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
     });
+    // BUG-2146: a malformed agents.toml is a refusal naming the file, not a
+    // silent "uncontained". trace:BUG-2146 | ai:claude
+    let contained_knob = project_root_for_config
+        .as_deref()
+        .map(load_agents_contained)
+        .transpose()?
+        .unwrap_or(false);
+    // trace:BUG-2146 | ai:claude
+    let contained_env = session::aida_contained_env()?;
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--plan-only` must not disable containment, and
+    // `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if contained_env {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained = sandbox || contained_env || contained_knob;
+    // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
+    // on a vendor that cannot apply it is refused HERE — before the queue_add
+    // row, the calibration/effort tags, any lease or worktree — rather than
+    // silently running uncontained. `contained` below uses the same inputs.
+    // trace:BUG-2144 | ai:claude
+    // trace:BUG-2166 | ai:antigravity
+    if !no_launch && !list_sessions {
+        session::require_vendor_containment(launch_vendor, contained, "queue-work session")?;
+    }
     let model_root = project_root_for_config
         .clone()
         .or_else(|| std::path::Path::new(".").canonicalize().ok());
@@ -11091,16 +11347,23 @@ pub(crate) fn handle_queue_work(
             // launches, which used to skip this check and refuse in
             // `issue_child` only after the status bump, queue row, worktree,
             // lease and manifest had landed.
-            if queue_work_issues_child_grant(
-                no_launch,
-                no_human,
-                matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                is_standalone_reviewer(&role, plan.review_target.is_some()),
-            ) {
+            if queue_work_issues_child_grant(no_launch) {
                 let child_seat = crate::canonical_role_name(&role);
-                if let Err(cause) =
+                // BUG-2139: a fresh headless pickup now mints a child grant
+                // too. Its baseline seats may fall back to an ungranted child;
+                // every other arm and seat must be delegated.
+                let preflight = if queue_work_is_fresh_headless(
+                    no_human,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    is_standalone_reviewer(&role, plan.review_target.is_some()),
+                ) {
+                    crate::seat_authority::preflight_headless_child(&project_root, &child_seat)
+                        .map(|_| ())
+                } else {
                     crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
-                {
+                        .map(|_| ())
+                };
+                if let Err(cause) = preflight {
                     let launcher = crate::seat_authority::current_grant(&project_root);
                     anyhow::bail!(queue_work_delegation_refusal(
                         &child_seat,
@@ -11214,39 +11477,32 @@ pub(crate) fn handle_queue_work(
         .as_deref()
         .map(|r| load_agents_bypass(r).unwrap_or(false))
         .unwrap_or(false);
-    let contained_knob = project_root_for_config
-        .as_deref()
-        .map(|r| load_agents_contained(r).unwrap_or(false))
-        .unwrap_or(false);
-    let contained_env = std::env::var("AIDA_CONTAINED")
-        .ok()
-        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    let contained = !plan_only && (sandbox || contained_env || contained_knob);
-    if contained && bypass_knob {
-        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
+    let posture = resolve_queue_work_posture(
+        permission_mode,
+        sandbox,
+        contained_env,
+        contained_knob,
+        bypass_knob,
+        plan_only,
+        env_mode.as_deref(),
+        config_mode.as_deref(),
+    )?;
+    let contained = posture.contained;
+    // trace:BUG-2131 | ai:claude
+    if contained {
+        aida_core::git_ops::ensure_git_supports_contained()?;
     }
     apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;
-    let (mut permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
-    } else {
-        resolve_queue_work_permission_mode(
-            permission_mode,
-            env_mode.as_deref(),
-            config_mode.as_deref(),
-            bypass_knob,
-            plan_only,
-        )
-    };
+    let (mut permission_mode, permission_mode_origin) =
+        (posture.permission_mode, posture.permission_mode_origin);
     // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
     // orchestrated children already passed dispatch authority and must not hang.
-    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+    // BUG-2166: `--plan-only` must not skip the bypass consent prompt if an
+    // uncontained interactive session resolves to bypassPermissions.
+    // trace:BUG-2166 | ai:antigravity
+    if !no_human && permission_mode.as_deref() == Some("bypassPermissions") {
         let orchestrated = project_root_for_config
             .as_deref()
             .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
@@ -12220,32 +12476,44 @@ pub(crate) fn handle_queue_work(
     // shim, conflict detection. We always pass launch=false so we can
     // (a) write the cluster manifest from the new lease and (b) emit
     // a queue-work-specific launch summary before exec.
-    session_start(
-        &plan.scope,
-        session_branch_override,
-        resolved_base.as_deref(),
-        /* reuse_branch */ false,
-        path_override,
-        /* forge_override */ None,
-        /* branch_style */ "auto",
-        /* launch */ false,
-        /* launch_title */ None,
-        /* launch_set_title */ false,
-        /* launch_name */ None,
-        // STORY-495: inert here (launch=false); the real launch below threads
-        // the resolved `permission_mode` into the exec call directly.
-        /* permission_mode */
-        permission_mode.as_deref(),
-        /* launch_contained */
-        false,
-        /* role */ Some(role.clone()),
-        /* force_claim */ force_claim,
-        // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
-        // only for non-stacked spawns (resolved_base is None unless --stack /
-        // --base), so stacked work keeps a fresh `git worktree add`.
-        /* use_pool */
-        None,
-    )?;
+    // BUG-1918: when this command launches the worker, the claim is made FOR
+    // it — the ledger must name the worker, not this launcher.
+    // trace:BUG-1918 | ai:claude
+    let start = || {
+        session_start(
+            &plan.scope,
+            session_branch_override,
+            resolved_base.as_deref(),
+            /* reuse_branch */ false,
+            path_override,
+            /* forge_override */ None,
+            /* branch_style */ "auto",
+            /* launch */ false,
+            /* launch_title */ None,
+            /* launch_set_title */ false,
+            /* launch_name */ None,
+            // STORY-495: inert here (launch=false); the real launch below threads
+            // the resolved `permission_mode` into the exec call directly.
+            /* permission_mode */
+            permission_mode.as_deref(),
+            /* launch_contained */
+            false,
+            /* role */ Some(role.clone()),
+            /* force_claim */ force_claim,
+            // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
+            // only for non-stacked spawns (resolved_base is None unless --stack /
+            // --base), so stacked work keeps a fresh `git worktree add`.
+            /* use_pool */
+            None,
+            /* self_claim */
+            queue_work_self_claim(no_launch),
+        )
+    };
+    if no_launch {
+        start()?;
+    } else {
+        crate::review_authority::as_launcher(start)?;
+    }
 
     // trace:TASK-1337 | ai:codex
     let setup_result = (|| -> Result<()> {
@@ -12493,6 +12761,10 @@ pub(crate) fn handle_queue_work(
         }
         std::env::set_current_dir(&lease.worktree_path)
             .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
+        // BUG-1918: the launched worker (exec'd or spawned below) carries its
+        // lease id, so it stays its lease's author wherever it later runs.
+        // trace:BUG-1918 | ai:claude
+        crate::review_authority::export_worker_session_env(&lease.id);
 
         // TASK-112: exec — resume the prior conversation, or cold-launch
         // with the minted session id so this conversation is itself
@@ -12558,6 +12830,9 @@ pub(crate) fn handle_queue_work(
         }
         // trace:TASK-1594 | ai:claude
         let mut child_grant_id = None;
+        // BUG-2139: the fresh headless child's own authority — minted here,
+        // never inherited from the launcher. `None` on every other arm.
+        let mut headless_child_grant = None;
         if !no_human {
             let child_grant = crate::seat_authority::issue_child(
                 &project_root,
@@ -12565,6 +12840,34 @@ pub(crate) fn handle_queue_work(
                 &crate::current_user_id(None),
             )?;
             child_grant_id = Some(child_grant.id);
+        } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
+            // trace:BUG-2139 | ai:claude
+            let seat = crate::canonical_role_name(&role);
+            let grant = crate::seat_authority::issue_headless_child(
+                &project_root,
+                &seat,
+                &crate::current_user_id(None),
+            )?;
+            match &grant {
+                crate::seat_authority::HeadlessChildGrant::Issued(issued) => {
+                    // Stamped beside `active_pid`, so a lease end or reap
+                    // revokes it even if this launcher dies before the child.
+                    if let Err(e) =
+                        session::stamp_lease_child_grant_at(&project_root, &lease.id, &issued.id)
+                    {
+                        session::revoke_headless_child_grant(&issued.id);
+                        return Err(
+                            e.context("could not record the headless child grant on its lease")
+                        );
+                    }
+                }
+                crate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    headless_baseline_notice(&seat, cause)
+                ),
+            }
+            headless_child_grant = Some(grant);
         }
         // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
         // no caller-minted session id / AIDA-addressable resume, and the interactive
@@ -12747,6 +13050,10 @@ pub(crate) fn handle_queue_work(
                     // trace:TASK-307 | ai:claude
                     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
                         .with_label(&lease.branch);
+                    // trace:BUG-2139 | ai:claude
+                    let child_grant = headless_child_grant
+                        .as_ref()
+                        .expect("BUG-2139: a fresh headless launch minted its child authority");
                     return session::exec_vendor_headless(
                         headless_vendor,
                         &prompt,
@@ -12755,6 +13062,8 @@ pub(crate) fn handle_queue_work(
                         &tee_opts,
                         contained,
                         Some(&lease.id),
+                        &crate::canonical_role_name(&role),
+                        child_grant,
                     );
                 }
                 eprintln!(
@@ -12854,9 +13163,22 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
+    // BUG-2149: only verdict files written after the reviewer starts belong
+    // to this run. trace:BUG-2149 | ai:claude
+    let launched_at = reviewer_spawn_instant(worktree);
+    let launcher_grant = std::env::var(crate::seat_authority::GRANT_ENV)
+        .ok()
+        .filter(|s| !s.trim().is_empty());
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
-    let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
+    // BUG-2149: every arm returns the id of the child reviewer grant it
+    // issued, so the collected verdict can be bound to exactly this launch.
+    // trace:BUG-2149 | ai:claude
+    let (status, log_path, child_grant): (
+        std::process::ExitStatus,
+        Option<std::path::PathBuf>,
+        Option<String>,
+    ) = match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
                 let log_path = project_root
@@ -12887,10 +13209,10 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:BUG-342 | ai:codex
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status = session::spawn_claude_headless_resume(
+                let (status, grant) = session::spawn_claude_headless_resume_granted(
                     prompt, &id, &log_path, worktree, &tee_opts, contained, "reviewer",
                 )?;
-                (status, Some(log_path))
+                (status, Some(log_path), Some(grant))
             } else {
                 // BUG-1607: `handle_queue_work` already refuses a
                 // non-Claude `--resume` before minting the launch decision
@@ -12922,9 +13244,20 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
+                let grant = crate::seat_authority::issue_child(
+                    project_root,
+                    "reviewer",
+                    &crate::current_user_id(None),
+                )?;
                 (
-                    session::spawn_claude_resume(&id, permission_mode, contained)?,
+                    session::spawn_claude_resume_with_grant(
+                        &id,
+                        permission_mode,
+                        contained,
+                        Some(&grant.id),
+                    )?,
                     None,
+                    Some(grant.id),
                 )
             }
         }
@@ -12963,7 +13296,7 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status = session::spawn_vendor_headless_with_seat(
+                let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
                     prompt,
@@ -12972,7 +13305,7 @@ pub(crate) fn run_standalone_reviewer(
                     &tee_opts,
                     contained,
                 )?;
-                (status, Some(log_path))
+                (status, Some(log_path), Some(grant))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
                 // BUG-1607: build the launch plan through the ONE shared
@@ -13015,8 +13348,9 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let status = session::spawn_reviewer_launch_plan(&plan, project_root)?;
-                (status, None)
+                let (status, grant) =
+                    session::spawn_reviewer_launch_plan_granted(&plan, project_root)?;
+                (status, None, Some(grant))
             }
         }
     };
@@ -13027,15 +13361,51 @@ pub(crate) fn run_standalone_reviewer(
     // trace:TASK-1460 | ai:claude
     let _ = crate::review_verdict::adopt_direct_write(verdict_path);
 
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+        .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
+        .unwrap_or_default();
+
+    // BUG-2149: a contained reviewer can only write inside its review
+    // worktree, so its `aida review record` lands there and the launcher's
+    // canonical PR-N.json never appears. Collect it (and mirror the
+    // spec-keyed records) into the launcher project, where `aida review
+    // verdict` and `aida pr ship` read. trace:BUG-2149 | ai:claude
+    let checks = StandaloneVerdictChecks {
+        project_root,
+        pr,
+        head_sha: standalone_review_pr_head(project_root, pr),
+        launcher_grant,
+        child_grant,
+    };
+    let collected = crate::review_verdict::collect_standalone_verdict(
+        project_root,
+        worktree,
+        verdict_path,
+        &pr_spec_ids,
+        launched_at,
+        &checks,
+    );
+    match &collected {
+        Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
+            "  {} collected the reviewer's verdict from {} into {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            worktree.display(),
+            verdict_path.display()
+        ),
+        Ok(_) => {}
+        Err(why) => eprintln!(
+            "  {} no verdict collected for PR-{pr}: {why}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+        ),
+    }
+
     // STORY-439: tag-along reviewer-side calibration capture. Resolve
     // every spec the PR credits (via the existing title / branch / body
     // precedence used by the squash-subject repair) and write a review
     // slot per spec. Best-effort; never blocks the summary print.
     // trace:STORY-439 | ai:claude
-    if let Ok(meta) = fetch_pr_ship_metadata_via_gh(project_root, pr) {
-        for spec in review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body) {
-            capture_review_calibration_for_spec(project_root, verdict_path, &spec);
-        }
+    for spec in &pr_spec_ids {
+        capture_review_calibration_for_spec(project_root, verdict_path, spec);
     }
 
     // End-of-command summary, assembled from the verdict file the
@@ -13062,9 +13432,154 @@ pub(crate) fn run_standalone_reviewer(
 
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
-    match status.code() {
-        Some(0) | None => Ok(()),
-        Some(code) => std::process::exit(code),
+    if let Some(code) = status.code().filter(|c| *c != 0) {
+        std::process::exit(code);
+    }
+    standalone_reviewer_outcome(pr, collected.err(), verdict_path)
+}
+
+/// BUG-2149: the launch command's result once the reviewer exited cleanly. A
+/// review that produced no verifiable verdict is a failure — a caller waiting
+/// on the exit status must never read a missing verdict as an approval.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn standalone_reviewer_outcome(
+    pr: u64,
+    rejection: Option<String>,
+    verdict_path: &std::path::Path,
+) -> Result<()> {
+    let Some(why) = rejection else {
+        return Ok(());
+    };
+    Err(anyhow::Error::new(NoReviewVerdict {
+        message: format!(
+            "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
+             nothing was collected into {}. Treat this as no approval and re-run the review.",
+            verdict_path.display()
+        ),
+    }))
+}
+
+/// BUG-2149: exit code of a standalone review that ended without a verified
+/// verdict — distinct from 1 (a crash or any other failure) so a caller can
+/// tell "no approval" from "the launch broke".
+// trace:BUG-2149 | ai:claude
+pub(crate) const NO_REVIEW_VERDICT_EXIT_CODE: i32 = 30;
+
+/// BUG-2149: the error a standalone review with no verified verdict returns;
+/// `exit_code_for_error` maps it to [`NO_REVIEW_VERDICT_EXIT_CODE`].
+// trace:BUG-2149 | ai:claude
+#[derive(Debug)]
+pub(crate) struct NoReviewVerdict {
+    pub(crate) message: String,
+}
+
+impl std::fmt::Display for NoReviewVerdict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for NoReviewVerdict {}
+
+/// BUG-2149: the reviewer's start as the FILESYSTEM sees it — the mtime of a
+/// marker written just before the spawn, so a verdict file's mtime compares
+/// on the same (possibly coarse) clock. Falls back to the wall clock.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn reviewer_spawn_instant(worktree: &std::path::Path) -> std::time::SystemTime {
+    let dir = worktree.join(".aida");
+    let marker = dir.join(format!(".review-spawn-{}", std::process::id()));
+    let stamped = std::fs::create_dir_all(&dir)
+        .and_then(|()| std::fs::write(&marker, b""))
+        .and_then(|()| std::fs::metadata(&marker))
+        .and_then(|m| m.modified());
+    let _ = std::fs::remove_file(&marker);
+    stamped.unwrap_or_else(|_| std::time::SystemTime::now())
+}
+
+/// BUG-2149: PR-N's head commit at collection time, read from the pinned
+/// forge repo. `None` when it cannot be resolved — which refuses collection.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn standalone_review_pr_head(project_root: &std::path::Path, pr: u64) -> Option<String> {
+    #[cfg(test)]
+    if let Ok(sha) = std::env::var("AIDA_TEST_PR_HEAD_SHA") {
+        return Some(sha);
+    }
+    merge_hold::fetch_pinned_change(
+        project_root,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+        pr,
+    )
+    .ok()
+    .flatten()
+    .and_then(|change| change.head_sha)
+}
+
+/// BUG-2149: what a collected standalone verdict must satisfy: a recognized
+/// verdict for THIS PR at its CURRENT head, recorded by the child reviewer
+/// grant this launch issued — not the launcher's grant, not an implementer's.
+// trace:BUG-2149 | ai:claude
+pub(crate) struct StandaloneVerdictChecks<'a> {
+    pub(crate) project_root: &'a std::path::Path,
+    pub(crate) pr: u64,
+    pub(crate) head_sha: Option<String>,
+    pub(crate) launcher_grant: Option<String>,
+    /// The grant this launch issued to its reviewer child — the ONLY grant a
+    /// collected verdict may be recorded under.
+    pub(crate) child_grant: Option<String>,
+}
+
+impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
+    fn check_record(&self, c: &crate::review_verdict::VerdictCandidate) -> Result<(), String> {
+        if c.verdict.kind == review_verdict::VerdictKind::Unknown {
+            return Err("not a recognized verdict record".to_string());
+        }
+        if let Some(pr) = c.obj.get("pr") {
+            let n = pr
+                .as_u64()
+                .or_else(|| pr.as_str().and_then(|s| s.trim().parse().ok()));
+            if n != Some(self.pr) {
+                return Err(format!("it names PR {pr}, not PR-{}", self.pr));
+            }
+        }
+        let Some(head) = self.head_sha.as_deref() else {
+            return Err(format!(
+                "PR-{}'s current head could not be resolved",
+                self.pr
+            ));
+        };
+        match c.verdict.reviewed_sha.as_deref() {
+            Some(sha) if review_verdict::same_reviewed_sha(sha, head) => Ok(()),
+            Some(sha) => Err(format!(
+                "it reviewed {sha}, but PR-{}'s head is now {head}",
+                self.pr
+            )),
+            None => Err("it names no reviewed commit".to_string()),
+        }
+    }
+
+    fn check_identity(&self, grant_id: &str) -> Result<(), String> {
+        if self.launcher_grant.as_deref() == Some(grant_id) {
+            return Err("it was recorded under the launcher's own grant".to_string());
+        }
+        let Some(child) = self.child_grant.as_deref() else {
+            return Err("this launch issued no reviewer grant to verify against".to_string());
+        };
+        if grant_id != child {
+            return Err(format!(
+                "it was recorded under grant {grant_id}, not this launch's reviewer grant"
+            ));
+        }
+        match crate::seat_authority::grant_check_for(
+            self.project_root,
+            grant_id,
+            &crate::current_user_id(None),
+        ) {
+            crate::seat_authority::GrantCheck::Valid(g) if g.seat == "reviewer" => Ok(()),
+            crate::seat_authority::GrantCheck::Valid(g) => {
+                Err(format!("it was recorded by a `{}` seat", g.seat))
+            }
+            _ => Err(format!("its recording grant {grant_id} is not valid")),
+        }
     }
 }
 

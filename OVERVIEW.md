@@ -1,3 +1,11 @@
+C7 lifecycle commands resolve invoking caller authority after acquiring the
+seat lock; ack/release also revalidate persisted requester authority locally.
+The dormant runtime gate refreshes its caller at the same locked boundary.
+Absolute deadlines reconcile on lifecycle/gate entry without a live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
@@ -14,6 +22,7 @@ normally.
 <!-- trace:BUG-2120 | ai:codex -->
 
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only
 when idle, clean, unlocked, and unleased. Setup failures retain a manual
@@ -270,6 +279,35 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
+Store commits run only AIDA's shipped pre-commit, commit-msg, prepare-commit-msg,
+and post-commit hooks, plus a shipped pre-push identity gate. Host git pins a versioned directory under its common git
+directory; project `core.hooksPath` (including husky, pre-commit and lefthook)
+applies to code commits. The host profile is installed atomically from embedded
+template masters and checked before use: exact entries and bytes, regular files
+with one link, current-user ownership, no symlinks, executable hooks, and no
+write permission for other users. Unsafe parent directories also refuse writes;
+root-owned sticky temporary roots are allowed. Existing suspect profiles are
+never silently repaired. Own-repository stores use only their sandbox-denied
+`.git` subtree; an authority path elsewhere inside the writable store refuses.
+Contained launch prepares the profile on the host before the sandbox starts,
+without adding writable paths. Host git authority directories are denied in
+both the sandbox and direct tool rules, including a primary-checkout launch.
+Store git removes relative/empty PATH entries
+and paths into the store, and uses the empty tree as `GIT_ATTR_SOURCE` so the
+store's `.gitattributes` cannot select a host filter or textconv driver. Older
+Git ignores that variable. On Git below 2.40, or when `git --version` cannot be
+parsed, contained mode is unavailable: launching a contained session or
+enabling the contained posture refuses, and host store git refuses while
+contained mode is in play for the store (`[agents] contained` /
+`[contained] enable`, `AIDA_CONTAINED`, or the marker a contained launch leaves
+in the git common directory). Without contained mode, store git keeps working
+and warns once. The fix is Git 2.40 or newer.
+<!-- trace:BUG-2131 | ai:claude --> The store-only hook marker keeps detached and override stores
+away from project-local executable probes without bypassing code-commit gates.
+Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.rs`
+and `tests/test_bug_1929_hook_templates.py`.
+<!-- trace:BUG-1929 | ai:codex -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
@@ -345,7 +383,285 @@ aida/
 
 ---
 
+Hypothesis pre-registration uses a `hypothesis` tag on an existing spike or
+decision. Canonical store transactions persist a sticky timestamp and description
+hash when a `references` or `verified-by` neighbor is Completed; later description
+edits direct amendments to comments. CLI and MCP share this preflight, including
+indirect lock writes when an experiment completes. See
+[pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 ## Feature surface (high level)
+
+`aida regen corpus <dir>` freezes committed requirements and knowledge rows,
+including archived rows and comment threads, into versioned `corpus.json` plus
+`manifest.json`. The manifest pins the store SHA and SHA-256 of the corpus bytes;
+exports of the same commit are identical across checkout paths. Only projected
+spec content is included: source artifacts, attachments, history, processing
+records and implementation metadata are excluded. Store-authored prose is kept
+verbatim. The output directory must be new or empty. Uncommitted changes under `objects/`
+refuse unless `--allow-dirty` is explicit; runtime files outside `objects/` do not
+count as dirty. The override still exports committed HEAD and adds
+`dirty: true` to the manifest. Legacy stores must migrate to git-canonical storage.
+<!-- trace:TASK-1729 | ai:codex -->
+
+`aida regen score <system-dir> --corpus <corpus-dir> --model <name> --vendor <name>
+--harness <name>` runs raw R1 scoring and records versioned JSON under
+`regen/trials/<uuid>.json` in the canonical store. Configure `[regen]` on the
+trusted default branch with `oracle_command` (required argv array), optional
+`install_command` (argv array; defaults to `./install.sh` when present), and
+`required_tools` (tool names guarded against fallback). Required nonempty
+`oracle_paths` lists repo-relative files/subtrees for the held-out oracle. Inputs
+are frozen via git from the same pinned trusted commit as config; worktree files
+are never used. Absolute paths, `..`, escaping/cyclic symlinks, omitted or directory link
+targets and submodules are refused. The content-addressed bundle lives under
+`$XDG_CACHE_HOME/aida/regen/oracle/<hash>` (default `~/.cache`), outside `/tmp`, `/dev`, `/proc`,
+project worktrees and the trial root. Its hash (sorted, length-framed paths,
+modes and bytes) is rechecked before execution; tampering refuses scoring.
+
+`oracle_command[0]` must name an executable inside the bundle (for example
+`tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
+never through PATH or the trial. The oracle runs from the read-only bundle via
+GNU coreutils `/usr/bin/env --chdir` (required; missing or unsupported means
+scoring fails closed), using `AIDA_REGEN_TRIAL_ROOT` and
+`AIDA_REGEN_PREFIX` to locate the regenerated system and private install prefix.
+The scorer first copies the selected system into a private `/tmp` trial root.
+The installer runs there and receives `PREFIX`, whose `bin/` precedes guards and
+system directories on its PATH. The oracle uses only frozen guards followed by
+`/usr/local/bin:/usr/bin:/bin`; it invokes regenerated tools through the locator
+variables, never by adding trial or prefix directories to PATH. Installer and
+oracle use separate private HOME/XDG/TMPDIR trees; the oracle's directories are
+created after installation. No Cargo/Rustup settings are inherited. Existing bubblewrap strict-read
+confinement is reused, and scoring refuses if its source-visibility probe can
+still see the original project (including projects in essential system paths).
+Confinement is required unless `--unconfined` explicitly records a non-clean trial.
+Fallback guards are generated only for `required_tools`, frozen and hash-verified
+like the oracle bundle, and bound read-only. They record an event to a per-run
+AIDA-owned FIFO before executing an absolute host tool path (or failing if the tool
+is absent). The FIFO is outside writable roots and read-only-bound with write-only
+inode permissions: subprocesses can append evidence but cannot consume it, unlink
+it, change permissions or truncate it. Logging failure refuses tool execution;
+channel errors and unexpected EOF forbid a clean result. An inherited descriptor
+is retained only as a best-effort survivor identity marker, not as the guard log.
+Each install-writable root is independently bound with no bound ancestor. After
+installation, the host quarantines the trial and prefix roots and copies their
+bytes into replacements at the same paths, preserving embedded absolute paths.
+Copying pins source descriptors, never follows source symlinks, and creates new
+files rather than hardlinks/reflinks. A best-effort process/fd scan kills detected
+installer survivors and records their count; any detection forbids a clean result
+without suppressing the raw score. This is snapshot isolation, not a guarantee
+that every descendant was found. Unconfined execution has no mount-namespace
+isolation and remains subject to concurrent-write races.
+
+The oracle emits exact LF-delimited `ok   - <name>` and `FAIL - <name>` lines on
+stdout. Oracle authors should not echo unchecked trial output as marker lines.
+Duplicate/conflicting names or no exact checks are scoring errors.
+Installer failures have no score; nonzero oracle exits with parsed checks retain
+the score and an exit flag. Guard hits, dirty corpus provenance and unconfined
+execution are recorded and forbid a clean result. Records include the trusted
+`oracle_sha`, `oracle_bundle_sha256`, `guard_bundle_sha256`, the env executable
+path and `survivors_detected` (older records default that count to zero). Trial timestamps support age
+reporting; per-check outcomes are retained for later controls and comparisons.
+Raw cleanliness describes execution conditions, not the pass rate.
+<!-- trace:TASK-1730 | ai:codex -->
+
+Every actual system (including reference controls and R2) must have the declared
+installer or `./install.sh`. Missing, unlaunchable and nonzero installers record
+`install_failed`, distinct from oracle/check failures. Only generated no-op stub
+controls skip installation. No source-layout subset is selected by the scorer.
+
+The trusted oracle can write optional per-failure JSONL to the scorer-created
+`AIDA_REGEN_CHECK_RESULTS` path, supplied only during the oracle phase. Each line
+is `{"v":1,"check":"exact failing marker name","kind":"crash","exit":127}`;
+`kind` is `crash` or `assertion`, and integer `exit` is optional. No extra fields,
+duplicate identities, passing/unknown checks or unsupported versions are accepted.
+Absent, unreadable, over-1-MiB or invalid sidecars classify **every** failure as
+unknown; a valid partial sidecar leaves omitted failures unknown. Marker text and
+exit numbers never imply a classification. The scorer keeps its original file
+handle rather than reopening the child-writable pathname. These are oracle-supplied
+diagnostics, not independent attestation of generated tool behavior.
+
+Trial JSON retains versioned `failure_diagnostics`. Trusted
+`[regen].crash_failure_share_percent` is an integer 0–100, default 50. Crashes
+strictly above that percentage of **classified** failures produce
+`crash-dominated: review before reporting`; unknown failures strictly above 50%
+of **all** failures produce `unclassified: review before reporting`. Both can
+apply. Ordinary R1/R2 warnings are attached after control validation and forbid a
+clean headline; expected stub failures retain diagnostics without changing control
+execution cleanliness. Reports show counts/unknown share and put warnings beside
+the headline, including for legacy or invalid diagnostic extensions. The shared committed reader
+derives these ordinary-trial warnings without rewriting historical bytes, so
+statusline/digest consumers also receive the non-clean marker.
+
+`regen score --model-family <identity>` records an explicit optional family on the
+trial (and nested R2); model/vendor strings never infer it. `regen report` lists
+**oracle-assumption audit candidates** from the latest scored ordinary R1 per
+family, ordered by completion then UUID. Comparison requires matching corpus,
+oracle SHA and bundle hash. A candidate must be observed in every compared family
+and fail in exactly one; repeated runs do not count as separate families. Fewer
+than two families is unavailable, absent/invalid-family trials are counted as
+excluded, and checks unobserved in some families are counted separately. The audit
+is a prompt for human investigation, not proof of an oracle defect. No launcher or
+continuation policy is introduced here.
+<!-- trace:STORY-1676 | ai:codex -->
+
+
+Before ordinary scoring, generate controls with `aida regen score --control
+reference|stub --corpus <dir> --model <name> --vendor <name> --harness <name>`.
+The reference command exports the pinned trusted commit into a fresh directory
+per repeat. Trusted `[regen].reference_repeats` defaults to 3 and must be positive.
+Every repeat in the latest matching reference batch must be clean and pass 100%;
+an incomplete or failed new batch cannot borrow older successful repeats.
+The stub command starts empty, skips the project installer and generates no-op
+executables for `required_tools` in the private prefix, exposed through
+`AIDA_REGEN_PREFIX`. Oracles invoke these tools by locator; bare tool names
+reach immutable fallback guards on PATH. Ordinary trials receive no generated tools.
+
+Each trial copies the selected system's files into a fresh scoring root; installs
+cannot mutate the caller's directory or carry state between runs. Root git
+metadata is omitted. Special files and links to external, omitted or directory
+inputs refuse. A pre-run comparison asserts exactly the placed files, modes,
+links and directories, including empty directories. HOME/XDG/PREFIX are fresh too.
+`root_fresh` records this condition; it is execution evidence, not attestation
+against hostile code inside the existing writable scratch area.
+
+The gate reads committed controls with the same `oracle_sha`,
+`oracle_bundle_sha256`, corpus content hash and exact check-name set. Controls
+with errors, nonzero exits, dirty flags, guard hits, unconfined execution or
+missing fresh-root evidence refuse. Controls must also carry the current
+`guard_bundle_sha256` and env executable evidence with zero detected survivors;
+older executor records remain readable but cannot qualify. A trial with sandbox contamination refuses
+a reported score. An ordinary nonzero oracle exit with parsed checks retains its
+flagged discriminating score; a nonzero control exit invalidates the control.
+Raw R1 `aggregate` remains available in records; the separate
+`discriminating` aggregate excludes and lists stub-passing checks. An empty
+discriminating denominator refuses. Records retain the control IDs used, and
+reference batches retain their run ID and repeat identities. These are additive
+format-v1 fields; older records deserialize with absent evidence and cannot
+qualify as controls. A refused trial is stored as diagnostics without printing
+a score to stdout.
+<!-- trace:TASK-1731 | ai:codex -->
+
+
+Ordinary scoring optionally reads `GAPS.toml` from the private trial input
+snapshot before any execution. Missing input leaves raw R1 scoring unchanged;
+a present file must be a regular file with the strict shared v1 schema:
+
+```toml
+format_version = 1
+[environment]
+CONTRACT_ENDPOINT = "REGENERATED_ENDPOINT"
+
+[[gaps]]
+id = "renamed-endpoint"
+category = "interface"
+note = "The implementation uses a different environment name."
+```
+
+Unknown fields and unsupported versions refuse. Environment mappings are
+contract source name to regenerated target name; both must match
+`^[A-Z_][A-Z0-9_]{0,63}$`. This is a data-only environment adapter: there are
+no values, shell expressions, executable mappings or argument mappings in the
+file. Gap rows share this parser: IDs are unique `[a-z0-9-]{1,64}`, categories
+are `interface|missing|behavior|other`, and notes are optional plain text.
+
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+A derived summary cache under `$XDG_CACHE_HOME/aida/regen-display` (default
+`~/.cache`) is keyed by store HEAD and CLI build. An unchanged HEAD uses no Git
+subprocesses; a miss reads trial blobs in one batch. Failed reads are not cached.
+Digest selection excludes trials after `--until`; text ages use compact days,
+hours, minutes or seconds. The cache grants no scoring or control authority;
+unusual Git discovery environments omit this optional segment.
+<!-- trace:TASK-1734 | ai:codex -->
+
+`aida regen report` reads committed ordinary trial records from a pinned store
+commit, without a cache rebuild or rereading the caller's trial directory.
+The headline is the latest attempt's discriminating **R1 oracle pass rate** and
+age in seconds. An unsuccessful attempt reports unavailable rather than falling
+back to an older passing score. Status, clean state and flags remain visible.
+Controls and nested adapted runs are excluded from trial selection.
+
+Scoring stores a versioned `gaps` extension with the original GAPS.toml content
+SHA-256 and parsed rows (IDs and categories), captured from
+the private input before execution. Category counts are diagnostic information,
+never a quality score. Deltas compare the latest two ordinary trials with matching
+oracle SHA, oracle bundle hash and corpus hash; they are labelled diagnostics.
+Missing or invalid gap metadata displays “no gap data”, and no deltas are inferred
+from it. A valid GAPS.toml containing no gap rows explicitly records empty data.
+Older trial records without the extension remain readable. Invalid GAPS.toml
+input still refuses scoring before execution; reporting never reparses it from
+a mutable caller path. Optional notes are parsed as plain text but omitted from
+durable diagnostics. Gap IDs containing a captured mapping value refuse before
+execution, without printing the ID or value.
+<!-- trace:TASK-1733 | ai:codex -->
+
+`aida regen score --consensus <trial-uuid> <trial-uuid> <trial-uuid> ...` compares
+at least three distinct committed ordinary scored R1 trials. It cannot be combined
+with a system directory, controls, corpus/model/vendor/harness execution inputs,
+or `--unconfined`. No tools are launched. Mixed oracle SHA, bundle hash or corpus
+hash, invalid discriminating aggregates, or differing discriminating check sets
+refuse the entire selection before any filing. Adapted R2, control and unsuccessful
+attempts cannot be selected. Dirty/untracked trial files never count.
+
+A discriminating check failed by every selected regeneration is a **store gap**;
+partial failures are listed separately as **capability-dependent**, never as store
+gaps. The report gives N, the number of unclean trials included, and counts of distinct
+recorded models/vendors (vendor names are trimmed and ASCII case normalized); a single
+vendor produces an explicit weaker-consensus warning. Repeated runs are separate
+regenerations, and their actual diversity counts remain visible. These labels are
+investigation evidence rather than proof of cause. Contract clause mapping is not
+yet available: every gap explicitly says `contract mapping missing`.
+
+By default consensus only reports. `--file` explicitly creates draft amendment
+tasks through the normal atomic requirement write path, preserving type-based IDs,
+filing provenance and store hooks. A tag `regen-gap:<sha256(exact check)[:16]>`
+identifies a check within this project store; deduplication and insertion share
+the store write lock. Deduplication is scoped to this store root. Any non-archived
+item with that tag whose status is neither Completed nor Rejected suppresses a new
+draft, including after promotion to Approved or InProgress. Completed, Rejected or
+archived investigations allow a new draft. The body retains the exact check name and compared trial IDs. No parent is invented
+without a clause mapping. Check-to-clause mapping and parenting are a separate
+follow-up; the command retains its explicit missing-mapping diagnostic until then.
+<!-- trace:STORY-1679 | ai:codex -->
+
+
+Sources and targets cannot name PATH, HOME, SHELL, ENV, BASH_ENV, IFS, TMPDIR,
+PWD, OLDPWD, LANG, any oracle-owned variable, or a name starting with LD_,
+DYLD_, PYTHON, PERL, RUBY, NODE_, JAVA_, CLASSPATH, GIT_, XDG_, AIDA_ or LC_.
+Source names containing TOKEN, SECRET, PASSWORD or KEY (case-insensitive)
+refuse. A target that is another distinct source, or a target shared by two
+mappings, refuses with the conflicting mapping names. Self-maps are allowed
+and recorded as no-ops. The complete map is validated before any source is read. Only the
+explicitly named sources are captured from the caller, once. Missing values
+refuse with the mapping name; each value must be UTF-8, at most 4 KiB, and
+contain no NUL or newline. Values are copied verbatim without expansion.
+
+R1 receives captured sources in its oracle environment. R2 then starts a fresh
+private root and install from the same frozen input; its oracle receives those
+same sources plus target aliases. Installers receive the isolated base
+environment. Both runs use the exact same immutable oracle and independently
+pass the same controls. Different check-name sets refuse. A valid nonzero oracle
+exit retains its flagged scores in either run; installer and parser failures
+remain distinct. A passing R1 cannot conceal a refused or contaminated R2.
+
+Trial format v1 has an optional independently versioned `adapter` block:
+`format_version = 1`, `adapter_input_sha256` (hash of GAPS bytes only), sorted
+`mappings` with `source`, `target`, `source_present`, explicit `r1` raw and
+discriminating aggregates, full nested `r2` trial
+execution evidence, `raw_delta`, and `discriminating_delta`. Top-level
+checks, aggregates, flags and exits describe R1; status/cleanliness/completion
+time include both runs. Deltas are R2 minus R1 pass-rate fractions and are null
+unless both runs score with identical check identities. Captured values and
+their hashes are never stored. Child error diagnostics are withheld on mapped runs (status and exits remain);
+check identities containing captured values refuse with the output withheld.
+R2 setup failures are attached as `setup_failed` evidence with no fabricated
+exit, check, guard attestation or fresh-root claim. Older records
+remain readable with no adapter block.
+<!-- trace:TASK-1732 | ai:codex -->
+
 
 External wall displays and dashboards use a narrow, versioned read-only
 contract rather than depending on incidental CLI JSON fields. The eleven
@@ -498,6 +814,19 @@ stale definition, and hold refusals for scripts. See
 [git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
 <!-- trace:TASK-1606 | ai:codex -->
 
+
+Seat occupancy is at the early C7 core checkpoint: process identity, permanent
+seat record/lock, graceful transitions and seat commands are implemented, while
+production gateway wiring requires fresh independent review. The C7 rework
+bounds lock acquisition to ten seconds, shares policy with the main-worktree
+state root, and defines a delegated child's review scope through persisted
+spawn identity and direct review/implements edges. One-shot shell Route/Spawn
+validates authority without claiming; harness/loop operations retain implicit
+claims. Hard takeover (`--kill`) remains disabled scaffolding. The
+[sketch C7 addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements)
+records the actual phase operations and unattended launcher dispositions.
+<!-- trace:TASK-1607 | ai:codex -->
+
 Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
 `PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
 existing canonical review story in distributed or legacy stores; an unreadable
@@ -537,3 +866,20 @@ another checkout), and preserves foreground stall behavior. A replaced root or
 rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
+
+
+### Explicit host constraint verification
+
+Constraint rows can carry an optional version-1 `verify` block containing a
+closed built-in probe ID, scalar arguments and a typed expectation. The explicit
+`aida verify constraints` command reports match, drift, unknown or invalid per
+configured row, as human text or JSON; only `--fail-on-drift` turns drift into an
+error exit. It never changes requirement status or executes stored commands.
+Linux procfs/sysfs supply CPU, memory, PSI and disk facts; path and executable
+presence use metadata/access checks. PATH lookup never launches the target.
+No sync, drain or hook invokes probes. Unknown/malformed blocks remain loadable
+so the report can label them invalid. `edit --verify` and `--clear-verify` use
+the protected canonical edit flow; YAML row roundtrips preserve the data, while
+archived writers refuse unsupported blocks. See the
+[manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
+<!-- trace:STORY-1673 | ai:codex -->

@@ -74,6 +74,8 @@ pub mod alias;
 pub mod analytics;
 pub mod block_allocation;
 pub mod conflict;
+// Explicit, data-only host constraint checks. trace:STORY-1673 | ai:codex
+pub mod constraints;
 #[cfg(all(unix, feature = "native"))]
 pub mod daemon;
 pub mod db;
@@ -97,6 +99,8 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+mod hypothesis;
+mod store_hooks;
 // trace:TASK-1513 | ai:claude
 pub mod home;
 // trace:BUG-1535 | ai:claude
@@ -127,6 +131,8 @@ pub mod object_store;
 pub mod oplog;
 /// trace:STORY-333 | ai:claude
 pub mod pickability;
+#[cfg(feature = "native")]
+pub mod process_probe;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]

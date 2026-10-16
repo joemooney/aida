@@ -256,6 +256,37 @@ mod burndown_run_tests;
 #[path = "tests/task1169_integration_wait_tests.rs"]
 mod task1169_integration_wait_tests;
 
+// BUG-2171: monotonic containment — a contained parent's env always wins
+// (BUG-2151 ruling). Under a contained parent, `--permission-mode` must be
+// refused and the mode defaults to `dontAsk`.
+// trace:BUG-2171 | ai:antigravity
+pub(crate) fn resolve_burndown_run_posture(
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<String> {
+    if contained {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+        let config = crate::agent_launch::AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: crate::session::claude_contained_flags(),
+            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+            contained: true,
+        };
+        crate::agent_launch::refuse_uncontained_child_of_contained_parent(&config)?;
+        Ok("dontAsk".to_string())
+    } else {
+        Ok(permission_mode.unwrap_or("bypassPermissions").to_string())
+    }
+}
+
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
 /// advisor-blessed ready set (the same gate `plan` shows), then launches a
 /// headless `claude -p "/aida-burndown <selector>"` that fans out
@@ -423,7 +454,9 @@ pub(crate) fn handle_burndown_run(
     // The skill re-resolves the ready set authoritatively (same gate), so the
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
-    let mode = permission_mode.unwrap_or("bypassPermissions");
+    let contained = session::aida_contained_env()?;
+    let mode_str = resolve_burndown_run_posture(permission_mode, contained)?;
+    let mode = &mode_str;
     let (project_verbose, global_verbose) = find_project_root()
         .ok()
         .map(|root| read_burndown_verbose_config(&root))
@@ -562,17 +595,23 @@ pub(crate) fn handle_burndown_run(
         let status_code = if stream_verbose {
             // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
             // discoverable log and render a live human progress line per event.
-            run_burndown_verbose(&current_prompt, mode)?
+            run_burndown_verbose(&current_prompt, mode, contained)?
         } else {
-            build_burndown_quiet_command(&current_prompt, mode, ceiling_key, &ceiling_value)
-                .status()
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
+            build_burndown_quiet_command(
+                &current_prompt,
+                mode,
+                ceiling_key,
+                &ceiling_value,
+                contained,
+            )
+            .status()
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
                      Code CLI on PATH. Install it, or use `aida queue work --auto-complete` \
                      (the orchestrator drain) instead."
-                    )
-                })?
+                )
+            })?
         };
 
         let code = status_code.code().unwrap_or(1);
@@ -1196,6 +1235,28 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
             return false;
         }
     };
+    // BUG-1918: a wave merge needs what `aida pr ship` needs — an attested
+    // approval by a non-author session covering the forge head — checked
+    // under the merge lease and pinned to that head.
+    // trace:BUG-1918 | ai:claude
+    let wave_match_head = match crate::pr_cmd::merge_path_approval_gate(
+        project_root,
+        pr.number,
+        std::slice::from_ref(&pr.spec),
+        Some(pr.branch.as_str()),
+        forge_head.as_deref(),
+    ) {
+        Ok(pin) => pin,
+        Err(refusal) => {
+            eprintln!(
+                "  {} refusing to auto-merge PR-{} ({}) — {refusal}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                pr.number,
+                pr.spec,
+            );
+            return false;
+        }
+    };
     let mut sink = network_retry::StderrSink;
     let change_ref = forge::ChangeRef {
         id: pr.number,
@@ -1209,7 +1270,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         squash_subject: None,
         squash_body: None, // trace:TASK-1330 | ai:claude
         delete_branch: false,
-        match_head: None,
+        match_head: wave_match_head, // trace:BUG-1918
     };
     match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
         Ok(_) => {
@@ -1354,7 +1415,16 @@ pub(crate) fn file_integration_wait_finding(
 /// drain's permission posture or control flow. The prompt stays the trailing
 /// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
 pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
-    vec![
+    burndown_verbose_claude_args_with_containment(prompt, mode, false)
+}
+
+// trace:TASK-804 trace:BUG-2171 | ai:antigravity
+pub(crate) fn burndown_verbose_claude_args_with_containment(
+    prompt: &str,
+    mode: &str,
+    contained: bool,
+) -> Vec<String> {
+    let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
         mode.to_string(),
@@ -1362,8 +1432,12 @@ pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<Stri
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--include-partial-messages".to_string(),
-        prompt.to_string(),
-    ]
+    ];
+    if contained {
+        args.extend(crate::session::claude_contained_flags());
+    }
+    args.push(prompt.to_string());
+    args
 }
 
 /// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
@@ -1931,8 +2005,13 @@ pub(crate) fn render_burndown_status_json(
 /// and a background tee renders a human-readable progress line per event to
 /// stderr — so a long drain shows live progress instead of a silent terminal.
 /// Reuses the proven `headless_tee` machinery (TASK-307) rather than rolling a
-/// new renderer. trace:TASK-804 | ai:claude
-pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitStatus> {
+/// new renderer.
+// trace:TASK-804 trace:BUG-2171 trace:BUG-2170 | ai:claude ai:antigravity
+pub(crate) fn run_burndown_verbose(
+    prompt: &str,
+    mode: &str,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
@@ -1976,37 +2055,50 @@ pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::proc
 
     let child_grant =
         seat_authority::issue_child(&project_root, "implementer", &current_user_id(None))?;
-    let status_code =
-        build_burndown_verbose_command(prompt, mode, &child_grant.id, ceiling_key, &ceiling_value)
-            .stdout(std::process::Stdio::from(log))
-            .status()
-            .map_err(|e| {
-                anyhow::anyhow!(
+    let status_code = build_burndown_verbose_command(
+        prompt,
+        mode,
+        &child_grant.id,
+        ceiling_key,
+        &ceiling_value,
+        contained,
+    )
+    .stdout(std::process::Stdio::from(log))
+    .status()
+    .map_err(|e| {
+        anyhow::anyhow!(
             "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
              CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
              orchestrator drain) instead."
         )
-            });
+    });
     // Always stop the tee, even on spawn failure, so the background thread exits.
     tee_handle.stop();
+    // trace:BUG-2170 | ai:antigravity
+    crate::session::revoke_headless_child_grant(&child_grant.id);
     status_code
 }
 
-// trace:BUG-2124 | ai:antigravity
+// trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_burndown_quiet_command(
     current_prompt: &str,
     mode: &str,
     ceiling_key: &str,
     ceiling_value: &str,
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("claude");
     cmd.arg("-p")
         .arg(current_prompt)
         .arg("--permission-mode")
-        .arg(mode)
-        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        .arg(mode);
+    if contained {
+        cmd.args(crate::session::claude_contained_flags());
+    }
+    cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .env(ceiling_key, ceiling_value);
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    crate::session::scrub_launcher_session_env(&mut cmd);
+    if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
@@ -2014,21 +2106,25 @@ pub(crate) fn build_burndown_quiet_command(
     cmd
 }
 
-// trace:BUG-2124 | ai:antigravity
+// trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_burndown_verbose_command(
     prompt: &str,
     mode: &str,
     child_grant_id: &str,
     ceiling_key: &str,
     ceiling_value: &str,
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("claude");
-    cmd.args(burndown_verbose_claude_args(prompt, mode))
-        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-        .env("AIDA_SESSION_ROLE", "implementer")
-        .env(seat_authority::GRANT_ENV, child_grant_id)
-        .env(ceiling_key, ceiling_value);
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    cmd.args(burndown_verbose_claude_args_with_containment(
+        prompt, mode, contained,
+    ))
+    .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+    .env("AIDA_SESSION_ROLE", "implementer")
+    .env(seat_authority::GRANT_ENV, child_grant_id)
+    .env(ceiling_key, ceiling_value);
+    crate::session::scrub_launcher_session_env(&mut cmd);
+    if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

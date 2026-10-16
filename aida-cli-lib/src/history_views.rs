@@ -302,9 +302,9 @@ fn oldest_commit_read(store_path: &Path, opts: &HistoryOpts, cap: usize) -> Opti
     if let Some(u) = &opts.until {
         args.push(format!("--until={}", history::format_git_log_bound(u)));
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    // Store git goes through the hardened builder (BUG-1929 guard).
+    // trace:BUG-1929 | ai:claude
+    let out = aida_core::git_ops::host_git_command(store_path)
         .args(&args)
         .output()
         .ok()?;

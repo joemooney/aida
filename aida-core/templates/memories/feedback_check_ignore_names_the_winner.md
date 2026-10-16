@@ -4,11 +4,13 @@ description: "git check-ignore -v reports the winning rule under git's precedenc
 type: feedback
 propagation: scaffolding-pack
 ---
-`git check-ignore -v <path>` prints **one** rule: the first match under git's precedence order, in
-which `.git/info/exclude` outranks a repo's own `.gitignore`. When two rules both cover a path, the
-command will always name `info/exclude` — which reads like attribution and is not. A per-clone,
-untracked file (`.git/info/exclude`) beating a tracked, designed rule (`.gitignore`) is a precedence
-fact about git, not evidence about who authored the behavior.
+`git check-ignore -v <path>` prints **one** rule: the winner under git's precedence order. Among
+patterns matching the same path, an in-tree `.gitignore` outranks `.git/info/exclude`, which outranks
+`core.excludesFile`. But git first checks whether a *leading directory* is excluded, and a
+directory-level match in any source wins for everything beneath it — so a `<dir>/` line in
+`info/exclude` is named over a `.gitignore` rule that also covers the file. When two rules both cover
+a path, the one reported reads like attribution and is not: it is a precedence fact about git, not
+evidence about which rule causes the behavior or who authored it.
 
 **Measured incident:** a status marker under a deny-by-default directory reported
 `.git/info/exclude:19:<dir>/` when checked, which led to the conclusion "this is machine-local, a

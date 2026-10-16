@@ -646,6 +646,9 @@ pub(crate) fn propose_only(
     store: &aida_core::RequirementsStore,
     spec: &str,
     pr: u64,
+    // BUG-2133: the drain's containment; a contained drain's harvest agent
+    // runs contained (or is refused). trace:BUG-2133 | ai:claude
+    contained: bool,
 ) -> Result<ProposeSummary> {
     let req = store
         .get_requirement_by_spec_id(spec)
@@ -684,7 +687,14 @@ pub(crate) fn propose_only(
         &out_path,
     );
     let vendor = crate::session::resolve_headless_vendor(project_root);
-    let raw = run_harvest_agent(project_root, &display, &prompt, &run_id, &out_path)?;
+    let raw = run_harvest_agent(
+        project_root,
+        &display,
+        &prompt,
+        &run_id,
+        &out_path,
+        contained,
+    )?;
     let candidates = parse_candidates(&raw)?;
     let total = candidates.len();
     let context = filter_context(&diff, store);
@@ -792,8 +802,11 @@ fn run_harvest_agent(
     prompt: &str,
     run_id: &str,
     out_path: &Path,
+    contained: bool,
 ) -> Result<String> {
     let vendor = crate::session::resolve_headless_vendor(project_root);
+    // trace:BUG-2133 | ai:claude
+    crate::session::require_child_containment(vendor, contained, "harvest agent")?;
     let log_path = project_root
         .join(".aida")
         .join("headless-logs")
@@ -811,7 +824,7 @@ fn run_harvest_agent(
         run_id,
         &log_path,
         &tee,
-        false,
+        contained,
     );
     let status = status?;
     if !status.success() {

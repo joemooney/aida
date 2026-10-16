@@ -937,6 +937,20 @@ fn shift_install_is_gated_and_installs_driver_after_yes() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
     let layer = root.path().join("home-shift-local.toml");
+    // TASK-1769: inject the live binary's home instead of reading the real
+    // `~/.local/bin` through `real_tick_invocation`.
+    // trace:TASK-1769 | ai:claude
+    let bin = root.path().join("bin");
+    let live = root.path().join("live");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&live).unwrap();
+    let exe_name = format!("aida{}", std::env::consts::EXE_SUFFIX);
+    std::fs::write(bin.join(&exe_name), b"link").unwrap();
+    let (bin_s, live_s) = (bin.display().to_string(), live.display().to_string());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_DEV_LINK_DIR", bin_s.as_str()),
+        ("AIDA_DEV_LIVE_DIR", live_s.as_str()),
+    ]);
 
     // Agent: refused, nothing written.
     let mut host = FakeHost::new();
@@ -973,6 +987,12 @@ fn shift_install_is_gated_and_installs_driver_after_yes() {
         .contains("enabled = true"));
     let repo = root.path().canonicalize().unwrap().display().to_string();
     assert!(host.enabled.contains(&unit_names(&repo).1));
+    let service = host.unit(&unit_names(&repo).0).expect("service written");
+    assert_eq!(
+        crate::schedule_driver::exec_start_binary(&service),
+        Some(bin.join(&exe_name)),
+        "the unit runs the injected live link, not the host's"
+    );
 }
 
 #[test]

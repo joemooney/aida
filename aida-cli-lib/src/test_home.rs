@@ -116,7 +116,7 @@ const TEST_HOME_PREFIX: &str = "aida-lib-test-home-";
 /// fences the operator's real home even when the environment lies.
 // trace:TASK-1513 | ai:claude
 #[cfg(unix)]
-fn passwd_home() -> Option<PathBuf> {
+pub(crate) fn passwd_home() -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt;
 
     // SAFETY: after the redirect, `$HOME` is always set and `dirs::home_dir()`
@@ -140,7 +140,7 @@ fn passwd_home() -> Option<PathBuf> {
 /// No password database to consult off unix.
 // trace:TASK-1513 | ai:claude
 #[cfg(not(unix))]
-fn passwd_home() -> Option<PathBuf> {
+pub(crate) fn passwd_home() -> Option<PathBuf> {
     None
 }
 

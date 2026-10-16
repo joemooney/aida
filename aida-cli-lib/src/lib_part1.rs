@@ -2425,6 +2425,12 @@ pub(crate) fn run() -> Result<()> {
         return handle_merge_hold(action);
     }
 
+    // STORY-1698: the fire-fighting mandate reads/writes only the user's AIDA
+    // home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
+    if let Command::Mandate { action } = &cli.command {
+        return crate::mandate::handle_mandate(action);
+    }
+
     // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
     // spec / drain id to the ONE log file that work streams into and tails it.
     // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
@@ -2829,6 +2835,12 @@ pub(crate) fn run() -> Result<()> {
     // handle, no LLM. trace:TASK-0417 | ai:claude
     if let Command::Lint { spec, scope, json } = &cli.command {
         return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
+    }
+
+    // Explicit only: no sync/drain/hook path invokes host probes.
+    // trace:STORY-1673 | ai:codex
+    if let Command::Verify(cmd) = &cli.command {
+        return verify_cmd::handle_verify_command(cmd, cli.file.as_deref());
     }
 
     // `aida gate` reads the embedded gate library (and, for `run`, self-loads
@@ -3809,6 +3821,8 @@ pub(crate) fn run() -> Result<()> {
             description,
             description_from_file,
             description_stdin,
+            verify,
+            clear_verify,
             status,
             priority,
             r#type,
@@ -3852,6 +3866,12 @@ pub(crate) fn run() -> Result<()> {
             // FR-283: the numeric weight is git-canonical only, same rule.
             weight: _,
         } => {
+            // trace:STORY-1673 | ai:codex
+            anyhow::ensure!(
+                verify.is_none() && !*clear_verify,
+                "--verify and --clear-verify require a git-canonical store"
+            );
+
             // trace:BUG-1234 | ai:codex — keep legacy and git-canonical edit
             // behavior aligned for file/stdin description replacement.
             let resolved_description =
@@ -4144,6 +4164,10 @@ pub(crate) fn run() -> Result<()> {
         Command::MergeHold { .. } => {
             unreachable!("merge-hold is dispatched before storage init")
         }
+        // trace:STORY-1698 | ai:claude
+        Command::Mandate { .. } => {
+            unreachable!("mandate is dispatched before storage init")
+        }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
         // trace:TASK-1034
@@ -4167,6 +4191,7 @@ pub(crate) fn run() -> Result<()> {
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
         Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
@@ -4268,6 +4293,12 @@ pub(crate) fn run() -> Result<()> {
         }
         Command::Type(type_cmd) => {
             type_cmd::handle_type_command(type_cmd, &storage)?;
+        }
+        // trace:TASK-1729 | ai:codex
+        Command::Regen(_) => {
+            anyhow::bail!(
+                "regeneration requires a git-canonical store; migrate the legacy store first"
+            );
         }
         Command::Export { format, output, id } => {
             import_export_cmd::handle_export_command(

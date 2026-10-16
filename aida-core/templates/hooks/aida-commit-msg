@@ -18,8 +18,18 @@ STRICT_MODE="${AIDA_COMMIT_STRICT:-false}"
 REQUIRE_REQ_FOR_FEAT="${AIDA_REQUIRE_REQ_FOR_FEAT:-true}"
 REQUIRE_AI_TAG="${AIDA_REQUIRE_AI_TAG:-true}"
 
-# Load project-specific config if exists
-if [ -f ".aida/commit-config" ]; then
+# Load project-specific config if exists, but never for a requirements-store
+# commit. The store's working tree is writable by sandboxed agent sessions,
+# so on a store commit `.aida/commit-config` (resolved from the store root)
+# is not the project's file and sourcing it would run that shell on the
+# host. A store commit is one an aida build makes (AIDA_STORE_WRITE_GUARD is
+# set on every such git call) or any commit on the `aida-store` branch (a
+# person committing by hand inside the store). Both are checked before
+# anything is sourced, while PATH is still the one git handed this hook.
+# trace:BUG-1929 | ai:claude
+AIDA_HOOK_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+if [ -z "${AIDA_STORE_WRITE_GUARD:-}" ] && [ "$AIDA_HOOK_BRANCH" != "aida-store" ] \
+    && [ -f ".aida/commit-config" ]; then
     source ".aida/commit-config"
 fi
 

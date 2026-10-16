@@ -272,7 +272,10 @@ On BUG-1745 (2026-09-30) a new test needed `target/<profile>/aida`. Three things
 1. **A filtered run cannot reach it.** `cargo test --lib bug_1745` passed every time; only the full
    `-p aida-cli-lib --lib` suite (7425 tests, ~9 min) failed. Same family as
    [[feedback_source_scanning_guards_need_the_full_suite]] — this is the second instance, so treat
-   "my change adds a new source file" as a trigger for the full suite, not just a diff to a guard.
+   "my change adds a new source file" as a change only the full suite verifies. The full suite runs
+   only in CI (STANDARD tier: `make test-touched` + `make check-ci-compile` locally), and
+   `make test-touched` module filters never reach a whole-tree guard: wait for CI's run, or name
+   the guard with `make test-touched ARGS="--filter <guard>"`.
 2. **`== allowed`, not `<= allowed`, kills the obvious workaround.** The instinct is to put a helper
    in the already-allowlisted `lib.rs` and call it from the test. That makes `lib.rs` hold **2**
    occurrences and fails the guard *there* instead. An exact-count allowlist forbids adding a second

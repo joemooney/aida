@@ -248,6 +248,49 @@ pub enum Recipient {
     Broadcast,
 }
 
+/// BUG-2132: why `id` cannot be a direct-message recipient, or `None` when its
+/// shape is acceptable. Rejects the shapes word-split arguments and stray
+/// `@` tokens produced (`-include`, `33492`, `BUG-52`, `L4425`): an id that
+/// starts with `-` (a flag), a bare number, an upper-case spec ID
+/// (`^[A-Z]+-\d+$`), and a source line reference (`^L\d+$`). Agent ids and
+/// seat names (`advisor`, `antigravity-implementer-1`,
+/// `agy-reviewer-task1522`, `codex#748323`) are unaffected. Shape only; the
+/// known-identity warning stays a separate, softer check.
+// trace:BUG-2132 | ai:claude
+pub fn recipient_id_rejection(id: &str) -> Option<String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Some("the recipient id is empty".to_string());
+    }
+    if id.starts_with('-') {
+        return Some(format!(
+            "'{id}' starts with '-', so it looks like a command-line flag, not an agent id (quote the arguments)"
+        ));
+    }
+    if id.chars().all(|c| c.is_ascii_digit()) {
+        return Some(format!("'{id}' is a bare number, not an agent id"));
+    }
+    if let Some((prefix, number)) = id.split_once('-') {
+        if !prefix.is_empty()
+            && prefix.chars().all(|c| c.is_ascii_uppercase())
+            && !number.is_empty()
+            && number.chars().all(|c| c.is_ascii_digit())
+        {
+            return Some(format!(
+                "'{id}' is a spec ID, not an agent id — mention the spec in the body instead"
+            ));
+        }
+    }
+    if let Some(rest) = id.strip_prefix('L') {
+        if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+            return Some(format!(
+                "'{id}' is a source line reference, not an agent id"
+            ));
+        }
+    }
+    None
+}
+
 /// The *interpreted intent* of a message (TASK-782): how the recipient should
 /// treat it, an axis **orthogonal** to `urgent` (urgency is "how loud"; intent
 /// is "what kind").
@@ -1080,6 +1123,39 @@ pub fn read_local_watermark(project_root: &Path, agent: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2132 | ai:claude
+    #[test]
+    fn recipient_id_rejection_refuses_junk_shapes() {
+        for junk in [
+            "-include", "--to", "33492", "BUG-52", "EPIC-20", "SPEC-7", "L4425", "L4448", "",
+        ] {
+            assert!(
+                recipient_id_rejection(junk).is_some(),
+                "'{junk}' must be refused"
+            );
+        }
+    }
+
+    // trace:BUG-2132 | ai:claude
+    #[test]
+    fn recipient_id_rejection_keeps_agent_ids_and_seats() {
+        for ok in [
+            "advisor",
+            "integrator",
+            "implementer",
+            "agy-reviewer-task1522",
+            "antigravity-implementer-1",
+            "implementer-1",
+            "codex#748323",
+            "joe.mooney",
+            "fixer-2136",
+            "L",
+            "Lisa",
+        ] {
+            assert_eq!(recipient_id_rejection(ok), None, "'{ok}' must be accepted");
+        }
+    }
 
     // trace:BUG-1575 | ai:codex
     #[test]

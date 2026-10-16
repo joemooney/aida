@@ -567,6 +567,63 @@ pub(crate) fn session_prune(
 /// resolution chain, minus the single-active prompt — `show` should be
 /// non-interactive). Errors with the active-lease listing if nothing
 /// resolves. trace:STORY-68 | ai:claude
+/// Resolve the seat grant for a session lease.
+/// Inspects creator/active PID environ, or falls back to viewer's grant if viewing current session.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn resolve_session_grant(
+    lease: &SessionLease,
+) -> Option<crate::seat_authority::SeatGrant> {
+    let mut gid = None;
+    #[cfg(target_os = "linux")]
+    if let Some((pid, start_time)) = lease
+        .creator_pid
+        .map(|p| (p, lease.creator_pid_start_time.as_deref()))
+        .or_else(|| {
+            lease
+                .active_pid
+                .map(|p| (p, lease.active_pid_start_time.as_deref()))
+        })
+    {
+        if crate::process_probe::process_identity_is_alive(pid, start_time) {
+            if let Some(vars) = crate::ps_integrate::read_pid_environ_vars(pid) {
+                gid = vars.get(crate::seat_authority::GRANT_ENV).cloned();
+            }
+        }
+    }
+    if gid.is_none() {
+        let is_current_session = std::env::var("AIDA_SESSION_ID")
+            .map(|cur| cur == lease.id)
+            .unwrap_or(false);
+        if is_current_session {
+            gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+        }
+    }
+    gid.and_then(|id| {
+        let id = id.trim();
+        if id.is_empty() {
+            None
+        } else {
+            crate::seat_authority::read_grant(id).ok()
+        }
+    })
+}
+
+/// Format the `grant ttl: <ttl>` display line for a session lease, if a valid grant resolves.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn format_session_grant_ttl_line(lease: &SessionLease) -> Option<String> {
+    let grant = resolve_session_grant(lease)?;
+    let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
+    if ttl > chrono::Duration::zero() {
+        Some(format!(
+            "  {}: {}",
+            "grant ttl".bold(),
+            crate::seat_authority::format_ttl(ttl)
+        ))
+    } else {
+        None
+    }
+}
+
 pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -639,6 +696,10 @@ pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
             role.cyan(),
             "(inherited from shell at start time)".dimmed()
         );
+    }
+    // trace:TASK-1787 | ai:antigravity
+    if let Some(line) = format_session_grant_ttl_line(&lease) {
+        println!("{line}");
     }
     println!(
         "  {}: {} ({})",
@@ -861,6 +922,20 @@ pub(crate) fn collect_session_handoff_facts(project_root: &std::path::Path) -> S
     }
 }
 
+/// The seat a handoff verb acts on: `--seat`, else `$AIDA_SESSION_ROLE`.
+fn resolve_handoff_seat(seat: Option<&str>) -> Result<String> {
+    match seat {
+        Some(s) => Ok(s.to_string()),
+        None => std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| canonical_role_name(&s))
+            .ok_or_else(|| {
+                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
+            }),
+    }
+}
+
 /// STORY-1464: write or show a seat handoff note (the rotation primitive).
 // trace:STORY-1464 | ai:claude
 pub(crate) fn session_handoff_seat(
@@ -868,16 +943,7 @@ pub(crate) fn session_handoff_seat(
     _show: bool,
     seat: Option<&str>,
 ) -> Result<()> {
-    let seat = match seat {
-        Some(s) => s.to_string(),
-        None => std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| canonical_role_name(&s))
-            .ok_or_else(|| {
-                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
-            })?,
-    };
+    let seat = resolve_handoff_seat(seat)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
     if let Some(src) = write {
         let body = if src == "-" {
@@ -898,11 +964,47 @@ pub(crate) fn session_handoff_seat(
         println!("Next session: aida session handoff --seat {seat} --show");
         return Ok(());
     }
-    match seat_rotation::read_latest_handoff(&project_root, &seat)? {
-        Some(text) => print!("{text}"),
-        None => println!("No handoff recorded for seat '{seat}'."),
-    }
+    // trace:STORY-1693 | ai:claude
+    let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
+    let handoff = seat_rotation::read_latest_handoff(&project_root, &seat)?;
+    print!(
+        "{}",
+        seat_rotation::compose_handoff_show(standing.as_deref(), handoff.as_deref(), &seat)
+    );
     Ok(())
+}
+
+/// STORY-1693: `aida session handoff --seat <seat> --standing-orders add
+/// "<text>" | list` — the repo-local operator rulings `--show` prints first.
+// trace:STORY-1693 | ai:claude
+pub(crate) fn session_handoff_standing_orders(args: &[String], seat: Option<&str>) -> Result<()> {
+    let seat = resolve_handoff_seat(seat)?;
+    let project_root = main_worktree_root_from(&find_project_root()?);
+    match args {
+        [action, text] if action == "add" => {
+            let path =
+                seat_rotation::add_standing_order(&project_root, &seat, text, chrono::Utc::now())?;
+            println!("Standing order added for seat '{seat}': {}", path.display());
+            println!("Shown first by: aida session handoff --seat {seat} --show");
+            Ok(())
+        }
+        [action] if action == "list" => {
+            let entries = seat_rotation::list_standing_orders(&project_root, &seat)?;
+            if entries.is_empty() {
+                println!("No repo-local standing orders for seat '{seat}'.");
+            }
+            for entry in entries {
+                println!("{entry}");
+            }
+            Ok(())
+        }
+        [action] if action == "add" => {
+            anyhow::bail!(
+                "--standing-orders add needs the order text: --standing-orders add \"<text>\""
+            )
+        }
+        _ => anyhow::bail!("--standing-orders takes `add \"<text>\"` or `list`"),
+    }
 }
 
 pub(crate) fn session_handoff_check(_check: bool) -> Result<()> {

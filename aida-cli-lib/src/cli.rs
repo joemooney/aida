@@ -201,6 +201,41 @@ pub enum InternalCommand {
     SoloActive,
 }
 
+/// `aida mandate` — the fire-fighting mandate.
+// trace:STORY-1698 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MandateAction {
+    /// Start a time-boxed mandate that lets the advisor seat ship held PRs
+    /// with an attested, independent approval and green CI. Start and stop
+    /// require a human at an interactive terminal; a same-uid process that
+    /// forges files in the AIDA home is outside the threat model (the same
+    /// as session grants).
+    Start {
+        /// Cover shipping held PRs (the only scope today; required).
+        #[clap(long)]
+        ship_held: bool,
+        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
+        /// A mandate cannot be extended; stop it and start another.
+        #[clap(long)]
+        ttl: Option<String>,
+        /// Why the mandate exists, recorded with it.
+        #[clap(long)]
+        reason: Option<String>,
+        /// Also cover sensitive specs (security, containment, authority,
+        /// guided, keystone). Operator-only specs are never covered.
+        #[clap(long)]
+        include_supervised: bool,
+    },
+    /// End the active mandate now. Human at an interactive terminal only.
+    Stop,
+    /// Show the current mandate, if any.
+    Status {
+        /// Print JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
     /// Release eligible Rework-only holds using a fresh recorded approval.
@@ -1314,6 +1349,82 @@ pub enum LockCommand {
 }
 
 // trace:FR-1-043 | ai:claude
+
+// `aida session seat` subcommands.
+// trace:TASK-1607 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum SeatCommand {
+    /// Claim an empty seat, or one whose holder has provably exited. Holding
+    /// it already is fine. `--force` asks a live holder to hand it over.
+    Claim {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Request a graceful takeover from a live holder (same as `takeover --force`).
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS", requires = "force")]
+        grace_secs: Option<i64>,
+        /// Send the request and return without waiting.
+        #[clap(long, requires = "force")]
+        no_wait: bool,
+    },
+    /// Show the holder, its liveness, any pending takeover and in-flight work.
+    Status {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        json: bool,
+    },
+    /// Give the seat up. Only the current holder can, at its current
+    /// generation; with a pending takeover, pass its request ID to hand over.
+    Release {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        generation: u64,
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+    },
+    /// Ask the live holder to hand the seat over, and wait for its
+    /// acknowledgment. Nothing is stopped if it does not answer in time.
+    Takeover {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Required: a takeover asks another session to stand down.
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS")]
+        grace_secs: Option<i64>,
+        /// Resume your own interrupted request (keeps its original deadline).
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+        /// Send the request and return without waiting.
+        #[clap(long)]
+        no_wait: bool,
+    },
+    /// As the holder: confirm you wrote your handoff and stopped dispatching,
+    /// and hand the seat to the pending requester.
+    Ack {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long, value_name = "UUID")]
+        request: String,
+        #[clap(long)]
+        generation: u64,
+        /// Confirms the handoff is written and no new dispatch will start.
+        #[clap(long)]
+        safe_to_stop: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
     /// List recent Claude Code conversations for this project (cwd)
@@ -1845,7 +1956,8 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
         write: Option<String>,
 
-        /// Print the seat's latest handoff note (the seed for a fresh session).
+        /// Print the seat's standing orders (if any), then its latest handoff
+        /// note (the seed for a fresh session).
         // trace:STORY-1464 | ai:claude
         #[clap(long, conflicts_with = "check")]
         show: bool,
@@ -1855,6 +1967,28 @@ pub enum SessionCommand {
         // trace:STORY-1464 | ai:claude
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
+
+        /// Manage the seat's repo-local standing orders
+        /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
+        /// entry, `list` prints them. `--show` prints standing orders before
+        /// the handoff.
+        // trace:STORY-1693 | ai:claude
+        #[clap(
+            long,
+            value_names = ["ACTION", "TEXT"],
+            num_args = 1..=2,
+            allow_hyphen_values = true,
+            conflicts_with_all = ["check", "write", "show"]
+        )]
+        standing_orders: Option<Vec<String>>,
+    },
+
+    /// Single-occupancy seats: see who drives the orchestrator loop, claim
+    /// or release it, and hand it over gracefully.
+    // trace:TASK-1607 | ai:claude
+    Seat {
+        #[command(subcommand)]
+        cmd: SeatCommand,
     },
 
     /// Manage the planned-cluster manifest for the active session
@@ -2352,6 +2486,11 @@ pub enum RoleCommand {
         // trace:STORY-1473, TASK-1592 | ai:antigravity
         #[clap(long = "delegate-seat")]
         delegate_seats: Vec<String>,
+
+        /// Grant time-to-live duration (e.g. 72h), capped by [seat] max_grant_hours (default 24, hard ceiling 168h).
+        // trace:TASK-1787 | ai:antigravity
+        #[clap(long)]
+        ttl: Option<String>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -6416,7 +6555,10 @@ pub enum QueueCommand {
         permission_mode: Option<String>,
         /// Launch Claude in contained mode: strict Bash sandboxing, no
         /// unsandboxed fallback, destructive-command deny rules, and
-        /// project-relative edit auto-allow only.
+        /// project-relative edit auto-allow only. With --auto-complete it
+        /// contains the whole drain and every agent child it spawns. A
+        /// vendor that cannot run contained (codex, agy) is refused.
+        // trace:BUG-2144 BUG-2145 | ai:claude
         #[clap(long)]
         sandbox: bool,
         /// Run the full setup (worktree, lease, manifest) but skip the
@@ -9603,7 +9745,9 @@ pub enum Command {
     /// — it owns the lane's filing convention in one place so the
     /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
     ///
-    /// CI is never skipped. The lane drops only the human-review ceremony.
+    /// CI is never skipped, and merging still needs an approval from a
+    /// session that did not author the work; no tag opts a PR out of that.
+    /// The lane drops only the reviewer model session.
     // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
     // `aida fasttrack <title>` filing form stays the default (title optional so
@@ -10275,6 +10419,16 @@ pub enum Command {
         // trace:BUG-1234 | ai:codex
         #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
         description_stdin: bool,
+
+        /// Replace the data-only constraint verification block with JSON.
+        /// Probes run only with `aida verify constraints`.
+        // trace:STORY-1673 | ai:codex
+        #[clap(long, value_name = "JSON", conflicts_with = "clear_verify")]
+        verify: Option<String>,
+
+        /// Remove a constraint's verification block.
+        #[clap(long)]
+        clear_verify: bool,
 
         /// New status (draft, approved, planned, in-progress, done,
         /// completed, rejected, superseded). Needs Attention is set via
@@ -11088,6 +11242,17 @@ pub enum Command {
     MergeHold {
         #[clap(subcommand)]
         action: MergeHoldAction,
+    },
+
+    /// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
+    /// advisor seat ship held PRs with an attested, independent approval.
+    ///
+    /// `start` and `stop` need a human at an interactive terminal; `status`
+    /// is open to anyone. Operator-only specs always stay human-only.
+    // trace:STORY-1698 | ai:claude
+    Mandate {
+        #[clap(subcommand)]
+        action: MandateAction,
     },
 
     /// Stream a running session's log — found by id, not by file path.
@@ -12816,6 +12981,11 @@ pub enum Command {
         json: bool,
     },
 
+    /// Freeze requirements into a deterministic regeneration corpus
+    // trace:TASK-1729 | ai:codex
+    #[clap(subcommand)]
+    Regen(RegenCommand),
+
     /// Export requirements to different formats
     #[clap(hide = true)]
     Export {
@@ -13841,6 +14011,12 @@ pub enum Command {
         json: bool,
     },
 
+    /// Explicit, report-only host verification using built-in probes.
+    /// Never executes a command from the requirements store.
+    // trace:STORY-1673 | ai:codex
+    #[clap(subcommand)]
+    Verify(VerifyCommand),
+
     /// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
     /// --diagram` prints a Mermaid state diagram generated from the single
     /// declared transition model in `aida-core`, so the picture can't drift
@@ -14124,6 +14300,26 @@ pub enum Command {
         json: bool,
         #[clap(subcommand)]
         command: Option<AliasCommand>,
+    },
+}
+
+/// The closed, explicit host-verification command group.
+// trace:STORY-1673 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum VerifyCommand {
+    /// Compare constraint verify blocks with this Linux host. Read-only.
+    Constraints {
+        /// Emit one match/drift/unknown/invalid result per configured row.
+        #[clap(long)]
+        json: bool,
+        /// Return a nonzero exit only when a row reports drift.
+        #[clap(long)]
+        fail_on_drift: bool,
+        /// Also list rejected, superseded and archived constraints, which are
+        /// never probed. JSON output always includes them.
+        // trace:STORY-1673 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 }
 
@@ -14954,6 +15150,30 @@ mod tests {
     #[test]
     fn cli_arg_tree_has_no_definition_conflicts() {
         Cli::command().debug_assert();
+    }
+
+    // trace:STORY-1693 | ai:claude
+    #[test]
+    fn session_handoff_standing_orders_parses_add_and_list() {
+        let so = |args: &[&str]| -> Option<Vec<String>> {
+            let cli = Cli::try_parse_from(args).unwrap();
+            match cli.command {
+                Command::Session(SessionCommand::Handoff {
+                    standing_orders, ..
+                }) => standing_orders,
+                _ => panic!("expected session handoff"),
+            }
+        };
+        let base = ["aida", "session", "handoff", "--seat", "advisor"];
+        let add = [&base[..], &["--standing-orders", "add", "-never page"]].concat();
+        assert_eq!(
+            so(&add),
+            Some(vec!["add".to_string(), "-never page".to_string()])
+        );
+        let list = [&base[..], &["--standing-orders", "list"]].concat();
+        assert_eq!(so(&list), Some(vec!["list".to_string()]));
+        let both = [&base[..], &["--show", "--standing-orders", "list"]].concat();
+        assert!(Cli::try_parse_from(both).is_err());
     }
 
     #[test]
@@ -16637,4 +16857,107 @@ mod tests {
             other => panic!("expected review stranded command, got {other:?}"),
         }
     }
+}
+
+#[cfg(test)]
+mod seat_help_tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    // trace:TASK-1607 | ai:codex
+    #[test]
+    fn session_seat_generated_help_contains_no_internal_spec_ids() {
+        let mut cli = Cli::command();
+        let session = cli.find_subcommand_mut("session").unwrap();
+        let seat = session.find_subcommand_mut("seat").unwrap();
+        let help = seat.render_long_help().to_string();
+        let leaves: Vec<_> = seat
+            .get_subcommands_mut()
+            .map(|leaf| leaf.render_long_help().to_string())
+            .collect();
+        for text in std::iter::once(help).chain(leaves) {
+            for internal in ["STORY-1485", "TASK-1607", "trace:"] {
+                assert!(
+                    !text.contains(internal),
+                    "internal trace leaked to generated help: {text}"
+                );
+            }
+        }
+    }
+}
+
+/// Generated control kinds; callers cannot label arbitrary roots as controls.
+// trace:TASK-1731 | ai:codex
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegenControl {
+    Reference,
+    Stub,
+}
+
+/// Versioned regeneration artifacts.
+// trace:TASK-1729 | ai:codex
+#[derive(Subcommand, Debug, Clone)]
+pub enum RegenCommand {
+    /// Report the latest discriminating oracle score and diagnostic gap trends
+    // trace:TASK-1733 | ai:codex
+    Report,
+
+    /// Run the declared installer and oracle, then record a raw R1 trial
+    // trace:TASK-1730 | ai:codex
+    Score {
+        /// Regenerated system directory; copied into a fresh scoring root
+        #[clap(required_unless_present_any = ["control", "consensus"], conflicts_with_all = ["control", "consensus"])]
+        dir: Option<PathBuf>,
+        /// Run generated controls instead of a caller-supplied system
+        #[clap(long, value_enum, conflicts_with = "consensus")]
+        control: Option<RegenControl>,
+        /// Corpus directory containing corpus.json and manifest.json
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        corpus: Option<PathBuf>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        model: Option<String>,
+        /// Explicit family identity for cross-family oracle audits (no inferred mapping)
+        // trace:STORY-1676 | ai:codex
+        #[clap(long, conflicts_with = "consensus")]
+        model_family: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        vendor: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        harness: Option<String>,
+        /// Compare at least three committed scored ordinary trials; never executes tools
+        // trace:STORY-1679 | ai:codex
+        #[clap(long, num_args = 3..)]
+        consensus: Vec<uuid::Uuid>,
+        /// File draft amendment tasks for consensus gaps (report-only by default)
+        #[clap(long, requires = "consensus")]
+        file: bool,
+        /// Explicitly bypass bubblewrap; the recorded trial is never clean
+        #[clap(long, conflicts_with = "consensus")]
+        unconfined: bool,
+    },
+
+    /// Export committed store content as corpus.json and manifest.json
+    Corpus {
+        /// New or empty output directory
+        dir: PathBuf,
+        /// Export committed content despite local store changes (records dirty: true)
+        #[clap(long)]
+        allow_dirty: bool,
+    },
 }

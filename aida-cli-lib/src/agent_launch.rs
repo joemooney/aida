@@ -54,7 +54,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
-            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode =
+                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, true)?;
             let mut argv = mode
                 .mode
                 .iter()
@@ -106,7 +107,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
-            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode =
+                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, *launch)?;
             if *launch {
                 let mut argv = mode
                     .mode
@@ -137,24 +139,35 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             } else {
                 None
             };
-            session_start(
-                owns,
-                branch.as_deref(),
-                base.as_deref(),
-                *reuse_branch,
-                path.as_deref(),
-                forge.as_deref(),
-                branch_style,
-                *launch,
-                title.clone(),
-                !*no_title,
-                name.clone(),
-                mode.mode.as_deref(),
-                mode.contained,
-                role.clone(),
-                *force_claim,
-                use_pool,
-            )
+            let start = || {
+                session_start(
+                    owns,
+                    branch.as_deref(),
+                    base.as_deref(),
+                    *reuse_branch,
+                    path.as_deref(),
+                    forge.as_deref(),
+                    branch_style,
+                    *launch,
+                    title.clone(),
+                    !*no_title,
+                    name.clone(),
+                    mode.mode.as_deref(),
+                    mode.contained,
+                    role.clone(),
+                    *force_claim,
+                    use_pool,
+                    !*launch,
+                )
+            };
+            // BUG-1918: `--launch` claims FOR the agent it starts; without
+            // it, the caller is the one who will work the lease.
+            // trace:BUG-1918 | ai:claude
+            if *launch {
+                review_authority::as_launcher(start)
+            } else {
+                start()
+            }
         }
         SessionCommand::HarnessWorktreeRegister {
             agent_id,
@@ -246,8 +259,11 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             write,
             show,
             seat,
+            standing_orders,
         } => {
-            if write.is_some() || *show {
+            if let Some(args) = standing_orders {
+                session_handoff_standing_orders(args, seat.as_deref())
+            } else if write.is_some() || *show {
                 session_handoff_seat(write.as_deref(), *show, seat.as_deref())
             } else {
                 session_handoff_check(*check)
@@ -271,6 +287,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             })
         }
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
+        // trace:TASK-1607 | ai:claude
+        SessionCommand::Seat { cmd } => seat_occupancy::cmd::dispatch(cmd),
     }
 }
 
@@ -1118,6 +1136,13 @@ pub(crate) fn agent_pause(agent: &str, reason: &str, resets: Option<&str>) -> Re
 pub(crate) fn agent_resume(agent: &str) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    agent_resume_in(&project_root, agent)
+}
+
+/// `aida agent resume` against an explicit project root (testable seam).
+// trace:BUG-2151 | ai:claude
+pub(crate) fn agent_resume_in(project_root: &std::path::Path, agent: &str) -> Result<()> {
+    let project_root = project_root.to_path_buf();
     match agent_registry::resume_agent(&project_root, agent) {
         Ok(entry) => {
             let identity = entry
@@ -1158,17 +1183,24 @@ pub(crate) fn agent_resume_ended(
             entry.name.as_deref().unwrap_or(entry.id.as_str())
         )
     })?;
+    let resume_prompt =
+        "Read the fresh AIDA resume context first: cat \"$AIDA_AGENT_CONTEXT_FILE\"";
+    // BUG-2151: every resume entry point (`agent resume`, `agent new
+    // --resume`, the TTY picker, the `--bg` path) funnels through here, so a
+    // contained parent is enforced HERE — before the session/binary checks
+    // and any side effect. trace:BUG-2151 | ai:claude
+    let config = agent_resume_launch_config(
+        &entry.agent_type,
+        &entry.worktree_path,
+        native_session_id,
+        resume_prompt,
+    )?;
     verify_agent_native_session_available(
         &entry.agent_type,
         &entry.worktree_path,
         native_session_id,
     )?;
-    let binary_name = match entry.agent_type.as_str() {
-        "claude" => "claude",
-        "codex" => "codex",
-        "antigravity" => "agy",
-        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
-    };
+    let binary_name = config.binary;
     let binary = find_executable_on_path(binary_name).ok_or_else(|| {
         anyhow::anyhow!(
             "`{}` is not on PATH — install {} or activate the environment that provides it",
@@ -1176,20 +1208,6 @@ pub(crate) fn agent_resume_ended(
             entry.agent_type
         )
     })?;
-    let resume_prompt =
-        "Read the fresh AIDA resume context first: cat \"$AIDA_AGENT_CONTEXT_FILE\"";
-    let config = AgentLaunchConfig {
-        agent_type: match entry.agent_type.as_str() {
-            "claude" => "claude",
-            "codex" => "codex",
-            "antigravity" => "antigravity",
-            _ => unreachable!(),
-        },
-        binary: binary_name,
-        default_args: agent_resume_args(&entry.agent_type, native_session_id, resume_prompt)?,
-        prompt_style: AgentPromptStyle::Positional,
-        contained: false,
-    };
     let plan = AgentLaunchPlan {
         project_root: project_root.to_path_buf(),
         launch_cwd: entry.worktree_path.clone(),
@@ -1234,6 +1252,50 @@ pub(crate) fn agent_resume_ended(
         true,
         false,
     )
+}
+
+/// BUG-2151: the launch config for resuming an ended agent. Under a contained
+/// parent (`AIDA_CONTAINED`, strict parse) a claude session resumes with the
+/// same contained posture (sandbox settings, `AIDA_CONTAINED=1` kept on the
+/// child) and codex/agy are refused; otherwise the resume is uncontained as
+/// before. The write roots are the resumed agent's own `worktree` (where the
+/// child runs), never the launcher's cwd.
+// trace:BUG-2151 | ai:claude
+pub(crate) fn agent_resume_launch_config(
+    agent_type: &str,
+    worktree: &std::path::Path,
+    native_session_id: &str,
+    resume_prompt: &str,
+) -> Result<AgentLaunchConfig> {
+    let (agent_type, binary): (&'static str, &'static str) = match agent_type {
+        "claude" => ("claude", "claude"),
+        "codex" => ("codex", "codex"),
+        "antigravity" => ("antigravity", "agy"),
+        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
+    };
+    let mut config = AgentLaunchConfig {
+        agent_type,
+        binary,
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    if session::aida_contained_env()? && agent_type == "claude" {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
+        // The child runs in `worktree`, so its write boundary is that
+        // worktree — not the launcher's cwd (`tool_contained_flags` would
+        // resolve the parent's git root). trace:BUG-2151 | ai:claude
+        config.default_args = session::claude_contained_flags_for(worktree);
+        config.contained = true;
+    }
+    config.default_args.extend(agent_resume_args(
+        agent_type,
+        native_session_id,
+        resume_prompt,
+    )?);
+    refuse_uncontained_child_of_contained_parent(&config)?;
+    Ok(config)
 }
 
 // trace:STORY-790 | ai:codex
@@ -1471,6 +1533,8 @@ pub(crate) fn split_posture_flags(
             ("--settings", true),
             ("--setting-sources", true),
             ("--dangerously-skip-permissions", false),
+            // trace:BUG-2151 | ai:claude
+            ("--allow-dangerously-skip-permissions", false),
         ],
         "codex" => &[
             ("--sandbox", true),
@@ -1508,6 +1572,74 @@ pub(crate) fn split_posture_flags(
         }
     }
     (kept, dropped)
+}
+
+/// BUG-2158: the ONLY passthrough flags (`--extra-flag`, `[agents.claude]
+/// default_flags`) a claude child of a contained parent may carry. `true` =
+/// the flag takes a value (`--flag value` or `--flag=value`).
+///
+/// An allowlist, not a denylist: the contained write boundary is itself a set
+/// of Edit/Write allow rules in `--settings`, so any flag that widens tools,
+/// directories, plugins, MCP servers or agents (`--add-dir`, `--allowedTools`,
+/// `--tools`, `--plugin-dir`, `--plugin-url`, `--mcp-config`, `--agents`, …)
+/// widens the boundary — and a denylist misses the next one Claude ships.
+/// Everything here only selects the model or how much the model thinks or
+/// logs; none of it grants a capability. Keep it that way: adding a flag
+/// needs a containment argument, not a convenience one.
+// trace:BUG-2158 | ai:claude
+pub(crate) const CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST: &[(&str, bool)] =
+    &[("--model", true), ("--effort", true), ("--verbose", false)];
+
+/// BUG-2158: refuse any passthrough flag a contained parent's claude child
+/// would carry that is not on [`CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST`].
+/// `source` names where the flags came from, for the message. Short flags,
+/// stray positionals, and a value that itself looks like a flag are refused
+/// too — the parse never guesses.
+// trace:BUG-2158 | ai:claude
+pub(crate) fn refuse_unallowlisted_contained_passthrough(
+    flags: &[String],
+    source: &str,
+) -> Result<()> {
+    let allowed = || {
+        CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let refuse = |flag: &str| -> Result<()> {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so a claude child may only \
+             carry the passthrough flags {} — refusing to launch it with `{flag}` (from \
+             {source}), which could widen the containment boundary. Drop it, or launch from an \
+             uncontained shell.",
+            allowed()
+        )
+    };
+    let mut idx = 0;
+    while idx < flags.len() {
+        let arg = flags[idx].as_str();
+        let name = arg.split('=').next().unwrap_or(arg);
+        let Some((_, takes_value)) = CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST
+            .iter()
+            .find(|(allowed, _)| *allowed == name && arg.starts_with("--"))
+        else {
+            return refuse(arg);
+        };
+        let inline_value = arg.len() > name.len();
+        if !*takes_value && inline_value {
+            return refuse(arg);
+        }
+        if *takes_value && !inline_value {
+            match flags.get(idx + 1) {
+                Some(value) if !value.starts_with('-') => idx += 1,
+                Some(value) => return refuse(value),
+                None => return refuse(arg),
+            }
+        }
+        idx += 1;
+    }
+    Ok(())
 }
 
 // trace:BUG-1178 | ai:codex
@@ -1876,6 +2008,150 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
     Ok(true)
 }
 
+/// BUG-2151: the Claude `agent new` launch posture.
+// trace:BUG-2151 | ai:claude
+pub(crate) struct ClaudeNewPosture {
+    pub(crate) default_args: Vec<String>,
+    pub(crate) contained: bool,
+    /// The launcher set the posture itself, so the `[agents]` knobs and
+    /// per-tool posture flags must not add another.
+    pub(crate) explicit: bool,
+}
+
+/// BUG-2151 (ruling on BUG-2133: containment is monotonic). Resolve the
+/// posture for `aida agent new claude`:
+///
+/// - A contained PARENT (`AIDA_CONTAINED`, parsed strictly by the caller)
+///   always wins: the child is contained, and `--permission-mode` (the only
+///   claude posture flag) is refused rather than honoured.
+/// - `--permission-mode` / `--sandbox` are operator posture flags and may
+///   override the `[agents] contained` CONFIG knob, never the env.
+/// - `--bg` is NOT a posture flag. Under the contained knob a detached launch
+///   stays contained; only an uncontained `--bg` launch is forced to
+///   `bypassPermissions` (no answerable TTY).
+// trace:BUG-2151 | ai:claude
+pub(crate) fn resolve_claude_new_posture(
+    permission_mode: Option<&str>,
+    sandbox: bool,
+    bg: bool,
+    parent_contained: bool,
+    knob_contained: impl FnOnce() -> Result<bool>,
+) -> Result<ClaudeNewPosture> {
+    // STORY-495: faithful default — inject `--permission-mode` only when the
+    // operator passed it explicitly. Otherwise leave Claude on its native
+    // posture and let the uniform `[agents] bypass` knob (applied in
+    // `apply_agent_default_flags`) decide whether to flip the whole fleet.
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    if parent_contained {
+        if let Some(m) = permission_mode {
+            anyhow::bail!(
+                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+                 launches is contained too — refusing `--permission-mode {m}`, which would run \
+                 the child with a different posture. Drop --permission-mode, or launch from an \
+                 uncontained shell."
+            );
+        }
+    }
+    let contained_posture = || -> Result<ClaudeNewPosture> {
+        // trace:BUG-2131 | ai:claude
+        aida_core::git_ops::ensure_git_supports_contained()?;
+        Ok(ClaudeNewPosture {
+            default_args: tool_contained_flags("claude"),
+            contained: true,
+            explicit: true,
+        })
+    };
+    if let Some(m) = permission_mode {
+        return Ok(ClaudeNewPosture {
+            default_args: vec!["--permission-mode".to_string(), m.to_string()],
+            contained: false,
+            explicit: true,
+        });
+    }
+    if sandbox || parent_contained {
+        return contained_posture();
+    }
+    if bg {
+        if knob_contained()? {
+            eprintln!(
+                "{} --bg under [agents] contained: the detached session stays contained.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            );
+            return contained_posture();
+        }
+        // STORY-495: a detached `--bg` launch has no answerable TTY, so a
+        // native (prompting) child would hang forever on the first
+        // permission prompt. Force bypass and say so. An explicit
+        // `--permission-mode` still wins (handled above).
+        eprintln!(
+            "{} --bg detaches from this terminal (no answerable prompt); forcing \
+             --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+        );
+        return Ok(ClaudeNewPosture {
+            default_args: vec![
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+            ],
+            contained: false,
+            explicit: true,
+        });
+    }
+    Ok(ClaudeNewPosture {
+        default_args: Vec::new(),
+        contained: false,
+        explicit: false,
+    })
+}
+
+/// BUG-2151: fail closed on the final `agent new` argv. When this process is
+/// contained (`AIDA_CONTAINED`, parsed strictly — a typo errors), the child
+/// must be a containable tool, must be marked contained (so the child env
+/// keeps `AIDA_CONTAINED=1`), and must carry no posture flag beyond the
+/// containment flags themselves (no `--permission-mode`, no
+/// `--dangerously-*`, no second `--settings`) — whatever the launcher flags,
+/// the agents.toml defaults, or a `--` passthrough tried to add.
+// trace:BUG-2151 | ai:claude
+pub(crate) fn refuse_uncontained_child_of_contained_parent(
+    config: &AgentLaunchConfig,
+) -> Result<()> {
+    if !session::aida_contained_env()? {
+        return Ok(());
+    }
+    let containable = session::HeadlessVendor::parse(config.agent_type)
+        .is_some_and(|v| session::containment_applied(v, true));
+    if !containable {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), but `{}` cannot run an \
+             AIDA-contained session — refusing to launch it uncontained. Launch \
+             `aida agent new claude`, or launch from an uncontained shell.",
+            config.agent_type
+        );
+    }
+    let (_, posture) = split_posture_flags(config.agent_type, config.default_args.clone());
+    let mut posture_names: Vec<&str> = posture
+        .iter()
+        .filter(|a| a.starts_with("--"))
+        .map(|a| a.split('=').next().unwrap_or(a))
+        .collect();
+    posture_names.sort_unstable();
+    let only_containment = posture_names == ["--setting-sources", "--settings"];
+    if !is_contained_launch(config) || !only_containment {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
+             launches must be contained too — refusing to launch `{}` with posture flags \
+             [{}]. Drop the posture override, or launch from an uncontained shell.",
+            config.agent_type,
+            posture.join(" ")
+        );
+    }
+    Ok(())
+}
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn agent_new_claude(
@@ -1897,6 +2173,31 @@ pub(crate) fn agent_new_claude(
     description: Option<String>,
     bg: bool,
 ) -> Result<()> {
+    // BUG-2151: resolve the launch posture BEFORE the role picker, so a
+    // contained parent (or a malformed AIDA_CONTAINED) refuses before any
+    // interaction. trace:BUG-2151 | ai:claude
+    let parent_contained = session::aida_contained_env()?;
+    let knob_contained = || -> Result<bool> {
+        if !flag_options.use_config_defaults {
+            return Ok(false);
+        }
+        let base = cwd
+            .map(std::path::PathBuf::from)
+            .unwrap_or(std::env::current_dir()?);
+        let root = agent_launch_project_root_from(&find_aida_project_root_from(&base)?);
+        crate::agent_config::load_agents_contained(&root)
+    };
+    let ClaudeNewPosture {
+        mut default_args,
+        contained,
+        explicit,
+    } = resolve_claude_new_posture(
+        permission_mode,
+        sandbox,
+        bg,
+        parent_contained,
+        knob_contained,
+    )?;
     // TASK-646: resolve the child role (flag → picker → implementer default)
     // before any launch work. A cancelled picker aborts cleanly.
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
@@ -1909,38 +2210,6 @@ pub(crate) fn agent_new_claude(
             return Ok(());
         }
     };
-    // STORY-495: faithful default — inject `--permission-mode` only when the
-    // operator passed it explicitly. Otherwise leave Claude on its native
-    // posture and let the uniform `[agents] bypass` knob (applied in
-    // `apply_agent_default_flags`) decide whether to flip the whole fleet.
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    let mut default_args = Vec::new();
-    let mut explicit = permission_mode.is_some() || sandbox;
-    let mut contained = false;
-    if let Some(m) = permission_mode {
-        default_args.push("--permission-mode".to_string());
-        default_args.push(m.to_string());
-    } else if sandbox {
-        default_args.extend(tool_contained_flags("claude"));
-        contained = true;
-    } else if bg {
-        // STORY-495: a detached `--bg` launch has no answerable TTY, so a
-        // native (prompting) child would hang forever on the first
-        // permission prompt. Force bypass and say so. An explicit
-        // `--permission-mode` still wins (handled above).
-        eprintln!(
-            "{} --bg detaches from this terminal (no answerable prompt); forcing \
-             --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
-        );
-        default_args.push("--permission-mode".to_string());
-        default_args.push("bypassPermissions".to_string());
-        explicit = true;
-    }
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
@@ -2170,6 +2439,9 @@ pub(crate) fn agent_new_with_config(
         flag_options,
         explicit_permission,
     )?;
+    // BUG-2151: a contained parent contains every child, whatever the flags.
+    // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
@@ -2421,6 +2693,9 @@ pub(crate) fn agent_new_bg_dispatch(
         flag_options,
         explicit_permission,
     )?;
+    // BUG-2151: a contained parent contains every child, whatever the flags.
+    // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
@@ -2634,6 +2909,14 @@ pub(crate) fn agent_new_bg_dispatch(
                 }
             });
             manifest.claude_session_id = Some(sid.clone());
+            // BUG-1918: the backgrounded agent — not this launcher — works
+            // the lease; record its session id as one of the lease's authors.
+            // trace:BUG-1918 | ai:claude
+            review_authority::record_lease_identity(
+                &plan.project_root,
+                lease_id,
+                &[format!("session:{sid}")],
+            );
             if let Err(err) = session_manifest::save(&manifest_path, &manifest) {
                 eprintln!(
                     "  {} couldn't record claude sessionId on lease manifest: {err}",
@@ -2754,12 +3037,49 @@ pub(crate) fn agent_resume_args(
 #[path = "tests/spike_34_bg_dispatch_tests.rs"]
 mod spike_34_bg_dispatch_tests;
 
+/// `launches`: this command will actually start claude. Only then does a
+/// contained parent (`AIDA_CONTAINED`, parsed strictly) govern the posture.
 pub(crate) fn resolve_interactive_launch_mode(
     flag: Option<&str>,
     sandbox: bool,
+    launches: bool,
 ) -> Result<ResolvedClaudeLaunch> {
+    // trace:BUG-2157 | ai:claude
+    let parent_contained = launches && session::aida_contained_env()?;
     let root = find_main_worktree_root().ok();
-    resolve_interactive_launch_mode_for_root(flag, sandbox, root.as_deref())
+    resolve_interactive_launch_mode_under_parent(flag, sandbox, root.as_deref(), parent_contained)
+}
+
+/// BUG-2157 (ruling on BUG-2151: a contained parent's env ALWAYS wins and no
+/// flag overrides it). `aida session new` / `session start --launch` under a
+/// contained parent launch a contained claude — whatever the `[agents]`
+/// knobs say — and refuse `--permission-mode` instead of honouring it.
+/// The write roots are the session's worktree: both paths launch claude in
+/// it (`session start --launch` chdirs there first), and the contained flags
+/// resolve their roots from that cwd.
+// trace:BUG-2157 | ai:claude
+pub(crate) fn resolve_interactive_launch_mode_under_parent(
+    flag: Option<&str>,
+    sandbox: bool,
+    root: Option<&std::path::Path>,
+    parent_contained: bool,
+) -> Result<ResolvedClaudeLaunch> {
+    if !parent_contained {
+        return resolve_interactive_launch_mode_for_root(flag, sandbox, root);
+    }
+    if let Some(m) = flag.filter(|s| !s.is_empty()) {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
+             is contained too — refusing `--permission-mode {m}`, which would run it with a \
+             different posture. Drop --permission-mode, or launch from an uncontained shell."
+        );
+    }
+    // trace:BUG-2131 | ai:claude
+    aida_core::git_ops::ensure_git_supports_contained()?;
+    Ok(ResolvedClaudeLaunch {
+        mode: None,
+        contained: true,
+    })
 }
 
 // trace:BUG-1178 | ai:codex
@@ -2781,13 +3101,16 @@ pub(crate) fn resolve_interactive_launch_mode_for_root(
     }
     if let Some(root) = root {
         let bypass = load_agents_bypass(root).unwrap_or(false);
-        let contained = sandbox || load_agents_contained(root).unwrap_or(false);
+        // BUG-2146: a malformed agents.toml refuses the launch. trace:BUG-2146 | ai:claude
+        let contained = sandbox || load_agents_contained(root)?;
         if bypass && contained {
             anyhow::bail!(
                 "[agents] bypass and [agents] contained are mutually exclusive launch postures"
             );
         }
         if contained {
+            // trace:BUG-2131 | ai:claude
+            aida_core::git_ops::ensure_git_supports_contained()?;
             return Ok(ResolvedClaudeLaunch {
                 mode: None,
                 contained: true,
@@ -3035,6 +3358,16 @@ fn agent_launch_lease_is_active(
         lease_state_for(lease, live, chrono::Utc::now()),
         LeaseState::Live
     ) || agent_registry::live_agents_covering_cwd(project_root, &lease.worktree_path) > 0
+        || {
+            // trace:BUG-2010 | ai:antigravity
+            let live_agents = agent_registry::load_live_entries(project_root);
+            agent_registry::live_agent_for_lease_or_spec(
+                &live_agents,
+                Some(lease),
+                Some(&lease.scope),
+            )
+            .is_some()
+        }
 }
 
 pub(crate) fn prepare_agent_launch(
@@ -3141,31 +3474,37 @@ fn prepare_agent_launch_with_cwd(
             let previous_cwd = std::env::current_dir()?;
             std::env::set_current_dir(project_root)
                 .with_context(|| format!("failed to cd to {}", project_root.display()))?;
-            let start_result = session_start(
-                &spec,
-                /* branch */ None,
-                /* base */ None,
-                /* reuse_branch */ false,
-                /* explicit_path */ None,
-                /* forge_override */ None,
-                /* branch_style */ "auto",
-                /* launch_claude */ false,
-                /* launch_title */ None,
-                /* launch_set_title */ false,
-                /* launch_name */ None,
-                // STORY-495: inert here (launch_claude=false). The agent-new
-                // launch path injects its own posture via `config.default_args`.
-                /* launch_permission_mode */
-                None,
-                /* launch_contained */
-                false,
-                role.clone(),
-                /* force_claim */ false,
-                // STORY-714: config-driven (no per-command flag on this path
-                // yet) — [worktree_pool] enabled decides.
-                /* use_pool */
-                None,
-            );
+            // BUG-1918: `agent new` claims FOR the agent it launches.
+            // trace:BUG-1918 | ai:claude
+            let start_result = review_authority::as_launcher(|| {
+                session_start(
+                    &spec,
+                    /* branch */ None,
+                    /* base */ None,
+                    /* reuse_branch */ false,
+                    /* explicit_path */ None,
+                    /* forge_override */ None,
+                    /* branch_style */ "auto",
+                    /* launch_claude */ false,
+                    /* launch_title */ None,
+                    /* launch_set_title */ false,
+                    /* launch_name */ None,
+                    // STORY-495: inert here (launch_claude=false). The agent-new
+                    // launch path injects its own posture via `config.default_args`.
+                    /* launch_permission_mode */
+                    None,
+                    /* launch_contained */
+                    false,
+                    role.clone(),
+                    /* force_claim */ false,
+                    // STORY-714: config-driven (no per-command flag on this path
+                    // yet) — [worktree_pool] enabled decides.
+                    /* use_pool */
+                    None,
+                    /* self_claim */
+                    false,
+                )
+            });
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
                 .with_context(|| format!("failed to restore cwd to {}", previous_cwd.display()))?;
@@ -4070,7 +4409,8 @@ pub(crate) fn render_agent_launch_noexec(
     let mut argv = vec![program.to_string_lossy().to_string()];
     argv.extend(exec_args.clone());
     let agents_bypass = load_agents_bypass(&plan.project_root).unwrap_or(false);
-    let agents_contained = load_agents_contained(&plan.project_root).unwrap_or(false);
+    // trace:BUG-2146 | ai:claude
+    let agents_contained = load_agents_contained(&plan.project_root)?;
     // TASK-1467: a dry-computed path — same naming scheme `prepare_agent_launch_context`
     // uses, but nothing is written here (no side effects). The real launch mints
     // its own token, so this path is illustrative of the SHAPE, not a promise of
@@ -4400,6 +4740,11 @@ pub(crate) fn build_agent_new_bg_command(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
+    // BUG-1918: the backgrounded worker carries its lease id too.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
     Ok(command)
 }
 
@@ -4602,11 +4947,22 @@ pub(crate) fn run_tracked_agent(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
+    // BUG-1918: the worker carries its lease id, so it stays its lease's
+    // author after it leaves the worktree or the lease is released.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::bind_worker_env(&mut command, lease_id);
+    }
 
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
+    // BUG-1918: this launcher made the claim; record the worker it spawned.
+    // trace:BUG-1918 | ai:claude
+    if let Some(lease_id) = &plan.lease_id {
+        review_authority::record_launched_worker(&plan.project_root, lease_id, child_pid);
+    }
     let terminal = agent_registry::current_terminal_identity();
     let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
     let mut title_restore = None;

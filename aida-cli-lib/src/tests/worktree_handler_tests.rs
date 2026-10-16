@@ -196,8 +196,8 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
         "STORY-742",
         None,
         None,
-        None,  // no existing lease
-        false, // not a registered worktree
+        None,       // no existing lease
+        |_p| false, // not a linked worktree
         |path, branch| {
             // The mint gets the epic-style path/branch the queue-work setup
             // would fork off origin/main.
@@ -232,7 +232,7 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
             "019f768atest".to_string(),
             true,
         )),
-        false,
+        |_p| true, // the lease path is a live linked worktree
         |_p, _b| panic!("mint must NOT run when a lease already exists"),
     )
     .expect("re-enter succeeds");
@@ -430,8 +430,8 @@ fn spec_worktree_core_registered_without_lease_reaffirms() {
         "TASK-100",
         None,
         None,
-        None, // no lease
-        true, // but already a registered git worktree
+        None,      // no lease
+        |_p| true, // but already a registered git worktree
         |_p, _b| panic!("mint must NOT run for an already-registered worktree"),
     )
     .expect("registered re-affirm succeeds");
@@ -456,7 +456,7 @@ fn spec_worktree_core_honors_path_and_branch_overrides() {
         Some(custom.to_str().unwrap()),
         Some("my-spec-branch"),
         None,
-        false,
+        |_p| false,
         |path, branch| {
             assert_eq!(path, custom.as_path());
             assert_eq!(branch, "my-spec-branch");
@@ -468,4 +468,375 @@ fn spec_worktree_core_honors_path_and_branch_overrides() {
     assert_eq!(out.path, custom);
     assert_eq!(out.branch, "my-spec-branch");
     assert_eq!(out.focus, "STORY-742");
+}
+
+/// BUG-2143: an existing lease with NO worktree (an `aida claim` lease) is not
+/// re-entered — the fresh mint runs and its real path is reported — and a mint
+/// that reports an empty path is an error, never a blank success.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn spec_worktree_core_ignores_worktreeless_lease_and_rejects_empty_path() {
+    let home = tempfile::tempdir().unwrap();
+    let minted = std::cell::Cell::new(false);
+    let out = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        Some((
+            std::path::PathBuf::new(),
+            "main".to_string(),
+            "01a13f58claim".to_string(),
+            false,
+        )),
+        |p| is_linked_worktree("", p, home.path()),
+        |path, branch| {
+            minted.set(true);
+            Ok((path.to_path_buf(), branch.to_string()))
+        },
+    )
+    .expect("a claim lease must not block creating the worktree");
+    assert!(
+        minted.get(),
+        "the worktree must be minted, not the claim re-entered"
+    );
+    assert!(out.created);
+    assert_eq!(
+        out.path,
+        crate::worktree::default_worktree_path(home.path(), "BUG-2143")
+    );
+
+    let Err(err) = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        None,
+        |_p| false,
+        |_p, _b| Ok((std::path::PathBuf::new(), String::new())),
+    ) else {
+        panic!("an empty minted path is never success");
+    };
+    assert!(err.to_string().contains("no path"), "{err}");
+
+    let missing = home.path().join("nope");
+    assert!(ensure_worktree_on_disk(&missing, "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(std::path::Path::new(""), "BUG-2143").is_err());
+    assert!(ensure_worktree_on_disk(std::path::Path::new("  "), "BUG-2143").is_err());
+    // A bare dir holding only the focus marker's `.aida` is NOT a worktree —
+    // the after-the-fact `is_dir` check this replaces always read as good.
+    let bare = home.path().join("bare");
+    std::fs::create_dir_all(bare.join(".aida")).unwrap();
+    assert!(ensure_worktree_on_disk(&bare, "BUG-2143").is_err());
+    std::fs::write(bare.join(".git"), "gitdir: /x\n").unwrap();
+    assert!(ensure_worktree_on_disk(&bare, "BUG-2143").is_ok());
+}
+
+/// BUG-2143 end-to-end through the core with the PRODUCTION worktree check: a
+/// lease whose worktree directory was deleted by hand (git still lists it as
+/// prunable) is not re-entered — the check runs BEFORE the focus marker, so no
+/// bare `<path>/.aida` dir is left behind as "success" — and a fresh worktree
+/// is minted at the default path instead.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn spec_worktree_core_mints_fresh_when_lease_tree_was_deleted() {
+    let repo = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    init_main_repo(repo.path());
+    let path = crate::worktree::default_worktree_path(home.path(), "BUG-2143");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "bug-2143-work",
+            path.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_dir_all(&path).unwrap(); // deleted by hand
+    let porcelain = worktree_porcelain(repo.path());
+    assert!(
+        crate::worktree::is_registered(&porcelain, &path),
+        "git still lists the deleted tree (prunable) — the trap"
+    );
+
+    let minted = std::cell::Cell::new(false);
+    let out = ensure_spec_worktree_core(
+        home.path(),
+        "BUG-2143",
+        "BUG-2143",
+        None,
+        None,
+        Some((
+            path.clone(),
+            "bug-2143-work".to_string(),
+            "staleleaseid".to_string(),
+            false,
+        )),
+        |p| is_linked_worktree(&porcelain, p, repo.path()),
+        |p, branch| {
+            assert!(!p.exists(), "no bare dir may be created before the mint");
+            minted.set(true);
+            git(repo.path(), &["worktree", "prune"]);
+            git(
+                repo.path(),
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    p.to_str().unwrap(),
+                    "bug-2143-work",
+                ],
+            );
+            Ok((p.to_path_buf(), branch.to_string()))
+        },
+    )
+    .expect("a deleted lease tree must be re-minted, not reported");
+    assert!(minted.get(), "the stale lease must not be re-entered");
+    assert!(out.created);
+    assert_eq!(out.lease_id, None, "the stale lease id is not reported");
+    assert!(
+        path.join(".git").exists(),
+        "a real worktree, not a bare dir"
+    );
+    ensure_worktree_on_disk(&out.path, &out.focus).expect("on-disk guard agrees");
+}
+
+/// BUG-2143: the linked-worktree probe the re-entry relies on rejects every
+/// informational path an advisory claim can record.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn is_linked_worktree_rejects_blank_main_root_missing_and_bare_paths() {
+    let repo = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    init_main_repo(repo.path());
+    let wt = home.path().join("aida-bug-2143");
+    git(
+        repo.path(),
+        &["worktree", "add", "-q", "-b", "w", wt.to_str().unwrap()],
+    );
+    let porcelain = worktree_porcelain(repo.path());
+    let main = repo.path();
+    assert!(is_linked_worktree(&porcelain, &wt, main));
+    assert!(!is_linked_worktree(
+        &porcelain,
+        std::path::Path::new(""),
+        main
+    ));
+    assert!(!is_linked_worktree(
+        &porcelain,
+        std::path::Path::new("   "),
+        main
+    ));
+    assert!(
+        !is_linked_worktree(&porcelain, main, main),
+        "the primary checkout"
+    );
+    assert!(
+        !is_linked_worktree(&porcelain, &home.path().join("aida-bug-x"), main),
+        "a path that does not exist"
+    );
+    let bare = home.path().join("bare");
+    std::fs::create_dir_all(bare.join(".aida")).unwrap();
+    assert!(
+        !is_linked_worktree(&porcelain, &bare, main),
+        "a non-git dir"
+    );
+}
+
+fn task_1784_lease(id: &str, path: &str, started: &str) -> SessionLease {
+    let mut t = toml::Table::new();
+    for (k, v) in [
+        ("id", id),
+        ("scope", "TASK-1784"),
+        ("slug", "task-1784"),
+        ("owner", "u"),
+        ("worktree_path", path),
+        ("branch", "task-1784"),
+        ("started_at", started),
+        ("hostname", "h"),
+    ] {
+        t.insert(k.to_string(), toml::Value::String(v.to_string()));
+    }
+    t.try_into().unwrap()
+}
+
+/// Facts for a lease that is provably dead: same host, path gone, owner gone.
+fn task_1784_dead() -> LeaseDeathFacts {
+    LeaseDeathFacts {
+        same_host: true,
+        tree_exists: Some(false),
+        owner_gone: Some(true),
+        owner_is_caller: false,
+        tree_active: false,
+    }
+}
+
+/// TASK-1784: only a lease that is provably dead — absolute path confirmed
+/// gone, same host, owner gone (or the caller itself), nothing active there —
+/// is ended implicitly. Anything else blocks and is named.
+// trace:TASK-1784 | ai:claude
+#[test]
+fn classify_unreenterable_leases_ends_only_provably_dead_sessions() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("aida-task-1784");
+    let gone = gone.to_str().unwrap();
+    let here = root.path().to_str().unwrap();
+    let dead_lease = task_1784_lease("aaaaaaaaaaaa", gone, "2026-10-01T00:00:00Z");
+
+    assert!(matches!(
+        classify_unreenterable_leases(Vec::new(), |_| task_1784_dead()),
+        UnreenterableLeases::None
+    ));
+    match classify_unreenterable_leases(vec![dead_lease.clone()], |_| task_1784_dead()) {
+        UnreenterableLeases::Dead(d) => assert_eq!(d.len(), 1),
+        other => panic!("a deleted tree with a gone owner is dead, got {other:?}"),
+    }
+    // The caller's own shell as owner counts as gone.
+    let own = LeaseDeathFacts {
+        owner_gone: Some(false),
+        owner_is_caller: true,
+        ..task_1784_dead()
+    };
+    assert!(lease_is_dead(&dead_lease, own), "the caller's own lease");
+
+    // Each missing proof of death blocks on its own.
+    for (why, f) in [
+        (
+            "owner alive",
+            LeaseDeathFacts {
+                owner_gone: Some(false),
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "owner unknown",
+            LeaseDeathFacts {
+                owner_gone: None,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "foreign host",
+            LeaseDeathFacts {
+                same_host: false,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path exists",
+            LeaseDeathFacts {
+                tree_exists: Some(true),
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path unprobeable (EACCES/unmounted)",
+            LeaseDeathFacts {
+                tree_exists: None,
+                ..task_1784_dead()
+            },
+        ),
+        (
+            "path still active",
+            LeaseDeathFacts {
+                tree_active: true,
+                ..task_1784_dead()
+            },
+        ),
+    ] {
+        match classify_unreenterable_leases(vec![dead_lease.clone()], |_| f) {
+            UnreenterableLeases::Blocking(l) => assert_eq!(l.id, "aaaaaaaaaaaa", "{why}"),
+            other => panic!("{why} must block, got {other:?}"),
+        }
+    }
+
+    // Mixed: the dead lease is not ended while a live holder exists.
+    match classify_unreenterable_leases(
+        vec![
+            dead_lease.clone(),
+            task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
+        ],
+        |l| LeaseDeathFacts {
+            tree_exists: Some(l.id != "aaaaaaaaaaaa"),
+            ..task_1784_dead()
+        },
+    ) {
+        UnreenterableLeases::Blocking(l) => assert_eq!(l.id, "bbbbbbbbbbbb"),
+        other => panic!("project-root lease blocks, got {other:?}"),
+    }
+    for path in ["", "  ", "relative/path"] {
+        assert!(
+            matches!(
+                classify_unreenterable_leases(
+                    vec![task_1784_lease(
+                        "cccccccccccc",
+                        path,
+                        "2026-10-01T00:00:00Z"
+                    )],
+                    |_| task_1784_dead()
+                ),
+                UnreenterableLeases::Blocking(_)
+            ),
+            "{path:?} is never treated as a deleted tree"
+        );
+    }
+
+    let msg = unreenterable_lease_message(
+        "TASK-1784",
+        &task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
+    );
+    assert!(msg.contains("aida session end bbbbbbbb"), "{msg}");
+    assert!(msg.contains(here), "{msg}");
+    let blank = unreenterable_lease_message(
+        "TASK-1784",
+        &task_1784_lease("cccccccccccc", "", "2026-10-01T00:00:00Z"),
+    );
+    assert!(blank.contains("with no worktree"), "{blank}");
+}
+
+/// TASK-1784: the caller match needs the pid AND its start identity, and never
+/// applies to an agent-backed lease (its active pid is authoritative).
+// trace:TASK-1784 | ai:claude
+#[test]
+fn probe_lease_death_facts_matches_the_caller_only_by_pid_and_start_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("aida-task-1784");
+    let mut lease = task_1784_lease(
+        "aaaaaaaaaaaa",
+        gone.to_str().unwrap(),
+        "2026-10-01T00:00:00Z",
+    );
+    lease.creator_pid = Some(4242);
+    lease.creator_pid_start_time = Some("t0".into());
+    let active = std::collections::HashSet::new();
+    let probe = |l: &SessionLease, caller| probe_lease_death_facts(l, "h", caller, &active);
+
+    let f = probe(&lease, Some((4242, Some("t0"))));
+    assert!(f.owner_is_caller && f.same_host);
+    assert_eq!(f.tree_exists, Some(false));
+    assert!(
+        !probe(&lease, Some((4242, Some("t1")))).owner_is_caller,
+        "recycled pid"
+    );
+    assert!(
+        !probe(&lease, Some((4242, None))).owner_is_caller,
+        "no start identity"
+    );
+    assert!(
+        !probe(&lease, Some((1, Some("t0")))).owner_is_caller,
+        "another pid"
+    );
+    assert!(!probe(&lease, None).owner_is_caller);
+    assert!(!probe_lease_death_facts(&lease, "other-host", None, &active).same_host);
+    lease.active_pid = Some(4242);
+    assert!(
+        !probe(&lease, Some((4242, Some("t0")))).owner_is_caller,
+        "agent lease"
+    );
 }

@@ -343,7 +343,22 @@ pub(crate) fn handle_solo_command(
             find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
         match solo_lock::probe_lock(&root) {
             solo_lock::LockStatus::Running(l) => {
-                if solo_lock::signal_stop(l.pid) {
+                // `probe_lock` is the lenient lock-holding probe; before a
+                // SIGTERM the recorded identity must POSITIVELY match, or a
+                // recycled / unverifiable pid could be signalled (TASK-1768).
+                // The cleared flag still stops the loop at its next step.
+                // trace:TASK-1768 | ai:claude
+                let identity_confirmed = l.pid_start_time.as_deref().is_some_and(|start| {
+                    aida_core::liveness::process_identity_matches_strict(l.pid, start)
+                });
+                if !identity_confirmed {
+                    println!(
+                        "solo mode {} — loop pid {} not signalled (its identity could not be \
+                         confirmed); it stops at its next step.",
+                        "off".bold(),
+                        l.pid
+                    );
+                } else if solo_lock::signal_stop(l.pid) {
                     println!(
                         "solo mode {} — signalled the running loop (pid {}).",
                         "off".bold(),

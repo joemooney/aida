@@ -113,7 +113,7 @@ Host/build:
 - [codegraph local setup + 1MiB cap](reference_codegraph_local_setup_and_1mib_cap.md) — systemd timer keeps it fresh; lib.rs (4.7MB) NEVER indexed, confirm no-callers with rg; init can exit 0 on "database is locked"
 - [sccache + shared target serves stale worktree builds](feedback_sccache_shared_target_serves_stale_worktree_builds.md) — same unit hash as main, relative dep-info; strings-verify the artifact, then touch + RUSTC_WRAPPER= rebuild
 
-- [merge-hold clearance policy](reference_merge_hold_clear_is_human_only.md) — nonsensitive Rework-only holds may auto-release on a fresh granted approval; other holds retain human clear → gate rerun → merge
+- [merge-hold clearance policy](reference_merge_hold_clear_is_human_only.md) — nonsensitive Rework-only holds may auto-release on a fresh granted, attested approval at the head; a sensitive Rework-only hold may also release under an `--include-supervised` mandate, never on the releasing advisor's own approval; other holds retain human clear → gate rerun → merge
 - [Idle peer sessions as independent review seats](feedback_idle_peer_sessions_as_independent_review_seats.md) — ListAgents+SendMessage; confirm pickup by artifact, instant-idle may mean exited
 
 Dispatch/codex:
@@ -145,7 +145,7 @@ Git/CI/merge:
 - [A test on the branch may be wired into nothing](feedback_a_test_on_the_branch_may_be_wired_into_nothing.md) — ci.yml names shell tests individually; grep for the FILENAME
 - [New CLI leaf must regenerate the format-json audit](feedback_new_cli_leaf_must_regenerate_format_json_audit.md) — the guard is an integration test check-ci-fast can't reach
 - [Tier a gate transitively](feedback_tier_a_gate_transitively_not_by_its_body.md) — build deps hide in called scripts; prefer loud failure over a predicate
-- [Source-scanning guards need the full suite](feedback_source_scanning_guards_need_the_full_suite.md) — satisfy honestly, never widen the allowlist
+- [Source-scanning guards need the full suite](feedback_source_scanning_guards_need_the_full_suite.md) — `make test-touched` module filters never reach them; CI's full suite does (or `--filter <guard>`); satisfy honestly, never widen the allowlist
 - [A source-scanning guard greps your comment too](feedback_a_source_scanning_guard_greps_your_comment_too.md) — the explaining comment trips it; `== allowed` blocks helper workarounds
 - [A fence tag is a gate-scope decision](feedback_a_fence_tag_is_a_gate_scope_decision.md) — `console` imports lines into check-portability; no inner fence inside a fence
 - [trace: never on a /// doc comment](reference_trace_marker_never_on_a_doc_comment.md) — clap pulls /// into --help; pre-commit refuses it

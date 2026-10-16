@@ -75,13 +75,13 @@ or forced completion is needed for an ID remapping.
 **Mental model.** `aida pr` is a small family of *PR lifecycle actions*, not a single command. The headline subcommands: `ship` (the fast path — create-if-needed → watch CI → squash-merge → pull → cleanup, in one call) and `auto-queue-review` (files the reviewer story the moment the PR opens, while context is fresh). Think of it as "the things that should happen at PR boundaries, automated."
 
 **Reach for it when**
-- `aida pr ship` — you have **human-pre-approved** work that needs *no* orchestrator review phase: docs PRs, master-signed architecture work, recovery merges. It's the direct-publish counterpart to the full reviewed pipeline.
+- `aida pr ship` — you have **already-approved** work (an independent approval is recorded on the PR head) that needs *no* orchestrator review phase: docs PRs, master-signed architecture work, recovery merges. It's the direct-publish counterpart to the full reviewed pipeline.
 - `aida pr hold` — you want to push the branch but *deliberately not open the PR yet*, pending a manual gate (a smoke test, an out-of-band sign-off).
 - `aida pr rebase` — collapse the standard 6-command "rebase a PR before review" recipe into one.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".
 
-**Don't reach for it when** — the work needs **review**. `aida pr ship` *skips* the reviewer phase by design; for work that should be reviewed, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead. Shipping unreviewed code is the right tool only when a human already approved it.
+**Don't reach for it when** — the work has not been **reviewed** yet. `aida pr ship` does not run a reviewer phase; it merges only when an approval of the PR head has already been recorded by a session that did not author the work, and refuses otherwise. For work that still needs review, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
@@ -355,3 +355,52 @@ release after a verified APPROVED write. Sensitive or composed holds retain
 the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
 <!-- trace:STORY-1687 | ai:codex -->
+
+### `aida mandate`
+
+**One line** — a time-boxed fire-fighting mandate that lets the advisor seat
+ship held PRs while the operator is away.
+
+**Mental model.** Normally only a human at a terminal can release a merge-hold.
+`aida mandate start --ship-held` (human at an interactive terminal only) mints a
+mandate bound to the advisor seat of the person who started it. While it is
+active, `aida pr ship <pr>` from that advisor seat may release the hold and
+merge, but only when an approval with a verified reviewer identity covers the
+PR's current head, that approval came from neither the implementer nor the
+shipping session, the advisor did not author the work, and CI is green.
+The stale-approval override of `aida pr ship` is never honoured under a
+mandate.
+
+**Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
+accepted, at most `24h`). A mandate cannot be extended: stop it and start
+another. `--reason` records why. `--include-supervised` also covers sensitive
+specs (security, containment, review or merge authority, guided, keystone).
+Specs tagged `operator-only` or with execution mode `operator` or `decide`
+always stay human-only. Exclusion is sticky: a spec that was ever in an
+excluded class, in any stored version or in the local exclusion ledger
+(`~/.aida/mandates/exclusions.jsonl`, append-only), stays excluded after the
+tag is removed. A mandate releases only a typed hold marker; a missing marker,
+a label-only hold or a recusal hold always needs a human.
+
+**Stopping.** `aida mandate stop` (human at a terminal) ends it at once. Expiry
+is checked by every ship at the moment it decides, again under the merge lease,
+and once more immediately before the merge call. `aida mandate status [--json]`
+shows the current mandate; the statusline shows `MANDATE <time left>` while one
+is active.
+
+**Audit.** Each release is recorded in the merge-hold clearance ledger and in a
+PR comment as "released under mandate <id> by advisor"; start and stop are
+recorded in `.aida/events.jsonl`. The authority record lives only in the
+user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
+Each record is re-validated on every read (24h cap, no future issue time,
+advisor seat, current user, a 0600 regular file you own, never a symlink); an
+invalid record is ignored with a warning. Stopping writes a `<id>.stopped`
+tombstone that is never removed, so editing a record cannot revive it.
+
+**Trust boundary.** Start and stop require a human at an interactive
+terminal. A same-uid process that forges files in the AIDA home is outside the
+threat model, the same as for session grants: the mandate keeps work moving
+while the operator is away, and is not a defense against a malicious agent
+running as the same user. Accepted risk: a process that wraps itself in a
+pseudo-terminal passes the terminal check, as it does for `aida role enter`.
+<!-- trace:STORY-1698 | ai:claude -->

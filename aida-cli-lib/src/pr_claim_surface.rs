@@ -345,7 +345,10 @@ pub(crate) fn print(pr: u64, lines: &[String]) {
     if lines.is_empty() {
         return;
     }
-    eprintln!("  Already on record for PR #{pr}:");
+    // BUG-2136: this block is the record BEFORE the write; the old
+    // "Already on record" header read as if the new write had been skipped.
+    // trace:BUG-2136 | ai:claude
+    eprintln!("  Previously on record for PR #{pr} (before this write):");
     for line in lines {
         eprintln!("    {line}");
     }

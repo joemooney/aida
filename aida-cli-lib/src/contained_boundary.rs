@@ -107,6 +107,168 @@ pub(crate) fn write_allow_rules(roots: &[PathBuf]) -> Vec<String> {
     rules
 }
 
+/// BUG-1929: the main checkout's AIDA store and cache, which a contained
+/// session's `aida` binary (run through sandboxed Bash) must write to claim a
+/// spec, comment, or finish a queue item. Per the operator ruling the set is
+/// exactly `<main>/.aida-store` (a directory: the objects plus
+/// `.aida/store-write.lock`) and the `<main>/.aida/cache.db*` files, for each
+/// spelling of `main` that [`contained_write_roots`] yields. Nothing else in
+/// the main checkout is added.
+///
+/// Claude Code's Linux sandbox binds each `sandbox.filesystem.allowWrite`
+/// entry as is, with no glob expansion, and skips any path that does not
+/// exist at launch, so the cache files are listed one by one rather than as
+/// `cache.db*`. Their sidecars persist across connections
+/// (`aida_core::db::prime_cache_sidecars`).
+// trace:BUG-1929 | ai:claude
+pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for base in contained_write_roots(main) {
+        paths.push(base.join(".aida-store"));
+        let cache = base.join(".aida").join("cache.db");
+        for suffix in std::iter::once("").chain(aida_core::db::CACHE_SANDBOX_SIDECARS) {
+            let mut name = cache.as_os_str().to_os_string();
+            name.push(suffix);
+            paths.push(PathBuf::from(name));
+        }
+    }
+    paths
+}
+
+/// The `sandbox.filesystem` path entries (`allowWrite` or `denyWrite`) for
+/// `paths`: `//<abs>` (Claude
+/// Code's absolute-path anchor) per path. A path [`root_rule_path`] cannot
+/// express exactly emits nothing (fails closed).
+// trace:BUG-1929 | ai:claude
+pub(crate) fn sandbox_allow_write_entries(paths: &[PathBuf]) -> Vec<String> {
+    let mut entries: Vec<String> = Vec::new();
+    for path in paths {
+        let Some(abs) = root_rule_path(path) else {
+            continue;
+        };
+        let entry = format!("/{abs}");
+        if !entries.contains(&entry) {
+            entries.push(entry);
+        }
+    }
+    entries
+}
+
+/// Git authority paths that must remain read-only even when a contained
+/// session's code root is the primary checkout. The store pointer/own git
+/// subtree, main git directory, and the verified hook profile's actual common
+/// directory are denied recursively. No host-executed profile is writable.
+// trace:BUG-1929 | ai:codex
+pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut denied = Vec::new();
+    for store in store_write_paths
+        .iter()
+        .filter(|p| p.file_name().is_some_and(|n| n == ".aida-store"))
+    {
+        let mut paths = vec![store.join(".git")];
+        if let Some(main) = store.parent() {
+            paths.push(main.join(".git"));
+        }
+        if let Ok(Some(hooks)) = aida_core::git_ops::resolve_store_hooks_dir(store) {
+            if let Some(common) = hooks.parent() {
+                paths.push(common.to_path_buf());
+            }
+        }
+        for path in paths {
+            if !denied.contains(&path) {
+                denied.push(path);
+            }
+        }
+    }
+    denied
+}
+
+/// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from
+/// [`sandbox_allow_write_entries`] and `denyWrite` for each allowed store's
+/// `.git` pointer ([`contained_store_deny_write_paths`]). A store directory
+/// whose pointer cannot be denied is not allowed either (fails closed). `None`
+/// when nothing is allowed.
+// trace:BUG-1929 | ai:claude
+pub(crate) fn sandbox_filesystem(store_write_paths: &[PathBuf]) -> Option<serde_json::Value> {
+    let guarded: Vec<PathBuf> = store_write_paths
+        .iter()
+        .filter(|p| {
+            p.file_name().is_none_or(|n| n != ".aida-store")
+                || contained_store_deny_write_paths(std::slice::from_ref(*p))
+                    .iter()
+                    .all(|deny| root_rule_path(deny).is_some())
+        })
+        .cloned()
+        .collect();
+    let allow_write = sandbox_allow_write_entries(&guarded);
+    if allow_write.is_empty() {
+        return None;
+    }
+    let deny_write = sandbox_allow_write_entries(&contained_store_deny_write_paths(&guarded));
+    Some(serde_json::json!({ "allowWrite": allow_write, "denyWrite": deny_write }))
+}
+
+/// BUG-1929: why a contained session's write set would miss the store or cache
+/// it resolves, one plain sentence per gap (empty when nothing is missing).
+/// `resolved_store` / `resolved_cache` are what the CLI actually uses; a path
+/// is covered when its canonical form is one of the write-set paths (or, for
+/// the store, inside the store directory).
+// trace:BUG-1929 | ai:claude
+pub(crate) fn contained_store_boundary_gaps(
+    main: &Path,
+    resolved_store: Option<&Path>,
+    resolved_cache: &Path,
+) -> Vec<String> {
+    let paths = contained_store_write_paths(main);
+    let expressible: Vec<&PathBuf> = paths
+        .iter()
+        .filter(|p| root_rule_path(p).is_some())
+        .collect();
+    if expressible.is_empty() {
+        return vec![format!(
+            "the main checkout path {} cannot be expressed as an exact sandbox path, so \
+             contained sessions get no write access to the AIDA store or cache",
+            main.display()
+        )];
+    }
+    let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let mut gaps = Vec::new();
+    if let Some(store) = resolved_store {
+        let store = canonical(store);
+        let covered = expressible
+            .iter()
+            .filter(|p| p.file_name().is_some_and(|n| n == ".aida-store"))
+            .any(|p| store.starts_with(canonical(p)));
+        if !covered {
+            gaps.push(format!(
+                "the AIDA store at {} is outside {}/.aida-store, so contained sessions \
+                 cannot write it",
+                store.display(),
+                main.display()
+            ));
+        }
+    }
+    let cache = canonical(&aida_core::db::shared_cache_path(resolved_cache));
+    if !expressible.iter().any(|p| canonical(p) == cache) {
+        gaps.push(format!(
+            "the AIDA cache at {} is not the main checkout's {}/.aida/cache.db, so \
+             contained sessions cannot write it",
+            cache.display(),
+            main.display()
+        ));
+    }
+    for path in contained_store_write_paths(&canonical(main)) {
+        if root_rule_path(&path).is_some() && !path.exists() {
+            gaps.push(format!(
+                "{} does not exist, and the sandbox skips a write path that is missing \
+                 at launch (any `aida` command run from the main checkout creates it)",
+                path.display()
+            ));
+        }
+    }
+    gaps
+}
+
 /// The label for the workspace line a launching `queue work` child prints. The
 /// orchestrator's phase-1 child carries `AIDA_AUTO_COMPLETE_PHASE=1`.
 // trace:BUG-1928 | ai:claude
@@ -319,3 +481,7 @@ pub(crate) mod evaluator {
 #[cfg(test)]
 #[path = "tests/bug_1928_contained_boundary_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1929_contained_store_tests.rs"]
+mod store_tests;

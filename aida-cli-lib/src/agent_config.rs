@@ -157,8 +157,18 @@ pub(crate) fn load_agents_contained(project_root: &std::path::Path) -> Result<bo
     // location overrides the legacy `[agents] contained` when explicitly set, so
     // a migrated config takes effect. trace:TASK-798 | ai:claude
     let cfg = read_project_config_value(project_root);
-    if let Some(v) = config_lookup(cfg.as_ref(), "contained", "enable").and_then(|v| v.as_bool()) {
-        contained = v;
+    // BUG-2146: a present-but-non-boolean `enable` is an error, not a miss.
+    // trace:BUG-2146 | ai:claude
+    if let Some(found) = config_lookup(cfg.as_ref(), "contained", "enable") {
+        match found.as_bool() {
+            Some(v) => contained = v,
+            None => anyhow::bail!(
+                "`[contained] enable` in {} must be a boolean (true or false), but is {} — \
+                 fix the value (or remove the key) and retry",
+                config_path_for_project(project_root).display(),
+                agents_toml_type_name(found)
+            ),
+        }
     }
     Ok(contained)
 }
@@ -527,8 +537,21 @@ pub(crate) fn read_agents_bool_from_file(
     let Some(value) = parse_agents_toml(path)? else {
         return Ok(None);
     };
-    Ok(value
-        .get("agents")
-        .and_then(|agents| agents.get(key))
-        .and_then(|b| b.as_bool()))
+    // BUG-2146 (#2665 review): a key that is PRESENT but not a boolean is an
+    // error, not a miss. `as_bool()` alone read `contained = "true"` or
+    // `contained = 1` as absent, so the posture silently fell back to
+    // uncontained — the same fail-open TASK-1558 closed for the string reader.
+    // trace:BUG-2146 | ai:claude
+    let Some(found) = value.get("agents").and_then(|agents| agents.get(key)) else {
+        return Ok(None);
+    };
+    match found.as_bool() {
+        Some(b) => Ok(Some(b)),
+        None => anyhow::bail!(
+            "`[agents] {key}` in {} must be a boolean (true or false), but is {} — \
+             fix the value (or remove the key to take the default) and retry",
+            path.display(),
+            agents_toml_type_name(found)
+        ),
+    }
 }

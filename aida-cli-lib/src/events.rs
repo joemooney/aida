@@ -236,6 +236,20 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// A fire-fighting mandate was started (`active: true`) or stopped
+    /// (`active: false`) by a human at a terminal — the audit copy of the
+    /// authority record in the user's AIDA home. **Actionable.**
+    // trace:STORY-1698 | ai:claude
+    MandateChanged {
+        id: String,
+        active: bool,
+        principal: String,
+        expires_at: String,
+        #[serde(default)]
+        include_supervised: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// A review verdict was recorded for a spec (`aida review record`) — the
     /// other coordination-seat action BUG-1423's event feed still missed:
     /// approving or requesting changes on a PR is a reviewer-seat decision
@@ -554,6 +568,7 @@ impl EventKind {
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
             | EventKind::MergeHoldChanged { .. }
+            | EventKind::MandateChanged { .. }
             | EventKind::ReviewVerdictRecorded { .. }
             | EventKind::DispositionChanged { .. }
             | EventKind::ExecutionModeChanged { .. }
@@ -606,6 +621,7 @@ impl EventKind {
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
             EventKind::PrMerged { .. } => "PrMerged",
             EventKind::MergeHoldChanged { .. } => "MergeHoldChanged",
+            EventKind::MandateChanged { .. } => "MandateChanged",
             EventKind::ReviewVerdictRecorded { .. } => "ReviewVerdictRecorded",
             EventKind::DispositionChanged { .. } => "DispositionChanged",
             EventKind::ExecutionModeChanged { .. } => "ExecutionModeChanged",
@@ -652,6 +668,7 @@ impl EventKind {
             "CronJobFailed",
             "MailReceived",
             "MergeHoldChanged",
+            "MandateChanged",
             "ReviewVerdictRecorded",
             "DispositionChanged",
             "ExecutionModeChanged",
@@ -1115,6 +1132,14 @@ pub const GATE_MERGE_HOLD_CLEAR_FLOOR: &str = "merge-hold-clear-floor";
 pub const GATE_SHIP_HOLD_RELEASE: &str = "ship-hold-release";
 /// TASK-1448: the recorded approval does not cover the head about to merge.
 pub const GATE_STALE_APPROVAL: &str = "stale-approval";
+/// BUG-1918: no approval from an authorized, non-author seat (missing,
+/// unattested, or recorded by the session that authored the work).
+// trace:BUG-1918 | ai:claude
+pub const GATE_APPROVAL_AUTHORITY: &str = "approval-authority";
+/// BUG-1918: the durable authorship ledger could not be written, so the
+/// claimer is identifiable only while its lease lives.
+// trace:BUG-1918 | ai:claude
+pub const GATE_AUTHORSHIP_LEDGER: &str = "authorship-ledger";
 /// STORY-1405: a reviewer is mid-way through this PR's head.
 pub const GATE_REVIEW_IN_PROGRESS: &str = "review-in-progress";
 /// Fresh pickup refused by an unsatisfied/permanent `BlockedBy`.
@@ -1125,6 +1150,10 @@ pub const GATE_QUEUE_PICKUP: &str = "queue-pickup";
 pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
 /// BUG-1535: an id resolving to more than one requirement was refused.
 pub const GATE_AMBIGUOUS_ID: &str = "ambiguous-id";
+/// STORY-1698: an active fire-fighting mandate did not cover an advisor's
+/// ship of a held PR (expired, stopped, excluded spec, independence, approval).
+// trace:STORY-1698 | ai:claude
+pub const GATE_MANDATE_SHIP: &str = "mandate-ship";
 
 /// Gates that constitute the human integrity floor over a merge-hold.
 // trace:STORY-1436 | ai:claude

@@ -240,6 +240,40 @@ fn branch_is_protected(branch: &str, default_ref: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
+/// BUG-2143: the branch the reap reasons about for `lease`. A lease that holds
+/// no worktree owns no branch: a claim/review lease that recorded the primary
+/// checkout's protected branch (`main`) has nothing on disk to protect, so it
+/// is treated as branchless — reapable once its spec is finished and its
+/// process is gone — and the reap never touches that protected ref.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn reap_branch<'a>(lease: &'a SessionLease, default_ref: Option<&str>) -> &'a str {
+    let branch = lease.branch.trim();
+    if lease.worktree_path.as_os_str().is_empty() && branch_is_protected(branch, default_ref) {
+        ""
+    } else {
+        branch
+    }
+}
+
+/// BUG-2143: the lease as the reap reasons about it. An ADVISORY lease (`aida
+/// claim` / `aida review`) whose recorded path is blank or IS the project root
+/// (`aida claim X --worktree .`) owns no tree: it is viewed as worktree-less, so
+/// a dead claim on a finished spec is reapable (the lease is ended) and the
+/// reap never touches the primary checkout.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn reap_view(lease: &SessionLease, project_root: &std::path::Path) -> SessionLease {
+    let mut view = lease.clone();
+    if (view.claim_verb || view.review_verb) && !view.worktree_path.as_os_str().is_empty() {
+        let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        if view.worktree_path.to_string_lossy().trim().is_empty()
+            || canon(&view.worktree_path) == canon(project_root)
+        {
+            view.worktree_path = std::path::PathBuf::new();
+        }
+    }
+    view
+}
+
 /// One row of the reap report — a session the pass considered, with the verdict
 /// it reached and (after execution) what actually happened to it.
 // trace:TASK-1177 | ai:claude
@@ -761,6 +795,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         .unwrap_or_else(|_| project_root.to_path_buf());
 
     for lease in &leases {
+        let lease = &reap_view(lease, project_root);
         let has_worktree = !lease.worktree_path.as_os_str().is_empty();
         // HARD FLOOR: the main checkout and the store worktree are never reap
         // targets, however the rest of the facts read. A lease whose worktree
@@ -775,7 +810,8 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
                 || lease.branch.trim().eq_ignore_ascii_case("aida-store"));
         // Same floor for the branch: a lease pointing at a protected ref is
         // bookkeeping, not a disposable session branch.
-        let protected_branch = branch_is_protected(&lease.branch, default_ref.as_deref());
+        let branch = reap_branch(lease, default_ref.as_deref());
+        let protected_branch = branch_is_protected(branch, default_ref.as_deref());
         if is_project_or_store_tree || protected_branch {
             report.skipped.push(ReapRow {
                 session: lease.id.clone(),
@@ -816,7 +852,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         let (worktree, branch_tip) = gather_merge_facts_pinned(
             project_root,
             default_ref.as_deref(),
-            &lease.branch,
+            branch,
             &lease.scope,
             dirty,
             spec_finished && process_exited,
@@ -832,10 +868,10 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             spec_finished,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
-            head_on_branch: session_head_on_branch(&lease.worktree_path, &lease.branch),
+            head_on_branch: session_head_on_branch(&lease.worktree_path, branch),
             branch_checked_out_elsewhere: branch_checked_out_elsewhere(
                 project_root,
-                &lease.branch,
+                branch,
                 &lease.worktree_path,
             ),
             worktree,
@@ -911,8 +947,9 @@ fn reap_one_with_clear_hooks(
     before_missing_worktree_clear: impl FnOnce(),
     after_final_registration_check: impl FnOnce(),
 ) -> String {
+    let lease = &reap_view(lease, project_root);
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
-    let branch = lease.branch.trim();
+    let branch = reap_branch(lease, resolve_default_branch_ref(project_root).as_deref());
 
     // The scan proved a specific commit shipped. If the branch moved since
     // (or its tip was never pinned), those proofs say nothing about the new
@@ -965,19 +1002,7 @@ fn reap_one_with_clear_hooks(
         }
     }
 
-    // Lease + companions. Reuses the same aggregation-then-delete ordering
-    // `aida session end` uses so the session's activity is folded into the
-    // project's role activity before its log goes away.
-    aggregate_session_activity_into_roles(project_root, &lease.id);
-    let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
-    let activity = session_activity_path(project_root, &lease.id);
-    if activity.exists() {
-        let _ = std::fs::remove_file(&activity);
-    }
-    let manifest = session_manifest::manifest_path(project_root, &lease.id);
-    if manifest.exists() {
-        let _ = std::fs::remove_file(&manifest);
-    }
+    release_lease_files(project_root, &lease.id);
 
     // Branch cleanup. The protected-ref floor is re-asserted here so the
     // destructive call can never be reached by a future caller that skipped
@@ -1015,10 +1040,31 @@ fn reap_one_with_clear_hooks(
     }
 }
 
+/// Delete a lease and its companions (activity log, manifest, headless child
+/// grant). Reuses the same aggregation-then-delete ordering `aida session end`
+/// uses so the session's activity is folded into the project's role activity
+/// before its log goes away. Touches no worktree and no branch.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str) {
+    aggregate_session_activity_into_roles(project_root, lease_id);
+    // BUG-2139: a reaped lease takes its headless child's grant with it.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
+    let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    let activity = session_activity_path(project_root, lease_id);
+    if activity.exists() {
+        let _ = std::fs::remove_file(&activity);
+    }
+    let manifest = session_manifest::manifest_path(project_root, lease_id);
+    if manifest.exists() {
+        let _ = std::fs::remove_file(&manifest);
+    }
+}
+
 // How a registration-clear attempt for an absent lease path ended.
 // trace:BUG-1694 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RegistrationClearOutcome {
+pub(crate) enum RegistrationClearOutcome {
     /// The stale admin registration was removed.
     Cleared,
     /// The path could not be confirmed unoccupied (or the removal itself
@@ -1042,7 +1088,7 @@ enum RegistrationClearOutcome {
 // uses the byte-identical path value the `gitdir` identity match uses, so the
 // two cannot diverge; a relative lease path is declined outright rather than
 // resolved against a process cwd. trace:BUG-1694 | ai:claude
-fn clear_missing_worktree_registration(
+pub(crate) fn clear_missing_worktree_registration(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
     before_clear: impl FnOnce(),

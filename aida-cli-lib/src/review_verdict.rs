@@ -197,6 +197,93 @@ pub struct RecordedVerdict {
     /// RFC-3339 timestamp of when `closed_by_merge` was recorded.
     // trace:BUG-1529 | ai:claude
     pub closed_at: Option<String>,
+    /// BUG-1918: the bound recording identity `aida review record` stamped
+    /// onto this verdict — which seat grant / human-at-TTY gate authorized
+    /// it, at which commit, from which session. `None` for every verdict not
+    /// written through that command (hand-written JSON, older binaries, the
+    /// drain's provenance stamp), which `aida pr ship` treats as UNATTESTED.
+    // trace:BUG-1918 | ai:claude
+    pub attestation: Option<RecorderAttestation>,
+}
+
+/// BUG-1918: the JSON key carrying a [`RecorderAttestation`].
+// trace:BUG-1918 | ai:claude
+pub(crate) const ATTESTATION_KEY: &str = "recorder_attestation";
+
+/// BUG-1918: the bound identity behind a verdict, as `aida review record`
+/// established it — never inferred from the free-text `recorded_by` label.
+///
+/// `sha` is the commit the attestation was made for: a later writer that
+/// re-stamps the verdict at a different `reviewed_sha` leaves the attestation
+/// pointing at the old commit, so it no longer vouches for the new one.
+// trace:BUG-1918 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct RecorderAttestation {
+    /// The commit this attestation vouches for.
+    pub sha: String,
+    /// The seat of the validated session grant that recorded it, if any.
+    #[serde(default)]
+    pub seat: Option<String>,
+    /// The validated grant's id, if any.
+    #[serde(default)]
+    pub grant_id: Option<String>,
+    /// True only when the recorder passed the human-at-TTY floor.
+    #[serde(default)]
+    pub human_at_tty: bool,
+    /// The recording session's identity tokens (`kind:value`, see
+    /// `review_authority`): its session ids, its process ancestry, and the
+    /// leases it was bound to. These persist across shell calls, so the ship
+    /// gate can match them against the spec's author sessions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identity: Vec<String>,
+    /// The human-review receipt `aida review record` wrote to the user's
+    /// AIDA home when the recorder passed the human-at-TTY floor. The ship
+    /// gate re-reads it rather than trusting `human_at_tty` on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_id: Option<String>,
+}
+
+impl RecorderAttestation {
+    /// Does this attestation carry authority to approve on its own terms: a
+    /// non-implementer seat grant or a human who passed the TTY floor, made
+    /// for exactly `reviewed_sha`. Fails closed on every missing piece. (The
+    /// author check is not stored here: the ship gate re-runs it against the
+    /// recorder identity.)
+    // trace:BUG-1918 | ai:claude
+    pub(crate) fn authorizes(&self, reviewed_sha: Option<&str>) -> bool {
+        let Some(reviewed) = reviewed_sha.map(str::trim).filter(|s| !s.is_empty()) else {
+            return false;
+        };
+        let seat_ok = self
+            .seat
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("implementer"));
+        (seat_ok || self.human_at_tty) && same_reviewed_sha(&self.sha, reviewed)
+    }
+
+    /// The key under which the ship gate re-validates this attestation's
+    /// authority against durable stores: the seat grant (as of the verdict's
+    /// `recorded_at`), or else the human-review receipt. `None` when the
+    /// attestation names neither, which never verifies.
+    // trace:BUG-1918 | ai:claude
+    pub(crate) fn authority_key(&self, recorded_at: Option<&str>) -> Option<String> {
+        fn nonempty(v: Option<&str>) -> Option<&str> {
+            v.map(str::trim).filter(|s| !s.is_empty())
+        }
+        if let (Some(grant), Some(seat)) = (
+            nonempty(self.grant_id.as_deref()),
+            nonempty(self.seat.as_deref()),
+        ) {
+            let at = nonempty(recorded_at)?;
+            return Some(format!("grant:{grant}:{seat}@{at}"));
+        }
+        if self.human_at_tty {
+            let receipt = nonempty(self.receipt_id.as_deref())?;
+            return Some(format!("receipt:{receipt}:{}", self.sha.trim()));
+        }
+        None
+    }
 }
 
 impl RecordedVerdict {
@@ -468,6 +555,10 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         inherited_findings,
         surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
+        // trace:BUG-1918 | ai:claude
+        attestation: obj
+            .get(ATTESTATION_KEY)
+            .and_then(|v| serde_json::from_value(v.clone()).ok()),
     })
 }
 
@@ -1190,6 +1281,15 @@ pub(crate) fn build_verdict_object(
             .collect(),
     );
     archive_current_round(&mut obj, &incoming_key);
+    // BUG-1918: a new verdict word is a new act of review; it must not
+    // inherit the previous recorder's attestation. Only `aida review record`
+    // writes one, after this builder returns. A provenance-only stamp
+    // (`verdict == None`) keeps it — the attestation's own `sha` stops it
+    // vouching for a different commit.
+    // trace:BUG-1918 | ai:claude
+    if verdict.map(str::trim).is_some_and(|w| !w.is_empty()) {
+        obj.remove(ATTESTATION_KEY);
+    }
     // BUG-1529 review fix: a close belongs to the round it closed. A new
     // round of review must not inherit it, or a fresh refusal reads as
     // resolved. trace:BUG-1529 | ai:claude
@@ -1510,6 +1610,261 @@ pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
         return Ok(());
     };
     archive_round_by_sha(path, &obj)
+}
+
+/// BUG-2149: what [`collect_standalone_verdict`] found and where it put it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectedVerdict {
+    /// The verdict now present at the launcher's canonical PR-keyed path.
+    pub verdict: RecordedVerdict,
+    /// Spec-keyed records (upper-case ids) written into the launcher project.
+    pub spec_records: Vec<String>,
+    /// True when the canonical PR-keyed file was written by the collector
+    /// rather than in place by the reviewer.
+    pub collected_from_worktree: bool,
+}
+
+/// BUG-2149: one verdict file the reviewer wrote during this run.
+#[derive(Debug, Clone)]
+pub struct VerdictCandidate {
+    /// Where it was found.
+    pub path: PathBuf,
+    /// The raw JSON body.
+    pub body: String,
+    /// The parsed JSON object.
+    pub obj: serde_json::Map<String, serde_json::Value>,
+    /// The parsed verdict.
+    pub verdict: RecordedVerdict,
+    modified: std::time::SystemTime,
+}
+
+impl VerdictCandidate {
+    /// Every grant this file names as its recorder: the bound
+    /// `recorder_attestation.grant_id` and the `release_grant.id` stamp.
+    /// Each one must be this launch's reviewer grant.
+    pub fn recording_grant_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = Vec::new();
+        let named = [
+            self.obj
+                .get(ATTESTATION_KEY)
+                .and_then(|a| a.get("grant_id"))
+                .and_then(|v| v.as_str()),
+            self.obj
+                .get("release_grant")
+                .and_then(|g| g.get("id"))
+                .and_then(|v| v.as_str()),
+        ];
+        for id in named.into_iter().flatten() {
+            let id = id.trim();
+            if !id.is_empty() && !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+        ids
+    }
+}
+
+/// BUG-2149: the largest verdict file the collector will read. A verdict is
+/// a few KiB; anything larger is not one.
+const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
+
+/// BUG-2149: a verdict file modified at or after `since` (the reviewer's
+/// start), read as a candidate. A pre-existing file is never a candidate,
+/// and neither is anything but a regular file of bounded size — a symlink to
+/// a FIFO or device must not be able to hang or flood the launcher.
+fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
+        return None;
+    }
+    let modified = meta.modified().ok()?;
+    if modified < since {
+        return None;
+    }
+    let body = std::fs::read_to_string(path).ok()?;
+    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
+        return None;
+    }
+    let obj = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()?
+        .as_object()
+        .cloned()?;
+    let verdict = parse_recorded_verdict(&body).unwrap_or_default();
+    Some(VerdictCandidate {
+        path: path.to_path_buf(),
+        body,
+        obj,
+        verdict,
+        modified,
+    })
+}
+
+/// BUG-2149: the checks a collected verdict must pass, supplied by the caller
+/// (they need the forge and the seat-grant store, which this filesystem-only
+/// module does not touch).
+pub trait VerdictCollectionChecks {
+    /// Schema, PR number and reviewed commit. `Err(reason)` on any mismatch.
+    fn check_record(&self, candidate: &VerdictCandidate) -> Result<(), String>;
+    /// `Ok` only when `grant_id` is the child reviewer grant of this run —
+    /// never the launcher's own grant or the implementer's.
+    fn check_identity(&self, grant_id: &str) -> Result<(), String>;
+}
+
+/// BUG-2149: make a standalone reviewer's verdict visible from the LAUNCHER
+/// checkout, where `aida review verdict` and `aida pr ship` read.
+///
+/// A contained reviewer may only write inside its review worktree, so
+/// `aida review record` there lands `<worktree>/.aida/review-verdicts/<SPEC>.json`
+/// (and possibly `PR-N.json`), and the launcher's `canonical` file never appears.
+/// After the reviewer exits, the launcher collects from the files written
+/// AFTER `since` (the reviewer's start) in the worktree and the launcher:
+///
+/// - every candidate must pass [`VerdictCollectionChecks::check_record`];
+/// - a candidate stamped with a recording grant must pass
+///   [`VerdictCollectionChecks::check_identity`], and at least one must;
+/// - an unstamped candidate (the PR-keyed handshake) must agree with the
+///   identity-checked source on verdict and reviewed commit.
+///
+/// Any mismatch collects nothing and returns `Err(reason)`. On success the
+/// newest identity-checked record is written to `canonical` unless the
+/// reviewer already wrote it in place, and the spec-keyed records for
+/// `spec_ids` (the specs the PR credits) — and no others — are mirrored into
+/// the launcher project unless it already holds one written during this run.
+// trace:BUG-2149 | ai:claude
+pub fn collect_standalone_verdict(
+    launcher_root: &Path,
+    worktree: &Path,
+    canonical: &Path,
+    spec_ids: &[String],
+    since: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> Result<CollectedVerdict, String> {
+    let launcher_dir = launcher_root.join(".aida").join("review-verdicts");
+    let worktree_dir = worktree.join(".aida").join("review-verdicts");
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let separate = canon(&launcher_dir) != canon(&worktree_dir);
+    let canonical_name = canonical
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let is_change_key = |stem: &str| {
+        let up = stem.to_ascii_uppercase();
+        up.starts_with("PR-") || up.starts_with("MR-")
+    };
+    let spec_ids: Vec<String> = spec_ids
+        .iter()
+        .map(|s| s.trim().to_ascii_uppercase())
+        .filter(|s| !s.is_empty() && !is_change_key(s))
+        .collect();
+
+    // Candidates: worktree files of this run, then the launcher's own.
+    let mut worktree_specs: Vec<VerdictCandidate> = Vec::new();
+    let mut candidates: Vec<VerdictCandidate> = Vec::new();
+    if separate {
+        if let Ok(rd) = std::fs::read_dir(&worktree_dir) {
+            for entry in rd.flatten() {
+                let path = entry.path();
+                let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+                    continue;
+                };
+                let Some(stem) = name.strip_suffix(".json") else {
+                    continue;
+                };
+                if name.starts_with('.') {
+                    continue;
+                }
+                if is_change_key(stem) && name != canonical_name {
+                    continue;
+                }
+                let Some(c) = fresh_candidate(&path, since) else {
+                    continue;
+                };
+                if !is_change_key(stem) {
+                    worktree_specs.push(c.clone());
+                }
+                candidates.push(c);
+            }
+        }
+    }
+    let canonical_in_place = fresh_candidate(canonical, since);
+    candidates.extend(canonical_in_place.clone());
+    for id in &spec_ids {
+        candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
+    }
+    if candidates.is_empty() {
+        return Err("the reviewer wrote no verdict file after it started".to_string());
+    }
+
+    for c in &candidates {
+        checks
+            .check_record(c)
+            .map_err(|why| format!("{}: {why}", c.path.display()))?;
+        for grant in c.recording_grant_ids() {
+            checks
+                .check_identity(&grant)
+                .map_err(|why| format!("{}: {why}", c.path.display()))?;
+        }
+    }
+    let source = candidates
+        .iter()
+        .filter(|c| !c.recording_grant_ids().is_empty())
+        .max_by_key(|c| c.modified)
+        .cloned()
+        .ok_or_else(|| {
+            "no verdict file carries the reviewer's recording grant, so its author cannot be \
+             verified"
+                .to_string()
+        })?;
+    for c in &candidates {
+        let same_sha = match (&c.verdict.reviewed_sha, &source.verdict.reviewed_sha) {
+            (Some(a), Some(b)) => same_reviewed_sha(a, b),
+            _ => false,
+        };
+        if c.verdict.kind != source.verdict.kind || !same_sha {
+            return Err(format!(
+                "{} disagrees with {} on the verdict or the reviewed commit",
+                c.path.display(),
+                source.path.display()
+            ));
+        }
+    }
+
+    // Mirror. Never overwrite a file written during this run.
+    let mut collected_from_worktree = false;
+    if canonical_in_place.is_none() {
+        write_verdict_atomic(canonical, &source.body)
+            .map_err(|e| format!("could not write {}: {e}", canonical.display()))?;
+        let _ = adopt_direct_write(canonical);
+        collected_from_worktree = true;
+    }
+    let mut spec_records = Vec::new();
+    for id in spec_ids {
+        let target = verdict_path(launcher_root, &id);
+        if fresh_candidate(&target, since).is_some() {
+            continue;
+        }
+        let body = worktree_specs
+            .iter()
+            .find(|c| {
+                c.path
+                    .file_stem()
+                    .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&id))
+            })
+            .map(|c| c.body.clone())
+            .unwrap_or_else(|| source.body.clone());
+        // Archive the round being replaced before overwriting it.
+        let _ = adopt_direct_write(&target);
+        write_verdict_atomic(&target, &body)
+            .map_err(|e| format!("could not write {}: {e}", target.display()))?;
+        let _ = adopt_direct_write(&target);
+        spec_records.push(id);
+    }
+
+    Ok(CollectedVerdict {
+        verdict: source.verdict,
+        spec_records,
+        collected_from_worktree,
+    })
 }
 
 /// TASK-1460: the marker that says the one-shot sidecar migration has run in
@@ -2012,6 +2367,61 @@ fn summary_line(v: &RecordedVerdict) -> String {
         .filter(|s| !s.is_empty())
         .map(|s| format!("Reviewer said: {s}"))
         .unwrap_or_default()
+}
+
+/// BUG-2136: what one `aida review record` call did to the verdict record,
+/// stated explicitly so the caller never has to infer it from the
+/// informational "previously on record" block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RecordOutcome {
+    /// A new recording landed; `round` counts it together with every
+    /// retained earlier round (1 on a first recording).
+    Recorded { round: usize },
+    /// The record already held a byte-equivalent recording (same commit,
+    /// recorder, verdict and findings); nothing new was added.
+    Unchanged,
+}
+
+/// BUG-2136: compare the record as it stood before the write (`before`, `None`
+/// when there was no file) with the object about to be written (`after`).
+/// Uses the same [`recording_key`] that decides round retention, so the
+/// printed outcome can never disagree with what the record kept.
+// trace:BUG-2136 | ai:claude
+pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
+    let identical = before.is_some_and(|prev| {
+        round_sha(prev).is_some() && recording_key(prev) == recording_key(after)
+    });
+    if identical {
+        return RecordOutcome::Unchanged;
+    }
+    let retained = after
+        .get("rounds")
+        .and_then(|v| v.as_array())
+        .map_or(0, Vec::len);
+    RecordOutcome::Recorded {
+        round: retained + 1,
+    }
+}
+
+/// BUG-2136: the one outcome line `aida review record` prints, e.g.
+/// `recorded APPROVED for BUG-7 at 0123456789ab (round 2)` or
+/// `unchanged: identical APPROVED already recorded at 0123456789ab`.
+// trace:BUG-2136 | ai:claude
+pub(crate) fn record_outcome_line(
+    outcome: &RecordOutcome,
+    label: &str,
+    key: &str,
+    sha: Option<&str>,
+) -> String {
+    let sha = sha.map(short_sha).unwrap_or("unknown commit");
+    match outcome {
+        RecordOutcome::Recorded { round } => {
+            format!("recorded {label} for {key} at {sha} (round {round})")
+        }
+        RecordOutcome::Unchanged => {
+            format!("unchanged: identical {label} already recorded at {sha}")
+        }
+    }
 }
 
 /// First 12 chars of a sha (or the whole string when shorter) — enough to

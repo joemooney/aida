@@ -1,3 +1,105 @@
+Explicit `aida verify constraints` reads data-only version-1 blocks using six
+closed built-in Linux probes. It never runs stored shell commands or probes
+from sync/drain/hooks, and reports match/drift/unknown/invalid without status
+mutation. Canonical `edit --verify <JSON>` / `--clear-verify` author blocks;
+archived writers refuse unsupported blocks. See
+[constraint verification](docs/cli/08-reporting.md#aida-verify).
+<!-- trace:STORY-1673 | ai:codex -->
+
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+A derived summary cache under `$XDG_CACHE_HOME/aida/regen-display` (default
+`~/.cache`) is keyed by store HEAD and CLI build. An unchanged HEAD uses no Git
+subprocesses; a miss reads trial blobs in one batch. Failed reads are not cached.
+Digest selection excludes trials after `--until`; text ages use compact days,
+hours, minutes or seconds. The cache grants no scoring or control authority;
+unusual Git discovery environments omit this optional segment.
+<!-- trace:TASK-1734 | ai:codex -->
+
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
+Regeneration scoring requires a declared/default installer for actual systems.
+The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
+or absent diagnostics remain unknown. Reports flag crash-dominated and mostly
+unclassified failures and audit matching R1 trials by explicit `--model-family`.
+See OVERVIEW.md for the sidecar and comparison rules.
+<!-- trace:STORY-1676 | ai:codex -->
+
+`regen score --consensus <uuid...>` compares at least three committed ordinary
+scored R1 trials with matching corpus/oracle/bundle and discriminating check sets.
+All-fail checks are reported as store gaps, partial failures separately. It is
+report-only unless `--file` requests draft amendments. Non-archived items other
+than Completed/Rejected deduplicate under the store write lock using exact-check
+hash tags. See OVERVIEW.md.
+<!-- trace:STORY-1679 | ai:codex -->
+
+`aida regen report` reads committed ordinary trials without a cache rebuild.
+Its headline is the latest attempt's discriminating R1 oracle pass rate and
+age; unsuccessful attempts show unavailable, with status and flags visible.
+Scoring retains optional versioned gap metadata from the private GAPS.toml
+snapshot. Category counts and latest matching oracle/bundle/corpus deltas are
+diagnostics, never quality scores. Missing/invalid metadata is “no gap data”.
+<!-- trace:TASK-1733 | ai:codex -->
+
+Ordinary regen scoring reads optional strict trial-root `GAPS.toml` v1.
+`[environment]` maps contract names to regenerated names; protected names and
+sensitive source names refuse before selective one-time capture. R1 receives
+sources, then fresh R2 receives sources plus aliases under the same oracle and
+controls. An additive versioned adapter block retains complete R2 evidence and
+pass-rate deltas; a failed R2 refuses the combined result. See OVERVIEW.md.
+<!-- trace:TASK-1732 | ai:codex -->
+
+`aida regen score --control reference|stub --corpus <dir> --model <name>
+--vendor <name> --harness <name>` generates fresh controls. Ordinary scoring
+copies system inputs into a fresh root and requires matching, clean reference
+repeats plus a generated no-op stub. Raw R1 and the discriminating aggregate
+(excluding listed stub-passing checks) are recorded with control IDs. Additive
+v1 control fields default to absent for older records, which cannot satisfy
+the gate. See OVERVIEW.md.
+<!-- trace:TASK-1731 | ai:codex -->
+Regen scoring uses independent private `/tmp` install roots and same-path
+quarantine snapshots, then fresh oracle HOME/XDG/TMPDIR. Only immutable guards
+and fixed system directories are on oracle PATH; regenerated tools use locators.
+Guards write an AIDA-owned, read-only-bound FIFO before absolute host delegation.
+Survivor detection is best effort and flags raw scores as non-clean. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
+`aida regen score <dir> --corpus <dir> --model <name> --vendor <name>
+--harness <name>` runs trusted-config argv commands via existing bubblewrap
+confinement and records raw R1 trial JSON under `regen/trials/` in the store.
+Required `oracle_paths` freezes held-out inputs at the trusted config commit;
+the hashed external bundle is verified before runs and mounted read-only.
+Exact v1 check markers, fallback guards, private HOME/XDG and explicit
+`--unconfined` flags govern score cleanliness. See OVERVIEW.md.
+<!-- trace:TASK-1730 | ai:codex -->
+
+C7 lifecycle commands resolve invoking caller authority after acquiring the
+seat lock; ack/release also revalidate persisted requester authority locally.
+The dormant runtime gate refreshes its caller at the same locked boundary.
+Absolute deadlines reconcile on lifecycle/gate entry without a live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
+Seat occupancy C7 core rework uses process-bound child scope plus persisted
+review/implements relationships for assigned-work routing, bounded seat-lock
+acquisition, and one shared main-worktree policy/state root. Plain-shell
+one-shot routing/spawn does not implicitly hold the seat. Production gateway
+wiring still awaits fresh independent C7 approval; hard takeover stays disabled.
+See [the sketch addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements).
+<!-- trace:TASK-1607 | ai:codex -->
+
+`aida regen corpus <dir>` exports committed store content as deterministic
+`corpus.json` and `manifest.json`. Uncommitted objects require `--allow-dirty`, which
+records `dirty: true` while exporting HEAD. See OVERVIEW.md.
+<!-- trace:TASK-1729 | ai:codex -->
+
 Rework-only merge holds can release through a current-head, granted reviewer
 approval after older refusal rounds. Sensitive spec metadata, guided/operator
 mode, keystone class and any non-Rework composition retain human clear.
@@ -226,6 +328,14 @@ refresh flock holder (including an inline refresher). `aida cache rebuild` and
 mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
+
+Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
+profile under the git common directory. Project hook managers never run there.
+Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse
+store writes. Contained launch primes this profile before sandboxing and denies host git
+authority writes in both sandbox and tool rules; the writable store/cache set
+is unchanged. See OVERVIEW.md.
+<!-- trace:BUG-1929 | ai:codex -->
 
 The spec graph is git-canonical. The orphan `aida-store` branch stores
 one YAML object per requirement; `.aida-store/` is the live worktree for

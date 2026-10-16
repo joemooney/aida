@@ -2381,7 +2381,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.spec
             );
         }
-        match harvest::propose_only(&self.project_root, &store, &self.spec, pr as u64) {
+        // trace:BUG-2133 | ai:claude
+        match harvest::propose_only(
+            &self.project_root,
+            &store,
+            &self.spec,
+            pr as u64,
+            self.contained,
+        ) {
             Ok(s) => {
                 if !self.json {
                     match &s.file {
@@ -2545,13 +2552,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 .map(|status| status.head_sha.trim().to_string())
                 .filter(|sha| !sha.is_empty())
         });
-        let candidates = pr_ship::merge_gate_verdict_candidates(
+        // BUG-1918: the same authority policy `aida pr ship` applies — the
+        // PR's authors resolved from the spec, its head branch, and what the
+        // forge says it ships — checked before head coverage.
+        // trace:BUG-1918 | ai:claude
+        let (candidates, approval_policy) = crate::pr_cmd::merge_approval_inputs(
             &[self.project_root.as_path(), lease_root.as_path()],
+            &lease_root,
             pr as u64,
             std::slice::from_ref(&self.spec),
+            self.branch.as_deref(),
             head_sha.as_deref(),
         );
-        drain_merge_approval_gate(&candidates, head_sha.as_deref(), pr as u64)?;
+        drain_merge_approval_gate(
+            &candidates,
+            &approval_policy,
+            head_sha.as_deref(),
+            pr as u64,
+        )?;
         // TASK-1458: pin the merge to the approved head the gate just
         // verified, so a push landing between this check and the merge is
         // refused by the forge rather than merged unreviewed.
@@ -3626,6 +3644,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             );
             return false;
         };
+        // Gate before any forge call: a refused child costs nothing.
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        // BUG-2133: containment is monotonic — a contained drain's CI-fix
+        // child (it writes code) is contained too, scoped to the worktree it
+        // runs in; a child that cannot be contained is refused, never
+        // launched uncontained.
+        // trace:BUG-2133 | ai:claude
+        if let Err(e) = session::require_child_containment(vendor, self.contained, "CI-fix session")
+        {
+            eprintln!(
+                "  {} {e:#} — leaving the red-CI failure standing",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            return false;
+        }
+        let contained_in = self.contained.then_some(worktree.as_path());
         eprintln!("  🔧 CI is red on `{branch}` — attempting in-drain fix {attempt}/{budget}…");
         let run_id = self
             .ci_run_id
@@ -3638,7 +3672,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let head_before = remote_head_sha(&self.project_root, &branch);
         let prompt = build_ci_fix_prompt(&self.spec, &branch, &failure.reason, &log_excerpt);
 
-        let vendor = session::resolve_headless_vendor(&self.project_root);
         let fix_uuid = uuid::Uuid::now_v7().to_string();
         let log_path = self
             .project_root
@@ -3671,7 +3704,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None, None);
+        let fix_args = session::headless_vendor_args_contained_in(
+            vendor,
+            &prompt,
+            &fix_uuid,
+            contained_in,
+            None,
+            None,
+        );
+        let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
+            vendor,
+            self.contained,
+            contained_in,
+            "CI-fix session",
+            &program,
+            fix_args,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => {
+                tee.stop();
+                eprintln!(
+                    "  {} {e:#} — leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let mut child_cmd = build_phase_driver_ci_fix_command(
@@ -3681,6 +3739,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &ceiling_key,
             &ceiling_value,
             vendor,
+            self.contained,
         );
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
@@ -3802,13 +3861,15 @@ pub(crate) fn build_phase_driver_ci_fix_command(
     ceiling_key: &str,
     ceiling_value: &str,
     vendor: session::HeadlessVendor,
+    // trace:BUG-2133 | ai:claude
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     cmd.current_dir(worktree)
         .args(fix_args)
         .env("AIDA_HEADLESS", "1")
         .env(ceiling_key, ceiling_value);
-    if session::containment_applied(vendor, false) {
+    if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

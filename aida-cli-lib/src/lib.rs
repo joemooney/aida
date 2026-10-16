@@ -179,6 +179,7 @@ mod questions;
 mod queue_cmd;
 mod queue_misc;
 mod rel_cards;
+mod relay_stall;
 mod requirements_cli;
 mod review_gates;
 mod role;
@@ -348,7 +349,8 @@ mod external_cmd;
 mod import_export_cmd;
 mod import_plan_cmd;
 mod interview;
-// trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
+mod regen; // trace:TASK-1729 | ai:codex
+           // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
 mod glyph_config;
 mod glyphs;
 mod goal_cmd;
@@ -403,6 +405,8 @@ mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+// trace:STORY-1698 | ai:claude — the fire-fighting mandate.
+mod mandate;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
@@ -471,6 +475,8 @@ mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
+// trace:BUG-1918 | ai:claude — who may approve: recorder/author identity + authority re-validation.
+mod review_authority;
 // trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
 mod review_marker;
 // trace:STORY-1417 | ai:claude
@@ -494,6 +500,7 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
 mod seat_rotation;
@@ -555,6 +562,8 @@ mod ultraplan_cmd;
 mod upgrade_cmd;
 mod usage;
 mod usage_cmd;
+// trace:STORY-1673 | ai:codex
+mod verify_cmd;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
 mod worker;

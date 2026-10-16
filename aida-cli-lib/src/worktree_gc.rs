@@ -631,6 +631,7 @@ pub(crate) fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bo
 /// when the origin ref is unknown (never fetched), git is unavailable, or the
 /// range doesn't resolve; `Some(0)` when up-to-date. trace:TASK-475 | ai:claude
 pub(crate) fn orphan_store_behind_count(project_root: &std::path::Path) -> Option<u32> {
+    // raw-git-ok(BUG-1929): read-only `rev-list` in the code checkout, naming refs.
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -1321,7 +1322,10 @@ pub(crate) fn ensure_epic_worktree_core(
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
 
-    if crate::worktree::is_registered(&porcelain, &path) {
+    // BUG-2143: a registration whose directory was deleted by hand is not
+    // "already there"; let `git worktree add` below report it instead of
+    // re-affirming a focus marker into a bare directory.
+    if crate::worktree::is_registered(&porcelain, &path) && path.join(".git").exists() {
         if aida_core::git_ops::is_git_repo(&path) {
             aida_core::git_ops::ensure_aida_runtime_excluded(&path)
                 .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
@@ -1485,7 +1489,7 @@ pub(crate) fn ensure_spec_worktree_core(
     path_override: Option<&str>,
     branch_override: Option<&str>,
     existing: Option<(std::path::PathBuf, String, String, bool)>,
-    registered: bool,
+    is_worktree: impl Fn(&std::path::Path) -> bool,
     mint: impl FnOnce(&std::path::Path, &str) -> Result<(std::path::PathBuf, String)>,
 ) -> Result<WorktreeOutcome> {
     let path = match path_override {
@@ -1498,6 +1502,13 @@ pub(crate) fn ensure_spec_worktree_core(
 
     // Idempotent re-entry: a lease already covers this spec — re-affirm focus at
     // that worktree and report it, don't mint a second one.
+    // BUG-2143: a lease is re-entered only when its path IS a linked git
+    // worktree — checked here, BEFORE the focus marker below `create_dir_all`s
+    // `<path>/.aida` (which made any "is it on disk?" check after the fact read
+    // as good). A lease whose tree was deleted by hand, or whose path was
+    // never a worktree, falls through to the registered / fresh paths.
+    // trace:BUG-2143 | ai:claude
+    let existing = existing.filter(|(p, ..)| is_worktree(p));
     if let Some((worktree_path, lease_branch, lease_id, has_session_env)) = existing {
         if aida_core::git_ops::is_git_repo(&worktree_path) {
             aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
@@ -1517,7 +1528,9 @@ pub(crate) fn ensure_spec_worktree_core(
 
     // A worktree is registered at the default path but carries no lease — treat
     // it as already-there (re-affirm focus) rather than recreating it.
-    if registered {
+    // BUG-2143: "registered" means a live linked worktree, not a stale
+    // registration whose directory is gone.
+    if is_worktree(&path) {
         if aida_core::git_ops::is_git_repo(&path) {
             aida_core::git_ops::ensure_aida_runtime_excluded(&path)
                 .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
@@ -1535,6 +1548,13 @@ pub(crate) fn ensure_spec_worktree_core(
 
     // Fresh: mint the worktree + lease, then scope focus to the spec.
     let (worktree_path, minted_branch) = mint(&path, &branch)?;
+    // BUG-2143: an empty path is never success.
+    if worktree_path.as_os_str().is_empty() {
+        anyhow::bail!(
+            "worktree setup for `{spec_display}` reported no path — no worktree was created. \
+             Check `aida session leases` and retry."
+        );
+    }
     crate::focus::write_focus_marker(&worktree_path, focus_label)?;
     Ok(WorktreeOutcome {
         path: worktree_path,
@@ -1544,6 +1564,258 @@ pub(crate) fn ensure_spec_worktree_core(
         lease_id: None,
         has_session_env: false,
     })
+}
+
+/// BUG-2143: is this lease ADVISORY — an `aida claim`, an `aida review`, or an
+/// MCP `claim_task` marker? An advisory lease gates pickups but owns no
+/// worktree: whatever `worktree_path` it records is informational (`aida claim
+/// --worktree P` stores P even when it does not exist, and MCP claims record the
+/// caller's cwd), so it is never re-entered. `SessionLease` drops the MCP
+/// `mcp_claim` key, so MCP claims are recognized by their lease id, collected
+/// from the `mcp-claim.<spec>.toml` files by [`mcp_claim_lease_ids`].
+// trace:BUG-2143 | ai:claude
+pub(crate) fn lease_is_advisory(lease: &SessionLease, mcp_claim_ids: &HashSet<String>) -> bool {
+    lease.claim_verb || lease.review_verb || mcp_claim_ids.contains(&lease.id)
+}
+
+/// BUG-2143: the lease ids of every MCP `claim_task` marker
+/// (`.aida/sessions/mcp-claim.<spec>.toml`) under `project_root`.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn mcp_claim_lease_ids(project_root: &std::path::Path) -> HashSet<String> {
+    let dir = project_root.join(".aida").join("sessions");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .is_some_and(|n| n.starts_with("mcp-claim.") && n.ends_with(".toml"))
+        })
+        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+        .filter_map(|body| body.parse::<toml::Table>().ok())
+        .filter_map(|t| t.get("id").and_then(|v| v.as_str()).map(str::to_string))
+        .collect()
+}
+
+/// BUG-2143: `git worktree list --porcelain` for `main_root`, or empty when git
+/// cannot answer (which then reads as "no linked worktree" — never as one).
+// trace:BUG-2143 | ai:claude
+pub(crate) fn worktree_porcelain(main_root: &std::path::Path) -> String {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+/// BUG-2143: is `path` a LINKED git worktree of this repository that exists on
+/// disk? Blank / whitespace paths, the primary checkout itself (`.` resolves
+/// there), a path git does not list, and a registered tree whose directory was
+/// deleted by hand (git still lists it as prunable) all answer `false`. The
+/// `.git` probe matters: a stray `<path>/.aida` dir (left by a focus marker)
+/// makes `is_dir` true but is not a worktree.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn is_linked_worktree(
+    porcelain: &str,
+    path: &std::path::Path,
+    main_root: &std::path::Path,
+) -> bool {
+    if path.to_string_lossy().trim().is_empty() {
+        return false;
+    }
+    let canon = crate::worktree::canonical_or_self;
+    if canon(path) == canon(main_root) {
+        return false;
+    }
+    path.is_dir() && path.join(".git").exists() && crate::worktree::is_registered(porcelain, path)
+}
+
+/// BUG-2143: may `aida worktree add|enter` / `aida session start` re-enter this
+/// lease? Only a non-advisory lease whose path is a live linked worktree.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn lease_holds_worktree(
+    lease: &SessionLease,
+    mcp_claim_ids: &HashSet<String>,
+    porcelain: &str,
+    main_root: &std::path::Path,
+) -> bool {
+    !lease_is_advisory(lease, mcp_claim_ids)
+        && is_linked_worktree(porcelain, &lease.worktree_path, main_root)
+}
+
+/// BUG-2143: the leases under `main_root` that can be re-entered (see
+/// [`lease_holds_worktree`]).
+// trace:BUG-2143 | ai:claude
+pub(crate) fn reenterable_leases(main_root: &std::path::Path) -> Vec<SessionLease> {
+    let porcelain = worktree_porcelain(main_root);
+    let mcp = mcp_claim_lease_ids(main_root);
+    list_leases(main_root)
+        .into_iter()
+        .filter(|l| lease_holds_worktree(l, &mcp, &porcelain, main_root))
+        .collect()
+}
+
+/// TASK-1784: the non-advisory leases on a spec, none of which is re-enterable,
+/// sorted by what `aida worktree add` should do about them.
+// trace:TASK-1784 | ai:claude
+#[derive(Debug)]
+pub(crate) enum UnreenterableLeases {
+    /// Nothing holds the spec.
+    None,
+    /// Every holder is a dead session of this host: its recorded absolute
+    /// worktree path is confirmed gone (deleted by hand) AND its owner is
+    /// confirmed gone (or is the caller's own shell). Safe to end and re-mint.
+    Dead(Vec<SessionLease>),
+    /// A holder that is not provably dead: its path still exists, was never
+    /// recorded, or cannot be probed (EACCES, unmounted); or its owner is alive,
+    /// unknown, or on another host. Never ended implicitly.
+    Blocking(SessionLease),
+}
+
+/// TASK-1784: the facts that decide whether one non-re-enterable lease is a
+/// dead session `aida worktree add` may end. Gathered by the caller so the
+/// verdict stays a pure, unit-testable function.
+// trace:TASK-1784 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LeaseDeathFacts {
+    /// The lease was minted on this host (a foreign host's pids mean nothing).
+    pub same_host: bool,
+    /// `try_exists` on the recorded path: `Ok(false)` is the only "gone".
+    pub tree_exists: Option<bool>,
+    /// [`aida_core::liveness::lease_owner_process_gone`]: `None` = no pid recorded.
+    pub owner_gone: Option<bool>,
+    /// The owner is the caller's own shell (same pid AND start identity) — the
+    /// caller re-running `aida worktree add` after deleting its own tree.
+    pub owner_is_caller: bool,
+    /// [`worktree_is_active`]: a live lease or process still references the path.
+    pub tree_active: bool,
+}
+
+// trace:TASK-1784 | ai:claude
+pub(crate) fn lease_is_dead(lease: &SessionLease, f: LeaseDeathFacts) -> bool {
+    let p = &lease.worktree_path;
+    let path_gone =
+        !p.to_string_lossy().trim().is_empty() && p.is_absolute() && f.tree_exists == Some(false);
+    let owner_dead = f.owner_gone == Some(true) || f.owner_is_caller;
+    path_gone && f.same_host && owner_dead && !f.tree_active
+}
+
+// trace:TASK-1784 | ai:claude
+pub(crate) fn classify_unreenterable_leases(
+    held: Vec<SessionLease>,
+    facts: impl Fn(&SessionLease) -> LeaseDeathFacts,
+) -> UnreenterableLeases {
+    if held.is_empty() {
+        return UnreenterableLeases::None;
+    }
+    if let Some(blocking) = held
+        .iter()
+        .filter(|l| !lease_is_dead(l, facts(l)))
+        .max_by_key(|l| l.started_at)
+    {
+        return UnreenterableLeases::Blocking(blocking.clone());
+    }
+    UnreenterableLeases::Dead(held)
+}
+
+/// TASK-1784: probe the live system for [`LeaseDeathFacts`] — the same
+/// liveness signals `aida session reap` uses, not a second notion.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn probe_lease_death_facts(
+    lease: &SessionLease,
+    this_host: &str,
+    caller: Option<(u32, Option<&str>)>,
+    active: &HashSet<std::path::PathBuf>,
+) -> LeaseDeathFacts {
+    let owner_is_caller = lease.active_pid.is_none()
+        && caller.is_some_and(|(pid, start)| {
+            lease.creator_pid == Some(pid)
+                && match (lease.creator_pid_start_time.as_deref(), start) {
+                    (Some(a), Some(b)) => a == b,
+                    // Without both start identities a recycled pid could pose
+                    // as the caller: never assume.
+                    _ => false,
+                }
+        });
+    LeaseDeathFacts {
+        same_host: lease.hostname == this_host,
+        tree_exists: lease.worktree_path.try_exists().ok(),
+        owner_gone: aida_core::liveness::lease_owner_process_gone(
+            lease.active_pid,
+            lease.active_pid_start_time.as_deref(),
+            lease.creator_pid,
+            lease.creator_pid_start_time.as_deref(),
+            process_probe::process_identity_is_alive,
+        ),
+        owner_is_caller,
+        tree_active: !lease.worktree_path.as_os_str().is_empty()
+            && worktree_is_active(&lease.worktree_path, active),
+    }
+}
+
+/// TASK-1784: a Declined registration clear means git still lists the path,
+/// so the fresh `git worktree add` there is about to refuse — say why first.
+// trace:TASK-1784 | ai:claude
+fn log_registration_clear(
+    path: &std::path::Path,
+    outcome: crate::session_reap::RegistrationClearOutcome,
+) {
+    if outcome == crate::session_reap::RegistrationClearOutcome::Declined {
+        eprintln!(
+            "  {} kept the git worktree registration for {} — the path could not be \
+             confirmed absent; if the add below refuses, check that path and remove the \
+             registration with `git worktree remove --force {}`",
+            crate::glyph(crate::glyphs::Glyph::Warning),
+            path.display(),
+            path.display()
+        );
+    }
+}
+
+/// TASK-1784: the refusal for a lease `aida worktree add` will not re-enter or
+/// end on its own — names the lease and the command that ends it.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn unreenterable_lease_message(spec: &str, lease: &SessionLease) -> String {
+    let short = &lease.id[..lease.id.len().min(8)];
+    let path = lease.worktree_path.display().to_string();
+    let at = if path.trim().is_empty() {
+        "with no worktree".to_string()
+    } else {
+        format!("at {path}")
+    };
+    format!(
+        "`{spec}` is held by session {short} {at}, which is not a linked worktree \
+         `aida worktree add` can re-enter (a session recorded at the project root is \
+         never re-entered). End it with `aida session end {short}`, then retry."
+    )
+}
+
+/// BUG-2143: refuse to report a path that is not a git worktree. `aida worktree
+/// add` used to print a blank path as success; the caller then fell back to a
+/// raw `git worktree add`. Checks `.git`, not `is_dir`: the focus marker has
+/// already created `<path>/.aida` by the time this runs.
+// trace:BUG-2143 | ai:claude
+pub(crate) fn ensure_worktree_on_disk(path: &std::path::Path, spec: &str) -> Result<()> {
+    if path.to_string_lossy().trim().is_empty() {
+        anyhow::bail!(
+            "worktree setup for `{spec}` reported no path — no worktree was created. \
+             Check `aida session leases` and retry."
+        );
+    }
+    if !path.join(".git").exists() {
+        anyhow::bail!(
+            "worktree setup for `{spec}` reported {} but no git worktree exists there — \
+             check `aida session leases` and retry.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// `<spec>` variant of [`ensure_epic_worktree`]: create-if-missing a worktree
@@ -1564,10 +1836,18 @@ pub(crate) fn ensure_spec_worktree(
     let home =
         crate::home_dir().context("cannot resolve home directory for the default worktree path")?;
 
-    // Existing lease for this spec → re-enter it (freshest wins).
+    // Existing lease for this spec → re-enter it (freshest wins). BUG-2143:
+    // only a non-advisory lease whose path is a live linked worktree is
+    // re-enterable — an `aida claim` / review / MCP claim records no worktree
+    // of its own (or an informational path), and re-entering it printed a
+    // blank or bogus path as success while creating nothing.
+    let porcelain = worktree_porcelain(&main_root);
+    let mcp_claims = mcp_claim_lease_ids(&main_root);
+    let holds = |l: &SessionLease| lease_holds_worktree(l, &mcp_claims, &porcelain, &main_root);
     let existing = list_leases(&main_root)
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+        .filter(|l| holds(l))
         .max_by_key(|l| l.started_at)
         .map(|l| {
             (
@@ -1582,21 +1862,101 @@ pub(crate) fn ensure_spec_worktree(
             )
         });
 
-    // Is the default path already a registered (lease-less) git worktree?
+    // TASK-1784: no lease is re-enterable, but a non-advisory one may still
+    // hold the spec (InProgress), which made session_start's preflight refuse
+    // with "no local lease holds it". A lease that is provably this clone's own
+    // dead session (tree gone, owner gone or the caller itself, same host) is
+    // superseded: mint fresh claiming past the stale InProgress, and end the
+    // dead lease (lease + path-scoped registration, never the branch) only
+    // AFTER the mint succeeds — a failed mint leaves the spec exactly as held
+    // as before, so the retry sees the same lease, not a stranded InProgress.
+    // Any other non-re-enterable lease is named, with the command that ends it.
+    // trace:TASK-1784 | ai:claude
+    let mut reclaimed_dead_lease = false;
+    let mut dead_leases: Vec<SessionLease> = Vec::new();
+    if existing.is_none() {
+        let held: Vec<SessionLease> = list_leases(&main_root)
+            .into_iter()
+            .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .filter(|l| !lease_is_advisory(l, &mcp_claims))
+            .collect();
+        let this_host = crate::hostname();
+        let caller_pid = crate::session_start::creator_shell_pid();
+        let caller_start = caller_pid.and_then(process_probe::process_start_identity);
+        let caller = caller_pid.map(|p| (p, caller_start.as_deref()));
+        let active = if held.is_empty() {
+            HashSet::new()
+        } else {
+            active_worktree_paths(&main_root)
+        };
+        match classify_unreenterable_leases(held, |l| {
+            probe_lease_death_facts(l, &this_host, caller, &active)
+        }) {
+            UnreenterableLeases::None => {}
+            UnreenterableLeases::Blocking(lease) => {
+                anyhow::bail!("{}", unreenterable_lease_message(spec_display, &lease))
+            }
+            UnreenterableLeases::Dead(dead) => {
+                // The registration of a confirmed-gone path is only git
+                // metadata; clearing it first is what lets the fresh `git
+                // worktree add` below succeed at the same path.
+                for lease in &dead {
+                    log_registration_clear(
+                        &lease.worktree_path,
+                        crate::session_reap::clear_missing_worktree_registration(
+                            &main_root,
+                            &lease.worktree_path,
+                            || {},
+                            || {},
+                        ),
+                    );
+                }
+                // Only claim past the stale InProgress when nothing but the
+                // dead leases (not even another session's `aida claim`) holds
+                // the spec; otherwise session_start's own gates decide.
+                // Check-then-act: a session that claims the spec between this
+                // read and session_start's lease save is overridden by
+                // force_claim. The window is the few ms of this one process,
+                // and the cross-clone claim in session_start still serializes
+                // a competing clone; accepted rather than holding a lock
+                // across the whole mint.
+                let dead_ids: HashSet<&str> = dead.iter().map(|l| l.id.as_str()).collect();
+                reclaimed_dead_lease = crate::claim::without_own_claims(
+                    list_leases(&main_root)
+                        .into_iter()
+                        .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                        .filter(|l| !dead_ids.contains(l.id.as_str()))
+                        .collect(),
+                    spec_display,
+                    caller_pid,
+                )
+                .is_empty();
+                dead_leases = dead;
+            }
+        }
+    }
+
+    // BUG-2143: a tree deleted by hand at the default path leaves a prunable
+    // registration that would make the fresh `git worktree add` below refuse.
+    // Clear just that registration (never a repo-wide prune).
     let default_path = match path_override {
         Some(p) => std::path::PathBuf::from(p),
         None => crate::worktree::default_worktree_path(&home, spec_display),
     };
-    let porcelain = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&main_root)
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default();
-    let registered = crate::worktree::is_registered(&porcelain, &default_path);
+    if existing.is_none()
+        && !default_path.exists()
+        && crate::worktree::is_registered(&porcelain, &default_path)
+    {
+        log_registration_clear(
+            &default_path,
+            crate::session_reap::clear_missing_worktree_registration(
+                &main_root,
+                &default_path,
+                || {},
+                || {},
+            ),
+        );
+    }
 
     ensure_spec_worktree_core(
         &home,
@@ -1605,7 +1965,7 @@ pub(crate) fn ensure_spec_worktree(
         path_override,
         branch_override,
         existing,
-        registered,
+        |p| is_linked_worktree(&porcelain, p, &main_root),
         |path, branch| {
             // Reuse the queue-work `--no-launch` setup primitive: session_start
             // mints the worktree + lease + Approved→InProgress bump off
@@ -1613,6 +1973,11 @@ pub(crate) fn ensure_spec_worktree(
             // per-spec path (no warm-pool tree); launch=false = no agent.
             let _context = ScopedEnvVar::set("AIDA_WORKTREE_CONTEXT", worktree_context);
             let _suppress_next = ScopedEnvVar::set("AIDA_SUPPRESS_SESSION_NEXT", "1");
+            // BUG-1918: `worktree add` / `enter` / `do-guided` are the
+            // implementer claiming for itself, so its own identity (harness
+            // ancestry, shell, session ids) is recorded as the author. Only a
+            // true hand-off to another process uses `as_launcher`.
+            // trace:BUG-1918 | ai:claude
             session_start(
                 spec_display,
                 Some(branch),
@@ -1628,12 +1993,14 @@ pub(crate) fn ensure_spec_worktree(
                 /* permission_mode */ None,
                 /* launch_contained */ false,
                 /* role */ Some("implementer".to_string()),
-                /* force_claim */ false,
+                /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
+                /* self_claim */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()
                 .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                .filter(|l| !lease_is_advisory(l, &mcp_claims))
                 .max_by_key(|l| l.started_at)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
@@ -1652,6 +2019,12 @@ pub(crate) fn ensure_spec_worktree(
         if let Some(lease) = list_leases(&main_root)
             .into_iter()
             .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .filter(|l| !lease_is_advisory(l, &mcp_claims))
+            // BUG-2143: only a lease for THIS tree, not a stale one elsewhere.
+            .filter(|l| {
+                crate::worktree::canonical_or_self(&l.worktree_path)
+                    == crate::worktree::canonical_or_self(&out.path)
+            })
             .max_by_key(|l| l.started_at)
         {
             out.lease_id = Some(lease.id.clone());
@@ -1663,6 +2036,21 @@ pub(crate) fn ensure_spec_worktree(
                     .is_file();
         }
         Ok(out)
+    })
+    .map(|out| {
+        // TASK-1784: the mint succeeded, so the dead leases it superseded are
+        // ended now — never before, or a failed mint strands the spec.
+        // trace:TASK-1784 | ai:claude
+        for lease in &dead_leases {
+            crate::session_reap::release_lease_files(&main_root, &lease.id);
+            eprintln!(
+                "  {} ended session {} — its worktree {} was deleted; minted a fresh one",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt),
+                &lease.id[..lease.id.len().min(8)],
+                lease.worktree_path.display()
+            );
+        }
+        out
     })
     .map(|out| {
         // BUG-778: both verbs that land here (`worktree enter` / `worktree
@@ -2472,6 +2860,10 @@ pub(crate) fn handle_worktree_add(
             ensure_spec_worktree(&display, &focus, path_override, branch_override, "add")?
         }
     };
+    // BUG-2143: print an absolute path, and never a blank one as success.
+    ensure_worktree_on_disk(&out.path, &out.focus)?;
+    let mut out = out;
+    out.path = crate::worktree::canonical_or_self(&out.path);
     let verb = if out.created {
         "Created"
     } else {
@@ -2506,6 +2898,8 @@ pub(crate) fn handle_worktree_enter(
             ensure_spec_worktree(&display, &focus, path_override, branch_override, "enter")?
         }
     };
+    // BUG-2143: never `cd` into a path that is not a git worktree.
+    ensure_worktree_on_disk(&out.path, &out.focus)?;
     let verb = if out.created {
         "Created and entering"
     } else {

@@ -414,6 +414,18 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
             .args(["fetch", "origin", &refspec])
             .output()?;
         if !fetch.status.success() {
+            // TASK-1784: a branch that was never pushed has nothing on origin
+            // to align with — the local branch IS the work (pure-git reports
+            // it as the change). Only a confirmed absence (`ls-remote` exit 2)
+            // proceeds; a network or auth failure still refuses.
+            // trace:TASK-1784 | ai:claude
+            if remote_branch_absent(project_root, branch) {
+                eprintln!(
+                    "  {} branch `{branch}` was never pushed — reusing the local branch as is",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt)
+                );
+                return Ok(());
+            }
             anyhow::bail!(
                 "could not refresh PR branch `{branch}` from origin before launch: {}",
                 String::from_utf8_lossy(&fetch.stderr).trim()
@@ -421,6 +433,22 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
         }
     }
     align_reused_pr_branch_with_status(project_root, branch, has_open_pr)
+}
+
+/// TASK-1784: origin answered and has no `refs/heads/<branch>`.
+/// `git ls-remote --exit-code` exits 2 exactly when no ref matched; any other
+/// failure (unreachable remote, auth) is not proof of absence.
+// trace:TASK-1784 | ai:claude
+fn remote_branch_absent(project_root: &std::path::Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-remote", "--exit-code", "--heads", "origin"])
+        .arg(format!("refs/heads/{branch}"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.code() == Some(2))
 }
 
 pub(crate) fn align_reused_pr_branch_with_status(
@@ -1129,6 +1157,9 @@ pub(crate) fn session_start(
     // STORY-714: pool the session's worktree? Some(true)=--pool,
     // Some(false)=--no-pool, None=resolve from [worktree_pool] enabled config.
     use_pool: Option<bool>,
+    // BUG-2010: true when caller is working the lease itself (self-claim).
+    // false when launching/spawning another agent (agent new, session start --launch).
+    self_claim: bool,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1275,7 +1306,8 @@ pub(crate) fn session_start(
     // Genuine create failures (worktree add, fetch, bad arg) stay non-zero.
     // Mirrors the BUG-573 contract (a completing read-only op exits 0).
     // trace:BUG-574 | ai:claude
-    let existing_leases = list_leases(&project_root);
+    // BUG-2143: only a lease holding a live linked worktree is re-entered.
+    let existing_leases = crate::worktree_gc::reenterable_leases(&project_root);
     if let Some(existing) = existing_lease_for_scope(&existing_leases, owns) {
         {
             eprintln!(
@@ -1419,7 +1451,12 @@ pub(crate) fn session_start(
     //   - DEAD/stale claims → ignored (a crashed agent can't lock its spec).
     // trace:BUG-637 | ai:claude
     if !force_claim_effective && !is_review_session {
-        let leases = list_leases(&project_root);
+        // BUG-2143: the caller's OWN `aida claim` never blocks its own pickup —
+        // `aida claim <spec>` then `aida worktree add <spec>` from one shell
+        // is the documented fixer flow.
+        // trace:BUG-2143 | ai:claude
+        let my_pid = creator_shell_pid();
+        let leases = crate::claim::without_own_claims(list_leases(&project_root), owns, my_pid);
         if !leases.is_empty() {
             let self_lease = std::env::current_dir()
                 .ok()
@@ -1507,8 +1544,27 @@ pub(crate) fn session_start(
                     || !std::io::IsTerminal::is_terminal(&std::io::stdin());
                 let live_sessions = process_probe::probe_live_claude_sessions();
                 let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
-                let decision = lease_conflict_decision(headless, is_live);
+                // BUG-2150: an explicit reviewer pickup coexists with the
+                // implementer's lease; another reviewer's lease still conflicts.
+                // trace:BUG-2150 | ai:claude
+                let decision = review_source_branch_conflict_decision(
+                    headless,
+                    is_live,
+                    l.role.as_deref(),
+                    launch_role.as_deref(),
+                );
                 match decision {
+                    LeaseConflictDecision::Coexist => {
+                        eprintln!(
+                            "{} PR-{}'s source branch `{}` is held by {} lease {} — the review checks out its own `{}` branch and runs alongside it",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            n,
+                            source_branch,
+                            l.role.as_deref().unwrap_or("an implementer"),
+                            l.id,
+                            branch_name
+                        );
+                    }
                     LeaseConflictDecision::AutoEnd => {
                         eprintln!(
                             "{} PR-{}'s source branch `{}` is held by lease {} whose session has exited — ending it so the review can check out the branch",
@@ -1545,7 +1601,7 @@ pub(crate) fn session_start(
                     }
                     LeaseConflictDecision::Prompt => {}
                 }
-                if decision != LeaseConflictDecision::AutoEnd {
+                if decision == LeaseConflictDecision::Prompt {
                     eprintln!();
                     eprintln!(
                         "{} PR-{}'s source branch `{}` is held by lease {}",
@@ -1968,10 +2024,27 @@ pub(crate) fn session_start(
     // Compose lease.
     let id_long = uuid::Uuid::now_v7().to_string();
     let id = id_long.replace('-', "")[..12].to_string();
-    let owner = aida_core::git_ops::git_config_get("user.email")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "unknown".to_string());
+    // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
+    // attribute the lease to that agent's live process rather than a short-lived
+    // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted
+    // for another agent (agent new, session start --launch) skip attribution
+    // so the launcher lane is not falsely pinned to the child's lease.
+    // Drain phase children get their own lease PID and also skip agent resolution.
+    // trace:BUG-2010 | ai:antigravity
+    let is_drain_child = orchestrator::detect(&project_root).is_orchestrated();
+    let session_agent = if is_drain_child || !self_claim {
+        None
+    } else {
+        agent_registry::resolve_session_agent_for_lease(&project_root)
+    };
+    let owner = if let Some(ref agent) = session_agent {
+        agent.name.clone().unwrap_or_else(|| agent.id.clone())
+    } else {
+        aida_core::git_ops::git_config_get("user.email")
+            .ok()
+            .or_else(|| std::env::var("USER").ok())
+            .unwrap_or_else(|| "unknown".to_string())
+    };
     // STORY-65 + TASK-67: role resolution by INTENT, not blind env
     // inheritance. Order:
     //   1. --role <name>             explicit override always wins
@@ -2027,8 +2100,20 @@ pub(crate) fn session_start(
     // even when cwd doesn't help. Best effort — if PPID isn't set / process
     // self-introspection fails, we leave the field None and fall back to
     // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
-    let creator_pid = creator_shell_pid();
-    let creator_pid_start_time = creator_pid.and_then(process_probe::process_start_identity);
+    let (creator_pid, creator_pid_start_time, active_pid, active_pid_start_time) =
+        if let Some(ref agent) = session_agent {
+            let pid = agent.pid;
+            let start = agent
+                .pid_start
+                .clone()
+                .or_else(|| process_probe::process_start_identity(pid));
+            (Some(pid), start.clone(), Some(pid), start)
+        } else {
+            let creator_pid = creator_shell_pid();
+            let creator_pid_start_time =
+                creator_pid.and_then(process_probe::process_start_identity);
+            (creator_pid, creator_pid_start_time, None, None)
+        };
 
     let lease = SessionLease {
         id: id.clone(),
@@ -2044,8 +2129,8 @@ pub(crate) fn session_start(
         role: inherited_role.clone(),
         creator_pid,
         creator_pid_start_time,
-        active_pid: None,
-        active_pid_start_time: None,
+        active_pid,
+        active_pid_start_time,
         cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -2090,6 +2175,23 @@ pub(crate) fn session_start(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // BUG-1918: durable record of who claimed this spec, surviving release.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
+
+    // BUG-2010: update the resolved agent's own registry entry with its new
+    // current_spec and worktree path.
+    // trace:BUG-2010 | ai:antigravity
+    if let Some(ref agent) = session_agent {
+        if let Err(e) = agent_registry::update_agent_current_spec(
+            &project_root,
+            &agent.id,
+            owns,
+            &worktree_path,
+        ) {
+            eprintln!("aida: warning: failed to update agent registry current_spec: {e}");
+        }
+    }
 
     // BUG-379: atomic-enough with the lease just persisted, bump
     // Approved → InProgress. Idempotent — if the spec already moved
@@ -2328,6 +2430,9 @@ pub(crate) fn session_start(
         );
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
+        // BUG-1918: the exec'd worker carries its lease id.
+        // trace:BUG-1918 | ai:claude
+        review_authority::export_worker_session_env(&id);
         // TASK-31: pass a display name to claude so the /resume picker and
         // terminal title can distinguish concurrent worktrees. Explicit
         // --name wins; otherwise derive from scope+branch+role.

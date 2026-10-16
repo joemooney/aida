@@ -324,6 +324,9 @@ pub(crate) fn session_harness_worktree_register(
         &lease_path(&project_root, &id),
         toml::to_string_pretty(&lease)?,
     )?;
+    // BUG-1918: durable record of who is authoring this worktree's work.
+    // trace:BUG-1918 | ai:claude
+    review_authority::record_authoring_lease(&project_root, &lease);
     println!(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
@@ -338,6 +341,14 @@ pub(crate) fn session_harness_worktree_register(
         println!(
             "adopted spec lease {adopted} for this subagent (its worktree is this subagent's cwd)"
         );
+        // BUG-1918: the adopting subagent now authors that spec's work.
+        // trace:BUG-1918 | ai:claude
+        if let Some(spec_lease) = list_leases(&project_root)
+            .into_iter()
+            .find(|l| l.id == adopted)
+        {
+            review_authority::record_authoring_lease(&project_root, &spec_lease);
+        }
     }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
     // now working that spec — flip Approved → In Progress at lease-take (the
@@ -624,7 +635,19 @@ pub(crate) fn existing_lease_for_scope<'a>(
     leases: &'a [SessionLease],
     scope: &str,
 ) -> Option<&'a SessionLease> {
-    leases.iter().find(|l| l.scope.eq_ignore_ascii_case(scope))
+    // BUG-2143: an advisory lease (`aida claim` / `aida review`) is never
+    // re-entered, whatever path it recorded, and neither is a blank path —
+    // "re-entering" one printed `cd ` with a blank or bogus path as success and
+    // created nothing. Callers pass leases pre-filtered by
+    // `worktree_gc::reenterable_leases`, which also drops MCP claims and any
+    // path that is not a live linked worktree.
+    // trace:BUG-2143 | ai:claude
+    leases.iter().find(|l| {
+        l.scope.eq_ignore_ascii_case(scope)
+            && !l.claim_verb
+            && !l.review_verb
+            && !l.worktree_path.to_string_lossy().trim().is_empty()
+    })
 }
 
 /// BUG-483: pure decision — does any lease OTHER than the one being ended
@@ -1619,6 +1642,11 @@ pub(crate) enum LeaseConflictDecision {
     AutoEnd,
     /// Headless and the lease is LIVE — refuse with a typed message.
     Refuse,
+    /// BUG-2150: the holder is not a reviewer (the implementer working the
+    /// PR). A review checks out its own `pr-N` branch from the forge's PR
+    /// head ref, so it coexists with that lease — no prompt, no refusal, and
+    /// never ending the implementer's session.
+    Coexist,
 }
 
 // BUG-1205: pure decision for the lease-held pre-flight in `session_start`.
@@ -1628,6 +1656,29 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
         (false, _) => LeaseConflictDecision::Prompt,
         (true, false) => LeaseConflictDecision::AutoEnd,
         (true, true) => LeaseConflictDecision::Refuse,
+    }
+}
+
+/// BUG-2150: the decision for a review whose PR source branch is held by
+/// another lease. A review lease is a different kind from an implementer
+/// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
+/// with a LIVE non-reviewer holder. Every other case — a non-reviewer pickup,
+/// a holder that is itself a reviewer, or a dead holder (ended as before) —
+/// keeps the BUG-1205 prompt / auto-end / refuse handling.
+// trace:BUG-2150 | ai:claude
+pub(crate) fn review_source_branch_conflict_decision(
+    headless: bool,
+    lease_live: bool,
+    holder_role: Option<&str>,
+    pickup_role: Option<&str>,
+) -> LeaseConflictDecision {
+    let is_reviewer = |r: Option<&str>| {
+        r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
+    };
+    if lease_live && is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+        LeaseConflictDecision::Coexist
+    } else {
+        lease_conflict_decision(headless, lease_live)
     }
 }
 
@@ -2486,6 +2537,50 @@ pub(crate) fn session_leases_prune_stale(yes: bool) -> Result<()> {
     Ok(())
 }
 
+/// BUG-2010: classify a list of session leases with live agent overlay.
+// trace:BUG-2010 | ai:antigravity
+pub(crate) fn classify_session_leases(
+    project_root: &std::path::Path,
+    leases: &[SessionLease],
+) -> Vec<(SessionLease, LeaseState, Option<u32>)> {
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let live_agents = agent_registry::load_live_entries(project_root);
+    leases
+        .iter()
+        .map(|l| {
+            let live_in_worktree = live.iter().find(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            // BUG-511: review-verb leases classify by creator PID, not worktree.
+            let mut state = lease_state_for(l, &live, now);
+            let mut pid = l
+                .active_pid
+                .filter(|p| process_probe::pid_is_alive(*p))
+                .or_else(|| live_in_worktree.map(|s| s.pid))
+                .or(if l.review_verb || l.claim_verb {
+                    l.creator_pid
+                } else {
+                    None
+                });
+            // BUG-2010: a live registered agent (Codex, Antigravity, Claude) keeps the lease live
+            // even if its recorded pid was dead or transient.
+            // trace:BUG-2010 | ai:antigravity
+            if !matches!(state, LeaseState::Live) {
+                if let Some(agent) =
+                    agent_registry::live_agent_for_lease_or_spec(&live_agents, Some(l), None)
+                {
+                    state = LeaseState::Live;
+                    if pid.is_none() {
+                        pid = Some(agent.pid);
+                    }
+                }
+            }
+            (l.clone(), state, pid)
+        })
+        .collect()
+}
+
 pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -2520,31 +2615,10 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         return Ok(());
     }
 
-    // TASK-55: probe live claudes once + classify every lease so we
-    // can render the state column AND apply the hide-stale filter
-    // off the same data. trace:TASK-55 | ai:claude
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let classified: Vec<(SessionLease, LeaseState, Option<u32>)> = leases
-        .iter()
-        .map(|l| {
-            let live_in_worktree = live.iter().find(|s| {
-                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            });
-            // BUG-511: review-verb leases classify by creator PID, not worktree.
-            let state = lease_state_for(l, &live, now);
-            let pid = l
-                .active_pid
-                .filter(|p| process_probe::pid_is_alive(*p))
-                .or_else(|| live_in_worktree.map(|s| s.pid))
-                .or(if l.review_verb || l.claim_verb {
-                    l.creator_pid
-                } else {
-                    None
-                });
-            (l.clone(), state, pid)
-        })
-        .collect();
+    let root = find_main_worktree_root()?;
+    let classified = classify_session_leases(&root, &leases);
 
     let (shown, hidden_stale) = select_lease_listing(classified, all);
 
@@ -2812,6 +2886,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // (after the same activity aggregation) and stop.
     if lease.worktree_path.as_os_str().is_empty() {
         aggregate_session_activity_into_roles(project_root, &lease.id);
+        // trace:BUG-2139 | ai:claude
+        crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
@@ -2879,6 +2955,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
@@ -4044,6 +4123,8 @@ pub(crate) fn remove_session_lease_record_only(
     lease_id: &str,
 ) -> bool {
     let lease_file = lease_path(project_root, lease_id);
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_file);
     let removed = match std::fs::remove_file(&lease_file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,

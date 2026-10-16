@@ -650,9 +650,7 @@ pub(crate) struct CoverageCache {
 }
 
 fn git_head_full(project_root: &Path) -> Option<String> {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    aida_core::git_ops::host_git_command(project_root)
         .args(["rev-parse", "HEAD"])
         .output()
         .ok()
@@ -669,9 +667,7 @@ pub(crate) fn store_head_sha(project_root: &Path) -> Option<String> {
             let p = project_root.join(".aida-store");
             p.exists().then_some(p)
         })?;
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&store_path)
+    let out = aida_core::git_ops::host_git_command(&store_path)
         .args(["rev-parse", "HEAD"])
         .stderr(std::process::Stdio::null())
         .output()

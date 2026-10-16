@@ -116,9 +116,12 @@ if [ "$AIDA_ALLOW_INTERMEDIATE" = "1" ] || ( [ -f "/proc/$PPID/cmdline" ] && gre
     exit 0
 fi
 
+# Host store git sets AIDA_STORE_HOOKS_ONLY even for detached/override stores;
+# code commits also carry the older version marker, so it cannot select this path.
+# trace:BUG-1929 | ai:codex
 # 2. Special-case bypass for .aida-store worktree/branch (deliberate gitignored path commits)
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
-if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
+if [ "${AIDA_STORE_HOOKS_ONLY:-}" = "1" ] || [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
     # 2a. Store bulk-write version floor (trace:BUG-766). A stale installed
     # aida binary resolved from the raw PATH once ran unguarded bulk saves
     # that rewrote the whole object tree and dropped fields (the

@@ -1457,6 +1457,26 @@ impl CachedGitBackend {
         }
     }
 
+    /// BUG-1929: refuse a store write up front when this handle's cache is
+    /// read-only. Writing the YAML first and failing on the cache afterwards
+    /// printed an error for a change that had in fact persisted; refusing
+    /// before the store write gives one error and changes nothing.
+    // trace:BUG-1929 | ai:claude
+    fn refuse_store_write_on_read_only_cache(&self) -> Result<()> {
+        if !self.cache.is_read_only() {
+            return Ok(());
+        }
+        let path = self.cache.path().to_path_buf();
+        Err(
+            anyhow::Error::new(super::cache::CacheReadOnly { path: path.clone() }).context(
+                format!(
+                    "nothing was written: {}",
+                    super::cache::cache_read_only_guidance(&path)
+                ),
+            ),
+        )
+    }
+
     /// Write-through batched update (BUG-425): apply many requirement updates
     /// in a SINGLE store commit (via `GitBackend::bulk_update`), then upsert
     /// each into the cache and re-stamp the HEAD-SHA once. Mirrors
@@ -1471,6 +1491,7 @@ impl CachedGitBackend {
         // inner write takes it again). Released before the cache upserts.
         // trace:BUG-1951 | ai:claude
         let (pre_write_head, n, post_write_head) = {
+            self.refuse_store_write_on_read_only_cache()?;
             let _lock = self.inner.lock_store()?;
             let pre = self.current_head_sha();
             let n = self.inner.bulk_update(requirements, commit_subject)?;
@@ -1523,6 +1544,7 @@ impl CachedGitBackend {
         // upserts as described above.
         // trace:BUG-1951 | ai:claude
         let (pre_write_head, report, post_write_head) = {
+            self.refuse_store_write_on_read_only_cache()?;
             let _lock = self.inner.lock_store()?;
             let pre = self.current_head_sha();
             let report = self
@@ -1565,6 +1587,7 @@ impl CachedGitBackend {
     where
         F: FnOnce(&mut Requirement),
     {
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let Some(updated) =
@@ -1620,6 +1643,7 @@ impl DatabaseBackend for CachedGitBackend {
         // it skipped specs that changed on disk after the load (the in-memory
         // copies are stale).
         // trace:BUG-1612 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let report = self.inner.save_reporting(store)?;
         let head = self.current_head_sha();
@@ -1640,6 +1664,7 @@ impl DatabaseBackend for CachedGitBackend {
     where
         F: FnOnce(&mut RequirementsStore),
     {
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let (store, summary) = self.inner.update_atomically_tracked(update_fn)?;
@@ -1727,6 +1752,7 @@ impl DatabaseBackend for CachedGitBackend {
         // BUG-1951: take the store lock (re-entrant) first, so no writer that
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
@@ -1748,6 +1774,7 @@ impl DatabaseBackend for CachedGitBackend {
         // BUG-1951: take the store lock (re-entrant) first, so no writer that
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
@@ -1768,6 +1795,7 @@ impl DatabaseBackend for CachedGitBackend {
         // BUG-1951: take the store lock (re-entrant) first, so no writer that
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
@@ -1789,6 +1817,7 @@ impl DatabaseBackend for CachedGitBackend {
         // BUG-1951: take the store lock (re-entrant) first, so no writer that
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
+        self.refuse_store_write_on_read_only_cache()?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;
@@ -3083,7 +3112,10 @@ mod tests {
     }
 
     /// BUG-1612: the cached per-spec update is a targeted write-through: the
-    /// row is refreshed without listing the store.
+    /// row is refreshed without listing the store for ordinary refinements.
+    /// STORY-1675: completing a result now consults incoming hypothesis edges;
+    /// that graph-affecting operation intentionally needs one canonical scan.
+    // trace:STORY-1675 | ai:codex
     // trace:BUG-1612 | ai:claude
     #[test]
     fn bug1612_cached_update_spec_atomically_refreshes_row_without_scan() {
@@ -3107,12 +3139,27 @@ mod tests {
         FULL_SCAN_COUNT.with(|c| c.set(0));
         backend
             .update_spec_atomically(&target, |r| {
-                r.status = crate::models::RequirementStatus::Completed;
+                r.title = "ordinary refinement".into();
             })
             .unwrap()
             .unwrap();
         assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
         assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
+        assert_eq!(
+            cached_status(&backend, target.id),
+            target.status.to_string()
+        );
+        backend
+            .update_spec_atomically(&target, |r| {
+                r.status = crate::models::RequirementStatus::Completed;
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            OBJECT_LIST_COUNT.with(|c| c.get()),
+            1,
+            "result completion must consult the canonical incoming hypothesis graph"
+        );
         assert_eq!(cached_status(&backend, target.id), "Completed");
     }
 
@@ -5229,5 +5276,47 @@ mod tests {
             3
         );
         assert_eq!(scope.metadata()["stale"], false);
+    }
+
+    // BUG-1929: with a read-only cache, a store write is refused before the
+    // YAML is touched: one error, nothing persisted. Previously the YAML was
+    // written and the command then failed on the cache.
+    // trace:BUG-1929 | ai:claude
+    #[test]
+    fn read_only_cache_refuses_write_atomically() {
+        let dir = tempdir().unwrap();
+        let (mut backend, store_root, _cache_path) = task_1515_backend(dir.path());
+        backend.cache.force_read_only_for_test();
+        let mut edited = backend
+            .inner
+            .get_requirement_by_spec_id("FR-1-001")
+            .unwrap()
+            .unwrap();
+        edited.title = "changed".to_string();
+
+        let err = backend
+            .update_requirement(&edited)
+            .expect_err("a read-only cache must refuse the write");
+        let message = format!("{err:#}");
+        assert!(message.contains("nothing was written"), "{message}");
+        assert!(backend
+            .add_requirement(sample_req("FR-1-099", "new"))
+            .is_err());
+        assert!(backend.delete_requirement(&edited.id).is_err());
+
+        let fresh = GitBackend::new(&store_root).unwrap();
+        assert_eq!(
+            fresh
+                .get_requirement_by_spec_id("FR-1-001")
+                .unwrap()
+                .unwrap()
+                .title,
+            "gen0",
+            "the YAML must be unchanged"
+        );
+        assert!(fresh
+            .get_requirement_by_spec_id("FR-1-099")
+            .unwrap()
+            .is_none());
     }
 }

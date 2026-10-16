@@ -1913,3 +1913,54 @@ fn recovery_with_old_format_crash_between_binary_swaps() {
     assert_eq!(read_promotion_meta(&f.layout.prev_dir()), a.clone());
     assert_consistent(&f, &a, &b, "old format between binary swaps");
 }
+
+// trace:BUG-2135 | ai:antigravity
+#[test]
+fn sccache_missing_tmpdir_detected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let proc_dir = tmp.path().join("proc");
+    let pid_dir = proc_dir.join("12345");
+    fs::create_dir_all(&pid_dir).unwrap();
+
+    fs::write(pid_dir.join("comm"), "sccache\n").unwrap();
+
+    let missing = tmp.path().join("deleted_tmp");
+    let mut environ = Vec::new();
+    environ.extend_from_slice(b"FOO=bar\0");
+    environ.extend_from_slice(format!("TMPDIR={}\0", missing.display()).as_bytes());
+    environ.extend_from_slice(b"BAZ=qux\0");
+    fs::write(pid_dir.join("environ"), &environ).unwrap();
+
+    let found = sccache_missing_tmpdir_in(&proc_dir, Some("12345"));
+    assert_eq!(found, Some(missing));
+
+    // Existing temp dir is not flagged
+    let valid = tmp.path().join("valid_tmp");
+    fs::create_dir_all(&valid).unwrap();
+    let mut environ_valid = Vec::new();
+    environ_valid.extend_from_slice(format!("TMPDIR={}\0", valid.display()).as_bytes());
+    fs::write(pid_dir.join("environ"), &environ_valid).unwrap();
+
+    let found_valid = sccache_missing_tmpdir_in(&proc_dir, Some("12345"));
+    assert_eq!(found_valid, None);
+}
+
+// trace:BUG-2135 | ai:antigravity
+#[test]
+fn sccache_missing_tmpdir_ignores_non_sccache() {
+    let tmp = tempfile::tempdir().unwrap();
+    let proc_dir = tmp.path().join("proc");
+    let pid_dir = proc_dir.join("67890");
+    fs::create_dir_all(&pid_dir).unwrap();
+
+    fs::write(pid_dir.join("comm"), "cargo\n").unwrap();
+    let missing = tmp.path().join("deleted_tmp");
+    fs::write(
+        pid_dir.join("environ"),
+        format!("TMPDIR={}\0", missing.display()).as_bytes(),
+    )
+    .unwrap();
+
+    let found = sccache_missing_tmpdir_in(&proc_dir, Some("67890"));
+    assert_eq!(found, None);
+}

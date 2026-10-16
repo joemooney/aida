@@ -28,11 +28,48 @@ fn git(repo: &Path, args: &[&str]) {
     );
 }
 
+/// BUG-1918: placeholder for the fake forge's PR head in the script below;
+/// replaced with the fixture repo's real head commit, whose committer date the
+/// ship gate checks the approval against.
+// trace:BUG-1918 | ai:claude
+const HEAD_SHA: &str = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12";
+/// The fixture head's committer date: before the fixture approval.
+const HEAD_COMMITTED_AT: &str = "2026-10-13T00:00:00Z";
+
+/// BUG-1918: `aida pr ship` refuses a PR with no approval from an independent,
+/// re-validated recorder. This test exercises step 5 behind that gate, so the
+/// fixture carries what `aida review record` leaves after a human approved at a
+/// terminal: a human-review receipt in the (fixture) AIDA home and an attested
+/// verdict at the head, recorded by a reviewer session distinct from the
+/// implementer lease `01bug1953abc`.
+// trace:BUG-1918 | ai:claude
+fn approve_at_head(home: &Path, repo: &Path, head: &str) {
+    let receipt_id = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+    let receipts = home.join(".aida/review-receipts");
+    std::fs::create_dir_all(&receipts).unwrap();
+    std::fs::write(
+        receipts.join(format!("{receipt_id}.json")),
+        format!(
+            r#"{{"id":"{receipt_id}","sha":"{head}","subject":"PR-42","recorded_at":"2026-10-13T01:00:00Z","identity":["session:fixture-reviewer"]}}"#
+        ),
+    )
+    .unwrap();
+    let verdicts = repo.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(
+        verdicts.join("PR-42.json"),
+        format!(
+            r#"{{"verdict":"approved","reviewed_sha":"{head}","recorded_at":"2026-10-13T01:00:00Z","recorded_by":"aida review record (operator)","recorder_attestation":{{"sha":"{head}","human_at_tty":true,"receipt_id":"{receipt_id}","identity":["session:fixture-reviewer"]}}}}"#
+        ),
+    )
+    .unwrap();
+}
+
 const FAKE_GH: &str = r###"#!/bin/sh
 set -eu
 state=${AIDA_FIXTURE_STATE:?}
 printf '%s\n' "$*" >> "$state/calls"
-head='"baseRefName":"main","headRefName":"task-123-work","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false'
+head='"baseRefName":"main","headRefName":"task-123-work","headRefOid":"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false'
 if [ "$1" = "--version" ]; then
   echo "gh version fixture"
 elif [ "$1 $2" = "pr list" ] && printf '%s' "$*" | grep -q -- '--base'; then
@@ -46,7 +83,7 @@ elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title.*mergedA
     printf '{"state":"OPEN","title":"fixture","mergedAt":null,%s}\n' "$head"
   fi
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,mergeable,reviewDecision,headRefOid'; then
-  printf 'OPEN\tMERGEABLE\t\tabc\n'
+  printf 'OPEN\tMERGEABLE\t\tab12cd34ef56ab12cd34ef56ab12cd34ef56ab12\n'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; then
   printf '%s\n' false
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
@@ -85,7 +122,25 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "AIDA Test"]);
     git(&repo, &["add", "."]);
-    git(&repo, &["commit", "-q", "-m", "base"]);
+    let out = Command::new("git")
+        .current_dir(&repo)
+        .args(["commit", "-q", "-m", "base"])
+        .env("GIT_COMMITTER_DATE", HEAD_COMMITTED_AT)
+        .env("GIT_AUTHOR_DATE", HEAD_COMMITTED_AT)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let head_sha = String::from_utf8(
+        Command::new("git")
+            .current_dir(&repo)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
     git(&repo, &["branch", "task-123-work"]);
     git(
         &repo,
@@ -113,7 +168,8 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     .unwrap();
 
     let gh = bin.join("gh");
-    std::fs::write(&gh, FAKE_GH).unwrap();
+    std::fs::write(&gh, FAKE_GH.replace(HEAD_SHA, &head_sha)).unwrap();
+    approve_at_head(&home, &repo, &head_sha);
     let mut permissions = std::fs::metadata(&gh).unwrap().permissions();
     permissions.set_mode(0o755);
     std::fs::set_permissions(&gh, permissions).unwrap();

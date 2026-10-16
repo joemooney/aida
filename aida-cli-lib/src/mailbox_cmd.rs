@@ -135,6 +135,14 @@ pub(crate) fn handle_mailbox_command(
             let recipient = if *broadcast {
                 Recipient::Broadcast
             } else if let Some(agent) = to {
+                // BUG-2132: a junk id (flag, number, spec ID, line ref) opens a
+                // mailbox nobody reads; refuse it instead of warning.
+                // trace:BUG-2132 | ai:claude
+                if let Some(why) = aida_core::mailbox::recipient_id_rejection(agent) {
+                    anyhow::bail!(
+                        "send refused: --to {why}.\n  Pass an agent id or seat name (e.g. advisor, antigravity-implementer-1), or --broadcast."
+                    );
+                }
                 Recipient::Agent(agent.clone())
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
@@ -1112,6 +1120,67 @@ mod tests {
         assert_eq!(
             mailbox_store::read_watermark(project.path(), "bob"),
             Some(99)
+        );
+    }
+
+    fn plain_send(to: &str) -> MailboxCommand {
+        MailboxCommand::Send {
+            to: Some(to.into()),
+            broadcast: false,
+            body: Some("status update".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: Some("alice".into()),
+            urgent: false,
+            intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
+        }
+    }
+
+    // BUG-2132: the word-split junk ids are refused and no mailbox is opened.
+    // trace:BUG-2132 | ai:claude
+    #[test]
+    fn mailbox_send_refuses_junk_recipient_ids_without_writing() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        for junk in ["-include", "33492", "BUG-52", "EPIC-20", "L4425"] {
+            let error = handle_mailbox_command(&plain_send(junk), &store)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("send refused"), "{junk}: {error}");
+            assert!(error.contains(junk), "{junk}: {error}");
+        }
+        assert!(mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .is_empty());
+    }
+
+    // BUG-2132 positive control: agent ids and seat names still send.
+    // trace:BUG-2132 | ai:claude
+    #[test]
+    fn mailbox_send_accepts_agent_ids_and_seat_names() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let ok = [
+            "advisor",
+            "agy-reviewer-task1522",
+            "antigravity-implementer-1",
+        ];
+        for to in ok {
+            handle_mailbox_command(&plain_send(to), &store)
+                .unwrap_or_else(|e| panic!("{to} must send: {e}"));
+        }
+        assert_eq!(
+            mailbox_store::read_local_messages(project.path())
+                .unwrap()
+                .len(),
+            ok.len()
         );
     }
 

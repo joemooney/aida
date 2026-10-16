@@ -269,9 +269,8 @@ pub fn set_allowed_seats_cas(
             Ok(false) => {
                 // Push rejected — someone else wrote first. Discard our stale
                 // commit + tree so the next pull --rebase applies cleanly.
-                let _ = std::process::Command::new("git")
+                let _ = crate::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 continue;
             }
@@ -356,9 +355,8 @@ fn update_seats_cas(
         match git_ops::push(store_root, "origin", &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
-                let _ = std::process::Command::new("git")
+                let _ = crate::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
             }
             Err(e) => return Err(io_err(e)),
@@ -419,9 +417,8 @@ pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool>
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly.
-                let _ = std::process::Command::new("git")
+                let _ = crate::git_ops::host_git_command(store_root)
                     .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
                     .output();
                 continue;
             }

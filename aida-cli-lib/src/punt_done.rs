@@ -186,6 +186,11 @@ pub(crate) fn send_notification(
     body: String,
 ) {
     use aida_core::mailbox::{Intent, Message, Recipient};
+    // BUG-2132: never open a mailbox for a junk id (a flag, a number, a spec
+    // ID, a line ref) — that mail is never read. trace:BUG-2132 | ai:claude
+    if aida_core::mailbox::recipient_id_rejection(recipient).is_some() {
+        return;
+    }
     let project_root = match store_path.parent() {
         Some(p) => p,
         None => return,
@@ -250,7 +255,7 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
                 let raw: String = chars[i + 1..j].iter().collect();
                 // Trim trailing sentence punctuation so `@bob.` -> `bob`.
                 let handle = raw.trim_end_matches(['.', '-']).to_string();
-                if !handle.is_empty() && !out.contains(&handle) {
+                if !handle.is_empty() && is_mention_handle(&handle) && !out.contains(&handle) {
                     out.push(handle);
                 }
                 i = j;
@@ -260,6 +265,22 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
         i += 1;
     }
     out
+}
+
+/// BUG-2132: whether an `@token` in comment prose is plausibly a person or
+/// agent rather than code-ish text. Comments quoting `@-include`,
+/// `@33492/34424`, `@BUG-52`, `@SCOPE`, `@L4425` (a thread-local selector)
+/// or `@main.rs:47359` each opened a junk mailbox that nobody reads. Refused:
+/// every shape `--to` refuses, a token with no lower-case letter (upper-case
+/// words and selectors such as `SPEC`, `L`), and a source file name.
+// trace:BUG-2132 | ai:claude
+fn is_mention_handle(handle: &str) -> bool {
+    const SOURCE_EXTS: &[&str] = &[
+        ".rs", ".md", ".toml", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".py", ".sh",
+    ];
+    aida_core::mailbox::recipient_id_rejection(handle).is_none()
+        && handle.chars().any(|c| c.is_lowercase())
+        && !SOURCE_EXTS.iter().any(|ext| handle.ends_with(ext))
 }
 
 /// One-line snippet of `text` for a mention notice: collapsed whitespace,

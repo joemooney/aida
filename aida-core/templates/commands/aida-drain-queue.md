@@ -21,7 +21,8 @@ Follow the workflow in `.claude/skills/aida-drain-queue/SKILL.md`:
      up the head item; there is no `--next`.
    - **Mechanism clause matches the mode** — `review` keeps the
      reviewer in the loop via `aida session end` (files a Review PR-N
-     story); `merge` autonomously merges and skips the reviewer.
+     story); `merge` merges each PR without the reviewer handoff, so a
+     merge still needs an independent approval already on the PR.
 4. With `--dry-run`: print the assembled `/goal` text and stop.
    Otherwise: invoke it as `/goal <text>` to start the drain.
 5. For an unattended / overnight loop, wait on the drain **event-driven**

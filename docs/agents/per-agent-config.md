@@ -56,6 +56,34 @@ unavailable, disables unsandboxed command retry, auto-allows project-relative
 edits only, and denies known destructive Bash commands. AIDA uses the session
 lease worktree as the write boundary.
 
+### Under a contained parent (`AIDA_CONTAINED`)
+
+A session that is itself contained (`AIDA_CONTAINED=1` in its environment)
+only ever launches contained Claude children, whatever the knobs or flags say.
+This covers `aida agent new`, `aida agent resume`, `aida session new`,
+`aida session start --launch` and `aida session resume`:
+
+- the child gets the contained flags and keeps `AIDA_CONTAINED=1`; its write
+  boundary is the child's own worktree (for `session resume`, the checkout
+  that holds the resumed transcript, which is also where it runs);
+- `--permission-mode` is refused, not honoured;
+- Codex and Antigravity are refused, since they cannot run AIDA-contained;
+- passthrough flags (`--extra-flag` and `[agents.claude] default_flags`) must be
+  on a fixed allowlist. Everything else is refused, including `--add-dir`,
+  `--allowedTools`/`--allowed-tools`, `--tools`, `--plugin-dir`,
+  `--plugin-url`, `--mcp-config` and `--agents`, because the write boundary is
+  itself a set of Edit/Write allow rules that those flags widen.
+
+| allowed passthrough flag | takes a value |
+| ------------------------ | ------------- |
+| `--model`                | yes           |
+| `--effort`               | yes           |
+| `--verbose`              | no            |
+
+The list is kept short on purpose: each entry only chooses the model or how
+much it thinks or logs, and grants nothing. Pass `--no-default-flags` to skip
+an agents.toml list the allowlist refuses, or launch from an uncontained shell.
+
 ### OS-boundary wrapper — `[contained] os_wrap` (STORY-612)
 
 Contained mode sandboxes only Claude's *Bash* tool; Edit/Write/MCP run

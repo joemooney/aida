@@ -75,6 +75,7 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         id: "codex-123".to_string(),
         agent_type: "codex".to_string(),
         pid: 123,
+        pid_start: None,
         name: None,
         description: None,
         tty: None,

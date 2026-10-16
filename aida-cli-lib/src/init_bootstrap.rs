@@ -332,9 +332,8 @@ fn current_branch(dir: &Path) -> Result<String> {
 }
 
 fn origin_exists(dir: &Path) -> bool {
-    std::process::Command::new("git")
+    aida_core::git_ops::host_git_command(dir)
         .args(["remote", "get-url", "origin"])
-        .current_dir(dir)
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)

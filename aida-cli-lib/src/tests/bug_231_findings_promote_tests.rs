@@ -165,6 +165,24 @@ fn extract_mentions_picks_handles_ignores_emails_and_code() {
     assert!(extract_mentions("no mentions here").is_empty());
 }
 
+/// BUG-2132: code-ish `@` tokens quoted in real comments are not mentions —
+/// each used to open a junk mailbox. Real handles beside them still count.
+// trace:BUG-2132 | ai:claude
+#[test]
+fn extract_mentions_ignores_code_tokens_that_opened_junk_mailboxes() {
+    let text = "no documented @-include mechanism; over list_worktrees @33492/34424 \
+                incl. @main.rs:47359; scenarios → `@BUG-52`, `@EPIC-20`; statusline \
+                @SCOPE fallback, @SPEC, selector (@L4425 -> @L4448), @L; ping @advisor \
+                and @antigravity-implementer-1";
+    assert_eq!(
+        extract_mentions(text),
+        vec![
+            "advisor".to_string(),
+            "antigravity-implementer-1".to_string()
+        ]
+    );
+}
+
 /// The mention snippet collapses whitespace and truncates with an ellipsis.
 #[test]
 fn mention_snippet_collapses_and_truncates() {

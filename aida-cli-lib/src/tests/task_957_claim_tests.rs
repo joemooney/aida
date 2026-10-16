@@ -148,3 +148,262 @@ fn write_then_unclaim_round_trips_through_the_gate() {
         "after unclaim the gate must no longer fire"
     );
 }
+
+/// BUG-2143: run git in `dir`, panicking on failure.
+fn git_in(dir: &std::path::Path, args: &[&str]) {
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git runs")
+        .status
+        .success();
+    assert!(ok, "git {args:?} failed in {}", dir.display());
+}
+
+/// BUG-2143: a claim with no worktree records NO branch — never the primary
+/// checkout's `main`, which reap would then protect forever. A claim naming
+/// the primary checkout itself also records none; a claim naming a real
+/// worktree records that worktree's branch.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn claim_lease_branch_is_the_worktree_branch_or_none() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    std::fs::create_dir_all(&root).unwrap();
+    git_in(&root, &["init", "-q", "-b", "main"]);
+    git_in(
+        &root,
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let wt = tmp.path().join("wt");
+    git_in(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "fix/bug-2143",
+            wt.to_str().unwrap(),
+        ],
+    );
+
+    assert_eq!(
+        crate::claim::claim_lease_branch(std::path::Path::new(""), &root),
+        "",
+        "a worktree-less claim must not inherit the primary checkout's branch"
+    );
+    assert_eq!(crate::claim::claim_lease_branch(&root, &root), "");
+    assert_eq!(crate::claim::claim_lease_branch(&wt, &root), "fix/bug-2143");
+}
+
+/// BUG-2143: a worktree-less lease that recorded `main` (legacy claims) is
+/// branchless to the reap — so a dead claim on a merged spec is reapable and
+/// the reap never touches `main` — while a lease that HOLDS a worktree keeps
+/// its branch (and the protected-ref floor) unchanged.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn reap_treats_worktreeless_main_claim_as_branchless() {
+    let mut legacy = claim("c1", "BUG-2143", None);
+    legacy.branch = "main".into();
+    assert_eq!(
+        crate::session_reap::reap_branch(&legacy, Some("origin/main")),
+        ""
+    );
+
+    let mut feature = claim("c2", "BUG-2143", None);
+    feature.branch = "fix/bug-2143".into();
+    assert_eq!(
+        crate::session_reap::reap_branch(&feature, Some("origin/main")),
+        "fix/bug-2143"
+    );
+
+    let mut in_place = claim("c3", "BUG-2143", None);
+    in_place.branch = "main".into();
+    in_place.worktree_path = std::path::PathBuf::from("/some/checkout");
+    assert_eq!(
+        crate::session_reap::reap_branch(&in_place, Some("origin/main")),
+        "main",
+        "a lease holding a worktree keeps its protected branch"
+    );
+}
+
+/// BUG-2143: a claim lease is ADVISORY and is never re-entered by `aida
+/// worktree add` — whatever path `aida claim --worktree` recorded: none, a
+/// path that does not exist, the primary checkout (`--worktree .`), or even a
+/// real linked worktree. A non-advisory session lease on a real linked
+/// worktree is the only re-enterable kind; MCP `claim_task` markers (keyed by
+/// lease id from their `mcp-claim.*` files) are advisory too.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn claim_lease_is_never_reentered() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    std::fs::create_dir_all(&root).unwrap();
+    git_in(&root, &["init", "-q", "-b", "main"]);
+    git_in(
+        &root,
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let wt = tmp.path().join("aida-bug-2143");
+    git_in(
+        &root,
+        &["worktree", "add", "-q", "-b", "w", wt.to_str().unwrap()],
+    );
+    let porcelain = crate::worktree_gc::worktree_porcelain(&root);
+    let none = std::collections::HashSet::new();
+    let holds =
+        |l: &SessionLease| crate::worktree_gc::lease_holds_worktree(l, &none, &porcelain, &root);
+
+    let mut c = claim("c1", "BUG-2143", None);
+    for recorded in [
+        std::path::PathBuf::new(),
+        tmp.path().join("aida-bug-x"), // `--worktree <nonexistent>`
+        root.clone(),                  // `--worktree .` from the primary checkout
+        wt.clone(),                    // even a real linked worktree
+    ] {
+        c.worktree_path = recorded.clone();
+        assert!(
+            !holds(&c),
+            "claim recording {recorded:?} must not be re-entered"
+        );
+    }
+    let mut review = c.clone();
+    review.claim_verb = false;
+    review.review_verb = true;
+    assert!(!holds(&review), "a review lease is advisory too");
+
+    let mut session = c.clone();
+    session.claim_verb = false;
+    assert!(
+        holds(&session),
+        "a session lease on a live linked worktree re-enters"
+    );
+    let mcp: std::collections::HashSet<String> = [session.id.clone()].into();
+    assert!(
+        !crate::worktree_gc::lease_holds_worktree(&session, &mcp, &porcelain, &root),
+        "an MCP claim is advisory"
+    );
+    for not_a_tree in [
+        std::path::PathBuf::new(),
+        std::path::PathBuf::from("   "),
+        root.clone(),
+        tmp.path().join("aida-bug-x"),
+    ] {
+        session.worktree_path = not_a_tree.clone();
+        assert!(!holds(&session), "{not_a_tree:?} is not a linked worktree");
+    }
+}
+
+/// BUG-2143: what `aida claim --worktree <P>` records — blank (`" "`) records
+/// nothing, a nonexistent path is kept verbatim, and `.` resolves to the cwd
+/// (the primary checkout when run there). All are informational only (see
+/// `claim_lease_is_never_reentered`).
+// trace:BUG-2143 | ai:claude
+#[test]
+fn claim_worktree_path_records_blank_as_none() {
+    use crate::claim::claim_worktree_path;
+    assert_eq!(claim_worktree_path(None), std::path::PathBuf::new());
+    assert_eq!(claim_worktree_path(Some(" ")), std::path::PathBuf::new());
+    assert_eq!(claim_worktree_path(Some("")), std::path::PathBuf::new());
+    assert_eq!(
+        claim_worktree_path(Some("/no/such/aida-bug-x")),
+        std::path::PathBuf::from("/no/such/aida-bug-x")
+    );
+    assert_eq!(
+        claim_worktree_path(Some(".")),
+        std::env::current_dir().unwrap().canonicalize().unwrap()
+    );
+}
+
+/// BUG-2143: MCP `claim_task` markers are recognized by the lease id in their
+/// `mcp-claim.<spec>.toml` file (`SessionLease` drops the `mcp_claim` key).
+// trace:BUG-2143 | ai:claude
+#[test]
+fn mcp_claim_lease_ids_reads_only_mcp_claim_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("mcp-claim.bug-2143.toml"),
+        "id = \"mcpid\"\nscope = \"BUG-2143\"\nmcp_claim = true\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("abc.toml"), "id = \"sessionid\"\n").unwrap();
+    let ids = crate::worktree_gc::mcp_claim_lease_ids(tmp.path());
+    assert!(ids.contains("mcpid"));
+    assert!(!ids.contains("sessionid"));
+}
+
+/// BUG-2143: the BUG-637 pickup gate drops ONLY the caller's own claim on the
+/// scope — another process's claim, a claim on another scope, and session
+/// leases still count.
+// trace:BUG-2143 | ai:claude
+#[test]
+fn pickup_gate_drops_only_own_claim() {
+    let me = Some(4242);
+    let own = claim("own", "BUG-2143", me);
+    let other_pid = claim("other", "BUG-2143", Some(7));
+    let other_scope = claim("scope", "BUG-9999", me);
+    let mut session = claim("session", "BUG-2143", me);
+    session.claim_verb = false;
+    let kept = crate::claim::without_own_claims(
+        vec![own, other_pid, other_scope, session],
+        "bug-2143",
+        me,
+    );
+    let ids: Vec<&str> = kept.iter().map(|l| l.id.as_str()).collect();
+    assert_eq!(ids, ["other", "scope", "session"]);
+}
+
+/// BUG-2143: a claim naming the primary checkout (`--worktree .`) is viewed by
+/// the reap as worktree-less — reapable as a lease, never touching the tree —
+/// while a session lease there keeps its path (and the hard floor).
+// trace:BUG-2143 | ai:claude
+#[test]
+fn reap_views_root_claim_as_worktreeless() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut c = claim("c1", "BUG-2143", None);
+    c.worktree_path = tmp.path().to_path_buf();
+    c.branch = "main".into();
+    let view = crate::session_reap::reap_view(&c, tmp.path());
+    assert!(view.worktree_path.as_os_str().is_empty());
+    assert_eq!(
+        crate::session_reap::reap_branch(&view, Some("origin/main")),
+        ""
+    );
+    let mut s = c.clone();
+    s.claim_verb = false;
+    assert_eq!(
+        crate::session_reap::reap_view(&s, tmp.path()).worktree_path,
+        tmp.path()
+    );
+    let mut elsewhere = c.clone();
+    elsewhere.worktree_path = tmp.path().join("aida-bug-2143");
+    assert_eq!(
+        crate::session_reap::reap_view(&elsewhere, tmp.path()).worktree_path,
+        elsewhere.worktree_path
+    );
+}

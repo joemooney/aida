@@ -41,6 +41,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 sha2 = "0.10"
+# Fresh scoring roots need automatic cleanup in production. trace:TASK-1731 | ai:codex
+tempfile = "3.8"
 dirs = { workspace = true }
 fs2 = { workspace = true }
 tokio = { workspace = true }
@@ -79,7 +81,6 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 tui = ["aida-tui"]
 
 [dev-dependencies]
-tempfile = "3.8"
 # Parse test-module boundaries for the engine guard. trace:TASK-1724 | ai:codex
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = "1"

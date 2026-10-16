@@ -134,17 +134,13 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
 /// snapshot commit, and prints (never runs) the coordinated force-push.
 // trace:STORY-733 | ai:claude
 fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
-    let head = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let head = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-parse", "HEAD"])
         .output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-    let commit_count = std::process::Command::new("git")
-        .arg("-C")
-        .arg(store_path)
+    let commit_count = aida_core::git_ops::host_git_command(store_path)
         .args(["rev-list", "--count", "HEAD"])
         .output()
         .ok()
@@ -292,9 +288,7 @@ fn store_status() -> Result<()> {
 
     // Current orphan-store HEAD.
     let store_head: Option<String> = if store_path.exists() {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&store_path)
+        aida_core::git_ops::host_git_command(&store_path)
             .args(["rev-parse", "HEAD"])
             .output()
             .ok()
@@ -340,9 +334,7 @@ fn store_status() -> Result<()> {
         (Some(p), Some(c)) => {
             // Compute the commit counts: how many commits is store HEAD
             // ahead of / behind the paired SHA.
-            let drift = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&store_path)
+            let drift = aida_core::git_ops::host_git_command(&store_path)
                 .args([
                     "rev-list",
                     "--left-right",
