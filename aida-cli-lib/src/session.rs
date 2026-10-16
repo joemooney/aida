@@ -8634,8 +8634,9 @@ mod tests {
     // codex/agy launch silently ran uncontained (AIDA_CONTAINED stripped).
     // The BUG-2133 ruling (containment is monotonic, fail closed) reverses
     // that intent: a contained request on a vendor that cannot apply it is
-    // REFUSED, and the vendor binary never runs. The uncontained control still
-    // strips an ambient AIDA_CONTAINED. trace:BUG-2144 | ai:claude
+    // REFUSED, and the vendor binary never runs. The uncontained control has
+    // no ambient containment request. trace:BUG-2144 | ai:claude
+    // trace:BUG-2172 | ai:codex
     #[test]
     fn spawn_vendor_headless_with_seat_codex_and_agy_refuse_contained_launch() {
         let tmp = tempfile::tempdir().unwrap();
@@ -8661,6 +8662,42 @@ mod tests {
 
         for vendor in [HeadlessVendor::Codex, HeadlessVendor::Agy] {
             let _ = std::fs::remove_file(&env_out);
+            {
+                let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                    &project,
+                    "advisor",
+                    &["implementer"],
+                    &[
+                        ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                        ("AIDA_OS_WRAP", Some("0")),
+                        ("AIDA_CONTAINED", Some("1")),
+                    ],
+                );
+                // Both explicit and ambient-only containment refuse before spawn.
+                for contained in [true, false] {
+                    let err = spawn_vendor_headless_with_seat(
+                        vendor,
+                        aida_core::agents_config::AgentSeat::Implementer,
+                        "prompt",
+                        "sid",
+                        &log_path,
+                        &tee_opts,
+                        contained,
+                    )
+                    .expect_err("explicit or ambient containment must refuse codex/agy");
+                    let msg = format!("{err:#}");
+                    assert!(
+                        msg.contains("refusing to launch") && msg.contains(vendor.as_str()),
+                        "{vendor:?}: {msg}"
+                    );
+                    assert!(
+                        !env_out.exists(),
+                        "{vendor:?}: the vendor binary must not run on a refused contained launch"
+                    );
+                }
+            }
+
+            // Uncontained control -> runs only with ambient containment unset.
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 &project,
                 "advisor",
@@ -8668,31 +8705,9 @@ mod tests {
                 &[
                     ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
                     ("AIDA_OS_WRAP", Some("0")),
-                    ("AIDA_CONTAINED", Some("1")),
+                    ("AIDA_CONTAINED", None),
                 ],
             );
-            // Contained -> refused, the vendor binary never runs.
-            let err = spawn_vendor_headless_with_seat(
-                vendor,
-                aida_core::agents_config::AgentSeat::Implementer,
-                "prompt",
-                "sid",
-                &log_path,
-                &tee_opts,
-                true,
-            )
-            .expect_err("a contained codex/agy launch must be refused");
-            let msg = format!("{err:#}");
-            assert!(
-                msg.contains("refusing to launch") && msg.contains(vendor.as_str()),
-                "{vendor:?}: {msg}"
-            );
-            assert!(
-                !env_out.exists(),
-                "{vendor:?}: the vendor binary must not run on a refused contained launch"
-            );
-
-            // Uncontained control -> runs, ambient AIDA_CONTAINED stripped.
             let status = spawn_vendor_headless_with_seat(
                 vendor,
                 aida_core::agents_config::AgentSeat::Implementer,

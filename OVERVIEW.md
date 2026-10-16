@@ -307,7 +307,6 @@ write permission for other users. Unsafe parent directories also refuse writes;
 root-owned sticky temporary roots are allowed. Existing suspect profiles are
 never silently repaired. Own-repository stores use only their sandbox-denied
 `.git` subtree; an authority path elsewhere inside the writable store refuses.
-
 Contained launch prepares the profile on the host before the sandbox starts,
 without adding writable paths. Host git authority directories are denied in
 both the sandbox and direct tool rules, including a primary-checkout launch.

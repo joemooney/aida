@@ -353,7 +353,6 @@ Neither state promises background progress. `worker_running` means an observed
 refresh flock holder (including an inline refresher). `aida cache rebuild` and
 mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
-
 ## Storage Model
 
 Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
