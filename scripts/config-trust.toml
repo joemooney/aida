@@ -63,7 +63,7 @@ sites = 1
 # names them in prose, and routes edits through the registered writers.
 [readers."aida-cli-lib/src/config_cmd.rs"]
 channels = ["worktree", "home", "write", "other-file", "prose"]
-sites = 33
+sites = 35
 
 # Settles a config edit by staging and committing exactly `.aida/config.toml`;
 # it reads no keys from the file. trace:BUG-1938 | ai:claude
@@ -294,6 +294,12 @@ sites = 1
 [readers."aida-cli-lib/src/scaffold_refresh.rs"]
 channels = ["worktree"]
 sites = 1
+
+# Resolves max_grant_hours cap from global (~/.aida) and worktree (.aida).
+# Worktree policy may only lower the cap. trace:TASK-1787 | ai:antigravity
+[readers."aida-cli-lib/src/seat_authority.rs"]
+channels = ["home", "worktree"]
+sites = 2
 
 [readers."aida-cli-lib/src/seats.rs"]
 channels = ["worktree", "home"]
@@ -668,6 +674,9 @@ profile = "policy" # fixed profile list
 [keys.worktree.ui]
 theme = "policy"
 glyphs = "policy"
+
+[keys.worktree.seat]
+max_grant_hours = "policy"
 
 [keys.worktree.seats]
 to-groom = "policy"
