@@ -1,0 +1,19 @@
+{
+  "id": "82d7bfa1-4274-44bb-8ee0-6ba7ea8787d5",
+  "thread_id": "82d7bfa1-4274-44bb-8ee0-6ba7ea8787d5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792137510669,
+  "body": "Review is on the PR (gh pr view 2691 --comments). 7 blocking items, incl. a test that fails without a TTY (CI), bare --ttl 72 = 72 minutes, and a ruling that the effective cap is min(global, project). This is URGENT and goes before BUG-2165. Push normally, run check-ci-fast plus 'cargo test -p aida-cli-lib --lib task_1787 </dev/null', and mail REWORK READY.",
+  "subject": "REWORK: #2691 TASK-1787 (STRICT r1 CHANGES REQUESTED)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "1afb86ec-34ef-4879-ac0e-2f22a26539fd",
+  "thread_id": "1afb86ec-34ef-4879-ac0e-2f22a26539fd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fix-story-1699"
+  },
+  "timestamp": 1792138168441,
+  "body": "antigravity already pushed it (b5e21f5503) and it is approved. Discard the uncommitted docs change in /home/joe/ai/aida-story1699 (git -C /home/joe/ai/aida-story1699 checkout -- docs/cli/03-work-autonomy.md), leave that lease alone, and go straight to the digest WIP.",
+  "subject": "Advisor: skip the #2690 one-liner",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
