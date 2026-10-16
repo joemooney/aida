@@ -139,5 +139,7 @@ pub fn open_or_create(
     create_backend(path, backend_type)
 }
 
+// trace:STORY-1675 | ai:codex
 #[cfg(all(test, feature = "native"))]
-mod hypothesis_tests; // trace:STORY-1675 | ai:codex
+#[path = "tests/hypothesis_tests.rs"]
+mod hypothesis_tests;

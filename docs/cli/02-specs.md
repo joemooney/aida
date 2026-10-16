@@ -283,16 +283,10 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 ---
 
-## Where to go next
+## Pre-registering a hypothesis
 
-You can now shape, query, and groom the graph. Next:
-- **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: turning approved, well-shaped specs into queued work agents can drain.
-- **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: where `trace` provenance and the `done → completed` auto-bump live.
-- **[Chapter 1 — Getting started](01-getting-started.md)**: the `add` / `list` / `show` / `edit` floor these graph commands build on.
-
-### Pre-registering a hypothesis
-
-Use an existing spike or decision with the `hypothesis` tag. Write the prediction
+Use an existing spike or decision with the `hypothesis` tag (matched
+case-insensitively, so `Hypothesis` counts too). Write the prediction
 before running the experiment; a useful description skeleton is:
 
 ```markdown
@@ -318,6 +312,23 @@ tags, comments, and relationships can still change. Removing the tag or link,
 reopening or deleting the experiment, and stale saves never clear the lock.
 Deleting or replacing the locked hypothesis itself is refused; archive it to
 hide it. There is no unlock flag. Untagged legacy rows keep their normal edit
-behavior. Archived SQLite/Postgres backends do not store this lock; use the
-canonical git store for pre-registration.
+behavior. The archived SQLite/Postgres backends and the YAML backend do not
+store or enforce this lock; use the canonical git store for pre-registration.
+
+If a clean text merge rewrites a locked description, the hash no longer
+matches. That row then refuses every change except one that restores the
+frozen text, for example `aida edit <ID>` with the original description from
+store history. Other rows stay writable. Binaries older than this feature do
+not know `hypothesis_lock` and drop it when they rewrite the row, so upgrade
+every clone that writes to the store.
 <!-- trace:STORY-1675 | ai:codex -->
+<!-- trace:STORY-1675 | ai:claude -->
+
+---
+
+## Where to go next
+
+You can now shape, query, and groom the graph. Next:
+- **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: turning approved, well-shaped specs into queued work agents can drain.
+- **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: where `trace` provenance and the `done → completed` auto-bump live.
+- **[Chapter 1 — Getting started](01-getting-started.md)**: the `add` / `list` / `show` / `edit` floor these graph commands build on.

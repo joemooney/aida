@@ -947,16 +947,19 @@ impl GitBackend {
         }
         // Ordinary single-row refinements cannot create or remove a result
         // boundary. Keep the BUG-1612 no-store-scan contract for those edits.
-        // A tag/edge/status change or any hypothesis stamp requires the graph.
+        // An edge change, a status change into or out of Completed, or any
+        // hypothesis tag/stamp requires the graph. trace:STORY-1675 | ai:claude
+        let completed = |r: &Requirement| r.effective_status().eq_ignore_ascii_case("completed");
         if deleted.is_empty()
             && updates.iter().zip(&existing).all(|(next, old)| {
                 old.as_ref().is_some_and(|old| {
                     old.id == next.id
                         && old.hypothesis_lock.is_none()
                         && next.hypothesis_lock.is_none()
-                        && !old.tags.contains("hypothesis")
-                        && !next.tags.contains("hypothesis")
-                        && old.effective_status() == next.effective_status()
+                        && !crate::hypothesis::has_tag(old)
+                        && !crate::hypothesis::has_tag(next)
+                        && !completed(old)
+                        && !completed(next)
                         && old.relationships == next.relationships
                 })
             })
@@ -966,22 +969,41 @@ impl GitBackend {
         let before = object_store::load_all_objects(&self.objects_root)?;
         let mut after = before.clone();
         after.retain(|r| !r.spec_id.as_ref().is_some_and(|s| deleted.contains(s)));
-        let mut indices: HashMap<_, _> = after.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
         let by_spec: HashMap<_, _> = before
             .iter()
-            .filter_map(|r| r.spec_id.as_ref().map(|s| (s, r)))
+            .filter_map(|r| {
+                r.spec_id
+                    .as_deref()
+                    .map(|s| (object_store::canonical_spec_id(s), r))
+            })
             .collect();
+        // An update carrying an existing spec_id under a NEW uuid replaces that
+        // ordinary row (re-run imports, identity repair): the old row leaves
+        // the planned graph. Hypothesis identities can never be replaced.
+        // trace:STORY-1675 | ai:claude
+        let mut replaced = HashSet::new();
         for update in updates.iter() {
-            if let Some(old) = update.spec_id.as_ref().and_then(|s| by_spec.get(s)) {
-                if old.id != update.id
-                    && (old.hypothesis_lock.is_some() || old.tags.contains("hypothesis"))
-                {
-                    anyhow::bail!(
-                        "{} cannot replace a hypothesis identity; nothing was written",
-                        old.display_id()
-                    );
-                }
+            let Some(old) = update
+                .spec_id
+                .as_deref()
+                .and_then(|s| by_spec.get(&object_store::canonical_spec_id(s)))
+            else {
+                continue;
+            };
+            if old.id == update.id {
+                continue;
             }
+            if old.hypothesis_lock.is_some() || crate::hypothesis::has_tag(old) {
+                anyhow::bail!(
+                    "{} cannot replace a hypothesis identity; nothing was written",
+                    old.display_id()
+                );
+            }
+            replaced.insert(old.id);
+        }
+        after.retain(|r| !replaced.contains(&r.id));
+        let mut indices: HashMap<_, _> = after.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
+        for update in updates.iter() {
             if let Some(&i) = indices.get(&update.id) {
                 after[i] = update.clone();
             } else {

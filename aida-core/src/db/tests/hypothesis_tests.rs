@@ -526,3 +526,153 @@ fn hypothesis_tree_and_validated_yaml_import_preserve_frozen_evidence() {
     imported.description = "post hoc after validated YAML import".into();
     assert!(yaml_backend.update_requirement(&imported).is_err());
 }
+
+// trace:STORY-1675 | ai:claude
+fn ordinary(spec: &str) -> Requirement {
+    let mut o = Requirement::new("ordinary".into(), "plain row".into());
+    o.spec_id = Some(spec.into());
+    o
+}
+
+/// Advisor round-1 BLOCKING 1: an ordinary row's identity can still be
+/// replaced (re-run imports) through both save and BulkWriter.
+// trace:STORY-1675 | ai:claude
+#[test]
+fn hypothesis_ordinary_identity_replacement_still_works_via_save_and_bulk_writer() {
+    for via_bulk in [false, true] {
+        let (_tmp, b, h, _) = fixture();
+        let old = ordinary("TASK-5");
+        b.add_requirement(old.clone()).unwrap();
+        let mut replacement = ordinary("TASK-5");
+        replacement.title = "re-imported".into();
+        assert_ne!(replacement.id, old.id);
+        if via_bulk {
+            let mut writer = b.bulk_writer().unwrap();
+            writer.add(replacement.clone()).unwrap();
+            writer.finish("re-run import").unwrap();
+        } else {
+            let mut s = b.load().unwrap();
+            s.requirements.retain(|r| r.id != old.id);
+            s.requirements.push(replacement.clone());
+            b.save(&s).unwrap();
+        }
+        let stored = b.get_requirement_by_spec_id("TASK-5").unwrap().unwrap();
+        assert_eq!(stored.id, replacement.id);
+        assert_eq!(stored.title, "re-imported");
+        // A hypothesis identity is still never replaceable.
+        let mut hijack = h.clone();
+        hijack.id = uuid::Uuid::new_v4();
+        let mut writer = b.bulk_writer().unwrap();
+        writer.add(hijack).unwrap();
+        assert!(writer.finish("hijack").is_err());
+        assert_eq!(disk(&b, &h).id, h.id);
+    }
+}
+
+fn corrupt(b: &GitBackend, h: &Requirement) -> Requirement {
+    let mut corrupted = disk(b, h);
+    corrupted.description = "clean Git text merge rewrote this body".into();
+    crate::object_store::write_object(&b.path().join("objects"), &corrupted).unwrap();
+    corrupted
+}
+
+/// Advisor round-1 BLOCKING 2a: one corrupted stamped row must not block
+/// unrelated adds, status changes, deletes, or whole-store saves.
+// trace:STORY-1675 | ai:claude
+#[test]
+fn hypothesis_corrupted_row_does_not_block_unrelated_writes() {
+    let (_tmp, b, h, mut r) = fixture();
+    r.status = RequirementStatus::Completed;
+    b.update_requirement(&r).unwrap();
+    corrupt(&b, &h);
+    // Status change on a completed (graph-scanning) row.
+    let mut reopened = disk(&b, &r);
+    reopened.title = "unrelated edit".into();
+    b.update_requirement(&reopened).unwrap();
+    let added = b.add_requirement(ordinary("TASK-7")).unwrap();
+    let mut done = disk(&b, &added);
+    done.status = RequirementStatus::Completed;
+    b.update_requirement(&done).unwrap();
+    b.delete_requirement(&added.id).unwrap();
+    let mut s = b.load().unwrap();
+    s.requirements
+        .iter_mut()
+        .find(|q| q.id == r.id)
+        .unwrap()
+        .title = "whole-store save".into();
+    b.save(&s).unwrap();
+    b.update_atomically(|s| {
+        s.requirements
+            .iter_mut()
+            .find(|q| q.id == r.id)
+            .unwrap()
+            .title = "atomic store edit".into();
+    })
+    .unwrap();
+    assert_eq!(disk(&b, &r).title, "atomic store edit");
+    // The corrupted row itself still refuses every non-repairing change.
+    let mut status_only = disk(&b, &h);
+    status_only.status = RequirementStatus::Approved;
+    let err = b.update_requirement(&status_only).unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("inconsistent locked hypothesis evidence"));
+    let mut other_text = disk(&b, &h);
+    other_text.description = "yet another rewrite".into();
+    assert!(b.update_requirement(&other_text).is_err());
+}
+
+/// Advisor round-1 BLOCKING 2b: restoring the frozen text is accepted, so
+/// `aida edit` can repair the row; after repair the lock behaves normally.
+// trace:STORY-1675 | ai:claude
+#[test]
+fn hypothesis_corrupted_row_is_repairable_by_restoring_frozen_text() {
+    let (_tmp, b, h, mut r) = fixture();
+    r.status = RequirementStatus::Completed;
+    b.update_requirement(&r).unwrap();
+    let stamp = disk(&b, &h).hypothesis_lock.unwrap();
+    assert_eq!(
+        stamp.description_sha256,
+        format!("{:x}", Sha256::digest(h.description.as_bytes()))
+    );
+    for route in 0..2 {
+        let mut repair = corrupt(&b, &h);
+        repair.description = h.description.clone();
+        if route == 0 {
+            b.update_requirement(&repair).unwrap();
+        } else {
+            b.update_spec_atomically(&repair, |row| row.description = h.description.clone())
+                .unwrap()
+                .unwrap();
+        }
+        let repaired = disk(&b, &h);
+        assert_eq!(repaired.description, h.description);
+        assert_eq!(repaired.hypothesis_lock.as_ref(), Some(&stamp));
+    }
+    let mut status_only = disk(&b, &h);
+    status_only.status = RequirementStatus::Approved;
+    b.update_requirement(&status_only).unwrap();
+    let mut rewrite = disk(&b, &h);
+    rewrite.description = "post-result rewrite".into();
+    assert!(b.update_requirement(&rewrite).is_err());
+}
+
+/// The pre-registration tag matches case-insensitively.
+// trace:STORY-1675 | ai:claude
+#[test]
+fn hypothesis_tag_match_is_case_insensitive() {
+    let tmp = tempfile::tempdir().unwrap();
+    let b = GitBackend::new(&tmp.path().join("store"))
+        .unwrap()
+        .with_auto_commit(false)
+        .with_oplog(false);
+    let (mut h, mut r) = rows();
+    h.tags.clear();
+    h.tags.insert("Hypothesis".into());
+    let mut s = RequirementsStore::new();
+    s.requirements = vec![h.clone(), r.clone()];
+    b.save(&s).unwrap();
+    r.status = RequirementStatus::Completed;
+    b.update_requirement(&r).unwrap();
+    assert!(disk(&b, &h).hypothesis_lock.is_some());
+}

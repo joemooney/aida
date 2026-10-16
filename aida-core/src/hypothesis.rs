@@ -6,6 +6,25 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+/// The pre-registration tag. Matched case-insensitively so `Hypothesis` and
+/// `HYPOTHESIS` cannot slip past the lock. trace:STORY-1675 | ai:claude
+pub(crate) fn has_tag(r: &Requirement) -> bool {
+    r.tags.iter().any(|t| t.eq_ignore_ascii_case("hypothesis"))
+}
+
+fn sha256_hex(text: &str) -> String {
+    format!("{:x}", Sha256::digest(text.as_bytes()))
+}
+
+/// Byte-identical row (no `PartialEq` on `Requirement`). Only consulted for
+/// stamped rows, which are few, so serializing is cheap.
+fn same_row(a: &Requirement, b: &Requirement) -> bool {
+    match (serde_json::to_string(a), serde_json::to_string(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
 fn eligible(
     graph: &[Requirement],
     hypotheses: &HashSet<Uuid>,
@@ -53,7 +72,7 @@ pub(crate) fn enforce(before: &[Requirement], after: &mut [Requirement]) -> Resu
             || row
                 .spec_id
                 .as_ref()
-                .is_some_and(|sid| !specs.insert(sid.to_ascii_uppercase()))
+                .is_some_and(|sid| !specs.insert(crate::object_store::canonical_spec_id(sid)))
         {
             anyhow::bail!("duplicate requirement in mutation graph; nothing was written");
         }
@@ -67,7 +86,7 @@ pub(crate) fn enforce(before: &[Requirement], after: &mut [Requirement]) -> Resu
         .chain(after.iter())
         .filter(|r| {
             r.spec_id.is_some()
-                && r.tags.contains("hypothesis")
+                && has_tag(r)
                 && matches!(
                     r.req_type,
                     RequirementType::Spike | RequirementType::Decision
@@ -85,7 +104,11 @@ pub(crate) fn enforce(before: &[Requirement], after: &mut [Requirement]) -> Resu
     locked.extend(eligible(after, &hypotheses, &completed));
     let by_spec: HashMap<_, _> = before
         .iter()
-        .filter_map(|r| r.spec_id.as_ref().map(|s| (s, r)))
+        .filter_map(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|s| (crate::object_store::canonical_spec_id(s), r))
+        })
         .collect();
     let after_ids: HashSet<_> = after.iter().map(|r| r.id).collect();
     for row in before {
@@ -104,7 +127,11 @@ pub(crate) fn enforce(before: &[Requirement], after: &mut [Requirement]) -> Resu
         }) {
             anyhow::bail!("a locked hypothesis identity cannot change; use aida comment add {} for amendments", previous.unwrap().display_id());
         }
-        if let Some(stored) = next.spec_id.as_ref().and_then(|s| by_spec.get(s)) {
+        if let Some(stored) = next
+            .spec_id
+            .as_deref()
+            .and_then(|s| by_spec.get(&crate::object_store::canonical_spec_id(s)))
+        {
             if stored.id != next.id
                 && (stored.hypothesis_lock.is_some() || locked.contains(&stored.id))
             {
@@ -117,28 +144,27 @@ pub(crate) fn enforce(before: &[Requirement], after: &mut [Requirement]) -> Resu
             .or_else(|| {
                 locked.contains(&next.id).then(|| HypothesisLock {
                     locked_at: now,
-                    description_sha256: format!(
-                        "{:x}",
-                        Sha256::digest(previous.unwrap_or(next).description.as_bytes())
-                    ),
+                    description_sha256: sha256_hex(&previous.unwrap_or(next).description),
                 })
             });
+        // Hash-check only the write set: an untouched stamped row (even one a
+        // text merge corrupted) must not block unrelated writes store-wide.
+        // A write whose NEW description matches the frozen hash is accepted,
+        // which is how `aida edit` repairs a corrupted body. Every other
+        // change to a mismatched row is refused. trace:STORY-1675 | ai:claude
         if let Some(stamp) = &stamp {
-            if stamp.description_sha256
-                != format!(
-                    "{:x}",
-                    Sha256::digest(previous.unwrap_or(next).description.as_bytes())
-                )
-            {
+            let untouched = previous.is_some_and(|p| same_row(p, next));
+            let frozen = |text: &str| sha256_hex(text) == stamp.description_sha256;
+            if !untouched && !frozen(&next.description) {
+                if previous.is_some_and(|p| frozen(&p.description)) {
+                    anyhow::bail!(
+                        "{} has a locked hypothesis description; append amendments with aida comment add {} instead",
+                        next.spec_id.as_deref().unwrap_or("hypothesis"),
+                        next.spec_id.as_deref().unwrap_or("<ID>")
+                    );
+                }
                 anyhow::bail!("{} has inconsistent locked hypothesis evidence; restore the frozen description from store history before using aida comment add {} for amendments", next.display_id(), next.display_id());
             }
-        }
-        if stamp.is_some() && previous.is_some_and(|r| r.description != next.description) {
-            anyhow::bail!(
-                "{} has a locked hypothesis description; append amendments with aida comment add {} instead",
-                next.spec_id.as_deref().unwrap_or("hypothesis"),
-                next.spec_id.as_deref().unwrap_or("<ID>")
-            );
         }
         // Incoming copies cannot clear or replace a canonical stamp. Newly
         // imported rows may retain their original pre-registration evidence.
