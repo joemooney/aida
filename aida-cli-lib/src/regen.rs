@@ -16,7 +16,8 @@ use uuid::Uuid;
 
 use crate::cli::RegenCommand;
 // trace:TASK-1730 | ai:codex
-mod score;
+mod consensus;
+mod score; // trace:STORY-1679 | ai:codex
 
 #[derive(Debug, Serialize)]
 pub(crate) struct CorpusManifest {
@@ -312,17 +313,34 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
             model_family,
             vendor,
             harness,
+            consensus,
+            file,
             unconfined,
         } => {
+            if !consensus.is_empty() {
+                anyhow::ensure!(
+                    dir.is_none()
+                        && control.is_none()
+                        && corpus.is_none()
+                        && model.is_none()
+                        && model_family.is_none()
+                        && vendor.is_none()
+                        && harness.is_none()
+                        && !unconfined,
+                    "consensus is exclusive of trial/control execution"
+                );
+                return self::consensus::handle(store, consensus, *file);
+            }
+            anyhow::ensure!(!file, "--file requires --consensus");
             score::handle_score(
                 store,
                 dir.as_deref(),
                 *control,
-                corpus,
-                model,
+                corpus.as_deref().context("scoring requires --corpus")?,
+                model.as_deref().context("scoring requires --model")?,
                 model_family.as_deref(),
-                vendor,
-                harness,
+                vendor.as_deref().context("scoring requires --vendor")?,
+                harness.as_deref().context("scoring requires --harness")?,
                 *unconfined,
             )?;
         }
