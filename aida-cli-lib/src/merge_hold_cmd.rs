@@ -208,8 +208,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             let mut refused = false;
             for pr in prs {
                 match crate::rework_hold_release::auto_release(&root, pr) {
-                    Ok(true) => println!("PR #{pr}: merge-hold auto-released by recorded verdict"),
-                    Ok(false) => println!("PR #{pr}: no active local hold"),
+                    Ok(outcome) => println!("{}", outcome.line(pr)),
                     Err(error) => {
                         eprintln!("PR #{pr}: held — {error:#}");
                         refused = true;
