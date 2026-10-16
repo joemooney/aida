@@ -108,6 +108,62 @@ fn test_resolve_max_grant_hours_precedence() {
 }
 
 #[test]
+fn test_worktree_config_cannot_raise_max_grant_hours() {
+    let dir = tempdir().unwrap();
+    let fake_home = tempdir().unwrap();
+    let global_aida = fake_home.path().join(".aida");
+    fs::create_dir_all(&global_aida).unwrap();
+    let project_aida = dir.path().join(".aida");
+    fs::create_dir_all(&project_aida).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(fake_home.path().to_str().unwrap()),
+    )]);
+
+    // Case 1: No global config set (trusted default is 24h).
+    // Worktree attempts to set max_grant_hours = 100.
+    // It must NOT raise the cap above 24h.
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 100\n",
+    )
+    .unwrap();
+    assert_eq!(
+        resolve_max_grant_hours(dir.path()),
+        DEFAULT_MAX_GRANT_HOURS,
+        "worktree config alone must not raise max_grant_hours above the 24h default ceiling"
+    );
+
+    // Case 2: Global config sets trusted cap to 12h.
+    // Worktree attempts to set max_grant_hours = 48.
+    // Cap must remain 12h; worktree cannot raise trusted global cap.
+    fs::write(
+        global_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 12\n",
+    )
+    .unwrap();
+    assert_eq!(
+        resolve_max_grant_hours(dir.path()),
+        12,
+        "worktree config must not raise max_grant_hours above the global trusted cap"
+    );
+
+    // Case 3: Worktree may only LOWER the cap.
+    // Global is 12h, worktree sets 6h -> cap becomes 6h.
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 6\n",
+    )
+    .unwrap();
+    assert_eq!(
+        resolve_max_grant_hours(dir.path()),
+        6,
+        "worktree config may only lower the cap"
+    );
+}
+
+#[test]
 fn test_parse_ttl_bare_number_without_unit_refused() {
     let dir = tempdir().unwrap();
     let _env =
