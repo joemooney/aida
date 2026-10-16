@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T20:33:46.513098599Z
+modified_at: 2026-10-16T20:45:48.111724147Z
 req_type: Task
 relationships:
 - rel_type:
@@ -67,6 +67,14 @@ comments:
     Artifacts /tmp/task1790-measure.py and .log are exploratory only. aida list --all --no-scope --no-focus --include-meta --format json supplies current title/tags. aida export --format json currently panics in clap format downcast; regen corpus works but deliberately excludes execution_mode/history. Do not use either incomplete projection to claim the final policy measurement. #2707 is merged; item 3 remains pending under the accepted ruling.
   created_at: 2026-10-16T20:33:46.513098599Z
   modified_at: 2026-10-16T20:33:46.513098599Z
+- id: 01a14676-b8cf-77f2-a1cf-ac78f464c02e
+  author: ai:codex:joe
+  content: |
+    Session-5 item-3 preparation archived under .aida/relay/20261016-095630-codex-batch/task1790-research/README.md. Completed short-circuit audit using extracted unchanged AIDA current class, recorded-field changes, committed history and private-ledger readers: 25/50 newly excluded for an ordinary (no --include-supervised) mandate over the captured last 50 merged-to-main PRs. Original PR commit trailers were fetched and added no named IDs. Three trace-derived blockers were unresolved IDs; remaining new blockers were sensitive/keystone classes. This replaces the earlier title/tag-only screening as a more complete PROVISIONAL result, not the final implementation report.
+
+    Important limits: raw token extraction can match strings/fixtures rather than actual comments; final ordinary-source/tree-mode and absent-side evidence checks are not implemented; comparison uses delivered merge-parent/merge-commit snapshots; no --include-supervised comparison. Re-run through the actual collector before the PR report. The 50% preliminary rate suggests the signed >20% hunk/enclosing-fn/impl path will be necessary. No new authority semantics or code was introduced. Item 3 remains pending. The helper only reads the store/ledger, no mutations or new lease. Do not interpret old lower-bound filenames as a mathematical lower bound.
+  created_at: 2026-10-16T20:45:48.111724147Z
+  modified_at: 2026-10-16T20:45:48.111724147Z
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
