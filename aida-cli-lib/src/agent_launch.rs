@@ -257,8 +257,11 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             write,
             show,
             seat,
+            standing_orders,
         } => {
-            if write.is_some() || *show {
+            if let Some(args) = standing_orders {
+                session_handoff_standing_orders(args, seat.as_deref())
+            } else if write.is_some() || *show {
                 session_handoff_seat(write.as_deref(), *show, seat.as_deref())
             } else {
                 session_handoff_check(*check)

@@ -428,6 +428,11 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	for f in aida-core/templates/.aida/discipline/*.md; do \
 		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
 	done
+	@# trace:STORY-1693 | ai:claude — per-seat standing orders subdirectory
+	@mkdir -p .aida/discipline/standing-orders
+	@for f in aida-core/templates/.aida/discipline/standing-orders/*.md; do \
+		[ -f "$$f" ] && cp "$$f" ".aida/discipline/standing-orders/$$(basename $$f)"; \
+	done; true
 	@$(MAKE) --no-print-directory sync-agent-skills
 	@# trace:BUG-2014 | ai:codex
 	@python3 scripts/check-template-hooks.py --sync
@@ -443,8 +448,10 @@ sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regul
 check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 	@echo "Checking .aida/discipline/ mirror..."
 	@errors=0; \
-	for f in aida-core/templates/.aida/discipline/*.md; do \
-		target=".aida/discipline/$$(basename $$f)"; \
+	for f in aida-core/templates/.aida/discipline/*.md \
+		aida-core/templates/.aida/discipline/standing-orders/*.md; do \
+		[ -f "$$f" ] || continue; \
+		target=".aida/discipline/$${f#aida-core/templates/.aida/discipline/}"; \
 		if [ -f "$$target" ]; then \
 			if ! diff -q "$$f" "$$target" > /dev/null 2>&1; then \
 				echo "  CONTENT DIFFERS: $$target and $$f"; \

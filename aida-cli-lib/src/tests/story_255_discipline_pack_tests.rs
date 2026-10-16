@@ -62,6 +62,54 @@ fn discipline_pack_scaffolds_full_set() {
     );
 }
 
+/// Regression (STORY-1693): a NESTED discipline key such as
+/// `standing-orders/advisor.md` must scaffold, both into a fresh project and
+/// into one whose `.aida/discipline/` already exists without the subdir (the
+/// `aida init --refresh` shape). Previously the write hit ENOENT.
+#[test]
+fn discipline_pack_scaffolds_nested_keys() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join(".aida/discipline");
+    std::fs::create_dir_all(&dir).unwrap();
+    let pack = [
+        ("README.md", "top"),
+        ("standing-orders/advisor.md", "nested"),
+        ("a/b/deep.md", "deeper"),
+    ];
+    let mut report = DisciplinePackScaffoldReport::default();
+    write_discipline_pack_entries(root.path(), &dir, &pack, &mut report).unwrap();
+    assert_eq!(report.written, 3);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("standing-orders/advisor.md")).unwrap(),
+        "nested\n"
+    );
+    assert!(dir.join("a/b/deep.md").is_file());
+    assert!(report.written_paths.contains(&std::path::PathBuf::from(
+        ".aida/discipline/standing-orders/advisor.md"
+    )));
+    // Idempotent: nothing rewritten on a second pass.
+    let mut again = DisciplinePackScaffoldReport::default();
+    write_discipline_pack_entries(root.path(), &dir, &pack, &mut again).unwrap();
+    assert_eq!(again.written, 0);
+
+    // The real embedded pack ships a nested key and scaffolds it end to end.
+    use aida_core::templates::EMBEDDED_TEMPLATES;
+    assert!(
+        EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix(".aida/discipline/"))
+            .any(|n| n.contains('/')),
+        "expected at least one nested embedded discipline key"
+    );
+    let fresh = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(fresh.path().join(".aida/discipline")).unwrap();
+    ensure_discipline_pack_scaffold(fresh.path(), true).unwrap();
+    assert!(fresh
+        .path()
+        .join(".aida/discipline/standing-orders/advisor.md")
+        .is_file());
+}
+
 #[test]
 fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
     // trace:TASK-126 — fresh init must plant docs/competitive-analysis/
