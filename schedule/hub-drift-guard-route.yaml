@@ -5,3 +5,9 @@ last_by:
   session: 3e7b9d7a-f729-448d-b73f-439bcee0d31a
   vendor: claude
 result: done
+due_since: 2026-10-16T10:48:21.009572791Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-16T10:39:24.740383014Z
+  job: hub-drift-guard
+  error: 'exit 1: '
