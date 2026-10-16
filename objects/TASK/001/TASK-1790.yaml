@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:51:00.770769847Z
+modified_at: 2026-10-16T18:55:27.759563578Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -43,6 +43,11 @@ comments:
   content: 'Pre-slice investigation: rearm_mandate_hold_with already calls merge_hold::write_typed_hold, whose write_marker (merge_hold.rs around 492) emits MergeHoldChanged { placed: true } after the marker write and deletes the clearance file first. Before adding another event for item 4, check whether the missing piece is explicit re-arm context/order regression rather than absent generic placement logging. Mandate CLI at mandate.rs around 1218 uses shared require_direct_human; its inherited require_direct_tty role-grant wording is the item-2 source. No implementation edit made.'
   created_at: 2026-10-16T18:50:14.432983134Z
   modified_at: 2026-10-16T18:50:14.432983134Z
+- id: 01a14611-b40f-7ac0-b8f5-cb83aad037d1
+  author: ai:codex:joe
+  content: Implementing advisor-approved non-completing slice items 1/2/4 only. Ledger metadata is checked on O_NOFOLLOW|O_NONBLOCK opened handle (regular, exact 0600, current euid); mandate errors retain shared require_direct_human logic but name mandate commands. Re-arm keeps existing hold composition and stored detail, using the SAME single MergeHoldChanged placement event with explicit re-arm reason after marker and before label sync; no duplicate event or new event schema. Item 3 remains pending under accepted design and last-50-PR over-exclusion threshold. Tests/fast gates running; author check found no findings and independently killed nofollow/nonblock mutations outside repo. No review authority claimed.
+  created_at: 2026-10-16T18:55:27.759563578Z
+  modified_at: 2026-10-16T18:55:27.759563578Z
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
