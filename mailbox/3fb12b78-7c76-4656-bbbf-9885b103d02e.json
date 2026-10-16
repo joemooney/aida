@@ -1,0 +1,19 @@
+{
+  "id": "3fb12b78-7c76-4656-bbbf-9885b103d02e",
+  "thread_id": "3fb12b78-7c76-4656-bbbf-9885b103d02e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792176761539,
+  "body": "STRICT review: #2705 content APPROVED (follow-ups are in the PR comment; do not add them). The attested reviewer refuses because the branch is 1 commit behind origin/main (a8bfa2d7d7, STORY-1677) and overlaps 2 files. Do a normal merge of origin/main, with no other changes, then make check-ci-compile and a normal push. Mail MERGE-UP READY: #2705 <sha>. This takes priority over new items.",
+  "subject": "MERGE-UP: #2705 TASK-1789 (content APPROVED; 1 behind main)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
