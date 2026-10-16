@@ -1002,22 +1002,7 @@ fn reap_one_with_clear_hooks(
         }
     }
 
-    // Lease + companions. Reuses the same aggregation-then-delete ordering
-    // `aida session end` uses so the session's activity is folded into the
-    // project's role activity before its log goes away.
-    aggregate_session_activity_into_roles(project_root, &lease.id);
-    // BUG-2139: a reaped lease takes its headless child's grant with it.
-    // trace:BUG-2139 | ai:claude
-    crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
-    let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
-    let activity = session_activity_path(project_root, &lease.id);
-    if activity.exists() {
-        let _ = std::fs::remove_file(&activity);
-    }
-    let manifest = session_manifest::manifest_path(project_root, &lease.id);
-    if manifest.exists() {
-        let _ = std::fs::remove_file(&manifest);
-    }
+    release_lease_files(project_root, &lease.id);
 
     // Branch cleanup. The protected-ref floor is re-asserted here so the
     // destructive call can never be reached by a future caller that skipped
@@ -1052,6 +1037,27 @@ fn reap_one_with_clear_hooks(
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
         format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
+    }
+}
+
+/// Delete a lease and its companions (activity log, manifest, headless child
+/// grant). Reuses the same aggregation-then-delete ordering `aida session end`
+/// uses so the session's activity is folded into the project's role activity
+/// before its log goes away. Touches no worktree and no branch.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str) {
+    aggregate_session_activity_into_roles(project_root, lease_id);
+    // BUG-2139: a reaped lease takes its headless child's grant with it.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
+    let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    let activity = session_activity_path(project_root, lease_id);
+    if activity.exists() {
+        let _ = std::fs::remove_file(&activity);
+    }
+    let manifest = session_manifest::manifest_path(project_root, lease_id);
+    if manifest.exists() {
+        let _ = std::fs::remove_file(&manifest);
     }
 }
 

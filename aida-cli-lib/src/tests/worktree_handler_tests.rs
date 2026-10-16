@@ -648,3 +648,71 @@ fn is_linked_worktree_rejects_blank_main_root_missing_and_bare_paths() {
         "a non-git dir"
     );
 }
+
+fn task_1784_lease(id: &str, path: &str, started: &str) -> SessionLease {
+    let mut lease: SessionLease = toml::from_str(&format!(
+        "id = \"{id}\"\nscope = \"TASK-1784\"\nslug = \"task-1784\"\nowner = \"u\"\n\
+         worktree_path = \"\"\nbranch = \"task-1784\"\n\
+         started_at = \"{started}\"\nhostname = \"h\"\n"
+    ))
+    .unwrap();
+    lease.worktree_path = std::path::PathBuf::from(path);
+    lease
+}
+
+/// TASK-1784: only a lease whose recorded tree is GONE is ended implicitly;
+/// a project-root (existing) or blank path blocks and is named.
+// trace:TASK-1784 | ai:claude
+#[test]
+fn classify_unreenterable_leases_ends_only_deleted_trees() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("aida-task-1784");
+    let gone = gone.to_str().unwrap();
+    let here = root.path().to_str().unwrap();
+
+    assert!(matches!(
+        classify_unreenterable_leases(Vec::new()),
+        UnreenterableLeases::None
+    ));
+    match classify_unreenterable_leases(vec![task_1784_lease(
+        "aaaaaaaaaaaa",
+        gone,
+        "2026-10-01T00:00:00Z",
+    )]) {
+        UnreenterableLeases::Dead(d) => assert_eq!(d.len(), 1),
+        other => panic!("a deleted tree is dead, got {other:?}"),
+    }
+    // Mixed: the dead lease is not ended while a live-path holder exists.
+    match classify_unreenterable_leases(vec![
+        task_1784_lease("aaaaaaaaaaaa", gone, "2026-10-01T00:00:00Z"),
+        task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
+    ]) {
+        UnreenterableLeases::Blocking(l) => assert_eq!(l.id, "bbbbbbbbbbbb"),
+        other => panic!("project-root lease blocks, got {other:?}"),
+    }
+    for path in ["", "  ", "relative/path"] {
+        assert!(
+            matches!(
+                classify_unreenterable_leases(vec![task_1784_lease(
+                    "cccccccccccc",
+                    path,
+                    "2026-10-01T00:00:00Z"
+                )]),
+                UnreenterableLeases::Blocking(_)
+            ),
+            "{path:?} is never treated as a deleted tree"
+        );
+    }
+
+    let msg = unreenterable_lease_message(
+        "TASK-1784",
+        &task_1784_lease("bbbbbbbbbbbb", here, "2026-10-02T00:00:00Z"),
+    );
+    assert!(msg.contains("aida session end bbbbbbbb"), "{msg}");
+    assert!(msg.contains(here), "{msg}");
+    let blank = unreenterable_lease_message(
+        "TASK-1784",
+        &task_1784_lease("cccccccccccc", "", "2026-10-01T00:00:00Z"),
+    );
+    assert!(blank.contains("with no worktree"), "{blank}");
+}

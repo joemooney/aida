@@ -1661,6 +1661,58 @@ pub(crate) fn reenterable_leases(main_root: &std::path::Path) -> Vec<SessionLeas
         .collect()
 }
 
+/// TASK-1784: the non-advisory leases on a spec, none of which is re-enterable,
+/// sorted by what `aida worktree add` should do about them.
+// trace:TASK-1784 | ai:claude
+#[derive(Debug)]
+pub(crate) enum UnreenterableLeases {
+    /// Nothing holds the spec.
+    None,
+    /// Every holder recorded an absolute worktree path that no longer exists —
+    /// the tree was deleted by hand. Safe to end and re-mint.
+    Dead(Vec<SessionLease>),
+    /// A holder whose path still exists (the project root, a non-worktree dir)
+    /// or was never recorded. Never ended implicitly.
+    Blocking(SessionLease),
+}
+
+// trace:TASK-1784 | ai:claude
+pub(crate) fn classify_unreenterable_leases(held: Vec<SessionLease>) -> UnreenterableLeases {
+    if held.is_empty() {
+        return UnreenterableLeases::None;
+    }
+    let is_dead = |l: &SessionLease| {
+        let p = &l.worktree_path;
+        !p.to_string_lossy().trim().is_empty() && p.is_absolute() && !p.exists()
+    };
+    if let Some(blocking) = held
+        .iter()
+        .filter(|l| !is_dead(l))
+        .max_by_key(|l| l.started_at)
+    {
+        return UnreenterableLeases::Blocking(blocking.clone());
+    }
+    UnreenterableLeases::Dead(held)
+}
+
+/// TASK-1784: the refusal for a lease `aida worktree add` will not re-enter or
+/// end on its own — names the lease and the command that ends it.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn unreenterable_lease_message(spec: &str, lease: &SessionLease) -> String {
+    let short = &lease.id[..lease.id.len().min(8)];
+    let path = lease.worktree_path.display().to_string();
+    let at = if path.trim().is_empty() {
+        "with no worktree".to_string()
+    } else {
+        format!("at {path}")
+    };
+    format!(
+        "`{spec}` is held by session {short} {at}, which is not a linked worktree \
+         `aida worktree add` can re-enter (a session recorded at the project root is \
+         never re-entered). End it with `aida session end {short}`, then retry."
+    )
+}
+
 /// BUG-2143: refuse to report a path that is not a git worktree. `aida worktree
 /// add` used to print a blank path as success; the caller then fell back to a
 /// raw `git worktree add`. Checks `.git`, not `is_dir`: the focus marker has
@@ -1727,6 +1779,59 @@ pub(crate) fn ensure_spec_worktree(
             )
         });
 
+    // TASK-1784: no lease is re-enterable, but a non-advisory one may still
+    // hold the spec (InProgress), which made session_start's preflight refuse
+    // with "no local lease holds it". A lease whose tree is GONE is this
+    // clone's own dead session: end it (lease + path-scoped registration, never
+    // the branch) and mint fresh, claiming past the stale InProgress. Any other
+    // non-re-enterable lease (e.g. one recorded at the project root) is named,
+    // with the command that ends it.
+    // trace:TASK-1784 | ai:claude
+    let mut reclaimed_dead_lease = false;
+    if existing.is_none() {
+        let held: Vec<SessionLease> = list_leases(&main_root)
+            .into_iter()
+            .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .filter(|l| !lease_is_advisory(l, &mcp_claims))
+            .collect();
+        match classify_unreenterable_leases(held) {
+            UnreenterableLeases::None => {}
+            UnreenterableLeases::Blocking(lease) => {
+                anyhow::bail!("{}", unreenterable_lease_message(spec_display, &lease))
+            }
+            UnreenterableLeases::Dead(dead) => {
+                for lease in &dead {
+                    crate::session_reap::clear_missing_worktree_registration(
+                        &main_root,
+                        &lease.worktree_path,
+                        || {},
+                        || {},
+                    );
+                    crate::session_reap::release_lease_files(&main_root, &lease.id);
+                    eprintln!(
+                        "  {} ended session {} — its worktree {} was deleted; minting a fresh one",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt),
+                        &lease.id[..lease.id.len().min(8)],
+                        lease.worktree_path.display()
+                    );
+                }
+                // Only claim past the stale InProgress when nothing else (not
+                // even another session's `aida claim`) still holds the spec;
+                // otherwise session_start's own gates decide.
+                let my_pid = crate::session_start::creator_shell_pid();
+                reclaimed_dead_lease = crate::claim::without_own_claims(
+                    list_leases(&main_root)
+                        .into_iter()
+                        .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                        .collect(),
+                    spec_display,
+                    my_pid,
+                )
+                .is_empty();
+            }
+        }
+    }
+
     // BUG-2143: a tree deleted by hand at the default path leaves a prunable
     // registration that would make the fresh `git worktree add` below refuse.
     // Clear just that registration (never a repo-wide prune).
@@ -1781,7 +1886,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* permission_mode */ None,
                 /* launch_contained */ false,
                 /* role */ Some("implementer".to_string()),
-                /* force_claim */ false,
+                /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
             )?;
