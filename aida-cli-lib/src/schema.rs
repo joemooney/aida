@@ -710,6 +710,17 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
              session when known. Every sub-field is best-effort and omitted when undetectable. \
              Write-once: edits never change it. None = filed before provenance existed.",
     },
+    // trace:STORY-1675 | ai:claude
+    FieldDoc {
+        name: "hypothesis_lock",
+        example: "{locked_at: 2026-10-15T12:00:00Z, description_sha256: 3a7bd3e2…}",
+        provenance: Provenance::ReflectionDerived,
+        description:
+            "Pre-registration lock on a hypothesis-tagged spike or decision, stamped when a \
+             references/verified-by neighbor first reaches Completed: the lock time and the \
+             SHA-256 of the frozen description. Sticky: removing the tag or link, or reopening \
+             the result, never clears it; amendments go in comments. None = never locked.",
+    },
     // trace:STORY-776 | ai:claude
     FieldDoc {
         name: "execution_mode",
