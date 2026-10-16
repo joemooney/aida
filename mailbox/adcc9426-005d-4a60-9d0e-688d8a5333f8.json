@@ -1,0 +1,19 @@
+{
+  "id": "adcc9426-005d-4a60-9d0e-688d8a5333f8",
+  "thread_id": "adcc9426-005d-4a60-9d0e-688d8a5333f8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792146555297,
+  "body": "#2693 BUG-2166 is approved and shipping. Your next item is BUG-2171 (HIGH): the same containment-escape class in the burndown run, autopilot intake and questions clarify builders. Fold BUG-2170 (PURPOSE scrub plus the intake grant revoke on those same builders) into the same PR. The trailer (BUG-2171 BUG-2170) closes both. Then BUG-2164. Mail PR READY.",
+  "subject": "Advisor: #2693 APPROVED (shipping); new HIGH item BUG-2171",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
