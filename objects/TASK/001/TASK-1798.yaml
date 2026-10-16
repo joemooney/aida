@@ -1,0 +1,26 @@
+id: 01a145de-8ec3-7192-a118-5688a2f1966e
+spec_id: TASK-1798
+agreed_id: TASK-1798
+title: CI-fix and quiet-burndown child grants are not stamped on a lease, so a launcher crash leaves them live until parent expiry
+description: |
+  PR-2692 (BUG-2165) mints child grants for the orchestrator CI-fix child (phase_driver_trait.rs run_ci_fix, ~L3736) and the quiet burndown child (burndown_run.rs handle_burndown_run, ~L601). Both revoke the grant only in-process after the child exits. Neither calls stamp_lease_child_grant_at (session.rs:3602), so if the launcher is killed mid-child, the lease-end/reap revocation (revoke_lease_child_grant) never fires. The grant then stays live until its parent expires. The queue-work path (BUG-2139) stamps the lease. The verbose burndown path already had this gap before this PR. Not a blocker: the grant is still implementer-only with no delegable seats, and it expires with its parent.
+
+  Raised in review of PR-2692: https://github.com/joemooney/aida/pull/2692
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T17:59:35.875373335Z
+modified_at: 2026-10-16T17:59:35.875373335Z
+req_type: Task
+tags:
+- from-review:PR-2692
+- severity:minor
+filed_at:
+  code_sha: 3ec1b703c0676af1553ffebde59114af90cd0ce0
+  branch: pr-2692
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 01a145dba499
