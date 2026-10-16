@@ -1,3 +1,10 @@
+Regeneration scoring requires a declared/default installer for actual systems.
+The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
+or absent diagnostics remain unknown. Reports flag crash-dominated and mostly
+unclassified failures and audit matching R1 trials by explicit `--model-family`.
+See OVERVIEW.md for the sidecar and comparison rules.
+<!-- trace:STORY-1676 | ai:codex -->
+
 `regen score --consensus <uuid...>` compares at least three committed ordinary
 scored R1 trials with matching corpus/oracle/bundle and discriminating check sets.
 All-fail checks are reported as store gaps, partial failures separately. It is

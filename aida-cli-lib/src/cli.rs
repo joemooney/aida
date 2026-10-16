@@ -16837,6 +16837,10 @@ pub enum RegenCommand {
             conflicts_with = "consensus"
         )]
         model: Option<String>,
+        /// Explicit family identity for cross-family oracle audits (no inferred mapping)
+        // trace:STORY-1676 | ai:codex
+        #[clap(long, conflicts_with = "consensus")]
+        model_family: Option<String>,
         #[clap(
             long,
             required_unless_present = "consensus",
