@@ -72,11 +72,11 @@ fn settings_with_store(worktree: &Path, main: &Path) -> serde_json::Value {
     serde_json::from_str(&json).unwrap()
 }
 
-fn allow_write(settings: &serde_json::Value) -> Vec<String> {
+pub(super) fn allow_write(settings: &serde_json::Value) -> Vec<String> {
     filesystem_entries(settings, "allowWrite")
 }
 
-fn deny_write(settings: &serde_json::Value) -> Vec<String> {
+pub(super) fn deny_write(settings: &serde_json::Value) -> Vec<String> {
     filesystem_entries(settings, "denyWrite")
 }
 
@@ -97,11 +97,11 @@ fn filesystem_entries(settings: &serde_json::Value, key: &str) -> Vec<String> {
 /// when it exists at launch, with no glob expansion; a directory bind covers
 /// everything under it; a `denyWrite` bind is read-only and wins over an
 /// enclosing `allowWrite`.
-fn sandbox_may_write(settings: &serde_json::Value, target: &Path) -> bool {
+pub(super) fn sandbox_may_write(settings: &serde_json::Value, target: &Path) -> bool {
     bound_covers(&allow_write(settings), target) && !bound_covers(&deny_write(settings), target)
 }
 
-fn bound_covers(entries: &[String], target: &Path) -> bool {
+pub(super) fn bound_covers(entries: &[String], target: &Path) -> bool {
     entries.iter().any(|entry| {
         let Some(abs) = entry.strip_prefix('/') else {
             return false;
@@ -337,15 +337,15 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     for name in CACHE_FILES {
         expected.push(format!("/{}", main.join(".aida").join(name).display()));
     }
+    // BUG-2169: plus the worktree's own git state, and the common dir's
+    // recursive deny replaced by the git grant's narrower denies.
+    // trace:BUG-2169 | ai:claude
+    let git = contained_git_write_paths(&worktree).expect("linked worktree git grant");
+    expected.extend(sandbox_allow_write_entries(&git.allow));
     assert_eq!(allow_write(&settings), expected, "{json}");
-    assert_eq!(
-        deny_write(&settings),
-        vec![
-            format!("/{}", main.join(".aida-store/.git").display()),
-            format!("/{}", main.join(".git").display())
-        ],
-        "{json}"
-    );
+    let mut expected_deny = vec![format!("/{}", main.join(".aida-store/.git").display())];
+    expected_deny.extend(sandbox_allow_write_entries(&git.deny));
+    assert_eq!(deny_write(&settings), expected_deny, "{json}");
     assert_eq!(
         json.matches(".aida-store").count(),
         2 + 2 * WRITE_TOOLS.len(),
@@ -990,7 +990,7 @@ fn bug_1929_store_git_guard() {
 }
 
 /// Run git in `dir` with a fixed identity; panics on failure.
-fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
+pub(super) fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(args)

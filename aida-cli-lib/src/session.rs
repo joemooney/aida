@@ -2750,7 +2750,31 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String 
         }
         None => Vec::new(),
     };
-    contained_settings_json_with_store(&allowed_hosts, managed_only, write_roots, &store_paths)
+    // BUG-2169: a linked worktree's own gitdir and the common dir's objects,
+    // refs and logs, so the seat can commit, fetch, merge and push. An empty
+    // `config.worktree` is created first: the sandbox skips a deny on a
+    // missing path, and a seat-created one could set `core.hooksPath`. Like
+    // the store paths, nothing is granted on a git too old for contained mode.
+    // trace:BUG-2169 | ai:claude
+    let git_paths = write_roots
+        .first()
+        .filter(|_| aida_core::git_ops::ensure_git_supports_contained().is_ok())
+        .and_then(|worktree| crate::contained_boundary::contained_git_write_paths(worktree));
+    if let Some(git) = &git_paths {
+        let worktree_config = git.gitdir.join("config.worktree");
+        if !worktree_config.exists() {
+            if let Err(error) = std::fs::write(&worktree_config, b"") {
+                eprintln!("writing {}: {error}", worktree_config.display());
+            }
+        }
+    }
+    contained_settings_json_with_git(
+        &allowed_hosts,
+        managed_only,
+        write_roots,
+        &store_paths,
+        git_paths.as_ref(),
+    )
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2879,6 +2903,26 @@ pub(crate) fn contained_settings_json_with_store(
     write_roots: &[PathBuf],
     store_write_paths: &[PathBuf],
 ) -> String {
+    contained_settings_json_with_git(
+        allowed_hosts,
+        managed_domains_only,
+        write_roots,
+        store_write_paths,
+        None,
+    )
+}
+
+/// [`contained_settings_json_with_store`] plus BUG-2169's git grant for a
+/// linked worktree (`crate::contained_boundary::ContainedGitPaths`): its
+/// paths widen only sandboxed Bash, and its denies apply in both layers.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn contained_settings_json_with_git(
+    allowed_hosts: &[String],
+    managed_domains_only: bool,
+    write_roots: &[PathBuf],
+    store_write_paths: &[PathBuf],
+    git: Option<&crate::contained_boundary::ContainedGitPaths>,
+) -> String {
     let mut sandbox = serde_json::json!({
         "enabled": true,
         "failIfUnavailable": true,
@@ -2904,7 +2948,9 @@ pub(crate) fn contained_settings_json_with_store(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
-    if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
+    if let Some(filesystem) =
+        crate::contained_boundary::sandbox_filesystem_with_git(store_write_paths, git)
+    {
         sandbox["filesystem"] = filesystem;
     }
     // Tool writes do not pass through Bash's OS sandbox, so deny the host
@@ -2914,7 +2960,12 @@ pub(crate) fn contained_settings_json_with_store(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths) {
+    // trace:BUG-2169 | ai:claude
+    let git_deny = git.map(|g| g.deny.clone()).unwrap_or_default();
+    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths)
+        .into_iter()
+        .chain(git_deny)
+    {
         if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
             for tool in crate::contained_boundary::WRITE_TOOLS {
                 deny.push(format!("{tool}(/{abs})"));

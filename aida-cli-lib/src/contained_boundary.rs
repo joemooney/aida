@@ -135,6 +135,172 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     paths
 }
 
+/// BUG-2169: the git paths a contained session in a LINKED worktree may
+/// write, so `git commit`, `fetch`, `merge` and `push` work in its own
+/// worktree, plus the paths that stay read-only inside and beside them.
+///
+/// A linked worktree's git state lives outside the worktree: its own gitdir
+/// (`<common>/worktrees/<name>`: index, HEAD, ORIG_HEAD, FETCH_HEAD,
+/// MERGE_HEAD) and the shared common dir (`objects/`, `refs/`, `logs/`).
+/// Only those are granted. The common dir's `config`, `hooks/` and `info/`,
+/// the store's hook profile, and every other worktree's gitdir stay outside
+/// the write set: a writable hook or `core.hooksPath` would run code on the
+/// host. `packed-refs` is not granted either: git rewrites it through
+/// `packed-refs.lock` and a rename in the common dir, which a file bind cannot
+/// serve, and fetch, commit, merge and push write loose refs.
+///
+/// `deny` lists, for `sandbox.filesystem.denyWrite` (deny wins over an
+/// enclosing allow): `<common>/config`, `hooks`, `info`; the gitdir's
+/// `config.worktree`, `commondir` and `gitdir` pointers; the worktree's own
+/// `.git` pointer; and the loose ref and reflog of every branch checked out in
+/// ANOTHER worktree (the main checkout's `main`, the store's branch), so a
+/// seat can move its own branches but not someone else's.
+// trace:BUG-2169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContainedGitPaths {
+    /// The canonical common dir. The store's recursive deny of it is replaced
+    /// by `deny`, because the sandbox cannot allow a path inside a denied one.
+    pub(crate) common: PathBuf,
+    pub(crate) gitdir: PathBuf,
+    pub(crate) allow: Vec<PathBuf>,
+    pub(crate) deny: Vec<PathBuf>,
+}
+
+/// The common-dir subdirectories a linked worktree's git must write.
+// trace:BUG-2169 | ai:claude
+pub(crate) const COMMON_GIT_WRITE_DIRS: [&str; 3] = ["objects", "refs", "logs"];
+
+/// The common-dir entries named read-only explicitly (they sit outside every
+/// allowed path anyway).
+// trace:BUG-2169 | ai:claude
+pub(crate) const COMMON_GIT_DENY: [&str; 3] = ["config", "hooks", "info"];
+
+/// The gitdir files that redirect or configure git and stay read-only.
+// trace:BUG-2169 | ai:claude
+pub(crate) const GITDIR_DENY: [&str; 3] = ["config.worktree", "commondir", "gitdir"];
+
+/// [`resolve_contained_git_paths`], printing the refusal on stderr. `None`
+/// (worktree-only boundary) for a primary checkout, outside git, or on refusal.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn contained_git_write_paths(worktree: &Path) -> Option<ContainedGitPaths> {
+    match resolve_contained_git_paths(worktree) {
+        Ok(paths) => paths,
+        Err(reason) => {
+            eprintln!(
+                "warning: contained session in {} gets no git write access (commit, fetch and \
+                 merge will fail): {reason}",
+                worktree.display()
+            );
+            None
+        }
+    }
+}
+
+/// The git write grant for `worktree`, resolved by git itself and
+/// canonicalized. `Ok(None)` when `worktree` is not a linked worktree (a
+/// primary checkout's `.git` is inside its own root and stays denied by the
+/// store boundary). `Err` when the layout is not exactly
+/// `<common>/worktrees/<name>` with real (non-symlinked) `objects`, `refs` and
+/// `logs` under the common dir, or when any path cannot be expressed exactly:
+/// the caller then falls back to the worktree-only boundary.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn resolve_contained_git_paths(
+    worktree: &Path,
+) -> Result<Option<ContainedGitPaths>, String> {
+    // Read-only lookups: `rev-parse` and `worktree list` run no hook.
+    let git = |args: &[&str]| -> Option<String> {
+        let out = std::process::Command::new("git")
+            .current_dir(worktree)
+            .args(["-c", "core.fsmonitor=false"])
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let Some(dirs) = git(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-dir",
+        "--git-common-dir",
+    ]) else {
+        return Ok(None);
+    };
+    let mut lines = dirs.lines();
+    let (Some(gitdir), Some(common)) = (lines.next(), lines.next()) else {
+        return Ok(None);
+    };
+    let canonical = |p: &Path| {
+        std::fs::canonicalize(p).map_err(|e| format!("cannot resolve {}: {e}", p.display()))
+    };
+    let gitdir = canonical(Path::new(gitdir))?;
+    let common = canonical(Path::new(common))?;
+    if gitdir == common {
+        return Ok(None);
+    }
+    let worktree_real = canonical(worktree)?;
+    if common.starts_with(&worktree_real) || worktree_real.starts_with(&common) {
+        return Err(format!(
+            "the git common dir {} and the worktree {} overlap",
+            common.display(),
+            worktree_real.display()
+        ));
+    }
+    if gitdir.parent() != Some(common.join("worktrees").as_path()) {
+        return Err(format!(
+            "the worktree's gitdir {} is not directly under {}/worktrees",
+            gitdir.display(),
+            common.display()
+        ));
+    }
+    let mut allow = vec![gitdir.clone()];
+    for name in COMMON_GIT_WRITE_DIRS {
+        let expected = common.join(name);
+        if canonical(&expected)? != expected || !expected.is_dir() {
+            return Err(format!("{} is not a real directory", expected.display()));
+        }
+        allow.push(expected);
+    }
+    let mut deny: Vec<PathBuf> = COMMON_GIT_DENY.iter().map(|n| common.join(n)).collect();
+    deny.extend(GITDIR_DENY.iter().map(|n| gitdir.join(n)));
+    for root in contained_write_roots(worktree) {
+        let pointer = root.join(".git");
+        if !deny.contains(&pointer) {
+            deny.push(pointer);
+        }
+    }
+    let listing = git(&["worktree", "list", "--porcelain"])
+        .ok_or_else(|| "`git worktree list` failed".to_string())?;
+    let mut other = false;
+    for line in listing.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            other = std::fs::canonicalize(path).map_or(true, |p| p != worktree_real);
+        } else if let Some(branch) = line.strip_prefix("branch refs/heads/") {
+            if other {
+                deny.push(common.join("refs/heads").join(branch));
+                deny.push(common.join("logs/refs/heads").join(branch));
+            }
+        }
+    }
+    if let Some(bad) = allow
+        .iter()
+        .chain(&deny)
+        .find(|p| root_rule_path(p).is_none())
+    {
+        return Err(format!(
+            "{} cannot be expressed as an exact sandbox path",
+            bad.display()
+        ));
+    }
+    Ok(Some(ContainedGitPaths {
+        common,
+        gitdir,
+        allow,
+        deny,
+    }))
+}
+
 /// The `sandbox.filesystem` path entries (`allowWrite` or `denyWrite`) for
 /// `paths`: `//<abs>` (Claude
 /// Code's absolute-path anchor) per path. A path [`root_rule_path`] cannot
@@ -190,6 +356,22 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// when nothing is allowed.
 // trace:BUG-1929 | ai:claude
 pub(crate) fn sandbox_filesystem(store_write_paths: &[PathBuf]) -> Option<serde_json::Value> {
+    sandbox_filesystem_with_git(store_write_paths, None)
+}
+
+/// [`sandbox_filesystem`] plus BUG-2169's git grant for a linked worktree:
+/// `git.allow` joins `allowWrite`, and the store's recursive deny of the git
+/// common dir is replaced by `git.deny`. Claude Code's sandbox lets a deny
+/// narrow an allow but never an allow reopen a denied directory, so keeping
+/// the recursive deny would leave `objects/` and `refs/` read-only. The
+/// common dir's other entries (config, hooks, the store's hook profile, other
+/// worktrees' gitdirs) stay outside every allowed path, and the Edit/Write
+/// tool layer keeps its recursive deny.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn sandbox_filesystem_with_git(
+    store_write_paths: &[PathBuf],
+    git: Option<&ContainedGitPaths>,
+) -> Option<serde_json::Value> {
     let guarded: Vec<PathBuf> = store_write_paths
         .iter()
         .filter(|p| {
@@ -200,11 +382,18 @@ pub(crate) fn sandbox_filesystem(store_write_paths: &[PathBuf]) -> Option<serde_
         })
         .cloned()
         .collect();
-    let allow_write = sandbox_allow_write_entries(&guarded);
+    let mut allow_paths = guarded.clone();
+    let mut deny_paths = contained_store_deny_write_paths(&guarded);
+    if let Some(git) = git {
+        allow_paths.extend(git.allow.iter().cloned());
+        deny_paths.retain(|p| std::fs::canonicalize(p).map_or(true, |p| p != git.common));
+        deny_paths.extend(git.deny.iter().cloned());
+    }
+    let allow_write = sandbox_allow_write_entries(&allow_paths);
     if allow_write.is_empty() {
         return None;
     }
-    let deny_write = sandbox_allow_write_entries(&contained_store_deny_write_paths(&guarded));
+    let deny_write = sandbox_allow_write_entries(&deny_paths);
     Some(serde_json::json!({ "allowWrite": allow_write, "denyWrite": deny_write }))
 }
 
@@ -485,3 +674,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/bug_1929_contained_store_tests.rs"]
 mod store_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2169_contained_git_tests.rs"]
+mod git_tests;
