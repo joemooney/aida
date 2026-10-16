@@ -201,7 +201,7 @@ pub enum InternalCommand {
     SoloActive,
 }
 
-/// `aida mandate` — the fire-fighting mandate (STORY-1698).
+/// `aida mandate` — the fire-fighting mandate.
 // trace:STORY-1698 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MandateAction {

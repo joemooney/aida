@@ -652,9 +652,7 @@ pub(crate) fn store_history_versions(
     let rel = aida_core::object_store::relative_object_path(spec_id)
         .map_err(|e| format!("no object path for {spec_id}: {e}"))?;
     let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(store_root)
+        aida_core::git_ops::host_git_command(store_root)
             .args(args)
             .output()
             .map_err(|e| format!("git failed to run: {e}"))
