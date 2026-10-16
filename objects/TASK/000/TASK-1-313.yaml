@@ -1,0 +1,28 @@
+id: 01a1460a-182a-7890-a396-7bd5e3d0b057
+spec_id: TASK-1-313
+title: 'minor/test-coverage: no test drives handle_score end-to-end for an incomplete t…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/test-coverage: no test drives handle_score end-to-end for an incomplete trial; completeness fixtures call finish() manually (completeness.rs:420), so deleting completeness::finish at score.rs:908 or reverting the scored|incomplete ensure at score.rs:911 would fail no test. Add a handle_score-level test asserting the persisted record is status incomplete and the command succeeds.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-16T18:47:09.098837962Z
+modified_at: 2026-10-16T18:47:09.098837962Z
+req_type: Task
+tags:
+- carried-from:STORY-1677
+- finding-hash:34e05e1a
+- from-review:STORY-1677
+- kind:carried-forward
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6
