@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1372",
+  "publishes": [
+    {
+      "at": "2026-10-16T23:02:53.371832053Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T20:33:52.106662833Z",
+      "spec": "TASK-1372",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T22:18:15.501304863Z",
+      "spec": "TASK-1372",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1372",
+        "branch": "codex/task-1372",
+        "first_seen": "2026-10-16T22:18:15.501233339+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T23:02:22.268664836Z",
+      "spec": "TASK-1372",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T23:02:32.927448914Z",
+      "spec": "TASK-1372",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2708
+      }
+    },
+    {
+      "ts": "2026-10-16T23:02:53.354696978Z",
+      "spec": "TASK-1372",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "30e4171bed78120cf272e1eef52649921f028294",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
