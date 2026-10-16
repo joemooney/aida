@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-16T21:13:18.585068713Z
+modified_at: 2026-10-16T21:13:20.368622001Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -243,6 +243,33 @@ comments:
     After the edits, grep finds no "reviewer subagent", "gh pr merge --squash" or "review record <ID>" in any prompt file.
   created_at: 2026-10-16T21:13:18.585068713Z
   modified_at: 2026-10-16T21:13:18.585068713Z
+  session_id: 01a143ac0514
+- id: 01a1468f-eef0-7b21-8b15-cd578ba0094a
+  author: joe
+  content: |-
+    THROUGHPUT BEFORE/AFTER (review item 2; AC acc8cc65), fix-2661b, 2026-10-16.
+
+    BEFORE: in-process Agent-tool reviewers, 2026-10-10 local (07:00Z on 10-10 to 07:00Z on 10-11). n=34: every Agent/Task tool call with "review" in its description, across all ~/.claude/projects/-home-joe-ai-aida*/*.jsonl transcripts. 21 are from the aida orchestrator/advisor sessions (cb4777a7, 47e4723e, ba0773e5, d28185fc) and 13 from the aida-relay orchestrator (ce7b935f, aida-relay PRs #61-#71).
+    Method:
+    - "Reviewer sent" is the Agent tool_use timestamp. "Verdict received" is the last `<task-notification> … <status>completed</status>` for that agent id. Synchronous calls use the tool_result's totalDurationMs.
+    - Tokens are summed per unique assistant message from each subagent's own transcript (<session>/subagents/agent-<id>.jsonl). All 34 ran claude-opus-5-5.
+    - Cost is an ESTIMATE. The transcripts carry no dollar figure, so I applied the billed rate implied by the two AFTER runs: $3.13 per million weighted tokens, with weights input 1, 1h cache write 2, cache read 0.1, output 5.
+    - 7 of the 34 were resumed with SendMessage after a first stop (for example, waiting on CI). Their send→verdict time includes the wait.
+
+    | | n | wall-clock median (p25-p75) | turns (median) | tokens (median) | cost per review (median, p25-p75) |
+    |---|---|---|---|---|---|
+    | BEFORE: Agent-tool, send→verdict | 34 | 5.0 min (2.5-20.5) | 16 | 0.85M | ~$0.83 ($0.44-$1.19), estimated |
+    | BEFORE: Agent-tool, subagent active time | 34 | 4.8 min (2.3-16.5) | | | |
+    | BEFORE: aida sessions only | 21 | 3.2 min active (2.0-6.4) | | | |
+    | BEFORE: not resumed | 27 | 3.6 min send→verdict | | | |
+    | AFTER: Bash reviewer, PR #2692 | 1 | 5m23s launcher total (reviewer 4m18s) | 19 | 1.48M | $1.07 (billed) |
+    | AFTER: Bash reviewer, PR #2701 | 1 | 4m56s launcher total (reviewer 4m57s) | 25 | 2.08M | $1.36 (billed) |
+    | AFTER: headless table in the sketch | 10 | ~5 min median (2.0-19.6) | | | |
+
+    Reading: the comparable before figure is the median of 3-5 min per review, with a tail to ~57 min when the orchestrator kept a reviewer waiting on CI. The after runs land at 5-5.5 min, about 1 minute more per review. That fits the sketch's estimate of 30-60 s for `claude -p` startup plus creating the review worktree. Cost per review goes from ~$0.83 (estimated median) to $1.07-$1.36. A fresh process has no prompt cache shared with the orchestrator, and the AIDA headless review prompt is heavier: 19-25 turns against a median of 16. The after sample is n=2, so treat that delta as indicative. Reviewers can run in parallel (up to 3), so the added wall-clock is not serial.
+    Data and scripts: /home/joe/.claude/jobs/cf44842f/tmp/before.json, scan2.py. This is a job directory and is deleted with the job, so the table above is the record.
+  created_at: 2026-10-16T21:13:20.368622001Z
+  modified_at: 2026-10-16T21:13:20.368622001Z
   session_id: 01a143ac0514
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
