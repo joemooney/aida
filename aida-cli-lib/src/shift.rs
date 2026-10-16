@@ -3075,7 +3075,21 @@ fn known_mail_recipients(project_root: &Path) -> BTreeSet<String> {
     known
 }
 
-fn try_shift_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
+/// A held `shift.lock`. Drop releases it with an explicit unlock rather than
+/// by closing the file: a child forked by any concurrent thread holds a copy
+/// of the descriptor until its exec closes it, and a close-only release would
+/// leave the lock held through that copy, so the next pass on this clone would
+/// read it as a running tick (BUG-2161).
+// trace:BUG-2161 | ai:claude
+struct ShiftLock(std::fs::File);
+
+impl Drop for ShiftLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
+fn try_shift_lock(project_root: &Path) -> Result<Option<ShiftLock>> {
     use aida_core::file_lock::is_lock_contended;
     use fs2::FileExt;
     let dir = project_root.join(".aida");
@@ -3087,7 +3101,7 @@ fn try_shift_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
         .truncate(false)
         .open(dir.join(LOCK_FILE))?;
     match file.try_lock_exclusive() {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(Some(ShiftLock(file))),
         Err(err) if is_lock_contended(&err) => Ok(None),
         Err(err) => Err(err.into()),
     }

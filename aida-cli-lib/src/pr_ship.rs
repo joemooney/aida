@@ -2215,12 +2215,18 @@ mod tests {
     #[test]
     fn ship_release_site_gates_on_the_floor_before_clearing() {
         let src = include_str!("pr_cmd.rs");
+        // STORY-1698: the release step's gate is the last call site (the
+        // preflight's takes the authority the handler decided).
         let gate = src
-            .find("pr_ship::ship_hold_release_refusal_for(")
+            .rfind("pr_ship::ship_hold_release_refusal_for(")
             .expect("pr ship must gate the hold release");
+        // STORY-1698: the authority is the human floor, or an advisor an
+        // active fire-fighting mandate covers (re-read under the merge lease).
+        // trace:STORY-1698 | ai:claude
+        assert!(src.contains("let floor_authority = crate::has_integrity_floor_authority();"));
         let floor = src[gate..]
-            .find("crate::has_integrity_floor_authority()")
-            .expect("the gate must be fed the integrity-floor authority");
+            .find("floor_authority || mandate_release.is_some()")
+            .expect("the gate must be fed the integrity-floor (or mandate) authority");
         assert!(floor < 400, "authority must be the gate's own argument");
         let clear = src
             .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
@@ -2530,7 +2536,10 @@ mod tests {
             .expect("pr ship must consult the hold gate");
         let args = &src[gate..gate + 300];
         assert!(args.contains("read_hold_record(&main_worktree, pr_number)"));
-        assert!(args.contains("crate::has_integrity_floor_authority()"));
+        // STORY-1698: the human floor, or an active mandate's cover.
+        // trace:STORY-1698 | ai:claude
+        assert!(args.contains("floor_authority || mandate_cover.is_ok()"));
+        assert!(src.contains("let floor_authority = crate::has_integrity_floor_authority();"));
         assert!(!args.contains("drive_specs"));
         // Ship's single deadline now owns registration and settlement.
         // trace:TASK-1606 | ai:codex

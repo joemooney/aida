@@ -457,6 +457,47 @@ reporting; per-check outcomes are retained for later controls and comparisons.
 Raw cleanliness describes execution conditions, not the pass rate.
 <!-- trace:TASK-1730 | ai:codex -->
 
+Every actual system (including reference controls and R2) must have the declared
+installer or `./install.sh`. Missing, unlaunchable and nonzero installers record
+`install_failed`, distinct from oracle/check failures. Only generated no-op stub
+controls skip installation. No source-layout subset is selected by the scorer.
+
+The trusted oracle can write optional per-failure JSONL to the scorer-created
+`AIDA_REGEN_CHECK_RESULTS` path, supplied only during the oracle phase. Each line
+is `{"v":1,"check":"exact failing marker name","kind":"crash","exit":127}`;
+`kind` is `crash` or `assertion`, and integer `exit` is optional. No extra fields,
+duplicate identities, passing/unknown checks or unsupported versions are accepted.
+Absent, unreadable, over-1-MiB or invalid sidecars classify **every** failure as
+unknown; a valid partial sidecar leaves omitted failures unknown. Marker text and
+exit numbers never imply a classification. The scorer keeps its original file
+handle rather than reopening the child-writable pathname. These are oracle-supplied
+diagnostics, not independent attestation of generated tool behavior.
+
+Trial JSON retains versioned `failure_diagnostics`. Trusted
+`[regen].crash_failure_share_percent` is an integer 0–100, default 50. Crashes
+strictly above that percentage of **classified** failures produce
+`crash-dominated: review before reporting`; unknown failures strictly above 50%
+of **all** failures produce `unclassified: review before reporting`. Both can
+apply. Ordinary R1/R2 warnings are attached after control validation and forbid a
+clean headline; expected stub failures retain diagnostics without changing control
+execution cleanliness. Reports show counts/unknown share and put warnings beside
+the headline, including for legacy or invalid diagnostic extensions. The shared committed reader
+derives these ordinary-trial warnings without rewriting historical bytes, so
+statusline/digest consumers also receive the non-clean marker.
+
+`regen score --model-family <identity>` records an explicit optional family on the
+trial (and nested R2); model/vendor strings never infer it. `regen report` lists
+**oracle-assumption audit candidates** from the latest scored ordinary R1 per
+family, ordered by completion then UUID. Comparison requires matching corpus,
+oracle SHA and bundle hash. A candidate must be observed in every compared family
+and fail in exactly one; repeated runs do not count as separate families. Fewer
+than two families is unavailable, absent/invalid-family trials are counted as
+excluded, and checks unobserved in some families are counted separately. The audit
+is a prompt for human investigation, not proof of an oracle defect. No launcher or
+continuation policy is introduced here.
+<!-- trace:STORY-1676 | ai:codex -->
+
+
 Before ordinary scoring, generate controls with `aida regen score --control
 reference|stub --corpus <dir> --model <name> --vendor <name> --harness <name>`.
 The reference command exports the pinned trusted commit into a fresh directory
@@ -536,6 +577,36 @@ a mutable caller path. Optional notes are parsed as plain text but omitted from
 durable diagnostics. Gap IDs containing a captured mapping value refuse before
 execution, without printing the ID or value.
 <!-- trace:TASK-1733 | ai:codex -->
+
+`aida regen score --consensus <trial-uuid> <trial-uuid> <trial-uuid> ...` compares
+at least three distinct committed ordinary scored R1 trials. It cannot be combined
+with a system directory, controls, corpus/model/vendor/harness execution inputs,
+or `--unconfined`. No tools are launched. Mixed oracle SHA, bundle hash or corpus
+hash, invalid discriminating aggregates, or differing discriminating check sets
+refuse the entire selection before any filing. Adapted R2, control and unsuccessful
+attempts cannot be selected. Dirty/untracked trial files never count.
+
+A discriminating check failed by every selected regeneration is a **store gap**;
+partial failures are listed separately as **capability-dependent**, never as store
+gaps. The report gives N, the number of unclean trials included, and counts of distinct
+recorded models/vendors (vendor names are trimmed and ASCII case normalized); a single
+vendor produces an explicit weaker-consensus warning. Repeated runs are separate
+regenerations, and their actual diversity counts remain visible. These labels are
+investigation evidence rather than proof of cause. Contract clause mapping is not
+yet available: every gap explicitly says `contract mapping missing`.
+
+By default consensus only reports. `--file` explicitly creates draft amendment
+tasks through the normal atomic requirement write path, preserving type-based IDs,
+filing provenance and store hooks. A tag `regen-gap:<sha256(exact check)[:16]>`
+identifies a check within this project store; deduplication and insertion share
+the store write lock. Deduplication is scoped to this store root. Any non-archived
+item with that tag whose status is neither Completed nor Rejected suppresses a new
+draft, including after promotion to Approved or InProgress. Completed, Rejected or
+archived investigations allow a new draft. The body retains the exact check name and compared trial IDs. No parent is invented
+without a clause mapping. Check-to-clause mapping and parenting are a separate
+follow-up; the command retains its explicit missing-mapping diagnostic until then.
+<!-- trace:STORY-1679 | ai:codex -->
+
 
 Sources and targets cannot name PATH, HOME, SHELL, ENV, BASH_ENV, IFS, TMPDIR,
 PWD, OLDPWD, LANG, any oracle-owned variable, or a name starting with LD_,
