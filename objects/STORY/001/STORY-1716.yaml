@@ -1,0 +1,80 @@
+id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+spec_id: STORY-1716
+agreed_id: STORY-1716
+title: 'Review PR-2710: [AI:codex] fix(launch): report selected harness version to child writes (TASK-1793)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a146b4`) for branch `codex/task-1793`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2710>
+  - Branch: `codex/task-1793` → `codex/story-1674`
+
+  ## Covers
+
+  - TASK-1793
+  - TASK-1789
+  - STORY-1674
+  - STORY-1677
+  - TASK-1792
+  - BUG-2165
+  - STORY-1673
+  - TASK-1787
+  - TASK-1784
+  - TASK-1734
+  - STORY-1697
+  - BUG-2171
+  - BUG-2170
+  - STORY-1675
+  - BUG-2164
+  - BUG-2166
+  - STORY-1679
+  - STORY-1699
+  - STORY-1698
+  - BUG-2160
+  - BUG-2161
+  - BUG-2139
+  - BUG-2163
+  - BUG-2157
+  - BUG-2158
+  - STORY-1676
+  - TASK-1782
+  - BUG-2149
+  - BUG-2150
+  - TASK-1780
+  - STORY-1693
+  - BUG-2151
+  - BUG-2148
+  - TASK-1733
+  - TASK-1732
+  - TASK-1731
+  - BUG-2143
+  - TASK-1730
+  - BUG-1918
+  - BUG-2010
+
+  ## References (not delivered)
+
+  Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.
+
+  - BUG-2144
+  - BUG-2145
+  - BUG-2146
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2710` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T22:26:59.542736275Z
+modified_at: 2026-10-16T22:26:59.542736275Z
+req_type: Story
+filed_at:
+  code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7dd7aee9de
+  vendor: codex
