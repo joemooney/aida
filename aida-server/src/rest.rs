@@ -4707,6 +4707,20 @@ mod bug_1612_save_conflict_tests {
     // the operator who launched the server. trace:STORY-1674 | ai:claude
     #[tokio::test]
     async fn rest_write_event_is_authored_aida_rest_without_operator_session() {
+        // The server process carries an operator session, so the None
+        // assertion below discriminates. aida-core's EnvVarsGuard is
+        // crate-private; this restores the variable the same way on drop.
+        struct SessionEnv(Option<std::ffi::OsString>);
+        impl Drop for SessionEnv {
+            fn drop(&mut self) {
+                match self.0.take() {
+                    Some(v) => std::env::set_var("AIDA_SESSION_ID", v),
+                    None => std::env::remove_var("AIDA_SESSION_ID"),
+                }
+            }
+        }
+        let _session = SessionEnv(std::env::var_os("AIDA_SESSION_ID"));
+        std::env::set_var("AIDA_SESSION_ID", "operator-session-1674");
         let dir = tempfile::tempdir().unwrap();
         let (state, raw, _task) = git_server(dir.path());
         let body: UpdateRequirementRequest =

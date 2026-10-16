@@ -362,9 +362,9 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 <!-- trace:STORY-1674 | ai:codex -->
 
 ```bash
-aida usage show STORY-123 --provenance
-aida usage show STORY-123 --provenance --json
-aida usage show STORY-123 --provenance --toon
+aida usage show <spec-id> --provenance
+aida usage show <spec-id> --provenance --json
+aida usage show <spec-id> --provenance --toon
 ```
 
 This view reads the requirement's filing, edit, comment and nested reply events.
