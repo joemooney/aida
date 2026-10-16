@@ -3,12 +3,12 @@ spec_id: TASK-1789
 agreed_id: TASK-1789
 title: 'BUG-2139 follow-ups: model child_grant_id in SessionLease (serde rewrites drop it), revoke on clear_worktree_session_leases, test child expires_at == parent, preflight when main root lookup fails'
 description: 'From the #2688 STRICT review (non-blocking): (1) child_grant_id is a raw TOML key, so orchestrator_leases.rs:521/546 (update_lease_branch, mark_lease_escalated_to_human) drop it on rewrite; add it to SessionLease. (2) session_start.rs:1007 clear_worktree_session_leases deletes leases without revoke_lease_child_grant. (3) No test asserts the child grant''s expires_at equals the parent''s. (4) The orchestrator preflight is skipped if find_main_worktree_root fails (drain_gate.rs ~1481); fail closed or preflight anyway.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T06:30:59.129256631Z
-modified_at: 2026-10-16T20:19:31.968268030Z
+modified_at: 2026-10-16T20:53:24.935600585Z
 req_type: Task
 relationships:
 - rel_type:
@@ -71,6 +71,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1467d-b137-7ec3-875a-18f73b978861
+  author: aida-auto-bump
+  timestamp: 2026-10-16T20:53:24.919411200Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1467d-b147-7eb0-8eaa-989fe55476c5
+  timestamp: 2026-10-16T20:53:24.935570057Z
+  agent: aida
+  commit_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
+  summary: 'TASK-1789 items 2-4 met (item 1 shipped in #2692): pooled reuse revokes stamped child grant before lease removal, unresolved project root fails headless drain closed before queue/plan, child expiry asserted equal to a short-lived parent; CI green at 007c853'
+  review_verdict: approved
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
@@ -79,3 +93,7 @@ filed_at:
   aida_build_sha: 251f99e7ef
   vendor: claude
   session: 3e7b9d7a-f729-448d-b73f-439bcee0d31a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T20:53:24.919395882Z
+  completion_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
