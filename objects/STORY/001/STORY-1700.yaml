@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-16T04:32:44.121267096Z
+modified_at: 2026-10-16T08:18:10.265271181Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -65,6 +65,28 @@ comments:
   created_at: 2026-10-16T04:32:44.121267096Z
   modified_at: 2026-10-16T04:32:44.121267096Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a143ca-3ed9-7051-b487-ee6e05ed7ea2
+  author: joe
+  content: |-
+    ADVISOR STRICT SKETCH REVIEW (2026-10-16 01:20): CHANGES REQUESTED. Most of the sketch is signed: the record/compat plan, the display path (read live in compose_handoff_show and never copied into the handoff), routing ship/sketch/dispatch to the advisor seat, add-only gates, and the ledger.
+
+    RULING ON THE EXPLICIT ASK (relay restart). My earlier comment assumed a "recorded launch" and a "launch grant", and neither exists. relay.status has no argv, principal or TTY provenance. The driver registry is deregistered in the EXIT trap. Implementer relays strip AIDA_SESSION_GRANT. So:
+    - In THIS story, the tick does NOT restart relays. It classifies a dead relay and routes it as a due item or notice (advisor for a crash, operator for credits, exit 7, or an advisor relay).
+    - Auto-restart becomes a follow-up story (filed) built on a new relay launch record in aida-relay. That record holds ORIG_ARGS verbatim, the profile hash, the principal, launched_from_tty and the restart lineage. Authority comes from the mandate plus that human launch record, never from a grant: the tick never mints, holds or forwards one. The follow-up's conditions: restart only the crash ending where the trap never ran, judged by `relay.sh --status` flock; never after a signal stop, the session cap, setup/usage errors, complete or blocked; honour relay.norestart; at most 3 restarts per run with 1/2/4-tick backoff and one crash-loop notice; --max-sessions = remaining budget; at least 30 minutes left on the mandate; never an advisor, --force-seat or non-TTY relay; re-check immediately before the exec; ledger every decision.
+
+    REQUIRED CHANGES for this story:
+    1. Agents must not be able to loosen gates. Read the committed gate layer from the origin/main blob, not the working tree. Any PR that touches [mandate.human_gates] or the mandate/gate code is always human-gated and never ships under the mandate.
+    2. The tick's authority is the same whoever invokes it. Scrub AIDA_SESSION_GRANT/ROLE/PURPOSE from the tick and its children. Take a dedicated flock, not only the scheduler's tick lock. Share budget and backoff state across invocations.
+    3. Re-read the mandate (stop tombstone, expiry) immediately before each action, not only at the start of the tick.
+    4. Principal under the scheduler: current_user_id falls back through AIDA_USER, USER, USERNAME, then "default". `mandate start --drive` and `aida doctor` must warn when the installed tick would resolve a different principal, or when no out-of-session schedule driver is installed.
+    5. AC3 reading: with no live advisor, ships and dispatches wait for the advisor seat (the STORY-1698 gate needs an anchored advisor grant). That reading is accepted. Record it as an AC note on this spec so merge-time completion isn't disputed.
+    6. Blocked flow: the advisor's due item carries the resolving action itself. No "next tick restarts" trigger exists in this story.
+    7. Tests: the classification table (130/143, session-cap, 1/4/5/6/7/8, and running-with-no-lock); two concurrent ticks; a mandate stopped or expired mid-tick; an inherited grant scrubbed; a gate removal in the working tree still enforced from origin/main; a PR that touches gates is gated; a principal mismatch warns and does nothing; an unknown scope string fails closed.
+    Non-blocking: state whether drive covers hold-clear. Show the per-turn "expired/stopped" line once per seat. Confirm the codex/agy relay lanes fire the notice hook. Keep the fail-closed deserialization behaviour and test it.
+    Sequencing: build after #2687 (shipping now) and STORY-1699's lane classifier (fleet_lanes::classify_lanes). Fold the plan into the implementation PR.
+  created_at: 2026-10-16T08:18:10.265271181Z
+  modified_at: 2026-10-16T08:18:10.265271181Z
+  session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
   author: joe
