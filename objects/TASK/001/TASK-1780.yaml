@@ -13,12 +13,12 @@ description: |-
   - Add a scheduled nightly full-suite job (aida schedule) that files a bug on red.
   - Add a make target such as 'make test-touched' that derives test filters from the files changed against origin/main.
   - Edit the template masters, then run make sync-templates.
-status: Draft
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:40:07.146402411Z
-modified_at: 2026-10-15T20:55:45.269812406Z
+modified_at: 2026-10-16T00:58:51.673551878Z
 req_type: Task
 comments:
 - id: 01a13f98-5bc3-7163-8498-acfc5a3f26f1
@@ -44,6 +44,19 @@ comments:
   created_at: 2026-10-15T14:31:05.926476533Z
   modified_at: 2026-10-15T14:31:05.926476533Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14238-0b99-7931-8903-060f82f2d47a
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (8336ec0) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-16T00:58:51.673547721Z
+  modified_at: 2026-10-16T00:58:51.673547721Z
+history:
+- id: 01a14238-0b99-7931-8903-05f8d89ab0de
+  author: aida-auto-bump
+  timestamp: 2026-10-16T00:58:51.673543739Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
   branch: main
