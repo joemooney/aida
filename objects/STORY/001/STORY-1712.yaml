@@ -1,0 +1,33 @@
+id: 01a14625-5d60-7360-a9d8-7343ecf107cc
+spec_id: STORY-1712
+agreed_id: STORY-1712
+title: 'Review PR-2707: [AI:codex] fix(mandate): validate ledger metadata and clarify re-arm audits (TASK-1790)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1460d`) for branch `codex/task-1790`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2707>
+  - Branch: `codex/task-1790` → `main`
+
+  ## Covers
+
+  - TASK-1790
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2707` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T19:16:56.288931495Z
+modified_at: 2026-10-16T19:16:56.288931495Z
+req_type: Story
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: codex
