@@ -3,13 +3,21 @@ spec_id: TASK-1791
 agreed_id: TASK-1791
 title: 'regen score: bound each generated-tool run (--help completeness probe, installer, oracle) with a timeout recorded as an incomplete/failed reason'
 description: 'From the #2679 STORY-1677 r1 review (non-blocking). completeness::check runs ''<tool> --help'' through ScoreEnv::run -> cmd.output() with no timeout; a generated tool that ignores --help and starts a server/loop hangs ''aida regen score'' and writes no record. Installer and oracle runs are equally unbounded. Add a bounded wait (configurable, default e.g. 30s) that kills the process group and records ''--help timed out'' as an incomplete reason (and a timeout failure for installer/oracle). Test with a fixture tool that sleeps.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:58:45.918836097Z
-modified_at: 2026-10-16T07:58:45.918836097Z
+modified_at: 2026-10-16T17:55:40.278941879Z
 req_type: Task
+history:
+- id: 01a145da-f676-71a3-ae22-ca2e7db01fda
+  author: aida-session-start
+  timestamp: 2026-10-16T17:55:40.278940439Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
