@@ -1,0 +1,20 @@
+id: 01a143ca-43de-7e53-9640-0693d693e319
+spec_id: STORY-1706
+agreed_id: STORY-1706
+title: 'Drive mandate: auto-restart a crashed relay from a human launch record (aida-relay launch record + tick restart)'
+description: 'Split from STORY-1700 per the advisor''s STRICT sketch ruling (comment on STORY-1700, 2026-10-16 01:20). Part 1 (aida-relay): at startup, write an atomic 0600 <run dir>/relay.launch holding ORIG_ARGS verbatim, the profile ref and sha256, PROJECT_ROOT, the relay.sh path, agent, SESSION_ROLE, force_seat, MAX_SESSIONS, principal, launched_from_tty, launched_at, run id and restart lineage. Add exit reason= values (signal:TERM, session-cap, setup-error) and a relay.norestart marker written by an operator stop verb. Part 2 (aida): the drive tick restarts ONLY the crash ending (trap never ran, per relay.sh --status flock), with the conditions in the ruling: principal == mandate principal; TTY-rooted lineage; profile hash unchanged; not advisor or --force-seat; at most 3 restarts with 1/2/4-tick backoff; --max-sessions = remaining budget; at least 30 minutes left on the mandate; re-check before the exec; ledger every decision. The tick never mints, holds or forwards a grant.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T08:18:11.550823998Z
+modified_at: 2026-10-16T08:18:11.550823998Z
+req_type: Story
+filed_at:
+  code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 5fb188c522
+  vendor: claude
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
