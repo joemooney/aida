@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-15T04:01:59.952351586Z
+modified_at: 2026-10-16T09:25:31.241322035Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -146,6 +146,12 @@ comments:
   created_at: 2026-10-15T04:01:59.952351586Z
   modified_at: 2026-10-15T04:01:59.952351586Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a14407-e7e9-7981-b210-b0e72b37f41e
+  author: joe
+  content: 'Advisor 2026-10-16 02:25: the performance guard tripped again. ''aida show'' exceeded its 1000 ms budget on 52.3% of 635 calls in 24h (tolerated 10%); worst call 26909 ms against the 5000 ms ceiling. The window includes about 5 concurrent cold cargo builds overnight (load avg ~7.7), so part of it is contention; the ceiling breach is still real.'
+  created_at: 2026-10-16T09:25:31.241322035Z
+  modified_at: 2026-10-16T09:25:31.241322035Z
+  session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
