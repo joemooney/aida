@@ -1,3 +1,9 @@
+Regen generated-command execution defaults to a 30-second timeout per call;
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
+kills the process group and failed records retain timeout reasons.
+See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
+<!-- trace:TASK-1791 | ai:codex -->
+
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
 closed built-in Linux probes. It never runs stored shell commands or probes
 from sync/drain/hooks, and reports match/drift/unknown/invalid without status

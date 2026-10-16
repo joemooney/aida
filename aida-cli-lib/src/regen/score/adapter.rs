@@ -348,7 +348,14 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
         // Withhold the entire diagnostic: truncation or encoding could otherwise
         // leave a fragment of an echoed captured value. Status/exits survive.
         record.error = Some(
-            if record.status == "install_failed" {
+            // Fixed scorer-owned flags preserve the failure class without
+            // retaining command paths or child-controlled diagnostic text.
+            // trace:TASK-1791 | ai:codex
+            if record.flags.iter().any(|flag| flag == "installer_timeout") {
+                "installer timed out; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "oracle_timeout") {
+                "oracle timed out; child diagnostics withheld for mapped input privacy"
+            } else if record.status == "install_failed" {
                 "installer failed; child diagnostics withheld for mapped input privacy"
             } else {
                 "scoring failed; child diagnostics withheld for mapped input privacy"
