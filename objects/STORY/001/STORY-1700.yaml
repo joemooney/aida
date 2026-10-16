@@ -1,0 +1,29 @@
+id: 01a142e2-d6c2-75a3-99dc-49b022a97612
+spec_id: STORY-1700
+agreed_id: STORY-1700
+title: 'Mandate drives the open list: a durable mandate that every seat, relay and heartbeat enforces, with human gates opt-in'
+description: |-
+  Implements ADR-77 on top of STORY-1698 (#2687) and STORY-1699.
+  ## Acceptance
+  - 'aida mandate start --drive [--ttl]' (human TTY only) records a DRIVE mandate. --include-supervised is ON by default for --drive. It covers: shipping held PRs (STORY-1698 gates), advisor signoff of sketches, restarting a relay that is blocked or exited, and dispatching fixers for approved unowned specs.
+  - Durability: SessionStart and per-turn hooks print the active mandate (scope, remaining TTL, reason) for every seat. Seat rotation handoffs carry it automatically. 'aida session handoff --show' prints it first.
+  - Active drive: while a drive mandate is active, the fleet heartbeat (STORY-1699) runs every 15m. For each stalled or blocked lane it performs the next action itself (restart the relay, re-dispatch, ship an approved PR) or records why it can't. If no advisor seat is live, the tick escalates to the operator once and keeps doing the substrate actions.
+  - Human gates are opt-in: config [mandate.human_gates] is an explicit list, empty by default, plus the 'operator-only' tag.
+  - Floors kept: independent attested review, no self-merge, no force-push or rewrite of shared branches, and mandate mint/stop by a human only.
+  - Audit: every mandate-driven action is ledgered and visible in 'aida mandate status' and the digest.
+  Tier: STRICT. Sketch plus advisor signoff first.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T04:05:24.802270123Z
+modified_at: 2026-10-16T04:05:24.802270123Z
+req_type: Story
+filed_at:
+  code_sha: 463b81d02796148deba3c59c47daefce584c35f4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 463b81d027
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
