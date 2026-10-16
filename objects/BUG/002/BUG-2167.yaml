@@ -1,0 +1,20 @@
+id: 01a143b3-360a-7003-ba6e-2751ef523d2c
+spec_id: BUG-2167
+agreed_id: BUG-2167
+title: aida agent status labels every --bg claude session with the FIRST dispatched session's name and spec
+description: 'Seen 2026-10-16 00:58. Five ''aida agent new claude --bg --role implementer --spec X --name N'' launches (TASK-1784/fix-task-1784, TASK-1734/rebase-2673, STORY-1679/rebase-2678, (no spec)/fix-story-1699, STORY-1698/fix-2687) all show in ''aida agent status'' as NAME=fix-task-1784 SPEC=TASK-1784 WORKTREE=/home/joe/ai/aida, while ''claude agents --json'' shows the five distinct sessions and the correct pool worktrees. The four later rows are the bg-spare PIDs (claude bg-spare --bg-spare ...claim.sock) the Claude supervisor recycles; the registry seems to key the row on the first-registered record or resolve the spare''s identity through the first one. Effect: the advisor cannot tell which seat is which without ''claude agents --json''; ''aida agent stop <name>'' is ambiguous. Expected: each row carries its own name/spec/lease (the linked lease ids are distinct: 01a143ac, 01a143ae, 01a143b1).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T07:53:00.682361656Z
+modified_at: 2026-10-16T07:53:00.682361656Z
+req_type: Bug
+filed_at:
+  code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a38e37f0f8
+  vendor: claude
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
