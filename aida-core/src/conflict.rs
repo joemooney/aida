@@ -140,7 +140,7 @@ pub fn resolve_conflict(
     remote: &Requirement,
     resolution: Resolution,
 ) -> Requirement {
-    match resolution {
+    let mut merged = match resolution {
         Resolution::AcceptLocal => local.clone(),
         Resolution::AcceptRemote => remote.clone(),
         Resolution::LastWriteWins => {
@@ -154,7 +154,9 @@ pub fn resolve_conflict(
                 std::cmp::Ordering::Equal => deterministic_scalar_winner(local, remote),
             }
         }
-    }
+    };
+    crate::hypothesis::preserve_merge(None, local, remote, &mut merged);
+    merged
 }
 
 /// Three-way structured merge of one spec YAML during a store-leg rebase.
@@ -411,6 +413,7 @@ pub fn merge_spec_three_way(
     merged.dependencies =
         merge_dependencies_three_way(&base.dependencies, &ours.dependencies, &theirs.dependencies);
 
+    crate::hypothesis::preserve_merge(Some(base), ours, theirs, &mut merged);
     merged
 }
 

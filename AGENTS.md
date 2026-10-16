@@ -1,9 +1,23 @@
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
 or absent diagnostics remain unknown. Reports flag crash-dominated and mostly
 unclassified failures and audit matching R1 trials by explicit `--model-family`.
 See OVERVIEW.md for the sidecar and comparison rules.
 <!-- trace:STORY-1676 | ai:codex -->
+
+`regen score --consensus <uuid...>` compares at least three committed ordinary
+scored R1 trials with matching corpus/oracle/bundle and discriminating check sets.
+All-fail checks are reported as store gaps, partial failures separately. It is
+report-only unless `--file` requests draft amendments. Non-archived items other
+than Completed/Rejected deduplicate under the store write lock using exact-check
+hash tags. See OVERVIEW.md.
+<!-- trace:STORY-1679 | ai:codex -->
 
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and

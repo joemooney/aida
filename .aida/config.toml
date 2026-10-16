@@ -301,6 +301,37 @@ on = ["CronJobFailed:watchdog"]
 prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 enabled = true
 
+# STORY-1699 quick-win slice: a blocked relay sat unnoticed for 4.5h on
+# 2026-10-15 because nothing digested the fleet on a schedule. Two jobs:
+#   - fleet-heartbeat: an hourly SEAT job (seat jobs accept `every`), so the
+#     advisor gets a due item in `aida awaiting` every hour to sweep the fleet.
+#   - relay-stall-guard: a 15m substrate GATE on `.aida/relay/*/relay.status`
+#     (blocked/exited with no `.done` marker), routed through CronJobFailed
+#     like performance-guard, so a stuck relay surfaces within 15 minutes
+#     instead of waiting for the hourly sweep.
+# The full `aida fleet digest` (STORY-1699 AC1-5) replaces the heartbeat's
+# hand-run census when it lands.
+# trace:STORY-1699 | ai:claude
+[[schedule.jobs]]
+name = "fleet-heartbeat"
+seats = ["advisor"]
+every = "1h"
+prompt = "Hourly fleet heartbeat. Run the `aida-fleet-watch` skill (or `aida ps`, `aida pr list`, and read each `.aida/relay/*/relay.status`). Act on every blocked relay, stalled lane, unreviewed PR, and approved-but-unshipped PR: unblock, review or route the review, nudge the owner, or escalate to the operator. Then post a 5-line digest (counts by state, oldest stall, what you acted on, what still waits on a human, next check). Finish with `aida schedule done fleet-heartbeat`."
+enabled = true
+
+[[schedule.jobs]]
+name = "relay-stall-guard"
+command = "doctor check relay-stall --fail-on-findings"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "relay-stall-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed:relay-stall-guard"]
+prompt = "A relay run is stopped (relay.status state=blocked or exited) with no `.done` acknowledgement. Use the routed trip evidence and `aida doctor check relay-stall` to find the run, read its handoff, then unblock it (answer the signoff or question it is waiting on and resume the relay) or retire it, escalating to the operator if it needs a human. Once handled, acknowledge it with `touch <handoff>.done` so the guard stops tripping."
+enabled = true
+
 [[schedule.jobs]]
 name = "night-shift"
 command = "shift tick"
