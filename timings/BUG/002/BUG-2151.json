@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2151",
+  "publishes": [
+    {
+      "at": "2026-10-16T00:53:31.277088412Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T11:05:07.843038945Z",
+      "spec": "BUG-2151",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T19:23:26.689145890Z",
+      "spec": "BUG-2151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2672,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4898c5f4c463d0f97ccf65a1792964a7ddac4e6d"
+      }
+    },
+    {
+      "ts": "2026-10-15T19:23:28.478533072Z",
+      "spec": "BUG-2151",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT round 2: all agent-resume paths are contained (e2e verified). ONE remaining in-scope defect (write roots); session resume/new and passthrough widening are split to BUG-2157/BUG-2158 under the 2-round cap",
+        "recovery_hint": "address the review findings, move BUG-2151 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:42:46.988551909Z",
+      "spec": "BUG-2151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2672,
+        "verdict": "APPROVED",
+        "reviewed_sha": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:49:11.458179818Z",
+      "spec": "BUG-2151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2672,
+        "verdict": "APPROVED",
+        "reviewed_sha": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:52:58.468959033Z",
+      "spec": "BUG-2151",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T00:53:21.934624327Z",
+      "spec": "BUG-2151",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2672
+      }
+    },
+    {
+      "ts": "2026-10-16T00:53:31.261916792Z",
+      "spec": "BUG-2151",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e93765f63773294be22b3a0d835006eadfe6a1c1",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

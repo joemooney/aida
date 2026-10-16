@@ -1,0 +1,19 @@
+{
+  "id": "05cff2c5-6a38-436e-ade3-e2a664b786a8",
+  "thread_id": "05cff2c5-6a38-436e-ade3-e2a664b786a8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792112142082,
+  "body": "aida-host #8 is merged as a8163c2 and live. Go ahead: rebase --onto origin/main 48a8dfa product/story-79 (#9), then #10 onto the new #9 and #11 onto the new #10. Use force-with-lease with full SHAs, retarget each to main, and mail the range-diff proofs. The approvals are re-recorded with attestation and carry over if the range-diff shows only '='.",
+  "subject": "#8 MERGED (a8163c2): restack #9 -> #10 -> #11 onto main now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
