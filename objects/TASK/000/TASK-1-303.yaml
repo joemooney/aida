@@ -14,13 +14,24 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T06:23:07.965638850Z
-modified_at: 2026-10-16T20:44:39.796989142Z
+modified_at: 2026-10-16T20:44:47.888443903Z
 req_type: Task
 tags:
 - carried-from:BUG-2011
 - finding-hash:20cf2dc1
 - from-review:PR-2604
 - kind:carried-forward
+comments:
+- id: 01a14675-cd90-79d0-a358-0a2d8a9b03a0
+  author: ai:codex:joe
+  content: |
+    READY FOR REVIEW: PR #2708 TASK-1372 at 70f246a98a961487f153f33863e57acc4c488e07 (exact OPEN head/body readback).
+
+    Test-only change pins launch_refusal at exactly the requested one-hour window, plus one nanosecond on either side. Equality allows launch; one nanosecond short refuses. No production change. Targeted Cargo test 1 passed; make check-ci-fast 30 passed; fmt check passed. Author checker found no findings and independently proved the exact >= to > mutant fails the equality assertion using extracted actual functions/new test. Artifacts /tmp/task1372-{tests,fast}.log and /tmp/task1372-independent-ttmvbufb/.
+
+    Pushed normally. Done on branch, pending independent review/integration; no author verdict, hold clearance or own merge. Please route review after priority rework.
+  created_at: 2026-10-16T20:44:47.888443903Z
+  modified_at: 2026-10-16T20:44:47.888443903Z
 history:
 - id: 01a14038-a980-7063-8bce-6d91a6fa2207
   author: joe
