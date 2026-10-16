@@ -5,6 +5,9 @@
 //!   redirect pointers and other worktrees' checked-out branches are denied.
 //! - Harness: the generated settings, checked over real paths with the BUG-1929
 //!   model of Claude Code's Linux sandbox (deny wins over an enclosing allow).
+//! - Packed refs: every protected branch (checked out in another worktree,
+//!   or the default branch) gets a loose ref and reflog before launch, since
+//!   the sandbox skips a deny on a missing path.
 //! - Fail closed: a primary checkout keeps its recursive `.git` deny; a
 //!   symlinked or path-traversing gitdir, or a symlinked `objects`, gets no
 //!   git grant at all.
@@ -297,4 +300,162 @@ fn bug_2169_symlinked_objects_falls_back_to_worktree_only() {
     std::fs::rename(&objects, &moved).unwrap();
     std::os::unix::fs::symlink(&moved, &objects).unwrap();
     assert_no_git_grant(&worktree, &main);
+}
+
+/// `linked_fixture` plus a worktree `<base>/other` on branch `other` and a
+/// branch `trunk` checked out nowhere, with every branch PACKED (no loose ref
+/// and, for `main`, no reflog file): the normal state after `git gc`.
+fn packed_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let (tmp, main, worktree) = linked_fixture();
+    let other = main.parent().unwrap().join("other");
+    bug_1929_git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "other",
+            other.to_str().unwrap(),
+        ],
+    );
+    bug_1929_git(&main, &["branch", "trunk"]);
+    bug_1929_git(&main, &["pack-refs", "--all", "--prune"]);
+    let common = main.join(".git");
+    let _ = std::fs::remove_file(common.join("logs/refs/heads/main"));
+    for branch in ["main", "other", "wt", "trunk"] {
+        assert!(!common.join("refs/heads").join(branch).exists(), "{branch}");
+    }
+    (tmp, main, worktree)
+}
+
+fn settings_with(worktree: &Path, main: &Path, git: &ContainedGitPaths) -> serde_json::Value {
+    let json = crate::session::contained_settings_json_with_git(
+        &[],
+        false,
+        &contained_write_roots(worktree),
+        &contained_store_write_paths(main),
+        Some(git),
+    );
+    serde_json::from_str(&json).unwrap()
+}
+
+// MODEL + BYPASS: with packed branches, the deny on a missing loose ref binds
+// nothing, so without materialization the seat could write a loose
+// `refs/heads/main` (which overrides packed-refs). After the launch-time
+// materialization the loose ref and reflog exist, hold the packed value, and
+// are denied; the seat's own branch and remote-tracking refs stay writable.
+// trace:BUG-2169 | ai:claude
+#[test]
+fn bug_2169_packed_protected_branches_are_materialized_and_denied() {
+    let (_tmp, main, worktree) = packed_fixture();
+    let common = main.join(".git");
+    let main_sha = bug_1929_git(&main, &["rev-parse", "main"]);
+    let git = resolve_contained_git_paths(&worktree).unwrap().unwrap();
+    let names: Vec<&str> = git.refs.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["refs/heads/main", "refs/heads/other"], "{git:?}");
+
+    // Without materialization the model reports the packed branches writable:
+    // a deny on a non-existent path is skipped.
+    let before = settings_with(&worktree, &main, &git);
+    for bypass in [
+        common.join("refs/heads/main"),
+        common.join("refs/heads/other"),
+        common.join("logs/refs/heads/main"),
+    ] {
+        assert!(sandbox_may_write(&before, &bypass), "{bypass:?}: {before}");
+    }
+
+    materialize_protected_refs(&git).unwrap();
+    let after = settings_with(&worktree, &main, &git);
+    for denied in [
+        common.join("refs/heads/main"),
+        common.join("refs/heads/other"),
+        common.join("logs/refs/heads/main"),
+        common.join("logs/refs/heads/other"),
+    ] {
+        assert!(denied.is_file(), "{denied:?}");
+        assert!(!sandbox_may_write(&after, &denied), "{denied:?}: {after}");
+    }
+    assert_eq!(
+        std::fs::read_to_string(common.join("refs/heads/main"))
+            .unwrap()
+            .trim(),
+        main_sha.trim()
+    );
+    assert_eq!(bug_1929_git(&main, &["rev-parse", "main"]), main_sha);
+    for writable in [
+        common.join("refs/heads/wt"),
+        common.join("refs/heads/trunk"),
+        common.join("refs/remotes/origin/main"),
+    ] {
+        assert!(!git.deny.contains(&writable), "{writable:?}");
+        assert!(
+            sandbox_may_write(&after, &writable),
+            "{writable:?}: {after}"
+        );
+    }
+    // Idempotent: a second launch leaves the loose refs as they are.
+    materialize_protected_refs(&git).unwrap();
+    assert_eq!(bug_1929_git(&main, &["rev-parse", "main"]), main_sha);
+}
+
+// DEFAULT BRANCH: `origin/HEAD`'s target is protected even when no worktree
+// has it checked out, and the production launch path materializes it.
+// trace:BUG-2169 | ai:claude
+#[test]
+fn bug_2169_default_branch_is_protected_when_packed() {
+    let (_tmp, main, worktree) = packed_fixture();
+    let common = main.join(".git");
+    bug_1929_git(
+        &main,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    let git = resolve_contained_git_paths(&worktree).unwrap().unwrap();
+    assert!(
+        git.refs.iter().any(|r| r.name == "refs/heads/trunk"),
+        "{git:?}"
+    );
+    let json = crate::session::claude_contained_settings_json(&[worktree.clone()]);
+    let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
+    for denied in [
+        common.join("refs/heads/trunk"),
+        common.join("refs/heads/main"),
+        common.join("logs/refs/heads/trunk"),
+    ] {
+        assert!(denied.is_file(), "{denied:?}");
+        assert!(!sandbox_may_write(&settings, &denied), "{denied:?}: {json}");
+    }
+    assert!(
+        sandbox_may_write(&settings, &common.join("refs/heads/wt")),
+        "{json}"
+    );
+}
+
+// FAIL CLOSED: a default branch that does not resolve, or a protected ref
+// that cannot be materialized (its lock is held), gets no git grant.
+// trace:BUG-2169 | ai:claude
+#[test]
+fn bug_2169_unmaterializable_protected_ref_falls_back_to_worktree_only() {
+    let (_tmp, main, worktree) = packed_fixture();
+    let common = main.join(".git");
+    std::fs::write(common.join("refs/heads/other.lock"), b"").unwrap();
+    assert_eq!(contained_git_write_paths(&worktree), None);
+    assert!(!common.join("refs/heads/other").exists());
+    std::fs::remove_file(common.join("refs/heads/other.lock")).unwrap();
+
+    bug_1929_git(
+        &main,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/missing",
+        ],
+    );
+    assert!(resolve_contained_git_paths(&worktree).is_err());
+    assert_eq!(contained_git_write_paths(&worktree), None);
 }

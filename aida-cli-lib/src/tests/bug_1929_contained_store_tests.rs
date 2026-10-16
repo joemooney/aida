@@ -96,7 +96,8 @@ fn filesystem_entries(settings: &serde_json::Value, key: &str) -> Vec<String> {
 /// (claude 2.1.296): a `//p` entry is the absolute path `/p`; it is bound only
 /// when it exists at launch, with no glob expansion; a directory bind covers
 /// everything under it; a `denyWrite` bind is read-only and wins over an
-/// enclosing `allowWrite`.
+/// enclosing `allowWrite`. A deny on a path missing at launch is skipped, so
+/// it protects nothing (BUG-2169: a packed branch has no loose ref to deny).
 pub(super) fn sandbox_may_write(settings: &serde_json::Value, target: &Path) -> bool {
     bound_covers(&allow_write(settings), target) && !bound_covers(&deny_write(settings), target)
 }

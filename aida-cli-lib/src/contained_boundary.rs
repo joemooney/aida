@@ -153,8 +153,10 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
 /// enclosing allow): `<common>/config`, `hooks`, `info`; the gitdir's
 /// `config.worktree`, `commondir` and `gitdir` pointers; the worktree's own
 /// `.git` pointer; and the loose ref and reflog of every branch checked out in
-/// ANOTHER worktree (the main checkout's `main`, the store's branch), so a
-/// seat can move its own branches but not someone else's.
+/// ANOTHER worktree (the main checkout's `main`, the store's branch) and of
+/// the default branch, so a seat can move its own branches but not someone
+/// else's. Those denies bind only once [`materialize_protected_refs`] has
+/// created the files: a packed branch has no loose ref to deny.
 // trace:BUG-2169 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ContainedGitPaths {
@@ -164,6 +166,23 @@ pub(crate) struct ContainedGitPaths {
     pub(crate) gitdir: PathBuf,
     pub(crate) allow: Vec<PathBuf>,
     pub(crate) deny: Vec<PathBuf>,
+    /// The branches the seat may not move (every branch checked out in
+    /// another worktree, and the default branch): their loose ref and reflog
+    /// are in `deny`, and [`materialize_protected_refs`] creates both before
+    /// launch so the deny binds an existing path.
+    pub(crate) refs: Vec<ProtectedRef>,
+}
+
+/// A branch the seat may not move, resolved at launch.
+// trace:BUG-2169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProtectedRef {
+    /// `refs/heads/<branch>`.
+    pub(crate) name: String,
+    /// `<common>/refs/heads/<branch>`.
+    pub(crate) path: PathBuf,
+    /// `<common>/logs/refs/heads/<branch>`.
+    pub(crate) log: PathBuf,
 }
 
 /// The common-dir subdirectories a linked worktree's git must write.
@@ -183,7 +202,13 @@ pub(crate) const GITDIR_DENY: [&str; 3] = ["config.worktree", "commondir", "gitd
 /// (worktree-only boundary) for a primary checkout, outside git, or on refusal.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn contained_git_write_paths(worktree: &Path) -> Option<ContainedGitPaths> {
-    match resolve_contained_git_paths(worktree) {
+    let resolved = resolve_contained_git_paths(worktree).and_then(|paths| {
+        if let Some(paths) = &paths {
+            materialize_protected_refs(paths)?;
+        }
+        Ok(paths)
+    });
+    match resolved {
         Ok(paths) => paths,
         Err(reason) => {
             eprintln!(
@@ -194,6 +219,82 @@ pub(crate) fn contained_git_write_paths(worktree: &Path) -> Option<ContainedGitP
             None
         }
     }
+}
+
+/// Create the loose ref and reflog file of every protected branch that lacks
+/// one. The sandbox skips a `denyWrite` on a missing path, and `refs/` is
+/// writable, so a PACKED branch (no loose file) would let the seat write a
+/// loose `refs/heads/main`, which overrides `packed-refs`. A loose ref holding
+/// the packed value changes nothing for git. The ref is written under git's
+/// own `<ref>.lock` protocol and re-resolved under that lock, so a concurrent
+/// update is never reverted. `Err` (the caller falls back to the
+/// worktree-only boundary) when any ref cannot be materialized as a real file.
+///
+/// `objects/info/alternates` stays writable through `objects/`: it can only
+/// add object sources to read, never run code or move a ref.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn materialize_protected_refs(paths: &ContainedGitPaths) -> Result<(), String> {
+    use std::io::Write;
+    let err = |p: &Path, e: std::io::Error| format!("materializing {}: {e}", p.display());
+    for r in &paths.refs {
+        for file in [&r.path, &r.log] {
+            let parent = file.parent().unwrap_or(&paths.common);
+            std::fs::create_dir_all(parent).map_err(|e| err(parent, e))?;
+            if std::fs::canonicalize(parent).ok().as_deref() != Some(parent) {
+                return Err(format!("{} is not a real directory", parent.display()));
+            }
+        }
+        if std::fs::symlink_metadata(&r.path).is_err() {
+            let mut lock_name = r.path.clone().into_os_string();
+            lock_name.push(".lock");
+            let lock = PathBuf::from(lock_name);
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock)
+                .map_err(|e| err(&lock, e))?;
+            // Under the lock: a loose ref written meanwhile wins; otherwise
+            // write the value git resolves now (the packed one).
+            let written = (|| {
+                if std::fs::symlink_metadata(&r.path).is_ok() {
+                    return Ok(false);
+                }
+                let out = std::process::Command::new("git")
+                    .arg("--git-dir")
+                    .arg(&paths.common)
+                    .args(["rev-parse", "--verify", "--quiet"])
+                    .arg(format!("{}^{{commit}}", r.name))
+                    .output()
+                    .map_err(|e| err(&r.path, e))?;
+                let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !out.status.success() || sha.is_empty() {
+                    return Err(format!("cannot resolve {}", r.name));
+                }
+                writeln!(file, "{sha}").map_err(|e| err(&lock, e))?;
+                file.sync_all().map_err(|e| err(&lock, e))?;
+                std::fs::rename(&lock, &r.path).map_err(|e| err(&r.path, e))?;
+                Ok(true)
+            })();
+            if !matches!(written, Ok(true)) {
+                let _ = std::fs::remove_file(&lock);
+            }
+            written?;
+        }
+        if std::fs::symlink_metadata(&r.log).is_err() {
+            std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&r.log)
+                .map_err(|e| err(&r.log, e))?;
+        }
+        for file in [&r.path, &r.log] {
+            let meta = std::fs::symlink_metadata(file).map_err(|e| err(file, e))?;
+            if !meta.file_type().is_file() {
+                return Err(format!("{} is not a regular file", file.display()));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The git write grant for `worktree`, resolved by git itself and
@@ -272,16 +373,64 @@ pub(crate) fn resolve_contained_git_paths(
     }
     let listing = git(&["worktree", "list", "--porcelain"])
         .ok_or_else(|| "`git worktree list` failed".to_string())?;
+    // trace:BUG-2169 | ai:claude
+    let mut protected: Vec<String> = Vec::new();
     let mut other = false;
+    let mut primary: Option<Option<String>> = None;
     for line in listing.lines() {
         if let Some(path) = line.strip_prefix("worktree ") {
             other = std::fs::canonicalize(path).map_or(true, |p| p != worktree_real);
+            if primary.is_none() {
+                primary = Some(None);
+            }
         } else if let Some(branch) = line.strip_prefix("branch refs/heads/") {
-            if other {
-                deny.push(common.join("refs/heads").join(branch));
-                deny.push(common.join("logs/refs/heads").join(branch));
+            if primary == Some(None) {
+                primary = Some(Some(branch.to_string()));
+            }
+            if other && !protected.iter().any(|b| b == branch) {
+                protected.push(branch.to_string());
             }
         }
+    }
+    // The default branch is protected even when no other worktree has it
+    // checked out: `origin/HEAD`'s target, else the primary checkout's branch.
+    let default = git(&["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"])
+        .and_then(|r| {
+            r.trim()
+                .strip_prefix("refs/remotes/origin/")
+                .map(str::to_string)
+        })
+        .or_else(|| primary.flatten())
+        .ok_or_else(|| "cannot determine the repository's default branch".to_string())?;
+    if !protected.contains(&default) {
+        protected.push(default);
+    }
+    if let Some(own) = git(&["symbolic-ref", "--quiet", "HEAD"]) {
+        let own = own.trim().trim_start_matches("refs/heads/").to_string();
+        if protected.contains(&own) {
+            return Err(format!(
+                "the worktree has the protected branch {own} checked out"
+            ));
+        }
+    }
+    let mut refs = Vec::new();
+    for branch in &protected {
+        git(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}^{{commit}}"),
+        ])
+        .ok_or_else(|| format!("cannot resolve the protected branch {branch}"))?;
+        let path = common.join("refs/heads").join(branch);
+        let log = common.join("logs/refs/heads").join(branch);
+        deny.push(path.clone());
+        deny.push(log.clone());
+        refs.push(ProtectedRef {
+            name: format!("refs/heads/{branch}"),
+            path,
+            log,
+        });
     }
     if let Some(bad) = allow
         .iter()
@@ -298,6 +447,7 @@ pub(crate) fn resolve_contained_git_paths(
         gitdir,
         allow,
         deny,
+        refs,
     }))
 }
 
