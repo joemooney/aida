@@ -4045,6 +4045,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn uncontained_launchers_strip_inherited_aida_contained() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().to_path_buf();
 
@@ -4172,7 +4173,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "claude",
         &[],
         crate::compete::JudgeVendor::Claude,
-    );
+    )
+    .unwrap();
     assert!(
         judge_cmd
             .get_envs()
@@ -4181,7 +4183,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 8. compete arm
-    let arm_cmd = crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude");
+    let arm_cmd =
+        crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude").unwrap();
     assert!(
         arm_cmd
             .get_envs()

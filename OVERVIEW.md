@@ -289,6 +289,16 @@ write permission for other users. Unsafe parent directories also refuse writes;
 root-owned sticky temporary roots are allowed. Existing suspect profiles are
 never silently repaired. Own-repository stores use only their sandbox-denied
 `.git` subtree; an authority path elsewhere inside the writable store refuses.
+Headless spawn and command composition resolve containment from both the caller
+and the strictly parsed `AIDA_CONTAINED` environment before creating logs or
+issuing child grants. A contained parent cannot downgrade a child through a
+literal `false` argument. Compete arms and judges replace their generated
+bypass arguments with containment flags scoped to the child worktree, propagate
+`AIDA_CONTAINED=1`, and refuse unsupported vendors. Burndown and intake use a
+shared permission-posture resolver; redundant checks against synthetic argv
+have been removed.
+<!-- trace:BUG-2172 | ai:codex -->
+
 Contained launch prepares the profile on the host before the sandbox starts,
 without adding writable paths. Host git authority directories are denied in
 both the sandbox and direct tool rules, including a primary-checkout launch.

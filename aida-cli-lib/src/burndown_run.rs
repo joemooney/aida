@@ -256,37 +256,6 @@ mod burndown_run_tests;
 #[path = "tests/task1169_integration_wait_tests.rs"]
 mod task1169_integration_wait_tests;
 
-// BUG-2171: monotonic containment — a contained parent's env always wins
-// (BUG-2151 ruling). Under a contained parent, `--permission-mode` must be
-// refused and the mode defaults to `dontAsk`.
-// trace:BUG-2171 | ai:antigravity
-pub(crate) fn resolve_burndown_run_posture(
-    permission_mode: Option<&str>,
-    contained: bool,
-) -> Result<String> {
-    if contained {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-        let config = crate::agent_launch::AgentLaunchConfig {
-            agent_type: "claude",
-            binary: "claude",
-            default_args: crate::session::claude_contained_flags(),
-            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
-            contained: true,
-        };
-        crate::agent_launch::refuse_uncontained_child_of_contained_parent(&config)?;
-        Ok("dontAsk".to_string())
-    } else {
-        Ok(permission_mode.unwrap_or("bypassPermissions").to_string())
-    }
-}
-
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
 /// advisor-blessed ready set (the same gate `plan` shows), then launches a
 /// headless `claude -p "/aida-burndown <selector>"` that fans out
@@ -455,7 +424,7 @@ pub(crate) fn handle_burndown_run(
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
     let contained = session::aida_contained_env()?;
-    let mode_str = resolve_burndown_run_posture(permission_mode, contained)?;
+    let mode_str = crate::session::resolve_headless_claude_posture(permission_mode, contained)?;
     let mode = &mode_str;
     let (project_verbose, global_verbose) = find_project_root()
         .ok()
@@ -543,7 +512,9 @@ pub(crate) fn handle_burndown_run(
     // headless drain that pushes/merges/fans-out can't stall on prompts, so
     // default to bypassed permissions — but say so loudly and let `--permission-mode`
     // override. trace:STORY-545
-    if permission_mode.is_none() {
+    if contained {
+        println!("  {} launching headless `claude -p` contained", "→".green());
+    } else if permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),

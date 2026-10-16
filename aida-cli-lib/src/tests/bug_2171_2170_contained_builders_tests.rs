@@ -13,12 +13,13 @@
 //! - Child grants are revoked on exit and on spawn failure (BUG-2170).
 // trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 
-use crate::autopilot_intake::{build_autopilot_intake_command, resolve_autopilot_intake_posture};
+use crate::autopilot_intake::build_autopilot_intake_command;
 use crate::burndown_run::{
     build_burndown_quiet_command, build_burndown_verbose_command,
-    burndown_verbose_claude_args_with_containment, resolve_burndown_run_posture,
+    burndown_verbose_claude_args_with_containment,
 };
-use crate::questions::{build_questions_clarify_command, validate_questions_clarify_contained};
+use crate::questions::build_questions_clarify_command;
+use crate::session::resolve_headless_claude_posture;
 use crate::test_env::EnvVarsGuard;
 
 fn args_of(cmd: &std::process::Command) -> Vec<String> {
@@ -38,7 +39,7 @@ fn contained_parent_burndown_run_refuses_permission_mode() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
 
     for mode in ["bypassPermissions", "acceptEdits", "dontAsk", "auto"] {
-        let err = resolve_burndown_run_posture(Some(mode), true)
+        let err = resolve_headless_claude_posture(Some(mode), true)
             .expect_err("contained parent must refuse --permission-mode for burndown run");
         let msg = format!("{err:#}");
         assert!(
@@ -56,17 +57,17 @@ fn contained_parent_burndown_run_refuses_permission_mode() {
 fn contained_parent_burndown_run_resolves_to_dont_ask() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
 
-    let mode = resolve_burndown_run_posture(None, true)
+    let mode = resolve_headless_claude_posture(None, true)
         .expect("contained parent without --permission-mode succeeds");
     assert_eq!(mode, "dontAsk");
 }
 
 #[test]
 fn uncontained_burndown_run_preserves_mode_or_defaults_to_bypass() {
-    let explicit = resolve_burndown_run_posture(Some("acceptEdits"), false).unwrap();
+    let explicit = resolve_headless_claude_posture(Some("acceptEdits"), false).unwrap();
     assert_eq!(explicit, "acceptEdits");
 
-    let default_mode = resolve_burndown_run_posture(None, false).unwrap();
+    let default_mode = resolve_headless_claude_posture(None, false).unwrap();
     assert_eq!(default_mode, "bypassPermissions");
 }
 
@@ -75,7 +76,7 @@ fn contained_parent_autopilot_intake_refuses_permission_mode() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
 
     for mode in ["bypassPermissions", "acceptEdits", "dontAsk", "auto"] {
-        let err = resolve_autopilot_intake_posture(Some(mode), true)
+        let err = resolve_headless_claude_posture(Some(mode), true)
             .expect_err("contained parent must refuse --permission-mode for autopilot intake");
         let msg = format!("{err:#}");
         assert!(
@@ -93,31 +94,18 @@ fn contained_parent_autopilot_intake_refuses_permission_mode() {
 fn contained_parent_autopilot_intake_resolves_to_dont_ask() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
 
-    let mode = resolve_autopilot_intake_posture(None, true)
+    let mode = resolve_headless_claude_posture(None, true)
         .expect("contained parent without --permission-mode succeeds");
     assert_eq!(mode, "dontAsk");
 }
 
 #[test]
 fn uncontained_autopilot_intake_preserves_mode_or_defaults_to_bypass() {
-    let explicit = resolve_autopilot_intake_posture(Some("acceptEdits"), false).unwrap();
+    let explicit = resolve_headless_claude_posture(Some("acceptEdits"), false).unwrap();
     assert_eq!(explicit, "acceptEdits");
 
-    let default_mode = resolve_autopilot_intake_posture(None, false).unwrap();
+    let default_mode = resolve_headless_claude_posture(None, false).unwrap();
     assert_eq!(default_mode, "bypassPermissions");
-}
-
-#[test]
-fn validate_questions_clarify_contained_checks() {
-    {
-        let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
-        validate_questions_clarify_contained(true).expect("contained clarify validation succeeds");
-    }
-    {
-        let _env_uncontained = EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
-        validate_questions_clarify_contained(false)
-            .expect("uncontained clarify validation succeeds");
-    }
 }
 
 #[test]

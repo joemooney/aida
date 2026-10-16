@@ -801,7 +801,7 @@ fn spawn_judge(
     let (cmd_bin, cmd_args) =
         compete::judge_command(judge_vendor, binary_override.as_deref(), prompt);
     let mut judge_cmd =
-        build_compete_judge_command(project_root, &cmd_bin, &cmd_args, judge_vendor);
+        build_compete_judge_command(project_root, &cmd_bin, &cmd_args, judge_vendor)?;
     let o = judge_cmd
         .output_retrying_etxtbsy()
         .context("failed to spawn the judge")?;
@@ -816,22 +816,17 @@ pub(crate) fn build_compete_judge_command(
     cmd_bin: &str,
     cmd_args: &[String],
     judge_vendor: compete::JudgeVendor,
-) -> std::process::Command {
-    let mut judge_cmd = std::process::Command::new(cmd_bin);
-    judge_cmd.args(cmd_args).current_dir(project_root);
-    if judge_vendor.needs_stdin_closed() {
-        judge_cmd.stdin(std::process::Stdio::null());
-    }
+) -> Result<std::process::Command> {
     let headless_vendor = match judge_vendor {
         compete::JudgeVendor::Claude => session::HeadlessVendor::Claude,
         compete::JudgeVendor::Codex => session::HeadlessVendor::Codex,
     };
-    if session::containment_applied(headless_vendor, false) {
-        judge_cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        judge_cmd.env_remove("AIDA_CONTAINED");
+    let mut judge_cmd =
+        build_compete_arm_command(project_root, cmd_bin, cmd_args, headless_vendor.as_str())?;
+    if judge_vendor.needs_stdin_closed() {
+        judge_cmd.stdin(std::process::Stdio::null());
     }
-    judge_cmd
+    Ok(judge_cmd)
 }
 
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
@@ -913,7 +908,7 @@ fn run_compete_arm(
     let log_dir = compete_log_dir(project_root, branch);
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{vendor}.log"));
-    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor);
+    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor)?;
     let vendor_out = arm_cmd.output_retrying_etxtbsy();
     let ran = match &vendor_out {
         Ok(o) if o.status.success() => Ran::Ok,
@@ -1004,18 +999,38 @@ pub(crate) fn build_compete_arm_command(
     command: &str,
     argv: &[String],
     vendor: &str,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new(command);
-    cmd.args(argv).current_dir(worktree_dir);
-    let contained = session::HeadlessVendor::parse(vendor)
-        .map(|v| session::containment_applied(v, false))
-        .unwrap_or(false);
+) -> Result<std::process::Command> {
+    // trace:BUG-2172 | ai:codex
+    let contained = session::aida_contained_env()?;
+    let headless_vendor = session::HeadlessVendor::parse(vendor);
     if contained {
+        let vendor = headless_vendor.ok_or_else(|| {
+            anyhow::anyhow!(
+                "[contained] unknown compete vendor `{vendor}` — refusing to launch uncontained"
+            )
+        })?;
+        session::require_vendor_containment(vendor, true, "compete child")?;
+    }
+    let (program, args) = if contained {
+        // Compete's generated argv ends with the prompt. Preserve it verbatim;
+        // replace the template's bypass posture with the actual containment flags.
+        let split = argv.len().saturating_sub(1);
+        let (mut args, _) =
+            crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
+        args.extend(session::claude_contained_flags_for(worktree_dir));
+        args.extend_from_slice(&argv[split..]);
+        session::os_wrapped_program_and_args(worktree_dir, command, args)?
+    } else {
+        (command.to_string(), argv.to_vec())
+    };
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args).current_dir(worktree_dir);
+    if headless_vendor.is_some_and(|v| session::containment_applied(v, contained)) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 /// The worktree directory a compete arm uses for `branch` — a sibling of the
@@ -1094,4 +1109,105 @@ fn binary_on_path(name: &str) -> bool {
         .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+// trace:BUG-2172 | ai:codex
+#[cfg(test)]
+mod containment_tests {
+    use super::*;
+
+    #[test]
+    fn compete_children_inherit_containment_and_replace_bypass_argv() {
+        let dir = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", Some("1")),
+            ("AIDA_OS_WRAP", Some("0")),
+        ]);
+        let prompt = "preserve --permission-mode in prompt";
+        let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
+        let judge =
+            build_compete_judge_command(dir.path(), &bin, &argv, compete::JudgeVendor::Claude)
+                .unwrap();
+        let arm = build_compete_arm_command(dir.path(), &bin, &argv, "claude").unwrap();
+        let exec = session::build_exec_vendor_headless_command(
+            session::HeadlessVendor::Claude,
+            prompt,
+            "sid",
+            false,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap();
+        for cmd in [judge, arm, exec] {
+            let args: Vec<_> = cmd
+                .get_args()
+                .map(|a| a.to_string_lossy().to_string())
+                .collect();
+            assert_eq!(args.last().map(String::as_str), Some(prompt));
+            assert!(args.iter().any(|a| a == "--settings"));
+            assert!(!args.iter().any(|a| a == "bypassPermissions"));
+            assert!(cmd
+                .get_envs()
+                .any(|(k, v)| k == "AIDA_CONTAINED" && v == Some(std::ffi::OsStr::new("1"))));
+        }
+        assert!(build_compete_arm_command(dir.path(), "codex", &[], "codex").is_err());
+        assert!(
+            build_compete_judge_command(dir.path(), "codex", &[], compete::JudgeVendor::Codex)
+                .is_err()
+        );
+        assert!(build_compete_arm_command(dir.path(), "unknown", &[], "unknown").is_err());
+    }
+
+    #[test]
+    fn malformed_containment_refuses_even_an_explicit_contained_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("typo"))]);
+        assert!(session::compose_headless_command(
+            session::HeadlessVendor::Claude,
+            "prompt",
+            "sid",
+            true,
+            None,
+            None
+        )
+        .is_err());
+        assert!(build_compete_arm_command(dir.path(), "claude", &[], "claude").is_err());
+        assert!(build_compete_judge_command(
+            dir.path(),
+            "claude",
+            &[],
+            compete::JudgeVendor::Claude
+        )
+        .is_err());
+        let log = dir.path().join("must-not-exist.log");
+        assert!(session::spawn_vendor_headless_with_seat_granted(
+            session::HeadlessVendor::Claude,
+            aida_core::agents_config::AgentSeat::Implementer,
+            "prompt",
+            "sid",
+            &log,
+            &crate::headless_tee::TeeOptions {
+                enabled: false,
+                label: None
+            },
+            true,
+        )
+        .is_err());
+        assert!(session::spawn_claude_headless_resume_granted(
+            "prompt",
+            "sid",
+            &log,
+            dir.path(),
+            &crate::headless_tee::TeeOptions {
+                enabled: false,
+                label: None
+            },
+            true,
+            "implementer",
+        )
+        .is_err());
+        assert!(!log.exists());
+    }
 }
