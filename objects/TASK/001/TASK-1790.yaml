@@ -3,12 +3,12 @@ spec_id: TASK-1790
 agreed_id: TASK-1790
 title: 'STORY-1698 follow-ups: exclusions ledger perms/owner check, require_direct_tty wording, operator-only exclusion beyond named IDs, re-arm audit ordering'
 description: 'From the #2687 STRICT round-2 review (non-blocking): (1) read_exclusions in mandate.rs only checks for a regular file; enforce 0600 and own-uid as the docs claim. (2) require_direct_tty''s error text says ''role grants''; reword for mandates. (3) A PR''s specs come only from IDs in its branch, title and trailers, so a PR touching an operator-only spec without naming it isn''t excluded; consider deriving from changed files'' trace comments. (4) Re-arm rewrites the marker after record_mandate_clearance logs a clearance; log the re-arm as an explicit event so the audit order is clear.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T20:45:48.111724147Z
+modified_at: 2026-10-16T21:41:13.394931140Z
 req_type: Task
 relationships:
 - rel_type:
@@ -83,6 +83,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a146a9-7632-7123-b5f2-d2faeae768ba
+  author: ai:codex:joe
+  timestamp: 2026-10-16T21:41:13.394924568Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
