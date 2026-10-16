@@ -1414,8 +1414,17 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let mut env = pinned_env();
-        let advisor =
-            test_support::mint_grant_for(root, SUBJECT, "advisor", &["implementer", "reviewer"]);
+        // Use a short parent lifetime so a child defaulting to MAX_GRANT_AGE
+        // cannot accidentally satisfy the expiry assertion.
+        // trace:TASK-1789 | ai:codex
+        let advisor = test_support::mint_grant_for_with_ttl(
+            root,
+            SUBJECT,
+            "advisor",
+            &["implementer", "reviewer"],
+            Some(Duration::minutes(7)),
+        );
+        let parent_expiry = read_grant(&advisor).unwrap().expires_at;
         {
             let _env = Scoped::apply(&mut env, &[(GRANT_ENV, Some(advisor.as_str()))]);
             for seat in ["implementer", "reviewer"] {
@@ -1438,6 +1447,9 @@ mod tests {
                     "the child delegates nothing"
                 );
                 assert_eq!(child.parent_grant_id.as_deref(), Some(advisor.as_str()));
+                // trace:TASK-1789 | ai:codex
+                assert_eq!(child.expires_at, parent_expiry, "{seat} child expiry");
+                assert_eq!(read_grant(&child.id).unwrap().expires_at, parent_expiry);
                 // Revocation by id ends exactly the child, never the launcher.
                 assert!(revoke_by_id(&child.id).unwrap());
                 assert!(!revoke_by_id(&child.id).unwrap(), "idempotent");
