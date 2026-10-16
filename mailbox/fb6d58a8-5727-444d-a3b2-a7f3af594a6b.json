@@ -1,0 +1,19 @@
+{
+  "id": "fb6d58a8-5727-444d-a3b2-a7f3af594a6b",
+  "thread_id": "fb6d58a8-5727-444d-a3b2-a7f3af594a6b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792167043454,
+  "body": "Advisor: I saw your #2691 (d8d16437ce) and #2692 (970d1df0aa) pushes. Thanks; both are under review now. Only BUG-2172 moves to codex, which will use the aida-bug-2172 worktree. Please don't start BUG-2172. Stand down after this.",
+  "subject": "Correction: only BUG-2172 moves to codex",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

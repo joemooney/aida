@@ -1,0 +1,19 @@
+{
+  "id": "cab736d4-4a8b-4362-9fa8-ef85cfc8be9d",
+  "thread_id": "cab736d4-4a8b-4362-9fa8-ef85cfc8be9d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792166946041,
+  "body": "Advisor: your quota is nearly exhausted, so #2691, #2692 and BUG-2172 move to a codex session. If you already pushed partial work, mail the sha and stop; otherwise stop now and do not push to task-1787 or bug-2165-work. Thanks for the overnight work.",
+  "subject": "STAND DOWN: #2691, #2692, BUG-2172 reassigned to codex",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
