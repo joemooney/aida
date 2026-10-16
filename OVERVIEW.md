@@ -940,3 +940,11 @@ the protected canonical edit flow; YAML row roundtrips preserve the data, while
 archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
+
+Standalone reviewer pickup coexists with a live implementer only with explicit
+`queue work --role reviewer` and an unambiguous backing spec. An inferred role
+and direct session starts retain ordinary source-branch conflict handling.
+Verdict collection validates metadata and reads bytes from the same opened
+regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
+regression runs under an exact-test subprocess watchdog.
+<!-- trace:TASK-1786 | ai:codex -->
