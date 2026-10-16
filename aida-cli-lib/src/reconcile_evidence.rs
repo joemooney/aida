@@ -269,17 +269,18 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
 }
 
 /// BUG-2163: does an open PR's title or body CREDIT `spec_id` the way a
-/// completion trailer does? The title must end with a `(SPEC …)` group
-/// (before any `(#N)`), or a non-code body line must end with one. Free
+/// completion trailer does? The title is parsed exactly as the merge-time
+/// completion scan parses a commit subject (`extract_spec_ids_from_commit`:
+/// a trailing `(SPEC …)` group before any `(#N)`, or a leading `SPEC-ID:`
+/// prefix, BUG-270), so a PR that would complete a spec when it merges also
+/// holds it while open. Otherwise a non-code body line must end with a
+/// `(SPEC …)` group. Free
 /// prose (`follow-up from BUG-2148`, `see X`) does not: a follow-up PR that
 /// names a merged spec is not another deliverable of it, and counting it
-/// held BUG-2148 and BUG-2141 open after their PRs merged. The groups are
-/// parsed by the same `push_paren_spec_ids_from_line` the completion scan
-/// uses, so "credits" means the same thing on both sides.
+/// held BUG-2148 and BUG-2141 open after their PRs merged.
 // trace:BUG-2163 | ai:claude
 fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
-    let mut credited = Vec::new();
-    crate::pr_lookup::push_paren_spec_ids_from_line(title, &mut credited);
+    let mut credited = crate::zen_drive_root::extract_spec_ids_from_commit(title);
     for line in body.lines() {
         if !crate::pr_lookup::body_line_is_code_like(line) {
             crate::pr_lookup::push_paren_spec_ids_from_line(line, &mut credited);
@@ -335,7 +336,9 @@ pub(crate) fn count_completed_with_open_changes(
             "--limit",
             "200",
             "--json",
-            "title,body",
+            // BUG-2163: the branch is one of the three credit forms.
+            // trace:BUG-2163 | ai:claude
+            "title,body,headRefName",
         ])
         .output_retrying_etxtbsy()
         .map_err(|e| {
@@ -351,9 +354,13 @@ pub(crate) fn count_completed_with_open_changes(
     count_diagnostic_rows(&out.stdout, candidate_ids)
 }
 
-/// Validate the complete `gh pr list --json title,body` response and count
-/// the candidates its rows name.
-// trace:TASK-1335 | ai:claude
+/// Validate the complete `gh pr list --json title,body,headRefName` response
+/// and count the candidates its rows CREDIT, under the same rules the
+/// per-candidate guard applies ([`row_credits_spec`], [`branch_names_spec`]),
+/// so the sweep's "still referenced by an open PR" count agrees with what
+/// would actually hold a spec. This list is not a search, so it is not
+/// subject to the search-index lag that needs the `state` check there.
+// trace:TASK-1335 trace:BUG-2163 | ai:claude
 pub(crate) fn count_diagnostic_rows(
     stdout: &[u8],
     candidate_ids: &[String],
@@ -361,20 +368,24 @@ pub(crate) fn count_diagnostic_rows(
     let value = serde_json::from_slice::<serde_json::Value>(stdout)
         .map_err(|_| EvidenceUnavailable::Undecodable)?;
     let rows = value.as_array().ok_or(EvidenceUnavailable::NotArray)?;
-    let mut haystack = String::new();
-    // Every row must carry BOTH requested fields as strings (an empty body is
-    // `""`); anything else is not a measurement, so it cannot count as 0.
+    // Every row must carry BOTH `title` and `body` as strings (an empty body
+    // is `""`); anything else is not a measurement, so it cannot count as 0.
+    let mut parsed: Vec<(&str, &str, &str)> = Vec::with_capacity(rows.len());
     for row in rows {
-        for field in ["title", "body"] {
-            let text = row
-                .get(field)
-                .and_then(|v| v.as_str())
-                .ok_or(EvidenceUnavailable::BadDiagnosticRow)?;
-            haystack.push_str(text);
-            haystack.push('\n');
-        }
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let (Some(title), Some(body)) = (field("title"), field("body")) else {
+            return Err(EvidenceUnavailable::BadDiagnosticRow);
+        };
+        parsed.push((title, body, field("headRefName").unwrap_or("")));
     }
-    Ok(crate::count_ids_mentioned(&haystack, candidate_ids))
+    Ok(candidate_ids
+        .iter()
+        .filter(|id| {
+            parsed.iter().any(|(title, body, branch)| {
+                row_credits_spec(title, body, id) || branch_names_spec(branch, id)
+            })
+        })
+        .count())
 }
 
 /// Where a candidate's completion evidence came from.
@@ -807,6 +818,10 @@ mod tests {
                 "z",
             ),
             ("fix(x): y (TASK-1782)", "", "bug-2148-part-2"),
+            // BUG-270 leading-prefix subject: it completes the spec when it
+            // merges, so it must hold the spec while open.
+            ("BUG-2148: second half", "", "z"),
+            ("BUG-2148: second half (#2700)", "", "z"),
         ] {
             let row = serde_json::json!([{
                 "number": 2700, "title": title, "body": body,
@@ -831,6 +846,27 @@ mod tests {
         assert_eq!(
             count_diagnostic_rows(br#"[{"title":"other","body":"TASK-110"}]"#, &ids),
             Ok(0)
+        );
+        // BUG-2163: the sweep counts credits only, under the guard's rules:
+        // prose is not counted; a title trailer, a `SPEC-ID:` title, a body
+        // trailer line, or a branch is. trace:BUG-2163 | ai:claude
+        assert_eq!(
+            count_diagnostic_rows(
+                br#"[{"title":"other (TASK-99)","body":"follow-up from TASK-11 and TASK-12"}]"#,
+                &ids
+            ),
+            Ok(0)
+        );
+        assert_eq!(
+            count_diagnostic_rows(br#"[{"title":"TASK-11: second half","body":""}]"#, &ids),
+            Ok(1)
+        );
+        assert_eq!(
+            count_diagnostic_rows(
+                br#"[{"title":"x (TASK-99)","body":"* fix: y (TASK-12)","headRefName":"a"},{"title":"z (TASK-98)","body":"","headRefName":"task-11-part-2"}]"#,
+                &ids
+            ),
+            Ok(2)
         );
         for (bytes, want) in [
             (&b"[{}]"[..], EvidenceUnavailable::BadDiagnosticRow),
