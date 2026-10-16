@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:09:06.232700696Z
-modified_at: 2026-10-16T16:59:27.598305592Z
+modified_at: 2026-10-16T17:08:27.323371061Z
 req_type: Task
+comments:
+- id: 01a145af-bc3b-7f62-bc43-b03832172142
+  author: ai:codex:joe
+  content: Implementation in isolated codex/task-1792, lease01a145a77c14. Guard checks PID/start time plus nonblocking run-lock probe; accepts actual relay strftime timestamp offsets, rejects live sentinel aliases for ack/action, and caps explicit exited records at24h while retaining blocked/dead-owner findings.12 final-source module tests passed via a standalone rustc runner linked to the existing actual aida_core liveness helpers. Full cargo targeted run and make check-ci-fast still compiling; not PR ready. Author self-check round3 final check pending; no independent verdict or merge.
+  created_at: 2026-10-16T17:08:27.323371061Z
+  modified_at: 2026-10-16T17:08:27.323371061Z
 history:
 - id: 01a145a7-7fee-71a0-aa5e-b6247b83bba6
   author: aida-session-start
