@@ -3167,8 +3167,9 @@ pub(crate) fn handle_review_record_at(
             Some(recorded_by.clone()),
         ));
         hold.spec = Some(spec_key.clone());
+        // trace:STORY-1697 | ai:claude
         hold.release_condition = Some(format!(
-            "a fresh APPROVED verdict for {spec_key} recorded at PR #{n}'s current head; then a human ships it"
+            "a fresh APPROVED verdict for {spec_key} recorded at PR #{n}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
         ));
         merge_hold::write_typed_hold(&project_root, &hold)
             .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;

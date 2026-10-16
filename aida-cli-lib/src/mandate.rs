@@ -748,51 +748,25 @@ impl HoldFacts {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MandateRefusal {
     NoMandate,
-    Expired {
-        id: String,
-    },
-    Stopped {
-        id: String,
-    },
-    NotAdvisor {
-        seat: Option<String>,
-    },
-    PrincipalMismatch {
-        mandate: String,
-        grant: String,
-    },
+    Expired { id: String },
+    Stopped { id: String },
+    NotAdvisor { seat: Option<String> },
+    PrincipalMismatch { mandate: String, grant: String },
     OverrideStale,
     SpecsUnresolved,
-    AlwaysHuman {
-        spec: String,
-        class: String,
-    },
+    AlwaysHuman { spec: String, class: String },
     LedgerUnreadable(String),
     NoHoldMarker,
     MarkerMissing,
-    HoldNotReleasable {
-        kind: String,
-    },
-    HistoryUnreadable {
-        spec: String,
-        why: String,
-    },
-    Excluded {
-        spec: String,
-        why: String,
-    },
+    HoldNotReleasable { kind: String },
+    HistoryUnreadable { spec: String, why: String },
+    Excluded { spec: String, why: String },
     ShipperUnanchored,
-    AdvisorAuthored {
-        author: String,
-    },
+    AdvisorAuthored { author: String },
     ApproverIsShipper,
     Approval(String),
     StaleApproval(String),
-    /// STORY-1697: releasing a sensitive rework hold on approval needs a
-    /// mandate minted with `--include-supervised`.
-    SupervisedNotIncluded {
-        id: String,
-    },
+    SupervisedNotIncluded { id: String }, // trace:STORY-1697 | ai:claude
 }
 
 impl MandateRefusal {
@@ -910,31 +884,7 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
             crate::pr_ship::approval_authority_refusal_message(0, &refusal),
         ));
     }
-    // The approval authority gate passed, so a newest approval exists.
-    let approvals: Vec<_> = c
-        .candidates
-        .iter()
-        .filter(|v| v.kind.approves() && !v.is_closed())
-        .cloned()
-        .collect();
-    if let Some(newest) = crate::pr_ship::newest_approval(&approvals) {
-        let recorder = newest
-            .attestation
-            .as_ref()
-            .map(|a| a.identity.clone())
-            .unwrap_or_default();
-        let verified = newest
-            .attestation
-            .as_ref()
-            .and_then(|a| a.authority_key(newest.recorded_at.as_deref()))
-            .and_then(|k| c.policy.verified_authority.get(&k).cloned())
-            .unwrap_or_default();
-        if crate::review_authority::identities_overlap(shipper, &recorder)
-            || crate::review_authority::identities_overlap(shipper, &verified)
-        {
-            return Err(MandateRefusal::ApproverIsShipper);
-        }
-    }
+    approver_is_not_shipper(c)?;
     if let Some(refusal) = crate::pr_ship::approval_head_refusal(c.candidates, c.head) {
         return Err(MandateRefusal::StaleApproval(
             crate::pr_ship::approval_head_refusal_message(0, &refusal),
@@ -943,13 +893,51 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
     Ok(mandate.id.clone())
 }
 
+/// The two-person rule: the newest open approval was not recorded by — and
+/// its re-validated authority does not resolve to — the session acting under
+/// the mandate. Shared by [`ship_decision`] and [`rework_release_decision`]:
+/// an advisor never ships, nor releases a hold, on its own approval.
+// trace:STORY-1698 | ai:claude
+// trace:STORY-1697 | ai:claude
+fn approver_is_not_shipper(c: &ShipCheck<'_>) -> std::result::Result<(), MandateRefusal> {
+    let shipper = &c.policy.shipper;
+    let approvals: Vec<_> = c
+        .candidates
+        .iter()
+        .filter(|v| v.kind.approves() && !v.is_closed())
+        .cloned()
+        .collect();
+    let Some(newest) = crate::pr_ship::newest_approval(&approvals) else {
+        return Ok(());
+    };
+    let recorder = newest
+        .attestation
+        .as_ref()
+        .map(|a| a.identity.clone())
+        .unwrap_or_default();
+    let verified = newest
+        .attestation
+        .as_ref()
+        .and_then(|a| a.authority_key(newest.recorded_at.as_deref()))
+        .and_then(|k| c.policy.verified_authority.get(&k).cloned())
+        .unwrap_or_default();
+    if crate::review_authority::identities_overlap(shipper, &recorder)
+        || crate::review_authority::identities_overlap(shipper, &verified)
+    {
+        return Err(MandateRefusal::ApproverIsShipper);
+    }
+    Ok(())
+}
+
 /// STORY-1697: may an active mandate release a REWORK hold on a sensitive
 /// spec when its advisor records an approval? The same mandate, seat, hold
 /// and sticky spec-class checks as [`ship_decision`], restricted to a typed
 /// rework hold and to a mandate minted with `--include-supervised`.
-/// Operator-only and decide-mode specs are never covered. The approval's own
-/// authority is judged by the caller (`rework_hold_release`), which also
-/// owns the head check — this releases a hold, it does not merge.
+/// Operator-only and decide-mode specs are never covered, and the session
+/// releasing must not be the approval's recorder (the same two-person rule
+/// as [`ship_decision`]). The approval's own authority is judged by the
+/// caller (`rework_hold_release`), which also owns the head check — this
+/// releases a hold, it does not merge.
 // trace:STORY-1697 | ai:claude
 pub(crate) fn rework_release_decision(
     c: &ShipCheck<'_>,
@@ -977,6 +965,14 @@ pub(crate) fn rework_release_decision(
             id: mandate.id.clone(),
         });
     }
+    // STORY-1698's two-person rule holds for a release too: the advisor that
+    // recorded the approval cannot be the one its mandate releases the hold
+    // for. An unanchored releasing session cannot be told apart from the
+    // approver, so it is refused. trace:STORY-1697 | ai:claude
+    if !crate::review_authority::has_identity_anchor(&c.policy.shipper) {
+        return Err(MandateRefusal::ShipperUnanchored);
+    }
+    approver_is_not_shipper(c)?;
     Ok(mandate.id.clone())
 }
 

@@ -16,7 +16,10 @@ use std::cell::RefCell;
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OLD: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const PR: u64 = 37;
-const RECORDER: &str = "session:advisor-recorder";
+/// The independent reviewer session that recorded the approval.
+const RECORDER: &str = "session:independent-reviewer";
+/// The advisor session running the release (the mandate's shipper).
+const RELEASER: &str = "session:advisor-releaser";
 const MANDATE_ID: &str = "6f1c1d6e-0000-4000-8000-000000000097";
 
 fn mandate(include_supervised: bool) -> Mandate {
@@ -62,18 +65,22 @@ struct Case {
     state: MandateState,
     /// `(seat, principal)` the mandate decision sees for the releasing session.
     seat: (&'static str, &'static str),
+    /// Stop the mandate after its first consultation (eligibility), before
+    /// the release-time recheck.
+    revoke_mid_release: bool,
 }
 
 impl Case {
     /// The happy path: a typed rework hold on an ordinary spec, and an
-    /// independent, attested approval recorded at the current head.
+    /// independent reviewer's attested approval recorded at the current head;
+    /// the advisor session ([`RELEASER`]) runs the release.
     fn ok() -> Self {
         let grant = sa::SeatGrant {
             id: uuid::Uuid::new_v4().to_string(),
             principal: "joe".into(),
-            subject: "advisor".into(),
-            session_id: "advisor-session".into(),
-            seat: "advisor".into(),
+            subject: "reviewer".into(),
+            session_id: "reviewer-session".into(),
+            seat: "reviewer".into(),
             tty_issued_at: Utc::now(),
             delegable_seats: vec![],
             parent_grant_id: None,
@@ -94,12 +101,13 @@ impl Case {
         req.execution_mode = Some(aida_core::ExecutionMode::Drive);
         req.spec_id = Some("TASK-37".into());
         let body = serde_json::json!({"verdict":"approved", "reviewed_sha":HEAD,
-            "recorded_at":"2026-10-14T01:00:02Z", "recorded_by":"advisor",
-            "release_grant":{"id":grant.id,"subject":grant.subject,"session_id":grant.session_id,"recorded_by":"advisor"},
+            "recorded_at":"2026-10-14T01:00:02Z", "recorded_by":"reviewer",
+            "release_grant":{"id":grant.id,"subject":grant.subject,"session_id":grant.session_id,"recorded_by":"reviewer"},
             "rounds":[{"verdict":"request-changes","reviewed_sha":OLD,"recorded_at":"2026-10-14T01:00:01Z","recorded_by":"old reviewer"}]});
         let candidates = vec![candidate(HEAD)];
         let mut policy = ShipApprovalPolicy {
             reviewed_committed_at: Some("2026-10-14T00:00:00Z".parse().unwrap()),
+            shipper: vec![RELEASER.into()],
             ..Default::default()
         };
         for v in &candidates {
@@ -116,6 +124,7 @@ impl Case {
             policy,
             state: MandateState::None,
             seat: ("advisor", "joe"),
+            revoke_mid_release: false,
         }
     }
 
@@ -141,6 +150,7 @@ impl Case {
             history: Ok(vec![self.req.clone()]),
         }];
         let ledger = Ok(Default::default());
+        let consulted = std::cell::Cell::new(0usize);
         let result = auto_release_with(
             root.path(),
             &self.hold,
@@ -170,8 +180,19 @@ impl Case {
                 },
                 mandate: &|| {
                     let hold = mh::read_hold_record(root.path(), PR);
+                    let state = match &self.state {
+                        MandateState::Active(m)
+                            if self.revoke_mid_release && consulted.get() > 0 =>
+                        {
+                            let mut m = m.clone();
+                            m.revoked_at = Some(Utc::now());
+                            MandateState::Stopped(m)
+                        }
+                        state => state.clone(),
+                    };
+                    consulted.set(consulted.get() + 1);
                     crate::mandate::rework_release_decision(&ShipCheck {
-                        state: &self.state,
+                        state: &state,
                         now: Utc::now(),
                         grant: Some(self.seat),
                         specs: &specs,
@@ -401,4 +422,62 @@ fn the_mandate_is_consulted_only_for_a_sensitive_spec() {
     )
     .unwrap();
     assert_eq!(release.mandate, None);
+}
+
+// ── STORY-1698's two-person rule holds for a mandate release ──────────────
+// trace:STORY-1697 | ai:claude
+
+#[test]
+fn an_advisor_cannot_release_a_sensitive_hold_on_its_own_approval() {
+    // The advisor recorded the approval itself and now runs the release.
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    case.policy.shipper = vec![RECORDER.into()];
+    case.refused("must come from an independent reviewer or a human");
+    // Same when only the re-validated authority resolves to the releaser.
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    let v = &case.candidates[0];
+    let key = v
+        .attestation
+        .as_ref()
+        .unwrap()
+        .authority_key(v.recorded_at.as_deref())
+        .unwrap();
+    case.policy
+        .verified_authority
+        .insert(key, vec![RELEASER.into()]);
+    case.refused("must come from an independent reviewer or a human");
+    // A releasing session with no checkable identity is refused too.
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    case.policy.shipper = vec![];
+    case.refused("no identity AIDA can check");
+}
+
+#[test]
+fn an_advisor_releases_a_sensitive_hold_on_an_independent_reviewers_approval() {
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    assert!(!crate::review_authority::identities_overlap(
+        &case.policy.shipper,
+        &case.candidates[0].attestation.as_ref().unwrap().identity
+    ));
+    let (result, _, held) = case.run();
+    assert_eq!(
+        result.unwrap(),
+        Outcome::Released {
+            mandate: Some(MANDATE_ID.into())
+        }
+    );
+    assert!(!held);
+}
+
+#[test]
+fn a_mandate_stopped_mid_release_withholds_the_release() {
+    // Covered at eligibility, stopped before the release-time recheck.
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    case.revoke_mid_release = true;
+    case.refused("was stopped");
 }

@@ -519,17 +519,19 @@ fn auto_release_with(
             .get("subject")
             .and_then(Value::as_str)
             .context("approval lacks reviewer subject")?;
-        let release = eligible(
+        // The approval's own authority is judged before `eligible` can
+        // consult the mandate: the mandate lookup reads the mandate records
+        // and writes the exclusion ledger, so nothing an unattested approval
+        // triggers reaches it. trace:STORY-1697 | ai:claude
+        (io.approval_authority)(&head)?;
+        eligible(
             hold,
             body,
             &head,
             &specs,
             &(io.grant_check)(id, subject),
             io.mandate,
-        )?;
-        // trace:STORY-1697 | ai:claude
-        (io.approval_authority)(&head)?;
-        Ok(release)
+        )
     };
     let (ids, store) = (io.covered_specs)()?;
     let release = check(&(io.read_body)(key)?, &ids, &store)?;
