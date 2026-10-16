@@ -17,7 +17,9 @@ fn task1793_launched_write_child() {
         .with_auto_commit(false);
     let mut req = Requirement::new("Launched session write".into(), "body".into());
     req.spec_id = Some("TASK-1".into());
-    backend.add_requirement(req).unwrap();
+    let mut created = backend.add_requirement(req).unwrap();
+    created.title = "Launched session edit".into();
+    backend.update_requirement(&created).unwrap();
 }
 
 #[cfg(unix)]
@@ -47,7 +49,7 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
         role_instance: RoleInstanceKind::Driver,
         current_spec: None,
         name: "version-fixture".into(),
-        lease_id: None,
+        lease_id: Some("fixture-child-session".into()),
         native_session_id: None,
         resumed_from: None,
     };
@@ -63,7 +65,7 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
             let _env = crate::test_env::EnvVarsGuard::apply(&[
                 ("AIDA_HARNESS_VERSION", Some("stale-parent-version")),
                 ("AIDA_TEST_1793_STORE", Some(store_string)),
-                ("AIDA_SESSION_ID", Some("launched-version-session")),
+                ("AIDA_SESSION_ID", Some("stale-parent-session")),
             ]);
             crate::test_exec::write_executable(
                 &binary,
@@ -90,13 +92,14 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
             let saved = backend.load().unwrap();
             assert_eq!(saved.requirements.len(), 1);
             let req = &saved.requirements[0];
+            assert_eq!(req.title, "Launched session edit");
             let filing = req.filed_at.as_ref().unwrap();
             assert_eq!(
                 filing.harness_version.as_deref(),
                 expected,
                 "{background}/{case}"
             );
-            assert_eq!(filing.session.as_deref(), Some("launched-version-session"));
+            assert_eq!(filing.session.as_deref(), Some("fixture-child-session"));
             assert_eq!(
                 req.history.last().unwrap().harness_version.as_deref(),
                 expected
