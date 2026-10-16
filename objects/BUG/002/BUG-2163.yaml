@@ -10,7 +10,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:57:25.809251438Z
-modified_at: 2026-10-16T02:33:13.047024141Z
+modified_at: 2026-10-16T04:19:20.559473730Z
 req_type: Bug
 comments:
 - id: 01a1428e-060d-77f2-b402-54c5a1972aad
@@ -24,6 +24,12 @@ comments:
   content: 'ADVISOR RULING: NARROW. An open PR holds a spec ONLY when it credits it: the title ends with a (SPEC...) group (before any (#N)), the branch is named for the spec, or a description line ENDS with (SPEC...). Free prose mentions (''follow-up from X'', ''see X'') never hold. Rationale: under the commit convention a genuine ''part 2'' PR credits its spec in the title trailer; BUG-2134''s test case should be updated to use that form. Implement in #2685 with tests for both the held (credited) and not-held (prose) cases.'
   created_at: 2026-10-16T02:33:13.047024141Z
   modified_at: 2026-10-16T02:33:13.047024141Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a142ef-976f-7132-bffd-742b9ee6652d
+  author: joe
+  content: 'ADVISOR REVIEW #2685 at 63c8348d4b (comment, no hold): all checks hold (state-skip conservative; tests bite) EXCEPT one fail-open item: row_credits_spec (reconcile_evidence.rs:282) parses the title with push_paren_spec_ids_from_line, while completion uses extract_spec_ids_from_commit, which also accepts the ''SPEC-ID:'' prefix (BUG-270). An open PR titled ''BUG-2148: second half'' no longer holds BUG-2148. Fix: use extract_spec_ids_from_commit for the title, plus a test. The fixer is on it; the advisor verifies the delta and ships.'
+  created_at: 2026-10-16T04:19:20.559473730Z
+  modified_at: 2026-10-16T04:19:20.559473730Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a141c9-0970-7c33-acda-acee2aa91e57
