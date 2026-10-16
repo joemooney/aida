@@ -1,0 +1,28 @@
+id: 01a1460a-300c-7d41-85f5-7dc191f61733
+spec_id: TASK-1-315
+title: 'minor/design: the marker heuristic also applies to the reference control (score…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/design: the marker heuristic also applies to the reference control (score.rs:546 only skips control-stub). A legitimate original tool that contains 'placeholder' or 'NotImplementedError' (e.g. bundled Python/compiled binaries, or a --placeholder option) makes every reference control incomplete, and the controls gate then refuses all trials. min_bytes is the only knob; consider surfacing this refusal cause explicitly or allowing a trusted per-component marker exemption.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-16T18:47:15.212029759Z
+modified_at: 2026-10-16T18:47:15.212029759Z
+req_type: Task
+tags:
+- carried-from:STORY-1677
+- finding-hash:e491b890
+- from-review:STORY-1677
+- kind:carried-forward
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6
