@@ -1599,6 +1599,10 @@ pub(crate) fn spawn_claude_resume_with_grant(
     contained: bool,
     grant_id: Option<&str>,
 ) -> Result<std::process::ExitStatus> {
+    // trace:BUG-2172 | ai:codex
+    let parent_contained = aida_contained_env()?;
+    let contained = contained || parent_contained;
+    refuse_contained_permission_override(permission_mode, parent_contained)?;
     let prog = resolve_agent_program("claude");
     let mut cmd = std::process::Command::new(prog);
     if let Some(grant) = grant_id {
@@ -1721,9 +1725,13 @@ pub(crate) fn interactive_reviewer_launch_plan(
     session_id: &str,
     contained: bool,
 ) -> Result<ReviewerLaunchPlan> {
+    // trace:BUG-2172 | ai:codex
+    let parent_contained = aida_contained_env()?;
+    let contained = contained || parent_contained;
     // BUG-2144: a contained reviewer on a vendor that cannot be contained is
     // refused, never downgraded. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "reviewer session")?;
+    refuse_contained_permission_override(permission_mode, parent_contained)?;
     match vendor {
         HeadlessVendor::Claude => Ok(ReviewerLaunchPlan {
             vendor,
@@ -1777,6 +1785,18 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     plan: &ReviewerLaunchPlan,
     project_root: &std::path::Path,
 ) -> Result<(std::process::ExitStatus, String)> {
+    // Reject a stale/uncontained plan before issuing any launch authority.
+    // Builders inherit containment; direct callers cannot bypass that boundary.
+    // trace:BUG-2172 | ai:codex
+    let parent_contained = aida_contained_env()?;
+    require_vendor_containment(
+        plan.vendor,
+        parent_contained || plan.contained,
+        "reviewer session",
+    )?;
+    if parent_contained && !plan.contained {
+        anyhow::bail!("[contained] reviewer launch plan is uncontained; rebuild it under the current parent before launching");
+    }
     let grant = crate::seat_authority::issue_child(
         project_root,
         "reviewer",
@@ -7599,6 +7619,7 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn interactive_reviewer_launch_plan_agy_refuses_with_recovery_hint() {
+        let _env = AgentCmdEnvGuard::acquire();
         let err = interactive_reviewer_launch_plan(
             HeadlessVendor::Agy,
             None,
@@ -8258,7 +8279,7 @@ mod tests {
 
     // trace:BUG-2006 | ai:antigravity
     #[test]
-    fn spawn_reviewer_launch_plan_contained_exports_aida_contained_and_uncontained_strips_it() {
+    fn spawn_reviewer_launch_plan_contains_or_refuses_stale_uncontained_plan() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -8275,7 +8296,7 @@ mod tests {
             format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
 
-        // 1. Contained = false with ambient AIDA_CONTAINED=1 -> stripped in child
+        // 1. A stale uncontained plan under a contained parent refuses before spawn.
         {
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 &project,
@@ -8289,15 +8310,11 @@ mod tests {
                 args: vec![],
                 contained: false,
             };
-            let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
-            assert!(status.success());
-            let env_contents = std::fs::read_to_string(&env_out).unwrap();
-            assert!(
-                !env_contents
-                    .lines()
-                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
-                "uncontained reviewer launch must strip AIDA_CONTAINED from child: {env_contents}"
-            );
+            let err = spawn_reviewer_launch_plan(&plan, &project).unwrap_err();
+            assert!(err
+                .to_string()
+                .contains("reviewer launch plan is uncontained"));
+            assert!(!env_out.exists());
         }
 
         // 2. Contained = true without ambient AIDA_CONTAINED -> exported in child
@@ -8326,7 +8343,7 @@ mod tests {
 
     // trace:BUG-2006 | ai:antigravity
     #[test]
-    fn spawn_claude_resume_contained_exports_aida_contained_and_uncontained_strips_it() {
+    fn spawn_claude_resume_inherits_or_explicitly_applies_containment() {
         let tmp = tempfile::tempdir().unwrap();
         let fake = tmp.path().join("fake-claude");
         let env_out = tmp.path().join("env.txt");
@@ -8335,7 +8352,7 @@ mod tests {
             format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
 
-        // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+        // 1. Caller false with ambient containment -> contained child
         {
             let _env = crate::test_env::EnvVarsGuard::apply(&[
                 ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
@@ -8345,10 +8362,8 @@ mod tests {
             assert!(status.success());
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
-                !env_contents
-                    .lines()
-                    .any(|l| l.starts_with("AIDA_CONTAINED=")),
-                "uncontained spawn_claude_resume must strip AIDA_CONTAINED: {env_contents}"
+                env_contents.lines().any(|l| l == "AIDA_CONTAINED=1"),
+                "spawn_claude_resume must inherit containment: {env_contents}"
             );
         }
 
@@ -8366,6 +8381,69 @@ mod tests {
                 "contained spawn_claude_resume must export AIDA_CONTAINED=1: {env_contents}"
             );
         }
+    }
+
+    // trace:BUG-2172 | ai:codex
+    #[test]
+    #[cfg(unix)]
+    fn interactive_reviewer_and_resume_inherit_parent_before_spawn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let capture = tmp.path().join("capture");
+        crate::test_exec::write_executable(
+            &fake,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > '{}'\n",
+                capture.display()
+            ),
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            tmp.path(),
+            "advisor",
+            &["reviewer"],
+            &[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_CONTAINED", Some("1")),
+                ("AIDA_OS_WRAP", Some("0")),
+            ],
+        );
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Claude,
+            None,
+            None,
+            "review",
+            "sid",
+            false,
+        )
+        .unwrap();
+        assert!(plan.contained);
+        assert!(plan.args.iter().any(|a| a == "--settings"));
+        let (status, grant) = spawn_reviewer_launch_plan_granted(&plan, tmp.path()).unwrap();
+        assert!(status.success());
+        revoke_headless_child_grant(&grant);
+        let output = std::fs::read_to_string(&capture).unwrap();
+        assert!(output.starts_with("1\n"), "{output}");
+        assert!(output.lines().any(|l| l == "--settings"));
+        std::fs::remove_file(&capture).unwrap();
+        let status = spawn_claude_resume_with_grant("sid", None, false, None).unwrap();
+        assert!(status.success());
+        let output = std::fs::read_to_string(&capture).unwrap();
+        assert!(output.starts_with("1\n--resume\nsid\n"), "{output}");
+        assert!(output.lines().any(|l| l == "--settings"));
+        std::fs::remove_file(&capture).unwrap();
+        assert!(
+            spawn_claude_resume_with_grant("sid", Some("bypassPermissions"), false, None).is_err()
+        );
+        assert!(!capture.exists());
+        assert!(interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            None,
+            None,
+            "review",
+            "sid",
+            false,
+        )
+        .is_err());
     }
 
     // trace:BUG-2006 | ai:antigravity
@@ -8638,7 +8716,7 @@ mod tests {
 
     // trace:BUG-2006 | ai:antigravity
     #[test]
-    fn interactive_reviewer_launch_plan_for_codex_refuses_contained_and_strips_aida_contained() {
+    fn interactive_reviewer_launch_plan_for_codex_refuses_contained_and_stale_uncontained_plan() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -8671,15 +8749,18 @@ mod tests {
             "{err:#}"
         );
 
-        let plan = interactive_reviewer_launch_plan(
-            HeadlessVendor::Codex,
-            Some("bypassPermissions"),
-            Some("codex-reviewer"),
-            "review prompt",
-            "sid-123",
-            false,
-        )
-        .unwrap();
+        let plan = {
+            let _env = AgentCmdEnvGuard::acquire();
+            interactive_reviewer_launch_plan(
+                HeadlessVendor::Codex,
+                Some("bypassPermissions"),
+                Some("codex-reviewer"),
+                "review prompt",
+                "sid-123",
+                false,
+            )
+            .unwrap()
+        };
         assert!(
             !plan.contained,
             "Codex reviewer plan must never be marked contained"
@@ -8696,15 +8777,9 @@ mod tests {
         );
         let mut plan_with_fake = plan;
         plan_with_fake.program = fake.to_string_lossy().to_string();
-        let status = spawn_reviewer_launch_plan(&plan_with_fake, &project).unwrap();
-        assert!(status.success());
-        let env_contents = std::fs::read_to_string(&env_out).unwrap();
-        assert!(
-            !env_contents
-                .lines()
-                .any(|l| l.starts_with("AIDA_CONTAINED=")),
-            "Codex reviewer launch must strip AIDA_CONTAINED from child: {env_contents}"
-        );
+        let err = spawn_reviewer_launch_plan(&plan_with_fake, &project).unwrap_err();
+        assert!(format!("{err:#}").contains("refusing to launch the reviewer session"));
+        assert!(!env_out.exists(), "stale plan must refuse before spawning");
     }
 
     // trace:BUG-2006 | ai:antigravity
