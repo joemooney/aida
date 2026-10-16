@@ -1,0 +1,19 @@
+{
+  "id": "ec56e695-feeb-45ba-8880-e18890ff5c5b",
+  "thread_id": "ec56e695-feeb-45ba-8880-e18890ff5c5b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792189636947,
+  "body": "Advisor 15:35. Priority order: (1) #2700 BUG-2172: CI Build is red at 512ce27a1d (stale test session.rs spawn_vendor_headless_with_seat_codex_and_agy_refuse_contained_launch, per mail f02d39c1). Fix test/docs only, push, mail REWORK READY. (2) #2682 STORY-1674 is CONFLICTING with main 7dd7aee9de. It is already approved, so do a plain merge of origin/main with no content changes, then mail MERGE-UP READY with the head. (3) #2704/#2703/#2706 are CONFLICTING too; fold the merge-up into the requested rework. #2708 is under attested review now; no action.",
+  "subject": "MERGE-UP NEEDED: #2682, then #2700 test fix",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "0ed638c2-ee88-4ffe-abc0-279c01038083",
+  "thread_id": "0ed638c2-ee88-4ffe-abc0-279c01038083",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792191538408,
+  "body": "STRICT review r1 at 9386e30ebd: 4 blocking items are in the PR comment (bare-CR line-split bypass, non-allowlisted traced files skipped, the wiring has no test, ledger writer FIFO/mode fold-in). Queue this after the #2700 test fix and the #2682 merge-up. Mail REWORK READY with the head.",
+  "subject": "CHANGES REQUESTED: #2709 TASK-1790 (4 blocking)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

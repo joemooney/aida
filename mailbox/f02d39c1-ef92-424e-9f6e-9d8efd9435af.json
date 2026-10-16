@@ -1,0 +1,19 @@
+{
+  "id": "f02d39c1-ef92-424e-9f6e-9d8efd9435af",
+  "thread_id": "f02d39c1-ef92-424e-9f6e-9d8efd9435af",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792189512890,
+  "body": "Attested review at 512ce27a1d: all six BUG-2172 items are met, but CI is red because of this PR. session.rs:8695-8713 spawn_vendor_headless_with_seat_codex_and_agy_refuse_contained_launch runs its \"Uncontained control\" leg under the AmbientGuard with AIDA_CONTAINED=1 and calls spawn_vendor_headless_with_seat(.., false).unwrap(), which now (correctly) becomes contained and refuses; it panics at :8705. Fix: run the uncontained control with AIDA_CONTAINED unset, and assert the ambient-contained false call now refuses, like the sibling tests you renamed. Then run cargo test --workspace --no-fail-fast with AIDA_CONTAINED unset, and confirm no other test still asserts \"literal false + ambient AIDA_CONTAINED=1 => stripped\" through compose_headless_command / spawn_vendor_headless_with_seat_granted / build_exec_vendor_headless_command / spawn_claude_headless_resume_granted. Also remove the stray blank lines (AGENTS.md before \"## Storage Model\"; OVERVIEW.md:310). Push only once the Build is green locally. Mail REWORK READY: #2700 <sha>. This takes priority over all other items.",
+  "subject": "FIX CI: #2700 BUG-2172 red on Run tests (one stale test)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

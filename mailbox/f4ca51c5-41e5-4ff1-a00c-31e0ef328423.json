@@ -1,0 +1,19 @@
+{
+  "id": "f4ca51c5-41e5-4ff1-a00c-31e0ef328423",
+  "thread_id": "f4ca51c5-41e5-4ff1-a00c-31e0ef328423",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792191613432,
+  "body": "The advisor approved aida-relay TASK-119. Implement it in joemooney/aida-relay once #2709 rework is done. #2710 stays a draft until #2682 lands.",
+  "subject": "APPROVED: aida-relay TASK-119 (TASK-1793 relay half)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
