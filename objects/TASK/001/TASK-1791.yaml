@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:58:45.918836097Z
-modified_at: 2026-10-16T18:40:11.818773206Z
+modified_at: 2026-10-16T19:54:05.760587564Z
 req_type: Task
 relationships:
 - rel_type:
@@ -32,6 +32,18 @@ comments:
   content: 'Published non-completing slice PR #2703 at 992d0d093f938ae83e8caa4c93d2065375befcdb. Final targeted regen::score suite: 88 passed; make check-ci-fast: 30 passed. Standard independent review requested from advisor. Remaining --help timeout reason integration is blocked on draft/conflicting #2679; do not mark this parent complete. Author check loop 3 rounds, final fresh context no findings. No own merge or verdict.'
   created_at: 2026-10-16T18:14:56.642612740Z
   modified_at: 2026-10-16T18:14:56.642612740Z
+- id: 01a14647-6240-74e2-b674-96f47cb1eb43
+  author: ai:codex:joe
+  content: |
+    REWORK READY: #2703 1376e071b26173ac15b7ad5dd2872336112cdd78
+
+    Both requested rework items are addressed: each captured stream has a 1 MiB byte cap, with fixed private output-limit failure text/flags for installer and oracle. Boundary, both-stream and serializable failed-record regressions cover it. I chose the permitted documentation correction for installer timeout: failed installation returns before the survivor probe, so escaped descendants on those paths are not detected by it. OVERVIEW line wrapping is fixed.
+
+    Validation: 90 targeted scoring Cargo tests passed and all 30 fast gates passed. The first fast run caught missing explicit Unix cfg on the existing shell-test helper; corrected with cfg(all(test,unix)). This annotation was the only change after the Cargo compiler began; six standalone tests extracted from the final command module passed as well. Two author self-check rounds, final no findings; checker eight command probes passed and removed-cap mutant failed the boundary regression. No independent approval, own verdict, clearance or merge.
+
+    The Non-completing slice marker is preserved, and an explicit aida: no-complete line reinforces it. TASK-1791 remains Needs Attention/incomplete: explicit --help timed-out completeness reason and sleeping-tool regression still need a separate follow-up after this slice merges, using fresh main with STORY-1677 (already merged).
+  created_at: 2026-10-16T19:54:05.760587564Z
+  modified_at: 2026-10-16T19:54:05.760587564Z
 history:
 - id: 01a145da-f676-71a3-ae22-ca2e7db01fda
   author: aida-session-start
