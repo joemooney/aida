@@ -21,6 +21,7 @@ fn role_expiry_cli_child() {
         project_root: root.clone(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
     let cli =
         crate::Cli::try_parse_from(["aida", "role", "expiry", "--refuse-within", "1h"]).unwrap();
@@ -299,6 +300,7 @@ fn validated_lookup_uses_the_earlier_parent_expiry() {
         project_root: root.path().to_path_buf(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
     let lookup = session_grant_lookup();
     crate::test_ambient::replace(previous);
@@ -327,6 +329,7 @@ fn valid_baseline_lookup_supplies_its_expiry() {
         project_root: root.path().to_path_buf(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
     let lookup = session_grant_lookup();
     crate::test_ambient::replace(previous);

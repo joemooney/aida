@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
+## [Unreleased]
+
+### Features
+
+- **TASK-1787** — aida role enter --ttl <dur>: operator-chosen grant TTL capped by [seat] max_grant_hours (default 24h, hard ceiling 168h) (#2691)
+
 ## [v0.15.0] — 2026-09-12
 
 Specs merged since v0.14.0 (959):

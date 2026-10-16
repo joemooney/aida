@@ -414,6 +414,18 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
             .args(["fetch", "origin", &refspec])
             .output()?;
         if !fetch.status.success() {
+            // TASK-1784: a branch that was never pushed has nothing on origin
+            // to align with — the local branch IS the work (pure-git reports
+            // it as the change). Only a confirmed absence (`ls-remote` exit 2)
+            // proceeds; a network or auth failure still refuses.
+            // trace:TASK-1784 | ai:claude
+            if remote_branch_absent(project_root, branch) {
+                eprintln!(
+                    "  {} branch `{branch}` was never pushed — reusing the local branch as is",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt)
+                );
+                return Ok(());
+            }
             anyhow::bail!(
                 "could not refresh PR branch `{branch}` from origin before launch: {}",
                 String::from_utf8_lossy(&fetch.stderr).trim()
@@ -421,6 +433,22 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
         }
     }
     align_reused_pr_branch_with_status(project_root, branch, has_open_pr)
+}
+
+/// TASK-1784: origin answered and has no `refs/heads/<branch>`.
+/// `git ls-remote --exit-code` exits 2 exactly when no ref matched; any other
+/// failure (unreachable remote, auth) is not proof of absence.
+// trace:TASK-1784 | ai:claude
+fn remote_branch_absent(project_root: &std::path::Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-remote", "--exit-code", "--heads", "origin"])
+        .arg(format!("refs/heads/{branch}"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.code() == Some(2))
 }
 
 pub(crate) fn align_reused_pr_branch_with_status(

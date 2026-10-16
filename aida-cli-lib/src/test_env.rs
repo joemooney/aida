@@ -510,6 +510,7 @@ impl AmbientGuard {
             project_root: root.to_path_buf(),
             stdin_is_terminal: false,
             stdout_is_terminal: false,
+            stderr_is_terminal: false,
         }));
         Self { prev, _env: env }
     }
@@ -530,6 +531,7 @@ impl AmbientGuard {
             project_root: root.to_path_buf(),
             stdin_is_terminal: false,
             stdout_is_terminal: false, // trace:BUG-1667 | ai:claude
+            stderr_is_terminal: false,
         }));
         Self { prev, _env: env }
     }
@@ -556,6 +558,7 @@ impl AmbientGuard {
             project_root: root.to_path_buf(),
             stdin_is_terminal: false,
             stdout_is_terminal: false,
+            stderr_is_terminal: false,
         }));
         Self { prev, _env: env }
     }
@@ -730,6 +733,7 @@ mod tests {
             project_root: tmp.path().to_path_buf(),
             stdin_is_terminal: false,
             stdout_is_terminal: false, // trace:BUG-1667 | ai:claude
+            stderr_is_terminal: false,
         }));
 
         // Positive control: clear the role inputs (not the identity), resolve
