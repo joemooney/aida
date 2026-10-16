@@ -8,8 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T12:52:18.642596834Z
-modified_at: 2026-10-16T18:33:15.437925351Z
+modified_at: 2026-10-16T18:35:51.254114367Z
 req_type: Task
+comments:
+- id: 01a145ff-c056-7e61-ac4b-5ed67f32b14d
+  author: ai:codex:joe
+  content: Implementation uses local main/master and origin/HEAD/ref evidence in the no-number guard, then a forge-aware bounded fallback. Global GitHub default-branch lookup now uses command_output_with_timeout with the existing 3-second FORGE_CLI_CALL_TIMEOUT, and local master fallback. Other forges skip gh. Targeted tests and fast gates are running; no CI or independent review result claimed.
+  created_at: 2026-10-16T18:35:51.254114367Z
+  modified_at: 2026-10-16T18:35:51.254114367Z
 history:
 - id: 01a14509-e700-77d0-9fc7-75cd6a626bfb
   author: joe
