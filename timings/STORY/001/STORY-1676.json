@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1676",
+  "publishes": [
+    {
+      "at": "2026-10-16T05:08:58.719001840Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:17.115133683Z",
+      "spec": "STORY-1676",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T14:44:59.596751843Z",
+      "spec": "STORY-1676",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T18:07:36.692439678Z",
+      "spec": "STORY-1676",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2677,
+        "verdict": "APPROVED",
+        "reviewed_sha": "84d55a95aa0b2f2422a151b39621674c85dfb0c9"
+      }
+    },
+    {
+      "ts": "2026-10-16T04:37:55.054247352Z",
+      "spec": "STORY-1676",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2677,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a3c6ac2905d8a8b52f62cfd6b9d658c16fd1429d"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:08:36.005061521Z",
+      "spec": "STORY-1676",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T05:08:48.466570376Z",
+      "spec": "STORY-1676",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2677
+      }
+    },
+    {
+      "ts": "2026-10-16T05:08:58.704030624Z",
+      "spec": "STORY-1676",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "251f99e7ef50bfc1537ce57ef7e88ff6975eaa85",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
