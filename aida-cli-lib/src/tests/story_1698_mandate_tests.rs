@@ -77,17 +77,25 @@ fn policy(verdicts: &[RecordedVerdict]) -> ShipApprovalPolicy {
     p
 }
 
-fn spec(id: &str) -> ShipSpec {
+fn plain() -> aida_core::Requirement {
     let mut req = aida_core::Requirement::new("Improve a list".into(), "fixture".into());
     req.req_type = aida_core::RequirementType::Task;
     req.execution_mode = Some(aida_core::ExecutionMode::Drive);
-    (id.into(), Some(req))
+    req
+}
+
+fn spec(id: &str) -> ShipSpec {
+    ShipSpec {
+        id: id.into(),
+        current: Some(plain()),
+        history: Ok(vec![plain()]),
+    }
 }
 
 fn tagged(id: &str, tag: &str) -> ShipSpec {
-    let (id, mut req) = spec(id);
-    req.as_mut().unwrap().tags.insert(tag.into());
-    (id, req)
+    let mut s = spec(id);
+    s.current.as_mut().unwrap().tags.insert(tag.into());
+    s
 }
 
 struct Case {
@@ -380,7 +388,11 @@ fn unresolved_specs_fail_closed() {
     c.specs = Vec::new();
     assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
     let mut c = Case::ok();
-    c.specs = vec![("TASK-404".into(), None)];
+    c.specs = vec![ShipSpec {
+        id: "TASK-404".into(),
+        current: None,
+        history: Ok(Vec::new()),
+    }];
     assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
 }
 
@@ -454,9 +466,9 @@ fn operator_only_specs_are_never_covered_even_with_include_supervised() {
             spec: "TASK-3".into()
         })
     );
-    let (id, mut req) = spec("TASK-4");
-    req.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Operator);
-    c.specs = vec![(id, req)];
+    let mut s4 = spec("TASK-4");
+    s4.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Operator);
+    c.specs = vec![s4];
     assert_eq!(
         c.decide(),
         Err(MandateRefusal::OperatorOnly {
@@ -542,4 +554,140 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         !preflight.contains("has_integrity_floor_authority()"),
         "the preflight takes the hold authority the handler decided"
     );
+}
+
+// ── Ruling: exclusion is STICKY across the spec's store history ────────────
+
+#[test]
+fn a_tag_stripped_in_a_later_version_is_still_refused() {
+    let mut once_secure = plain();
+    once_secure.tags.insert("security".into());
+    let mut c = Case::ok();
+    c.specs = vec![ShipSpec {
+        id: "TASK-5".into(),
+        current: Some(plain()),
+        history: Ok(vec![once_secure, plain()]),
+    }];
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::Excluded { ref why, .. }) if why.contains("earlier version")),
+        "{:?}",
+        c.decide()
+    );
+    c.state = MandateState::Active(active(true));
+    assert!(
+        c.decide().is_ok(),
+        "--include-supervised still lifts a sensitive class"
+    );
+}
+
+#[test]
+fn a_tag_stripped_by_a_recorded_edit_is_still_refused() {
+    let mut current = plain();
+    current.history.push(aida_core::HistoryEntry::new(
+        "agent".into(),
+        vec![aida_core::FieldChange {
+            field_name: "tags".into(),
+            old_value: "containment, area:x".into(),
+            new_value: "area:x".into(),
+        }],
+    ));
+    let mut c = Case::ok();
+    c.specs = vec![ShipSpec {
+        id: "TASK-6".into(),
+        current: Some(current),
+        history: Ok(Vec::new()),
+    }];
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
+}
+
+#[test]
+fn operator_mode_anywhere_in_history_is_always_refused() {
+    let mut once_operator = plain();
+    once_operator.execution_mode = Some(aida_core::ExecutionMode::Operator);
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.specs = vec![ShipSpec {
+        id: "TASK-7".into(),
+        current: Some(plain()),
+        history: Ok(vec![once_operator]),
+    }];
+    assert_eq!(
+        c.decide(),
+        Err(MandateRefusal::OperatorOnly {
+            spec: "TASK-7".into()
+        })
+    );
+}
+
+#[test]
+fn unreadable_history_is_refused_even_with_include_supervised() {
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.specs = vec![ShipSpec {
+        id: "TASK-8".into(),
+        current: Some(plain()),
+        history: Err("git failed".into()),
+    }];
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::HistoryUnreadable { .. })
+    ));
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// End to end against a real git store: a spec committed with `security`,
+/// then re-committed without it, is still excluded; a spec with no stored
+/// version at all is unreadable.
+#[test]
+fn store_git_history_keeps_a_stripped_tag_visible() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q"]);
+    let rel = aida_core::object_store::relative_object_path("TASK-9").unwrap();
+    let path = root.join(&rel);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut req = plain();
+    req.spec_id = Some("TASK-9".into());
+    req.tags.insert("security".into());
+    std::fs::write(&path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "v1"]);
+    req.tags.clear();
+    std::fs::write(&path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(root, &["commit", "-qam", "strip the tag"]);
+
+    let history = store_history_versions(root, "TASK-9").unwrap();
+    assert_eq!(history.len(), 2);
+    let mut c = Case::ok();
+    c.specs = vec![ShipSpec {
+        id: "TASK-9".into(),
+        current: Some(req),
+        history: Ok(history),
+    }];
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
+
+    assert!(store_history_versions(root, "TASK-10").is_err());
+    let not_a_repo = tempfile::tempdir().unwrap();
+    assert!(store_history_versions(not_a_repo.path(), "TASK-9").is_err());
 }

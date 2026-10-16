@@ -231,9 +231,146 @@ pub(crate) fn stop(
 
 // ── Ship decision ───────────────────────────────────────────────────────────
 
-/// What the ship decision knows about one spec the PR ships: `None` when the
-/// store has no such spec (fails closed).
-pub(crate) type ShipSpec = (String, Option<aida_core::Requirement>);
+/// What the ship decision knows about one spec the PR ships.
+// trace:STORY-1698 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct ShipSpec {
+    pub id: String,
+    /// The spec as the store holds it now; `None` when the store has no such
+    /// spec (fails closed).
+    pub current: Option<aida_core::Requirement>,
+    /// Every earlier version of the spec found in the store's git history
+    /// (plus what its recorded field changes say it once was). `Err` = the
+    /// history could not be read, which refuses (fails closed): exclusion is
+    /// sticky, so a version we cannot see may be the one that excludes it.
+    pub history: std::result::Result<Vec<aida_core::Requirement>, String>,
+}
+
+/// Every version of a requirement its own `history:` field changes describe:
+/// for each recorded change to `tags`, `execution_mode`, `title` or `type`,
+/// one pseudo-version carrying the OLD value and one carrying the NEW value
+/// (on top of `req`), so a tag removed by a recorded edit is still seen.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn field_change_versions(req: &aida_core::Requirement) -> Vec<aida_core::Requirement> {
+    let mut out = Vec::new();
+    for change in req.history.iter().flat_map(|h| h.changes.iter()) {
+        for value in [&change.old_value, &change.new_value] {
+            let mut v = req.clone();
+            match change.field_name.trim().to_ascii_lowercase().as_str() {
+                "tags" | "tag" => {
+                    v.tags = value
+                        .split([',', ' '])
+                        .map(str::trim)
+                        .filter(|t| !t.is_empty())
+                        .map(str::to_string)
+                        .collect();
+                }
+                "execution_mode" | "mode" => match value.parse::<aida_core::ExecutionMode>() {
+                    Ok(mode) => v.execution_mode = Some(mode),
+                    Err(_) => continue,
+                },
+                "title" => v.title = value.clone(),
+                "type" | "req_type" => {
+                    match serde_yaml::from_str::<aida_core::RequirementType>(value) {
+                        Ok(t) => v.req_type = t,
+                        Err(_) => continue,
+                    }
+                }
+                _ => continue,
+            }
+            out.push(v);
+        }
+    }
+    out
+}
+
+/// One historical object body, read leniently: the full requirement when it
+/// parses, else just the fields exclusion looks at (an older schema). `Err`
+/// only when it is not YAML at all.
+// trace:STORY-1698 | ai:claude
+fn parse_version(text: &str) -> std::result::Result<aida_core::Requirement, String> {
+    if let Ok(req) = serde_yaml::from_str::<aida_core::Requirement>(text) {
+        return Ok(req);
+    }
+    let value: serde_yaml::Value =
+        serde_yaml::from_str(text).map_err(|e| format!("unparseable version: {e}"))?;
+    let field = |k: &str| {
+        value
+            .get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let mut req = aida_core::Requirement::new(field("title"), String::new());
+    if let Some(tags) = value.get("tags").and_then(|v| v.as_sequence()) {
+        req.tags = tags
+            .iter()
+            .filter_map(|t| t.as_str().map(str::to_string))
+            .collect();
+    }
+    req.execution_mode = field("execution_mode").parse().ok();
+    if let Some(t) = value
+        .get("type")
+        .and_then(|t| serde_yaml::from_value(t.clone()).ok())
+    {
+        req.req_type = t;
+    }
+    Ok(req)
+}
+
+/// STORY-1698: every version of `spec_id` in the store's git history (all
+/// refs, so a rewritten local branch still shows what the remote saw), each
+/// expanded by its recorded field changes. `Err` when the history cannot be
+/// read or holds no version at all — the caller refuses.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn store_history_versions(
+    store_root: &Path,
+    spec_id: &str,
+) -> std::result::Result<Vec<aida_core::Requirement>, String> {
+    let rel = aida_core::object_store::relative_object_path(spec_id)
+        .map_err(|e| format!("no object path for {spec_id}: {e}"))?;
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(store_root)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git failed to run: {e}"))
+            .and_then(|out| {
+                if out.status.success() {
+                    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+                } else {
+                    Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+                }
+            })
+    };
+    // Deletions carry no body to read; every other touching commit does.
+    let log = git(&[
+        "log",
+        "--all",
+        "--format=%H",
+        "--diff-filter=ACMRT",
+        "--",
+        &rel,
+    ])?;
+    let shas: Vec<&str> = log
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    if shas.is_empty() {
+        return Err(format!("no version of {spec_id} in the store's history"));
+    }
+    let mut out = Vec::new();
+    for sha in shas {
+        let text = git(&["show", &format!("{sha}:{rel}")])
+            .map_err(|e| format!("cannot read {spec_id} at {sha}: {e}"))?;
+        let req = parse_version(&text).map_err(|e| format!("{spec_id} at {sha}: {e}"))?;
+        out.extend(field_change_versions(&req));
+        out.push(req);
+    }
+    Ok(out)
+}
 
 /// Everything the mandate ship decision weighs, gathered by the caller.
 // trace:STORY-1698 | ai:claude
@@ -263,6 +400,7 @@ pub(crate) enum MandateRefusal {
     OverrideStale,
     SpecsUnresolved,
     OperatorOnly { spec: String },
+    HistoryUnreadable { spec: String, why: String },
     Excluded { spec: String, why: String },
     ShipperUnanchored,
     AdvisorAuthored { author: String },
@@ -290,6 +428,9 @@ impl MandateRefusal {
             Self::SpecsUnresolved => {
                 "what the PR ships could not be resolved to specs in the store".to_string()
             }
+            Self::HistoryUnreadable { spec, why } => format!(
+                "{spec}'s store history could not be read ({why}), so it is treated as excluded"
+            ),
             Self::OperatorOnly { spec } => {
                 format!("{spec} is operator-only; it always needs a human merge")
             }
@@ -384,20 +525,48 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
     if !c.specs_resolved || c.specs.is_empty() {
         return Err(MandateRefusal::SpecsUnresolved);
     }
-    for (id, req) in c.specs {
-        let Some(req) = req else {
+    // Exclusion is STICKY: a spec is judged by every version it ever had —
+    // now, in the store's git history, and in its recorded field changes —
+    // so stripping a tag never lifts it. Unreadable history refuses.
+    // trace:STORY-1698 | ai:claude
+    for spec in c.specs {
+        let id = &spec.id;
+        let Some(current) = &spec.current else {
             return Err(MandateRefusal::SpecsUnresolved);
         };
-        if is_operator_only(req) {
-            return Err(MandateRefusal::OperatorOnly { spec: id.clone() });
-        }
-        if !mandate.include_supervised {
-            if let Some(why) = excluded_class(req) {
-                return Err(MandateRefusal::Excluded {
+        let history = match &spec.history {
+            Ok(history) => history,
+            Err(why) => {
+                return Err(MandateRefusal::HistoryUnreadable {
                     spec: id.clone(),
-                    why,
+                    why: why.clone(),
+                })
+            }
+        };
+        let current_changes = field_change_versions(current);
+        let versions = std::iter::once(current)
+            .chain(current_changes.iter())
+            .chain(history.iter());
+        let mut excluded: Option<String> = None;
+        for (i, version) in versions.enumerate() {
+            if is_operator_only(version) {
+                return Err(MandateRefusal::OperatorOnly { spec: id.clone() });
+            }
+            if excluded.is_none() {
+                excluded = excluded_class(version).map(|why| {
+                    if i == 0 {
+                        why
+                    } else {
+                        format!("{why}, in an earlier version")
+                    }
                 });
             }
+        }
+        if let (Some(why), false) = (excluded, mandate.include_supervised) {
+            return Err(MandateRefusal::Excluded {
+                spec: id.clone(),
+                why,
+            });
         }
     }
     let shipper = &c.policy.shipper;

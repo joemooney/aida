@@ -1774,6 +1774,7 @@ pub(crate) fn mandate_ship_cover(
     let author_ids: &[String] = if forge_resolved { &ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
     let store = load_store_for_lookup(project_root);
+    let store_root = crate::store_sync::detect_distributed_store_from(project_root);
     let specs: Vec<crate::mandate::ShipSpec> = ids
         .iter()
         .map(|id| {
@@ -1791,7 +1792,16 @@ pub(crate) fn mandate_ship_cover(
                     })
                     .cloned()
             });
-            (id.clone(), req)
+            // STORY-1698: sticky exclusion reads every stored version.
+            let history = match &store_root {
+                Some(root) => crate::mandate::store_history_versions(root, id),
+                None => Err("no git-canonical store to read history from".to_string()),
+            };
+            crate::mandate::ShipSpec {
+                id: id.clone(),
+                current: req,
+                history,
+            }
         })
         .collect();
     let id = crate::mandate::ship_decision(&ShipCheck {
