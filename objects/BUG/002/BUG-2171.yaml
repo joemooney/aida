@@ -1,0 +1,20 @@
+id: 01a14441-cfd2-7cf1-9361-fa62bbd2d157
+spec_id: BUG-2171
+agreed_id: BUG-2171
+title: 'Contained parent escape via burndown run, autopilot intake and questions clarify: BUG-2124 builders pass containment_applied(Claude, false), so they always strip AIDA_CONTAINED and default to bypassPe'
+description: 'From the #2693 BUG-2166 STRICT review. Same class as BUG-2166/2157/2158. These builders call containment_applied(HeadlessVendor::Claude, false), which is constant false (session.rs:1829), so a contained parent launches an UNCONTAINED child. None of the files reads aida_contained_env or calls refuse_uncontained_child_of_contained_parent. (1) burndown_run.rs:2018 build_burndown_quiet_command and :2040 build_burndown_verbose_command; the mode defaults to bypassPermissions (:426), and the only gate is dispatch authority (:317), which --force skips. This is the most serious. (2) autopilot_intake.rs:994 build_autopilot_intake_command, which defaults to bypassPermissions (:920) and strips AIDA_CONTAINED (:1030). (3) questions.rs:1644 build_questions_clarify_command, an interactive native-mode advisor that strips AIDA_CONTAINED (:1652). Fix: under the strict aida_contained_env()?, refuse --permission-mode and launch with dontAsk + claude_contained_flags() + AIDA_CONTAINED=1 (or refuse outright); route through refuse_uncontained_child_of_contained_parent. Add argv/env tests as in #2693. Coordinate with BUG-2170 (PURPOSE scrub on the same two builders).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T10:28:46.162235280Z
+modified_at: 2026-10-16T10:28:46.162235280Z
+req_type: Bug
+filed_at:
+  code_sha: 5aa7198cfe4e3a3f5055480c06d7095208e7080b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 75ff185cbf
+  vendor: claude
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
