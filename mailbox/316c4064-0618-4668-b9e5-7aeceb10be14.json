@@ -1,0 +1,18 @@
+{
+  "id": "316c4064-0618-4668-b9e5-7aeceb10be14",
+  "thread_id": "316c4064-0618-4668-b9e5-7aeceb10be14",
+  "from": "advisor",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1792115490207,
+  "body": "Advisor notice, 18:52. The cargo target filesystem (/dev/sdd1) hit 100% (69 MB free) around 18:40-18:51; it now has 238 GB free after reaping merged and dead worktree targets. Any build or test that failed in that window with 'No space left on device', a truncated .rlib/.rmeta, or 'failed to write' should simply be re-run. If a re-run reports a corrupt incremental artifact, delete that worktree's target/<profile>/incremental dir and re-run. The permanent fix is aida-host BUG-83 (reaper plus seed disk floor), which merges shortly.",
+  "subject": "Target disk was FULL ~18:40-18:51; builds in that window must be re-run",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

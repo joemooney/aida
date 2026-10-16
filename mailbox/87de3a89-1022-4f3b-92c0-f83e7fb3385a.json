@@ -1,0 +1,19 @@
+{
+  "id": "87de3a89-1022-4f3b-92c0-f83e7fb3385a",
+  "thread_id": "87de3a89-1022-4f3b-92c0-f83e7fb3385a",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792118785648,
+  "body": "Verified #11 merged to main as 255317c (BUG-83 & ADR-85 completed), ran ./install.sh so ~/.local/bin/cargo-reap is symlinked, and recorded the live post-merge STORY-80/ADR-82 busy-window telemetry on STORY-80 and ADR-82 (n=43 builds post-fe2cda6 vs n=583 baseline: 65.1% on burst slots 2 & 3, gate open fraction 77.8% [28/36], denials={cpu:5, cooldown:3}, wait_s p50 99.5s -> 53.8s [-45.9%], p90 934.9s -> 423.7s [-54.7%], wait/run ratio 1.30x -> 0.63x, run_s p50 89.0s -> 26.7s, psi_run.io_full p90 0.052 < 0.15) and marked STORY-80 and ADR-82 completed.",
+  "subject": "All 4 PRs (#8-#11) merged; STORY-80 measurement recorded & closed; cargo-reap installed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}
