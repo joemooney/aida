@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T23:04:32.053386588Z
-modified_at: 2026-10-16T19:45:35.846369083Z
+modified_at: 2026-10-16T23:44:21.341323584Z
 req_type: Task
 relationships:
 - rel_type:
@@ -49,6 +49,11 @@ comments:
     The spec is currently Needs Attention. I attempted to set In Progress while starting rework; AIDA refused that promotion without advisor authority, so I left status unchanged. Please handle the status with re-review.
   created_at: 2026-10-16T19:45:35.846369083Z
   modified_at: 2026-10-16T19:45:35.846369083Z
+- id: 01a1471a-315d-7712-9b30-0b7f7f6fd681
+  author: joe
+  content: Commit 30e4171bed references this requirement
+  created_at: 2026-10-16T23:44:21.341323584Z
+  modified_at: 2026-10-16T23:44:21.341323584Z
 history:
 - id: 01a141cf-7b0b-7992-bf12-f6ffe9cfc327
   author: joe
