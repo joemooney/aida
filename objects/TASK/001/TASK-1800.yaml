@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-16T23:00:01.795083421Z
+modified_at: 2026-10-16T23:42:18.737968566Z
 req_type: Task
+comments:
+- id: 01a14718-5271-7e40-b609-40fe6102da42
+  author: joe
+  content: 'Further items from the STRICT r2 review of #2709 @6e5727ce3c. (a) Every changed file is now scanned, so a PR that changes a symlink (133 on main, e.g. the .claude/skills mirrors), a binary file or a gitlink refuses coverage. That fails closed, but the refusal rate goes up. Consider scanning symlink targets as text and skipping binaries only when they carry no trace. (b) Re-measure the last-50 refusal rate with the new collector; the 25/24 figures describe the old one. (c) Add a call-site test: if mandate_ship_cover passes an empty set instead of trace_evidence.ids, no test fails today.'
+  created_at: 2026-10-16T23:42:18.737968566Z
+  modified_at: 2026-10-16T23:42:18.737968566Z
+  session_id: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
 filed_at:
   code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
   branch: main
