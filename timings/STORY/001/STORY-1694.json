@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1694",
+  "publishes": [
+    {
+      "at": "2026-10-16T04:16:14.128181851Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T04:16:14.105785470Z",
+      "spec": "STORY-1694",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "pr": 2681,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

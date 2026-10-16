@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1782",
+  "publishes": [
+    {
+      "at": "2026-10-16T04:16:14.105670029Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T18:55:14.799189643Z",
+      "spec": "TASK-1782",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T19:01:44.782914399Z",
+      "spec": "TASK-1782",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T02:33:53.465993050Z",
+      "spec": "TASK-1782",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2681,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bee81417afe5502c9422d90831030a32045e5cf4"
+      }
+    },
+    {
+      "ts": "2026-10-16T02:33:55.500477664Z",
+      "spec": "TASK-1782",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STANDARD round 1: never signals unconfirmed (no BUG-2148 regression), but 'recycled' includes inconclusive comparisons, so a possibly-live agent is reported gone with a gc hint that gc won't act on",
+        "recovery_hint": "address the review findings, move TASK-1782 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T04:14:20.373148094Z",
+      "spec": "TASK-1782",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2681,
+        "verdict": "APPROVED",
+        "reviewed_sha": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b"
+      }
+    },
+    {
+      "ts": "2026-10-16T04:15:26.982713652Z",
+      "spec": "TASK-1782",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T04:15:51.524752680Z",
+      "spec": "TASK-1782",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2681
+      }
+    },
+    {
+      "ts": "2026-10-16T04:16:14.083952213Z",
+      "spec": "TASK-1782",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "pr": 2681,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
