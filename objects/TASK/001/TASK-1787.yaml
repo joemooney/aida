@@ -17,8 +17,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:21:50.183588416Z
-modified_at: 2026-10-16T04:30:49.203930092Z
+modified_at: 2026-10-16T04:30:52.782827052Z
 req_type: Task
+comments:
+- id: 01a142fa-276e-7e70-bd83-86e0dbe1ce35
+  author: joe
+  content: 'Operator decision 2026-10-15 21:21 (recorded by advisor): ''I will be gone for more than 24hr, so I need it to automatically renew the grant.'' The advisor ruling is that agent self-renewal violates the human-mint floor, so this task delivers an operator-chosen long grant minted once at the TTY.'
+  created_at: 2026-10-16T04:30:52.782827052Z
+  modified_at: 2026-10-16T04:30:52.782827052Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a142fa-1973-7943-978f-094d52787bc3
   author: joe
