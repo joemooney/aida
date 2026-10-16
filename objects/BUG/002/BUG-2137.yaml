@@ -8,11 +8,26 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:07.555374058Z
-modified_at: 2026-10-15T00:43:07.555374058Z
+modified_at: 2026-10-16T04:41:30.492639221Z
 req_type: Bug
 tags:
 - capture
 - mirror
+comments:
+- id: 01a14303-e27c-7941-86e5-597717f0de71
+  author: joe
+  content: |-
+    Cross-ref from aida-host TASK-3 (TASK-JM-001, closed in favor of this upstream bug):
+
+    Root cause: .git/hooks/pre-push invokes `aida remote mirror-push` during git's pre-push phase — *before* git transmits objects/refs to `origin`. When `aida remote mirror-push` checks whether the branch is confirmed on `origin` (or when pushing a new branch / new commit), `origin` has not received the push yet, so it prints:
+      [aida mirror] <branch> not confirmed on origin — skipped
+
+    Suggested fixes:
+    1. Read the pre-push stdin lines (`<local ref> <local sha> <remote ref> <remote sha>`) or pass the ref/oid being pushed so mirror-push knows what is in flight, OR
+    2. Spawn a detached background helper that waits briefly for `git push` to finish confirming on `origin` before pushing to the mirror remote, OR
+    3. Only mirror refs already at `refs/remotes/origin/*` without warning on the in-flight branch.
+  created_at: 2026-10-16T04:41:30.492639221Z
+  modified_at: 2026-10-16T04:41:30.492639221Z
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
