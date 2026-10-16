@@ -30,6 +30,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 
