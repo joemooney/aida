@@ -1,0 +1,20 @@
+id: 01a143c1-f1b8-72f2-b2b1-6c0ee705421e
+spec_id: TASK-1792
+agreed_id: TASK-1792
+title: 'relay-stall check: detect SIGKILL/OOM-dead relays still marked running, ignore run-dir handoff.md.done as an ack, and age-cap or distinguish deliberate Ctrl-C exits'
+description: 'From the #2690 (STORY-1699 heartbeat) review, non-blocking. (1) relay_stall.rs:246 trusts the raw state file, so a relay killed with -9 or by the OOM killer stays state=running and is never flagged; check the pid/lock (with start-time identity) as relay.sh:1277 does. (2) relay_stall.rs:207 treats the run-dir handoff.md.done (relay.sh''s live sentinel) as an operator ack; only the seat handoff''s .done should count. (3) state=exited covers a deliberate Ctrl-C stop and has no age cap, so an intentionally stopped relay pages forever; add an age cap or a ''stopped by operator'' distinction. Tests for each.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T08:09:06.232700696Z
+modified_at: 2026-10-16T08:09:06.232700696Z
+req_type: Task
+filed_at:
+  code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 5fb188c522
+  vendor: claude
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
