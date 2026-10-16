@@ -83,7 +83,9 @@ pub(super) fn frozen_entries(
                 && matches!(fields[0], "100644" | "100755" | "120000"),
             "unsupported oracle tree entry: {name}"
         );
-        let bytes = super::super::git(project, &["cat-file", "blob", fields[2]])?;
+        // trace:BUG-2160 | ai:claude
+        let bytes = super::super::git(project, &["cat-file", "blob", fields[2]])
+            .with_context(|| format!("read oracle input {name} at {sha}"))?;
         entries.insert(
             name.into(),
             Entry {

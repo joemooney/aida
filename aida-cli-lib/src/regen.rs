@@ -130,10 +130,14 @@ fn git(store: &Path, args: &[&str]) -> Result<Vec<u8>> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .output()
         .with_context(|| format!("run git {}", args.join(" ")))?;
+    // Report the exit status as well as stderr: a git killed by a signal
+    // writes nothing, and an empty "failed:" hides why (BUG-2160).
+    // trace:BUG-2160 | ai:claude
     anyhow::ensure!(
         out.status.success(),
-        "git {} failed: {}",
+        "git {} failed ({}): {}",
         args.join(" "),
+        out.status,
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(out.stdout)
