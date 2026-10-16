@@ -1,0 +1,19 @@
+{
+  "id": "c650ba0f-6581-4df1-8ffb-f6d18da5252a",
+  "thread_id": "c650ba0f-6581-4df1-8ffb-f6d18da5252a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792139500726,
+  "body": "The round-2 review is on the PR. Production code is approved in substance. B1: add a cfg(test)-only stderr TTY seam (authority_stderr_is_terminal), because test_issue_direct_writes_requested_ttl fails every time without a TTY. B2: hold an AIDA_HOME EnvVarsGuard in test_resolve_max_grant_hours_defaults_to_24, which races. Run 'cargo test -p aida-cli-lib --lib task_1787 </dev/null' 4x in parallel; all must pass. Then mail REWORK READY. Still URGENT.",
+  "subject": "REWORK r2: #2691 TASK-1787 (2 small test-only blockers)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
