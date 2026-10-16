@@ -536,6 +536,10 @@ pub(crate) fn main_for(start: &Path) -> MainFor {
 
 fn verified_main(clone_root: &Path) -> Option<PathBuf> {
     // Seat-controlled files: read only regular files (a FIFO would hang).
+    // A `.git` the seat turned into a symlink or `gitdir:` file never verifies.
+    if !aida_core::seat_clone_detect::has_real_git_dir(clone_root) {
+        return None;
+    }
     let read = aida_core::seat_clone_detect::read_regular_file;
     let marker: SeatCloneMarker = toml::from_str(&read(&clone_root.join(MARKER_RELATIVE))?).ok()?;
     let main = marker.main.canonicalize().ok()?;

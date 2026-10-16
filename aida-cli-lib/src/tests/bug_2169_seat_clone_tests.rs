@@ -849,3 +849,97 @@ fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
         1
     );
 }
+
+/// Plant seat-written execution hooks in the clone's git config: a
+/// `core.fsmonitor` and a `filter.<x>.clean` bound by `.gitattributes`. Each
+/// touches its canary if host git ever runs them.
+fn plant_canaries(clone: &Path, fsmonitor: &Path, filter: &Path) {
+    git_ok(
+        clone,
+        &[
+            "config",
+            "core.fsmonitor",
+            &format!("touch {}; false", fsmonitor.display()),
+        ],
+    );
+    git_ok(
+        clone,
+        &[
+            "config",
+            "filter.evil.clean",
+            &format!("touch {}; cat", filter.display()),
+        ],
+    );
+    std::fs::write(clone.join(".gitattributes"), "* filter=evil\n").unwrap();
+    std::fs::write(clone.join("dirty.txt"), "x\n").unwrap();
+}
+
+/// Run the host builders against `clone` and require that both refuse and
+/// neither canary fires.
+fn assert_host_git_refused(clone: &Path, fsmonitor: &Path, filter: &Path) {
+    assert!(
+        matches!(main_for(clone), MainFor::Unverified(_)),
+        "a rewired .git must still be a seat clone and must not verify"
+    );
+    let dirty = crate::status_sections::worktree_dirty_entries(clone);
+    assert_eq!(dirty.len(), 1, "{dirty:?}");
+    assert!(dirty[0].contains("private clone"), "{dirty:?}");
+    for args in [
+        &["status", "--porcelain"][..],
+        &["add", "-A"][..],
+        &["diff"][..],
+    ] {
+        let out = aida_core::git_ops::host_git_command(clone)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "host git {args:?} ran in the clone");
+    }
+    assert!(!fsmonitor.exists(), "seat core.fsmonitor ran on the host");
+    assert!(!filter.exists(), "seat filter.clean ran on the host");
+}
+
+/// A seat replaces its `.git` directory with a symlink to a renamed copy.
+#[cfg(unix)]
+#[test]
+fn a_symlinked_git_dir_is_still_refused() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-symlink");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    write_lease(&fx.main, &clone.canonicalize().unwrap(), "clone");
+    let (fsmonitor, filter) = (fx.root.join("fsmonitor-ran"), fx.root.join("filter-ran"));
+    plant_canaries(&clone, &fsmonitor, &filter);
+    std::fs::rename(clone.join(".git"), clone.join(".gitx")).unwrap();
+    std::os::unix::fs::symlink(".gitx", clone.join(".git")).unwrap();
+    std::fs::remove_file(clone.join(MARKER_RELATIVE)).unwrap();
+
+    assert_host_git_refused(&clone, &fsmonitor, &filter);
+    // Control: the canaries are live, so the refusal is what kept them quiet.
+    let _ = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["add", "-A"])
+        .output();
+    assert!(filter.exists(), "control: the planted filter should fire");
+}
+
+/// A seat replaces its `.git` directory with a `gitdir:` file.
+#[test]
+fn a_gitdir_file_is_still_refused() {
+    let fx = fixture();
+    let clone = fx.root.join("seats").join("aida-seat-aida-gitfile");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    write_lease(&fx.main, &clone.canonicalize().unwrap(), "clone");
+    let (fsmonitor, filter) = (fx.root.join("fsmonitor-ran"), fx.root.join("filter-ran"));
+    plant_canaries(&clone, &fsmonitor, &filter);
+    std::fs::rename(clone.join(".git"), clone.join(".gitx")).unwrap();
+    std::fs::write(clone.join(".git"), "gitdir: .gitx\n").unwrap();
+
+    assert_host_git_refused(&clone, &fsmonitor, &filter);
+    let _ = Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["add", "-A"])
+        .output();
+    assert!(filter.exists(), "control: the planted filter should fire");
+}

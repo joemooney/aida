@@ -43,26 +43,32 @@ fn is_real_dir(path: &Path) -> bool {
 pub const CLONE_DIR_PREFIX: &str = "aida-seat-";
 
 /// The root of the seat clone `start` sits in: the nearest ancestor holding
-/// a `.git` entry, when that `.git` is a real directory and EITHER the
-/// directory is named `aida-seat-*` OR a marker entry of any type exists. A
-/// marker the seat replaced with a FIFO or symlink still marks a clone (and
-/// then fails verification); a deleted marker is caught by the name. `None`
-/// for a linked worktree, a main checkout or any other repository.
+/// a `.git` entry of ANY type, when that directory is named `aida-seat-*` or
+/// a marker entry of any type exists in it. The `.git` entry's type is not
+/// consulted: a seat that turns its `.git` into a symlink or a `gitdir:` file
+/// is still a clone (and then fails verification). A marker the seat replaced
+/// with a FIFO or symlink still marks a clone; a deleted marker is caught by
+/// the name. `None` for a linked worktree, a main checkout or any other
+/// repository.
 // trace:BUG-2169 | ai:claude
 pub fn seat_clone_root(start: &Path) -> Option<PathBuf> {
     let start = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
     let root = start
         .ancestors()
         .find(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())?;
-    if !is_real_dir(&root.join(".git")) {
-        return None;
-    }
     let named = root
         .file_name()
         .and_then(|n| n.to_str())
         .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX));
     let marked = std::fs::symlink_metadata(root.join(MARKER_RELATIVE)).is_ok();
     (named || marked).then(|| root.to_path_buf())
+}
+
+/// Whether `clone_root`'s `.git` is a real directory, as the creator made
+/// it. A symlink or `gitdir:` file means the seat rewired it.
+// trace:BUG-2169 | ai:claude
+pub fn has_real_git_dir(clone_root: &Path) -> bool {
+    is_real_dir(&clone_root.join(".git"))
 }
 
 /// The refusal text for host git aimed at a seat clone.
