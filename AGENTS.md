@@ -1,3 +1,9 @@
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
 or absent diagnostics remain unknown. Reports flag crash-dominated and mostly
