@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-16T14:19:56.048172366Z
+modified_at: 2026-10-16T14:21:23.893623443Z
 req_type: Bug
 comments:
 - id: 01a14468-6b8e-7cc1-8b0f-bea6641c15b3
@@ -41,6 +41,25 @@ comments:
   created_at: 2026-10-16T14:19:56.048172366Z
   modified_at: 2026-10-16T14:19:56.048172366Z
   session_id: 01a143ac0514
+- id: 01a14516-ca35-7b33-a2c6-e3be1945fe99
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-16: option A (private clone per contained seat) APPROVED for implementation as slices S1-S4. Sketch: docs/plans/2026-10-16-bug-2169-contained-clone.md (branch bug-2169-sketch, 37ba937d14); land the doc with S1. Option B rejected for the reasons given. #2694 is closed unmerged.
+
+    Rulings on the open questions:
+    - O1: do not assume the launcher is unsandboxed. S1 must refuse loudly when it cannot create a clone, with no worktree fallback; that is a hard requirement. S5 (host-provisioned clone pool) is deferred: decide after S1 dogfooding shows whether contained relays' `aida agent new` hits the refusal.
+    - O2: NO rw /mnt/build/sccache for contained seats. A shared compile cache writable by a contained seat is a cross-seat and host artifact-poisoning vector, which is a containment escape. Contained seats build with RUSTC_WRAPPER unset, or with a per-seat sccache dir under their own target dir. Revisit only with a read-only cache plus a host-side writer.
+    - O3: accepted. The v* tag push to origin is recorded as an origin-side residual; the operator adds a GitHub tag ruleset (filed as a separate task). Do not block on it.
+
+    Binding conditions:
+    1. The invariant "the host NEVER runs git with a seat clone as the repo (or cwd)" is enforced in code: a single seat_clone module is the only accessor, plus a test or lint that flags any std::process::Command("git") whose cwd or -C resolves to a seat clone outside it.
+    2. The fixes for the pre-existing defects (tool_contained_flags scoped to the launcher cwd, agent_launch.rs:1646; --bg/interactive skipping os_wrap) land in S2, with tests. They are containment bugs in their own right.
+    3. T1-T8 real-bwrap tests are a CI gate. Each attack must SUCCEED against the frozen #2694 layout fixture (proving the test can detect the attack) and FAIL against the clone layout.
+    4. The base-pin refs (refs/aida/seats/*) are released on every destroy path, and reap enumerates orphan pins.
+    5. Each slice gets STRICT review. Do not flip the [contained] seat_tree default before S4 is approved.
+  created_at: 2026-10-16T14:21:23.893623443Z
+  modified_at: 2026-10-16T14:21:23.893623443Z
+  session_id: b307b6fe-d611-428b-bc2a-5df6287d4592
 history:
 - id: 01a143cc-f836-7583-b190-7823068c7b77
   author: aida-session-start
