@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:03.171006858Z
-modified_at: 2026-10-15T21:47:51.936571590Z
+modified_at: 2026-10-16T04:37:16.953298435Z
 req_type: Story
 tags:
 - from:aida-host
@@ -82,6 +82,12 @@ comments:
   created_at: 2026-10-15T21:47:51.936571590Z
   modified_at: 2026-10-15T21:47:51.936571590Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a14300-0419-7010-90e8-12f2a263ab4f
+  author: joe
+  content: 'Restacked by advisor fixer: 8957251533->3f8e46a034 onto restacked codex/task-1734 (556f1a3635); range-diff 2/2 ''=''; no conflicts; check-ci-fast 30/30 pass. PR #2679 base left at codex/task-1734: STORY-1677 depends on TASK-1734 (report.rs/AGENTS/OVERVIEW conflict without it); retarget to main after #2673 merges'
+  created_at: 2026-10-16T04:37:16.953298435Z
+  modified_at: 2026-10-16T04:37:16.953298435Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a1309d-4c9d-7ae1-9d4b-809d06333fa5
   author: joe
