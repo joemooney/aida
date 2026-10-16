@@ -83,6 +83,20 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_disk_headroom_light(*json, *fail_on_findings);
             }
+            // STORY-1699: the relay stall guard reads only
+            // `.aida/relay/*/relay.status`; same store-free light path.
+            // trace:STORY-1699 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::relay_stall::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::relay_stall::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
@@ -700,6 +714,13 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // lacks a covering trust record. Opt-in path for the same reason as
     // disk-headroom: it reads a file outside the project.
     // trace:BUG-1700 | ai:claude
+    // STORY-1699: stalled relay runs (opt-in append path, like disk-headroom).
+    // trace:STORY-1699 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::relay_stall::CATEGORY)? {
+        findings.extend(crate::relay_stall::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -1064,6 +1085,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
     let report = match category {
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
+        // trace:STORY-1699 | ai:claude
+        crate::relay_stall::CATEGORY => {
+            DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
         _ => unreachable!("only store-free categories dispatch here"),
     };
     let failing = fail_on_findings && !report.findings.is_empty();
