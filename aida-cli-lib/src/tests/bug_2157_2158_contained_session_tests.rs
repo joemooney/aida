@@ -253,7 +253,7 @@ fn widening_flag_sets() -> Vec<Vec<String>> {
         ("--allowedTools", "Edit(//**)"),
         ("--allowed-tools", "Bash"),
         ("--tools", "Bash,Edit"),
-        ("--plugin-dir", "/tmp/plugin"),
+        ("--plugin-dir", "/opt/plugin"),
         ("--plugin-url", "https://example.invalid/p.zip"),
         ("--mcp-config", "{}"),
         ("--agents", "{}"),
@@ -356,6 +356,6 @@ fn an_uncontained_parent_passes_extra_flags_through_unchanged() {
     let tmp = tempfile::tempdir().unwrap();
     let (root, home) = project(tmp.path(), "[agents]\n");
     let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", None)]);
-    let args = claude_launch(&root, s(&["--add-dir=/tmp", "--allowedTools=Edit"])).unwrap();
-    assert!(args.iter().any(|a| a == "--add-dir=/tmp"), "{args:?}");
+    let args = claude_launch(&root, s(&["--add-dir=/srv/extra", "--allowedTools=Edit"])).unwrap();
+    assert!(args.iter().any(|a| a == "--add-dir=/srv/extra"), "{args:?}");
 }
