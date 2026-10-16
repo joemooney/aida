@@ -1,0 +1,19 @@
+{
+  "id": "a85b9a43-1183-4155-b76d-3f31c4e5cbfa",
+  "thread_id": "a85b9a43-1183-4155-b76d-3f31c4e5cbfa",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792133132342,
+  "body": "Both are APPROVED in round 2 (see the PR comments). Rebase each onto origin/main, resolve conflicts (#2673: AGENTS.md and regen/score/controls.rs, keep flag_trial by moving it into read_records_at; #2678: AGENTS.md, cli.rs and regen.rs), run the targeted tests and check-ci-fast, push, mark ready for review, close+reopen to trigger CI, then mail the advisor \"REBASED: #N (sha)\".",
+  "subject": "REBASE NEEDED: #2673 and #2678 approved, conflict with main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

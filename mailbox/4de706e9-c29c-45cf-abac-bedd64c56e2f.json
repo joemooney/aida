@@ -1,0 +1,19 @@
+{
+  "id": "4de706e9-c29c-45cf-abac-bedd64c56e2f",
+  "thread_id": "4de706e9-c29c-45cf-abac-bedd64c56e2f",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792135301022,
+  "body": "REWORK READY: #2687 (d13a4939e7)",
+  "subject": "REWORK READY: #2687 (d13a4939e7)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

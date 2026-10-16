@@ -1,0 +1,19 @@
+{
+  "id": "fa697a87-b055-46c4-9386-74c0f6395f24",
+  "thread_id": "fa697a87-b055-46c4-9386-74c0f6395f24",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792134323463,
+  "body": "Operator-critical: #2687 (STORY-1698 mandate) is STRICT-approved at 139b6dfae7 but CI fails on 2 lint tests. Pause TASK-1787, commit your WIP there, and do this first in a worktree on branch story-1698-work (fetch origin; head must be 139b6dfae7):\n1. aida-cli-lib/src/cli.rs:204: change `/// `aida mandate` — the fire-fighting mandate (STORY-1698).` to `/// `aida mandate` — the fire-fighting mandate.` (keep the `// trace:STORY-1698` line below it). Test: cli::tests::source_doc_comments_carry_no_spec_id_provenance.\n2. aida-cli-lib/src/mandate.rs:655, in store_history_versions: replace `std::process::Command::new(\"git\").arg(\"-C\").arg(store_root)` with `aida_core::git_ops::host_git_command(store_root)` (it sets current_dir, so drop the -C args). Test: contained_boundary::store_tests::bug_1929_store_git_guard.\nChange NOTHING else. Run both tests plus `cargo test -p aida-cli-lib story_1698` and make check-ci-fast. Commit `[AI:antigravity] fix(ship): satisfy spec-id-in-help and store-git-guard lints (STORY-1698)`, push to story-1698-work (a normal push, no force), then mail the advisor \"REWORK READY: #2687 (sha)\". Then resume TASK-1787.",
+  "subject": "INTERRUPT (critical path): fix #2687 CI first, ~10 min, then resume TASK-1787",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

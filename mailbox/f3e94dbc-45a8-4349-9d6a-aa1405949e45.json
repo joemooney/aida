@@ -1,0 +1,19 @@
+{
+  "id": "f3e94dbc-45a8-4349-9d6a-aa1405949e45",
+  "thread_id": "f3e94dbc-45a8-4349-9d6a-aa1405949e45",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792132601193,
+  "body": "Fire-fighting mandate, ADR-77: do not ask, work this queue in order. Each item: claim, isolated worktree, trace comments, STANDARD tests (targeted cargo test plus make check-ci-compile plus make check-ci-fast), non-draft PR, then mail the advisor \"PR READY: #N SPEC (sha)\" and go straight to the next item.\n1. TASK-1787 (URGENT, the operator needs it by morning): aida role enter <seat> --ttl <dur>, human TTY only, capped by [seat] max_grant_hours (default 24, hard ceiling 168h). Read `aida show TASK-1787 --full --comments`. The floors stay: agents never mint or extend grants, and the TTY check is unchanged. Tier STRICT, since it touches authority. Test the cap, the ceiling, a non-TTY refusal and the default.\n2. PR #2690 (STORY-1699 heartbeat, branch story-1699-heartbeat; its author is gone): one-line CI fix. In docs/cli/03-work-autonomy.md:282, remove \"; STORY-1699\" from the prose (spec-id leak caught by docs/cli/verify-manual.py); add <!-- trace:STORY-1699 | ai:antigravity --> if wanted. Push to that branch. Do NOT make other changes.\n3. BUG-2165: headless CI-fix and quiet-burndown children still inherit the launcher grant and PURPOSE. burndown_run.rs:2018 build_burndown_quiet_command; mirror apply_headless_child_seat_env from #2688 (BUG-2139). If #2688 has not merged yet, base on its branch bug-2139-work and say so in the PR. STRICT.\n4. BUG-2166: a contained parent escapes via `aida queue work --plan-only --permission-mode bypassPermissions` (queue_cmd.rs:11351 contained = !plan_only && ...). A contained parent always wins (BUG-2151 ruling): plan-only must not disable containment, and --permission-mode is refused under containment. STRICT.\n5. BUG-2164: aida pr ship with no PR number on the default branch must refuse before any push or gh call.",
+  "subject": "ASSIGNMENT (advisor, drive mandate): TASK-1787 now, then queue",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
