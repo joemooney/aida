@@ -131,8 +131,15 @@ Rules:
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
   trailer. Never use --no-verify.
 - Template masters only; never edit generated mirrors.
-- Run `make check-ci-fast` before pushing. After ANY merge from main, also
-  run `cargo test --no-run`: the fast gate does not compile tests.
+- Testing tier for YOUR work (the full workspace suite runs only in CI; never
+  run `cargo test --workspace` locally). <Pick one:>
+  FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
+  STANDARD: `make test-touched` (targeted `cargo test --profile agent -p
+  <crate> <filter>` for the touched modules) plus `make check-ci-compile`.
+  STRICT or heft >= 7: STANDARD plus the area's integration test binaries
+  (`cargo test --profile agent -p <crate> --test <name>`).
+  Always `make check-ci-fast` before pushing, and `make check-ci-compile`
+  after ANY merge from main: the fast gate does not compile tests.
 - Open a PR. Do NOT merge.
 - STOP clause: if the fix needs an architecture change, a new authority path,
   or a design choice the spec does not settle, do not implement it. Report the

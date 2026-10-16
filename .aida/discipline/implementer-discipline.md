@@ -250,12 +250,16 @@ full-suite builds", and my own `aida doctor check performance` was killed at a 1
 timeout. The orchestrator seat was being starved by its own fleet.
 
 **How to brief from now on:**
-- Implementers run `make build-fast`, **targeted** tests (`cargo test -p aida-cli-lib --lib <filter>`
-  plus the specific affected groups), and `cargo fmt --all -- --check`.
-- `cargo test --workspace` and `cargo clippy --workspace` run **once, at integration**, which
-  is where they actually gate the merge and where CI repeats them anyway.
+- Brief by the local testing tiers (`.aida/discipline/README.md`). A STANDARD implementer runs
+  `make test-touched` (targeted `cargo test --profile agent` for the touched modules; it exits
+  nonzero rather than report a filter that matched 0 tests) plus `make check-ci-compile`, and
+  `make check-ci-fast` before pushing.
+- `cargo test --workspace` and `cargo clippy --workspace` run **only in CI**, at the PR head,
+  which is where they gate the merge. Nobody runs them locally, integrator included.
 - Accept the tradeoff knowingly: an implementer can break an unrelated test and only find
-  out at batch time. The batch catches it before the PR, so the gate is not weakened.
+  out from CI. Whole-tree source-scanning guard tests are not reached by module filters, so
+  a change that adds a source file or a pattern such a guard counts relies on CI's run (or
+  name the guard with `make test-touched ARGS="--filter <guard>"`). CI is the gate.
 
 **Why NOT `CARGO_BUILD_JOBS=1`** (Joe suggested it 2026-09-27): with 2 slots that is only
 2 of 6 cores compiling, idling 4, and each build gets ~3x slower. Throughput collapses.

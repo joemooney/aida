@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list \
+        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -251,6 +251,14 @@ db-list-status: cli ## List requirements grouped by status
 
 test: ## Run all tests
 	cargo test --workspace
+
+# The STANDARD tier's local tests: targeted `cargo test --profile agent` runs
+# for the Rust files changed vs origin/main (module filters, touched
+# integration test binaries). The full workspace suite runs only in CI.
+# `make test-touched ARGS=--print` prints the commands without running them;
+# `ARGS="--filter foo"` adds a libtest filter. trace:TASK-1780 | ai:claude
+test-touched: ## Targeted tests for the Rust files changed vs origin/main (agent profile)
+	@python3 scripts/test-touched.py $(ARGS)
 
 test-unit: ## Run unit tests only
 	cargo test --workspace --lib
