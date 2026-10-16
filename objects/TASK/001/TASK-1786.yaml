@@ -8,12 +8,12 @@ description: |-
   2. TOCTOU between symlink_metadata and read_to_string: open the candidate with O_NOFOLLOW|O_NONBLOCK and check the file type on the open handle.
   3. The fifo_symlink_verdict test hangs on regression; bound it with a timeout or watchdog so a regression fails instead of stalling CI.
   4. Optional: add a ctime check alongside mtime freshness (condition (a) said mtime/ctime).
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T23:04:32.053386588Z
-modified_at: 2026-10-16T05:07:05.716880985Z
+modified_at: 2026-10-16T07:31:11.376869184Z
 req_type: Task
 history:
 - id: 01a141cf-7b0b-7992-bf12-f6ffe9cfc327
@@ -44,6 +44,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1439f-3b90-76a3-b8b6-a8a517afb5aa
+  author: joe
+  timestamp: 2026-10-16T07:31:11.376864623Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: c419f6a5efdbdf3c450a099b26f79428c01c8d3b
   branch: main
