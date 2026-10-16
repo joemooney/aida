@@ -1,0 +1,19 @@
+{
+  "id": "2c2be5cd-4cc2-4dd9-a3ba-663c93e83382",
+  "thread_id": "2c2be5cd-4cc2-4dd9-a3ba-663c93e83382",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792179106510,
+  "body": "STRICT r1 REQUEST CHANGES; details in the PR comment. (1) The ship guard must accept only an origin/HEAD symref as local evidence, not a fallback ref guess. (2) A gh timeout or error with no evidence must REFUSE, not fall back to \"main\" (use an Option-returning probe for the guard). Add a test for each, and merge main up in the same push. Mail REWORK READY: #2706 <sha>. Queue order: #2705 merge-up is done; next #2704, #2703, #2706, #2700.",
+  "subject": "REWORK: #2706 TASK-1795 (2 blocking fail-open)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
