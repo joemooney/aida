@@ -211,6 +211,12 @@ fn handle_role_enter(
             delegate_seats.to_vec(),
             requested_ttl,
         )?;
+        let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
+        eprintln!(
+            "grant expires {} ({})",
+            grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
+            dur_str
+        );
         crate::seat_authority::revoke_current()?;
         emit_persona_enter_eval(project_root, persona, &grant.id);
         return Ok(());
@@ -234,6 +240,14 @@ fn handle_role_enter(
                                 delegate_seats.to_vec(),
                                 requested_ttl,
                             )?;
+                            let dur_str = crate::seat_authority::format_ttl(
+                                grant.expires_at - grant.issued_at,
+                            );
+                            eprintln!(
+                                "grant expires {} ({})",
+                                grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
+                                dur_str
+                            );
                             crate::seat_authority::revoke_current()?;
                             emit_persona_enter_eval(project_root, persona, &grant.id);
                             return Ok(());
@@ -319,6 +333,12 @@ Include it in the TTY-issued delegation set?";
         final_delegate_seats,
         requested_ttl,
     )?;
+    let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
+    eprintln!(
+        "grant expires {} ({})",
+        grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
+        dur_str
+    );
     crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();

@@ -567,6 +567,52 @@ pub(crate) fn session_prune(
 /// resolution chain, minus the single-active prompt — `show` should be
 /// non-interactive). Errors with the active-lease listing if nothing
 /// resolves. trace:STORY-68 | ai:claude
+/// Resolve the seat grant for a session lease.
+/// Inspects creator/active PID environ, or falls back to viewer's grant if viewing current session.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn resolve_session_grant(
+    lease: &SessionLease,
+) -> Option<crate::seat_authority::SeatGrant> {
+    let mut gid = None;
+    #[cfg(target_os = "linux")]
+    if let Some((pid, start_time)) = lease
+        .creator_pid
+        .map(|p| (p, lease.creator_pid_start_time.as_deref()))
+        .or_else(|| {
+            lease
+                .active_pid
+                .map(|p| (p, lease.active_pid_start_time.as_deref()))
+        })
+    {
+        if crate::process_probe::process_identity_is_alive(pid, start_time) {
+            if let Some(vars) = crate::ps_integrate::read_pid_environ_vars(pid) {
+                gid = vars.get(crate::seat_authority::GRANT_ENV).cloned();
+            }
+        }
+    }
+    if gid.is_none() {
+        let is_current_session = std::env::var("AIDA_SESSION_ID")
+            .map(|cur| cur == lease.id)
+            .unwrap_or(false)
+            || std::env::current_dir()
+                .ok()
+                .and_then(|cwd| cwd.canonicalize().ok())
+                .map(|canon| lease_covers_cwd(lease, &canon))
+                .unwrap_or(false);
+        if is_current_session {
+            gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+        }
+    }
+    gid.and_then(|id| {
+        let id = id.trim();
+        if id.is_empty() {
+            None
+        } else {
+            crate::seat_authority::read_grant(id).ok()
+        }
+    })
+}
+
 pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -641,26 +687,7 @@ pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
         );
     }
     // trace:TASK-1787 | ai:antigravity
-    let resolved_grant = {
-        let mut gid = None;
-        #[cfg(target_os = "linux")]
-        if let Some(pid) = lease.creator_pid.or(lease.active_pid) {
-            if let Some(vars) = crate::ps_integrate::read_pid_environ_vars(pid) {
-                gid = vars.get(crate::seat_authority::GRANT_ENV).cloned();
-            }
-        }
-        if gid.is_none() {
-            gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
-        }
-        gid.and_then(|id| {
-            let id = id.trim();
-            if id.is_empty() {
-                None
-            } else {
-                crate::seat_authority::read_grant(id).ok()
-            }
-        })
-    };
+    let resolved_grant = resolve_session_grant(&lease);
     if let Some(grant) = &resolved_grant {
         let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
         if ttl > chrono::Duration::zero() {

@@ -28,33 +28,88 @@ fn test_resolve_max_grant_hours_defaults_to_24() {
 }
 
 #[test]
-fn test_resolve_max_grant_hours_from_project_config() {
+fn test_resolve_max_grant_hours_project_lowers_default() {
     let dir = tempdir().unwrap();
     let aida_dir = dir.path().join(".aida");
     fs::create_dir_all(&aida_dir).unwrap();
     fs::write(
         aida_dir.join("config.toml"),
-        "[seat]\nmax_grant_hours = 48\n",
+        "[seat]\nmax_grant_hours = 12\n",
     )
     .unwrap();
 
     let cap = resolve_max_grant_hours(dir.path());
-    assert_eq!(cap, 48);
+    assert_eq!(cap, 12);
 }
 
 #[test]
-fn test_resolve_max_grant_hours_supports_seats_plural_table() {
+fn test_resolve_max_grant_hours_precedence() {
     let dir = tempdir().unwrap();
-    let aida_dir = dir.path().join(".aida");
-    fs::create_dir_all(&aida_dir).unwrap();
+    let fake_home = tempdir().unwrap();
+    let global_aida = fake_home.path().join(".aida");
+    fs::create_dir_all(&global_aida).unwrap();
+    let project_aida = dir.path().join(".aida");
+    fs::create_dir_all(&project_aida).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(fake_home.path().to_str().unwrap()),
+    )]);
+
+    // 1. Both set: global=72, project=48 -> min is 48
     fs::write(
-        aida_dir.join("config.toml"),
-        "[seats]\nmax_grant_hours = 72\n",
+        global_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 72\n",
     )
     .unwrap();
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 48\n",
+    )
+    .unwrap();
+    assert_eq!(resolve_max_grant_hours(dir.path()), 48);
 
-    let cap = resolve_max_grant_hours(dir.path());
-    assert_eq!(cap, 72);
+    // 2. Both set: global=48, project=72 -> min is 48 (project cannot raise global cap)
+    fs::write(
+        global_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 48\n",
+    )
+    .unwrap();
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 72\n",
+    )
+    .unwrap();
+    assert_eq!(resolve_max_grant_hours(dir.path()), 48);
+
+    // 3. Project alone: project=72, global=None -> min(24, 72) = 24 (project alone cannot raise 24h ceiling)
+    fs::remove_file(global_aida.join("config.toml")).unwrap();
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 72\n",
+    )
+    .unwrap();
+    assert_eq!(resolve_max_grant_hours(dir.path()), 24);
+
+    // 4. Project alone: project=12, global=None -> min(24, 12) = 12 (project alone can lower 24h ceiling)
+    fs::write(
+        project_aida.join("config.toml"),
+        "[seat]\nmax_grant_hours = 12\n",
+    )
+    .unwrap();
+    assert_eq!(resolve_max_grant_hours(dir.path()), 12);
+}
+
+#[test]
+fn test_parse_ttl_bare_number_without_unit_refused() {
+    let dir = tempdir().unwrap();
+    let err = parse_ttl(dir.path(), Some("72")).unwrap_err().to_string();
+    assert!(
+        err.contains("--ttl needs a unit, e.g. 72h or 90m"),
+        "error message `{err}` must mention unit requirement"
+    );
+    let err = parse_ttl(dir.path(), Some("24")).unwrap_err().to_string();
+    assert!(err.contains("--ttl needs a unit, e.g. 72h or 90m"));
 }
 
 #[test]
@@ -82,13 +137,18 @@ fn test_parse_ttl_within_default_cap() {
 #[test]
 fn test_parse_ttl_within_custom_cap() {
     let dir = tempdir().unwrap();
-    let aida_dir = dir.path().join(".aida");
-    fs::create_dir_all(&aida_dir).unwrap();
+    let fake_home = tempdir().unwrap();
+    let global_aida = fake_home.path().join(".aida");
+    fs::create_dir_all(&global_aida).unwrap();
     fs::write(
-        aida_dir.join("config.toml"),
+        global_aida.join("config.toml"),
         "[seat]\nmax_grant_hours = 72\n",
     )
     .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(fake_home.path().to_str().unwrap()),
+    )]);
 
     let dur = parse_ttl(dir.path(), Some("72h")).unwrap().unwrap();
     assert_eq!(dur, Duration::hours(72));
@@ -107,14 +167,19 @@ fn test_parse_ttl_above_cap_refused_with_setting_name() {
         "error message `{err}` must name `[seat] max_grant_hours`"
     );
 
-    // Project cap 48h; requesting 50h should fail
-    let aida_dir = dir.path().join(".aida");
-    fs::create_dir_all(&aida_dir).unwrap();
+    // Global cap 48h; requesting 50h should fail
+    let fake_home = tempdir().unwrap();
+    let global_aida = fake_home.path().join(".aida");
+    fs::create_dir_all(&global_aida).unwrap();
     fs::write(
-        aida_dir.join("config.toml"),
+        global_aida.join("config.toml"),
         "[seat]\nmax_grant_hours = 48\n",
     )
     .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(fake_home.path().to_str().unwrap()),
+    )]);
     let err = parse_ttl(dir.path(), Some("50h")).unwrap_err().to_string();
     assert!(
         err.contains("exceeds the configured cap of 48h ([seat] max_grant_hours)"),
@@ -125,30 +190,35 @@ fn test_parse_ttl_above_cap_refused_with_setting_name() {
 #[test]
 fn test_parse_ttl_above_hard_ceiling_refused_even_with_higher_config() {
     let dir = tempdir().unwrap();
-    let aida_dir = dir.path().join(".aida");
-    fs::create_dir_all(&aida_dir).unwrap();
+    let fake_home = tempdir().unwrap();
+    let global_aida = fake_home.path().join(".aida");
+    fs::create_dir_all(&global_aida).unwrap();
     // Config attempts to set max_grant_hours = 200 (above hard ceiling 168h)
     fs::write(
-        aida_dir.join("config.toml"),
+        global_aida.join("config.toml"),
         "[seat]\nmax_grant_hours = 200\n",
     )
     .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(fake_home.path().to_str().unwrap()),
+    )]);
 
     // 168h is allowed
     let dur = parse_ttl(dir.path(), Some("168h")).unwrap().unwrap();
     assert_eq!(dur, Duration::hours(168));
 
-    // 169h is refused naming the hard ceiling and [seat] max_grant_hours
+    // 169h is refused naming the 168h maximum (not configurable)
     let err = parse_ttl(dir.path(), Some("169h")).unwrap_err().to_string();
     assert!(
-        err.contains("exceeds the hard ceiling of 168h ([seat] max_grant_hours)"),
-        "error message `{err}` must mention hard ceiling and `[seat] max_grant_hours`"
+        err.contains("exceeds the 168h maximum (not configurable)"),
+        "error message `{err}` must mention 168h maximum (not configurable)"
     );
 
     let err = parse_ttl(dir.path(), Some("180h")).unwrap_err().to_string();
     assert!(
-        err.contains("exceeds the hard ceiling of 168h ([seat] max_grant_hours)"),
-        "error message `{err}` must mention hard ceiling and `[seat] max_grant_hours`"
+        err.contains("exceeds the 168h maximum (not configurable)"),
+        "error message `{err}` must mention 168h maximum (not configurable)"
     );
 }
 
@@ -275,6 +345,73 @@ fn test_task_1736_relay_refusal_with_long_grant() {
 }
 
 #[test]
+fn test_parse_ttl_boundary_values() {
+    let dir = tempdir().unwrap();
+    // 1h valid
+    let dur = parse_ttl(dir.path(), Some("1h")).unwrap().unwrap();
+    assert_eq!(dur, Duration::hours(1));
+
+    // 24h1m against default 24h cap -> refused
+    let err = parse_ttl(dir.path(), Some("24h1m"))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("exceeds the configured cap of 24h ([seat] max_grant_hours)"));
+
+    // 168h1s -> refused naming 168h maximum (not configurable)
+    let err = parse_ttl(dir.path(), Some("168h1s"))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("exceeds the 168h maximum (not configurable)"));
+
+    // "0s" -> refused as not positive
+    let err = parse_ttl(dir.path(), Some("0s")).unwrap_err().to_string();
+    assert!(err.contains("grant TTL must be positive"));
+
+    // Oversized config clamped to exactly 168h
+    assert_eq!(
+        parse_max_grant_hours_from_str("[seat]\nmax_grant_hours = 500\n"),
+        Some(168)
+    );
+}
+
+#[test]
+fn test_issue_direct_writes_requested_ttl() {
+    let dir = tempdir().unwrap();
+    let aida_dir = dir.path().join(".aida");
+    fs::create_dir_all(&aida_dir).unwrap();
+    fs::write(
+        aida_dir.join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let store = dir.path().join(".aida-store");
+    fs::create_dir_all(store.join("objects")).unwrap();
+    let registry = store.join("registry");
+    fs::create_dir_all(&registry).unwrap();
+    fs::write(
+        registry.join("team.toml"),
+        "[members]\nhuman-operator = [\"advisor\"]\n",
+    )
+    .unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_USER", Some("human-operator")),
+    ]);
+    let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: dir.path().to_path_buf(),
+        stdin_is_terminal: true,
+        stdout_is_terminal: true,
+    }));
+    let grant = issue_direct(dir.path(), "advisor", Vec::new(), Some(Duration::hours(12))).unwrap();
+    crate::test_ambient::replace(prev);
+    let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
+    assert_eq!(ttl, Duration::hours(12));
+}
+
+#[test]
 fn test_session_show_displays_grant_ttl() {
     let dir = tempdir().unwrap();
     let aida_dir = dir.path().join(".aida");
@@ -325,15 +462,21 @@ fn test_session_show_displays_grant_ttl() {
     )
     .unwrap();
 
-    let _env = crate::test_env::EnvVarsGuard::apply(&[(
-        crate::seat_authority::GRANT_ENV,
-        Some(grant_id.as_str()),
-    )]);
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+        ("AIDA_SESSION_ID", Some("123456789012")),
+    ]);
     let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: dir.path().to_path_buf(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
     }));
+
+    let resolved = crate::session_misc::resolve_session_grant(&lease);
+    assert!(resolved.is_some(), "grant must resolve for current session");
+    let grant = resolved.unwrap();
+    let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
+    assert_eq!(crate::seat_authority::format_ttl(ttl), "72h");
 
     let res = crate::session_misc::session_show(Some("123456789012"), false);
     crate::test_ambient::replace(prev);
