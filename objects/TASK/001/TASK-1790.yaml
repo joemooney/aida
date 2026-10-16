@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T21:41:15.513958922Z
+modified_at: 2026-10-16T21:44:00.525990595Z
 req_type: Task
 relationships:
 - rel_type:
@@ -84,6 +84,11 @@ comments:
   created_at: 2026-10-16T21:41:15.513958922Z
   modified_at: 2026-10-16T21:41:15.513958922Z
   session_id: 01a1467c42c8
+- id: 01a146ac-030e-7651-af13-2272f4f3f51d
+  author: ai:codex:joe
+  content: 'Published completing TASK-1790 item3 as PR #2709: https://github.com/joemooney/aida/pull/2709 at exact pushed/read-back OPEN head 9386e30ebdac4434ff4a14d6dbbcc4f26fe985a7. Body/title equality verified; completing trailer is TASK-1790. Final frozen-source workspace compile 398.1s passed; final fresh workspace libtest 15 collector + 47 mandate passed; final fast 30 passed. Actual root-locked/core hardened collector matched all 50 pins. Full 25/50 vs scoped 24/50 ordinary newly refused; baseline 22, fallback 46 cases; full method/pins/limits in docs/testing/task-1790-trace-exclusions.md and JSON. Three author contexts preceded the late host-Git correction; final actual-core regressions/benchmark cover it. STRICT independent review requested; no own review/ship/hold clearance. Status Done, not Completed. Origin store sync succeeded; GitLab store mirror reported divergence and was left for normal reconciliation.'
+  created_at: 2026-10-16T21:44:00.525990595Z
+  modified_at: 2026-10-16T21:44:00.525990595Z
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
