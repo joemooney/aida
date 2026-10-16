@@ -22,8 +22,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:01:11.827678807Z
-modified_at: 2026-10-16T04:01:29.781618989Z
+modified_at: 2026-10-16T04:01:32.503852515Z
 req_type: Story
+comments:
+- id: 01a142df-4b57-7173-9d8e-1208ccb76303
+  author: joe
+  content: 'Operator request 2026-10-15 21:00: ''We need a way to ask what is in progress and have some way of establishing a heartbeat ... this output needs to be digested hourly programmatically or by an agent.'''
+  created_at: 2026-10-16T04:01:32.503852515Z
+  modified_at: 2026-10-16T04:01:32.503852515Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a142df-40b5-70e3-b75a-6d11021098e1
   author: joe
