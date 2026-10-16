@@ -478,6 +478,11 @@ print(pid,flush=True)
     }
     #[test]
     fn real_scorer_mounts_pin_old_trial_and_prefix_after_quarantine() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -487,6 +492,8 @@ print(pid,flush=True)
         let config = RegenConfig {
             reference_repeats: 3,
             crash_failure_share_percent: 50,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             install_command: None,
