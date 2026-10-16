@@ -3,12 +3,12 @@ spec_id: TASK-1791
 agreed_id: TASK-1791
 title: 'regen score: bound each generated-tool run (--help completeness probe, installer, oracle) with a timeout recorded as an incomplete/failed reason'
 description: 'From the #2679 STORY-1677 r1 review (non-blocking). completeness::check runs ''<tool> --help'' through ScoreEnv::run -> cmd.output() with no timeout; a generated tool that ignores --help and starts a server/loop hangs ''aida regen score'' and writes no record. Installer and oracle runs are equally unbounded. Add a bounded wait (configurable, default e.g. 30s) that kills the process group and records ''--help timed out'' as an incomplete reason (and a timeout failure for installer/oracle). Test with a fixture tool that sleeps.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:58:45.918836097Z
-modified_at: 2026-10-16T18:15:24.908546366Z
+modified_at: 2026-10-16T18:40:11.818773206Z
 req_type: Task
 relationships:
 - rel_type:
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14603-ba2a-71a2-a2e7-5be65405f387
+  author: aida-orchestrator
+  timestamp: 2026-10-16T18:40:11.818800287Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -48,3 +55,11 @@ filed_at:
   aida_build_sha: a38e37f0f8
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Timeout runner is sound (process-group kill, WNOWAIT pipe deadline, typed CommandTimedOut, privacy-safe reasons), but the commit subject/PR title trailer (TASK-1791) would auto-complete a spec the PR itself says must stay open; local tests and CI were still pending at verdict time
+  recovery_hint: address the review findings, move TASK-1791 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-16T18:40:11.818773206Z
