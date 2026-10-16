@@ -692,8 +692,22 @@ pub(crate) fn apply_agent_default_flags(
     flag_options: AgentDefaultFlagOptions,
     explicit_permission: bool,
 ) -> Result<()> {
+    // BUG-2158: under a contained parent every claude passthrough flag (extra
+    // or agents.toml default) must be on the allowlist; checked before the
+    // BUG-1699 posture split, so a widening default is refused, not dropped.
+    // trace:BUG-2158 | ai:claude
+    let contained_claude_parent = config.agent_type == "claude" && session::aida_contained_env()?;
+    if contained_claude_parent {
+        refuse_unallowlisted_contained_passthrough(&flag_options.extra_flags, "--extra-flag")?;
+    }
     if flag_options.use_config_defaults {
         let per_tool = load_agent_default_flags(project_root, config.agent_type)?;
+        if contained_claude_parent {
+            refuse_unallowlisted_contained_passthrough(
+                &per_tool,
+                "[agents.claude] default_flags in agents.toml (pass --no-default-flags to skip them)",
+            )?;
+        }
         // STORY-495: the uniform `[agents] bypass` knob injects this tool's
         // bypass flag UNLESS (a) the launcher already set an explicit posture
         // (`--permission-mode` / `--bypass-sandbox` / forced `--bg`), or

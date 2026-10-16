@@ -54,7 +54,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
-            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode =
+                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, true)?;
             let mut argv = mode
                 .mode
                 .iter()
@@ -106,7 +107,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
-            let mut mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            let mut mode =
+                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, *launch)?;
             if *launch {
                 let mut argv = mode
                     .mode
@@ -1572,6 +1574,74 @@ pub(crate) fn split_posture_flags(
     (kept, dropped)
 }
 
+/// BUG-2158: the ONLY passthrough flags (`--extra-flag`, `[agents.claude]
+/// default_flags`) a claude child of a contained parent may carry. `true` =
+/// the flag takes a value (`--flag value` or `--flag=value`).
+///
+/// An allowlist, not a denylist: the contained write boundary is itself a set
+/// of Edit/Write allow rules in `--settings`, so any flag that widens tools,
+/// directories, plugins, MCP servers or agents (`--add-dir`, `--allowedTools`,
+/// `--tools`, `--plugin-dir`, `--plugin-url`, `--mcp-config`, `--agents`, …)
+/// widens the boundary — and a denylist misses the next one Claude ships.
+/// Everything here only selects the model or how much the model thinks or
+/// logs; none of it grants a capability. Keep it that way: adding a flag
+/// needs a containment argument, not a convenience one.
+// trace:BUG-2158 | ai:claude
+pub(crate) const CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST: &[(&str, bool)] =
+    &[("--model", true), ("--effort", true), ("--verbose", false)];
+
+/// BUG-2158: refuse any passthrough flag a contained parent's claude child
+/// would carry that is not on [`CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST`].
+/// `source` names where the flags came from, for the message. Short flags,
+/// stray positionals, and a value that itself looks like a flag are refused
+/// too — the parse never guesses.
+// trace:BUG-2158 | ai:claude
+pub(crate) fn refuse_unallowlisted_contained_passthrough(
+    flags: &[String],
+    source: &str,
+) -> Result<()> {
+    let allowed = || {
+        CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let refuse = |flag: &str| -> Result<()> {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so a claude child may only \
+             carry the passthrough flags {} — refusing to launch it with `{flag}` (from \
+             {source}), which could widen the containment boundary. Drop it, or launch from an \
+             uncontained shell.",
+            allowed()
+        )
+    };
+    let mut idx = 0;
+    while idx < flags.len() {
+        let arg = flags[idx].as_str();
+        let name = arg.split('=').next().unwrap_or(arg);
+        let Some((_, takes_value)) = CONTAINED_CLAUDE_PASSTHROUGH_ALLOWLIST
+            .iter()
+            .find(|(allowed, _)| *allowed == name && arg.starts_with("--"))
+        else {
+            return refuse(arg);
+        };
+        let inline_value = arg.len() > name.len();
+        if !*takes_value && inline_value {
+            return refuse(arg);
+        }
+        if *takes_value && !inline_value {
+            match flags.get(idx + 1) {
+                Some(value) if !value.starts_with('-') => idx += 1,
+                Some(value) => return refuse(value),
+                None => return refuse(arg),
+            }
+        }
+        idx += 1;
+    }
+    Ok(())
+}
+
 // trace:BUG-1178 | ai:codex
 pub(crate) fn tool_contained_flags(agent_type: &str) -> Vec<String> {
     match agent_type {
@@ -2967,12 +3037,49 @@ pub(crate) fn agent_resume_args(
 #[path = "tests/spike_34_bg_dispatch_tests.rs"]
 mod spike_34_bg_dispatch_tests;
 
+/// `launches`: this command will actually start claude. Only then does a
+/// contained parent (`AIDA_CONTAINED`, parsed strictly) govern the posture.
 pub(crate) fn resolve_interactive_launch_mode(
     flag: Option<&str>,
     sandbox: bool,
+    launches: bool,
 ) -> Result<ResolvedClaudeLaunch> {
+    // trace:BUG-2157 | ai:claude
+    let parent_contained = launches && session::aida_contained_env()?;
     let root = find_main_worktree_root().ok();
-    resolve_interactive_launch_mode_for_root(flag, sandbox, root.as_deref())
+    resolve_interactive_launch_mode_under_parent(flag, sandbox, root.as_deref(), parent_contained)
+}
+
+/// BUG-2157 (ruling on BUG-2151: a contained parent's env ALWAYS wins and no
+/// flag overrides it). `aida session new` / `session start --launch` under a
+/// contained parent launch a contained claude — whatever the `[agents]`
+/// knobs say — and refuse `--permission-mode` instead of honouring it.
+/// The write roots are the session's worktree: both paths launch claude in
+/// it (`session start --launch` chdirs there first), and the contained flags
+/// resolve their roots from that cwd.
+// trace:BUG-2157 | ai:claude
+pub(crate) fn resolve_interactive_launch_mode_under_parent(
+    flag: Option<&str>,
+    sandbox: bool,
+    root: Option<&std::path::Path>,
+    parent_contained: bool,
+) -> Result<ResolvedClaudeLaunch> {
+    if !parent_contained {
+        return resolve_interactive_launch_mode_for_root(flag, sandbox, root);
+    }
+    if let Some(m) = flag.filter(|s| !s.is_empty()) {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
+             is contained too — refusing `--permission-mode {m}`, which would run it with a \
+             different posture. Drop --permission-mode, or launch from an uncontained shell."
+        );
+    }
+    // trace:BUG-2131 | ai:claude
+    aida_core::git_ops::ensure_git_supports_contained()?;
+    Ok(ResolvedClaudeLaunch {
+        mode: None,
+        contained: true,
+    })
 }
 
 // trace:BUG-1178 | ai:codex

@@ -631,11 +631,76 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 }
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
+    // BUG-2157: a contained parent (strict parse, so a typo refuses) resumes
+    // contained. Read before the picker so a refusal precedes any interaction.
+    // trace:BUG-2157 | ai:claude
+    let parent_contained = aida_contained_env()?;
     let target = match id {
         Some(prefix) => resolve_resume_target(&prefix)?,
         None => pick_interactive(limit)?,
     };
+    if parent_contained {
+        let cwd = std::env::current_dir().context("failed to read the current directory")?;
+        let mut cmd = build_contained_resume_command(&target, &cwd)?;
+        return exec_or_spawn_claude(&mut cmd);
+    }
     exec_resume_command(&target, None, false)
+}
+
+/// BUG-2157 (ruling on BUG-2151: a contained parent's env ALWAYS wins). The
+/// `aida session resume` command for a contained parent: only a claude
+/// session can resume contained — codex/agy are refused, never resumed
+/// uncontained — and it resumes with the contained flags and `AIDA_CONTAINED=1`
+/// kept on the child. It runs in the session's own checkout — the directory
+/// whose Claude project store holds the transcript, so `--resume` finds it —
+/// and that checkout's git root is the write boundary. `launcher_cwd` is the
+/// fallback only when the target has no checkout recorded or it is gone. No
+/// git root means no write roots (fail closed).
+// trace:BUG-2157 | ai:claude
+pub(crate) fn build_contained_resume_command(
+    target: &ResumeTarget,
+    launcher_cwd: &Path,
+) -> Result<std::process::Command> {
+    if target.agent != "claude" {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), but `{}` sessions cannot \
+             run AIDA-contained — refusing to resume `{}` uncontained. Resume it from an \
+             uncontained shell.",
+            target.agent,
+            target.id
+        );
+    }
+    // trace:BUG-2131 | ai:claude
+    aida_core::git_ops::ensure_git_supports_contained()?;
+    let worktree = target
+        .worktree
+        .clone()
+        .filter(|p| p.is_dir())
+        .unwrap_or_else(|| launcher_cwd.to_path_buf());
+    let mut cmd = std::process::Command::new("claude");
+    cmd.args(["--resume", &target.id]);
+    cmd.args(claude_contained_flags_for_roots(
+        &contained_session_write_roots_from(&worktree),
+    ));
+    cmd.env("AIDA_CONTAINED", "1");
+    cmd.current_dir(&worktree);
+    Ok(cmd)
+}
+
+/// Replace this process with `cmd` (spawn + wait where exec is unavailable).
+// trace:BUG-2157 | ai:claude
+fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec claude: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd.status().context("failed to spawn claude")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
 }
 
 /// `aida session new` — capture role + title up-front, append a record
@@ -657,6 +722,10 @@ pub fn new_session(
     contained: bool,
     set_terminal_title: bool,
 ) -> Result<()> {
+    // BUG-2157: fail closed — a contained parent never launches an
+    // uncontained or re-postured claude, whichever caller got here.
+    // trace:BUG-2157 | ai:claude
+    refuse_uncontained_session_under_contained_parent(permission_mode, contained)?;
     let role = role_override
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
         .filter(|s| !s.is_empty())
@@ -718,6 +787,24 @@ pub fn new_session(
         None,
         title_restore,
     )
+}
+
+/// BUG-2157: the `session new` launch guard. Under a contained parent
+/// (`AIDA_CONTAINED`, strict parse) the launch must be contained and carry no
+/// `--permission-mode`.
+// trace:BUG-2157 | ai:claude
+pub(crate) fn refuse_uncontained_session_under_contained_parent(
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    if aida_contained_env()? && (!contained || permission_mode.is_some()) {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
+             must be contained too — refusing an uncontained launch. Drop --permission-mode, or \
+             launch from an uncontained shell."
+        );
+    }
+    Ok(())
 }
 
 /// TASK-31: derive a claude `--name` value from session metadata. Keeps the
@@ -4871,9 +4958,13 @@ fn humanize_age(secs: u64) -> String {
 }
 
 #[derive(Debug, Clone)]
-struct ResumeTarget {
-    agent: String,
-    id: String,
+pub(crate) struct ResumeTarget {
+    pub(crate) agent: String,
+    pub(crate) id: String,
+    /// The checkout whose Claude project store the transcript was found in:
+    /// where a contained resume runs and what bounds its writes.
+    // trace:BUG-2157 | ai:claude
+    pub(crate) worktree: Option<PathBuf>,
 }
 
 fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
@@ -4916,6 +5007,9 @@ fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
     Ok(ResumeTarget {
         agent: chosen.agent.clone(),
         id: chosen.id.clone(),
+        // `collect_sessions` scans this cwd's project store.
+        // trace:BUG-2157 | ai:claude
+        worktree: std::env::current_dir().ok(),
     })
 }
 
@@ -4932,6 +5026,9 @@ fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
         1 => Ok(ResumeTarget {
             agent: matches[0].agent.clone(),
             id: matches[0].id.clone(),
+            // `collect_global_project_sessions` scans the main worktree's
+            // project store. trace:BUG-2157 | ai:claude
+            worktree: crate::find_main_worktree_root().ok(),
         }),
         _ => anyhow::bail!(
             "{} sessions match `{}` — use a longer prefix",
@@ -5941,6 +6038,7 @@ mod tests {
         let target = ResumeTarget {
             agent: "codex".to_string(),
             id: "01a067ec-facc-71a0-9a69-1476568e1f1e".to_string(),
+            worktree: None,
         };
 
         let (program, args) = resume_command_for(&target);
