@@ -3,12 +3,12 @@ spec_id: BUG-2149
 agreed_id: BUG-2149
 title: Standalone Bash-launched reviewer never receives the verdict-file path, so its approval lands only in the review worktree and pr ship succeeds only from there
 description: 'From the STORY-1654 combined e2e (PR #2661 + #2485): the positive run''s reviewer approved, but the verdict file the orchestrator templates read (.aida/review-verdicts/PR-N.json in the orchestrator''s checkout) was never written; the reviewer process was not given the verdict path, so the approval landed in the review worktree and ''aida pr ship'' only succeeded from there. Fix: pass the canonical verdict path (or the project root) to the standalone reviewer and have review record write the canonical location; e2e: ship from the orchestrator checkout succeeds.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:14:04.425135776Z
-modified_at: 2026-10-15T17:56:31.733697067Z
+modified_at: 2026-10-16T01:43:12.827792451Z
 req_type: Bug
 tags:
 - relay
@@ -35,6 +35,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14260-a6b7-78c1-8fd6-5973f758a822
+  author: aida-auto-bump
+  timestamp: 2026-10-16T01:43:12.823560567Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a14260-a6bb-76f0-82cd-18de03324260
+  timestamp: 2026-10-16T01:43:12.827790160Z
+  agent: aida
+  commit_sha: 463b81d02796148deba3c59c47daefce584c35f4
+  summary: Completed via merge 463b81d0
 filed_at:
   code_sha: 92763a125a7b2ac062064c6324063723a02a80ad
   branch: main
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: defb55f88b
   vendor: claude
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T01:43:12.823555549Z
+  completion_sha: 463b81d02796148deba3c59c47daefce584c35f4
