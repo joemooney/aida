@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:58:45.918836097Z
-modified_at: 2026-10-16T18:02:36.037052042Z
+modified_at: 2026-10-16T18:12:56.014737310Z
 req_type: Task
 comments:
 - id: 01a145e1-4e85-7892-84d7-7c6a3aca63db
@@ -16,6 +16,11 @@ comments:
   content: 'Implementation in codex/task-1791 is a non-completing slice: scoring-local bounded process/pipe collection, configurable AIDA_REGEN_COMMAND_TIMEOUT_SECS (30 seconds default, 1..86400), installer/oracle timeout flags and retained mapped-input privacy-safe reasons. Author self-check found and fixed early-child-exit pipe deadline bypass and sanitizer reason loss; final second round reports no actionable findings. Cargo regressions and make check-ci-fast are running. Remaining explicit --help timed out completeness reason depends on unmerged draft/conflicting PR #2679; advisor notified, no edits to its active repair branch.'
   created_at: 2026-10-16T18:02:36.037052042Z
   modified_at: 2026-10-16T18:02:36.037052042Z
+- id: 01a145ea-c44e-7f10-a9d2-d9159f52e28a
+  author: joe
+  content: Commit 08f6a4af7a references this requirement
+  created_at: 2026-10-16T18:12:56.014737310Z
+  modified_at: 2026-10-16T18:12:56.014737310Z
 history:
 - id: 01a145da-f676-71a3-ae22-ca2e7db01fda
   author: aida-session-start
