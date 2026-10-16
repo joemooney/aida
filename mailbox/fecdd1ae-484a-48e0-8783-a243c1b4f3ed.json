@@ -1,0 +1,19 @@
+{
+  "id": "fecdd1ae-484a-48e0-8783-a243c1b4f3ed",
+  "thread_id": "fecdd1ae-484a-48e0-8783-a243c1b4f3ed",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792136429448,
+  "body": "PR READY: #2691 TASK-1787 (aabe47e08f)",
+  "subject": "PR READY: #2691 TASK-1787 (aabe47e08f)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
