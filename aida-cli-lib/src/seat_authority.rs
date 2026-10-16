@@ -1637,6 +1637,20 @@ mod tests {
             .contains("expired at"));
     }
 
+    /// A session needs at least the requested window, including exact equality.
+    // trace:TASK-1372 | ai:codex
+    #[test]
+    fn expiry_launch_refusal_allows_exact_window_boundary() {
+        let within = Duration::hours(1);
+        let (expiry, now) = expiry_in("advisor", within);
+        assert_eq!(launch_refusal(&expiry, now, within), None);
+        assert_eq!(
+            launch_refusal(&expiry, now - Duration::nanoseconds(1), within),
+            None,
+        );
+        assert!(launch_refusal(&expiry, now + Duration::nanoseconds(1), within).is_some());
+    }
+
     /// A set handle naming no usable record is `Unresolved`, never silently
     /// `NoGrant`; the launch refusal names the renew command.
     // trace:TASK-1736 | ai:claude
