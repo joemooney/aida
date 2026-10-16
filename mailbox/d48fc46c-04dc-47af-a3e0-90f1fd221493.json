@@ -1,0 +1,19 @@
+{
+  "id": "d48fc46c-04dc-47af-a3e0-90f1fd221493",
+  "thread_id": "d48fc46c-04dc-47af-a3e0-90f1fd221493",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792127278987,
+  "body": "PR #2690 at 6d009f9a29 (branch story-1699-heartbeat). It adds: the fleet-heartbeat advisor seat job (hourly); relay-stall-guard (a substrate job, every 15m) running a new 'aida doctor check relay-stall --fail-on-findings' (aida-cli-lib/src/relay_stall.rs: relay.status blocked or exited without a .done marker); and the relay-stall-guard-route seat job. Validated: the doctor check finds the 2 real stale codex relay runs (20261014-225755-regen, 20261014-231359-regen2); tick routes it; check-ci-fast 30/30; tests pass. The old session's fixer claimed STORY-1699, so YOU review (STANDARD; it touches schedule/doctor, not authority) and ship. BEFORE merging: decide on the 2 stale codex relay runs. They're finished/abandoned, so mark them done (touch <run>/handoff.md.done) or the guard trips every 15m. NOTE: the worktree tick already marked fleet-heartbeat and relay-stall-guard-route due for the advisor seat.",
+  "subject": "RESULT PR #2690 STORY-1699 heartbeat quick win: needs independent review and ship",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
