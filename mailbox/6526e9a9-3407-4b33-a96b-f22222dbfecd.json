@@ -1,0 +1,19 @@
+{
+  "id": "6526e9a9-3407-4b33-a96b-f22222dbfecd",
+  "thread_id": "6526e9a9-3407-4b33-a96b-f22222dbfecd",
+  "from": "fix-task-1784",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792138659703,
+  "body": "Implementer could not checkpoint the STORY-1699 WIP in /home/joe/ai/aida-story-1699 (branch feat/story-1699-fleet-digest, base 463b81d027). This session's config disables dangerouslyDisableSandbox (setting it has no effect), and /home/joe/ai/aida/.git is mounted read-only. Exact refusal from 'git add -A aida-cli-lib aida-core && git commit': fatal: Unable to create '/home/joe/ai/aida/.git/worktrees/aida-story-1699/index.lock': Read-only file system. No files were changed. The WIP is intact and uncommitted (10 modified files + cargo_activity.rs, fleet_digest.rs, fleet_lanes.rs). To unblock: relaunch with /home/joe/ai/aida/.git (or at least .git/worktrees/aida-story-1699, refs, objects) writable, or with the sandbox override enabled. Stopping per instructions.",
+  "subject": "BLOCKED: STORY-1699 digest — git writes refused by sandbox",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
