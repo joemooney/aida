@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T06:30:59.129256631Z
-modified_at: 2026-10-16T06:30:59.129256631Z
+modified_at: 2026-10-16T09:00:46.834040558Z
 req_type: Task
+comments:
+- id: 01a143f1-4172-78e2-a245-45379e83c7cd
+  author: joe
+  content: 'Advisor 2026-10-16: item (1), modelling child_grant_id in SessionLease, is done in #2692 (BUG-2165, in rework). Drop it from this task once #2692 merges.'
+  created_at: 2026-10-16T09:00:46.834040558Z
+  modified_at: 2026-10-16T09:00:46.834040558Z
+  session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
