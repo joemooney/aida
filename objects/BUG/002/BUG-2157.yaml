@@ -13,12 +13,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:22:55.514682146Z
-modified_at: 2026-10-16T06:22:35.744823371Z
+modified_at: 2026-10-16T22:29:43.531440556Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a13f3c-9f02-7bb1-8070-20e0c8d86eed
   created_at: 2026-10-15T19:23:17.847918428Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+  created_at: 2026-10-16T22:29:43.531437084Z
   created_by: joe
 history:
 - id: 01a14104-c5f0-78b1-87b8-d796387ae496
