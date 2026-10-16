@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-16T17:52:20.167049200Z
+modified_at: 2026-10-16T18:09:18.741982155Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -213,6 +213,12 @@ comments:
   created_at: 2026-10-16T17:52:20.167049200Z
   modified_at: 2026-10-16T17:52:20.167049200Z
   session_id: 01a143ac0514
+- id: 01a145e7-7395-7d53-84f9-26434a59756c
+  author: joe
+  content: 'ADVISOR E2E (A2 POSITIVE), 2026-10-16 ~11:00, on a real PR rather than a vehicle, from the advisor seat (grant 58784e9f, which delegates reviewer). PR #2692 (BUG-2165; implementer: antigravity/codex). Head 3ec1b703c0 was unreviewed after a merge-up, and the first ship was refused as stale-approval. Then ''aida queue work PR-2692 --role reviewer --no-human --vendor claude'' launched a SEPARATE Bash process. It minted its own child reviewer grant eb1d77f9 (recorded_by ''claude reviewer seat'', its own session:01a145dba499). The verdict PASS was collected into .aida/review-verdicts/PR-2692.json, and ''aida pr ship 2692'' merged it with NO override. Wall-clock: 5m23s launcher total (reviewer 4m18s, 19 turns, $1.07). A second run on PR-2701: 4m56s, $1.36. A2 positive is satisfied. The negative leg is from fix-2661''s run (self-record refused). Gotchas: (1) without --no-human the reviewer runs interactive and writes NO verdict file; the templates must always pass --no-human. (2) A failed or interrupted reviewer leaves a dormant lease and the pr-N worktree; a rerun refuses until ''aida session end --spec PR-N --remove --yes''. (3) Under AIDA_CONTAINED, the codex vendor refuses; pass --vendor claude.'
+  created_at: 2026-10-16T18:09:18.741982155Z
+  modified_at: 2026-10-16T18:09:18.741982155Z
+  session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
   author: aida-lease-take
