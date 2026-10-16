@@ -205,6 +205,23 @@ fn parent_pid(proc_dir: &Path) -> Option<i32> {
         .ok()
 }
 
+/// A live child of this process still executing this process's own binary:
+/// a fork that has not reached its exec yet.
+// trace:BUG-2160 | ai:claude
+fn is_own_pre_exec_fork(proc_dir: &Path) -> bool {
+    if parent_pid(proc_dir) != Some(std::process::id() as i32) {
+        return false;
+    }
+    let identity = |path: &Path| std::fs::metadata(path).ok().map(|m| (m.dev(), m.ino()));
+    match (
+        identity(&proc_dir.join("exe")),
+        identity(Path::new("/proc/self/exe")),
+    ) {
+        (Some(child), Some(own)) => child == own,
+        _ => false,
+    }
+}
+
 /// Advisory only: namespace/process races prevent this from being a universal
 /// no-survivors guarantee. Open pidfds keep best-effort signals bound to the
 /// observed process identity instead of a subsequently reused numeric PID.
@@ -230,15 +247,17 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
         // A process may vanish, be inaccessible, or predate pidfd support. It
         // can still be counted; never signal an unpinned PID in that case.
         let identity = (fd >= 0).then(|| unsafe { File::from_raw_fd(fd) });
-        // A live child of this process is never a survivor: every scored
-        // command was waited for, so whatever outlived it was reparented away
-        // from us. A child forked by another thread, though, holds copies of
-        // all our descriptors (the guard pipe included) until its exec, and
-        // matching it here SIGKILLed unrelated concurrent spawns, such as a
-        // `git cat-file` dying with empty stderr (BUG-2160). Read after the
-        // pidfd pins the identity, so a reused PID is never signalled.
+        // A child forked by another scorer thread holds copies of all our
+        // descriptors (the guard pipe included) until its exec, and matching
+        // it here SIGKILLed unrelated concurrent spawns, such as a `git
+        // cat-file` dying with empty stderr (BUG-2160). Skip only that case:
+        // a live child that is still running this very binary. Parentage
+        // alone is not enough: an unconfined installer (our child) can
+        // clone(CLONE_PARENT) a sibling whose parent is us, and that sibling
+        // must still be counted and killed. Read after the pidfd pins the
+        // identity, so a reused PID is never signalled.
         // trace:BUG-2160 | ai:claude
-        if parent_pid(&entry.path()) == Some(std::process::id() as i32) {
+        if is_own_pre_exec_fork(&entry.path()) {
             continue;
         }
         let under_root = ["cwd", "root", "exe"].iter().any(|name| {
@@ -281,33 +300,123 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Reap our child `pid` within `secs`; `Some(signal)` if a signal ended it.
+    // trace:BUG-2160 | ai:claude
+    fn reap(pid: i32, secs: u64) -> Option<Option<i32>> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+        loop {
+            let mut status = 0;
+            let r = unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) };
+            if r == pid {
+                return Some(libc::WIFSIGNALED(status).then(|| libc::WTERMSIG(status)));
+            }
+            if r < 0 || std::time::Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
     // trace:BUG-2160 | ai:claude
     #[test]
     fn live_children_of_the_scorer_are_never_survivors() {
         use std::process::{Command, Stdio};
         let temp = TempDir::new().unwrap();
         let root = temp.path().to_path_buf();
-        // Our own live child under the root, standing in for a concurrent
-        // thread's spawn caught mid-fork: neither counted nor killed.
-        let mut child = Command::new("sleep")
-            .arg("60")
-            .current_dir(&root)
-            .stdin(Stdio::null())
-            .spawn()
-            .unwrap();
+        // A fork of this binary that has not exec'd yet (as a concurrent
+        // thread's spawn is mid-fork), sitting under the root: neither counted
+        // nor killed. The child only makes async-signal-safe calls.
+        let dir = CString::new(root.as_os_str().as_bytes()).unwrap();
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            unsafe {
+                // Drop the copies of other tests' descriptors (locks, pipes)
+                // that this long-lived fork would otherwise keep open.
+                libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 0u32);
+                if libc::chdir(dir.as_ptr()) != 0 {
+                    libc::_exit(1);
+                }
+                libc::sleep(60);
+                libc::_exit(0);
+            }
+        }
+        let in_root = |pid: i32| {
+            std::fs::read_link(format!("/proc/{pid}/cwd")).is_ok_and(|cwd| cwd.starts_with(&root))
+        };
+        while !in_root(pid) {
+            assert!(reap(pid, 0).is_none(), "the fork exited before chdir");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         // An escaped descendant: its parent exited, so it was reparented.
         let out = Command::new("/bin/sh")
             .args(["-c", "sleep 60 </dev/null >/dev/null 2>&1 & echo $!"])
             .current_dir(&root)
+            .stdin(Stdio::null())
             .output()
             .unwrap();
         assert!(out.status.success());
         let count = survivors(std::slice::from_ref(&root), None, true).unwrap();
-        let child_alive = child.try_wait().unwrap().is_none();
-        let _ = child.kill();
-        let _ = child.wait();
-        assert!(child_alive, "the scan killed a live child of the scorer");
+        // Still our unreaped child, so its PID cannot have been reused.
+        let fork_alive = reap(pid, 0).is_none();
+        unsafe { libc::kill(pid, libc::SIGKILL) };
+        reap(pid, 30);
+        assert!(fork_alive, "the scan killed a pre-exec fork of the scorer");
         assert_eq!(count, 1, "only the reparented descendant is a survivor");
+    }
+
+    // A scored command (our child) clones a sibling with CLONE_PARENT, so the
+    // sibling's parent is the scorer too. It is not this binary, so it must
+    // be counted and killed (BUG-2160 review).
+    // trace:BUG-2160 | ai:claude
+    #[test]
+    fn clone_parent_sibling_of_a_scored_command_is_counted_and_killed() {
+        use std::process::{Command, Stdio};
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().to_path_buf();
+        let script = r#"
+import ctypes,os,time
+libc=ctypes.CDLL(None,use_errno=True)
+CLONE_PARENT,SIGCHLD,SYS_clone=0x8000,17,{'x86_64':56,'aarch64':220}[os.uname().machine]
+pid=libc.syscall(SYS_clone,CLONE_PARENT|SIGCHLD,0,0,0,0)
+if pid==0:
+ n=os.open('/dev/null',os.O_RDWR)
+ for fd in (0,1,2): os.dup2(n,fd)
+ time.sleep(60); os._exit(0)
+print(pid,flush=True)
+"#;
+        let out = match Command::new("/usr/bin/python3")
+            .args(["-c", script])
+            .current_dir(&root)
+            .stdin(Stdio::null())
+            .output()
+        {
+            Ok(out) if out.status.success() => out,
+            // No python3, or an architecture without a known clone number.
+            _ => return,
+        };
+        let sibling: i32 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+        assert!(sibling > 0, "clone failed");
+        let parent = parent_pid(Path::new(&format!("/proc/{sibling}")));
+        let count = survivors(std::slice::from_ref(&root), None, true).unwrap();
+        // CLONE_PARENT made it our child: reaping it is safe and tells us how
+        // it ended.
+        let ended = reap(sibling, 30);
+        if ended.is_none() {
+            unsafe { libc::kill(sibling, libc::SIGKILL) };
+            reap(sibling, 30);
+        }
+        assert_eq!(
+            parent,
+            Some(std::process::id() as i32),
+            "not a CLONE_PARENT sibling"
+        );
+        assert_eq!(count, 1, "the sibling under the root was not counted");
+        assert_eq!(
+            ended,
+            Some(Some(libc::SIGKILL)),
+            "the sibling was not killed"
+        );
     }
 
     #[test]

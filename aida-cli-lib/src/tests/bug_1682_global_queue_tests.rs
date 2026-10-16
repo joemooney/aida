@@ -414,6 +414,12 @@ fn errors() {
         // reads as a failure (BUG-2161). The child runs one test on one
         // thread, so the process-wide hook swap affects nothing else.
         // trace:BUG-2161 | ai:claude
+        assert!(
+            std::env::var_os("BUG_1682_CONTROL").is_some()
+                && std::env::args().any(|a| a == "--exact")
+                && std::env::args().any(|a| a == "--test-threads=1"),
+            "the panic-hook swap is only safe in the single-test child"
+        );
         let report = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
         let caught = std::panic::catch_unwind(|| add(ROLE, entry(1, 0)));
