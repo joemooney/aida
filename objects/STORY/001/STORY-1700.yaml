@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-16T04:09:21.423560725Z
+modified_at: 2026-10-16T04:32:44.121267096Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -58,6 +58,12 @@ comments:
     SEQUENCING: implement after #2687 (STORY-1698) merges and on top of the STORY-1699 lane classifier. Tier STRICT, adversarial review.
   created_at: 2026-10-16T04:09:21.423560725Z
   modified_at: 2026-10-16T04:09:21.423560725Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a142fb-da59-7951-b944-5b34f17d3414
+  author: joe
+  content: 'Advisor note 2026-10-15 21:35 (required addition): fixers dispatched by the advisor MUST run as separate sessions (e.g. ''aida agent new --bg'' / relay-spawned), never as in-session Agent-tool subagents. Reason: (1) BUG-1918 binds approval authority to session identity, so an advisor whose in-session subagents claimed specs can no longer approve that work, which deadlocks the review gate; (2) in-session subagents die with the seat. Independent reviewer subagents remain fine because they do not claim.'
+  created_at: 2026-10-16T04:32:44.121267096Z
+  modified_at: 2026-10-16T04:32:44.121267096Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
