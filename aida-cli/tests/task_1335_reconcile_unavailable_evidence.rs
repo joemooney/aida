@@ -57,7 +57,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-if [ "$json" = "title,body" ]; then
+if [ "$json" = "title,body,headRefName" ]; then
   mode=$(cat "$state/diag" 2>/dev/null || echo clear)
 else
   if [ -f "$state/barrier-$search" ]; then
