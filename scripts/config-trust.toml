@@ -782,6 +782,13 @@ crash_failure_share_percent = "policy" # classified-failure warning threshold; t
 channels = ["trusted"]
 sites = 1
 
+# Read-only report-cache lookup: reads only store_path (a frozen location key,
+# via store_path_candidates) to find the store; no command or credential.
+# trace:TASK-1734 | ai:claude
+[readers."aida-cli-lib/src/regen/score/report/cache.rs"]
+channels = ["worktree"]
+sites = 1
+
 # Main-worktree policy copy shared by all sibling occupancy callers. This
 # is still committable policy, not the trusted executable/credential channel.
 # trace:TASK-1607 | ai:codex
