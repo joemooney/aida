@@ -633,3 +633,67 @@ fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
         );
     }
 }
+
+/// Exercise the queue-work input builder passed to session_start, including
+/// rework's stored route. A resolved reviewer role is insufficient authority.
+// trace:TASK-1786 | ai:codex
+#[test]
+fn queue_work_coexistence_input_preserves_explicit_intent() {
+    use crate::queue_cmd::QueueWorkRoleInput;
+
+    let mut spec = aida_core::Requirement::new("Fix the widget".into(), String::new());
+    spec.spec_id = Some("STORY-77".into());
+    let mut plan = standalone_review_plan(ReviewForge::GitHub, 42, &spec, "u");
+    let implementer = lease_with_role("impl", "STORY-77", "implementer");
+    // The plan itself carries a reviewer route even without a CLI override.
+    assert_eq!(infer_queue_work_role(&plan, None).0, "reviewer");
+    for (label, input, expected) in [
+        (
+            "inferred reviewer",
+            QueueWorkRoleInput::direct(None),
+            LeaseConflictDecision::Refuse,
+        ),
+        (
+            "explicit --role reviewer",
+            QueueWorkRoleInput::direct(Some("reviewer")),
+            LeaseConflictDecision::Coexist,
+        ),
+        (
+            "rework inherited reviewer route, no --for",
+            QueueWorkRoleInput::rework(None, Some("reviewer")),
+            LeaseConflictDecision::Refuse,
+        ),
+        (
+            "rework explicit --for reviewer",
+            QueueWorkRoleInput::rework(Some("reviewer"), Some("reviewer")),
+            LeaseConflictDecision::Coexist,
+        ),
+        (
+            "rework explicit --for any",
+            QueueWorkRoleInput::rework(Some("any"), None),
+            LeaseConflictDecision::Refuse,
+        ),
+    ] {
+        let coexistence = input.review_coexistence(&plan);
+        if expected == LeaseConflictDecision::Coexist {
+            assert_eq!(coexistence, Some(("reviewer", "STORY-77")), "{label}");
+        }
+        assert_eq!(
+            review_source_branch_conflict_decision(
+                true,
+                true,
+                implementer.role.as_deref(),
+                coexistence.map(|(role, _)| role),
+                coexistence.map(|(_, spec)| spec),
+            ),
+            expected,
+            "{label}",
+        );
+    }
+    plan.review_target = None;
+    assert_eq!(
+        QueueWorkRoleInput::direct(Some("reviewer")).review_coexistence(&plan),
+        None,
+        "an ordinary work plan cannot authorize review coexistence",
+    );
+}

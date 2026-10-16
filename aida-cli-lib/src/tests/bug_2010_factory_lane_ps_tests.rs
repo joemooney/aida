@@ -710,7 +710,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         None,
         false,
         /* no_launch */ true,
-        Some("implementer"),
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         true,
         None,
         None,
