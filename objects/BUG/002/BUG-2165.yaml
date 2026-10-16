@@ -3,12 +3,12 @@ spec_id: BUG-2165
 agreed_id: BUG-2165
 title: Headless CI-fix and quiet-burndown children still inherit the launcher grant and PURPOSE (BUG-2139 sibling spawn paths)
 description: 'Found in the #2688 (BUG-2139) STRICT review. queue-work children are fixed, but: phase_driver_trait.rs:3857 build_phase_driver_ci_fix_command (the orchestrator''s in-drain CI-fix child writes code in the implementer worktree with the FULL advisor grant) and burndown_run.rs:2018 build_burndown_quiet_command (the verbose variant mints a child grant, the quiet one doesn''t). The phase_driver.rs:2297 advisor-tier consult inherits the grant, arguably by intent; rule on it. Fix: route both through issue_headless_child (or the explicit '''' baseline grant) plus scrub_launcher_session_env, with tests that fail without the fix. Also: add a #[serde(default)] child_grant_id field to SessionLease so update_lease_branch / mark_lease_escalated_to_human can''t drop it. Tier STRICT.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:42:39.504020077Z
-modified_at: 2026-10-16T09:00:24.408465705Z
+modified_at: 2026-10-16T18:06:32.897363839Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -30,6 +30,22 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a145e4-e859-72e3-af08-21d66430bd6c
+  author: aida-auto-bump
+  timestamp: 2026-10-16T18:06:32.025497107Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a145e4-ebc1-7d82-ac43-6965bfc9e825
+  timestamp: 2026-10-16T18:06:32.897354270Z
+  agent: aida
+  commit_sha: 502aa04ca4ea03483d57588366a6a67b1f058512
+  summary: 'All BUG-2165 criteria met: CI-fix and quiet-burndown children routed through issue_headless_child + apply_headless_child_seat_env (ROLE=implementer, explicit grant or '''' baseline, PURPOSE scrubbed), grants revoked on child exit; advisor consult ruled inherit-by-intent with PURPOSE scrubbed; SessionLease.child_grant_id serde(default) preserved by update_lease_branch/mark_lease_escalated_to_human; 6 regression tests that fail without the fix; bug protocol met (test file touched); PR CI green on 3ec1b703.'
+  punted:
+  - 'punted: STRICT: authority fix correct; restore replaced BUG-2124 trace lines; ruling: advisor consult inherits launcher grant intentionally'
+  review_verdict: approved
 filed_at:
   code_sha: 696c90c4f4e6a486035759b30bd2f0e6a99cd02c
   branch: main
@@ -38,11 +54,7 @@ filed_at:
   aida_build_sha: 463b81d027
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STRICT: authority fix correct; restore replaced BUG-2124 trace lines; ruling: advisor consult inherits launcher grant intentionally'
-  recovery_hint: address the review findings, move BUG-2165 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-16T09:00:24.408465705Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T18:06:32.025492669Z
+  completion_sha: 502aa04ca4ea03483d57588366a6a67b1f058512
