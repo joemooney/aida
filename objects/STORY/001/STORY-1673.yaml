@@ -23,12 +23,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:16.862091872Z
-modified_at: 2026-10-16T04:37:21.332768112Z
+modified_at: 2026-10-16T08:07:44.765965581Z
 req_type: Story
 tags:
 - from:aida-host
@@ -156,6 +156,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a143c0-b37d-7b41-ade7-e1d68f5be643
+  author: aida-orchestrator
+  timestamp: 2026-10-16T08:07:44.765984871Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
@@ -164,3 +171,11 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 55a24ea7-bd81-4793-b71a-a2c0d75d4d9a
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'r1: CI red (BUG-1502 audit, schema docs, web types), macOS test gate, skip retired constraints, AGENTS.md conflict'
+  recovery_hint: address the review findings, move STORY-1673 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-16T08:07:44.765965581Z
