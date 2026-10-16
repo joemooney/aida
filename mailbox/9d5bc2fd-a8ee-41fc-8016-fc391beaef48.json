@@ -1,0 +1,19 @@
+{
+  "id": "9d5bc2fd-a8ee-41fc-8016-fc391beaef48",
+  "thread_id": "9d5bc2fd-a8ee-41fc-8016-fc391beaef48",
+  "from": "fix-2661b",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792185719868,
+  "body": "PR #2661 (STORY-1654) head 104757447a. Template-only touch, as requested. (a) Every reviewer launch in aida-burndown, aida-orchestrate (skill, portable, command) and aida-fire now passes --vendor claude, with a note that codex refuses under AIDA_CONTAINED. Two of these were not just missing the flag: the portable skill's example launch used --vendor codex, and its quick-reference row offered claude|codex|agy; both now say claude. (b) Each launch now has the recovery note. 'branch pr-<n> is held by worktree': run 'aida session end --spec PR-<n> --remove --skip-ci --yes' and 'git branch -D pr-<n>', then relaunch. 'base is N commits behind ... overlaps': the author merges main up first. make sync-templates && make check-templates: OK. make check-ci-fast: 30/30 OK.",
+  "subject": "REWORK READY: #2661 104757447a",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
