@@ -3,13 +3,28 @@ spec_id: BUG-2166
 agreed_id: BUG-2166
 title: 'Contained parent escape: ''aida queue work --plan-only --permission-mode bypassPermissions'' launches an uncontained bypass claude with no consent gate'
 description: 'Found by the STRICT review of #2689 (BUG-2157/2158), out of its scope. Under AIDA_CONTAINED=1, queue_cmd.rs:11351 computes contained = !plan_only && ..., so --plan-only turns containment off; apply_queue_work_contained_env(false) then strips AIDA_CONTAINED, the explicit --permission-mode wins (phase_driver.rs:2864), and the consent gate is skipped because it requires !plan_only. Result: an uncontained claude in bypassPermissions mode with no consent prompt. Fix per the BUG-2151 ruling: a contained parent''s env always wins; plan-only must not disable containment, and --permission-mode must be refused under a contained parent. Add a test asserting the child''s argv/env.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T05:17:46.236563340Z
-modified_at: 2026-10-16T05:17:46.236563340Z
+modified_at: 2026-10-16T11:03:54.766315176Z
 req_type: Bug
+history:
+- id: 01a14461-fc5d-7f30-bec0-4f9c407df758
+  author: aida-auto-bump
+  timestamp: 2026-10-16T11:03:54.717817181Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a14461-fc8e-74e2-b99e-7c16564fadc4
+  timestamp: 2026-10-16T11:03:54.766295442Z
+  agent: aida
+  commit_sha: e0713fdb5e41eccc3806aa28ddef719caa08f48c
+  summary: 'STRICT approved: plan-only contained, permission-mode refused under contained parent; follow-ups filed'
+  review_verdict: approved
 filed_at:
   code_sha: 251f99e7ef50bfc1537ce57ef7e88ff6975eaa85
   branch: main
@@ -18,3 +33,7 @@ filed_at:
   aida_build_sha: 696c90c4f4
   vendor: claude
   session: 3e7b9d7a-f729-448d-b73f-439bcee0d31a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T11:03:54.717807532Z
+  completion_sha: e0713fdb5e41eccc3806aa28ddef719caa08f48c
