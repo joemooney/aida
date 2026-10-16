@@ -35,6 +35,12 @@ fn render(records: &[TrialRecord], now: DateTime<Utc>) -> String {
         ),
         None => format!("Discriminating oracle pass rate: unavailable, age {age}s"),
     };
+    // Warnings accompany the headline even for legacy/invalid diagnostic data.
+    // trace:STORY-1676 | ai:codex
+    let summary = diagnostics::summary(latest);
+    for warning in summary.warnings() {
+        let _ = write!(out, "; {warning}");
+    }
     // Make unsuccessful/contaminated attempts visible; never fall back to an
     // older passing trial or treat an adapter score as the raw headline.
     let _ = write!(
@@ -56,6 +62,15 @@ fn render(records: &[TrialRecord], now: DateTime<Utc>) -> String {
                 .join(", ")
         );
     }
+    let failures = summary.crashes + summary.assertions + summary.unknown;
+    let unknown_share = if failures == 0 {
+        0.0
+    } else {
+        summary.unknown as f64 * 100.0 / failures as f64
+    };
+    let _ = write!(out, "\nFailure diagnostics: {} crash, {} assertion, {} unknown ({:.1}% of failures); crash threshold {}% of classified failures",
+        summary.crashes, summary.assertions, summary.unknown, unknown_share, summary.threshold);
+    render_audit(&mut out, &trials, latest);
     let previous = trials.into_iter().skip(1).find(|r| {
         r.oracle_sha == latest.oracle_sha
             && r.oracle_bundle_sha256 == latest.oracle_bundle_sha256
@@ -94,6 +109,87 @@ fn render(records: &[TrialRecord], now: DateTime<Utc>) -> String {
         (None, _) => out.push_str("\nDiagnostic deltas unavailable: no previous matching trial"),
     }
     out
+}
+
+// Compare like-for-like R1 evidence. One latest scored trial per explicit family
+// avoids counting repeated runs as independent families or retaining stale failures.
+// trace:STORY-1676 | ai:codex
+fn render_audit(out: &mut String, trials: &[&TrialRecord], latest: &TrialRecord) {
+    let comparable: Vec<_> = trials
+        .iter()
+        .copied()
+        .filter(|r| {
+            r.status == "scored"
+                && r.oracle_sha == latest.oracle_sha
+                && r.oracle_bundle_sha256 == latest.oracle_bundle_sha256
+                && r.content_sha256 == latest.content_sha256
+        })
+        .collect();
+    let excluded = comparable
+        .iter()
+        .filter(|r| {
+            !r.model_family
+                .as_deref()
+                .is_some_and(diagnostics::valid_family)
+        })
+        .count();
+    let mut families = BTreeMap::new();
+    for row in comparable {
+        if let Some(family) = row
+            .model_family
+            .as_deref()
+            .filter(|f| diagnostics::valid_family(f))
+        {
+            // The caller already sorted completion time, then UUID, descending.
+            families.entry(family).or_insert(row);
+        }
+    }
+    let _ = write!(out, "\nOracle-assumption audit candidates (latest scored R1 per family; matching oracle, bundle and corpus):\n  {} trials excluded: absent/invalid model family; {} families available", excluded, families.len());
+    if families.len() < 2 {
+        out.push_str("\n  unavailable: need at least two explicit model families");
+        return;
+    }
+    let mut checks: BTreeMap<&str, Vec<(&str, bool)>> = BTreeMap::new();
+    for (family, row) in &families {
+        let mut seen = HashSet::new();
+        for check in &row.checks {
+            if !seen.insert(&check.name) {
+                out.push_str("\n  unavailable: duplicate check identities");
+                return;
+            }
+            checks
+                .entry(&check.name)
+                .or_default()
+                .push((family, check.passed));
+        }
+    }
+    let mut count = 0;
+    let mut incomplete = 0;
+    for (check, outcomes) in checks {
+        if outcomes.len() != families.len() {
+            incomplete += 1;
+            continue;
+        }
+        let failed: Vec<_> = outcomes.iter().filter(|(_, passed)| !passed).collect();
+        if let [failure] = failed.as_slice() {
+            let _ = write!(
+                out,
+                "\n  {}: fails only in {} (human audit required)",
+                check.escape_debug(),
+                failure.0.escape_debug()
+            );
+            count += 1;
+        }
+    }
+    if count == 0 {
+        out.push_str("\n  none");
+    }
+    if incomplete > 0 {
+        let _ = write!(
+            out,
+            "\n  {incomplete} checks excluded: not observed in every family"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -154,6 +250,10 @@ mod tests {
         assert_eq!(out, concat!(
             "Discriminating oracle pass rate (R1): 75.0% (3/4), age 50s\n",
             "Trial: 00000000-0000-0000-0000-000000000002; status scored; clean true\n",
+            "Failure diagnostics: 0 crash, 0 assertion, 0 unknown (0.0% of failures); crash threshold 50% of classified failures\n",
+            "Oracle-assumption audit candidates (latest scored R1 per family; matching oracle, bundle and corpus):\n",
+            "  2 trials excluded: absent/invalid model family; 0 families available\n",
+            "  unavailable: need at least two explicit model families\n",
             "Gap diagnostics (category counts; not a quality score):\n",
             "  interface: 0 (delta -1)\n  missing: 1 (delta +1)\n",
             "  behavior: 0 (delta +0)\n  other: 0 (delta +0)\n",
@@ -232,6 +332,62 @@ mod tests {
         let out = render(&[oldest, trial(2, 100), latest], now);
         assert!(out.contains("no gap data for previous matching trial"));
         assert!(!out.contains("delta +0"));
+    }
+
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn report_audits_only_explicit_families_and_like_for_like_observed_checks() {
+        let mut a = trial(1, 100);
+        a.model_family = Some("family A".into());
+        let mut b = trial(2, 150);
+        b.model_family = Some("family B".into());
+        a.checks = parse_checks(
+            "FAIL - unique A\nok   - unique B\nFAIL - both\nok   - pass\nok   - only A\n",
+        )
+        .unwrap();
+        b.checks =
+            parse_checks("ok   - unique A\nFAIL - unique B\nFAIL - both\nok   - pass\n").unwrap();
+        let mut older = trial(3, 50);
+        older.model_family = Some("family B".into());
+        older.checks = a.checks.clone();
+        let mut other_oracle = trial(4, 125);
+        other_oracle.model_family = Some("family C".into());
+        other_oracle.oracle_sha = "different".into();
+        let mut control = trial(5, 160);
+        control.kind = "control-reference".into();
+        let mut nested = trial(6, 170);
+        nested.kind = "trial-adapted".into();
+        let mut failed = trial(7, 120);
+        failed.status = "install_failed".into();
+        failed.model_family = Some("family D".into());
+        let rows = vec![
+            a,
+            b,
+            older,
+            other_oracle,
+            control,
+            nested,
+            failed,
+            trial(8, 110),
+        ];
+        let out = render(&rows, Utc::now());
+        assert!(
+            out.contains("unique A: fails only in family A (human audit required)"),
+            "{out}"
+        );
+        assert!(out.contains("unique B: fails only in family B (human audit required)"));
+        assert!(!out.contains("both: fails") && !out.contains("pass: fails"));
+        assert!(out.contains("1 checks excluded: not observed in every family"));
+        assert!(
+            out.contains("1 trials excluded: absent/invalid model family; 2 families available")
+        );
+        // Marker-like text cannot invent a crash; warning stays on headline.
+        let headline = out.lines().next().unwrap();
+        assert!(headline.contains("unclassified: review before reporting"));
+        assert!(out.contains("0 crash, 0 assertion, 2 unknown (100.0% of failures)"));
+        assert!(!out.contains("crash-dominated"));
+        let out = render(&[trial(1, 100)], Utc::now());
+        assert!(out.contains("need at least two explicit model families"));
     }
 
     #[test]

@@ -150,6 +150,27 @@ check "an unreachable project root skips the grant check (no false tag)" \
 ctx=$(role_ctx STUB_SEAT=advisor)
 check "no label: role addendum stays silent" "" "$ctx"
 
+# STORY-1693: the addendum points at the seat's standing orders, one line,
+# only when a source exists. trace:STORY-1693 | ai:claude
+ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
+absent "no standing orders: no pointer line" "Standing orders" "$ctx"
+mkdir -p "$TMP/project/.aida/standing-orders"
+printf -- '- [2026-10-15 05:00Z] ship it\n' >"$TMP/project/.aida/standing-orders/advisor.md"
+ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
+contains "repo-local standing orders: the addendum points at them" \
+    "aida session handoff --seat advisor --show" "$ctx"
+check "the pointer is exactly one line" "1" \
+    "$(printf '%s\n' "$ctx" | grep -c 'Standing orders')"
+rm -rf "$TMP/project/.aida/standing-orders"
+mkdir -p "$TMP/project/.aida/discipline/standing-orders"
+printf '1. ship it\n' >"$TMP/project/.aida/discipline/standing-orders/advisor.md"
+ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor)
+contains "tracked standing orders: the addendum points at them" \
+    "aida session handoff --seat advisor --show" "$ctx"
+ctx=$(role_ctx AIDA_SESSION_ROLE=reviewer STUB_SEAT=reviewer)
+absent "another seat's standing orders are not pointed at" "Standing orders" "$ctx"
+rm -rf "$TMP/project/.aida/discipline"
+
 # A grant check that times out is unvalidated, not a missing grant.
 if command -v timeout >/dev/null 2>&1; then
     out=$(run "$SESSION_HOOK" AIDA_SESSION_ROLE=advisor STUB_SEAT= STUB_SLEEP=4)

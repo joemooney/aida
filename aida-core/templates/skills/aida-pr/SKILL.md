@@ -292,7 +292,7 @@ Mechanically derived — no creative writing required:
 - **PR-N** is the eventual PR number; if `gh pr create` hasn't run yet, use the branch name and revise after the PR opens
 - **commit short-sha** comes from `git log <base>..HEAD --grep="(REQ-ID)" --pretty=%h`
 - **bullets** lift from the commit body's bulleted lines, falling back to `git show --stat` line summaries
-- **test status** comes from the latest `cargo test --workspace` run in the session — usually surfaced in the agent's final report
+- **test status** comes from the latest local tier run in the session (STANDARD: `make test-touched` + `make check-ci-compile`) — usually surfaced in the agent's final report. The full workspace suite runs only in CI; never claim a local `cargo test --workspace` result
 - **follow-up** is optional; only include when the commit body explicitly notes one (e.g. "tracked separately as BUG-NN")
 
 Skip the comment for trivial fixes whose entire commit body is one line (typo, doc bump, lint) — the commit subject is the whole context.
@@ -362,7 +362,8 @@ comments, and pass it to `gh pr create --body-file -`.
 
 ## Test plan
 
-- [x] `cargo test --workspace` — <N>/<N> green
+- [x] `make test-touched` (targeted, <N> tests) + `make check-ci-compile` — green
+- [ ] Full workspace suite — CI (Build) at the PR head
 - [ ] Manual: <one item per significant spec>
 - [ ] <other smoke tests run during development>
 ```

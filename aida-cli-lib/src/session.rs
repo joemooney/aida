@@ -631,11 +631,76 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 }
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
+    // BUG-2157: a contained parent (strict parse, so a typo refuses) resumes
+    // contained. Read before the picker so a refusal precedes any interaction.
+    // trace:BUG-2157 | ai:claude
+    let parent_contained = aida_contained_env()?;
     let target = match id {
         Some(prefix) => resolve_resume_target(&prefix)?,
         None => pick_interactive(limit)?,
     };
+    if parent_contained {
+        let cwd = std::env::current_dir().context("failed to read the current directory")?;
+        let mut cmd = build_contained_resume_command(&target, &cwd)?;
+        return exec_or_spawn_claude(&mut cmd);
+    }
     exec_resume_command(&target, None, false)
+}
+
+/// BUG-2157 (ruling on BUG-2151: a contained parent's env ALWAYS wins). The
+/// `aida session resume` command for a contained parent: only a claude
+/// session can resume contained — codex/agy are refused, never resumed
+/// uncontained — and it resumes with the contained flags and `AIDA_CONTAINED=1`
+/// kept on the child. It runs in the session's own checkout — the directory
+/// whose Claude project store holds the transcript, so `--resume` finds it —
+/// and that checkout's git root is the write boundary. `launcher_cwd` is the
+/// fallback only when the target has no checkout recorded or it is gone. No
+/// git root means no write roots (fail closed).
+// trace:BUG-2157 | ai:claude
+pub(crate) fn build_contained_resume_command(
+    target: &ResumeTarget,
+    launcher_cwd: &Path,
+) -> Result<std::process::Command> {
+    if target.agent != "claude" {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), but `{}` sessions cannot \
+             run AIDA-contained — refusing to resume `{}` uncontained. Resume it from an \
+             uncontained shell.",
+            target.agent,
+            target.id
+        );
+    }
+    // trace:BUG-2131 | ai:claude
+    aida_core::git_ops::ensure_git_supports_contained()?;
+    let worktree = target
+        .worktree
+        .clone()
+        .filter(|p| p.is_dir())
+        .unwrap_or_else(|| launcher_cwd.to_path_buf());
+    let mut cmd = std::process::Command::new("claude");
+    cmd.args(["--resume", &target.id]);
+    cmd.args(claude_contained_flags_for_roots(
+        &contained_session_write_roots_from(&worktree),
+    ));
+    cmd.env("AIDA_CONTAINED", "1");
+    cmd.current_dir(&worktree);
+    Ok(cmd)
+}
+
+/// Replace this process with `cmd` (spawn + wait where exec is unavailable).
+// trace:BUG-2157 | ai:claude
+fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec claude: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd.status().context("failed to spawn claude")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
 }
 
 /// `aida session new` — capture role + title up-front, append a record
@@ -657,6 +722,10 @@ pub fn new_session(
     contained: bool,
     set_terminal_title: bool,
 ) -> Result<()> {
+    // BUG-2157: fail closed — a contained parent never launches an
+    // uncontained or re-postured claude, whichever caller got here.
+    // trace:BUG-2157 | ai:claude
+    refuse_uncontained_session_under_contained_parent(permission_mode, contained)?;
     let role = role_override
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
         .filter(|s| !s.is_empty())
@@ -718,6 +787,24 @@ pub fn new_session(
         None,
         title_restore,
     )
+}
+
+/// BUG-2157: the `session new` launch guard. Under a contained parent
+/// (`AIDA_CONTAINED`, strict parse) the launch must be contained and carry no
+/// `--permission-mode`.
+// trace:BUG-2157 | ai:claude
+pub(crate) fn refuse_uncontained_session_under_contained_parent(
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    if aida_contained_env()? && (!contained || permission_mode.is_some()) {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
+             must be contained too — refusing an uncontained launch. Drop --permission-mode, or \
+             launch from an uncontained shell."
+        );
+    }
+    Ok(())
 }
 
 /// TASK-31: derive a claude `--name` value from session metadata. Keeps the
@@ -1243,6 +1330,25 @@ pub fn spawn_vendor_headless_with_seat(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_with_seat_granted(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+    )
+    .map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_vendor_headless_with_seat`], also returning the id of the
+/// child seat grant it issued, so the caller can bind the child's recorded
+/// output to exactly this launch.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_vendor_headless_with_seat_granted(
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, &format!("{} session", seat.as_str()))?;
@@ -1287,7 +1393,7 @@ pub fn spawn_vendor_headless_with_seat(
     cmd.args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
-        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -1296,6 +1402,9 @@ pub fn spawn_vendor_headless_with_seat(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // BUG-2139: the child holds its own grant; the launcher's purpose stays
+    // behind. trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
@@ -1307,7 +1416,7 @@ pub fn spawn_vendor_headless_with_seat(
         .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
-    Ok(status)
+    Ok((status, child_grant.id))
 }
 
 /// STORY-612: the worktree root a non-resume headless drain runs in — its
@@ -1439,8 +1548,27 @@ pub fn spawn_claude_resume(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    spawn_claude_resume_with_grant(id, permission_mode, contained, None)
+}
+
+/// BUG-2149: [`spawn_claude_resume`] with an explicit seat grant for the
+/// child, so a caller that minted the child's grant knows exactly which grant
+/// the resumed session records under. `None` inherits the ambient grant.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_claude_resume_with_grant(
+    id: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+    grant_id: Option<&str>,
+) -> Result<std::process::ExitStatus> {
     let prog = resolve_agent_program("claude");
     let mut cmd = std::process::Command::new(prog);
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant)
+            .env("AIDA_SESSION_ROLE", "reviewer");
+    }
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
@@ -1601,6 +1729,16 @@ pub(crate) fn spawn_reviewer_launch_plan(
     plan: &ReviewerLaunchPlan,
     project_root: &std::path::Path,
 ) -> Result<std::process::ExitStatus> {
+    spawn_reviewer_launch_plan_granted(plan, project_root).map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_reviewer_launch_plan`], also returning the id of the
+/// child reviewer grant it issued.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_reviewer_launch_plan_granted(
+    plan: &ReviewerLaunchPlan,
+    project_root: &std::path::Path,
+) -> Result<(std::process::ExitStatus, String)> {
     let grant = crate::seat_authority::issue_child(
         project_root,
         "reviewer",
@@ -1608,16 +1746,20 @@ pub(crate) fn spawn_reviewer_launch_plan(
     )?;
     let mut cmd = std::process::Command::new(&plan.program);
     cmd.args(&plan.args)
-        .env(crate::seat_authority::GRANT_ENV, grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if plan.contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.status_retrying_etxtbsy()
-        .with_context(|| format!("failed to spawn {}", plan.program))
+    let status = cmd
+        .status_retrying_etxtbsy()
+        .with_context(|| format!("failed to spawn {}", plan.program))?;
+    Ok((status, grant.id))
 }
 
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
@@ -3258,6 +3400,7 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 /// silently fall back to a disabled default.
 // trace:BUG-898 | ai:codex
 // trace:BUG-2006 | ai:antigravity
+// trace:BUG-2139 | ai:claude
 pub(crate) fn build_exec_vendor_headless_command(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -3265,6 +3408,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     contained: bool,
     model: Option<&str>,
     effort: Option<&str>,
+    seat: &str,
+    grant_env: &str,
 ) -> Result<std::process::Command> {
     use std::process::Command;
     let (program, args) =
@@ -3283,6 +3428,10 @@ pub(crate) fn build_exec_vendor_headless_command(
         // BUG-806: same PATH rule as the spawn path.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // BUG-2139: the child's seat authority is ALWAYS set explicitly — the
+    // grant minted for this launch, or `""` for a baseline child — never
+    // inherited from the launcher, whose grant may carry delegable seats.
+    apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3291,7 +3440,9 @@ pub(crate) fn build_exec_vendor_headless_command(
     Ok(child_cmd)
 }
 
-pub fn exec_vendor_headless(
+// trace:BUG-2139 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn exec_vendor_headless(
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -3299,7 +3450,77 @@ pub fn exec_vendor_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
     lease_id: Option<&str>,
+    seat: &str,
+    child_grant: &crate::seat_authority::HeadlessChildGrant,
 ) -> Result<()> {
+    let result = run_vendor_headless_child(
+        vendor,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        lease_id,
+        seat,
+        child_grant.env_value(),
+    );
+    // BUG-2139: the child's grant dies with the child — on a normal or
+    // nonzero exit and on a spawn failure alike. A failed revoke only warns:
+    // the grant still expires with its parent, and the lease end/reap revokes
+    // it too.
+    if let Some(id) = child_grant.id() {
+        revoke_headless_child_grant(id);
+    }
+    let status = result?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// BUG-2139: revoke a headless child's grant, warning (never failing) on error.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_headless_child_grant(id: &str) {
+    if let Err(e) = crate::seat_authority::revoke_by_id(id) {
+        eprintln!(
+            "{} could not revoke headless child grant {}: {e:#} (it still expires with its parent)",
+            "Warning:".yellow().bold(),
+            &id[..id.len().min(8)]
+        );
+    }
+}
+
+/// BUG-2139: the seat env every headless child gets. `AIDA_SESSION_ROLE` and
+/// `AIDA_SESSION_GRANT` are set explicitly (never inherited), and the
+/// launcher's `AIDA_SESSION_PURPOSE` is scrubbed (BUG-2153 class): it describes
+/// the launcher's session, not the child's.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn apply_headless_child_seat_env(
+    cmd: &mut std::process::Command,
+    seat: &str,
+    grant_env: &str,
+) {
+    cmd.env("AIDA_SESSION_ROLE", seat)
+        .env(crate::seat_authority::GRANT_ENV, grant_env);
+    scrub_launcher_session_env(cmd);
+}
+
+/// BUG-2139: strip the launcher-session env a child must not inherit.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
+    cmd.env_remove("AIDA_SESSION_PURPOSE");
+}
+
+// trace:BUG-2139 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn run_vendor_headless_child(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    lease_id: Option<&str>,
+    seat: &str,
+    grant_env: &str,
+) -> Result<std::process::ExitStatus> {
     use std::process::Stdio;
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "implementer session")?;
@@ -3334,6 +3555,8 @@ pub fn exec_vendor_headless(
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
+        seat,
+        grant_env,
     )?;
     let mut child = child_cmd
         .stdout(Stdio::from(log))
@@ -3354,7 +3577,7 @@ pub fn exec_vendor_headless(
         .wait()
         .with_context(|| format!("failed to wait for {}", vendor.program()))?;
     tee.stop();
-    std::process::exit(status.code().unwrap_or(1));
+    Ok(status)
 }
 
 /// BUG-741: `codex exec` is not discoverable by the Claude-specific worktree
@@ -3364,6 +3587,57 @@ pub fn exec_vendor_headless(
 fn stamp_lease_active_pid(lease_id: &str, pid: u32) -> Result<()> {
     let project_root = crate::find_project_root()?;
     stamp_lease_active_pid_at(&project_root, lease_id, pid)
+}
+
+/// BUG-2139: record the headless child's grant id on its lease, so a lease
+/// end or reap revokes it even when the launcher crashed before the child's
+/// exit could. Written as a raw key (the lease struct does not model it); a
+/// lease without the key is a legacy or interactive lease with nothing to
+/// revoke.
+// trace:BUG-2139 | ai:claude
+pub(crate) const LEASE_CHILD_GRANT_KEY: &str = "child_grant_id";
+
+// trace:BUG-2139 | ai:claude
+pub(crate) fn stamp_lease_child_grant_at(
+    project_root: &Path,
+    lease_id: &str,
+    grant_id: &str,
+) -> Result<()> {
+    use toml_edit::{value, DocumentMut};
+    let path = project_root
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{lease_id}.toml"));
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut doc = body
+        .parse::<DocumentMut>()
+        .with_context(|| format!("parsing lease {}", path.display()))?;
+    doc[LEASE_CHILD_GRANT_KEY] = value(grant_id);
+    aida_core::write_atomic(&path, doc.to_string())
+        .with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
+}
+
+/// BUG-2139: revoke the child grant stamped on lease file `lease_file`, if
+/// any. Best-effort: called just before a lease is removed (session end,
+/// force cleanup, record-only removal, reap); a missing or unreadable lease
+/// or an unstamped one is a quiet no-op.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_lease_child_grant(lease_file: &Path) {
+    let Ok(body) = std::fs::read_to_string(lease_file) else {
+        return;
+    };
+    let Ok(table) = body.parse::<toml::Table>() else {
+        return;
+    };
+    if let Some(id) = table
+        .get(LEASE_CHILD_GRANT_KEY)
+        .and_then(|v| v.as_str())
+        .filter(|id| !id.is_empty())
+    {
+        revoke_headless_child_grant(id);
+    }
 }
 
 // trace:BUG-741 | ai:codex
@@ -3606,6 +3880,24 @@ pub fn spawn_claude_headless_resume(
     contained: bool,
     seat: &str,
 ) -> Result<std::process::ExitStatus> {
+    spawn_claude_headless_resume_granted(
+        prompt, session_id, log_path, cwd, tee_opts, contained, seat,
+    )
+    .map(|(status, _)| status)
+}
+
+/// BUG-2149: [`spawn_claude_headless_resume`], also returning the id of the
+/// child seat grant it issued.
+// trace:BUG-2149 | ai:claude
+pub(crate) fn spawn_claude_headless_resume_granted(
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    cwd: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    seat: &str,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -3633,11 +3925,13 @@ pub fn spawn_claude_headless_resume(
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat)
-        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
+        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value);
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -3649,7 +3943,7 @@ pub fn spawn_claude_headless_resume(
         .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
     tee.stop();
-    Ok(status)
+    Ok((status, child_grant.id))
 }
 
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
@@ -4871,9 +5165,13 @@ fn humanize_age(secs: u64) -> String {
 }
 
 #[derive(Debug, Clone)]
-struct ResumeTarget {
-    agent: String,
-    id: String,
+pub(crate) struct ResumeTarget {
+    pub(crate) agent: String,
+    pub(crate) id: String,
+    /// The checkout whose Claude project store the transcript was found in:
+    /// where a contained resume runs and what bounds its writes.
+    // trace:BUG-2157 | ai:claude
+    pub(crate) worktree: Option<PathBuf>,
 }
 
 fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
@@ -4916,6 +5214,9 @@ fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
     Ok(ResumeTarget {
         agent: chosen.agent.clone(),
         id: chosen.id.clone(),
+        // `collect_sessions` scans this cwd's project store.
+        // trace:BUG-2157 | ai:claude
+        worktree: std::env::current_dir().ok(),
     })
 }
 
@@ -4932,6 +5233,9 @@ fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
         1 => Ok(ResumeTarget {
             agent: matches[0].agent.clone(),
             id: matches[0].id.clone(),
+            // `collect_global_project_sessions` scans the main worktree's
+            // project store. trace:BUG-2157 | ai:claude
+            worktree: crate::find_main_worktree_root().ok(),
         }),
         _ => anyhow::bail!(
             "{} sessions match `{}` — use a longer prefix",
@@ -5941,6 +6245,7 @@ mod tests {
         let target = ResumeTarget {
             agent: "codex".to_string(),
             id: "01a067ec-facc-71a0-9a69-1476568e1f1e".to_string(),
+            worktree: None,
         };
 
         let (program, args) = resume_command_for(&target);
@@ -8445,6 +8750,104 @@ mod tests {
         );
     }
 
+    /// BUG-2139: the child grant stamped on a headless lease is revoked when
+    /// the lease ends or is reaped — the crash-leak window where the launcher
+    /// died before it could revoke on the child's exit. An unstamped lease
+    /// revokes nothing.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn lease_removal_revokes_the_stamped_child_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _lock = crate::test_env::env_lock();
+        let subject = "bug-2139-lease-user";
+        let id =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let other =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let sessions = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        for lease in ["stamped", "plain"] {
+            std::fs::write(
+                sessions.join(format!("{lease}.toml")),
+                format!("id = \"{lease}\"\nactive_pid = 1\n"),
+            )
+            .unwrap();
+        }
+        stamp_lease_child_grant_at(root, "stamped", &id).unwrap();
+        let body = std::fs::read_to_string(sessions.join("stamped.toml")).unwrap();
+        assert!(
+            body.contains("active_pid = 1"),
+            "the stamp keeps the lease: {body}"
+        );
+        revoke_lease_child_grant(&sessions.join("plain.toml"));
+        revoke_lease_child_grant(&sessions.join("missing.toml"));
+        let valid = |g: &str| {
+            matches!(
+                crate::seat_authority::grant_check_for(root, g, subject),
+                crate::seat_authority::GrantCheck::Valid(_)
+            )
+        };
+        assert!(valid(&id) && valid(&other), "nothing revoked yet");
+        revoke_lease_child_grant(&sessions.join("stamped.toml"));
+        assert!(!valid(&id), "the stamped child grant is revoked");
+        assert!(valid(&other), "only the stamped grant is touched");
+    }
+
+    /// BUG-2139: the fresh headless child's seat env is ALWAYS explicit — the
+    /// grant minted for it (or `""` for a baseline child) and the routed seat
+    /// — never the launcher's, even when the launcher exports a grant, a
+    /// role and a purpose. Every vendor.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn exec_headless_child_never_inherits_the_launcher_seat_env() {
+        let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
+            crate::seat_authority::GRANT_ENV,
+            "AIDA_SESSION_ROLE",
+            "AIDA_SESSION_PURPOSE",
+        ]);
+        env.set_key(
+            crate::seat_authority::GRANT_ENV,
+            "11111111-1111-4111-8111-111111111111",
+        );
+        env.set_key("AIDA_SESSION_ROLE", "advisor");
+        env.set_key("AIDA_SESSION_PURPOSE", "advisor relay");
+        let child = "22222222-2222-4222-8222-222222222222";
+        for vendor in [
+            HeadlessVendor::Claude,
+            HeadlessVendor::Codex,
+            HeadlessVendor::Agy,
+        ] {
+            for (seat, grant) in [
+                ("implementer", child),
+                ("reviewer", child),
+                ("implementer", ""),
+            ] {
+                let cmd = build_exec_vendor_headless_command(
+                    vendor, "prompt", "sid", false, None, None, seat, grant,
+                )
+                .unwrap();
+                let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
+                let get = |k: &str| envs.get(std::ffi::OsStr::new(k)).copied();
+                assert_eq!(
+                    get(crate::seat_authority::GRANT_ENV),
+                    Some(Some(std::ffi::OsStr::new(grant))),
+                    "{vendor:?} {seat}: the grant is set explicitly"
+                );
+                assert_eq!(
+                    get("AIDA_SESSION_ROLE"),
+                    Some(Some(std::ffi::OsStr::new(seat))),
+                    "{vendor:?}: the routed seat, not the launcher's"
+                );
+                assert_eq!(
+                    get("AIDA_SESSION_PURPOSE"),
+                    Some(None),
+                    "{vendor:?}: the launcher's purpose is scrubbed"
+                );
+            }
+        }
+    }
+
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_exec_vendor_headless_command_exports_only_for_claude() {
@@ -8456,6 +8859,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8474,6 +8879,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8493,6 +8900,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .expect_err("a contained Codex exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
@@ -8503,6 +8912,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8522,6 +8933,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .expect_err("a contained Agy exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
@@ -8532,6 +8945,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd_agy.get_envs().collect();

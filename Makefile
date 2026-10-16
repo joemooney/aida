@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list \
+        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -252,6 +252,14 @@ db-list-status: cli ## List requirements grouped by status
 test: ## Run all tests
 	cargo test --workspace
 
+# The STANDARD tier's local tests: targeted `cargo test --profile agent` runs
+# for the Rust files changed vs origin/main (module filters, touched
+# integration test binaries). The full workspace suite runs only in CI.
+# `make test-touched ARGS=--print` prints the commands without running them;
+# `ARGS="--filter foo"` adds a libtest filter. trace:TASK-1780 | ai:claude
+test-touched: ## Targeted tests for the Rust files changed vs origin/main (agent profile)
+	@python3 scripts/test-touched.py $(ARGS)
+
 test-unit: ## Run unit tests only
 	cargo test --workspace --lib
 
@@ -428,6 +436,11 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	for f in aida-core/templates/.aida/discipline/*.md; do \
 		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
 	done
+	@# trace:STORY-1693 | ai:claude — per-seat standing orders subdirectory
+	@mkdir -p .aida/discipline/standing-orders
+	@for f in aida-core/templates/.aida/discipline/standing-orders/*.md; do \
+		[ -f "$$f" ] && cp "$$f" ".aida/discipline/standing-orders/$$(basename $$f)"; \
+	done; true
 	@$(MAKE) --no-print-directory sync-agent-skills
 	@# trace:BUG-2014 | ai:codex
 	@python3 scripts/check-template-hooks.py --sync
@@ -443,8 +456,10 @@ sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regul
 check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 	@echo "Checking .aida/discipline/ mirror..."
 	@errors=0; \
-	for f in aida-core/templates/.aida/discipline/*.md; do \
-		target=".aida/discipline/$$(basename $$f)"; \
+	for f in aida-core/templates/.aida/discipline/*.md \
+		aida-core/templates/.aida/discipline/standing-orders/*.md; do \
+		[ -f "$$f" ] || continue; \
+		target=".aida/discipline/$${f#aida-core/templates/.aida/discipline/}"; \
 		if [ -f "$$target" ]; then \
 			if ! diff -q "$$f" "$$target" > /dev/null 2>&1; then \
 				echo "  CONTENT DIFFERS: $$target and $$f"; \

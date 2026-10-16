@@ -1642,6 +1642,11 @@ pub(crate) enum LeaseConflictDecision {
     AutoEnd,
     /// Headless and the lease is LIVE — refuse with a typed message.
     Refuse,
+    /// BUG-2150: the holder is not a reviewer (the implementer working the
+    /// PR). A review checks out its own `pr-N` branch from the forge's PR
+    /// head ref, so it coexists with that lease — no prompt, no refusal, and
+    /// never ending the implementer's session.
+    Coexist,
 }
 
 // BUG-1205: pure decision for the lease-held pre-flight in `session_start`.
@@ -1651,6 +1656,29 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
         (false, _) => LeaseConflictDecision::Prompt,
         (true, false) => LeaseConflictDecision::AutoEnd,
         (true, true) => LeaseConflictDecision::Refuse,
+    }
+}
+
+/// BUG-2150: the decision for a review whose PR source branch is held by
+/// another lease. A review lease is a different kind from an implementer
+/// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
+/// with a LIVE non-reviewer holder. Every other case — a non-reviewer pickup,
+/// a holder that is itself a reviewer, or a dead holder (ended as before) —
+/// keeps the BUG-1205 prompt / auto-end / refuse handling.
+// trace:BUG-2150 | ai:claude
+pub(crate) fn review_source_branch_conflict_decision(
+    headless: bool,
+    lease_live: bool,
+    holder_role: Option<&str>,
+    pickup_role: Option<&str>,
+) -> LeaseConflictDecision {
+    let is_reviewer = |r: Option<&str>| {
+        r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
+    };
+    if lease_live && is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+        LeaseConflictDecision::Coexist
+    } else {
+        lease_conflict_decision(headless, lease_live)
     }
 }
 
@@ -2858,6 +2886,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // (after the same activity aggregation) and stop.
     if lease.worktree_path.as_os_str().is_empty() {
         aggregate_session_activity_into_roles(project_root, &lease.id);
+        // trace:BUG-2139 | ai:claude
+        crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
@@ -2925,6 +2955,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
@@ -4090,6 +4123,8 @@ pub(crate) fn remove_session_lease_record_only(
     lease_id: &str,
 ) -> bool {
     let lease_file = lease_path(project_root, lease_id);
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_file);
     let removed = match std::fs::remove_file(&lease_file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,

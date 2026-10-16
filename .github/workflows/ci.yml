@@ -181,6 +181,11 @@ jobs:
           python3 scripts/external-prose-classifiers.py --check
           python3 -m unittest tests/test_external_prose_classifiers.py
 
+      # `make test-touched` planner: pure Python, no git or cargo, so fast.
+      # trace:TASK-1780 | ai:claude
+      - name: test-touched planner tests
+        run: python3 -m unittest tests/test_test_touched.py
+
       # STORY-612: the LIVE OS-wrap confinement gate. The `os_wrap` bwrap wrapper
       # is a security boundary, so a real bubblewrap run must prove write-inside-OK
       # / write-outside-blocked — not just unit-test the flag shape. The ephemeral

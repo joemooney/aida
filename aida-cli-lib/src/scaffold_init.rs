@@ -263,6 +263,7 @@ pub(crate) fn ensure_discipline_pack_scaffold(
             if dest.exists() {
                 continue;
             }
+            create_parent_dirs(&dest)?;
             std::fs::rename(&old_path, &dest)?;
             report.relocated += 1;
             report
@@ -272,18 +273,43 @@ pub(crate) fn ensure_discipline_pack_scaffold(
         remove_empty_parent_dirs(root, &old_dir)?;
     }
 
+    write_discipline_pack_entries(root, &dir, &pack, &mut report)?;
+    Ok(report)
+}
+
+/// Create `path`'s parent directories. Embedded discipline keys may be nested
+/// (e.g. `standing-orders/advisor.md`), so `.aida/discipline/` alone is not
+/// enough.
+// trace:STORY-1693 | ai:claude
+fn create_parent_dirs(path: &std::path::Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+/// Write each missing `(relative name, content)` pack entry under `dir`,
+/// creating nested parent directories; existing files are left alone.
+// trace:STORY-1693 | ai:claude
+pub(crate) fn write_discipline_pack_entries(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    pack: &[(&str, &str)],
+    report: &mut DisciplinePackScaffoldReport,
+) -> Result<()> {
     for (name, content) in pack {
         let dest = dir.join(name);
         if dest.exists() {
             continue;
         }
+        create_parent_dirs(&dest)?;
         std::fs::write(&dest, format!("{content}\n"))?;
         report.written += 1;
         report
             .written_paths
             .push(dest.strip_prefix(root).unwrap_or(&dest).to_path_buf());
     }
-    Ok(report)
+    Ok(())
 }
 
 pub(crate) fn remove_empty_parent_dirs(

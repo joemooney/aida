@@ -236,6 +236,145 @@ pub(crate) fn read_latest_handoff(project_root: &Path, seat: &str) -> Result<Opt
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standing orders (STORY-1693).
+//
+// A handoff is a snapshot written by the outgoing seat; it can be stale or
+// wrong. Standing orders are durable operator rulings that a fresh seat must
+// read FIRST, so `--show` prints them ahead of the handoff body. Two optional
+// sources, in order: the tracked, template-managed
+// `.aida/discipline/standing-orders/<seat>.md`, then the repo-local untracked
+// `.aida/standing-orders/<seat>.md` that `--standing-orders add` appends to.
+// trace:STORY-1693 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Header of the block `--show` prints before the handoff body.
+pub(crate) const STANDING_ORDERS_HEADER: &str =
+    "STANDING ORDERS (these override anything in the handoff below)";
+
+/// Tracked, template-managed standing orders for `seat` (source 1).
+pub(crate) fn tracked_standing_orders_path(project_root: &Path, seat: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("discipline")
+        .join("standing-orders")
+        .join(format!("{seat}.md"))
+}
+
+/// Repo-local, untracked operator rulings for `seat` (source 2).
+pub(crate) fn local_standing_orders_path(project_root: &Path, seat: &str) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("standing-orders")
+        .join(format!("{seat}.md"))
+}
+
+fn read_optional(path: &Path) -> Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(s) if s.trim().is_empty() => Ok(None),
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+/// The STANDING ORDERS block for `seat`: each present source under a source
+/// header, tracked first. `None` when neither source has content, so the
+/// caller prints no empty header.
+pub(crate) fn render_standing_orders(project_root: &Path, seat: &str) -> Result<Option<String>> {
+    let seat = sanitize_seat(seat)?;
+    let sources = [
+        (
+            tracked_standing_orders_path(project_root, &seat),
+            "tracked, template-managed",
+        ),
+        (
+            local_standing_orders_path(project_root, &seat),
+            "repo-local operator rulings",
+        ),
+    ];
+    let mut out = String::new();
+    for (path, kind) in &sources {
+        let Some(body) = read_optional(path)? else {
+            continue;
+        };
+        let rel = path.strip_prefix(project_root).unwrap_or(path);
+        out.push_str(&format!(
+            "\n--- source: {} ({kind}) ---\n{}\n",
+            rel.display(),
+            body.trim_end()
+        ));
+    }
+    if out.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(format!("{STANDING_ORDERS_HEADER}\n{out}")))
+}
+
+/// What `aida session handoff --show` prints: the standing orders block (if
+/// any) BEFORE the handoff body, and the standing orders even when no
+/// handoff was ever written.
+pub(crate) fn compose_handoff_show(
+    standing: Option<&str>,
+    handoff: Option<&str>,
+    seat: &str,
+) -> String {
+    let mut out = String::new();
+    if let Some(block) = standing {
+        out.push_str(block.trim_end());
+        out.push_str("\n\n--- handoff ---\n");
+    }
+    match handoff {
+        Some(text) => out.push_str(text),
+        None => out.push_str(&format!("No handoff recorded for seat '{seat}'.\n")),
+    }
+    out
+}
+
+/// Append a dated entry to the repo-local standing orders for `seat`,
+/// creating the file (with a title) on first use. Returns the file path.
+pub(crate) fn add_standing_order(
+    project_root: &Path,
+    seat: &str,
+    text: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<PathBuf> {
+    let seat = sanitize_seat(seat)?;
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        bail!("standing order text is empty");
+    }
+    let path = local_standing_orders_path(project_root, &seat);
+    let dir = path.parent().expect("standing-orders path has a parent");
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let fresh = !path.exists();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    if fresh {
+        writeln!(
+            f,
+            "# Standing orders: {seat} (repo-local operator rulings)\n"
+        )?;
+    }
+    writeln!(f, "- [{}] {text}", now.format("%Y-%m-%d %H:%MZ"))?;
+    Ok(path)
+}
+
+/// The dated entries in the repo-local standing orders for `seat`, in order.
+pub(crate) fn list_standing_orders(project_root: &Path, seat: &str) -> Result<Vec<String>> {
+    let seat = sanitize_seat(seat)?;
+    let path = local_standing_orders_path(project_root, &seat);
+    Ok(read_optional(&path)?
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.starts_with("- ["))
+        .map(str::to_string)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,5 +518,123 @@ mod tests {
         assert!(write_handoff(dir.path(), "advisor", "   ", now).is_err());
         assert!(write_handoff(dir.path(), "../etc", "x", now).is_err());
         assert!(!dir.path().join(".aida/handoff/advisor/latest.md").exists());
+    }
+
+    // trace:STORY-1693 | ai:claude
+    fn at(ts: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(ts)
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    #[test]
+    fn standing_orders_absent_renders_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(render_standing_orders(dir.path(), "advisor")
+            .unwrap()
+            .is_none());
+        // An empty (whitespace-only) source is also absent: no empty header.
+        let p = tracked_standing_orders_path(dir.path(), "advisor");
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, "  \n").unwrap();
+        assert!(render_standing_orders(dir.path(), "advisor")
+            .unwrap()
+            .is_none());
+        assert!(list_standing_orders(dir.path(), "advisor")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn standing_orders_both_sources_in_order_under_one_header() {
+        let dir = tempfile::tempdir().unwrap();
+        let tracked = tracked_standing_orders_path(dir.path(), "advisor");
+        std::fs::create_dir_all(tracked.parent().unwrap()).unwrap();
+        std::fs::write(&tracked, "1. ship approved green PRs\n").unwrap();
+        add_standing_order(
+            dir.path(),
+            "advisor",
+            "never page the operator",
+            at("2026-10-15T05:00:00Z"),
+        )
+        .unwrap();
+        let block = render_standing_orders(dir.path(), "Advisor")
+            .unwrap()
+            .unwrap();
+        assert!(block.starts_with(STANDING_ORDERS_HEADER), "{block}");
+        assert_eq!(block.matches(STANDING_ORDERS_HEADER).count(), 1);
+        let t = block
+            .find("source: .aida/discipline/standing-orders/advisor.md")
+            .unwrap();
+        let l = block
+            .find("source: .aida/standing-orders/advisor.md")
+            .unwrap();
+        assert!(t < l, "tracked source must come first: {block}");
+        assert!(block.find("ship approved green PRs").unwrap() < l);
+        assert!(block.find("never page the operator").unwrap() > l);
+    }
+
+    #[test]
+    fn standing_orders_one_source_only() {
+        let dir = tempfile::tempdir().unwrap();
+        add_standing_order(dir.path(), "advisor", "local only", chrono::Utc::now()).unwrap();
+        let block = render_standing_orders(dir.path(), "advisor")
+            .unwrap()
+            .unwrap();
+        assert!(block.contains("local only"));
+        assert!(!block.contains("discipline/standing-orders"), "{block}");
+    }
+
+    #[test]
+    fn standing_orders_add_list_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        add_standing_order(
+            dir.path(),
+            "advisor",
+            "first ruling",
+            at("2026-10-15T05:00:00Z"),
+        )
+        .unwrap();
+        let p = add_standing_order(
+            dir.path(),
+            "advisor",
+            "second\n  ruling",
+            at("2026-10-15T06:30:00Z"),
+        )
+        .unwrap();
+        assert!(p.ends_with(".aida/standing-orders/advisor.md"));
+        assert_eq!(
+            list_standing_orders(dir.path(), "advisor").unwrap(),
+            vec![
+                "- [2026-10-15 05:00Z] first ruling".to_string(),
+                "- [2026-10-15 06:30Z] second ruling".to_string(),
+            ]
+        );
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert_eq!(text.matches("# Standing orders: advisor").count(), 1);
+        assert!(add_standing_order(dir.path(), "advisor", "  ", chrono::Utc::now()).is_err());
+        assert!(add_standing_order(dir.path(), "../x", "y", chrono::Utc::now()).is_err());
+    }
+
+    #[test]
+    fn show_puts_standing_orders_before_the_handoff_and_survives_no_handoff() {
+        let both = compose_handoff_show(
+            Some("STANDING ORDERS (x)\nobey"),
+            Some("handoff body\n"),
+            "advisor",
+        );
+        assert!(both.find("obey").unwrap() < both.find("handoff body").unwrap());
+        let no_handoff = compose_handoff_show(Some("STANDING ORDERS (x)\nobey"), None, "advisor");
+        assert!(no_handoff.starts_with("STANDING ORDERS"));
+        assert!(no_handoff.contains("No handoff recorded for seat 'advisor'."));
+        // No standing orders: output is exactly the old handoff output.
+        assert_eq!(
+            compose_handoff_show(None, Some("handoff body\n"), "advisor"),
+            "handoff body\n"
+        );
+        assert_eq!(
+            compose_handoff_show(None, None, "advisor"),
+            "No handoff recorded for seat 'advisor'.\n"
+        );
     }
 }

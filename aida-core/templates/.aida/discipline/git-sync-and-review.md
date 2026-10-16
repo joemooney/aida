@@ -145,7 +145,7 @@ Git/CI/merge:
 - [A test on the branch may be wired into nothing](feedback_a_test_on_the_branch_may_be_wired_into_nothing.md) — ci.yml names shell tests individually; grep for the FILENAME
 - [New CLI leaf must regenerate the format-json audit](feedback_new_cli_leaf_must_regenerate_format_json_audit.md) — the guard is an integration test check-ci-fast can't reach
 - [Tier a gate transitively](feedback_tier_a_gate_transitively_not_by_its_body.md) — build deps hide in called scripts; prefer loud failure over a predicate
-- [Source-scanning guards need the full suite](feedback_source_scanning_guards_need_the_full_suite.md) — satisfy honestly, never widen the allowlist
+- [Source-scanning guards need the full suite](feedback_source_scanning_guards_need_the_full_suite.md) — `make test-touched` module filters never reach them; CI's full suite does (or `--filter <guard>`); satisfy honestly, never widen the allowlist
 - [A source-scanning guard greps your comment too](feedback_a_source_scanning_guard_greps_your_comment_too.md) — the explaining comment trips it; `== allowed` blocks helper workarounds
 - [A fence tag is a gate-scope decision](feedback_a_fence_tag_is_a_gate_scope_decision.md) — `console` imports lines into check-portability; no inner fence inside a fence
 - [trace: never on a /// doc comment](reference_trace_marker_never_on_a_doc_comment.md) — clap pulls /// into --help; pre-commit refuses it
