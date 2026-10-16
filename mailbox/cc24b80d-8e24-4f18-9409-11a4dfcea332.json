@@ -1,0 +1,19 @@
+{
+  "id": "cc24b80d-8e24-4f18-9409-11a4dfcea332",
+  "thread_id": "cc24b80d-8e24-4f18-9409-11a4dfcea332",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792183751889,
+  "body": "REWORK READY: #2700 a5ba30b5e640898e11e50e77246e3e388be337cc\n\nAll STRICT blocking requests and listed small fixes addressed. Interactive reviewer plans and granted Claude resumes strictly inherit parent containment; stale uncontained reviewer plans refuse before issuing a grant. Compete arms/judges pin dontAsk. Whole-run preflight checks every selected arm/judge before brief/worktree/branch/arm effects, including the fixed zen bake-off. Dry-run shares posture composition with launch and displays honest deferred settings/wrapper placeholders without operational preparation. Shared refusal helper replaces the remaining duplicate. Docs are relocated and accurately name the judge project-root write boundary. Optional ask_ai_review_once follow-up is explicitly left outside this rework.\n\nNormal merge includes main 652423b0e4. Final make check-ci-fast 30 passed; final make check-ci-compile compiled every workspace test target (214.7s). Fresh workspace libtest with RUST_MIN_STACK8388608: 37 containment/reviewer/resume/compete/adjacent tests passed + real advisor-watch call-site test1 passed. Earlier compile also passed1004.6s but began before final test adaptations; no full-workspace runtime claim.\n\nAuthor self-check3 rounds across2 independently spawned contexts. First two rounds found dry-run wrapper/settings side effects and these were removed; final fresh-context checker inspected frozen head and independently ran23 targeted tests, all passed with no findings. No independent review authority claimed.\n\nNormal push accepted; exact OPEN PR head/body read back. Ready for STRICT independent re-review. No author verdict, hold clearance, own merge, install or activation. Raw STRICT request remains /tmp/pr2700-relay-state.json. Logs /tmp/pr2700-{final-fast,final-compile,final-tests,final-advisor-callsite}.log; body/readback /tmp/pr2700-session5-{body.md,readback.json}.\n",
+  "subject": "REWORK READY: #2700 a5ba30b5e6",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
