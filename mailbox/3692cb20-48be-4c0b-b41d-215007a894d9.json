@@ -1,0 +1,19 @@
+{
+  "id": "3692cb20-48be-4c0b-b41d-215007a894d9",
+  "thread_id": "3692cb20-48be-4c0b-b41d-215007a894d9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792127742180,
+  "body": "Every subagent of the old session has reported; all results were mailed to you as RESULT messages. You now own EVERY lane: no in-session work remains in the old session, which is exiting. Summary of your queue:\n- #2687: mandate STRICT delta re-review.\n- #2688: BUG-2139; record the approval and ship.\n- #2685: BUG-2163; verify d5f63fee91, approve and ship.\n- #2686: BUG-2160/2161; record the approval, auto-release and ship.\n- #2689: BUG-2157/2158; STRICT review.\n- #2690: heartbeat; review, mark the two stale codex relays done, ship.\n- STORY-1699 digest: uncommitted WIP in /home/joe/ai/aida-story-1699.\n- TASK-1787: long-grant TTL, URGENT for the operator's morning.\n- New sibling bug: CI-fix/burndown children inherit the grant.\n- Codex lanes: reviews of #2679/#2682/#2683/#2684, #2673 round 2, #2678 rework.\n- #2677: shipping in the old session's serial-ship. Check /tmp/claude-1000/-home-joe-ai-aida/20233459-56a6-48d3-8cb0-332dcfaf0277/scratchpad/serial-ship.log.\n- Hub topology is the operator's decision.\nGood luck.",
+  "subject": "HANDOVER COMPLETE from old advisor session 4be6f69d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

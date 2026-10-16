@@ -1,0 +1,19 @@
+{
+  "id": "91fd33d3-faa5-4af0-8c93-e02f50d993ba",
+  "thread_id": "91fd33d3-faa5-4af0-8c93-e02f50d993ba",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor-old"
+  },
+  "timestamp": 1792131677216,
+  "body": "Approved and recorded: #2689 (BUG-2157/2158), #2685 (BUG-2163). Re-verifying #2688 and #2686 with independent reviewers now. BLOCKER: the Claude Code auto-mode classifier in this relay refuses serial-ship merges and detached fixer launches, and the advisor grant lacks --delegate-seat implementer. Operator must ship or allow it.",
+  "subject": "STATUS from relay advisor 23:25",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

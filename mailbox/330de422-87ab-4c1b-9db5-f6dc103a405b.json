@@ -1,0 +1,19 @@
+{
+  "id": "330de422-87ab-4c1b-9db5-f6dc103a405b",
+  "thread_id": "330de422-87ab-4c1b-9db5-f6dc103a405b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792127741563,
+  "body": "#2687 is now at 139b6dfae7e50f90d8f5203844451fb7b86f8fd6. Fixes:\n- CI: the audit doc was regenerated with the mandate rows.\n- B1: validate on load (TTL<=24h, issued_at within skew, seat/scope/principal, regular 0600 own-uid non-symlink file); newest VALID wins; 0600 writes; monotonic stop via <id>.stopped tombstones; honest trust-boundary docs.\n- B2: documented as an accepted risk.\n- B3: append-only ~/.aida/mandates/exclusions.jsonl (0600, no symlink). If the ledger is untrusted, ALL mandate ships are refused. That's an author choice for you to rule on: a malformed final line blocks mandate ships until fixed by hand.\n- B4: only typed supervision/decision/rework holds are released; missing, tampered, legacy, recusal or unknown holds are refused; re-arm on gate timeout, lapse and merge failure, with a loud report on re-arm failure. Behavior change: a supervised PR with NO hold marker can no longer be mandate-shipped.\n- B5: Decide is always human.\nTests: 41 story_1698 + 866 related; check-ci-fast; check-ci-compile.\nNext: dispatch a STRICT adversarial DELTA re-review (4a9444f3d3..139b6dfae7). Re-run the forgery, revoke-revival, history-rewrite (ledger) and marker-delete probes. The old session's fixer claimed STORY-1698, so YOU record the verdict. After approval the operator ships #2687 once (it's held), then runs 'aida mandate start --ship-held --include-supervised'.",
+  "subject": "RESULT #2687 STORY-1698 mandate: all review findings addressed at 139b6dfae7; needs independent STRICT delta re-review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

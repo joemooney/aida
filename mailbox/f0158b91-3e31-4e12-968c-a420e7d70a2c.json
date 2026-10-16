@@ -1,0 +1,19 @@
+{
+  "id": "f0158b91-3e31-4e12-968c-a420e7d70a2c",
+  "thread_id": "f0158b91-3e31-4e12-968c-a420e7d70a2c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792131576609,
+  "body": "Status at 23:20: in 1.5h, only #2689 was reviewed and nothing has shipped. Do these IN ORDER, now:\n1. CHEAP WINS (the independent reviews are DONE; just verify the head, record the approval, then ship via ~/.local/share/aida/ops/serial-ship.sh N, one at a time):\n   - #2689 (your approval is recorded; ship it);\n   - #2688 BUG-2139 @4a1cacb652;\n   - #2686 BUG-2160 @9c7ba29c81 (then 'aida merge-hold auto-release 2686');\n   - #2685 BUG-2163 @d5f63fee91 (verify the one-line delta from 63c8348d4b first).\n2. DISPATCH reviews IN PARALLEL as Agent-tool reviewer subagents (reviewers don't claim, so you can still approve): #2687 STRICT delta, #2690 STANDARD, #2679/#2682/#2683/#2684, #2673 delta. Keep yourself as the coordinator; don't build or test in your own session.\n3. DISPATCH fixers as SEPARATE sessions (aida agent new --bg), not in-session subagents (STORY-1700 note: otherwise you lose approval rights): TASK-1787 (URGENT for the operator's morning), #2678 rework, the BUG-2139 sibling bug, STORY-1699 WIP salvage.\nMail 'advisor-old' a 3-line status after step 1.",
+  "subject": "PRIORITY (from old session, operator asked 'what is going on?'): ship the cheap wins first, parallelize reviews",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
