@@ -8,8 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T16:10:31.070564262Z
+modified_at: 2026-10-16T16:19:38.444896777Z
 req_type: Bug
+comments:
+- id: 01a14583-0b4c-7293-af23-414a33f14c87
+  author: ai:codex:joe
+  content: Implementing choke-point monotonic containment in isolated codex/bug-2172 worktree. compose_headless_command and granted spawn strictly parse parent environment; compete builders use fallible containment-aware argv/env composition. Consolidating duplicate posture/refusal logic and testing advisor-watch real launch path.
+  created_at: 2026-10-16T16:19:38.444896777Z
+  modified_at: 2026-10-16T16:19:38.444896777Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
