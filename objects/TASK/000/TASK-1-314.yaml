@@ -1,0 +1,28 @@
+id: 01a1460a-238d-7953-b874-3c5929d9cc8a
+spec_id: TASK-1-314
+title: 'minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping the private prefix all collapse to one reason, 'missing, unreadable or unsafe tool' (completeness.rs:153, 236). The AC asks for a listing of missing/stub components; carry the underlying error kind so 'missing' can be told apart from 'unsafe link'.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-16T18:47:12.013376824Z
+modified_at: 2026-10-16T18:47:12.013376824Z
+req_type: Task
+tags:
+- carried-from:STORY-1677
+- finding-hash:99e2fc82
+- from-review:STORY-1677
+- kind:carried-forward
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6
