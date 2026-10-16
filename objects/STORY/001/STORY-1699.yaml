@@ -1,0 +1,34 @@
+id: 01a142de-fa93-7461-a845-1ee3d19e011b
+spec_id: STORY-1699
+agreed_id: STORY-1699
+title: 'Fleet digest and heartbeat: an hourly compact ''what''s in progress'' report with automatic stall/blocked escalation'
+description: |-
+  ## Why
+  On 2026-10-15 the codex relay went BLOCKED at 16:13 (exit 3, waiting on advisor signoff) and nobody noticed for 4.5h. Seven PRs sat idle. 'aida ps' is a firehose: dozens of rows of adopted/dormant/stale sessions that are unreadable to a human, and nothing digests it on a schedule. The advisor's own Agent-tool fixers take generic harness-worktree leases, so their work reads as flag-only or dormant.
+
+  ## Acceptance
+  1. 'aida fleet digest' prints at most ~15 lines (plus --json): one row per LANE, i.e. each relay run, each live spec session, and each open PR. Each row has: state (progressing / waiting-review / waiting-human / blocked / stalled / done), last-progress age (newest of commit, push, CI, verdict, mail, relay session log), and ONE next action with its owner. A header gives counts and the oldest stall.
+  2. Stall rules (configurable):
+     - a relay with relay.status state=blocked or exited and no .done marker;
+     - a lane with no progress signal for 45m while marked in-progress;
+     - an open PR with no verdict and no owner activity for 60m;
+     - an APPROVED PR that has waited for a human ship for more than 30m.
+  3. 'aida fleet digest --fail-on-findings' exits nonzero on any stall, so the tick routes it (CronJobFailed) to the advisor seat as a due item. A stall that also needs the operator (waiting-human, a blocked relay) additionally pushes an operator notification.
+  4. Agent-tool fan-out leases carry the spec id and the parent session, so the digest and 'aida ps' attribute them correctly instead of as flag-only or harness-worktree.
+  5. 'aida ps' gains a --summary that prints the digest by default when there are more than 10 rows.
+  Tests: fixture lanes for each state; blocked relay status; stale PR; fan-out lease attribution. Tier: STANDARD.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T04:01:11.827678807Z
+modified_at: 2026-10-16T04:01:11.827678807Z
+req_type: Story
+filed_at:
+  code_sha: 463b81d02796148deba3c59c47daefce584c35f4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 463b81d027
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
