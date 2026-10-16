@@ -7,12 +7,12 @@ description: |-
   ## Acceptance
   - `aida statusline` and `aida digest` show the latest regenerability score and its age when one is recorded, and nothing when none is.
   - Tests for both surfaces, including the no-score case.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:10:01.221147663Z
-modified_at: 2026-10-16T08:21:21.072805659Z
+modified_at: 2026-10-16T15:39:33.112020287Z
 req_type: Task
 tags:
 - needs-docs
@@ -108,6 +108,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1455e-5774-7b61-8b2a-76759d13aa90
+  author: aida-auto-bump
+  timestamp: 2026-10-16T15:39:33.108395617Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1455e-5778-77a3-800a-cb346a46004b
+  timestamp: 2026-10-16T15:39:33.112009769Z
+  agent: implementer
+  commit_sha: a2cecb69741328a6b9238634f60dee50d23dbe42
+  summary: 'Base-only merge-up 826c3352e4: AGENTS.md conflict resolved keeping both paragraphs; no code conflicts; approval carried pending green Build'
+  review_verdict: approved
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
@@ -116,3 +130,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T15:39:33.108391481Z
+  completion_sha: a2cecb69741328a6b9238634f60dee50d23dbe42
