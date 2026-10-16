@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1675",
+  "publishes": [
+    {
+      "at": "2026-10-16T14:48:39.870514620Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T15:02:27.577396484Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:14:37.013073765Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:14:39.038737704Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "STORY-1675"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:36:13.385532990Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:36:13.386119179Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:05:14.942327779Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T22:45:42.554469540Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1675",
+        "branch": "codex/story-1675",
+        "first_seen": "2026-10-15T22:45:42.554407638+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:50:54.012535279Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "STORY-1675"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:55:02.230005749Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T22:55:02.230545039Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:57:14.004202444Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2684,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ba6a25cdd5f420deea5a9f8615e8bbd25d86f96a"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:57:15.808567641Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1: CI failures caused by PR (identity replacement regression, store-wide hash check, seam test placement, schema docs) + AGENTS.md conflict; see PR comment",
+        "recovery_hint": "address the review findings, move STORY-1675 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:10:47.872101215Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:10:47.872820903Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:11:26.105517162Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:12:18.553759885Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T08:21:01.390168463Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:54:34.617417449Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:54:51.145681039Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T13:04:01.165618656Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "cc39e39e5682a07ce3e367d5dedde4947f37fbd6"
+      }
+    },
+    {
+      "ts": "2026-10-16T13:04:20.597077885Z",
+      "spec": "STORY-1675",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2684,
+        "verdict": "APPROVED",
+        "reviewed_sha": "cc39e39e5682a07ce3e367d5dedde4947f37fbd6"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:48:11.163449463Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T14:48:25.943531676Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2684
+      }
+    },
+    {
+      "ts": "2026-10-16T14:48:39.847623925Z",
+      "spec": "STORY-1675",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1f5e08becb2bfa23c73ec23d4cfb6b50b784f5c3",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
