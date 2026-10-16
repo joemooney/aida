@@ -3,12 +3,12 @@ spec_id: BUG-2150
 agreed_id: BUG-2150
 title: Standalone reviewer pickup needs the spec queued and the implementer lease released (--force-claim)
 description: 'From the STORY-1654 e2e: launching the standalone reviewer via ''aida queue work PR-<n> --role reviewer --no-human'' required the spec to be queued and the implementer lease released (--force-claim). The reviewer role should be able to pick up a PR review while the implementer lease exists (review is a distinct claim), without force.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:14:13.077444075Z
-modified_at: 2026-10-15T22:22:45.204111148Z
+modified_at: 2026-10-16T01:43:14.157324513Z
 req_type: Bug
 tags:
 - relay
@@ -63,6 +63,22 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a14260-abe8-7ab1-9d86-07db6c849a85
+  author: aida-auto-bump
+  timestamp: 2026-10-16T01:43:14.152112947Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a14260-abed-7c20-adb4-d0096b805883
+  timestamp: 2026-10-16T01:43:14.157312309Z
+  agent: aida
+  commit_sha: 463b81d02796148deba3c59c47daefce584c35f4
+  summary: 'Base-only main merge (update-branch for the CI definition change from #2674), verified by the advisor: empty remerge-diff; PR delta identical to the approved bbb2c83c3e (10 files, +1260/-28, line-identical). Approval carried.'
+  punted:
+  - 'punted: STRICT round 1: the lease coexistence and exit status are correct, but CI is red, the authority checks for conditions (a)/(b) are untested (a mutation removing all three passes), and identity is not bound to this launch''s child grant'
+  review_verdict: approved
 filed_at:
   code_sha: 92763a125a7b2ac062064c6324063723a02a80ad
   branch: main
@@ -71,11 +87,7 @@ filed_at:
   aida_build_sha: defb55f88b
   vendor: claude
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STRICT round 1: the lease coexistence and exit status are correct, but CI is red, the authority checks for conditions (a)/(b) are untested (a mutation removing all three passes), and identity is not bound to this launch''s child grant'
-  recovery_hint: address the review findings, move BUG-2150 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-15T20:05:33.520046110Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T01:43:14.152107268Z
+  completion_sha: 463b81d02796148deba3c59c47daefce584c35f4
