@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1784",
+  "publishes": [
+    {
+      "at": "2026-10-16T15:50:54.157625224Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T19:51:56.924561270Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:04:24.569618350Z",
+      "spec": "TASK-1784",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T05:06:44.259154274Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:06:54.884281030Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T07:31:10.763045002Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:35:50.803138368Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T07:36:30.435949025Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:45:13.386753439Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T13:23:59.244546677Z",
+      "spec": "TASK-1784",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1784",
+        "branch": "task-1784",
+        "first_seen": "2026-10-16T13:23:59.244387451+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:14:13.363965786Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2698,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4f3cf95991c9268abd8d83f35362f36491f58b5e"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:14:16.014141174Z",
+      "spec": "TASK-1784",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Ratchet red; dead-lease test is path-only (can end a live lease); lease released before mint so a failed mint strands the spec",
+        "recovery_hint": "address the review findings, move TASK-1784 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:21:15.606190728Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2698,
+        "verdict": "APPROVED",
+        "reviewed_sha": "06c6c50962f24641bd341c5b11112d00053f5f84"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:50:23.705129359Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T15:50:40.011848364Z",
+      "spec": "TASK-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2698
+      }
+    },
+    {
+      "ts": "2026-10-16T15:50:54.138021156Z",
+      "spec": "TASK-1784",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+        "pr": 2698,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
