@@ -1725,6 +1725,99 @@ pub(crate) fn merge_approval_inputs(
     (candidates, policy)
 }
 
+/// STORY-1698: who a fire-fighting mandate lets ship — the mandate id and the
+/// advisor principal it is bound to.
+// trace:STORY-1698 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MandateCover {
+    pub id: String,
+    pub principal: String,
+}
+
+/// STORY-1698: does an active fire-fighting mandate let THIS session ship PR
+/// `pr` past its merge-hold? Reads the mandate records from disk at this
+/// instant (never cached); only when one is active does it read the forge,
+/// the verdicts and the store. `head` is read lazily for the same reason.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn mandate_ship_cover(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+    override_stale_approval: bool,
+) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
+    use crate::mandate::{MandateRefusal, MandateState, ShipCheck};
+    let state = crate::mandate::current_state();
+    if !matches!(state, MandateState::Active(_)) {
+        return Err(match state {
+            MandateState::Expired(m) => MandateRefusal::Expired { id: m.id },
+            MandateState::Stopped(m) => MandateRefusal::Stopped { id: m.id },
+            _ => MandateRefusal::NoMandate,
+        });
+    }
+    let grant = crate::seat_authority::current_grant(project_root).map(|g| {
+        (
+            aida_core::team::canonical_role(&g.seat),
+            g.principal.trim().to_string(),
+        )
+    });
+    let head = head();
+    let (ids, branch, forge_resolved) = pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    let candidates = pr_ship::merge_gate_verdict_candidates(
+        &[project_root, main_worktree],
+        pr,
+        &ids,
+        head.as_deref(),
+    );
+    let author_ids: &[String] = if forge_resolved { &ids } else { &[] };
+    let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
+    let store = load_store_for_lookup(project_root);
+    let specs: Vec<crate::mandate::ShipSpec> = ids
+        .iter()
+        .map(|id| {
+            let req = store.as_ref().and_then(|store| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| {
+                        r.spec_id
+                            .as_deref()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                            || r.agreed_id
+                                .as_deref()
+                                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                    })
+                    .cloned()
+            });
+            (id.clone(), req)
+        })
+        .collect();
+    let id = crate::mandate::ship_decision(&ShipCheck {
+        state: &state,
+        now: chrono::Utc::now(),
+        grant: grant.as_ref().map(|(s, p)| (s.as_str(), p.as_str())),
+        specs: &specs,
+        specs_resolved: forge_resolved,
+        candidates: &candidates,
+        policy: &policy,
+        head: head.as_deref(),
+        override_stale_approval,
+    })?;
+    Ok(MandateCover {
+        id,
+        principal: grant.map(|(_, p)| p).unwrap_or_default(),
+    })
+}
+
+/// STORY-1698: is mandate `id` still active at this instant? Re-read from
+/// disk immediately before the merge call.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn mandate_still_active(id: &str) -> bool {
+    matches!(crate::mandate::current_state(), crate::mandate::MandateState::Active(m) if m.id == id)
+}
+
 /// BUG-1918: the approval gate for merge paths other than `aida pr ship`
 /// (`aida release --after-pr`, burndown): approval AUTHORITY, then head
 /// coverage, with no override. `Ok(pin)` = merge pinned to `pin`
@@ -1939,6 +2032,7 @@ fn ship_preflight_gates(
     override_stale_check: bool,
     override_stale_approval: bool,
     delete_branch: bool,
+    hold_authority: bool,
 ) -> Result<()> {
     use pr_ship::ShipRefusal;
     let forge = crate::forge::forge_for(project_root);
@@ -1989,10 +2083,12 @@ fn ship_preflight_gates(
     let marker = crate::merge_hold::read_hold(hold_root, change.id);
     let label_only =
         marker.is_none() && crate::merge_hold::label_present(hold_root, change.id).unwrap_or(false);
+    // STORY-1698: a human at a terminal, or an advisor covered by an active
+    // fire-fighting mandate. trace:STORY-1698 | ai:claude
     if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
         marker.is_some(),
         label_only,
-        crate::has_integrity_floor_authority(),
+        hold_authority,
         change.id,
     ) {
         return Err(ShipRefusal::MergeHold.error(refusal));
@@ -2386,6 +2482,55 @@ pub(crate) fn pr_ship_handler(
             pr_is_merged_with_sink(&project_root, pr_number as u32, &mut probe_sink) == Some(true);
     }
 
+    // ---- STORY-1698: the fire-fighting mandate. A human at a terminal
+    // needs none; any other caller may release a hold only when an active
+    // mandate covers THIS session (advisor seat of the minting human),
+    // these specs, and an attested independent approval at the head. Read
+    // fresh here, again under the merge lease, and once more immediately
+    // before the merge call. trace:STORY-1698 | ai:claude
+    let floor_authority = crate::has_integrity_floor_authority();
+    let mandate_ids = || {
+        let mut ids: Vec<String> = ship_gate_spec_records(&project_root)
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect();
+        ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
+        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
+            ids.extend(pr_ship::extract_spec_ids_from_text(title));
+        }
+        ids
+    };
+    let mandate_cover_now = || {
+        if pr_number == 0 || already_merged || floor_authority {
+            return Err(crate::mandate::MandateRefusal::NoMandate);
+        }
+        mandate_ship_cover(
+            &project_root,
+            &main_worktree,
+            pr_number,
+            &mandate_ids(),
+            Some(&ship_branch),
+            || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
+            override_stale_approval,
+        )
+    };
+    let mut mandate_cover = mandate_cover_now();
+    let mandate_refusal_note =
+        |cover: &std::result::Result<MandateCover, crate::mandate::MandateRefusal>| match cover {
+            Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
+                let message = r.message(pr_number);
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr_number),
+                    &message,
+                );
+                format!(" {message}.")
+            }
+            _ => String::new(),
+        };
+
     // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
     // without a live drive and whatever its reason text names. Checked HERE —
     // before the CI watch (which would otherwise discount the hold's own red
@@ -2399,7 +2544,7 @@ pub(crate) fn pr_ship_handler(
     if pr_number != 0 {
         if let Some(refusal) = pr_ship::ship_hold_gate(
             crate::merge_hold::read_hold_record(&main_worktree, pr_number).as_ref(),
-            crate::has_integrity_floor_authority(),
+            floor_authority || mandate_cover.is_ok(),
             pr_number,
             |record| {
                 // BUG-1532 criterion 4: only for a refusal hold with a human
@@ -2412,6 +2557,7 @@ pub(crate) fn pr_ship_handler(
                 )
             },
         ) {
+            let refusal = format!("{refusal}{}", mandate_refusal_note(&mandate_cover));
             log_ship_activity(
                 &main_worktree,
                 Some(pr_number),
@@ -2482,7 +2628,10 @@ pub(crate) fn pr_ship_handler(
     let supervised = if already_merged {
         Vec::new()
     } else {
-        supervised_specs_for_ship(&project_root, interactive_tty)
+        // STORY-1698: an advisor covered by an active mandate is the explicit
+        // advisor merge this gate waits for (operator-only specs never are:
+        // the mandate refuses them). trace:STORY-1698 | ai:claude
+        supervised_specs_for_ship(&project_root, interactive_tty || mandate_cover.is_ok())
     };
     if !supervised.is_empty() {
         for (id, label) in &supervised {
@@ -2533,6 +2682,7 @@ pub(crate) fn pr_ship_handler(
             override_stale_check,
             override_stale_approval,
             delete_branch,
+            floor_authority || mandate_cover.is_ok(),
         )?;
     }
 
@@ -2664,6 +2814,25 @@ pub(crate) fn pr_ship_handler(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    // STORY-1698: re-read the mandate under the merge lease. A mandate that
+    // covered the early gate but lapsed (or whose approval moved) since
+    // refuses here, before any hold is touched. trace:STORY-1698 | ai:claude
+    if mandate_cover.is_ok() {
+        mandate_cover = mandate_cover_now();
+        if mandate_cover.is_err() {
+            let refusal = format!(
+                "PR-{pr_number} left OPEN — the merge-hold stays.{}",
+                mandate_refusal_note(&mandate_cover)
+            );
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Skipped(refusal.clone()),
+            );
+            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+        }
+    }
     if !already_merged {
         ship_preflight_gates(
             &project_root,
@@ -2673,6 +2842,7 @@ pub(crate) fn pr_ship_handler(
             override_stale_check,
             override_stale_approval,
             delete_branch,
+            floor_authority || mandate_cover.is_ok(),
         )?;
     }
     // STORY-1405: refuse while a reviewer is mid-way through THIS head. Asked
@@ -2848,10 +3018,15 @@ pub(crate) fn pr_ship_handler(
         // not even for a human — because a ship leaves no clearance record.
         // It goes through `aida merge-hold clear <PR>`, which records it.
         // trace:BUG-1499 | ai:claude
+        // STORY-1698: the mandate cover was re-read under the merge lease.
+        // trace:STORY-1698 | ai:claude
+        let mandate_release = (!floor_authority)
+            .then(|| mandate_cover.as_ref().ok().cloned())
+            .flatten();
         if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
             marker_reason.is_some(),
             label_only_hold,
-            crate::has_integrity_floor_authority(),
+            floor_authority || mandate_release.is_some(),
             pr_number,
         ) {
             log_ship_activity(
@@ -2960,9 +3135,37 @@ pub(crate) fn pr_ship_handler(
                 ),
             }
             let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
-            // BUG-1532: a refusal released by a verdict is recorded like a
-            // `merge-hold clear`, naming the verdict that met the condition.
-            if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
+            // STORY-1698: a mandate-authorized release is recorded in the
+            // hold ledger and on the PR as "released under mandate <id> by
+            // advisor". trace:STORY-1698 | ai:claude
+            if let (Some(cover), Some(record)) = (&mandate_release, &hold_record) {
+                eprintln!(
+                    "  {} PR-{pr_number}: merge-hold {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    crate::mandate::release_note(&cover.id)
+                );
+                if let Err(err) = crate::merge_hold::record_mandate_clearance(
+                    &hold_root,
+                    record,
+                    &cover.principal,
+                    &cover.id,
+                    released_by_verdict.clone(),
+                ) {
+                    eprintln!(
+                        "  {} could not record the mandate release on PR-{pr_number}: {err}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+                let _ = crate::forge::forge_for(&hold_root).comment(
+                    &change_ref,
+                    &format!(
+                        "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
+                        crate::mandate::release_note(&cover.id),
+                        cover.principal,
+                        head_sha.as_deref().unwrap_or("?"),
+                    ),
+                );
+            } else if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
                 let actor =
                     crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(None));
                 if let Err(err) = crate::merge_hold::record_clearance_with_verdict(
@@ -2987,7 +3190,13 @@ pub(crate) fn pr_ship_handler(
                 crate::events::EventKind::MergeHoldChanged {
                     pr: pr_number as u32,
                     placed: false,
-                    reason: Some(reason.to_string()),
+                    // STORY-1698: a mandate release names the mandate.
+                    reason: Some(match &mandate_release {
+                        Some(cover) => {
+                            format!("{} — {reason}", crate::mandate::release_note(&cover.id))
+                        }
+                        None => reason.to_string(),
+                    }),
                 },
             );
             hold_event.seat = crate::events::active_seat();
@@ -3022,6 +3231,30 @@ pub(crate) fn pr_ship_handler(
                         crate::ci_gate::HOLD_GATE_CHECK
                     ),
                 }
+            }
+        }
+        // STORY-1698: re-read the mandate immediately before the merge call.
+        // If it lapsed after the hold was released (the hold-gate wait above
+        // can take minutes), re-arm the hold and refuse.
+        // trace:STORY-1698 | ai:claude
+        if let Some(cover) = &mandate_release {
+            if !mandate_still_active(&cover.id) {
+                if let Some(record) = &hold_record {
+                    let _ = crate::merge_hold::write_typed_hold(&hold_root, record);
+                    let _ = crate::merge_hold::sync_label(&hold_root, pr_number, true);
+                }
+                let refusal = format!(
+                    "PR-{pr_number} left OPEN — mandate {} ended before the merge; the merge-hold is re-armed.",
+                    cover.id
+                );
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr_number),
+                    &refusal,
+                );
+                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         let mut merge_sink = crate::network_retry::StderrSink;

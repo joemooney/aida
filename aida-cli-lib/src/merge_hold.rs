@@ -944,6 +944,11 @@ pub(crate) struct HoldClearance {
     // trace:BUG-1532 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub released_by_verdict: Option<VerdictRef>,
+    /// STORY-1698: the mandate under which the advisor released this hold,
+    /// when one did. `None` = no mandate was involved.
+    // trace:STORY-1698 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released_under_mandate: Option<String>,
 }
 
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
@@ -1003,6 +1008,36 @@ pub(crate) fn record_clearance_by(
     principal: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
+    record_clearance_full(project_root, record, principal, released_by_verdict, None)
+}
+
+/// STORY-1698: the ledger entry for a hold the advisor released under a
+/// fire-fighting mandate — `cleared_by` names the advisor seat's principal,
+/// `released_under_mandate` the mandate.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn record_mandate_clearance(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    advisor_principal: &str,
+    mandate_id: &str,
+    released_by_verdict: Option<VerdictRef>,
+) -> std::io::Result<()> {
+    record_clearance_full(
+        project_root,
+        record,
+        &format!("advisor:{}", advisor_principal.trim()),
+        released_by_verdict,
+        Some(mandate_id.to_string()),
+    )
+}
+
+fn record_clearance_full(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    principal: &str,
+    released_by_verdict: Option<VerdictRef>,
+    released_under_mandate: Option<String>,
+) -> std::io::Result<()> {
     let path = clearance_path(project_root, record.pr);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1015,6 +1050,7 @@ pub(crate) fn record_clearance_by(
         target_head_sha: record.target_head_sha.clone(),
         cleared_at: chrono::Utc::now().to_rfc3339(),
         released_by_verdict,
+        released_under_mandate,
     };
     let body = serde_json::to_vec_pretty(&clearance)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;

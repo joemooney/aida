@@ -401,6 +401,21 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                     .unwrap_or_default(),
             ),
         ),
+        // trace:STORY-1698 | ai:claude
+        EventKind::MandateChanged {
+            id,
+            active,
+            principal,
+            expires_at,
+            ..
+        } => (
+            "mandate-changed",
+            if *active {
+                format!("mandate {id} started by {principal}, until {expires_at}")
+            } else {
+                format!("mandate {id} stopped")
+            },
+        ),
         // trace:TASK-1450 | ai:claude
         EventKind::ReviewVerdictRecorded {
             pr,

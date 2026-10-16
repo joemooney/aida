@@ -355,3 +355,37 @@ release after a verified APPROVED write. Sensitive or composed holds retain
 the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
 <!-- trace:STORY-1687 | ai:codex -->
+
+### `aida mandate`
+
+**One line** — a time-boxed fire-fighting mandate that lets the advisor seat
+ship held PRs while the operator is away.
+
+**Mental model.** Normally only a human at a terminal can release a merge-hold.
+`aida mandate start --ship-held` (human at an interactive terminal only) mints a
+mandate bound to the advisor seat of the person who started it. While it is
+active, `aida pr ship <pr>` from that advisor seat may release the hold and
+merge, but only when an approval with a verified reviewer identity covers the
+PR's current head, that approval came from neither the implementer nor the
+shipping session, the advisor did not author the work, and CI is green.
+The stale-approval override of `aida pr ship` is never honoured under a
+mandate.
+
+**Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
+accepted, at most `24h`). A mandate cannot be extended: stop it and start
+another. `--reason` records why. `--include-supervised` also covers sensitive
+specs (security, containment, review or merge authority, guided, keystone);
+specs tagged `operator-only` or with execution mode `operator` always stay
+human-only.
+
+**Stopping.** `aida mandate stop` (human at a terminal) ends it at once. Expiry
+is checked by every ship at the moment it decides, again under the merge lease,
+and once more immediately before the merge call. `aida mandate status [--json]`
+shows the current mandate; the statusline shows `MANDATE <time left>` while one
+is active.
+
+**Audit.** Each release is recorded in the merge-hold clearance ledger and in a
+PR comment as "released under mandate <id> by advisor"; start and stop are
+recorded in `.aida/events.jsonl`. The authority record lives only in the
+user's AIDA home (`~/.aida/mandates/`), never in the shared store.
+<!-- trace:STORY-1698 | ai:claude -->
