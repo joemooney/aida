@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1677",
+  "publishes": [
+    {
+      "at": "2026-10-16T18:47:08.263365331Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T14:56:18.285887524Z",
+      "spec": "STORY-1677",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T14:55:17.393000162Z",
+      "spec": "STORY-1677",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T15:18:25.713199034Z",
+      "spec": "STORY-1677",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1677",
+        "branch": "codex/story-1677",
+        "first_seen": "2026-10-15T15:18:25.713124069+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:58:45.724109649Z",
+      "spec": "STORY-1677",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2679,
+        "verdict": "APPROVED",
+        "reviewed_sha": "3f8e46a034f0b2d07099e6a3d399c0f88236a12e"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:46:30.606506139Z",
+      "spec": "STORY-1677",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T18:46:53.913419262Z",
+      "spec": "STORY-1677",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2679
+      }
+    },
+    {
+      "ts": "2026-10-16T18:47:08.245413723Z",
+      "spec": "STORY-1677",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
