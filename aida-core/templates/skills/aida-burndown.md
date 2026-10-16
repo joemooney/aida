@@ -225,6 +225,11 @@ nohup aida queue work PR-<n> --role reviewer --no-human \
 cat .aida/review-verdicts/PR-<n>.json
 ```
 
+The verdict file appears only after the reviewer exits and the launcher has
+checked it against the PR head and this launch's reviewer grant. If the job
+has exited and there is no verdict file, no verified verdict was produced:
+read the log and launch a new reviewer; never record one yourself.
+
 - Never use the Agent tool for review, never write the reviewer's prompt, and
   never run `aida review record` yourself. The reviewer process reads the spec
   and any operator checklist comments itself.
