@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2139",
+  "publishes": [
+    {
+      "at": "2026-10-16T07:28:41.235031030Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T04:03:13.315416555Z",
+      "spec": "BUG-2139",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T01:11:52.140848345Z",
+      "spec": "BUG-2139",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T06:30:50.095899160Z",
+      "spec": "BUG-2139",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2688,
+        "verdict": "APPROVED",
+        "reviewed_sha": "4a1cacb65210e615f8e436e1e92d230c5822ca01"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:28:18.457282987Z",
+      "spec": "BUG-2139",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T07:28:28.541149642Z",
+      "spec": "BUG-2139",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2688
+      }
+    },
+    {
+      "ts": "2026-10-16T07:28:41.219157929Z",
+      "spec": "BUG-2139",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b8784ba39419f2dedfb0acd95e33eef3a865d084",
+        "pr": 2688,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
