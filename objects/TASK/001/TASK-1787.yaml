@@ -1,0 +1,29 @@
+id: 01a142f1-dfe7-74c3-9c66-7e59101caf20
+spec_id: TASK-1787
+agreed_id: TASK-1787
+title: 'Operator-chosen grant TTL: ''aida role enter <seat> --ttl <dur>'' (human TTY only), capped by [seat] max_grant_hours (default 24, hard ceiling 168h)'
+description: |-
+  Operator need 2026-10-15 21:21: away for more than 24h while an advisor relay drives the open list (ADR-77). Grants are hard-capped by MAX_GRANT_AGE=24h (seat_authority.rs:14), and agents correctly cannot mint grants (TTY floor), so the relay stops when the grant expires.
+  ## Acceptance
+  - 'aida role enter <seat> --ttl <dur>' (e.g. 72h) mints a grant with that lifetime. Minting stays human-TTY only (unchanged floor).
+  - The cap is resolved from config '[seat] max_grant_hours' (global ~/.aida/config.toml, then project), default 24. A hard ceiling of 168h applies regardless of config. --ttl above the cap is refused with a message naming the setting.
+  - Without --ttl, behavior is unchanged (24h default).
+  - Expiry warnings and the statusline show the real remaining time; 'aida session show' displays the grant's ttl.
+  - Relay's <1h-left launch refusal (TASK-1736) keeps working with long grants.
+  - Tests: ttl within cap; above cap refused; above the hard ceiling refused even with a higher config; default unchanged; non-TTY mint still refused.
+  Tier: STRICT (authority), but small. URGENT: the operator is leaving.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T04:21:50.183588416Z
+modified_at: 2026-10-16T04:21:50.183588416Z
+req_type: Task
+filed_at:
+  code_sha: 696c90c4f4e6a486035759b30bd2f0e6a99cd02c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 463b81d027
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
