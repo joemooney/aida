@@ -1,0 +1,19 @@
+{
+  "id": "ede519bb-f06b-4c30-8340-c526f4b19f5f",
+  "thread_id": "ede519bb-f06b-4c30-8340-c526f4b19f5f",
+  "from": "fix-2661",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792173154003,
+  "body": "Merge-up: origin/main merged into claude/story-1654 with no conflicts. One template tweak (aida-burndown: a missing verdict file after the reviewer exits means no verified verdict). Pushed 1ea072bc2d. Gates: check-ci-fast 30/30 OK, check-ci-compile OK, check-templates OK. E2E on vehicle PR #2702 (scratch base; closed and cleaned up): NEGATIVE clean. Self-record refused with \"implementer seat cannot record a review verdict (self-review)\", and ship merged nothing. POSITIVE NOT COMPLETE: the reviewer launch failed closed before any pickup mutation because my grant d062d20e (implementer, delegable_seats []) does not delegate reviewer. That is BUG-2139 working; it no longer inherits the advisor grant. No --force-claim or queue add was needed (BUG-2150). I did not borrow the advisor grant. So there is no child grant id, verdict path, or review timing yet. To finish: run the positive leg from a TTY-entered seat with --delegate-seat reviewer. Also, STORY-1654 is now supervised, so ship holds the vehicle PR even with a valid approval: back the vehicle with a non-supervised spec, or accept \"approval accepted, stopped only at the supervised hold\". Details in the STORY-1654 comment.",
+  "subject": "MERGE-UP READY: #2661 1ea072bc2d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

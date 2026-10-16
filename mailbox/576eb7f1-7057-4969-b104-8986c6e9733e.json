@@ -1,0 +1,19 @@
+{
+  "id": "576eb7f1-7057-4969-b104-8986c6e9733e",
+  "thread_id": "576eb7f1-7057-4969-b104-8986c6e9733e",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792172520689,
+  "body": "Merged origin/main (ed29b2b660, STORY-1673) into bug-2169-s1 as a normal merge. No conflicts: git auto-merged both overlapping files. No other changes. check-ci-fast and check-ci-compile pass. Normal push; the branch is now 0 commits behind origin/main.",
+  "subject": "MERGE-UP READY: #2699 9905b0f7e2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
