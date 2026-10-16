@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:42.111598429Z
-modified_at: 2026-10-16T00:53:26.493991213Z
+modified_at: 2026-10-16T00:55:02.646407003Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -41,6 +41,24 @@ comments:
   content: 'Operator decision 2026-10-15 17:52: ''implement option 2'' (recorded by advisor).'
   created_at: 2026-10-16T00:52:56.111108018Z
   modified_at: 2026-10-16T00:52:56.111108018Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14234-8cf6-70c3-a1e5-ef49f76bec24
+  author: joe
+  content: |-
+    IMPLEMENTER SKETCH (STORY-1698, fire-fighting mandate)
+    1. Record. Authority lives in aida home: ~/.aida/mandates/<uuid>.json {id, principal (current_user_id), seat:"advisor", scope:"ship-held", include_supervised, reason, issued_at, expires_at, revoked_at}. Same trust class as session-grants/ and human-review receipts, written atomically only after seat_authority::require_direct_human() (TTY on stdin+stderr AND no AIDA_AGENT_NAME/TYPE). The git store is NOT authority (any agent can write it); start/stop append MandateChanged events to .aida/events.jsonl as the audit mirror. Ruling needed if you also want a store object.
+    2. TTL: --ttl default 8h, hard cap 24h; no extend verb (re-mint = new id, TTY again). New start while one is active refuses (stop first).
+    3. Ship verification (new pr_ship::mandate_release_decision, pure + unit-tested). The early ship_hold_gate defers instead of refusing only when ALL: no human TTY; seat_authority::current_seat()=="advisor" from a VALIDATED grant whose principal == mandate.principal; an active mandate re-read from disk. The release step (after CI watch, under the merge lease) re-reads the mandate and checks Utc::now() < expires_at && revoked_at.is_none() at that instant; no cached state.
+    4. Approval: reuse BUG-1918 approval_authority_refusal (attested, re-validated grant/receipt, non-author, anchored, dated after reviewed commit) + approval_head_refusal at the live head; --override-stale-approval is refused under mandate. Merge pinned to head (match_head). Missing attestation / stale sha => refuse.
+    5. Independence: approver identity must not match author_sessions (existing) AND must not match the shipper tokens; shipper (RecorderIdentity::current) must not match any author_session (reuse stale_override_refusal's author check) => "advisor-authored PR" refusal.
+    6. CI: existing step-2 CI watch must be green at the pinned head; the mandate path runs no earlier than that.
+    7. Excluded classes: reuse STORY-1687 rework_hold_release::sensitive() (make pub(crate)), adding terms "containment", "review-authority", "merge-authority" and tag "operator-only". Without --include-supervised any matching spec refuses. execution_mode=Operator or tag operator-only refuse ALWAYS (include-supervised never covers them) — ruling needed. The BUG-727 supervised-merge gate is satisfied by an active mandate for advisor except those operator-only specs.
+    8. Hold kinds: mandate releases marker holds (supervision/decision/rework/legacy). Recusal hold: refuse if the advisor principal is recused. Label-only holds stay human (no marker record).
+    9. Ledger: HoldClearance gains released_under_mandate: Option<String>, cleared_by "advisor:<principal>"; MergeHoldChanged event carries the mandate id; GATE_MANDATE_SHIP gate-held events on refusals; forge PR comment "merge-hold released under mandate <id> by advisor (approval <verdict key> at <sha>)".
+    10. CLI: aida mandate start --ship-held [--ttl 8h] [--reason TEXT] [--include-supervised]; aida mandate stop (TTY, sets revoked_at, immediate); aida mandate status [--json] (anyone). Statusline gets a "MANDATE <remaining>" segment. No MCP start/stop (agents can never mint).
+    Tests (fail without change): agent/no-TTY start refused, human start ok (TTY injected via test seam); ship-under-mandate OK; refusals: expired, stopped, missing attestation, stale sha, advisor-authored, excluded class w/o flag, non-advisor seat; ledger + clearance record present.
+  created_at: 2026-10-16T00:55:02.646407003Z
+  modified_at: 2026-10-16T00:55:02.646407003Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a14232-9634-7ff2-9397-aecbc5be8cd4
