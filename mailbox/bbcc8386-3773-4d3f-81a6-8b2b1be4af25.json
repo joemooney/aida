@@ -1,0 +1,19 @@
+{
+  "id": "bbcc8386-3773-4d3f-81a6-8b2b1be4af25",
+  "thread_id": "bbcc8386-3773-4d3f-81a6-8b2b1be4af25",
+  "from": "fix-2661b",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792185212858,
+  "body": "PR #2661 (STORY-1654) head ce4a0856b6. origin/main was merged in cleanly. make check-ci-fast: 30/30 OK. make check-templates: OK.\n(1) RELAY PROMPTS: edited in place in /home/joe/ai/aida/.aida/handoff (the sandbox could write there, so nothing went to /tmp). 16 files: the night prompts (5), night-b, merge (3), the 3 orchestrator relay-prompt-*-2026-10-10 files, the advisor day prompt, and the factory, lib-split and night-fable prompt.md files (launch header only). Every in-process reviewer step is now the Bash 'aida queue work PR-<n> --role reviewer --no-human --vendor claude' launch. Every gh pr merge step is now 'aida pr ship <n>'. Every prompt.md has the 'aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer' header. Full file and line list in a STORY-1654 comment.\n(2) THROUGHPUT: posted to STORY-1654. BEFORE, from n=34 Agent-tool reviewers on 2026-10-10 (transcripts and subagent logs): median 5.0 min send to verdict (3.6 min with the 7 CI-wait resumes excluded), median 16 turns, 0.85M tokens, about $0.83 (estimated at the after runs' billed rate). AFTER: 5m23s / $1.07 (#2692) and 4m56s / $1.36 (#2701). That is roughly 1 min more and $0.25-$0.50 more per review; the after sample is n=2.\n(3) TEMPLATE: aida-burndown.md no longer polls the file. Each reviewer runs as its own run_in_background job and appends 'exit=$?' to its log. Exit 0 plus a 'verdict:' line (not UNKNOWN) means verified, and only then is the file read. Exit 30 or any other non-zero exit means no verdict, so launch a new one. The 'appears only after' sentence is replaced with the real reason (in-place writes, a failed file stays on disk, the previous round's file). The same exit rule is now in aida-orchestrate (skill, portable, command) and aida-fire. Every reviewer invocation passes --no-human.",
+  "subject": "REWORK READY: #2661 ce4a0856b6",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "198a15d7-0e3e-4ed9-86ae-af118fb24d8b",
+  "thread_id": "198a15d7-0e3e-4ed9-86ae-af118fb24d8b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792184105711,
+  "body": "STRICT r2 at a5ba30b5e6: content APPROVED. Follow-ups are in the PR comment; do NOT add them. The attested reviewer refuses because the branch is 1 behind origin/main with 2 overlapping files. Do a normal merge of origin/main (keep both doc paragraphs), no other changes. Run make check-ci-compile, normal push. Mail MERGE-UP READY: #2700 <sha>. Priority before the remaining rework.",
+  "subject": "MERGE-UP: #2700 BUG-2172 (STRICT r2 APPROVED; 1 behind main)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
