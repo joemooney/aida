@@ -516,6 +516,27 @@ no values, shell expressions, executable mappings or argument mappings in the
 file. Gap rows share this parser: IDs are unique `[a-z0-9-]{1,64}`, categories
 are `interface|missing|behavior|other`, and notes are optional plain text.
 
+`aida regen report` reads committed ordinary trial records from a pinned store
+commit, without a cache rebuild or rereading the caller's trial directory.
+The headline is the latest attempt's discriminating **R1 oracle pass rate** and
+age in seconds. An unsuccessful attempt reports unavailable rather than falling
+back to an older passing score. Status, clean state and flags remain visible.
+Controls and nested adapted runs are excluded from trial selection.
+
+Scoring stores a versioned `gaps` extension with the original GAPS.toml content
+SHA-256 and parsed rows (IDs and categories), captured from
+the private input before execution. Category counts are diagnostic information,
+never a quality score. Deltas compare the latest two ordinary trials with matching
+oracle SHA, oracle bundle hash and corpus hash; they are labelled diagnostics.
+Missing or invalid gap metadata displays “no gap data”, and no deltas are inferred
+from it. A valid GAPS.toml containing no gap rows explicitly records empty data.
+Older trial records without the extension remain readable. Invalid GAPS.toml
+input still refuses scoring before execution; reporting never reparses it from
+a mutable caller path. Optional notes are parsed as plain text but omitted from
+durable diagnostics. Gap IDs containing a captured mapping value refuse before
+execution, without printing the ID or value.
+<!-- trace:TASK-1733 | ai:codex -->
+
 Sources and targets cannot name PATH, HOME, SHELL, ENV, BASH_ENV, IFS, TMPDIR,
 PWD, OLDPWD, LANG, any oracle-owned variable, or a name starting with LD_,
 DYLD_, PYTHON, PERL, RUBY, NODE_, JAVA_, CLASSPATH, GIT_, XDG_, AIDA_ or LC_.

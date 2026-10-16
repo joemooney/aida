@@ -1,3 +1,11 @@
+`aida regen report` reads committed ordinary trials without a cache rebuild.
+Its headline is the latest attempt's discriminating R1 oracle pass rate and
+age; unsuccessful attempts show unavailable, with status and flags visible.
+Scoring retains optional versioned gap metadata from the private GAPS.toml
+snapshot. Category counts and latest matching oracle/bundle/corpus deltas are
+diagnostics, never quality scores. Missing/invalid metadata is “no gap data”.
+<!-- trace:TASK-1733 | ai:codex -->
+
 Ordinary regen scoring reads optional strict trial-root `GAPS.toml` v1.
 `[environment]` maps contract names to regenerated names; protected names and
 sensitive source names refuse before selective one-time capture. R1 receives
