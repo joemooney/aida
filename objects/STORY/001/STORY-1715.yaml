@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T21:44:09.947959524Z
-modified_at: 2026-10-16T21:44:21.118054853Z
+modified_at: 2026-10-16T21:46:13.529818678Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,12 @@ relationships:
   target_id: 01a14386-dbfd-7f93-9536-aab7bf557568
   created_at: 2026-10-16T21:44:21.118052572Z
   created_by: joe
+comments:
+- id: 01a146ae-0a99-7693-8f8c-06f6b012be2e
+  author: ai:codex:joe
+  content: 'Binding review tier: STRICT, per TASK-1790 advisor ruling 1a40cba8. Review exact PR-2709 head 9386e30ebdac4434ff4a14d6dbbcc4f26fe985a7. The PR body/report disclose that three author contexts preceded the final hardened host-Git reader correction; final actual-core 15 collector + 47 mandate regressions and the frozen 50-case benchmark cover it. Read the owning canonical requirement and acceptance; author checks confer no independent review authority.'
+  created_at: 2026-10-16T21:46:13.529818678Z
+  modified_at: 2026-10-16T21:46:13.529818678Z
 filed_at:
   code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
   branch: main
