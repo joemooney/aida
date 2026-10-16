@@ -1,3 +1,10 @@
+Headless drains validate every headless phase seat before queue mutation or
+plan startup, including refusing when the project root cannot be resolved.
+Pooled-worktree reuse revokes the prior occupant's stamped child grant before
+removing its lease, while leaving sibling worktrees and the parent grant intact.
+Delegated children retain exactly their parent's expiration timestamp.
+<!-- trace:TASK-1789 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.

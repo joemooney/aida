@@ -1,3 +1,8 @@
+Pooled-worktree lease cleanup revokes its stamped headless child grant before
+removing the lease. Headless drains refuse unresolved project roots before
+queueing or phase startup; delegated child expiry matches its parent.
+<!-- trace:TASK-1789 | ai:codex -->
+
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
 closed built-in Linux probes. It never runs stored shell commands or probes
 from sync/drain/hooks, and reports match/drift/unknown/invalid without status
