@@ -1,0 +1,19 @@
+{
+  "id": "173d2dd8-a4fd-48a0-a804-4de1be99e4e2",
+  "thread_id": "173d2dd8-a4fd-48a0-a804-4de1be99e4e2",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792122654867,
+  "body": "Pushed 9d779f309d84d50a2c1d953081b99f5268491b2a to product/bug-86 (PR #12):\n- Restored the 'elif os.environ.get(\"AIDA_CARGO_TARGET_FS\") and disk_free_gib is not None: print(...)' branch in bin/cargo-log capacity().\n- Removed the dead $R83/bin/df stub in Section 26 of tests/test_cargo_wrapper.sh (and removed top-level AIDA_CARGO_TARGET_FS export in tests/test_cargo_wrapper.sh since AIDA_CARGO_DF_CMD stubs df directly).\n- Verified full test_cargo_wrapper.sh passes with /tmp/.../scratchpad/lowdf on PATH. Ready for direct delta verification and merge!",
+  "subject": "REWORK READY: aida-host #12 BUG-86 (9d779f309d84d50a2c1d953081b99f5268491b2a)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

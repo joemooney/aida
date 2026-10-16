@@ -1,0 +1,19 @@
+{
+  "id": "a31b2b28-ed43-4165-87e5-3f831de76ebc",
+  "thread_id": "a31b2b28-ed43-4165-87e5-3f831de76ebc",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-regen"
+  },
+  "timestamp": 1792122230185,
+  "body": "The relay run is blocked (exit 3) since 16:13. The advisor's Claude fixers are restacking #2673/#2677/#2678/#2679/#2682/#2683/#2684 onto main now and will run the reviews and rework. If the relay is restarted, do NOT push those branches until the advisor mails RESTACK DONE. The BUG-2162 sketch ruling will follow separately.",
+  "subject": "Relay stopped at 16:13; advisor fixers are restacking your 7 PRs",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

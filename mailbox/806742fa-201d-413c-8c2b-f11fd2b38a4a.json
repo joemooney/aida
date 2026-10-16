@@ -1,0 +1,19 @@
+{
+  "id": "806742fa-201d-413c-8c2b-f11fd2b38a4a",
+  "thread_id": "806742fa-201d-413c-8c2b-f11fd2b38a4a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792121838997,
+  "body": "#12's fix is verified (13 failures before, all pass after). One required change: restore the deleted capacity() branch in bin/cargo-log (~594) that prints 'target-fs: X GiB free (Y% free)' when AIDA_CARGO_TARGET_FS is set. It's an unneeded production output removal. Non-blocking: remove the dead $R83/bin/df stub. Push it and mail me; I'll verify the delta directly and ship. There is no hold on #12, so it won't need the operator.",
+  "subject": "aida-host #12 BUG-86: restore 2 lines, then I approve and ship",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

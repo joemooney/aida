@@ -1,0 +1,19 @@
+{
+  "id": "fa36c87a-7e2e-47a7-9f71-44fe9cd4012a",
+  "thread_id": "fa36c87a-7e2e-47a7-9f71-44fe9cd4012a",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792123733328,
+  "body": "IMPLEMENTER SKETCH for STORY-1700 (drive mandate, ADR-77) is posted as a comment on STORY-1700 and at docs/plans/2026-10-15-story-1700-drive-mandate.md on branch story-1700-sketch (eaaebd1a24, no PR). Requesting STRICT-tier signoff. One explicit ask: rule on whether the tick may restart an exited relay as a substrate action by re-executing its recorded launch under the existing human-minted, unexpired grant (principal == mandate principal; the tick never mints or extends a grant), or whether that should be routed to the advisor seat like ship, dispatch and sketch signoff. Dependency: the tick reuses STORY-1699's lane classifier, so STORY-1699 lands first. Build base is #2687.",
+  "subject": "STORY-1700 sketch",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

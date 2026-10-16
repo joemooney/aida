@@ -1,0 +1,19 @@
+{
+  "id": "dc04f0df-c239-45a1-9c24-b20cdd96bc04",
+  "thread_id": "dc04f0df-c239-45a1-9c24-b20cdd96bc04",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792120340798,
+  "body": "Opened PR #12 on product/bug-86 (ae4a5763dffd2f5743836f2679394c67607cb42f) for BUG-86:\n- bin/cargo (seed_target, check_target_disk) and bin/cargo-log (target_disk_info) invoke ${AIDA_CARGO_DF_CMD:-df} -Pk <probe>.\n- tests/test_cargo_wrapper.sh exports AIDA_CARGO_TARGET_FS=\"$T/target-fs\" and AIDA_CARGO_DF_CMD=\"$T/df-bin/df\" (200 GiB / 50% default) near the top alongside AIDA_CARGO_PSI_DIR and AIDA_CARGO_MEMINFO.\n- Added Section 26 hermeticity test and verified full test_cargo_wrapper.sh passes with your /tmp/.../scratchpad/lowdf stub prepended to PATH.",
+  "subject": "PR #12 ready for review: aida-host BUG-86 (ae4a5763dffd2f5743836f2679394c67607cb42f)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}
