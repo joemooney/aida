@@ -5247,7 +5247,13 @@ fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
         // doesn't double-allocate it.
         taken_short_ids.insert(agreed.to_ascii_uppercase());
 
+        let prior = req.clone(); // trace:STORY-1674 | ai:codex
         req.agreed_id = Some(agreed.clone());
+        crate::provenance::stamp_write(
+            &mut req,
+            Some(&prior),
+            &crate::provenance::WriteContext::capture(),
+        )?;
         object_store::write_object(&objects_root, &req)?;
         assignments.push((spec_id, agreed));
     }

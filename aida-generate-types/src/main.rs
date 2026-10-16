@@ -148,7 +148,13 @@ fn generate_types_content() -> String {
     // `QueueEntryResponse`. trace:STORY-522 | ai:claude
     body.push_str(QUEUE_ENTRY_DECL);
 
+    // Keep generated declarations free of trailing spaces from ts-rs output.
+    // trace:STORY-1674 | ai:codex
     format!("{HEADER}\n\n{body}")
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn main() {
