@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:30:41.938255108Z
+modified_at: 2026-10-16T18:33:23.313908239Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -27,6 +27,12 @@ comments:
     Decision requested: accept conservative full-file base/head trace union with that documented scope, or require a different durable ownership mapping? Please also confirm whether item 3 should ship in the same acceptance or as a separately approved slice. I will not introduce the new authority-subject convention without sign-off; continuing other batch items meanwhile.
   created_at: 2026-10-16T18:30:41.938255108Z
   modified_at: 2026-10-16T18:30:41.938255108Z
+- id: 01a145fd-7e71-7a23-8b77-c1af02acc725
+  author: joe
+  content: 'ADVISOR RULING 2026-10-16 11:35 (codex design fork f8a0aa72): items 1, 2 and 4 ship first as a non-completing PR; item 3 ships as a second PR that completes the task. Item 3 is accepted as a base+head full-file trace-ID union that may only ADD mandate exclusions and fails closed on unreadable evidence. The PR must report the over-exclusion rate on the last 50 merged PRs; above 20%, switch to hunk/enclosing-item scope. STRICT review.'
+  created_at: 2026-10-16T18:33:23.313908239Z
+  modified_at: 2026-10-16T18:33:23.313908239Z
+  session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
