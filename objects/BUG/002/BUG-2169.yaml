@@ -3,12 +3,12 @@ spec_id: BUG-2169
 agreed_id: BUG-2169
 title: 'Contained implementer seats cannot run git in their own worktree: write roots omit the worktree''s gitdir and the common dir, so commit/fetch/merge fail with Read-only file system'
 description: 'Seen 2026-10-16 00:49-01:17 with every ''aida agent new claude --bg --role implementer'' seat launched from a contained advisor relay (AIDA_CONTAINED). contained_boundary::contained_write_roots(worktree) returns only the worktree path. A linked worktree''s gitdir (/home/joe/ai/aida/.git/worktrees/<name>: index.lock, HEAD, ORIG_HEAD) and the common dir (objects, refs, FETCH_HEAD, packed-refs) are outside it, so ''git commit'', ''git fetch'', ''git checkout <branch>'' and ''git merge'' all fail with ''Read-only file system''. dangerouslyDisableSandbox is disabled in these seats. Workarounds observed: one seat cloned into $TMPDIR with --reference and pushed from there, which the classifier allowed once and denied once. That means a full cold cargo build per clone. Effect: the contained implementer lane cannot do its basic job (commit, push, merge-up). Fix: add the worktree''s resolved gitdir plus the common dir''s objects/, refs/, logs/, FETCH_HEAD, packed-refs and the worktree''s own config to the contained write roots, or run git through an uncontained AIDA helper verb (''aida git commit/push/merge-up'' executed by the host). Keep config/hooks of the common dir read-only, since that is the containment boundary that matters. Test: a contained seat in a pool worktree can commit, fetch, merge origin/main and push, and cannot write .git/hooks or .git/config.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-16T11:10:56.398807207Z
+modified_at: 2026-10-16T11:11:22.037146424Z
 req_type: Bug
 comments:
 - id: 01a14468-6b8e-7cc1-8b0f-bea6641c15b3
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a14468-cfb5-7f10-a980-a897ef86e75f
+  author: aida-session-start
+  timestamp: 2026-10-16T11:11:22.037145625Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
