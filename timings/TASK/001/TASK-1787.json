@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1787",
+  "publishes": [
+    {
+      "at": "2026-10-16T16:40:15.602906119Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T04:30:52.061486130Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T06:37:31.633548810Z",
+      "spec": "TASK-1787",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:12:42.886157264Z",
+      "spec": "TASK-1787",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1787",
+        "branch": "task-1787",
+        "first_seen": "2026-10-16T07:12:42.883863101+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:58:28.100885483Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2691,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "aabe47e08f72a189d6afdff5b02a267c500bcaaf"
+      }
+    },
+    {
+      "ts": "2026-10-16T07:58:30.431586212Z",
+      "spec": "TASK-1787",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT r1: CI-failing TTY-dependent test; bare --ttl = minutes; project config must not raise cap (min ruling); see PR comment",
+        "recovery_hint": "address the review findings, move TASK-1787 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:31:39.051990520Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2691,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "eef08fd018b3fac741cd6740073f99df705a4c79"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:31:40.146018180Z",
+      "spec": "TASK-1787",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT r2: production ready; 2 test-only blockers (stderr TTY seam; env race on default cap)",
+        "recovery_hint": "address the review findings, move TASK-1787 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T09:40:51.810718276Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2691,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7df5aa3fb5c2584340e6ca061fa9da9439037128"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:02:56.842065230Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-16T16:11:54.819709416Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2691,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d8d16437ce5fe52f26feaea5c3f5b11b91e09570"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:13:03.506421944Z",
+      "spec": "TASK-1787",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2691
+      }
+    },
+    {
+      "ts": "2026-10-16T16:40:15.562271813Z",
+      "spec": "TASK-1787",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
