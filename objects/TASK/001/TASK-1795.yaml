@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T12:52:18.642596834Z
-modified_at: 2026-10-16T19:31:44.057820031Z
+modified_at: 2026-10-16T20:16:10.545054474Z
 req_type: Task
 relationships:
 - rel_type:
@@ -28,6 +28,16 @@ comments:
   created_at: 2026-10-16T18:56:20.045466995Z
   modified_at: 2026-10-16T18:56:20.045466995Z
   session_id: 01a145fd5cd7
+- id: 01a1465b-9931-7d82-882c-7c65cb5514f6
+  author: ai:codex:joe
+  content: |
+    Local rework is committed, clean and NOT PUSHED at 46f7c3e00f0cc416ac0ee996a64a825279916ecc in /home/joe/ai/aida-worktrees/aida-pr-2706-fixup (lease 01a146341c8d). Both STRICT r1 blockers are addressed: only origin/HEAD supplies local evidence, then a bounded Option probe; unknown refuses a no-number ship. Whole-response branch validation rejects malformed/multiline forge answers. Read-only origin-preferring forge detection avoids configuration repair in this probe; production probe ignores the test-binary override. The PR-base helper retains conventional/main fallbacks.
+
+    Local verification passed: all 30 fast gates; every workspace test target compiled (1760.2s including queue time); all 16 targeted default-branch tests passed using the fresh workspace libtest binary with RUST_MIN_STACK=8388608. Two author self-check rounds, final no findings after fixing malformed-answer acceptance. This is author checking, not independent review. Superseded/waiting Cargo test wrappers were cancelled normally; final targeted binary execution passed.
+
+    Current code includes main a8bfa2d7d7 through merge ceb0c2ef54. Main advanced to 652423b0e4 (#2707) during verification, and advisor mail 3b8e3ed9 prioritized a new #2705 merge-up first. Retaining this clean committed worktree/cache for the relay: merge latest main, rerun required fast/compile gates and targeted tests, then normal push/readback and REWORK READY handoff. No PR body update, ready handoff, verdict, clearance or own merge has been performed for this rework yet. Status remains Needs Attention.
+  created_at: 2026-10-16T20:16:10.545054474Z
+  modified_at: 2026-10-16T20:16:10.545054474Z
 history:
 - id: 01a14509-e700-77d0-9fc7-75cd6a626bfb
   author: joe
