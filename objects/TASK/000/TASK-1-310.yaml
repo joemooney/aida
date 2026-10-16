@@ -1,5 +1,6 @@
 id: 01a145e9-3c8d-7ab0-907c-c68c342a4a0d
 spec_id: TASK-1-310
+agreed_id: TASK-1380
 title: 'minor (non-blocking): relay_stall.rs:135-149 dead-owner findings have no age ca…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1792, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

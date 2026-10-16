@@ -1,5 +1,6 @@
 id: 01a145e9-4d53-7452-85bc-15f9f046637a
 spec_id: TASK-1-311
+agreed_id: TASK-1381
 title: 'minor (non-blocking): relay_stall.rs:139-142 an ''exited'' status whose updated= …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1792, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

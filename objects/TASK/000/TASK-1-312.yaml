@@ -1,5 +1,6 @@
 id: 01a145e9-5b68-7172-947a-d84f17008a94
 spec_id: TASK-1-312
+agreed_id: TASK-1379
 title: 'cosmetic (non-blocking): relay_stall.rs:66 owner_alive compares second-resoluti…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1792, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
