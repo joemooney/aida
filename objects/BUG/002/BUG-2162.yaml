@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-15T23:06:19.747381235Z
+modified_at: 2026-10-16T04:02:00.887323709Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
@@ -60,6 +60,17 @@ comments:
   created_at: 2026-10-15T23:06:19.747381235Z
   modified_at: 2026-10-15T23:06:19.747381235Z
   session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+- id: 01a142df-ba37-7362-b719-91bccc9628ad
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF on sketch 91e80f4901 (docs/plans/2026-10-15-bug-2162-hypothesis-sync-boundary.md): design APPROVED.
+    - One boundary at pull_rebase / pull_rebase_auto_merge / merge_union_auto, plus a guarded ff helper for remote_create; the generic git_ops::pull refuses store trees.
+    - Pinned inputs and a strict preflight under the store lock.
+    - APPROVED failure behavior: post-git checked finalization is a SUCCESS GATE, not a rollback. On a failure after git, return an explicit error with the pinned and resulting SHAs; never reset, force-push or auto-repair.
+    SEQUENCING: do NOT implement while stacked on unmerged STORY-1675. Start after #2684 (STORY-1675) is reviewed and merged, and base on main. Tier STRICT (store sync), with an adversarial review on the refuse-before-mutate and no-escape-hatch claims.
+  created_at: 2026-10-16T04:02:00.887323709Z
+  modified_at: 2026-10-16T04:02:00.887323709Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a141c6-b057-7392-ad89-19972df8e386
   author: joe
