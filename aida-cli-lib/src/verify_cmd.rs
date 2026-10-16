@@ -43,6 +43,7 @@ pub(crate) fn handle_verify_command(command: &VerifyCommand, file: Option<&str>)
     let VerifyCommand::Constraints {
         json,
         fail_on_drift,
+        verbose,
     } = command;
     let path = match file {
         Some(path) => std::path::PathBuf::from(path),
@@ -63,7 +64,7 @@ pub(crate) fn handle_verify_command(command: &VerifyCommand, file: Option<&str>)
     let rows = verify_constraints(&read_requirements(&path)?);
     println!(
         "{}",
-        render(&rows, *json || crate::output_format_is_json())?
+        render(&rows, *json || crate::output_format_is_json(), *verbose)?
     );
     anyhow::ensure!(
         !fails_on_drift(&rows, *fail_on_drift),
@@ -97,20 +98,27 @@ fn fails_on_drift(rows: &[ConstraintResult], enabled: bool) -> bool {
     enabled && rows.iter().any(|row| row.status == Status::Drift)
 }
 
-fn render(rows: &[ConstraintResult], json: bool) -> Result<String> {
+fn render(rows: &[ConstraintResult], json: bool, verbose: bool) -> Result<String> {
     if json {
         return Ok(serde_json::to_string_pretty(rows)?);
     }
     if rows.is_empty() {
         return Ok("No constraint verify blocks configured.".into());
     }
+    // Retired rows are noise in the default human view; name only the count.
+    // trace:STORY-1673 | ai:claude
+    let skipped = rows.iter().filter(|r| r.status == Status::Skipped).count();
     let mut output = String::new();
-    for row in rows {
+    for row in rows
+        .iter()
+        .filter(|r| verbose || r.status != Status::Skipped)
+    {
         let status = match row.status {
             Status::Match => "match",
             Status::Drift => "drift",
             Status::Unknown => "unknown",
             Status::Invalid => "invalid",
+            Status::Skipped => "skipped",
         };
         use std::fmt::Write;
         writeln!(
@@ -127,6 +135,13 @@ fn render(rows: &[ConstraintResult], json: bool) -> Result<String> {
         if let Some(observed) = &row.observed {
             writeln!(output, "  observed: {observed}")?;
         }
+    }
+    if skipped > 0 && !verbose {
+        use std::fmt::Write;
+        writeln!(
+            output,
+            "{skipped} retired constraint(s) skipped; use --verbose to list them."
+        )?;
     }
     Ok(output.trim_end().to_owned())
 }
@@ -151,7 +166,8 @@ mod tests {
             cli.command,
             crate::cli::Command::Verify(VerifyCommand::Constraints {
                 json: true,
-                fail_on_drift: true
+                fail_on_drift: true,
+                verbose: false
             })
         ));
         for args in [
@@ -187,10 +203,10 @@ mod tests {
                 detail: "fixture detail".into(),
             }];
             let output: serde_json::Value =
-                serde_json::from_str(&render(&rows, true).unwrap()).unwrap();
+                serde_json::from_str(&render(&rows, true, false).unwrap()).unwrap();
             assert_eq!(output[0]["spec"], "CNST-1");
             assert_eq!(output[0]["status"], serde_json::to_value(status).unwrap());
-            let human = render(&rows, false).unwrap();
+            let human = render(&rows, false, true).unwrap();
             assert!(
                 human.contains("CNST-1")
                     && human.contains("expected: 6")
@@ -199,8 +215,35 @@ mod tests {
             assert!(!fails_on_drift(&rows, false));
             assert_eq!(fails_on_drift(&rows, true), status == Status::Drift);
         }
-        assert_eq!(render(&[], true).unwrap(), "[]");
-        assert!(render(&[], false).unwrap().contains("No constraint"));
+        assert_eq!(render(&[], true, false).unwrap(), "[]");
+        assert!(render(&[], false, false).unwrap().contains("No constraint"));
+    }
+
+    // trace:STORY-1673 | ai:claude
+    #[test]
+    fn story1673_skipped_rows_hidden_unless_verbose_and_never_fail_drift() {
+        let row = |spec: &str, status| ConstraintResult {
+            spec: spec.into(),
+            title: "fixture".into(),
+            probe: Some("disk-rotational".into()),
+            status,
+            expected: Some(json!(true)),
+            observed: None,
+            detail: "superseded constraint not probed".into(),
+        };
+        let rows = [row("CON-1", Status::Match), row("CON-2", Status::Skipped)];
+        let human = render(&rows, false, false).unwrap();
+        assert!(human.contains("CON-1") && !human.contains("CON-2"));
+        assert!(human.contains("1 retired constraint(s) skipped"));
+        let verbose = render(&rows, false, true).unwrap();
+        assert!(verbose.contains("CON-2  skipped") && !verbose.contains("retired constraint(s)"));
+        let output: serde_json::Value =
+            serde_json::from_str(&render(&rows, true, false).unwrap()).unwrap();
+        assert_eq!(output[1]["status"], "skipped");
+        assert!(!fails_on_drift(&rows, true));
+        assert!(
+            crate::cli::Cli::try_parse_from(["aida", "verify", "constraints", "--verbose"]).is_ok()
+        );
     }
 }
 

@@ -628,7 +628,10 @@ Use this after a host change to find assumptions that drifted. It runs only
 when invoked: sync, drain and hooks never trigger these checks. Each configured
 constraint reports `match`, `drift`, `unknown` (host data unavailable), or
 `invalid` (bad block, arguments, type, operator or version). Rows without a
-block are skipped. Reports do not edit requirements or status. Results exit
+block are skipped. Rejected, superseded and archived constraints report
+`skipped` and are never probed, so a retired host fact cannot trip
+`--fail-on-drift`; the human view prints only their count unless `--verbose`
+is given, and JSON always lists them. Reports do not edit requirements or status. Results exit
 successfully unless drift exists and `--fail-on-drift` was supplied; store load
 and command errors still fail normally.
 
@@ -666,4 +669,12 @@ names must match `[A-Za-z0-9._-]+`; the probe looks up executable regular files
 and never runs them. Missing paths or commands produce a known false value;
 lookup/read errors produce `unknown`. No stored command or custom probe runs.
 
+The procfs and sysfs probes (`cpu-count`, `mem-total-bytes`, `psi-available`,
+`disk-rotational`) report `unknown` off Linux; `path-exists` and
+`command-on-path` run on any Unix host. Path probes call `stat`, so a hung NFS
+mount or a slow automount point can block the command until the filesystem
+answers. Relative `PATH` entries (including an empty entry) resolve against the
+current working directory, as they would for a shell lookup.
+
 <!-- trace:STORY-1673 | ai:codex -->
+<!-- trace:STORY-1673 | ai:claude -->

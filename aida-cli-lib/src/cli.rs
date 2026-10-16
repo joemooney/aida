@@ -14310,6 +14310,11 @@ pub enum VerifyCommand {
         /// Return a nonzero exit only when a row reports drift.
         #[clap(long)]
         fail_on_drift: bool,
+        /// Also list rejected, superseded and archived constraints, which are
+        /// never probed. JSON output always includes them.
+        // trace:STORY-1673 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 }
 

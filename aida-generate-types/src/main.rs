@@ -145,13 +145,7 @@ fn generate_types_content() -> String {
     // `QueueEntryResponse`. trace:STORY-522 | ai:claude
     body.push_str(QUEUE_ENTRY_DECL);
 
-    // Normalize ts-rs trailing spaces so generated output passes diff checks.
-    // trace:STORY-1673 | ai:codex
     format!("{HEADER}\n\n{body}")
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn main() {

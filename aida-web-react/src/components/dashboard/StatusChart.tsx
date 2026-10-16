@@ -28,6 +28,7 @@ export function StatusChart({ requirements }: StatusChartProps) {
     Done: '#84cc16',
     Completed: '#10b981',
     Rejected: '#ef4444',
+    Superseded: '#71717a',
   };
 
   let cumulative = 0;

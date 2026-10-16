@@ -45,6 +45,7 @@ function emptyColumns(): Record<RequirementStatus, string[]> {
     Done: [],
     Completed: [],
     Rejected: [],
+    Superseded: [],
   };
 }
 
@@ -83,6 +84,7 @@ export function KanbanBoard() {
     Done: false,
     Completed: false,
     Rejected: false,
+    Superseded: false,
   });
   const [localColumns, setLocalColumns] = useState<Record<RequirementStatus, string[]>>(
     emptyColumns(),
@@ -193,7 +195,7 @@ export function KanbanBoard() {
 
   const columnMap = useMemo(() => {
     const map: Record<RequirementStatus, Requirement[]> = {
-      Draft: [], Approved: [], Planned: [], InProgress: [], NeedsAttention: [], Done: [], Completed: [], Rejected: [],
+      Draft: [], Approved: [], Planned: [], InProgress: [], NeedsAttention: [], Done: [], Completed: [], Rejected: [], Superseded: [],
     };
 
     for (const status of STATUS_ORDER) {
@@ -448,6 +450,7 @@ export function KanbanBoard() {
         Done: false,
         Completed: false,
         Rejected: false,
+        Superseded: false,
       });
       onQueryChange(view.advancedQuery ?? EMPTY_ADVANCED_QUERY);
       setSearchParams((prev) => {

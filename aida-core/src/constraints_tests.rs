@@ -161,6 +161,8 @@ fn story1673_shell_looking_arguments_are_invalid_before_any_host_read() {
     assert!(!dir.path().join("sentinel").exists());
 }
 
+// Linux-only: procfs/sysfs probes. trace:STORY-1673 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
 fn story1673_proc_fixtures_match_drift_unknown_and_integer_boundaries() {
     let dir = tempfile::tempdir().unwrap();
@@ -234,8 +236,34 @@ fn story1673_proc_fixtures_match_drift_unknown_and_integer_boundaries() {
     );
 }
 
+// Linux-only: procfs/sysfs probes. trace:STORY-1673 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
-fn story1673_path_psi_and_executable_lookup_never_execute() {
+fn story1673_psi_fixture_availability() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = host(dir.path());
+    assert_eq!(
+        status(&host, block("psi-available", json!({}), "eq", json!(false))).status,
+        Status::Match
+    );
+    std::fs::create_dir_all(host.proc_root.join("pressure")).unwrap();
+    for name in ["cpu", "memory", "io"] {
+        std::fs::write(
+            host.proc_root.join("pressure").join(name),
+            "some avg10=0.00\n",
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        status(&host, block("psi-available", json!({}), "eq", json!(true))).status,
+        Status::Match
+    );
+}
+
+// Path and PATH probes run on every unix host. trace:STORY-1673 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story1673_path_and_executable_lookup_never_execute() {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
     let host = host(dir.path());
@@ -256,22 +284,6 @@ fn story1673_path_psi_and_executable_lookup_never_execute() {
             Status::Match
         );
     }
-    assert_eq!(
-        status(&host, block("psi-available", json!({}), "eq", json!(false))).status,
-        Status::Match
-    );
-    std::fs::create_dir_all(host.proc_root.join("pressure")).unwrap();
-    for name in ["cpu", "memory", "io"] {
-        std::fs::write(
-            host.proc_root.join("pressure").join(name),
-            "some avg10=0.00\n",
-        )
-        .unwrap();
-    }
-    assert_eq!(
-        status(&host, block("psi-available", json!({}), "eq", json!(true))).status,
-        Status::Match
-    );
     let bin = dir.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let sentinel = dir.path().join("EXECUTED");
@@ -355,7 +367,7 @@ fn story1673_absent_null_valid_invalid_survive_yaml_json_and_canonical_store() {
         backend.save(&store).unwrap();
         assert_eq!(backend.load().unwrap().requirements[0].verify, raw);
         let before = serde_yaml::to_string(&backend.load().unwrap().requirements[0]).unwrap();
-        let rows = verify_constraints(&backend.load().unwrap().requirements);
+        let rows = report_with(&backend.load().unwrap().requirements, &host(dir.path()));
         assert_eq!(rows.len(), usize::from(raw.is_some()));
         let after = serde_yaml::to_string(&backend.load().unwrap().requirements[0]).unwrap();
         assert_eq!(before, after, "verification mutated row");
@@ -444,6 +456,7 @@ fn story1673_sync_merge_preserves_one_sided_add_edit_remove_and_converges() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn story1673_command_lookup_checks_effective_user_access_not_any_execute_bit() {
     use std::os::unix::fs::PermissionsExt;
@@ -470,6 +483,8 @@ fn story1673_command_lookup_checks_effective_user_access_not_any_execute_bit() {
     );
 }
 
+// Linux-only: procfs/sysfs probes. trace:STORY-1673 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
 fn story1673_sysfs_disk_partition_rotational_states_and_unavailable() {
     let dir = tempfile::tempdir().unwrap();
@@ -526,4 +541,54 @@ fn story1673_bad_yaml_args_are_invalid_data_instead_of_dropped_constraints() {
         assert_eq!(retained.verify, req.verify);
         serde_json::to_string(&retained).unwrap();
     }
+}
+
+// trace:STORY-1673 | ai:claude
+#[test]
+fn story1673_retired_constraints_are_skipped_not_probed() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = host(dir.path()); // empty procfs: a probe would be unknown
+    let raw = block("cpu-count", json!({}), "eq", json!(6));
+    let mut rejected = row(raw.clone());
+    rejected.status = crate::RequirementStatus::Rejected;
+    let mut superseded = row(raw.clone());
+    superseded.status = crate::RequirementStatus::Superseded;
+    let mut archived = row(raw.clone());
+    archived.archived = true;
+    // Retired rows skip validation too: an old block never needs rewriting.
+    let mut invalid_retired = row(json!("malformed"));
+    invalid_retired.status = crate::RequirementStatus::Superseded;
+    for (req, reason) in [
+        (rejected, "rejected"),
+        (superseded, "superseded"),
+        (archived, "archived"),
+        (invalid_retired, "superseded"),
+    ] {
+        let result = report_with(&[req], &host).pop().unwrap();
+        assert_eq!(result.status, Status::Skipped);
+        assert!(result.detail.starts_with(reason), "{}", result.detail);
+        assert_eq!(result.observed, None);
+    }
+    let live = report_with(&[row(raw)], &host).pop().unwrap();
+    assert_ne!(live.status, Status::Skipped);
+}
+
+// trace:STORY-1673 | ai:claude
+#[test]
+fn story1673_rows_sort_by_numeric_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = host(dir.path());
+    let rows: Vec<_> = ["CON-10", "CON-9", "AAA-2", "CON-1"]
+        .into_iter()
+        .map(|id| {
+            let mut req = row(Value::Null);
+            req.spec_id = Some(id.into());
+            req
+        })
+        .collect();
+    let ids: Vec<_> = report_with(&rows, &host)
+        .into_iter()
+        .map(|r| r.spec)
+        .collect();
+    assert_eq!(ids, ["AAA-2", "CON-1", "CON-9", "CON-10"]);
 }

@@ -146,9 +146,11 @@ impl Verify {
     }
 }
 
+// Schema validity must not depend on the reading host: stores are shared, so
+// "absolute" means a leading `/` everywhere, not `Path::is_absolute`.
+// trace:STORY-1673 | ai:claude
 fn valid_path(text: &str) -> bool {
-    !text.is_empty()
-        && Path::new(text).is_absolute()
+    text.starts_with('/')
         && !Path::new(text)
             .components()
             .any(|c| matches!(c, Component::ParentDir))
@@ -164,6 +166,35 @@ pub enum Status {
     Drift,
     Unknown,
     Invalid,
+    /// Rejected, superseded or archived constraint: its block is retained but
+    /// never probed, so a retired host fact cannot gate `--fail-on-drift`.
+    // trace:STORY-1673 | ai:claude
+    Skipped,
+}
+
+// trace:STORY-1673 | ai:claude
+fn retired(req: &Requirement) -> Option<&'static str> {
+    if req.archived {
+        Some("archived")
+    } else {
+        match req.status {
+            crate::RequirementStatus::Rejected => Some("rejected"),
+            crate::RequirementStatus::Superseded => Some("superseded"),
+            _ => None,
+        }
+    }
+}
+
+// Natural order by display id so CON-9 sorts before CON-10.
+// trace:STORY-1673 | ai:claude
+fn id_sort_key(id: &str) -> (&str, u64, &str) {
+    match id.rsplit_once('-') {
+        Some((prefix, number)) => match number.parse() {
+            Ok(number) => (prefix, number, ""),
+            Err(_) => (id, 0, id),
+        },
+        None => (id, 0, id),
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -199,6 +230,12 @@ fn report_with(requirements: &[Requirement], host: &LinuxHost) -> Vec<Constraint
             observed: None,
             detail: String::new(),
         };
+        if let Some(reason) = retired(req) {
+            row.status = Status::Skipped;
+            row.detail = format!("{reason} constraint not probed");
+            rows.push(row);
+            continue;
+        }
         match Verify::parse(raw) {
             Err(error) => row.detail = error,
             Ok(verify) => match host.observe(&verify) {
@@ -224,7 +261,7 @@ fn report_with(requirements: &[Requirement], host: &LinuxHost) -> Vec<Constraint
         }
         rows.push(row);
     }
-    rows.sort_by(|a, b| a.spec.cmp(&b.spec));
+    rows.sort_by(|a, b| id_sort_key(&a.spec).cmp(&id_sort_key(&b.spec)));
     rows
 }
 
@@ -246,8 +283,15 @@ impl LinuxHost {
     }
 
     fn observe(&self, verify: &Verify) -> Result<Value, String> {
-        if !cfg!(target_os = "linux") {
-            return Err("host probes require Linux".into());
+        // Path and PATH probes are portable; procfs/sysfs probes need Linux.
+        // trace:STORY-1673 | ai:claude
+        if !cfg!(target_os = "linux")
+            && matches!(
+                verify.probe,
+                Probe::CpuCount | Probe::MemTotalBytes | Probe::PsiAvailable
+            )
+        {
+            return Err("procfs probes require Linux".into());
         }
         match verify.probe {
             Probe::CpuCount => {
