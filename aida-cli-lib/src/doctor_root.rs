@@ -1587,6 +1587,18 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "disk-headroom",
     ),
+    // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
+    // `.done` acknowledgement. trace:STORY-1699 | ai:claude
+    (
+        &[
+            "relay-stall",
+            "relay-stalls",
+            "relay",
+            "relays",
+            "stalled-relay",
+        ],
+        "relay-stall",
+    ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
     // a "Quick safety check" modal, so a fresh per-spec worktree strands
