@@ -18,6 +18,19 @@ impl std::fmt::Display for CommandTimedOut {
 }
 impl std::error::Error for CommandTimedOut {}
 
+// Cap each stream independently; total captured child output is at most 2 MiB.
+const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
+
+#[derive(Debug)]
+pub(super) struct CommandOutputLimitExceeded;
+
+impl std::fmt::Display for CommandOutputLimitExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("regen command output limit exceeded")
+    }
+}
+impl std::error::Error for CommandOutputLimitExceeded {}
+
 // Keep the direct child unreaped while pipes are open. Its identity pins the
 // group ID even if it exits before a pipe-holding descendant. Error/timeout
 // cleanup always signals that group before reaping; no detached reader threads.
@@ -58,14 +71,19 @@ fn drain(pipe: &mut impl Read, bytes: &mut Vec<u8>, eof: &mut bool) -> Result<()
     }
     let mut buffer = [0u8; 8192];
     // Finite work per iteration so a noisy stream cannot starve the deadline
-    // or the other stream. Preserve the existing full-output capture contract.
+    // or the other stream. Oversized output fails without retaining diagnostics.
     for _ in 0..16 {
         match pipe.read(&mut buffer) {
             Ok(0) => {
                 *eof = true;
                 break;
             }
-            Ok(n) => bytes.extend_from_slice(&buffer[..n]),
+            Ok(n) => {
+                if n > MAX_OUTPUT_BYTES.saturating_sub(bytes.len()) {
+                    return Err(CommandOutputLimitExceeded.into());
+                }
+                bytes.extend_from_slice(&buffer[..n]);
+            }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.into()),
@@ -130,7 +148,7 @@ pub(super) fn run(mut cmd: Command, timeout: Duration) -> Result<Output> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -175,6 +193,38 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.downcast_ref::<CommandTimedOut>().is_some());
+    }
+
+    #[test]
+    fn each_stream_has_a_byte_limit_and_errors_do_not_echo_child_output() {
+        for stream in ["", " >&2"] {
+            let error = run(
+                shell(&format!(
+                    "printf 'private-child-output'{stream}; head -c {} /dev/zero{stream}; sleep 60",
+                    MAX_OUTPUT_BYTES + 1
+                )),
+                Duration::from_secs(5),
+            )
+            .unwrap_err();
+            assert!(
+                error.downcast_ref::<CommandOutputLimitExceeded>().is_some(),
+                "{error:#}"
+            );
+            assert_eq!(format!("{error:#}"), "regen command output limit exceeded");
+        }
+    }
+
+    #[test]
+    fn drain_never_retains_bytes_above_limit_and_accepts_exact_limit() {
+        let mut bytes = vec![0; MAX_OUTPUT_BYTES - 1];
+        let mut eof = false;
+        drain(&mut std::io::Cursor::new(b"a"), &mut bytes, &mut eof).unwrap();
+        assert_eq!(bytes.len(), MAX_OUTPUT_BYTES);
+        assert!(eof);
+        eof = false;
+        let error = drain(&mut std::io::Cursor::new(b"b"), &mut bytes, &mut eof).unwrap_err();
+        assert!(error.downcast_ref::<CommandOutputLimitExceeded>().is_some());
+        assert_eq!(bytes.len(), MAX_OUTPUT_BYTES);
     }
 
     #[test]

@@ -423,9 +423,13 @@ Generated commands have a 30-second execution timeout per invocation. Set
 `AIDA_REGEN_COMMAND_TIMEOUT_SECS` to an integer from 1 to 86400 before scoring
 to change it for the run (including reference/stub controls and R2). Invalid
 values refuse scoring. Timeouts kill the child process group and retain a
-failure reason in the trial, without scoring partial oracle output. The deadline includes stdout/stderr collection even if the direct child exits
-before its descendants. Escaped descendants are subject to the existing
-best-effort survivor detection.
+failure reason in the trial, without scoring partial oracle output. The deadline
+includes stdout/stderr collection even if the direct child exits before its
+descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
+the group and records an output-limit failure without child diagnostics. The
+best-effort survivor probe runs after a successful installation; installer
+failure paths (including timeout) return before that probe, so escaped
+descendants on those paths are not detected by it.
 <!-- trace:TASK-1791 | ai:codex -->
 
 `oracle_command[0]` must name an executable inside the bundle (for example

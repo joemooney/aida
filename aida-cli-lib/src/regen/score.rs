@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 mod command; // trace:TASK-1791 | ai:codex
-use command::CommandTimedOut;
+use command::{CommandOutputLimitExceeded, CommandTimedOut};
 
 mod adapter; // trace:TASK-1732 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
@@ -538,6 +538,9 @@ fn execute(
                 if error.downcast_ref::<CommandTimedOut>().is_some() {
                     record.flags.push("installer_timeout".into());
                     record.error = Some("installer timed out".into());
+                } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                    record.flags.push("installer_output_limit".into());
+                    record.error = Some("installer output limit exceeded".into());
                 } else {
                     record.error = Some(format!("installer launch failed: {error:#}"));
                 }
@@ -570,6 +573,9 @@ fn execute(
             if error.downcast_ref::<CommandTimedOut>().is_some() {
                 record.flags.push("oracle_timeout".into());
                 record.error = Some("oracle timed out".into());
+            } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                record.flags.push("oracle_output_limit".into());
+                record.error = Some("oracle output limit exceeded".into());
             } else {
                 record.error = Some(format!("oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required: {error:#}"));
             }
@@ -1039,18 +1045,21 @@ mod tests {
     // oracle that prints a passing marker before hanging (never a partial score).
     // trace:TASK-1791 | ai:codex
     #[test]
-    fn installer_and_oracle_timeouts_produce_failed_trial_records() {
-        for installer in [true, false] {
+    fn installer_and_oracle_limits_produce_private_failed_trial_records() {
+        for (installer, output_limit) in
+            [(true, false), (false, false), (true, true), (false, true)]
+        {
             let dir = TempDir::new().unwrap();
             let repo = TempDir::new().unwrap();
             super::super::git(repo.path(), &["init", "-b", "main"]).unwrap();
             super::super::git(repo.path(), &["config", "user.name", "Test"]).unwrap();
             super::super::git(repo.path(), &["config", "user.email", "test@example.com"]).unwrap();
-            std::fs::write(
-                repo.path().join("oracle.sh"),
-                "#!/bin/sh\nprintf 'ok   - premature pass\\n'\nsleep 60\n",
-            )
-            .unwrap();
+            let script = if output_limit {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\nprivate-test-value\\n'\nhead -c 1048577 /dev/zero\nsleep 60\n"
+            } else {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\n'\nsleep 60\n"
+            };
+            std::fs::write(repo.path().join("oracle.sh"), script).unwrap();
             std::fs::set_permissions(
                 repo.path().join("oracle.sh"),
                 std::fs::Permissions::from_mode(0o755),
@@ -1064,7 +1073,7 @@ mod tests {
             let cfg = config(&["oracle.sh"]);
             let mut cfg = cfg;
             if installer {
-                cfg.install_command = Some(vec!["/bin/sleep".into(), "60".into()]);
+                cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), script.into()]);
             }
             let cache = tempfile::tempdir_in("/var/tmp").unwrap();
             let bundle = OracleBundle::freeze_in_cache(
@@ -1099,12 +1108,18 @@ mod tests {
                 record.status,
                 if installer { "install_failed" } else { "error" }
             );
-            assert!(record.error.as_ref().unwrap().contains("timed out"));
+            let reason = if output_limit {
+                "output limit exceeded"
+            } else {
+                "timed out"
+            };
+            assert!(record.error.as_ref().unwrap().contains(reason));
             assert!(record.flags.iter().any(|flag| flag
-                == if installer {
-                    "installer_timeout"
-                } else {
-                    "oracle_timeout"
+                == match (installer, output_limit) {
+                    (true, false) => "installer_timeout",
+                    (false, false) => "oracle_timeout",
+                    (true, true) => "installer_output_limit",
+                    (false, true) => "oracle_output_limit",
                 }));
             assert!(!record
                 .error
@@ -1115,7 +1130,7 @@ mod tests {
             assert!(record.checks.is_empty());
             assert!(!record.clean);
             let persisted = serde_json::to_value(&record).unwrap();
-            assert!(persisted["error"].as_str().unwrap().contains("timed out"));
+            assert!(persisted["error"].as_str().unwrap().contains(reason));
         }
     }
 

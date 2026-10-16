@@ -1,6 +1,7 @@
 Regen generated-command execution defaults to a 30-second timeout per call;
 `AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
-kills the process group and failed records retain timeout reasons.
+kills the process group and failed records retain timeout reasons. Each output
+stream is capped at 1 MiB; overflow fails without retaining child diagnostics.
 See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
 <!-- trace:TASK-1791 | ai:codex -->
 

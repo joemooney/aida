@@ -355,6 +355,10 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
                 "installer timed out; child diagnostics withheld for mapped input privacy"
             } else if record.flags.iter().any(|flag| flag == "oracle_timeout") {
                 "oracle timed out; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "installer_output_limit") {
+                "installer output limit exceeded; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "oracle_output_limit") {
+                "oracle output limit exceeded; child diagnostics withheld for mapped input privacy"
             } else if record.status == "install_failed" {
                 "installer failed; child diagnostics withheld for mapped input privacy"
             } else {
