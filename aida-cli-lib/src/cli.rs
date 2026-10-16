@@ -201,6 +201,41 @@ pub enum InternalCommand {
     SoloActive,
 }
 
+/// `aida mandate` — the fire-fighting mandate.
+// trace:STORY-1698 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MandateAction {
+    /// Start a time-boxed mandate that lets the advisor seat ship held PRs
+    /// with an attested, independent approval and green CI. Start and stop
+    /// require a human at an interactive terminal; a same-uid process that
+    /// forges files in the AIDA home is outside the threat model (the same
+    /// as session grants).
+    Start {
+        /// Cover shipping held PRs (the only scope today; required).
+        #[clap(long)]
+        ship_held: bool,
+        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
+        /// A mandate cannot be extended; stop it and start another.
+        #[clap(long)]
+        ttl: Option<String>,
+        /// Why the mandate exists, recorded with it.
+        #[clap(long)]
+        reason: Option<String>,
+        /// Also cover sensitive specs (security, containment, authority,
+        /// guided, keystone). Operator-only specs are never covered.
+        #[clap(long)]
+        include_supervised: bool,
+    },
+    /// End the active mandate now. Human at an interactive terminal only.
+    Stop,
+    /// Show the current mandate, if any.
+    Status {
+        /// Print JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
     /// Release eligible Rework-only holds using a fresh recorded approval.
@@ -11194,6 +11229,17 @@ pub enum Command {
         action: MergeHoldAction,
     },
 
+    /// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
+    /// advisor seat ship held PRs with an attested, independent approval.
+    ///
+    /// `start` and `stop` need a human at an interactive terminal; `status`
+    /// is open to anyone. Operator-only specs always stay human-only.
+    // trace:STORY-1698 | ai:claude
+    Mandate {
+        #[clap(subcommand)]
+        action: MandateAction,
+    },
+
     /// Stream a running session's log — found by id, not by file path.
     ///
     /// `aida ps` says WHAT is running; this says what THAT ONE is doing right
@@ -16829,6 +16875,10 @@ pub enum RegenCommand {
         corpus: PathBuf,
         #[clap(long)]
         model: String,
+        /// Explicit family identity for cross-family oracle audits (no inferred mapping)
+        // trace:STORY-1676 | ai:codex
+        #[clap(long)]
+        model_family: Option<String>,
         #[clap(long)]
         vendor: String,
         #[clap(long)]
