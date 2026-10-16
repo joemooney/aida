@@ -1455,6 +1455,11 @@ mod queue_work_tests;
 #[path = "tests/bug_1607_reviewer_vendor_tests.rs"]
 mod bug_1607_reviewer_vendor_tests;
 
+// trace:BUG-2149 BUG-2150 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2149_2150_standalone_reviewer_tests.rs"]
+mod bug_2149_2150_standalone_reviewer_tests;
+
 // trace:BUG-1686 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1686_agy_headless_argv_tests.rs"]
