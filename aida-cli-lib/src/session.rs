@@ -1315,6 +1315,9 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // BUG-2139: the child holds its own grant; the launcher's purpose stays
+    // behind. trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
@@ -1477,6 +1480,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
     }
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
@@ -1656,6 +1661,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if plan.contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -3306,6 +3313,7 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 /// silently fall back to a disabled default.
 // trace:BUG-898 | ai:codex
 // trace:BUG-2006 | ai:antigravity
+// trace:BUG-2139 | ai:claude
 pub(crate) fn build_exec_vendor_headless_command(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -3313,6 +3321,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     contained: bool,
     model: Option<&str>,
     effort: Option<&str>,
+    seat: &str,
+    grant_env: &str,
 ) -> Result<std::process::Command> {
     use std::process::Command;
     let (program, args) =
@@ -3331,6 +3341,10 @@ pub(crate) fn build_exec_vendor_headless_command(
         // BUG-806: same PATH rule as the spawn path.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // BUG-2139: the child's seat authority is ALWAYS set explicitly — the
+    // grant minted for this launch, or `""` for a baseline child — never
+    // inherited from the launcher, whose grant may carry delegable seats.
+    apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3339,7 +3353,9 @@ pub(crate) fn build_exec_vendor_headless_command(
     Ok(child_cmd)
 }
 
-pub fn exec_vendor_headless(
+// trace:BUG-2139 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn exec_vendor_headless(
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -3347,7 +3363,77 @@ pub fn exec_vendor_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
     lease_id: Option<&str>,
+    seat: &str,
+    child_grant: &crate::seat_authority::HeadlessChildGrant,
 ) -> Result<()> {
+    let result = run_vendor_headless_child(
+        vendor,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        lease_id,
+        seat,
+        child_grant.env_value(),
+    );
+    // BUG-2139: the child's grant dies with the child — on a normal or
+    // nonzero exit and on a spawn failure alike. A failed revoke only warns:
+    // the grant still expires with its parent, and the lease end/reap revokes
+    // it too.
+    if let Some(id) = child_grant.id() {
+        revoke_headless_child_grant(id);
+    }
+    let status = result?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// BUG-2139: revoke a headless child's grant, warning (never failing) on error.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_headless_child_grant(id: &str) {
+    if let Err(e) = crate::seat_authority::revoke_by_id(id) {
+        eprintln!(
+            "{} could not revoke headless child grant {}: {e:#} (it still expires with its parent)",
+            "Warning:".yellow().bold(),
+            &id[..id.len().min(8)]
+        );
+    }
+}
+
+/// BUG-2139: the seat env every headless child gets. `AIDA_SESSION_ROLE` and
+/// `AIDA_SESSION_GRANT` are set explicitly (never inherited), and the
+/// launcher's `AIDA_SESSION_PURPOSE` is scrubbed (BUG-2153 class): it describes
+/// the launcher's session, not the child's.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn apply_headless_child_seat_env(
+    cmd: &mut std::process::Command,
+    seat: &str,
+    grant_env: &str,
+) {
+    cmd.env("AIDA_SESSION_ROLE", seat)
+        .env(crate::seat_authority::GRANT_ENV, grant_env);
+    scrub_launcher_session_env(cmd);
+}
+
+/// BUG-2139: strip the launcher-session env a child must not inherit.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
+    cmd.env_remove("AIDA_SESSION_PURPOSE");
+}
+
+// trace:BUG-2139 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn run_vendor_headless_child(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    lease_id: Option<&str>,
+    seat: &str,
+    grant_env: &str,
+) -> Result<std::process::ExitStatus> {
     use std::process::Stdio;
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "implementer session")?;
@@ -3382,6 +3468,8 @@ pub fn exec_vendor_headless(
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
+        seat,
+        grant_env,
     )?;
     let mut child = child_cmd
         .stdout(Stdio::from(log))
@@ -3402,7 +3490,7 @@ pub fn exec_vendor_headless(
         .wait()
         .with_context(|| format!("failed to wait for {}", vendor.program()))?;
     tee.stop();
-    std::process::exit(status.code().unwrap_or(1));
+    Ok(status)
 }
 
 /// BUG-741: `codex exec` is not discoverable by the Claude-specific worktree
@@ -3412,6 +3500,57 @@ pub fn exec_vendor_headless(
 fn stamp_lease_active_pid(lease_id: &str, pid: u32) -> Result<()> {
     let project_root = crate::find_project_root()?;
     stamp_lease_active_pid_at(&project_root, lease_id, pid)
+}
+
+/// BUG-2139: record the headless child's grant id on its lease, so a lease
+/// end or reap revokes it even when the launcher crashed before the child's
+/// exit could. Written as a raw key (the lease struct does not model it); a
+/// lease without the key is a legacy or interactive lease with nothing to
+/// revoke.
+// trace:BUG-2139 | ai:claude
+pub(crate) const LEASE_CHILD_GRANT_KEY: &str = "child_grant_id";
+
+// trace:BUG-2139 | ai:claude
+pub(crate) fn stamp_lease_child_grant_at(
+    project_root: &Path,
+    lease_id: &str,
+    grant_id: &str,
+) -> Result<()> {
+    use toml_edit::{value, DocumentMut};
+    let path = project_root
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{lease_id}.toml"));
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut doc = body
+        .parse::<DocumentMut>()
+        .with_context(|| format!("parsing lease {}", path.display()))?;
+    doc[LEASE_CHILD_GRANT_KEY] = value(grant_id);
+    aida_core::write_atomic(&path, doc.to_string())
+        .with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
+}
+
+/// BUG-2139: revoke the child grant stamped on lease file `lease_file`, if
+/// any. Best-effort: called just before a lease is removed (session end,
+/// force cleanup, record-only removal, reap); a missing or unreadable lease
+/// or an unstamped one is a quiet no-op.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_lease_child_grant(lease_file: &Path) {
+    let Ok(body) = std::fs::read_to_string(lease_file) else {
+        return;
+    };
+    let Ok(table) = body.parse::<toml::Table>() else {
+        return;
+    };
+    if let Some(id) = table
+        .get(LEASE_CHILD_GRANT_KEY)
+        .and_then(|v| v.as_str())
+        .filter(|id| !id.is_empty())
+    {
+        revoke_headless_child_grant(id);
+    }
 }
 
 // trace:BUG-741 | ai:codex
@@ -3704,6 +3843,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value);
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -8511,6 +8652,104 @@ mod tests {
         );
     }
 
+    /// BUG-2139: the child grant stamped on a headless lease is revoked when
+    /// the lease ends or is reaped — the crash-leak window where the launcher
+    /// died before it could revoke on the child's exit. An unstamped lease
+    /// revokes nothing.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn lease_removal_revokes_the_stamped_child_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _lock = crate::test_env::env_lock();
+        let subject = "bug-2139-lease-user";
+        let id =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let other =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let sessions = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        for lease in ["stamped", "plain"] {
+            std::fs::write(
+                sessions.join(format!("{lease}.toml")),
+                format!("id = \"{lease}\"\nactive_pid = 1\n"),
+            )
+            .unwrap();
+        }
+        stamp_lease_child_grant_at(root, "stamped", &id).unwrap();
+        let body = std::fs::read_to_string(sessions.join("stamped.toml")).unwrap();
+        assert!(
+            body.contains("active_pid = 1"),
+            "the stamp keeps the lease: {body}"
+        );
+        revoke_lease_child_grant(&sessions.join("plain.toml"));
+        revoke_lease_child_grant(&sessions.join("missing.toml"));
+        let valid = |g: &str| {
+            matches!(
+                crate::seat_authority::grant_check_for(root, g, subject),
+                crate::seat_authority::GrantCheck::Valid(_)
+            )
+        };
+        assert!(valid(&id) && valid(&other), "nothing revoked yet");
+        revoke_lease_child_grant(&sessions.join("stamped.toml"));
+        assert!(!valid(&id), "the stamped child grant is revoked");
+        assert!(valid(&other), "only the stamped grant is touched");
+    }
+
+    /// BUG-2139: the fresh headless child's seat env is ALWAYS explicit — the
+    /// grant minted for it (or `""` for a baseline child) and the routed seat
+    /// — never the launcher's, even when the launcher exports a grant, a
+    /// role and a purpose. Every vendor.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn exec_headless_child_never_inherits_the_launcher_seat_env() {
+        let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
+            crate::seat_authority::GRANT_ENV,
+            "AIDA_SESSION_ROLE",
+            "AIDA_SESSION_PURPOSE",
+        ]);
+        env.set_key(
+            crate::seat_authority::GRANT_ENV,
+            "11111111-1111-4111-8111-111111111111",
+        );
+        env.set_key("AIDA_SESSION_ROLE", "advisor");
+        env.set_key("AIDA_SESSION_PURPOSE", "advisor relay");
+        let child = "22222222-2222-4222-8222-222222222222";
+        for vendor in [
+            HeadlessVendor::Claude,
+            HeadlessVendor::Codex,
+            HeadlessVendor::Agy,
+        ] {
+            for (seat, grant) in [
+                ("implementer", child),
+                ("reviewer", child),
+                ("implementer", ""),
+            ] {
+                let cmd = build_exec_vendor_headless_command(
+                    vendor, "prompt", "sid", false, None, None, seat, grant,
+                )
+                .unwrap();
+                let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
+                let get = |k: &str| envs.get(std::ffi::OsStr::new(k)).copied();
+                assert_eq!(
+                    get(crate::seat_authority::GRANT_ENV),
+                    Some(Some(std::ffi::OsStr::new(grant))),
+                    "{vendor:?} {seat}: the grant is set explicitly"
+                );
+                assert_eq!(
+                    get("AIDA_SESSION_ROLE"),
+                    Some(Some(std::ffi::OsStr::new(seat))),
+                    "{vendor:?}: the routed seat, not the launcher's"
+                );
+                assert_eq!(
+                    get("AIDA_SESSION_PURPOSE"),
+                    Some(None),
+                    "{vendor:?}: the launcher's purpose is scrubbed"
+                );
+            }
+        }
+    }
+
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_exec_vendor_headless_command_exports_only_for_claude() {
@@ -8522,6 +8761,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8540,6 +8781,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8559,6 +8802,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .expect_err("a contained Codex exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
@@ -8569,6 +8814,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
@@ -8588,6 +8835,8 @@ mod tests {
             true,
             None,
             None,
+            "implementer",
+            "",
         )
         .expect_err("a contained Agy exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
@@ -8598,6 +8847,8 @@ mod tests {
             false,
             None,
             None,
+            "implementer",
+            "",
         )
         .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd_agy.get_envs().collect();

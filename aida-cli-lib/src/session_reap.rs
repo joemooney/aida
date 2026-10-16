@@ -1006,6 +1006,9 @@ fn reap_one_with_clear_hooks(
     // `aida session end` uses so the session's activity is folded into the
     // project's role activity before its log goes away.
     aggregate_session_activity_into_roles(project_root, &lease.id);
+    // BUG-2139: a reaped lease takes its headless child's grant with it.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
     let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
     let activity = session_activity_path(project_root, &lease.id);
     if activity.exists() {

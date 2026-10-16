@@ -10736,18 +10736,36 @@ pub(crate) fn is_standalone_reviewer(role: &str, has_review_target: bool) -> boo
 /// via `seat_authority::issue_child`, and so must preflight delegation before
 /// any mutation. Mirrors the launch arms of `handle_queue_work`:
 /// - `--no-launch` launches nothing, so no child grant;
-/// - every interactive launch mints one for the pickup role;
-/// - `--no-human` mints one on a resume (`spawn_claude_headless_resume`) and
-///   on a standalone reviewer (`run_standalone_reviewer`); a fresh headless
-///   pickup execs the vendor without a child grant.
+/// - every other launch — interactive, headless resume, standalone reviewer
+///   and (BUG-2139) a fresh headless pickup — mints one for the pickup role.
+///   A fresh headless pickup never runs under the launcher's grant.
 // trace:BUG-1808 | ai:claude
-pub(crate) fn queue_work_issues_child_grant(
-    no_launch: bool,
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_issues_child_grant(no_launch: bool) -> bool {
+    !no_launch
+}
+
+/// BUG-2139: whether this launch is a fresh headless pickup — the arm that
+/// execs the vendor through `session::exec_vendor_headless`. It is the one
+/// arm where a launcher that cannot delegate a BASELINE seat still launches,
+/// with the child at baseline authority (`AIDA_SESSION_GRANT=""`); every other
+/// arm requires delegation.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_is_fresh_headless(
     no_human: bool,
     resume: bool,
     standalone_reviewer: bool,
 ) -> bool {
-    !no_launch && (!no_human || resume || standalone_reviewer)
+    no_human && !resume && !standalone_reviewer
+}
+
+/// BUG-2139: the one line a baseline headless launch prints.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
+    format!(
+        "headless `{seat}` child runs ungranted at baseline authority (AIDA_SESSION_GRANT=\"\"): \
+         the launcher cannot delegate `{seat}` ({cause})"
+    )
 }
 
 /// The refusal printed when the launcher's grant cannot delegate the child
@@ -11220,16 +11238,23 @@ pub(crate) fn handle_queue_work(
             // launches, which used to skip this check and refuse in
             // `issue_child` only after the status bump, queue row, worktree,
             // lease and manifest had landed.
-            if queue_work_issues_child_grant(
-                no_launch,
-                no_human,
-                matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                is_standalone_reviewer(&role, plan.review_target.is_some()),
-            ) {
+            if queue_work_issues_child_grant(no_launch) {
                 let child_seat = crate::canonical_role_name(&role);
-                if let Err(cause) =
+                // BUG-2139: a fresh headless pickup now mints a child grant
+                // too. Its baseline seats may fall back to an ungranted child;
+                // every other arm and seat must be delegated.
+                let preflight = if queue_work_is_fresh_headless(
+                    no_human,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    is_standalone_reviewer(&role, plan.review_target.is_some()),
+                ) {
+                    crate::seat_authority::preflight_headless_child(&project_root, &child_seat)
+                        .map(|_| ())
+                } else {
                     crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
-                {
+                        .map(|_| ())
+                };
+                if let Err(cause) = preflight {
                     let launcher = crate::seat_authority::current_grant(&project_root);
                     anyhow::bail!(queue_work_delegation_refusal(
                         &child_seat,
@@ -12700,6 +12725,9 @@ pub(crate) fn handle_queue_work(
         }
         // trace:TASK-1594 | ai:claude
         let mut child_grant_id = None;
+        // BUG-2139: the fresh headless child's own authority — minted here,
+        // never inherited from the launcher. `None` on every other arm.
+        let mut headless_child_grant = None;
         if !no_human {
             let child_grant = crate::seat_authority::issue_child(
                 &project_root,
@@ -12707,6 +12735,34 @@ pub(crate) fn handle_queue_work(
                 &crate::current_user_id(None),
             )?;
             child_grant_id = Some(child_grant.id);
+        } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
+            // trace:BUG-2139 | ai:claude
+            let seat = crate::canonical_role_name(&role);
+            let grant = crate::seat_authority::issue_headless_child(
+                &project_root,
+                &seat,
+                &crate::current_user_id(None),
+            )?;
+            match &grant {
+                crate::seat_authority::HeadlessChildGrant::Issued(issued) => {
+                    // Stamped beside `active_pid`, so a lease end or reap
+                    // revokes it even if this launcher dies before the child.
+                    if let Err(e) =
+                        session::stamp_lease_child_grant_at(&project_root, &lease.id, &issued.id)
+                    {
+                        session::revoke_headless_child_grant(&issued.id);
+                        return Err(
+                            e.context("could not record the headless child grant on its lease")
+                        );
+                    }
+                }
+                crate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    headless_baseline_notice(&seat, cause)
+                ),
+            }
+            headless_child_grant = Some(grant);
         }
         // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
         // no caller-minted session id / AIDA-addressable resume, and the interactive
@@ -12889,6 +12945,10 @@ pub(crate) fn handle_queue_work(
                     // trace:TASK-307 | ai:claude
                     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
                         .with_label(&lease.branch);
+                    // trace:BUG-2139 | ai:claude
+                    let child_grant = headless_child_grant
+                        .as_ref()
+                        .expect("BUG-2139: a fresh headless launch minted its child authority");
                     return session::exec_vendor_headless(
                         headless_vendor,
                         &prompt,
@@ -12897,6 +12957,8 @@ pub(crate) fn handle_queue_work(
                         &tee_opts,
                         contained,
                         Some(&lease.id),
+                        &crate::canonical_role_name(&role),
+                        child_grant,
                     );
                 }
                 eprintln!(

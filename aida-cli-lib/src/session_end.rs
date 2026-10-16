@@ -1526,6 +1526,9 @@ pub(crate) fn session_end(
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
     match std::fs::remove_file(lease_target) {
         Ok(_) => eprintln!(
             "{} lease deleted",

@@ -397,7 +397,7 @@ pub(crate) fn classify_role_display(label: Option<&str>, grant_seat: Option<&str
             // The implementer baseline and the lower-privilege stakeholder
             // personas confer nothing a grant would gate, so the label is
             // already the truth for them.
-            if matches!(role.as_str(), "implementer" | "guest" | "requester") {
+            if is_baseline_seat(&role) {
                 RoleDisplay::Held(role)
             } else {
                 RoleDisplay::Ungranted(role)
@@ -832,11 +832,118 @@ pub(crate) fn issue_child(
     Ok(grant)
 }
 
+/// BUG-2139: the seats that confer nothing a grant gates — the implementer
+/// baseline and the lower-privilege stakeholder personas. ONE list, read by
+/// both the statusline classification ([`classify_role_display`]) and the
+/// headless-child baseline fallback ([`preflight_headless_child`]), so the two
+/// can never disagree about which seats are safe to run ungranted.
+// trace:BUG-2139 | ai:claude
+pub(crate) const BASELINE_SEATS: &[&str] = &["implementer", "guest", "requester"];
+
+/// Whether `seat` (any spelling) is one of [`BASELINE_SEATS`].
+// trace:BUG-2139 | ai:claude
+pub(crate) fn is_baseline_seat(seat: &str) -> bool {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    BASELINE_SEATS.contains(&seat.as_str())
+}
+
+/// BUG-2139: the authority a fresh headless queue-work child will run with.
+/// It never inherits the launcher's grant.
+// trace:BUG-2139 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HeadlessChildAuthority {
+    /// The launcher's grant delegates the seat; a child grant is minted.
+    Delegated,
+    /// The launcher cannot delegate a BASELINE seat; the child runs with
+    /// `AIDA_SESSION_GRANT=""` (baseline authority only). `cause` says why.
+    Baseline { cause: String },
+}
+
+/// BUG-2139: read-only preflight for a fresh headless child in `seat`. A seat
+/// the launcher's grant delegates is [`HeadlessChildAuthority::Delegated`]. A
+/// baseline seat it cannot delegate (no grant, or a grant that does not
+/// delegate it) falls back to [`HeadlessChildAuthority::Baseline`]. Every other
+/// seat (reviewer, advisor, integrator, ...) fails closed.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn preflight_headless_child(
+    project_root: &Path,
+    seat: &str,
+) -> Result<HeadlessChildAuthority> {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    match validate_child_delegation(project_root, &seat) {
+        Ok(_) => Ok(HeadlessChildAuthority::Delegated),
+        Err(cause) if is_baseline_seat(&seat) => Ok(HeadlessChildAuthority::Baseline {
+            cause: format!("{cause:#}"),
+        }),
+        Err(cause) => Err(cause),
+    }
+}
+
+/// BUG-2139: the grant a fresh headless child was launched with.
+// trace:BUG-2139 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) enum HeadlessChildGrant {
+    /// A child grant minted for this launch (seat = routed role,
+    /// `delegable_seats` empty, parent = the launcher's grant).
+    Issued(SeatGrant),
+    /// No grant: the child runs at baseline authority. `cause` says why the
+    /// launcher could not delegate the seat.
+    Baseline { cause: String },
+}
+
+impl HeadlessChildGrant {
+    /// The value the child's `AIDA_SESSION_GRANT` is set to — ALWAYS set,
+    /// never inherited: the minted id, or `""` for a baseline child.
+    pub(crate) fn env_value(&self) -> &str {
+        match self {
+            Self::Issued(grant) => &grant.id,
+            Self::Baseline { .. } => "",
+        }
+    }
+
+    /// The minted grant id, if any.
+    pub(crate) fn id(&self) -> Option<&str> {
+        match self {
+            Self::Issued(grant) => Some(&grant.id),
+            Self::Baseline { .. } => None,
+        }
+    }
+}
+
+/// BUG-2139: mint the authority for a fresh headless child in `seat`.
+/// [`preflight_headless_child`] decides; a delegated seat goes through
+/// [`issue_child`], which re-validates, so a roster edit or a parent revoked
+/// between preflight and launch still fails closed.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn issue_headless_child(
+    project_root: &Path,
+    seat: &str,
+    child_subject: &str,
+) -> Result<HeadlessChildGrant> {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    match preflight_headless_child(project_root, &seat)? {
+        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child(
+            project_root,
+            &seat,
+            child_subject,
+        )?)),
+        HeadlessChildAuthority::Baseline { cause } => Ok(HeadlessChildGrant::Baseline { cause }),
+    }
+}
+
 pub(crate) fn revoke_current() -> Result<bool> {
     let Some(id) = std::env::var(GRANT_ENV).ok() else {
         return Ok(false);
     };
-    let Ok(mut grant) = read_grant(&id) else {
+    revoke_by_id(&id)
+}
+
+/// Revoke grant `id` now. `Ok(false)` when it does not exist or is already
+/// revoked. BUG-2139: a headless child's grant is revoked this way when the
+/// child exits and when its lease ends or is reaped.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
+    let Ok(mut grant) = read_grant(id) else {
         return Ok(false);
     };
     if grant.revoked_at.is_some() {
@@ -1162,6 +1269,92 @@ mod tests {
                 None,
                 "a shrunk roster ceiling invalidates the grant"
             );
+        }
+    }
+
+    /// BUG-2139: a fresh headless child never inherits the launcher's grant.
+    /// A delegated seat mints a distinct child grant (routed seat, no
+    /// delegable seats, parent = launcher); a baseline seat the launcher
+    /// cannot delegate falls back to an ungranted child; every other seat
+    /// fails closed. The child grant is revocable by id.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn headless_child_gets_its_own_grant_or_baseline_or_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut env = pinned_env();
+        let advisor =
+            test_support::mint_grant_for(root, SUBJECT, "advisor", &["implementer", "reviewer"]);
+        {
+            let _env = Scoped::apply(&mut env, &[(GRANT_ENV, Some(advisor.as_str()))]);
+            for seat in ["implementer", "reviewer"] {
+                assert_eq!(
+                    preflight_headless_child(root, seat).unwrap(),
+                    HeadlessChildAuthority::Delegated
+                );
+                let HeadlessChildGrant::Issued(child) =
+                    issue_headless_child(root, seat, SUBJECT).unwrap()
+                else {
+                    panic!("a delegated {seat} seat must mint a child grant");
+                };
+                assert_ne!(
+                    child.id, advisor,
+                    "the child never reuses the launcher grant"
+                );
+                assert_eq!(child.seat, seat);
+                assert!(
+                    child.delegable_seats.is_empty(),
+                    "the child delegates nothing"
+                );
+                assert_eq!(child.parent_grant_id.as_deref(), Some(advisor.as_str()));
+                // Revocation by id ends exactly the child, never the launcher.
+                assert!(revoke_by_id(&child.id).unwrap());
+                assert!(!revoke_by_id(&child.id).unwrap(), "idempotent");
+                assert!(read_grant(&child.id).unwrap().revoked_at.is_some());
+                assert!(read_grant(&advisor).unwrap().revoked_at.is_none());
+            }
+        }
+        // A launcher whose grant does not delegate the seat.
+        let narrow = test_support::mint_grant_for(root, SUBJECT, "advisor", &["product"]);
+        for grant in [Some(narrow.as_str()), None] {
+            let _env = Scoped::apply(&mut env, &[(GRANT_ENV, grant)]);
+            // Baseline seats fall back to an ungranted child...
+            for seat in BASELINE_SEATS {
+                let got = issue_headless_child(root, seat, SUBJECT).unwrap();
+                assert!(
+                    matches!(got, HeadlessChildGrant::Baseline { .. }),
+                    "{seat} with grant {grant:?}: {got:?}"
+                );
+                assert_eq!(got.env_value(), "", "a baseline child's grant env is empty");
+                assert_eq!(got.id(), None);
+            }
+            // ...every other seat is refused.
+            for seat in ["reviewer", "advisor", "integrator", "product"] {
+                if grant.is_some() && seat == "product" {
+                    continue; // `product` IS delegated by the narrow grant.
+                }
+                issue_headless_child(root, seat, SUBJECT)
+                    .expect_err("a non-baseline seat must fail closed");
+                preflight_headless_child(root, seat)
+                    .expect_err("the preflight agrees with issuance");
+            }
+        }
+    }
+
+    /// BUG-2139: the baseline seat list is the one `classify_role_display`
+    /// reads, so the statusline and the headless fallback cannot drift.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn baseline_seats_match_role_display() {
+        for seat in BASELINE_SEATS {
+            assert!(is_baseline_seat(seat));
+            assert_eq!(
+                classify_role_display(Some(seat), None),
+                RoleDisplay::Held((*seat).to_string())
+            );
+        }
+        for seat in ["reviewer", "advisor", "integrator", "product"] {
+            assert!(!is_baseline_seat(seat));
         }
     }
 

@@ -2886,6 +2886,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // (after the same activity aggregation) and stop.
     if lease.worktree_path.as_os_str().is_empty() {
         aggregate_session_activity_into_roles(project_root, &lease.id);
+        // trace:BUG-2139 | ai:claude
+        crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
@@ -2953,6 +2955,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
@@ -4118,6 +4123,8 @@ pub(crate) fn remove_session_lease_record_only(
     lease_id: &str,
 ) -> bool {
     let lease_file = lease_path(project_root, lease_id);
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_file);
     let removed = match std::fs::remove_file(&lease_file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
