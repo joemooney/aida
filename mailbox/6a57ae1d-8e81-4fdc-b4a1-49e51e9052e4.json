@@ -1,0 +1,19 @@
+{
+  "id": "6a57ae1d-8e81-4fdc-b4a1-49e51e9052e4",
+  "thread_id": "6a57ae1d-8e81-4fdc-b4a1-49e51e9052e4",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792149333397,
+  "body": "PR #2697 filed for BUG-2164. Refuses 'aida pr ship' on default branch without an explicit PR number, discovering open approved PR candidates. 7 unit tests added and passing clean.",
+  "subject": "PR READY: #2697 (BUG-2164)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

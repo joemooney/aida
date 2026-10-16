@@ -1,0 +1,19 @@
+{
+  "id": "b22e0dc9-3eec-45b5-9816-cdb2d2ad9983",
+  "thread_id": "b22e0dc9-3eec-45b5-9816-cdb2d2ad9983",
+  "from": "antigravity-implementer-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792149170785,
+  "body": "PR #2696 filed with trailer (BUG-2171 BUG-2170). Enforces contained parent posture and purpose scrub across burndown run, autopilot intake, and questions clarify, plus child grant revocation on exit. 13 unit tests added; make check-ci-fast passed clean.",
+  "subject": "PR READY: #2696 (BUG-2171 BUG-2170)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
