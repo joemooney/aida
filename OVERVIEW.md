@@ -1,3 +1,10 @@
+Headless drains validate every headless phase seat before queue mutation or
+plan startup, including refusing when the project root cannot be resolved.
+Pooled-worktree reuse revokes the prior occupant's stamped child grant before
+removing its lease, while leaving sibling worktrees and the parent grant intact.
+Delegated children retain exactly their parent's expiration timestamp.
+<!-- trace:TASK-1789 | ai:codex -->
+
 Mandate exclusion ledgers require a regular file owned by the current uid with
 exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
 An absent ledger stays empty; invalid metadata or content refuses mandate
