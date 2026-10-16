@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T21:41:13.394931140Z
+modified_at: 2026-10-16T21:41:15.513958922Z
 req_type: Task
 relationships:
 - rel_type:
@@ -75,6 +75,15 @@ comments:
     Important limits: raw token extraction can match strings/fixtures rather than actual comments; final ordinary-source/tree-mode and absent-side evidence checks are not implemented; comparison uses delivered merge-parent/merge-commit snapshots; no --include-supervised comparison. Re-run through the actual collector before the PR report. The 50% preliminary rate suggests the signed >20% hunk/enclosing-fn/impl path will be necessary. No new authority semantics or code was introduced. Item 3 remains pending. The helper only reads the store/ledger, no mutations or new lease. Do not interpret old lower-bound filenames as a mathematical lower bound.
   created_at: 2026-10-16T20:45:48.111724147Z
   modified_at: 2026-10-16T20:45:48.111724147Z
+- id: 01a146a9-7e79-74f0-8564-9ec8769bd3ed
+  author: ai:codex:joe
+  content: |
+    TASK-1790 item3 implemented on codex/task-1790-traces at 9386e30ebdac4434ff4a14d6dbbcc4f26fe985a7. Trace IDs only add mandate exclusions using committed base/head source evidence; named IDs retain all completion/verdict/author authority. Pinned raw/blob evidence, Rust comment/item collection with conservative fallback, mode-only/deletion/rename coverage, hardened host-Git reads, and dirty/moving store refusals are implemented.
+
+    Final frozen-source workspace compile passed 398.1s; fresh workspace libtest 15 collector + 47 mandate tests passed; final fast 30 passed. Root-locked actual-core collector matches all 50 frozen cases. Ordinary mandates: full 25/50 newly refused vs scoped 24/50, 22 already refused named; 46 cases have fallback. Public benchmark docs include full pins and limits; private ledger contents stay local. Three author checker contexts ran, last compared 1813 ranges + 50 PRs, preceding the later host-reader correction; final actual-core regressions and benchmark cover that correction. STRICT independent review required. This completes branch work for item3; no merged/Completed claim.
+  created_at: 2026-10-16T21:41:15.513958922Z
+  modified_at: 2026-10-16T21:41:15.513958922Z
+  session_id: 01a1467c42c8
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
