@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:05.860398049Z
-modified_at: 2026-10-15T07:02:00.521272248Z
+modified_at: 2026-10-16T17:21:29.842887153Z
 req_type: Bug
 tags:
 - contained
@@ -285,6 +285,12 @@ comments:
   created_at: 2026-10-15T01:20:13.611692819Z
   modified_at: 2026-10-15T01:20:13.611692819Z
   session_id: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
+- id: 01a145bb-acf2-73c1-979f-ba37a25dc9d3
+  author: joe
+  content: 'Advisor note 2026-10-16 (from the BUG-2169 r4 review). Pre-existing, not widened by #2699: <main>/.aida-store/.git is in the seat-writable store, so a contained seat can rewrite it to ''gitdir: <seat-controlled dir>''. Store hardening pins core.fsmonitor, hooksPath and GIT_ATTR_SOURCE, but not core.attributesFile, $GIT_DIR/info/attributes or diff.external. Worktree mode has the same capability through a crafted gitdir. Hardening: before any host store git, verify the store gitfile target is host-owned and outside every seat write-root, and pin the remaining config vectors.'
+  created_at: 2026-10-16T17:21:29.842887153Z
+  modified_at: 2026-10-16T17:21:29.842887153Z
+  session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
 history:
 - id: 01a12b8d-8939-7062-a354-e51064a03c51
   author: joe
