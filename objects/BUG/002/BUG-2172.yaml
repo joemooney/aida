@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T21:27:21.698257991Z
+modified_at: 2026-10-16T21:29:04.729166298Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,16 @@ comments:
   content: Commit 7dd7aee9de references this requirement
   created_at: 2026-10-16T21:27:21.698257991Z
   modified_at: 2026-10-16T21:27:21.698257991Z
+- id: 01a1469e-57d9-72f3-9110-042466173e19
+  author: ai:codex:joe
+  content: |
+    MERGE-UP READY: #2700 512ce27a1debef96faf42cd65cac42bbffce5cf8
+
+    Normal merge of main 7dd7aee9de into the reviewed author head a5ba30b5e6. The entire final tree equals the independently computed automatic merge tree 3457546313ea1f0f874b36d5094b44d420bde801. Both documentation files retain all author-parent content and the incoming TASK-1789 paragraphs. A separate author checker ran its own parent/tree/document proofs and found no findings; this conveys no review authority.
+
+    Local validation at the pushed head: make check-ci-compile passed every workspace test target (989.7s); make check-ci-fast passed 30 gates. No new content or follow-ups were added. OPEN state and exact new head read back from GitHub. Fresh independent attestation is requested at this head; the existing STRICT r2 approval was at the previous head. No GitHub CI-green claim.
+  created_at: 2026-10-16T21:29:04.729166298Z
+  modified_at: 2026-10-16T21:29:04.729166298Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
