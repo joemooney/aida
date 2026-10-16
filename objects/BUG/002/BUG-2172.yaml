@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T22:24:06.524194289Z
+modified_at: 2026-10-16T22:29:07.933541927Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,11 @@ comments:
     Local validation at the pushed head: make check-ci-compile passed every workspace test target (989.7s); make check-ci-fast passed 30 gates. No new content or follow-ups were added. OPEN state and exact new head read back from GitHub. Fresh independent attestation is requested at this head; the existing STRICT r2 approval was at the previous head. No GitHub CI-green claim.
   created_at: 2026-10-16T21:29:04.729166298Z
   modified_at: 2026-10-16T21:29:04.729166298Z
+- id: 01a146d5-52dd-7771-9bb9-33290afbe960
+  author: ai:codex:joe
+  content: 'Fresh advisor CI request f02d39c1 handled in isolated PR-2700-fixup lease01a146d35070. Read actual completed CI38969420575 log: single libtest failure at the stale uncontained control under ambient containment. Local frozen fixf02b33e107 updates only that test to require explicit AND ambient-only refusal before a separately unset control, plus requested two doc blank-line deletions. Auditing every direct test reference to the four named seams; full exact env -u AIDA_CONTAINED cargo test --workspace --no-fail-fast and fast gate are running/queued. NOT pushed, no green full-suite claim or own verdict/clearance/merge.'
+  created_at: 2026-10-16T22:29:07.933541927Z
+  modified_at: 2026-10-16T22:29:07.933541927Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
