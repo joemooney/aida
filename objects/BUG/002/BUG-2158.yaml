@@ -5,12 +5,12 @@ title: 'Contained parent: widening passthrough flags (--add-dir, --allowedTools,
 description: |-
   Found in the BUG-2151 #2672 round-2 e2e case 11: '--extra-flag=--add-dir=/ --extra-flag=--allowedTools=Edit(//**)' passed through to the contained child alongside AIDA_CONTAINED=1. The claude strip list (agent_launch.rs:1501-1509) is a denylist missing these flags. The contained write boundary is itself expressed as Edit/Write allow rules, so these flags widen it.
   Acceptance: under a contained parent, any extra or default flag NOT on an explicit allowlist is refused with a clear message (allowlist, not denylist). Tests cover each named flag and an unknown flag. Tier STRICT.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:23:06.151798270Z
-modified_at: 2026-10-15T19:23:22.635168034Z
+modified_at: 2026-10-16T06:22:37.054510054Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -25,6 +25,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a14360-73f7-77a1-bca7-4ce306a88b39
+  author: aida-auto-bump
+  timestamp: 2026-10-16T06:22:37.047311812Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a14360-73fe-7792-ac7a-ec6f7bcbca14
+  timestamp: 2026-10-16T06:22:37.054504467Z
+  agent: aida
+  commit_sha: 8e004a52ae9f4e4c518a10b661f9d1f8ba41b833
+  summary: 'STRICT independent review: resume/new/start --launch contained under a contained parent; strict passthrough allowlist; 17/17 bug_2157 tests pass. Non-blocking follow-ups filed separately.'
+  review_verdict: approved
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
@@ -33,3 +47,7 @@ filed_at:
   aida_build_sha: bfddcbee42
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T06:22:37.047306427Z
+  completion_sha: 8e004a52ae9f4e4c518a10b661f9d1f8ba41b833
