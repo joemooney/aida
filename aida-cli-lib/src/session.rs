@@ -3591,10 +3591,10 @@ fn stamp_lease_active_pid(lease_id: &str, pid: u32) -> Result<()> {
 
 /// BUG-2139: record the headless child's grant id on its lease, so a lease
 /// end or reap revokes it even when the launcher crashed before the child's
-/// exit could. Written as a raw key (the lease struct does not model it); a
-/// lease without the key is a legacy or interactive lease with nothing to
-/// revoke.
+/// exit could. Modeled on `SessionLease.child_grant_id` (BUG-2165); a lease
+/// without the key is a legacy or interactive lease with nothing to revoke.
 // trace:BUG-2139 | ai:claude
+// trace:BUG-2165 | ai:antigravity
 pub(crate) const LEASE_CHILD_GRANT_KEY: &str = "child_grant_id";
 
 // trace:BUG-2139 | ai:claude

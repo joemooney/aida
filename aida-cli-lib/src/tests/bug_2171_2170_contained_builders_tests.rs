@@ -123,7 +123,8 @@ fn validate_questions_clarify_contained_checks() {
 #[test]
 fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     // Contained
-    let cmd = build_burndown_quiet_command("prompt-quiet", "dontAsk", "CEILING_KEY", "10", true);
+    let cmd =
+        build_burndown_quiet_command("prompt-quiet", "dontAsk", "", "CEILING_KEY", "10", true);
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -151,6 +152,7 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     let cmd_uncontained = build_burndown_quiet_command(
         "prompt-quiet",
         "bypassPermissions",
+        "",
         "CEILING_KEY",
         "10",
         false,
