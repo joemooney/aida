@@ -1,3 +1,8 @@
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.

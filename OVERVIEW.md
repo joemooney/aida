@@ -1,3 +1,8 @@
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 Headless drains validate every headless phase seat before queue mutation or
 plan startup, including refusing when the project root cannot be resolved.
 Pooled-worktree reuse revokes the prior occupant's stamped child grant before

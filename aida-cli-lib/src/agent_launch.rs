@@ -4678,6 +4678,104 @@ pub(crate) fn render_agent_show_prompt(
     out
 }
 
+/// Ask the selected executable, never the launching session, for its version.
+/// A failed probe clears inherited context so a different vendor cannot receive
+/// its parent's version. Previews do not call this helper.
+// trace:TASK-1793 | ai:codex
+fn apply_harness_version(command: &mut std::process::Command, binary: &std::path::Path) {
+    command.env_remove("AIDA_HARNESS_VERSION");
+    if let Some(version) = reported_harness_version(binary, command.get_current_dir()) {
+        command.env("AIDA_HARNESS_VERSION", version);
+    }
+}
+
+// trace:TASK-1793 | ai:codex
+#[cfg(unix)]
+fn reported_harness_version(
+    binary: &std::path::Path,
+    cwd: Option<&std::path::Path>,
+) -> Option<String> {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let start = std::time::Instant::now();
+    let mut probe = Command::new(binary);
+    if let Some(cwd) = cwd {
+        probe.current_dir(cwd);
+    }
+    let mut child = probe
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn_retrying_etxtbsy()
+        .ok()?;
+    let pid = child.id();
+    let result = (|| {
+        let mut stdout = child.stdout.take()?;
+        let fd = stdout.as_raw_fd();
+        // SAFETY: fd belongs to this live stdout pipe; these fcntl operations
+        // change only its file-status flags and do not take pointer arguments.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        let mut eof = false;
+        loop {
+            // Never retain more than 257 bytes, including a trailing newline.
+            // A descendant holding the pipe open shares this same deadline.
+            let mut chunk = [0u8; 258];
+            match stdout.read(&mut chunk) {
+                Ok(0) => eof = true,
+                Ok(n) => {
+                    if bytes.len() + n > 257 {
+                        return None;
+                    }
+                    bytes.extend_from_slice(&chunk[..n]);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => return None,
+            }
+            if let Some(status) = child.try_wait().ok()? {
+                if !status.success() {
+                    return None;
+                }
+                if eof {
+                    let output = String::from_utf8(bytes).ok()?;
+                    let value = output.trim();
+                    return (!value.is_empty()
+                        && value.len() <= 256
+                        && !value.chars().any(char::is_control))
+                    .then(|| value.to_string());
+                }
+            }
+            if start.elapsed() >= std::time::Duration::from_secs(2) {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    })();
+    // Terminate the probe group even when its leader has already exited. No
+    // pipe-reader threads survive a timeout or an oversized output stream.
+    crate::kill_process_group(pid);
+    let _ = child.kill();
+    let _ = child.wait();
+    result
+}
+
+#[cfg(not(unix))]
+fn reported_harness_version(
+    _binary: &std::path::Path,
+    _cwd: Option<&std::path::Path>,
+) -> Option<String> {
+    None
+}
+
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_agent_new_bg_command(
     binary: &std::path::Path,
@@ -4705,6 +4803,7 @@ pub(crate) fn build_agent_new_bg_command(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    apply_harness_version(&mut command, binary);
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
@@ -4907,6 +5006,7 @@ pub(crate) fn run_tracked_agent(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    apply_harness_version(&mut command, binary);
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
@@ -5072,3 +5172,8 @@ pub(crate) fn run_tracked_agent(
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+// trace:TASK-1793 | ai:codex
+#[cfg(test)]
+#[path = "tests/task_1793_harness_version_tests.rs"]
+mod harness_version_tests;
