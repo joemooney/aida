@@ -2993,7 +2993,13 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         let project_path = project_root.join(".aida").join("config.toml");
         let project_hours = crate::seat_authority::read_max_grant_hours_file(&project_path);
         let (effective, source) = match (global_hours, project_hours) {
-            (Some(g), Some(p)) => (std::cmp::min(g, p), PolicySource::ProjectConfig),
+            (Some(g), Some(p)) => {
+                if g <= p {
+                    (g, PolicySource::GlobalConfig)
+                } else {
+                    (p, PolicySource::ProjectConfig)
+                }
+            }
             (Some(g), None) => (g, PolicySource::GlobalConfig),
             (None, Some(p)) => (
                 std::cmp::min(crate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
@@ -4765,6 +4771,7 @@ mod bug_1667_bypass_gate_tests {
                     project_root: root.to_path_buf(),
                     stdin_is_terminal: stdin,
                     stdout_is_terminal: stdout,
+                    stderr_is_terminal: false,
                 },
             )))
         }

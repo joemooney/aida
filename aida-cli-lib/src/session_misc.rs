@@ -593,12 +593,7 @@ pub(crate) fn resolve_session_grant(
     if gid.is_none() {
         let is_current_session = std::env::var("AIDA_SESSION_ID")
             .map(|cur| cur == lease.id)
-            .unwrap_or(false)
-            || std::env::current_dir()
-                .ok()
-                .and_then(|cwd| cwd.canonicalize().ok())
-                .map(|canon| lease_covers_cwd(lease, &canon))
-                .unwrap_or(false);
+            .unwrap_or(false);
         if is_current_session {
             gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
         }
@@ -611,6 +606,22 @@ pub(crate) fn resolve_session_grant(
             crate::seat_authority::read_grant(id).ok()
         }
     })
+}
+
+/// Format the `grant ttl: <ttl>` display line for a session lease, if a valid grant resolves.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn format_session_grant_ttl_line(lease: &SessionLease) -> Option<String> {
+    let grant = resolve_session_grant(lease)?;
+    let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
+    if ttl > chrono::Duration::zero() {
+        Some(format!(
+            "  {}: {}",
+            "grant ttl".bold(),
+            crate::seat_authority::format_ttl(ttl)
+        ))
+    } else {
+        None
+    }
 }
 
 pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
@@ -687,16 +698,8 @@ pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
         );
     }
     // trace:TASK-1787 | ai:antigravity
-    let resolved_grant = resolve_session_grant(&lease);
-    if let Some(grant) = &resolved_grant {
-        let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
-        if ttl > chrono::Duration::zero() {
-            println!(
-                "  {}: {}",
-                "grant ttl".bold(),
-                crate::seat_authority::format_ttl(ttl)
-            );
-        }
+    if let Some(line) = format_session_grant_ttl_line(&lease) {
+        println!("{line}");
     }
     println!(
         "  {}: {} ({})",

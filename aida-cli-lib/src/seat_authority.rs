@@ -710,8 +710,7 @@ pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> St
 }
 
 pub(crate) fn require_direct_tty() -> Result<()> {
-    use std::io::IsTerminal;
-    if !(crate::authority_stdin_is_terminal() && std::io::stderr().is_terminal()) {
+    if !(crate::authority_stdin_is_terminal() && crate::authority_stderr_is_terminal()) {
         bail!("role grants require a human at an interactive TTY; run `aida role enter` from your terminal");
     }
     Ok(())
@@ -745,8 +744,12 @@ pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
 pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
     let value: toml::Value = match toml::from_str(body) {
         Ok(v) => v,
-        Err(e) => {
-            eprintln!("Warning: failed to parse config TOML: {e}");
+        Err(_) => {
+            static WARNED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("Warning: failed to parse config TOML");
+            }
             return None;
         }
     };

@@ -466,6 +466,7 @@ fn callers() {
         project_root: project.clone(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
     let path = queue_path(ROLE).unwrap();
     let corrupt = "broken: [";

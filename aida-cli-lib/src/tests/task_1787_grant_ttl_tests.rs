@@ -22,6 +22,8 @@ fn test_format_ttl() {
 #[test]
 fn test_resolve_max_grant_hours_defaults_to_24() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     let cap = resolve_max_grant_hours(dir.path());
     assert_eq!(cap, DEFAULT_MAX_GRANT_HOURS);
     assert_eq!(cap, 24);
@@ -30,6 +32,11 @@ fn test_resolve_max_grant_hours_defaults_to_24() {
 #[test]
 fn test_resolve_max_grant_hours_project_lowers_default() {
     let dir = tempdir().unwrap();
+    let empty_home = tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(empty_home.path().to_str().unwrap()),
+    )]);
     let aida_dir = dir.path().join(".aida");
     fs::create_dir_all(&aida_dir).unwrap();
     fs::write(
@@ -103,6 +110,8 @@ fn test_resolve_max_grant_hours_precedence() {
 #[test]
 fn test_parse_ttl_bare_number_without_unit_refused() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     let err = parse_ttl(dir.path(), Some("72")).unwrap_err().to_string();
     assert!(
         err.contains("--ttl needs a unit, e.g. 72h or 90m"),
@@ -115,6 +124,8 @@ fn test_parse_ttl_bare_number_without_unit_refused() {
 #[test]
 fn test_parse_ttl_none_and_empty() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     assert_eq!(parse_ttl(dir.path(), None).unwrap(), None);
     assert_eq!(parse_ttl(dir.path(), Some("")).unwrap(), None);
     assert_eq!(parse_ttl(dir.path(), Some("   ")).unwrap(), None);
@@ -123,6 +134,8 @@ fn test_parse_ttl_none_and_empty() {
 #[test]
 fn test_parse_ttl_within_default_cap() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     // Default cap is 24h
     let dur = parse_ttl(dir.path(), Some("12h")).unwrap().unwrap();
     assert_eq!(dur, Duration::hours(12));
@@ -160,12 +173,18 @@ fn test_parse_ttl_within_custom_cap() {
 #[test]
 fn test_parse_ttl_above_cap_refused_with_setting_name() {
     let dir = tempdir().unwrap();
+    let empty_home = tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(empty_home.path().to_str().unwrap()),
+    )]);
     // Default cap is 24h; requesting 25h should fail naming [seat] max_grant_hours
     let err = parse_ttl(dir.path(), Some("25h")).unwrap_err().to_string();
     assert!(
         err.contains("exceeds the configured cap of 24h ([seat] max_grant_hours)"),
         "error message `{err}` must name `[seat] max_grant_hours`"
     );
+    drop(_env);
 
     // Global cap 48h; requesting 50h should fail
     let fake_home = tempdir().unwrap();
@@ -225,6 +244,8 @@ fn test_parse_ttl_above_hard_ceiling_refused_even_with_higher_config() {
 #[test]
 fn test_parse_ttl_rejects_negative_or_zero_or_invalid() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     let err = parse_ttl(dir.path(), Some("0m")).unwrap_err().to_string();
     assert!(err.contains("grant TTL must be positive"));
 
@@ -237,6 +258,11 @@ fn test_parse_ttl_rejects_negative_or_zero_or_invalid() {
 #[test]
 fn test_default_ttl_unchanged_24h_even_with_higher_config() {
     let dir = tempdir().unwrap();
+    let empty_home = tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(empty_home.path().to_str().unwrap()),
+    )]);
     let aida_dir = dir.path().join(".aida");
     fs::create_dir_all(&aida_dir).unwrap();
     fs::write(
@@ -254,6 +280,11 @@ fn test_default_ttl_unchanged_24h_even_with_higher_config() {
 #[test]
 fn test_custom_ttl_minted_correctly() {
     let dir = tempdir().unwrap();
+    let empty_home = tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(empty_home.path().to_str().unwrap()),
+    )]);
     let grant_id = test_support::mint_grant_for_with_ttl(
         dir.path(),
         "user1",
@@ -274,12 +305,14 @@ fn test_non_tty_mint_still_refused() {
         ("AIDA_HEADLESS", Some("1")),
         ("AIDA_AGENT_NAME", None),
         ("AIDA_AGENT_TYPE", None),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
     ]);
 
     let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: dir.path().to_path_buf(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
 
     let res = issue_direct(dir.path(), "advisor", Vec::new(), Some(Duration::hours(12)));
@@ -299,6 +332,7 @@ fn test_managed_agent_mint_refused() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS", None),
         ("AIDA_AGENT_NAME", Some("antigravity-1")),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
     ]);
 
     let res = issue_direct(dir.path(), "advisor", Vec::new(), None);
@@ -347,6 +381,8 @@ fn test_task_1736_relay_refusal_with_long_grant() {
 #[test]
 fn test_parse_ttl_boundary_values() {
     let dir = tempdir().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(dir.path().to_str().unwrap()))]);
     // 1h valid
     let dur = parse_ttl(dir.path(), Some("1h")).unwrap().unwrap();
     assert_eq!(dur, Duration::hours(1));
@@ -399,11 +435,13 @@ fn test_issue_direct_writes_requested_ttl() {
         ("AIDA_AGENT_NAME", None),
         ("AIDA_AGENT_TYPE", None),
         ("AIDA_USER", Some("human-operator")),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
     ]);
     let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: dir.path().to_path_buf(),
         stdin_is_terminal: true,
         stdout_is_terminal: true,
+        stderr_is_terminal: true,
     }));
     let grant = issue_direct(dir.path(), "advisor", Vec::new(), Some(Duration::hours(12))).unwrap();
     crate::test_ambient::replace(prev);
@@ -416,6 +454,11 @@ fn test_session_show_displays_grant_ttl() {
     let dir = tempdir().unwrap();
     let aida_dir = dir.path().join(".aida");
     fs::create_dir_all(&aida_dir).unwrap();
+
+    let mut _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ID", Some("123456789012")),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
+    ]);
     let grant_id = test_support::mint_grant_for_with_ttl(
         dir.path(),
         "fixture-user",
@@ -423,6 +466,7 @@ fn test_session_show_displays_grant_ttl() {
         &[],
         Some(Duration::hours(72)),
     );
+    _env.set_key(crate::seat_authority::GRANT_ENV, grant_id.as_str());
 
     let lease = crate::leases::SessionLease {
         id: "123456789012".to_string(),
@@ -461,15 +505,11 @@ fn test_session_show_displays_grant_ttl() {
         toml::to_string(&lease).unwrap(),
     )
     .unwrap();
-
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
-        ("AIDA_SESSION_ID", Some("123456789012")),
-    ]);
     let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: dir.path().to_path_buf(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
 
     let resolved = crate::session_misc::resolve_session_grant(&lease);
@@ -477,6 +517,21 @@ fn test_session_show_displays_grant_ttl() {
     let grant = resolved.unwrap();
     let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
     assert_eq!(crate::seat_authority::format_ttl(ttl), "72h");
+
+    let ttl_line = crate::session_misc::format_session_grant_ttl_line(&lease);
+    assert!(
+        ttl_line.as_deref().unwrap_or("").contains("grant ttl")
+            && ttl_line.as_deref().unwrap_or("").contains("72h"),
+        "ttl line must format 72h: {ttl_line:?}"
+    );
+
+    // Another session lease does NOT resolve viewer's grant
+    let mut other_lease = lease.clone();
+    other_lease.id = "999999999999".to_string();
+    assert!(
+        crate::session_misc::resolve_session_grant(&other_lease).is_none(),
+        "viewer grant must not resolve for another session"
+    );
 
     let res = crate::session_misc::session_show(Some("123456789012"), false);
     crate::test_ambient::replace(prev);
