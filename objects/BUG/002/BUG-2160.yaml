@@ -11,8 +11,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T21:05:44.789566170Z
-modified_at: 2026-10-15T21:05:58.621223846Z
+modified_at: 2026-10-16T02:50:44.489232042Z
 req_type: Bug
+comments:
+- id: 01a1429e-7989-7360-ba5a-9cb03d036f14
+  author: joe
+  content: 'Fix in PR #2686 (42c28af8d2): root cause is the fork-to-exec descriptor window (forked children hold copies of all fds). See PR body for per-test cause/fix; 10x stability loop green at --test-threads=24.'
+  created_at: 2026-10-16T02:50:44.489232042Z
+  modified_at: 2026-10-16T02:50:44.489232042Z
+  session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
 history:
 - id: 01a14162-d55d-79b2-881f-334047b4fe7f
   author: joe
