@@ -1,3 +1,9 @@
+Standalone reviewer coexistence requires an explicit queue-work role flag plus
+an unambiguous backing spec. Verdict collection reads a size-bounded regular
+file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
+process watchdog.
+<!-- trace:TASK-1786 | ai:codex -->
+
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
 closed built-in Linux probes. It never runs stored shell commands or probes
 from sync/drain/hooks, and reports match/drift/unknown/invalid without status

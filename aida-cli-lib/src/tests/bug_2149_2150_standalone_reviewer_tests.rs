@@ -346,6 +346,20 @@ fn fifo_symlink_verdict_is_skipped_not_read() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // The PATH isolation helper above guarantees that this watchdog exits only
+    // this exact-test subprocess if a blocking-open regression returns.
+    // trace:TASK-1786 | ai:codex
+    assert!(crate::test_env::is_path_isolated_process());
+    let (done, wait) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if matches!(
+            wait.recv_timeout(std::time::Duration::from_secs(60)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            eprintln!("FIFO verdict test exceeded 60 seconds");
+            std::process::exit(124);
+        }
+    });
     let tmp = tempfile::tempdir().unwrap();
     let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
         let dir = l.worktree.join(".aida/review-verdicts");
@@ -354,6 +368,20 @@ fn fifo_symlink_verdict_is_skipped_not_read() {
             d = dir.display()
         )
     });
+    assert_refused(result, &project, "wrote no verdict file after it started");
+    // A direct FIFO reaches open itself; a symlink-only fixture cannot prove
+    // that O_NONBLOCK is present on the candidate open.
+    let direct = tmp.path().join("direct");
+    std::fs::create_dir(&direct).unwrap();
+    let (result, project) = run_mock_reviewer(&direct, |l, _| {
+        let dir = l.worktree.join(".aida/review-verdicts");
+        format!(
+            "#!/bin/sh\nmkdir -p '{d}'\nmkfifo '{d}/STORY-77.json'\nexit 0\n",
+            d = dir.display()
+        )
+    });
+    drop(done);
+    watchdog.join().unwrap();
     assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
@@ -463,7 +491,8 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
             true,
             true,
             implementer.role.as_deref(),
-            Some("reviewer")
+            Some("reviewer"),
+            Some("STORY-77"),
         ),
         LeaseConflictDecision::Coexist
     );
@@ -476,12 +505,24 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
         Some("rev1".to_string())
     );
     assert_eq!(
-        review_source_branch_conflict_decision(true, true, Some("reviewer"), Some("reviewer")),
+        review_source_branch_conflict_decision(
+            true,
+            true,
+            Some("reviewer"),
+            Some("reviewer"),
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::Refuse
     );
     // A DEAD implementer lease is still ended, as before.
     assert_eq!(
-        review_source_branch_conflict_decision(true, false, Some("implementer"), Some("reviewer")),
+        review_source_branch_conflict_decision(
+            true,
+            false,
+            Some("implementer"),
+            Some("reviewer"),
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::AutoEnd
     );
 }
@@ -555,12 +596,40 @@ fn implementer_pickup_still_conflicts_with_live_implementer_lease() {
             true,
             true,
             implementer.role.as_deref(),
-            Some("implementer")
+            Some("implementer"),
+            Some("STORY-77"),
         ),
         LeaseConflictDecision::Refuse
     );
     assert_eq!(
-        review_source_branch_conflict_decision(true, true, implementer.role.as_deref(), None),
+        review_source_branch_conflict_decision(
+            true,
+            true,
+            implementer.role.as_deref(),
+            None,
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::Refuse
     );
+}
+
+// trace:TASK-1786 | ai:codex
+#[test]
+fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
+    for (explicit, backing) in [
+        (None, Some("STORY-77")),
+        (Some("reviewer"), None),
+        (Some("reviewer"), Some("")),
+    ] {
+        assert_eq!(
+            review_source_branch_conflict_decision(
+                true,
+                true,
+                Some("implementer"),
+                explicit,
+                backing
+            ),
+            LeaseConflictDecision::Refuse
+        );
+    }
 }

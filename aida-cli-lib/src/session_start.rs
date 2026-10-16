@@ -1160,6 +1160,10 @@ pub(crate) fn session_start(
     // BUG-2010: true when caller is working the lease itself (self-claim).
     // false when launching/spawning another agent (agent new, session start --launch).
     self_claim: bool,
+    // Only a caller with an explicit role flag and resolved backing spec may
+    // request reviewer coexistence; a resolved/inferred role is insufficient.
+    // trace:TASK-1786 | ai:codex
+    review_coexistence: Option<(&str, &str)>,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1400,7 +1404,7 @@ pub(crate) fn session_start(
             anyhow::bail!("{e}");
         }
     }
-    let preflight_status: Option<RequirementStatus> = preflight_store.and_then(|store| {
+    let preflight_status: Option<RequirementStatus> = preflight_store.as_ref().and_then(|store| {
         store
             .get_requirement_by_spec_id(owns)
             .map(|r| r.status.clone())
@@ -1551,7 +1555,15 @@ pub(crate) fn session_start(
                     headless,
                     is_live,
                     l.role.as_deref(),
-                    launch_role.as_deref(),
+                    review_coexistence.map(|(explicit_role, _)| explicit_role),
+                    review_coexistence.and_then(|(_, id)| {
+                        preflight_store
+                            .as_ref()?
+                            .get_requirement_unambiguous(id)
+                            .ok()
+                            .flatten()
+                            .map(|_| id)
+                    }),
                 );
                 match decision {
                     LeaseConflictDecision::Coexist => {

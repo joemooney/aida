@@ -12507,6 +12507,8 @@ pub(crate) fn handle_queue_work(
             None,
             /* self_claim */
             queue_work_self_claim(no_launch),
+            // trace:TASK-1786 | ai:codex
+            role_override.map(|explicit| (explicit, plan.anchor_display.as_str())),
         )
     };
     if no_launch {
