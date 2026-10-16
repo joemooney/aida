@@ -1,0 +1,38 @@
+id: 01a145eb-ea17-7223-abbe-fcfe7d7e3fb6
+spec_id: STORY-1707
+agreed_id: STORY-1707
+title: 'Review PR-2679: [AI:codex] feat(regen): check completeness and split component diagnostics (STORY-1677)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1400f`) for branch `codex/story-1677`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2679>
+  - Branch: `codex/story-1677` → `main`
+
+  ## Covers
+
+  - STORY-1677
+  - TASK-1734
+  - TASK-1733
+  - TASK-1732
+  - TASK-1731
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2679` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T18:14:11.223028059Z
+modified_at: 2026-10-16T18:14:11.223028059Z
+req_type: Story
+filed_at:
+  code_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6
