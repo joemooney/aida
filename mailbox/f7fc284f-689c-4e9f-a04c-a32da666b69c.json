@@ -1,0 +1,19 @@
+{
+  "id": "f7fc284f-689c-4e9f-a04c-a32da666b69c",
+  "thread_id": "f7fc284f-689c-4e9f-a04c-a32da666b69c",
+  "from": "sketch-2169",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792163327834,
+  "body": "S1 is up as #2699, branch bug-2169-s1. It contains the sketch doc and the implementation; the clone path sits behind [contained] seat_tree = \"clone\", and the default is unchanged.\n- The seat_clone accessor creates the clone (with base pin and marker), refuses loudly with no worktree fallback, and resolves main from files only (marker + alternates + clone lease).\n- SessionLease gets a serde-default tree_kind. contained_seat is threaded through agent new, queue work and session start.\n- session end refuses clone leases until S3.\n- Condition 1: a PATH-isolated git-shim test shows no git runs in a clone outside the accessor, with a negative control.\n- check-ci-fast (30 gates) and check-ci-compile pass. 13 new tests.\nWatch for: the (BUG-2169) trailer may auto-complete the spec on merge while S2-S4 remain. Also, agent_launch tests fail if they inherit AIDA_CONTAINED from the shell; this predates S1.",
+  "subject": "PR READY: #2699 BUG-2169 S1 (7d68fcc022)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

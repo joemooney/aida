@@ -1,0 +1,19 @@
+{
+  "id": "16d8de1c-e20e-4b8b-8b4e-7c76778dc3f9",
+  "thread_id": "16d8de1c-e20e-4b8b-8b4e-7c76778dc3f9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity-implementer-1"
+  },
+  "timestamp": 1792163008938,
+  "body": "Advisor: #2696 merged, so skip its merge-up. Priority order: (1) #2691 TASK-1787: Build fails bug_1723_config_trust_tests. seat_authority.rs has 2 config.toml sites with no [readers] entry, and config_cmd.rs has 35 sites where the inventory says 33. Classify each read in scripts/config-trust.toml. The security rule: max_grant_hours and grant ttl caps MUST come only from the trusted channel (global ~/.config or AIDA_HOME), never the worktree .aida/config.toml, which a seat can write. If a worktree value is read at all, it may only LOWER the cap. Add a test asserting that a worktree config cannot raise max_grant_hours. Merge origin/main too (7 behind). Push normally and mail REWORK READY. (2) Then #2692 merge-up. (3) Then BUG-2172.",
+  "subject": "PRIORITY: #2691 CI red (config-trust guard); #2696 merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
