@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-16T18:09:18.741982155Z
+modified_at: 2026-10-16T21:13:18.585068713Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -219,6 +219,31 @@ comments:
   created_at: 2026-10-16T18:09:18.741982155Z
   modified_at: 2026-10-16T18:09:18.741982155Z
   session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
+- id: 01a1468f-e7f9-7c52-a579-d74a437a58c6
+  author: joe
+  content: |-
+    RELAY PROMPTS (review item 1), fix-2661b, 2026-10-16. Edited in place in the main checkout /home/joe/ai/aida (untracked operator files; originals were backed up before editing).
+
+    Every in-process "FRESH reviewer subagent" instruction is replaced with: launch a FRESH reviewer as a separate process with Bash, never the Agent tool: `aida queue work PR-<n> --role reviewer --no-human --vendor claude` (at most 3 at once). The reviewer uses AIDA's own headless review prompt and records its own verdict. Exit 0 with a `verdict:` line means a verified verdict in `.aida/review-verdicts/PR-<n>.json`. Exit 30 or any other non-zero exit means no verdict, so launch a new reviewer. Pass it no verdict guidance, never run `aida review record` yourself, and never hand-roll `claude -p`.
+    Every `gh pr ready` / `gh pr merge --squash --match-head-commit` merge step is replaced with `aida pr ship <n>`, with no `--override-stale-approval` and no `gh pr merge`.
+    Every .aida/handoff/*/prompt.md now opens with the launch header: `aida role enter <seat> --delegate-seat reviewer --delegate-seat implementer`.
+
+    Changed files:
+    - .aida/handoff/night/prompt.md: header; reviewer at :24 (was :22) and :36 (was :34); merges at :6, :26 and :44 now use aida pr ship
+    - .aida/handoff/night/prompt-2026-10-12.md:21, prompt-2026-10-12b.md:17, prompt-2026-10-12c.md:17, prompt-2026-10-12d.md:20: reviewer line
+    - .aida/handoff/night-b/prompt-2026-10-12.md:19: reviewer line
+    - .aida/handoff/orchestrator/relay-prompt-batch-2026-10-10.md:25 reviewer, :27 merge now uses aida pr ship
+    - .aida/handoff/orchestrator/relay-prompt-history-2026-10-10.md:16 reviewer, :23 merge
+    - .aida/handoff/orchestrator/relay-prompt-idle-wave1-2026-10-10.md:21 reviewer, :22 merge
+    - .aida/handoff/merge/prompt.md: header; reviewer :15, merge :17. The reviewer checklist now goes in an operator-checklist comment on the spec (A1), not in the launch.
+    - .aida/handoff/merge/prompt-2026-10-12.md and prompt-2026-10-13.md: reviewer step 3 (checklist moved to a spec comment, per A1); the "Record the verdict: aida review record" bullet now says the reviewer records its own verdict; merge step 5 now uses aida pr ship
+    - .aida/handoff/advisor/prompt-2026-10-12-day.md:18: reviewer, and the merge now uses aida pr ship
+    - .aida/handoff/factory/prompt.md, lib-split/prompt.md, night-fable/prompt.md: launch header only (these seats never review or merge)
+    Searched: .aida/handoff/*/ prompt files and .aida/relay/*.md. .aida/relay/codex-batch-2026-10-16.md had no matches. Dated advisor handoff briefs (.aida/handoff/advisor/2026*.md) are historical state, not launch prompts, and were left as they are.
+    After the edits, grep finds no "reviewer subagent", "gh pr merge --squash" or "review record <ID>" in any prompt file.
+  created_at: 2026-10-16T21:13:18.585068713Z
+  modified_at: 2026-10-16T21:13:18.585068713Z
+  session_id: 01a143ac0514
 history:
 - id: 01a13e56-a047-75f0-932a-1d7b3ea7d062
   author: aida-lease-take
@@ -246,7 +271,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STRICT round 1: the templates prescribe a reviewer flow that fails or hangs at this base. Still held per the 2026-10-15 sequencing ruling (BUG-2139, BUG-2149, BUG-2150, #2485 first)'
+  detail: Template changes are correct and CI is green, but 2 of 3 acceptance criteria are not fully met (relay prompts unchanged; no 'before' throughput number), and the burndown poll recipe can act on an unverified or stale verdict file
   recovery_hint: address the review findings, move STORY-1654 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-15T17:55:54.861302605Z
+  shelved_by: reviewer
+  shelved_at: 2026-10-16T21:00:22.373874350Z
