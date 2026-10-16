@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-16T14:11:31.586285725Z
+modified_at: 2026-10-16T14:19:56.048172366Z
 req_type: Bug
 comments:
 - id: 01a14468-6b8e-7cc1-8b0f-bea6641c15b3
@@ -22,6 +22,25 @@ comments:
   created_at: 2026-10-16T14:11:31.586285725Z
   modified_at: 2026-10-16T14:11:31.586285725Z
   session_id: b307b6fe-d611-428b-bc2a-5df6287d4592
+- id: 01a14515-7310-7832-8acb-f987630982f7
+  author: joe
+  content: |-
+    ARCHITECTURE SKETCH (needs advisor signoff; nothing implemented). Full doc: docs/plans/2026-10-16-bug-2169-contained-clone.md on branch bug-2169-sketch (commit 37ba937d14).
+
+    RECOMMEND option A: each contained seat gets a private clone.
+    (1) Location: aida-seat-<slug>-<N> under worktree_parent. session_start creates it on the host side with git clone --reference <main> <origin-url>, then checkout -b <branch> <base-sha resolved in main>. Selection uses TreeKind::Clone on contained posture. Measured cost: 1.7s and 57MB; objects are about 16KB plus alternates. The host pins refs/aida/seats/<seat> in main so gc cannot prune borrowed objects. Seat boundary: the clone (its own .git) is rw, plus the store/cache (BUG-1929), plus target/worktrees/<seat>. The whole <main>/.git stays ro and has no carve-outs. Round-1 config/hooks denies are kept.
+    (2) Paths that assume a worktree: main_worktree_root_from (worktree_gc.rs:725, about 78 call sites) and the --git-common-dir helpers return the clone as main. Fix: a lease- or marker-verified resolver; host-side code takes main from the lease. Hard breaks: session_end.rs:1675 worktree remove, :966 end root, worktree_gc.rs:1609 re-entry gate, session_start.rs:1222, pool reset by ref name, rebase_cmd.rs:206-244, pr_cmd ship pull/hold root (3774). Silent skips, which become an explicit seat_trees() enumerator: reap (session_reap.rs:569/654/1225), the unshipped warning (session_end.rs:1036), gc/reclaim/dismiss/status/doctor/runaway. The doc has file:line for each.
+    (3) Disk and target: CARGO_TARGET_DIR stays <main>/target/worktrees/<seat> (6.7-19G each today, same as pool trees). sccache /mnt/build/sccache needs rw (O2).
+    (4) The seat only pushes to origin; landing is unchanged (forge merge plus host pull). New rule: the host NEVER runs git with a seat clone as the repo, because seat-writable config/hooks would escape the sandbox. Host facts come from seat_clone::probe, a read-only, no-network bwrap. destroy = probe, then salvage, then rm, then unpin, then release.
+    (5) Uncontained seats keep worktrees and the pool. The knob [contained] seat_tree defaults to clone only at S4. Lease gets a serde-default tree_kind. Close #2694 unmerged.
+    (6) Residuals: origin/HEAD and tags in main are ro. Tag push to origin is a pre-existing residual (release.yml fires on v*): recommend a GitHub tag ruleset (O3). Stale .lock: no fallback exists; creation refuses loudly. Alternates write: only the seat's own clone.
+    (7) Real-bwrap tests T1-T8 run both attacks (rename-aside; host update-ref / pack-refs detach) plus objects/alternates, origin/HEAD and tags, no silent fallback, and a host-git config/hooks escape. Each runs against the frozen #2694 layout (the attack must succeed) and the clone layout (the attack must fail). It is a CI gate with the userns sysctl.
+    (8) Slices: S1 clone, resolver and lease kind; S2 sandbox boundary plus the bwrap harness; S3 probe/destroy lifecycle; S4 visibility and the default flip; S5 host clone pool, only if O1 says the launcher can be sandboxed.
+    Option B is rejected: it still needs the shared objects/ writable (pack delete/rename), adds a privileged host ref mover, and the seat could not fetch, merge or push.
+    Also found: tool_contained_flags (agent_launch.rs:1646) scopes the boundary to the launcher's cwd, not the lease tree, and --bg/interactive launches skip os_wrap.
+  created_at: 2026-10-16T14:19:56.048172366Z
+  modified_at: 2026-10-16T14:19:56.048172366Z
+  session_id: 01a143ac0514
 history:
 - id: 01a143cc-f836-7583-b190-7823068c7b77
   author: aida-session-start
