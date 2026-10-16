@@ -1879,7 +1879,7 @@ pub(crate) fn rearm_mandate_hold_with(
     sync_label: impl FnOnce() -> std::result::Result<(), String>,
 ) -> std::result::Result<(), String> {
     let mut failed = Vec::new();
-    if let Err(e) = crate::merge_hold::write_typed_hold(hold_root, record) {
+    if let Err(e) = crate::merge_hold::rearm_typed_hold(hold_root, record) {
         failed.push(format!("the hold marker could not be rewritten ({e})"));
     }
     if let Err(e) = sync_label() {
