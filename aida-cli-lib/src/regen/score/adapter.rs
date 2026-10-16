@@ -359,6 +359,7 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
     for value in env.values().filter(|v| !v.is_empty()) {
         if record.checks.iter().any(|c| c.name.contains(value)) {
             record.checks.clear();
+            record.failure_diagnostics = None;
             record.aggregate = None;
             record.status = "error".into();
             record.error =
@@ -636,6 +637,7 @@ mod tests {
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 1,
+            crash_failure_share_percent: 50,
             min_bytes: 64,
             components: BTreeMap::new(),
             required_tools: vec!["regen-fixture-tool".into()],

@@ -184,7 +184,10 @@ fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChang
             "--limit",
             "30",
             "--json",
-            "number,title,body,headRefName",
+            // BUG-2163: `state` is read live, unlike the `--state open`
+            // filter, which goes through GitHub's lagging search index.
+            // trace:BUG-2163 | ai:claude
+            "number,title,body,headRefName,state",
         ])
         .output_retrying_etxtbsy()
     {
@@ -209,13 +212,15 @@ fn exit_failure(out: &std::process::Output) -> EvidenceUnavailable {
     }
 }
 
-/// Validate the complete `gh pr list --json number,title,body,headRefName`
+/// Validate the complete `gh pr list --json number,title,body,headRefName,state`
 /// response. Only a JSON array whose every row carries a positive integer
 /// `number` and string `title` / `body` is an answer; `[]` is the
 /// authoritative "no open change".
 ///
-/// BUG-2134: a row counts as an open change for `spec_id` only when its title
-/// or body names the id as a whole token, or its head branch is named for it
+/// BUG-2134 / BUG-2163: a row counts as an open change for `spec_id` only when
+/// its title or a body line credits the id in a trailing `(SPEC …)` group
+/// (see [`row_credits_spec`]; prose mentions do not count), or its head
+/// branch is named for it
 /// (`bug-1994`, `bug-1994-work`, `fix/bug-1994`). `gh pr list --search` also
 /// returns PRs that mention the id only in a review comment, or that merely
 /// contain its tokens (`BUG`, `1994`) apart. Before this filter such a PR held
@@ -229,7 +234,6 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
     let Some(rows) = value.as_array() else {
         return OpenChangeCheck::Unavailable(EvidenceUnavailable::NotArray);
     };
-    let ids = [spec_id.to_string()];
     let mut first = None;
     for row in rows {
         let Some(number) = row
@@ -243,14 +247,46 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
         let (Some(title), Some(body)) = (field("title"), field("body")) else {
             return OpenChangeCheck::Unavailable(EvidenceUnavailable::BadDiagnosticRow);
         };
+        // BUG-2163: `--state open` filters on GitHub's search index, which
+        // lags a merge by seconds to minutes. `aida pr ship` runs its pull
+        // about 20s after merging, so the PR it just merged came back as
+        // "open", its own `(SPEC-ID)` title named the spec, and the guard
+        // withheld the very completion that merge earned (TASK-1730..1733).
+        // The row's `state` is read live, so a row that says it is not OPEN
+        // is not an open change. A row without `state` (older fixtures)
+        // keeps the search filter's answer. trace:BUG-2163 | ai:claude
+        if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("OPEN")) {
+            continue;
+        }
         let branch = field("headRefName").unwrap_or("");
-        let names_spec = crate::count_ids_mentioned(&format!("{title}\n{body}"), &ids) > 0
-            || branch_names_spec(branch, spec_id);
+        let names_spec =
+            row_credits_spec(title, body, spec_id) || branch_names_spec(branch, spec_id);
         if names_spec {
             first.get_or_insert(number);
         }
     }
     first.map_or(OpenChangeCheck::Clear, OpenChangeCheck::Open)
+}
+
+/// BUG-2163: does an open PR's title or body CREDIT `spec_id` the way a
+/// completion trailer does? The title is parsed exactly as the merge-time
+/// completion scan parses a commit subject (`extract_spec_ids_from_commit`:
+/// a trailing `(SPEC …)` group before any `(#N)`, or a leading `SPEC-ID:`
+/// prefix, BUG-270), so a PR that would complete a spec when it merges also
+/// holds it while open. Otherwise a non-code body line must end with a
+/// `(SPEC …)` group. Free
+/// prose (`follow-up from BUG-2148`, `see X`) does not: a follow-up PR that
+/// names a merged spec is not another deliverable of it, and counting it
+/// held BUG-2148 and BUG-2141 open after their PRs merged.
+// trace:BUG-2163 | ai:claude
+fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
+    let mut credited = crate::zen_drive_root::extract_spec_ids_from_commit(title);
+    for line in body.lines() {
+        if !crate::pr_lookup::body_line_is_code_like(line) {
+            crate::pr_lookup::push_paren_spec_ids_from_line(line, &mut credited);
+        }
+    }
+    credited.iter().any(|id| id.eq_ignore_ascii_case(spec_id))
 }
 
 /// BUG-2134: is `branch` named for `spec_id`? A path segment of the branch
@@ -300,7 +336,9 @@ pub(crate) fn count_completed_with_open_changes(
             "--limit",
             "200",
             "--json",
-            "title,body",
+            // BUG-2163: the branch is one of the three credit forms.
+            // trace:BUG-2163 | ai:claude
+            "title,body,headRefName",
         ])
         .output_retrying_etxtbsy()
         .map_err(|e| {
@@ -316,9 +354,13 @@ pub(crate) fn count_completed_with_open_changes(
     count_diagnostic_rows(&out.stdout, candidate_ids)
 }
 
-/// Validate the complete `gh pr list --json title,body` response and count
-/// the candidates its rows name.
-// trace:TASK-1335 | ai:claude
+/// Validate the complete `gh pr list --json title,body,headRefName` response
+/// and count the candidates its rows CREDIT, under the same rules the
+/// per-candidate guard applies ([`row_credits_spec`], [`branch_names_spec`]),
+/// so the sweep's "still referenced by an open PR" count agrees with what
+/// would actually hold a spec. This list is not a search, so it is not
+/// subject to the search-index lag that needs the `state` check there.
+// trace:TASK-1335 trace:BUG-2163 | ai:claude
 pub(crate) fn count_diagnostic_rows(
     stdout: &[u8],
     candidate_ids: &[String],
@@ -326,20 +368,24 @@ pub(crate) fn count_diagnostic_rows(
     let value = serde_json::from_slice::<serde_json::Value>(stdout)
         .map_err(|_| EvidenceUnavailable::Undecodable)?;
     let rows = value.as_array().ok_or(EvidenceUnavailable::NotArray)?;
-    let mut haystack = String::new();
-    // Every row must carry BOTH requested fields as strings (an empty body is
-    // `""`); anything else is not a measurement, so it cannot count as 0.
+    // Every row must carry BOTH `title` and `body` as strings (an empty body
+    // is `""`); anything else is not a measurement, so it cannot count as 0.
+    let mut parsed: Vec<(&str, &str, &str)> = Vec::with_capacity(rows.len());
     for row in rows {
-        for field in ["title", "body"] {
-            let text = row
-                .get(field)
-                .and_then(|v| v.as_str())
-                .ok_or(EvidenceUnavailable::BadDiagnosticRow)?;
-            haystack.push_str(text);
-            haystack.push('\n');
-        }
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let (Some(title), Some(body)) = (field("title"), field("body")) else {
+            return Err(EvidenceUnavailable::BadDiagnosticRow);
+        };
+        parsed.push((title, body, field("headRefName").unwrap_or("")));
     }
-    Ok(crate::count_ids_mentioned(&haystack, candidate_ids))
+    Ok(candidate_ids
+        .iter()
+        .filter(|id| {
+            parsed.iter().any(|(title, body, branch)| {
+                row_credits_spec(title, body, id) || branch_names_spec(branch, id)
+            })
+        })
+        .count())
 }
 
 /// Where a candidate's completion evidence came from.
@@ -687,13 +733,15 @@ mod tests {
             check(br#"[{"number":9,"title":"x (BUG-19945)","body":"","headRefName":"bug-19945"}]"#),
             OpenChangeCheck::Clear
         );
-        // Title trailer, body prose, and branch name each count.
+        // Title trailer and branch name each count.
         assert_eq!(
             check(br#"[{"number":2606,"title":"x","body":"","headRefName":"y"},{"number":2597,"title":"fix (BUG-1994)","body":"","headRefName":"z"}]"#),
             OpenChangeCheck::Open(2597)
         );
+        // BUG-2163: a part-2 PR credits the spec in its title trailer, the
+        // convention; the same PR naming it only in prose does not hold it.
         assert_eq!(
-            check(br#"[{"number":5,"title":"x","body":"part 2 of BUG-1994","headRefName":"z"}]"#),
+            check(br#"[{"number":5,"title":"[AI:claude] fix(x): part 2 (BUG-1994) (#5)","body":"","headRefName":"z"}]"#),
             OpenChangeCheck::Open(5)
         );
         assert_eq!(
@@ -704,6 +752,87 @@ mod tests {
             check(br#"[{"number":7,"title":"x","body":""}]"#),
             OpenChangeCheck::Clear
         );
+    }
+
+    /// BUG-2163: the search index still lists a just-merged PR as open, but
+    /// the row's live `state` says MERGED. That PR must not hold the spec its
+    /// own merge completed; a genuinely OPEN row still does, and a row with no
+    /// `state` keeps the old behaviour.
+    // trace:BUG-2163 | ai:claude
+    #[test]
+    fn open_change_rows_ignore_rows_whose_live_state_is_not_open() {
+        let check = |bytes: &[u8]| parse_open_change_rows(bytes, "TASK-1732");
+        assert_eq!(
+            check(br#"[{"number":2666,"title":"[AI:codex] feat(regen): score environment seam adapters (TASK-1732)","body":"","headRefName":"codex/task-1732","state":"MERGED"}]"#),
+            OpenChangeCheck::Clear
+        );
+        assert_eq!(
+            check(br#"[{"number":2666,"title":"x (TASK-1732)","body":"","headRefName":"y","state":"CLOSED"},{"number":2670,"title":"part two (TASK-1732)","body":"","headRefName":"z","state":"OPEN"}]"#),
+            OpenChangeCheck::Open(2670)
+        );
+        assert_eq!(
+            check(
+                br#"[{"number":2670,"title":"part two (TASK-1732)","body":"","headRefName":"z"}]"#
+            ),
+            OpenChangeCheck::Open(2670)
+        );
+    }
+
+    /// BUG-2163: an open PR holds a spec only when it CREDITS it: a title
+    /// `(SPEC …)` trailer, a branch named for it, or a body line ending in a
+    /// `(SPEC …)` group. Free prose never holds it (the #2681 / BUG-2148 and
+    /// #2661 / BUG-2141 cases).
+    // trace:BUG-2163 | ai:claude
+    #[test]
+    fn open_change_rows_hold_only_prs_that_credit_the_spec() {
+        let check = |bytes: &[u8]| parse_open_change_rows(bytes, "BUG-2148");
+        // Prose mentions never hold.
+        for body in [
+            "Follow-up from BUG-2148 (#2676, merged as 84a04dc111) implementing TASK-1782:",
+            "see BUG-2148",
+            "part 2 of BUG-2148",
+            "This builds on (BUG-2148) work, see the notes.",
+        ] {
+            let row = serde_json::json!([{
+                "number": 2681,
+                "title": "[AI:antigravity] fix(registry): distinguish recycled pids (TASK-1782)",
+                "body": body,
+                "headRefName": "task-1782",
+                "state": "OPEN",
+            }]);
+            assert_eq!(
+                check(row.to_string().as_bytes()),
+                OpenChangeCheck::Clear,
+                "{body}"
+            );
+        }
+        // A credited PR holds: title trailer (with or without `(#N)`, alone
+        // or in a multi-spec group), a body trailer line, or the branch.
+        for (title, body, branch) in [
+            ("fix(x): part 2 (BUG-2148)", "", "z"),
+            ("fix(x): part 2 (BUG-2148) (#2700)", "", "z"),
+            ("fix(x): both (TASK-1782 BUG-2148) (#2700)", "", "z"),
+            (
+                "fix(x): y (TASK-1782)",
+                "* fix(x): second half (BUG-2148)",
+                "z",
+            ),
+            ("fix(x): y (TASK-1782)", "", "bug-2148-part-2"),
+            // BUG-270 leading-prefix subject: it completes the spec when it
+            // merges, so it must hold the spec while open.
+            ("BUG-2148: second half", "", "z"),
+            ("BUG-2148: second half (#2700)", "", "z"),
+        ] {
+            let row = serde_json::json!([{
+                "number": 2700, "title": title, "body": body,
+                "headRefName": branch, "state": "OPEN",
+            }]);
+            assert_eq!(
+                check(row.to_string().as_bytes()),
+                OpenChangeCheck::Open(2700),
+                "{title} | {body} | {branch}"
+            );
+        }
     }
 
     #[test]
@@ -717,6 +846,27 @@ mod tests {
         assert_eq!(
             count_diagnostic_rows(br#"[{"title":"other","body":"TASK-110"}]"#, &ids),
             Ok(0)
+        );
+        // BUG-2163: the sweep counts credits only, under the guard's rules:
+        // prose is not counted; a title trailer, a `SPEC-ID:` title, a body
+        // trailer line, or a branch is. trace:BUG-2163 | ai:claude
+        assert_eq!(
+            count_diagnostic_rows(
+                br#"[{"title":"other (TASK-99)","body":"follow-up from TASK-11 and TASK-12"}]"#,
+                &ids
+            ),
+            Ok(0)
+        );
+        assert_eq!(
+            count_diagnostic_rows(br#"[{"title":"TASK-11: second half","body":""}]"#, &ids),
+            Ok(1)
+        );
+        assert_eq!(
+            count_diagnostic_rows(
+                br#"[{"title":"x (TASK-99)","body":"* fix: y (TASK-12)","headRefName":"a"},{"title":"z (TASK-98)","body":"","headRefName":"task-11-part-2"}]"#,
+                &ids
+            ),
+            Ok(2)
         );
         for (bytes, want) in [
             (&b"[{}]"[..], EvidenceUnavailable::BadDiagnosticRow),

@@ -3102,6 +3102,23 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1699: relay stall guard — store-free, silent unless a relay
+        // run is blocked/exited without a `.done` acknowledgement.
+        // trace:STORY-1699 | ai:claude
+        (
+            &["doctor check relay-stall --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check relay-stall --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "relay-stall",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
         // which seat made the store writes; keep it off the per-turn hook path.
         // trace:BUG-1746 | ai:codex
@@ -4737,6 +4754,8 @@ enabled = true
             "doctor check runaway-seats --fail-on-findings",
             // trace:TASK-1596 | ai:codex
             "doctor check merged-agent-worktrees --fail-on-findings",
+            // trace:STORY-1699 | ai:claude
+            "doctor check relay-stall --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";

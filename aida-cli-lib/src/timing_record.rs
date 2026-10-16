@@ -87,7 +87,10 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         | UnshippedWorkDetected { .. }
         | PlanRecorded { .. }
         | GateHeld { .. } => true,
-        UnreadMail
+        // STORY-1698: the mandate's audit copy stays local; the store is
+        // never its record. trace:STORY-1698 | ai:claude
+        MandateChanged { .. }
+        | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }
         | CronJobFailed { .. }

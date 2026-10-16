@@ -16,7 +16,9 @@ use uuid::Uuid;
 
 use crate::cli::RegenCommand;
 // trace:TASK-1730 | ai:codex
-mod score;
+mod consensus;
+mod score; // trace:STORY-1679 | ai:codex
+
 // trace:TASK-1734 | ai:codex
 pub(crate) use score::report::read_summary_for_project;
 pub use score::report::RegenerationSummary;
@@ -133,10 +135,14 @@ fn git(store: &Path, args: &[&str]) -> Result<Vec<u8>> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .output()
         .with_context(|| format!("run git {}", args.join(" ")))?;
+    // Report the exit status as well as stderr: a git killed by a signal
+    // writes nothing, and an empty "failed:" hides why (BUG-2160).
+    // trace:BUG-2160 | ai:claude
     anyhow::ensure!(
         out.status.success(),
-        "git {} failed: {}",
+        "git {} failed ({}): {}",
         args.join(" "),
+        out.status,
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(out.stdout)
@@ -321,18 +327,37 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
             control,
             corpus,
             model,
+            model_family,
             vendor,
             harness,
+            consensus,
+            file,
             unconfined,
         } => {
+            if !consensus.is_empty() {
+                anyhow::ensure!(
+                    dir.is_none()
+                        && control.is_none()
+                        && corpus.is_none()
+                        && model.is_none()
+                        && model_family.is_none()
+                        && vendor.is_none()
+                        && harness.is_none()
+                        && !unconfined,
+                    "consensus is exclusive of trial/control execution"
+                );
+                return self::consensus::handle(store, consensus, *file);
+            }
+            anyhow::ensure!(!file, "--file requires --consensus");
             score::handle_score(
                 store,
                 dir.as_deref(),
                 *control,
-                corpus,
-                model,
-                vendor,
-                harness,
+                corpus.as_deref().context("scoring requires --corpus")?,
+                model.as_deref().context("scoring requires --model")?,
+                model_family.as_deref(),
+                vendor.as_deref().context("scoring requires --vendor")?,
+                harness.as_deref().context("scoring requires --harness")?,
                 *unconfined,
             )?;
         }
@@ -637,5 +662,36 @@ mod tests {
                 ..
             })
         ));
+    }
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn score_cli_preserves_optional_explicit_model_family() {
+        use clap::Parser;
+        for family in [None, Some("explicit-family")] {
+            let mut args = vec![
+                "aida",
+                "regen",
+                "score",
+                "system",
+                "--corpus",
+                "corpus",
+                "--model",
+                "model",
+                "--vendor",
+                "vendor",
+                "--harness",
+                "harness",
+            ];
+            if let Some(family) = family {
+                args.extend(["--model-family", family]);
+            }
+            let parsed = crate::cli::Cli::try_parse_from(args).unwrap();
+            match parsed.command {
+                crate::cli::Command::Regen(RegenCommand::Score { model_family, .. }) => {
+                    assert_eq!(model_family.as_deref(), family)
+                }
+                _ => panic!("expected regen score"),
+            }
+        }
     }
 }
