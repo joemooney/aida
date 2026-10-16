@@ -9,12 +9,12 @@ description: |-
 
   PR: #2604
   Reviewed sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T06:23:07.965638850Z
-modified_at: 2026-10-16T22:22:51.216328750Z
+modified_at: 2026-10-16T23:02:49.166485065Z
 req_type: Task
 tags:
 - carried-from:BUG-2011
@@ -70,6 +70,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a146f4-2a1a-7d02-94ad-3bf096f7ff3a
+  author: aida-auto-bump
+  timestamp: 2026-10-16T23:02:49.114708732Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a146f4-2a4e-70c2-990a-a01eaf3e49ad
+  timestamp: 2026-10-16T23:02:49.166476529Z
+  agent: aida
+  commit_sha: 30e4171bed78120cf272e1eef52649921f028294
+  summary: 'Test-only: pins launch_refusal at exact window equality (allowed), +1ns remaining (allowed), -1ns (refused); kills the >= to > mutant; CI run 38975364135 green; targeted test passes locally.'
+  review_verdict: approved
 filed_at:
   code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
   branch: main
@@ -78,3 +92,7 @@ filed_at:
   aida_build_sha: defb55f88b
   vendor: claude
   session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T23:02:49.114684427Z
+  completion_sha: 30e4171bed78120cf272e1eef52649921f028294
