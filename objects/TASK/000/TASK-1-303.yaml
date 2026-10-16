@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T06:23:07.965638850Z
-modified_at: 2026-10-16T20:45:09.939030897Z
+modified_at: 2026-10-16T22:22:51.216328750Z
 req_type: Task
 tags:
 - carried-from:BUG-2011
@@ -38,6 +38,16 @@ comments:
     Pushed normally. Done on branch, pending independent review/integration; no author verdict, hold clearance or own merge. Please route review after priority rework.
   created_at: 2026-10-16T20:44:47.888443903Z
   modified_at: 2026-10-16T20:44:47.888443903Z
+- id: 01a146cf-9350-7c62-920f-f5e76525bdc1
+  author: ai:codex:joe
+  content: |
+    MERGE-UP READY: #2708 db988967ec77b3c8258850615e5d52c2af1c2f13
+
+    Normal merge of main 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35 into original author70f246a98a961487f153f33863e57acc4c488e07. No other content changes or follow-ups. Entire tree8b415b5d910908366d3aaefc718724432dee7cb6 equals independently computed automatic merge-tree; against main only the original14-line exact-boundary test remains. Fresh author checker independently confirmed parents/full-tree/test preservation, with zero independent review authority.
+
+    Final checks: make check-ci-fast30 passed; make check-ci-compile passed all workspace test targets (1346.3s including queue); actual newly compiled6090b583233ca8b8 libtest ran the exact boundary test1 passed. Normal push succeeded and forge OPEN head readback equals db988967ec77b3c8258850615e5d52c2af1c2f13. No GitHub CI-green claim, author verdict, hold clearance or own main merge. Existing review STORY-1713 remains the independent gate.
+  created_at: 2026-10-16T22:22:51.216328750Z
+  modified_at: 2026-10-16T22:22:51.216328750Z
 history:
 - id: 01a14038-a980-7063-8bce-6d91a6fa2207
   author: joe
