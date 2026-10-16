@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1693",
+  "publishes": [
+    {
+      "at": "2026-10-16T00:56:22.780137208Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T12:01:15.966908891Z",
+      "spec": "STORY-1693",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T14:44:11.677632080Z",
+      "spec": "STORY-1693",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1693",
+        "branch": "story-1693",
+        "first_seen": "2026-10-15T14:44:11.677558078+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:24:43.218579771Z",
+      "spec": "STORY-1693",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2671,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4d28f0fd115e939b855b7e6958bddc14722bf2a4"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:24:45.627450982Z",
+      "spec": "STORY-1693",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STANDARD round 1: the --show behavior meets acceptance, but the nested standing-orders/ dir breaks discipline-pack scaffolding (ENOENT); CI is red with 7 failures",
+        "recovery_hint": "address the review findings, move STORY-1693 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:55:42.853674009Z",
+      "spec": "STORY-1693",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2671,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d8cea0368fe6c9e0399d43a498258131f23f2d4f"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:49:12.985392530Z",
+      "spec": "STORY-1693",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2671,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d8cea0368fe6c9e0399d43a498258131f23f2d4f"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:56:03.045943172Z",
+      "spec": "STORY-1693",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T00:56:13.818071335Z",
+      "spec": "STORY-1693",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2671
+      }
+    },
+    {
+      "ts": "2026-10-16T00:56:22.765314683Z",
+      "spec": "STORY-1693",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1e6449feed61e71c7bcd9b00ecd15987675f915f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

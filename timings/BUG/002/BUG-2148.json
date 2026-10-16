@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2148",
+  "publishes": [
+    {
+      "at": "2026-10-16T00:58:03.707183546Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T13:36:02.994589595Z",
+      "spec": "BUG-2148",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:47:29.151337170Z",
+      "spec": "BUG-2148",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2676,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ef72614b211f49c355bb68b6998054e4a50dca9f"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:47:31.763355240Z",
+      "spec": "BUG-2148",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT round 1: kill gating is correct and every signal site is covered, but agent stop reaps a live, unconfirmed agent and reports success; SIGKILL re-check untested; CI red",
+        "recovery_hint": "address the review findings, move BUG-2148 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T18:55:18.464719743Z",
+      "spec": "BUG-2148",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2676,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e1a40a89bcae34ede42bce015543b506c984a10f"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:49:08.428895663Z",
+      "spec": "BUG-2148",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2676,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e1a40a89bcae34ede42bce015543b506c984a10f"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:50:22.350185764Z",
+      "spec": "BUG-2148",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T00:50:45.411694051Z",
+      "spec": "BUG-2148",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2676
+      }
+    },
+    {
+      "ts": "2026-10-16T00:58:03.677264532Z",
+      "spec": "BUG-2148",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:58:03.678225551Z",
+      "spec": "BUG-2148",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
