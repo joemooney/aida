@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1697",
+  "publishes": [
+    {
+      "at": "2026-10-16T15:11:00.074738893Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T00:52:52.149671024Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:52:48.217911603Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:53:06.203740719Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T14:07:36.961669132Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2695,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f57a122d6e7ed60d61b7deede8ae3e2dbb6fec8a"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:07:38.010137848Z",
+      "spec": "STORY-1697",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Mandate path lets one advisor both approve and release a sensitive hold (drops ApproverIsShipper)",
+        "recovery_hint": "address the review findings, move STORY-1697 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:44:25.708775393Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2695,
+        "verdict": "APPROVED",
+        "reviewed_sha": "57ee0a5281253191556cfd9a625326091f381665"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:10:19.345777568Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T15:10:44.525540941Z",
+      "spec": "STORY-1697",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2695
+      }
+    },
+    {
+      "ts": "2026-10-16T15:11:00.047730068Z",
+      "spec": "STORY-1697",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6d9ea04f5fa0822cef3a791bf78486c5ebce3ae3",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
