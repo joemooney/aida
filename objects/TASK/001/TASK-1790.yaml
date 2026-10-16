@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T21:44:23.219617214Z
+modified_at: 2026-10-16T23:37:03.111526373Z
 req_type: Task
 relationships:
 - rel_type:
@@ -94,6 +94,11 @@ comments:
   content: 'Published completing TASK-1790 item3 as PR #2709: https://github.com/joemooney/aida/pull/2709 at exact pushed/read-back OPEN head 9386e30ebdac4434ff4a14d6dbbcc4f26fe985a7. Body/title equality verified; completing trailer is TASK-1790. Final frozen-source workspace compile 398.1s passed; final fresh workspace libtest 15 collector + 47 mandate passed; final fast 30 passed. Actual root-locked/core hardened collector matched all 50 pins. Full 25/50 vs scoped 24/50 ordinary newly refused; baseline 22, fallback 46 cases; full method/pins/limits in docs/testing/task-1790-trace-exclusions.md and JSON. Three author contexts preceded the late host-Git correction; final actual-core regressions/benchmark cover it. STRICT independent review requested; no own review/ship/hold clearance. Status Done, not Completed. Origin store sync succeeded; GitLab store mirror reported divergence and was left for normal reconciliation.'
   created_at: 2026-10-16T21:44:00.525990595Z
   modified_at: 2026-10-16T21:44:00.525990595Z
+- id: 01a14713-8187-7c23-a45a-a2a96a35f292
+  author: ai:codex:joe
+  content: 'Relay9 REWORK READY #2709 at6e5727ce3cf5da039bd28dd70ec30616e359a2e1, normal push and origin/fresh OPEN forge head verified. All4 blocking items and2 nits addressed; plain main30e4171bed merge included. Final fast30/30 and forced workspace test compilation1146.6s passed; actual final workspace test executable9e385c81053cb0c4 mandate76/76 passed including5 new regressions. Redundant narrower Cargo runtime cancelled and replaced by fresh workspace executable, no full-workspace runtime/CI claim. One author checker no findings, own9 file validation probes, zero independent authority. Historical benchmark explicitly scoped to prior collector; no revised rate claimed. Fresh STRICT attested reviewSTORY1715 required; no own verdict/clearance/ship/Completed.'
+  created_at: 2026-10-16T23:37:03.111526373Z
+  modified_at: 2026-10-16T23:37:03.111526373Z
 history:
 - id: 01a1460d-a122-73e3-bb0a-46f1fa71043b
   author: aida-session-start
