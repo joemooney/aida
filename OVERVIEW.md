@@ -1,3 +1,14 @@
+Mandate exclusion ledgers require a regular file owned by the current uid with
+exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
+An absent ledger stays empty; invalid metadata or content refuses mandate
+coverage. Mandate start/stop retains the shared direct-human authority check,
+with mandate-specific recovery commands. Hold re-arm uses the same composition
+and marker write, but its single placement event explicitly names the failed
+mandate ship; the event follows marker restoration and precedes label sync.
+Marker and label failures remain explicit. Trace-derived mandate exclusions are
+not part of this slice.
+<!-- trace:TASK-1790 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.
@@ -587,6 +598,45 @@ hours, minutes or seconds. The cache grants no scoring or control authority;
 unusual Git discovery environments omit this optional segment.
 <!-- trace:TASK-1734 | ai:codex -->
 
+Before scoring each actual system, required installed `PREFIX/bin/<tool>` entries
+must be regular executables (links may resolve inside the private system/prefix),
+contain at least `[regen].min_bytes` non-whitespace bytes (default 64, positive),
+and contain none of these ASCII case-insensitive markers: `TODO: implement`,
+`NotImplemented`, `NotImplementedError`, `unimplemented!`, `placeholder`. This is
+a conservative heuristic, not a proof of implementation. The complete file is
+scanned, including across read boundaries; binary/text files use the same rule.
+`--help` must exit 0 with nonempty stdout or stderr, under the existing score
+confinement and private installation environment. Helper output is never stored.
+After each helper, the existing survivor scan and same-path quarantine run
+again; all tool content, mode and resolved-target fingerprints are rechecked
+before another helper or the oracle. A helper that replaces itself or a later
+tool loses completeness, including a full-sized replacement without markers.
+Unconfined execution retains the existing concurrent-writer limits.
+
+`[regen.components.<required-tool>]` may declare `checks = ["exact check name"]`.
+Mappings come only from pinned trusted config; names must be required tools and
+each exact check may map to only one tool. Without any mapping, the restricted
+score reads `unavailable (no check mapping)`. Unmapped observed checks are listed;
+observed checks mapped to complete components alone form the restricted pass rate.
+Split rates are derived from recorded checks/outcomes when reading, not trusted
+from redundant stored percentages.
+
+Trial JSON gains an optional versioned `completeness` extension. An incomplete
+actual system records `status: incomplete`, with per-component reasons, overall
+oracle pass rate and the restricted score as diagnostic numbers. Oracle execution
+still runs so those diagnostics are available. Expected generated stubs skip
+completeness. Completeness status is attached after raw control validation;
+incomplete reference controls cannot validate later trials. R1/R2 retain their
+own evidence and parent cleanliness reflects both. The statusline/digest reader
+skips incomplete trials (and invalid completeness metadata), selecting the latest
+eligible scored ordinary R1. `regen report` shows the latest attempt and its
+incomplete diagnostics without turning its number into a headline.
+
+Harness continuation/re-invocation is separate launcher work; these checks do
+not launch or continue regenerators.
+<!-- trace:STORY-1677 | ai:codex -->
+
+
 `aida regen report` reads committed ordinary trial records from a pinned store
 commit, without a cache rebuild or rereading the caller's trial directory.
 The headline is the latest attempt's discriminating **R1 oracle pass rate** and
@@ -876,3 +926,20 @@ another checkout), and preserves foreground stall behavior. A replaced root or
 rewritten history exits non-zero with `cache rebuild --history` advice. The scaffold runs it every 15 minutes.
 See [cache commands](docs/cli/10-storage.md).
 <!-- trace:STORY-1661 | ai:codex -->
+
+
+### Explicit host constraint verification
+
+Constraint rows can carry an optional version-1 `verify` block containing a
+closed built-in probe ID, scalar arguments and a typed expectation. The explicit
+`aida verify constraints` command reports match, drift, unknown or invalid per
+configured row, as human text or JSON; only `--fail-on-drift` turns drift into an
+error exit. It never changes requirement status or executes stored commands.
+Linux procfs/sysfs supply CPU, memory, PSI and disk facts; path and executable
+presence use metadata/access checks. PATH lookup never launches the target.
+No sync, drain or hook invokes probes. Unknown/malformed blocks remain loadable
+so the report can label them invalid. `edit --verify` and `--clear-verify` use
+the protected canonical edit flow; YAML row roundtrips preserve the data, while
+archived writers refuse unsupported blocks. See the
+[manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
+<!-- trace:STORY-1673 | ai:codex -->

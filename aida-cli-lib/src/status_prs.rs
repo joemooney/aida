@@ -3104,6 +3104,7 @@ mod story_1043_unshipped_work_tests {
             interrupted_at: None,
             interrupted_reason: None,
             driver: None,
+            child_grant_id: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(

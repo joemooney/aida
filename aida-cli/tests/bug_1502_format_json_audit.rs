@@ -494,6 +494,8 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         // trace:BUG-1631 | ai:claude
         ("aida history", &["history", "--full"]),
         ("aida history events", &["history", "events"]),
+        // trace:STORY-1673 | ai:claude
+        ("aida verify constraints", &["verify", "constraints"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();
