@@ -1,0 +1,17 @@
+{
+  "id": "d1e87dbc-2145-474f-a4fa-09dcd0edabc8",
+  "thread_id": "d1e87dbc-2145-474f-a4fa-09dcd0edabc8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "6e5727ce3c"
+  },
+  "timestamp": 1792194139661,
+  "body": "You were mentioned on TASK-1800 by joe: Further items from the STRICT r2 review of #2709 @6e5727ce3c. (a) Every changed …",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
