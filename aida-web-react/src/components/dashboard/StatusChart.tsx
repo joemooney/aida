@@ -1,3 +1,4 @@
+// trace:STORY-1675 | ai:codex — support the complete regenerated Rust enums.
 import type { Requirement, RequirementStatus } from '@shared/types';
 import { STATUS_ORDER, STATUS_CONFIG } from '../../lib/constants';
 
@@ -28,8 +29,7 @@ export function StatusChart({ requirements }: StatusChartProps) {
     Done: '#84cc16',
     Completed: '#10b981',
     Rejected: '#ef4444',
-    // trace:STORY-1674 | ai:claude — terminal, replaced by another spec.
-    Superseded: '#78716c',
+    Superseded: '#71717a',
   };
 
   let cumulative = 0;

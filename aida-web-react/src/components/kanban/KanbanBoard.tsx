@@ -1,3 +1,4 @@
+// trace:STORY-1675 | ai:codex — support the complete regenerated Rust enums.
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { RuleGroupType } from 'react-querybuilder';
@@ -33,9 +34,8 @@ import { cn } from '../../lib/utils';
 import { useSavedViews } from '../../hooks/useSavedViews';
 
 // NeedsAttention (STORY-332) must appear in every RequirementStatus record
-// literal or `tsc -b` fails; CI now guards this (TASK-224). So must
-// Superseded. trace:TASK-224 | ai:claude
-// trace:STORY-1674 | ai:claude
+// literal or `tsc -b` fails; CI now guards this (TASK-224).
+// trace:TASK-224 | ai:claude
 function emptyColumns(): Record<RequirementStatus, string[]> {
   return {
     Draft: [],

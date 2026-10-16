@@ -634,6 +634,33 @@ mod tests {
         assert_eq!(default_author(), "ai:codex:joe");
     }
 
+    // STORY-1675's persisted hypothesis_lock passes through write stamping
+    // unchanged: on create, on an edit of a locked spec, and on import.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_hypothesis_lock_round_trips_through_stamping() {
+        let lock = crate::models::HypothesisLock {
+            locked_at: chrono::Utc::now(),
+            description_sha256: "abc123".into(),
+        };
+        let mut old = Requirement::new("old".into(), "body".into());
+        old.hypothesis_lock = Some(lock.clone());
+        let mut created = old.clone();
+        stamp_write(&mut created, None, &write_context()).unwrap();
+        assert_eq!(created.hypothesis_lock, Some(lock.clone()));
+        let mut edited = old.clone();
+        edited.title = "new".into();
+        stamp_write(&mut edited, Some(&old), &write_context()).unwrap();
+        assert_eq!(edited.hypothesis_lock, Some(lock.clone()));
+        assert!(edited.history.last().unwrap().is_write_event());
+        let yaml = serde_yaml::to_string(&edited).unwrap();
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.hypothesis_lock, Some(lock.clone()));
+        let mut imported = edited.clone();
+        stamp_import_write(&mut imported, Some(&old)).unwrap();
+        assert_eq!(imported.hypothesis_lock, Some(lock));
+    }
+
     #[test]
     fn story1674_existing_context_cannot_be_rewritten_or_retro_attributed() {
         use crate::models::{Comment, HistoryEntry};

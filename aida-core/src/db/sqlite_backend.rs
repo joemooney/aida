@@ -610,6 +610,7 @@ impl SqliteBackend {
                 filed_at: filed_at_json
                     .map(|json| Self::from_json(&json))
                     .transpose()?,
+                hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -1073,6 +1074,7 @@ impl SqliteBackend {
                     filed_at: filed_at_json
                         .map(|json| Self::from_json(&json))
                         .transpose()?,
+                    hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                     custom_status,
                     custom_priority,
                     custom_fields,

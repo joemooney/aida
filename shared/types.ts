@@ -6,21 +6,6 @@
 
 export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected" | "Superseded" | "NeedsAttention";
 
-export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
-
-export type Origin = {
-/**
- * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
- * repo entry in the workspace manifest (`.aida-workspace`); validated as
- * a lowercase slug so it is stable as a map key and a filter value.
- */
-repo: string,
-/**
- * Optional finer-grained component within the repo (e.g. "orchestrator").
- * Free-form within the repo; `None` = the whole repo.
- */
-component?: string | null, };
-
 export type PuntCategory = "design-fork" | "ambiguous-spec" | "missing-context" | "blocked-dependency" | "other";
 
 export type AttentionReason = {
@@ -401,41 +386,6 @@ session_id?: string | null, harness_version?: string | null,
  * List of field changes in this update
  */
 changes: Array<FieldChange>, };
-
-export type FilingProvenance = {
-/**
- * HEAD of the CODE repo the spec was filed from (full SHA; not the
- * `aida-store` branch).
- */
-code_sha?: string | null,
-/**
- * Checked-out branch; omitted on a detached HEAD.
- */
-branch?: string | null,
-/**
- * Whether the working tree had uncommitted changes to tracked files.
- */
-dirty?: boolean | null,
-/**
- * Package version of the filing `aida` binary.
- */
-aida_version?: string | null,
-/**
- * Git SHA the filing `aida` binary was built from.
- */
-aida_build_sha?: string | null,
-/**
- * Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
- */
-vendor?: string | null,
-/**
- * Filing session id, when known.
- */
-session?: string | null,
-/**
- * Harness version explicitly supplied by AIDA_HARNESS_VERSION; absent is unknown.
- */
-harness_version?: string | null, };
 
 export type InterfaceChanges = {
 /**
@@ -974,6 +924,62 @@ source_hash: string,
  */
 model: string, };
 
+export type ExecutionMode = "drain" | "drive" | "guided" | "operator" | "decide";
+
+export type Origin = {
+/**
+ * Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
+ * repo entry in the workspace manifest (`.aida-workspace`); validated as
+ * a lowercase slug so it is stable as a map key and a filter value.
+ */
+repo: string,
+/**
+ * Optional finer-grained component within the repo (e.g. "orchestrator").
+ * Free-form within the repo; `None` = the whole repo.
+ */
+component?: string | null, };
+
+export type FilingProvenance = {
+/**
+ * HEAD of the CODE repo the spec was filed from (full SHA; not the
+ * `aida-store` branch).
+ */
+code_sha?: string | null,
+/**
+ * Checked-out branch; omitted on a detached HEAD.
+ */
+branch?: string | null,
+/**
+ * Whether the working tree had uncommitted changes to tracked files.
+ */
+dirty?: boolean | null,
+/**
+ * Package version of the filing `aida` binary.
+ */
+aida_version?: string | null,
+/**
+ * Git SHA the filing `aida` binary was built from.
+ */
+aida_build_sha?: string | null,
+/**
+ * Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
+ */
+vendor?: string | null,
+/**
+ * Filing session id, when known.
+ */
+session?: string | null,
+/**
+ * Harness version explicitly supplied by AIDA_HARNESS_VERSION; absent is unknown.
+ */
+harness_version?: string | null, };
+
+export type HypothesisLock = { locked_at: string,
+/**
+ * SHA-256 of the UTF-8 description before the first completed result.
+ */
+description_sha256: string, };
+
 export type Requirement = {
 /**
  * Unique identifier for the requirement (UUID)
@@ -1163,6 +1169,10 @@ origin?: Origin | null,
  * existing stores round-trip unchanged. Optional, serde-default.
  */
 filed_at?: FilingProvenance | null,
+/**
+ * Sticky pre-registration lock; tag, relationship and status edits never clear it.
+ */
+hypothesis_lock?: HypothesisLock | null,
 /**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field

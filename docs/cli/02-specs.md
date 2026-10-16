@@ -283,6 +283,49 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 ---
 
+## Pre-registering a hypothesis
+
+Use an existing spike or decision with the `hypothesis` tag (matched
+case-insensitively, so `Hypothesis` counts too). Write the prediction
+before running the experiment; a useful description skeleton is:
+
+```markdown
+## Prediction
+The outcome I expect, stated so an experiment can test it.
+
+## Refuted if
+The observable result that would refute this prediction.
+
+## Experiments
+The linked specs that will record results.
+```
+
+Create a `references` or `verified-by` relationship to each experiment. Either
+edge direction counts. In the canonical git store, the first mutation that
+links a Completed spec or completes an already-linked experiment permanently
+locks the hypothesis description. The same transaction records
+`hypothesis_lock.locked_at` and a SHA-256 of the UTF-8 description. A description
+rewrite combined with the first result is refused before any rows are written.
+
+After locking, append amendments with `aida comment add <ID> "..."`. Title,
+tags, comments, and relationships can still change. Removing the tag or link,
+reopening or deleting the experiment, and stale saves never clear the lock.
+Deleting or replacing the locked hypothesis itself is refused; archive it to
+hide it. There is no unlock flag. Untagged legacy rows keep their normal edit
+behavior. The archived SQLite/Postgres backends and the YAML backend do not
+store or enforce this lock; use the canonical git store for pre-registration.
+
+If a clean text merge rewrites a locked description, the hash no longer
+matches. That row then refuses every change except one that restores the
+frozen text, for example `aida edit <ID>` with the original description from
+store history. Other rows stay writable. Binaries older than this feature do
+not know `hypothesis_lock` and drop it when they rewrite the row, so upgrade
+every clone that writes to the store.
+<!-- trace:STORY-1675 | ai:codex -->
+<!-- trace:STORY-1675 | ai:claude -->
+
+---
+
 ## Where to go next
 
 You can now shape, query, and groom the graph. Next:

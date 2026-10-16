@@ -251,6 +251,9 @@ pub struct RawRequirement {
     pub title: String,
     #[serde(default)]
     pub description: String,
+    // trace:STORY-1675 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis_lock: Option<crate::models::HypothesisLock>,
     #[serde(default)]
     pub req_type: Option<String>,
     #[serde(default)]
@@ -741,6 +744,7 @@ pub fn execute_import(
         req.owner = raw_req.owner.clone();
         req.feature = raw_req.feature.clone();
         req.tags = raw_req.tags.clone();
+        req.hypothesis_lock = raw_req.hypothesis_lock.clone(); // trace:STORY-1675 | ai:codex
 
         // Set timestamps
         if let Some(created_at) = raw_req.created_at {

@@ -5,6 +5,24 @@ unknown. Session totals overlap between events and must not be summed.
 See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
 <!-- trace:STORY-1674 | ai:codex -->
 
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+A derived summary cache under `$XDG_CACHE_HOME/aida/regen-display` (default
+`~/.cache`) is keyed by store HEAD and CLI build. An unchanged HEAD uses no Git
+subprocesses; a miss reads trial blobs in one batch. Failed reads are not cached.
+Digest selection excludes trials after `--until`; text ages use compact days,
+hours, minutes or seconds. The cache grants no scoring or control authority;
+unusual Git discovery environments omit this optional segment.
+<!-- trace:TASK-1734 | ai:codex -->
+
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
 or absent diagnostics remain unknown. Reports flag crash-dominated and mostly

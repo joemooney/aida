@@ -29,10 +29,6 @@ fn generate_types_content() -> String {
     let decls: Vec<String> = vec![
         // Models from aida_core::models
         models::RequirementStatus::decl(),
-        // Requirement also references these optional model types.
-        // trace:STORY-1674 | ai:codex
-        models::ExecutionMode::decl(),
-        models::Origin::decl(),
         // STORY-332: punt / NeedsAttention types
         models::PuntCategory::decl(),
         models::AttentionReason::decl(),
@@ -60,8 +56,6 @@ fn generate_types_content() -> String {
         models::Relationship::decl(),
         models::FieldChange::decl(),
         models::HistoryEntry::decl(),
-        // trace:STORY-1674 | ai:codex — Requirement references filing context.
-        models::FilingProvenance::decl(),
         // STORY-542: Requirement.interface_changes references InterfaceChanges,
         // so its definition must be emitted too (else the web dashboard
         // type-check fails with "Cannot find name 'InterfaceChanges'"). BUG-516.
@@ -91,6 +85,12 @@ fn generate_types_content() -> String {
         // STORY-631 cached intent. trace:STORY-648 | ai:claude
         models::ProcessingRecord::decl(),
         models::SpecIntent::decl(),
+        // Regenerating Requirement must emit every nested model it names.
+        // trace:STORY-1675 | ai:codex
+        models::ExecutionMode::decl(),
+        models::Origin::decl(),
+        models::FilingProvenance::decl(),
+        models::HypothesisLock::decl(),
         models::Requirement::decl(),
         // BUG-571: lightweight web-DTO projection of Requirement (list/board/
         // dashboard fetch this via GET /api/v2/requirements?view=summary so the
