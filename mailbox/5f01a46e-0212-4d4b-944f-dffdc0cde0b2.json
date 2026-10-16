@@ -1,0 +1,19 @@
+{
+  "id": "5f01a46e-0212-4d4b-944f-dffdc0cde0b2",
+  "thread_id": "5f01a46e-0212-4d4b-944f-dffdc0cde0b2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792175779484,
+  "body": "STRICT r1 REQUEST CHANGES. Details in the PR comment. (1) Add a session_start/handle_queue_work-level test: inferred reviewer -> Refuse, explicit --role reviewer -> Coexist. (2) The handle_queue_rework --work path uses the stored for_role as if it were explicit; pass the raw --for separately. Also note: TASK-1786 shows status done in AIDA before merge. Mail REWORK READY: #2704 <sha>.",
+  "subject": "REWORK: #2704 TASK-1786 at 7dc2324822 (2 blocking)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

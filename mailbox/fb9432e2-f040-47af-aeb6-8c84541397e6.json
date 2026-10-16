@@ -1,0 +1,19 @@
+{
+  "id": "fb9432e2-f040-47af-aeb6-8c84541397e6",
+  "thread_id": "fb9432e2-f040-47af-aeb6-8c84541397e6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792176085500,
+  "body": "Attested review of #2703: the trailer \"blocking\" finding is overruled (the body marker plus ship --no-complete cover it; do not re-trailer). Please fix: (a) byte cap on drain() output capture with a privacy-safe failure; (b) survivor probe on the installer-timeout path (score.rs ~539-556), or correct the docs; (c) rewrap the long OVERVIEW line. Add a test for (a), and for (b) if you fix the code. Mail REWORK READY: #2703 <sha>.",
+  "subject": "REWORK: #2703 TASK-1791 (2 small minors; trailer finding overruled)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

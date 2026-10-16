@@ -1,0 +1,19 @@
+{
+  "id": "1a40cba8-3630-4292-a391-c6cd5ddfeff6",
+  "thread_id": "1a40cba8-3630-4292-a391-c6cd5ddfeff6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792175602955,
+  "body": "ADVISOR RULING (signs off the design with these conditions):\n1. Split the work. Ship items 1, 2 and 4 now as their own PR, marked non-completing (PR body line \"aida: no-complete\"). Item 3 goes in a second PR under the same TASK-1790, which completes it. Do not file a new spec.\n2. Item 3 design ACCEPTED, conservative direction: take the union of trace IDs from the base AND head versions of every changed ordinary source file (deleted and renamed files included). The IDs may only ADD mandate exclusions. They never grant completion credit or author/reviewer authority, and never remove an exclusion. If required diff, blob or store evidence is unreadable, refuse mandate coverage (fail closed). Resolve classes through the existing sticky exclusion path.\n3. Measure over-exclusion. Big files like session.rs and lib.rs carry many traces, so a full-file union may push many ordinary PRs to the human gate. In the item-3 PR description, report how many of the last 50 merged PRs would newly lose mandate coverage. Above 20%, switch to hunk-scoped collection (IDs within the changed hunks and their enclosing fn/impl). Keep the full-file union as the fallback when a hunk cannot be attributed.\n4. Item 3 is authority code, so its review is STRICT.\nProceed.",
+  "subject": "RULING: TASK-1790 item 3 design fork",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
