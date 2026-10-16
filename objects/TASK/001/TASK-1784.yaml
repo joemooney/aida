@@ -13,8 +13,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:51:44.146542081Z
-modified_at: 2026-10-16T07:45:10.097813698Z
+modified_at: 2026-10-16T07:51:36.730647868Z
 req_type: Task
+comments:
+- id: 01a143b1-ee1a-7981-b488-783e1c1ecf6c
+  author: joe
+  content: 'Related (advisor, 2026-10-16 00:55): ''aida agent new --spec X'' fails with ''failed to create session worktree for X; run aida session leases'' when X is in-progress/needs-attention with NO lease (seen on STORY-1679 and STORY-1698 after their dead sessions'' leases were ended). Resetting status to approved fixes it. Same root: a stale status with no re-enterable lease should re-mint, or the error should name the status.'
+  created_at: 2026-10-16T07:51:36.730647868Z
+  modified_at: 2026-10-16T07:51:36.730647868Z
+  session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
 history:
 - id: 01a1411f-08b0-7892-97a7-cee37f7b5596
   author: joe
