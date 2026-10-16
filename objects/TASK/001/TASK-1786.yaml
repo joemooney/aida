@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T23:04:32.053386588Z
-modified_at: 2026-10-16T18:17:04.080367845Z
+modified_at: 2026-10-16T18:20:07.804165905Z
 req_type: Task
 comments:
 - id: 01a145ee-8d50-7180-9178-398745b27c0f
@@ -21,6 +21,11 @@ comments:
   content: 'Implemented first pass in isolated codex/task-1786: queue-work forwards explicit role_override plus backing ID to session_start; conflict gate re-resolves backing unambiguously and inferred roles/direct starts receive no queue-backed coexistence exception. Verdict reads use O_NOFOLLOW|O_NONBLOCK, metadata on the opened handle, and a 1MiB+1 bounded read. FIFO regression now covers direct and symlink FIFO paths under a 60-second watchdog in the exact-test child. Optional ctime check deferred. Spawned author self-check found no actionable findings and independently probed 8 file-reader cases; not independent review. Targeted Cargo tests and make check-ci-fast are running; strict independent review will be requested when green.'
   created_at: 2026-10-16T18:17:04.080367845Z
   modified_at: 2026-10-16T18:17:04.080367845Z
+- id: 01a145f1-5afc-7742-b8a6-c5eca4904f41
+  author: joe
+  content: Commit 08f6a4af7a references this requirement
+  created_at: 2026-10-16T18:20:07.804165905Z
+  modified_at: 2026-10-16T18:20:07.804165905Z
 history:
 - id: 01a141cf-7b0b-7992-bf12-f6ffe9cfc327
   author: joe
