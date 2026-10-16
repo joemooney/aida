@@ -1,0 +1,40 @@
+id: 01a14232-67ff-7bc0-8490-a080cefc2e0e
+spec_id: STORY-1698
+agreed_id: STORY-1698
+title: 'Fire-fighting mandate: a human-minted, time-boxed grant that lets the advisor seat ship held PRs with attested independent approval'
+description: |-
+  ## Why
+  In an emergency the operator wants the advisor to keep shipping while they are away. Today, held PRs need a human TTY for every merge (operator decision 2026-10-15: implement this).
+
+  ## Shape (sketch required before code; see Rules)
+  - 'aida mandate start --ship-held [--ttl 8h] [--reason TEXT]' can ONLY be run by a human at an interactive TTY (the same integrity floor as merge-hold clear). It mints a time-boxed mandate grant bound to the advisor seat. It is recorded in the store (who, when, ttl, scope, reason) and visible in 'aida mandate status' and the statusline.
+  - While the mandate is active, 'aida pr ship N' from the ADVISOR seat may release a merge hold and merge IF ALL of these hold:
+    - an APPROVED verdict with a valid BUG-1918 recorder_attestation exists at the PR's current head;
+    - the approving identity is independent of the PR's implementer AND the advisor did not author the PR's commits;
+    - CI is green on that head;
+    - the PR's specs are not in an excluded class: security/containment/review-authority/merge-authority-tagged or explicitly 'operator-only' specs stay human-only by default, unless the mandate was minted with an explicit '--include-supervised'.
+  - Every mandate-authorized release and merge is recorded in the hold ledger and the PR comment as 'released under mandate <id> by advisor'.
+  - 'aida mandate stop' (human TTY or the expiry) ends it immediately. Expiry is enforced server-side at ship time, not cached.
+  - Agents can never start or extend a mandate. Non-advisor seats are never covered.
+
+  ## Acceptance tests
+  - An agent cannot start a mandate (refused without a TTY); a human can.
+  - An advisor can ship a held PR under an active mandate with attested independent approval plus green CI.
+  - Refused cases: expired mandate; missing attestation; stale sha; advisor-authored PR; excluded spec class without --include-supervised; non-advisor seat.
+  - 'mandate stop' takes effect immediately, and the ledger entries exist.
+  Tier: STRICT (merge authority). Rules: architecture change, so the implementer posts IMPLEMENTER SKETCH on this story and gets advisor signoff before implementing.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T00:52:42.111598429Z
+modified_at: 2026-10-16T00:52:42.111598429Z
+req_type: Story
+filed_at:
+  code_sha: 84a04dc111d04db11f26375d2a7d12d68f1ed930
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c419f6a5ef
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
