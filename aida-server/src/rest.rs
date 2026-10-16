@@ -2360,7 +2360,7 @@ fn find_requirement_index(store: &aida_core::RequirementsStore, id: &str) -> Opt
 /// which carries no caller identity. It is not an automated author, so the
 /// BUG-1625 merge guard treats the change as intentional.
 // trace:BUG-1637 | ai:claude
-const REST_STATUS_AUTHOR: &str = "aida-rest";
+pub(crate) const REST_STATUS_AUTHOR: &str = "aida-rest";
 
 fn parse_status(s: &str) -> aida_core::RequirementStatus {
     match s.to_lowercase().as_str() {
@@ -4700,6 +4700,30 @@ mod bug_1612_save_conflict_tests {
             author: Some("tester".into()),
             parent_comment_id: None,
         })
+    }
+
+    // A REST edit with no field-history builder (a title change) records a
+    // write event authored by the REST convention with no session, never by
+    // the operator who launched the server. trace:STORY-1674 | ai:claude
+    #[tokio::test]
+    async fn rest_write_event_is_authored_aida_rest_without_operator_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let (state, raw, _task) = git_server(dir.path());
+        let body: UpdateRequirementRequest =
+            serde_json::from_value(serde_json::json!({ "title": "renamed over REST" })).unwrap();
+        let _ = update_requirement_legacy(State(state.clone()), Path("TASK-1".into()), Json(body))
+            .await
+            .unwrap_or_else(|_| panic!("REST update failed"));
+        let on_disk = raw.get_requirement_by_spec_id("TASK-1").unwrap().unwrap();
+        assert_eq!(on_disk.title, "renamed over REST");
+        let event = on_disk
+            .history
+            .last()
+            .expect("the edit recorded a write event");
+        assert!(event.is_write_event());
+        assert_eq!(event.author, REST_STATUS_AUTHOR);
+        assert_eq!(event.session_id, None);
+        assert_eq!(event.harness_version, None);
     }
 
     #[tokio::test]

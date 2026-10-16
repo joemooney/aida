@@ -195,6 +195,34 @@ pub fn preserve_from_disk(incoming: &mut Requirement, disk: &Requirement) {
     }
 }
 
+/// Why a whole-store save happens, which decides how it is stamped.
+// trace:STORY-1674 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveOrigin {
+    /// An ordinary write: new entries get this session's context and an
+    /// untracked change records a write event.
+    Write,
+    /// A transfer: historical context is kept and the import is one event.
+    Import,
+    /// Not a write by anyone: a load-time migration or a derived copy (the
+    /// cache). Nothing is stamped and no event is recorded.
+    Unstamped,
+}
+
+/// Stamp `incoming` against `disk` for a save of the given origin.
+// trace:STORY-1674 | ai:claude
+pub fn stamp_store_for(
+    origin: SaveOrigin,
+    incoming: &mut crate::models::RequirementsStore,
+    disk: &[Requirement],
+) -> anyhow::Result<()> {
+    match origin {
+        SaveOrigin::Write => stamp_store_write(incoming, disk),
+        SaveOrigin::Import => stamp_store_import(incoming, disk),
+        SaveOrigin::Unstamped => Ok(()),
+    }
+}
+
 /// Small context captured without Git, transcript or model probes.
 // trace:STORY-1674 | ai:codex
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -203,8 +231,54 @@ pub struct WriteContext {
     pub harness_version: Option<String>,
 }
 
+/// A writer that is not the invoking CLI user, set for the duration of a
+/// save (the server's REST/gRPC paths). Its author and context replace the
+/// process environment, so a server write is never attributed to the
+/// operator who launched the server or to that shell's session.
+// trace:STORY-1674 | ai:claude
+#[derive(Debug, Clone)]
+struct WriteActor {
+    author: String,
+    context: WriteContext,
+}
+
+thread_local! {
+    static WRITE_ACTOR: std::cell::RefCell<Option<WriteActor>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` (a synchronous save) with write events authored by `author` and
+/// stamped with `context` instead of the process environment. Nested calls
+/// restore the outer actor.
+// trace:STORY-1674 | ai:claude
+pub fn with_write_actor<T>(author: &str, context: WriteContext, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<WriteActor>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let previous = self.0.take();
+            WRITE_ACTOR.with(|actor| *actor.borrow_mut() = previous);
+        }
+    }
+    let previous = WRITE_ACTOR.with(|actor| {
+        actor.borrow_mut().replace(WriteActor {
+            author: author.to_string(),
+            context,
+        })
+    });
+    let _restore = Restore(previous);
+    f()
+}
+
+fn current_actor() -> Option<WriteActor> {
+    WRITE_ACTOR.with(|actor| actor.borrow().clone())
+}
+
 impl WriteContext {
     pub fn capture() -> Self {
+        // trace:STORY-1674 | ai:claude
+        if let Some(actor) = current_actor() {
+            return actor.context;
+        }
         Self::from_reported(
             session_from_env(),
             std::env::var("AIDA_HARNESS_VERSION").ok(),
@@ -332,7 +406,8 @@ pub fn default_author() -> String {
 
 fn write_event(context: &WriteContext) -> crate::models::HistoryEntry {
     // trace:STORY-1674 | ai:claude
-    let mut event = crate::models::HistoryEntry::new(default_author(), Vec::new());
+    let author = current_actor().map_or_else(default_author, |actor| actor.author);
+    let mut event = crate::models::HistoryEntry::new(author, Vec::new());
     event.session_id = context.session_id.clone();
     event.harness_version = context.harness_version.clone();
     event

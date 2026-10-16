@@ -1041,7 +1041,9 @@ fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
         root.join(db_path)
     };
     if let Ok(store) = Storage::new(&source).load() {
-        let _ = Storage::new(&cache_path).save_imported(&store);
+        // A derived copy, not a write or import: copy it raw and unstamped.
+        // trace:STORY-1674 | ai:claude
+        let _ = Storage::new(&cache_path).save_unstamped(&store);
     }
 }
 
@@ -5994,5 +5996,39 @@ mod init_roster_tests {
         );
 
         std::env::set_current_dir(prev_cwd).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod story_1674_minimal_cache_tests {
+    use super::ensure_minimal_cache;
+    use aida_core::db::{DatabaseBackend, SqliteBackend};
+
+    /// The minimal-footprint cache is a derived copy of the source store: no
+    /// import write event (or any other stamp) is added to its rows.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_minimal_cache_is_copied_unstamped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut store = aida_core::RequirementsStore::new();
+        let mut req = aida_core::Requirement::new("source".into(), "body".into());
+        req.spec_id = Some("TASK-1".into());
+        store.requirements.push(req);
+        std::fs::write(
+            root.join("requirements.yaml"),
+            serde_yaml::to_string(&store).unwrap(),
+        )
+        .unwrap();
+        ensure_minimal_cache(root, std::path::Path::new("requirements.yaml"));
+        let cache = SqliteBackend::new(root.join(".aida").join("cache.db")).unwrap();
+        let copied = cache.load().unwrap();
+        let row = copied
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("TASK-1"))
+            .expect("the cache holds the source row");
+        assert!(row.history.is_empty(), "no write event: {:?}", row.history);
+        assert!(row.filed_at.is_none(), "no invented filing provenance");
     }
 }

@@ -1924,15 +1924,26 @@ impl GitBackend {
             }
         }
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+        // A spec_id change is a delete + create of the same UUID. Stamp it
+        // against its old copy, as the full-save path does, so legacy events
+        // keep their unknown context instead of acquiring this session's.
+        // trace:STORY-1674 | ai:claude
+        let mut renamed_from: HashMap<uuid::Uuid, Requirement> = HashMap::new();
+        for (sid, id) in &removed {
+            if let Some((_, yaml)) = before.get(sid.as_str()) {
+                renamed_from.insert(*id, serde_yaml::from_str(yaml)?);
+            }
+        }
         for req in &created {
             let mut new_req = (*req).clone();
-            if new_req.filed_at.is_none() {
+            let previous = renamed_from.get(&new_req.id);
+            if previous.is_none() && new_req.filed_at.is_none() {
                 let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
                 crate::provenance::stamp_with(&mut new_req, p);
             }
             crate::provenance::stamp_write(
                 &mut new_req,
-                None,
+                previous,
                 &crate::provenance::WriteContext::capture(),
             )?;
             self.record_op(
@@ -4351,6 +4362,50 @@ mod tests {
             renamed.history.last().unwrap().harness_version.as_deref(),
             Some("rename-harness")
         );
+    }
+
+    // A spec_id change inside a whole-store transaction is delete + create of
+    // the same UUID: legacy events keep unknown context, filing provenance is
+    // not invented, and only the new write event carries this session.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_transaction_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy.history.push(crate::models::HistoryEntry::new(
+            "old".into(),
+            vec![crate::models::FieldChange {
+                field_name: "title".into(),
+                old_value: "a".into(),
+                new_value: "legacy".into(),
+            }],
+        ));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let (_, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].spec_id = Some("TASK-2".into()))
+            .unwrap();
+        assert_eq!(summary.created, vec!["TASK-2".to_string()]);
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none(), "no invented filing provenance");
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.history[0].harness_version.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert!(renamed.comments[0].harness_version.is_none());
+        let event = renamed.history.last().unwrap();
+        assert!(event.is_write_event());
+        assert_eq!(event.session_id.as_deref(), Some("renamer"));
     }
 
     // ---- BUG-1612: per-spec compare-and-swap, no whole-store rewrite -------

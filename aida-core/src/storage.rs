@@ -530,7 +530,9 @@ impl Storage {
             || had_missing_id_config_types
             || repaired_duplicates > 0
         {
-            self.save(&store)?;
+            // A read's migration is nobody's write: no write events.
+            // trace:STORY-1674 | ai:claude
+            self.save_unstamped(&store)?;
         }
 
         // Validate SPEC-ID uniqueness (should pass after repair, but let's be safe)
@@ -564,7 +566,9 @@ impl Storage {
             || had_missing_id_config_types
             || repaired_duplicates > 0
         {
-            backend.save(&store)?;
+            // A read's migration is nobody's write: no write events.
+            // trace:STORY-1674 | ai:claude
+            backend.save_with_origin(&store, crate::provenance::SaveOrigin::Unstamped)?;
         }
 
         store.validate_unique_spec_ids()?;
@@ -574,16 +578,29 @@ impl Storage {
     /// Saves requirements to file with file locking
     /// Automatically detects file type from extension (.db/.sqlite for SQLite, otherwise YAML)
     pub fn save(&self, store: &RequirementsStore) -> Result<()> {
-        self.save_with_origin(store, false)
+        self.save_with_origin(store, crate::provenance::SaveOrigin::Write)
     }
 
     /// Transfer historical context without retro-attributing unknown events.
     // trace:STORY-1674 | ai:codex
     pub fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
-        self.save_with_origin(store, true)
+        self.save_with_origin(store, crate::provenance::SaveOrigin::Import)
     }
 
-    fn save_with_origin(&self, store: &RequirementsStore, imported: bool) -> Result<()> {
+    /// Save exactly as given, with no provenance stamping: for a load-time
+    /// migration (no one wrote anything) or a derived copy such as the cache.
+    /// Legacy file stores only.
+    // trace:STORY-1674 | ai:claude
+    pub fn save_unstamped(&self, store: &RequirementsStore) -> Result<()> {
+        self.save_with_origin(store, crate::provenance::SaveOrigin::Unstamped)
+    }
+
+    fn save_with_origin(
+        &self,
+        store: &RequirementsStore,
+        origin: crate::provenance::SaveOrigin,
+    ) -> Result<()> {
+        use crate::provenance::SaveOrigin;
         // Check if this is a SQLite database by extension
         let is_sqlite = matches!(
             self.file_path.extension().and_then(|e| e.to_str()),
@@ -593,11 +610,7 @@ impl Storage {
         if is_sqlite {
             use crate::db::{DatabaseBackend, SqliteBackend};
             let backend = SqliteBackend::new(&self.file_path)?;
-            return if imported {
-                backend.save_imported(store)
-            } else {
-                backend.save(store)
-            };
+            return backend.save_with_origin(store, origin);
         }
 
         // Directory paths → git-canonical store (EPIC-1-001). Symmetric with
@@ -609,10 +622,13 @@ impl Storage {
         if self.file_path.is_dir() {
             use crate::db::DatabaseBackend;
             let backend = self.git_backend_for(&self.file_path)?;
-            return if imported {
-                backend.save_imported(store)
-            } else {
-                backend.save(store)
+            return match origin {
+                SaveOrigin::Write => backend.save(store),
+                SaveOrigin::Import => backend.save_imported(store),
+                // trace:STORY-1674 | ai:claude
+                SaveOrigin::Unstamped => {
+                    anyhow::bail!("an unstamped save is only for legacy file stores")
+                }
             };
         }
 
@@ -645,11 +661,7 @@ impl Storage {
             RequirementsStore::new()
         };
         let mut stamped = store.clone();
-        if imported {
-            crate::provenance::stamp_store_import(&mut stamped, &disk.requirements)?;
-        } else {
-            crate::provenance::stamp_store_write(&mut stamped, &disk.requirements)?;
-        }
+        crate::provenance::stamp_store_for(origin, &mut stamped, &disk.requirements)?;
         let yaml = serde_yaml::to_string(&stamped)?;
         fs::write(&self.file_path, yaml)?;
 
@@ -1793,6 +1805,55 @@ mod tests {
 
     fn create_test_requirement(title: &str) -> Requirement {
         Requirement::new(title.to_string(), format!("Description for {}", title))
+    }
+
+    // A read's load-time migration (here: assigning a missing SPEC-ID) saves
+    // the file back, but records no write event and no filing provenance.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_yaml_load_migration_is_unstamped() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(create_test_requirement("no spec id"));
+        std::fs::write(&path, serde_yaml::to_string(&store).unwrap()).unwrap();
+        let loaded = Storage::new(&path).load().unwrap();
+        assert!(
+            loaded.requirements[0].spec_id.is_some(),
+            "the migration ran"
+        );
+        let on_disk: RequirementsStore =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(on_disk.requirements[0].spec_id.is_some(), "and was saved");
+        assert!(on_disk.requirements[0].history.is_empty());
+        assert!(on_disk.requirements[0].filed_at.is_none());
+    }
+
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_sqlite_load_migration_is_unstamped() {
+        use crate::db::{DatabaseBackend, SqliteBackend};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("archived.db");
+        let backend = SqliteBackend::new(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(create_test_requirement("no spec id"));
+        backend
+            .save_with_origin(&store, crate::provenance::SaveOrigin::Unstamped)
+            .unwrap();
+        drop(backend);
+        let loaded = Storage::new(&path).load().unwrap();
+        assert!(
+            loaded.requirements[0].spec_id.is_some(),
+            "the migration ran"
+        );
+        let persisted = SqliteBackend::new(&path).unwrap().load().unwrap();
+        assert!(persisted.requirements[0].spec_id.is_some(), "and was saved");
+        assert!(persisted.requirements[0].history.is_empty());
     }
 
     // trace:STORY-1674 | ai:codex

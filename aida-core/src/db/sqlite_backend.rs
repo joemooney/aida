@@ -607,9 +607,9 @@ impl SqliteBackend {
                 execution_mode: None,
                 // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                 origin: None,
-                filed_at: filed_at_json
-                    .map(|json| Self::from_json(&json))
-                    .transpose()?,
+                // A malformed filed_at degrades to unknown, like every other JSON
+                // column, instead of failing the load. trace:STORY-1674 | ai:claude
+                filed_at: filed_at_json.and_then(|json| Self::from_json(&json).ok()),
                 verify: None,
                 hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                 custom_status,
@@ -1072,9 +1072,9 @@ impl SqliteBackend {
                     execution_mode: None,
                     // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                     origin: None,
-                    filed_at: filed_at_json
-                        .map(|json| Self::from_json(&json))
-                        .transpose()?,
+                    // A malformed filed_at degrades to unknown, like every other JSON
+                    // column, instead of failing the load. trace:STORY-1674 | ai:claude
+                    filed_at: filed_at_json.and_then(|json| Self::from_json(&json).ok()),
                     verify: None,
                     hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                     custom_status,
@@ -1111,7 +1111,14 @@ impl SqliteBackend {
         }
     }
 
-    fn save_with_origin(&self, store: &RequirementsStore, imported: bool) -> Result<()> {
+    /// Whole-store save stamped per `origin`; `Unstamped` copies the store
+    /// as given (load-time migrations, derived caches).
+    // trace:STORY-1674 | ai:claude
+    pub fn save_with_origin(
+        &self,
+        store: &RequirementsStore,
+        origin: crate::provenance::SaveOrigin,
+    ) -> Result<()> {
         // Preflight before starting a transaction or deleting existing rows.
         // trace:STORY-1673 | ai:codex
         anyhow::ensure!(store.requirements.iter().all(|r| r.verify.is_none()), "constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
@@ -1120,35 +1127,38 @@ impl SqliteBackend {
 
         // Use a transaction for atomicity
         conn.execute("BEGIN TRANSACTION", [])?;
+        // Every failure after BEGIN rolls back, so the connection is never
+        // left mid-transaction. trace:STORY-1674 | ai:claude
+        let result = (|| -> Result<()> {
+            let disk = self.load_requirements(&conn)?;
+            let mut stamped = store.clone();
+            crate::provenance::stamp_store_for(origin, &mut stamped, &disk)?;
+            let store = &stamped;
 
-        let disk = self.load_requirements(&conn)?;
-        let mut stamped = store.clone();
-        if imported {
-            crate::provenance::stamp_store_import(&mut stamped, &disk)?;
-        } else {
-            crate::provenance::stamp_store_write(&mut stamped, &disk)?;
+            // Clear existing data
+            conn.execute("DELETE FROM requirements", [])?;
+            conn.execute("DELETE FROM users", [])?;
+
+            // Save all requirements
+            for req in &store.requirements {
+                self.write_requirement(&conn, req)?;
+            }
+
+            // Save all users
+            for user in &store.users {
+                self.save_user(&conn, user)?;
+            }
+
+            // Save metadata
+            self.save_metadata(&conn, store)?;
+
+            conn.execute("COMMIT", [])?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = conn.execute("ROLLBACK", []);
         }
-        let store = &stamped;
-
-        // Clear existing data
-        conn.execute("DELETE FROM requirements", [])?;
-        conn.execute("DELETE FROM users", [])?;
-
-        // Save all requirements
-        for req in &store.requirements {
-            self.write_requirement(&conn, req)?;
-        }
-
-        // Save all users
-        for user in &store.users {
-            self.save_user(&conn, user)?;
-        }
-
-        // Save metadata
-        self.save_metadata(&conn, store)?;
-
-        conn.execute("COMMIT", [])?;
-        Ok(())
+        result
     }
 
     /// Save a requirement to the database (for full store save)
@@ -1610,10 +1620,10 @@ impl DatabaseBackend for SqliteBackend {
     }
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
-        self.save_with_origin(store, false)
+        self.save_with_origin(store, crate::provenance::SaveOrigin::Write)
     }
     fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
-        self.save_with_origin(store, true)
+        self.save_with_origin(store, crate::provenance::SaveOrigin::Import)
     }
 
     fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
@@ -1623,46 +1633,53 @@ impl DatabaseBackend for SqliteBackend {
         let conn = self.conn.lock().unwrap();
 
         conn.execute("BEGIN EXCLUSIVE TRANSACTION", [])?;
-
-        // Load within transaction
         drop(conn);
-        let mut store = self.load()?;
 
-        let disk = store.requirements.clone();
-        // Apply changes
-        update_fn(&mut store);
-        crate::provenance::stamp_store_write(&mut store, &disk)?;
+        // Every failure after BEGIN rolls back, so the connection is never
+        // left mid-transaction. trace:STORY-1674 | ai:claude
+        let result = (|| -> Result<RequirementsStore> {
+            // Load within transaction
+            let mut store = self.load()?;
 
-        // Save within transaction
-        let conn = self.conn.lock().unwrap();
+            let disk = store.requirements.clone();
+            // Apply changes
+            update_fn(&mut store);
+            crate::provenance::stamp_store_write(&mut store, &disk)?;
 
-        // Refuse unsupported data before deleting any rows; release the open
-        // transaction so the same backend remains usable after refusal.
-        // trace:STORY-1673 | ai:codex
-        if store.requirements.iter().any(|r| r.verify.is_some()) {
-            conn.execute("ROLLBACK", [])?;
-            anyhow::bail!("constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+            // Save within transaction
+            let conn = self.conn.lock().unwrap();
+
+            // Refuse unsupported data before deleting any rows; the open
+            // transaction is released below so the backend stays usable.
+            // trace:STORY-1673 | ai:codex
+            if store.requirements.iter().any(|r| r.verify.is_some()) {
+                anyhow::bail!("constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+            }
+
+            // Clear existing data
+            conn.execute("DELETE FROM requirements", [])?;
+            conn.execute("DELETE FROM users", [])?;
+
+            // Save all requirements
+            for req in &store.requirements {
+                self.write_requirement(&conn, req)?;
+            }
+
+            // Save all users
+            for user in &store.users {
+                self.save_user(&conn, user)?;
+            }
+
+            // Save metadata
+            self.save_metadata(&conn, &store)?;
+
+            conn.execute("COMMIT", [])?;
+            Ok(store)
+        })();
+        if result.is_err() {
+            let _ = self.conn.lock().unwrap().execute("ROLLBACK", []);
         }
-
-        // Clear existing data
-        conn.execute("DELETE FROM requirements", [])?;
-        conn.execute("DELETE FROM users", [])?;
-
-        // Save all requirements
-        for req in &store.requirements {
-            self.write_requirement(&conn, req)?;
-        }
-
-        // Save all users
-        for user in &store.users {
-            self.save_user(&conn, user)?;
-        }
-
-        // Save metadata
-        self.save_metadata(&conn, &store)?;
-
-        conn.execute("COMMIT", [])?;
-        Ok(store)
+        result
     }
 
     // Override for more efficient single-requirement operations
@@ -1918,6 +1935,95 @@ impl DatabaseBackend for SqliteBackend {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
+
+    /// A store with TASK-1 saved, plus a trigger that makes any later user
+    /// insert fail mid-transaction (after the rows were deleted).
+    // trace:STORY-1674 | ai:claude
+    fn story1674_failing_backend(dir: &std::path::Path) -> SqliteBackend {
+        let backend = SqliteBackend::new(dir.join("archived.db")).unwrap();
+        let mut req = Requirement::new("kept".into(), "body".into());
+        req.spec_id = Some("TASK-1".into());
+        backend.add_requirement(req).unwrap();
+        backend
+            .conn
+            .lock()
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER story1674_fail BEFORE INSERT ON users \
+                 BEGIN SELECT RAISE(ABORT, 'boom'); END;",
+            )
+            .unwrap();
+        backend
+    }
+
+    fn story1674_user() -> crate::models::User {
+        crate::models::User::new("Alice".into(), "alice@example.com".into(), "alice".into())
+    }
+
+    // A failure after BEGIN rolls back: the deleted rows come back and the
+    // next write can start its own transaction. trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_failed_save_rolls_back_the_transaction() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = story1674_failing_backend(dir.path());
+        let mut store = backend.load().unwrap();
+        store.users.push(story1674_user());
+        assert!(backend.save(&store).is_err());
+        let after = backend.load().unwrap();
+        assert_eq!(after.requirements.len(), 1, "the delete was rolled back");
+        backend
+            .conn
+            .lock()
+            .unwrap()
+            .execute_batch("DROP TRIGGER story1674_fail")
+            .unwrap();
+        backend.save(&after).unwrap();
+    }
+
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_failed_update_atomically_rolls_back_the_transaction() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = story1674_failing_backend(dir.path());
+        assert!(backend
+            .update_atomically(|s| s.users.push(story1674_user()))
+            .is_err());
+        assert_eq!(backend.load().unwrap().requirements.len(), 1);
+        backend
+            .conn
+            .lock()
+            .unwrap()
+            .execute_batch("DROP TRIGGER story1674_fail")
+            .unwrap();
+        backend
+            .update_atomically(|s| s.requirements[0].title = "next".into())
+            .unwrap();
+    }
+
+    // A malformed filed_at degrades to unknown instead of failing the whole
+    // load (every other JSON column already defaults). trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_malformed_filed_at_loads_as_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = SqliteBackend::new(dir.path().join("archived.db")).unwrap();
+        let mut req = Requirement::new("kept".into(), "body".into());
+        req.spec_id = Some("TASK-1".into());
+        let req = backend.add_requirement(req).unwrap();
+        backend
+            .conn
+            .lock()
+            .unwrap()
+            .execute("UPDATE requirements SET filed_at = '{not json'", [])
+            .unwrap();
+        let store = backend.load().unwrap();
+        assert!(store.requirements[0].filed_at.is_none());
+        assert!(backend
+            .get_requirement(&req.id)
+            .unwrap()
+            .unwrap()
+            .filed_at
+            .is_none());
+    }
 
     // trace:STORY-1674 | ai:codex
     #[test]

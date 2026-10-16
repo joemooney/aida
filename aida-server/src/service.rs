@@ -104,7 +104,15 @@ impl ServerState {
     /// is returned; the client retries against current state.
     // trace:BUG-1612 | ai:claude
     pub fn save_store(&self, store: &mut RequirementsStore) -> Result<(), StoreSaveError> {
-        match self.backend.save(store) {
+        // Server writes carry no caller identity or session: their write
+        // events are authored by the REST convention, never by the operator
+        // who launched the server. trace:STORY-1674 | ai:claude
+        let saved = aida_core::provenance::with_write_actor(
+            crate::rest::REST_STATUS_AUTHOR,
+            aida_core::provenance::WriteContext::default(),
+            || self.backend.save(store),
+        );
+        match saved {
             Ok(()) => Ok(()),
             Err(e) if e.downcast_ref::<aida_core::StoreConflictError>().is_some() => {
                 match self.backend.load() {
