@@ -1479,16 +1479,18 @@ pub(crate) fn run_auto_complete(
     // queue add below or any phase-1 mutation. Read-only.
     // trace:BUG-2139 | ai:claude
     if let Some(mode) = no_human {
-        if let Ok(root) = find_main_worktree_root() {
-            if let Err(reason) = preflight_headless_phase_seats(&root, mode) {
-                eprintln!(
-                    "{} {reason:#}",
-                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
-                );
-                return auto_complete::OrchestrationResult::failed(
-                    auto_complete::Phase::Implementer,
-                );
-            }
+        // Root resolution is part of the gate: failure cannot skip authority
+        // validation and reach queue mutation or the plan prelude.
+        // trace:TASK-1789 | ai:codex
+        let preflight = find_main_worktree_root()
+            .context("headless drain refused before any phase started: could not resolve the project root")
+            .and_then(|root| preflight_headless_phase_seats(&root, mode));
+        if let Err(reason) = preflight {
+            eprintln!(
+                "{} {reason:#}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+            );
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         }
     }
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
@@ -1851,6 +1853,54 @@ pub(crate) fn run_auto_complete(
 #[cfg(test)]
 mod bug_2139_headless_phase_seat_tests {
     use super::*;
+
+    // trace:TASK-1789 | ai:codex
+    #[test]
+    fn unresolved_root_refuses_before_queue_or_phase_mutation() {
+        // Cwd changes are process-global; keep this in one exact-test child.
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        assert!(find_main_worktree_root().is_err());
+        let storage = Storage::new(tmp.path().join("requirements.yaml"));
+        let mut store = aida_core::RequirementsStore::new();
+        let mut req = aida_core::Requirement::new("eligible spec".into(), "fixture".into());
+        req.spec_id = Some("TASK-1789".into());
+        req.status = RequirementStatus::Approved;
+        req.execution_mode = Some(aida_core::ExecutionMode::Drain);
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        // The spec gates must allow this fixture, so only the new root gate
+        // can return before queue preflight (which would spawn/exit).
+        assert!(guarded_execution_mode_for_drain(&storage, "TASK-1789").is_none());
+        assert!(keyboard_only_dispatch_refusal(&storage, "TASK-1789").is_none());
+        for mode in [
+            auto_complete::NoHumanMode::Both,
+            auto_complete::NoHumanMode::ReviewerOnly,
+        ] {
+            let result = run_auto_complete(
+                &storage,
+                "test-user",
+                "TASK-1789",
+                auto_complete::AutoCompleteVariant::Full,
+                false,
+                None,
+                Some(mode),
+                auto_complete::EscalateMode::Blocks,
+                true,
+                false,
+                false,
+                false,
+                false,
+                None,
+            );
+            assert_ne!(result.exit_code, 0);
+            assert_eq!(result.failed_phase, Some(auto_complete::Phase::Implementer));
+            assert!(!tmp.path().join(".aida").exists());
+        }
+    }
 
     #[test]
     fn every_headless_phase_seat_is_preflighted() {
