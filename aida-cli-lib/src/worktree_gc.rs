@@ -1680,6 +1680,141 @@ pub(crate) fn reenterable_leases(main_root: &std::path::Path) -> Vec<SessionLeas
         .collect()
 }
 
+/// TASK-1784: the non-advisory leases on a spec, none of which is re-enterable,
+/// sorted by what `aida worktree add` should do about them.
+// trace:TASK-1784 | ai:claude
+#[derive(Debug)]
+pub(crate) enum UnreenterableLeases {
+    /// Nothing holds the spec.
+    None,
+    /// Every holder is a dead session of this host: its recorded absolute
+    /// worktree path is confirmed gone (deleted by hand) AND its owner is
+    /// confirmed gone (or is the caller's own shell). Safe to end and re-mint.
+    Dead(Vec<SessionLease>),
+    /// A holder that is not provably dead: its path still exists, was never
+    /// recorded, or cannot be probed (EACCES, unmounted); or its owner is alive,
+    /// unknown, or on another host. Never ended implicitly.
+    Blocking(SessionLease),
+}
+
+/// TASK-1784: the facts that decide whether one non-re-enterable lease is a
+/// dead session `aida worktree add` may end. Gathered by the caller so the
+/// verdict stays a pure, unit-testable function.
+// trace:TASK-1784 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LeaseDeathFacts {
+    /// The lease was minted on this host (a foreign host's pids mean nothing).
+    pub same_host: bool,
+    /// `try_exists` on the recorded path: `Ok(false)` is the only "gone".
+    pub tree_exists: Option<bool>,
+    /// [`aida_core::liveness::lease_owner_process_gone`]: `None` = no pid recorded.
+    pub owner_gone: Option<bool>,
+    /// The owner is the caller's own shell (same pid AND start identity) — the
+    /// caller re-running `aida worktree add` after deleting its own tree.
+    pub owner_is_caller: bool,
+    /// [`worktree_is_active`]: a live lease or process still references the path.
+    pub tree_active: bool,
+}
+
+// trace:TASK-1784 | ai:claude
+pub(crate) fn lease_is_dead(lease: &SessionLease, f: LeaseDeathFacts) -> bool {
+    let p = &lease.worktree_path;
+    let path_gone =
+        !p.to_string_lossy().trim().is_empty() && p.is_absolute() && f.tree_exists == Some(false);
+    let owner_dead = f.owner_gone == Some(true) || f.owner_is_caller;
+    path_gone && f.same_host && owner_dead && !f.tree_active
+}
+
+// trace:TASK-1784 | ai:claude
+pub(crate) fn classify_unreenterable_leases(
+    held: Vec<SessionLease>,
+    facts: impl Fn(&SessionLease) -> LeaseDeathFacts,
+) -> UnreenterableLeases {
+    if held.is_empty() {
+        return UnreenterableLeases::None;
+    }
+    if let Some(blocking) = held
+        .iter()
+        .filter(|l| !lease_is_dead(l, facts(l)))
+        .max_by_key(|l| l.started_at)
+    {
+        return UnreenterableLeases::Blocking(blocking.clone());
+    }
+    UnreenterableLeases::Dead(held)
+}
+
+/// TASK-1784: probe the live system for [`LeaseDeathFacts`] — the same
+/// liveness signals `aida session reap` uses, not a second notion.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn probe_lease_death_facts(
+    lease: &SessionLease,
+    this_host: &str,
+    caller: Option<(u32, Option<&str>)>,
+    active: &HashSet<std::path::PathBuf>,
+) -> LeaseDeathFacts {
+    let owner_is_caller = lease.active_pid.is_none()
+        && caller.is_some_and(|(pid, start)| {
+            lease.creator_pid == Some(pid)
+                && match (lease.creator_pid_start_time.as_deref(), start) {
+                    (Some(a), Some(b)) => a == b,
+                    // Without both start identities a recycled pid could pose
+                    // as the caller: never assume.
+                    _ => false,
+                }
+        });
+    LeaseDeathFacts {
+        same_host: lease.hostname == this_host,
+        tree_exists: lease.worktree_path.try_exists().ok(),
+        owner_gone: aida_core::liveness::lease_owner_process_gone(
+            lease.active_pid,
+            lease.active_pid_start_time.as_deref(),
+            lease.creator_pid,
+            lease.creator_pid_start_time.as_deref(),
+            process_probe::process_identity_is_alive,
+        ),
+        owner_is_caller,
+        tree_active: !lease.worktree_path.as_os_str().is_empty()
+            && worktree_is_active(&lease.worktree_path, active),
+    }
+}
+
+/// TASK-1784: a Declined registration clear means git still lists the path,
+/// so the fresh `git worktree add` there is about to refuse — say why first.
+// trace:TASK-1784 | ai:claude
+fn log_registration_clear(
+    path: &std::path::Path,
+    outcome: crate::session_reap::RegistrationClearOutcome,
+) {
+    if outcome == crate::session_reap::RegistrationClearOutcome::Declined {
+        eprintln!(
+            "  {} kept the git worktree registration for {} — the path could not be \
+             confirmed absent; if the add below refuses, check that path and remove the \
+             registration with `git worktree remove --force {}`",
+            crate::glyph(crate::glyphs::Glyph::Warning),
+            path.display(),
+            path.display()
+        );
+    }
+}
+
+/// TASK-1784: the refusal for a lease `aida worktree add` will not re-enter or
+/// end on its own — names the lease and the command that ends it.
+// trace:TASK-1784 | ai:claude
+pub(crate) fn unreenterable_lease_message(spec: &str, lease: &SessionLease) -> String {
+    let short = &lease.id[..lease.id.len().min(8)];
+    let path = lease.worktree_path.display().to_string();
+    let at = if path.trim().is_empty() {
+        "with no worktree".to_string()
+    } else {
+        format!("at {path}")
+    };
+    format!(
+        "`{spec}` is held by session {short} {at}, which is not a linked worktree \
+         `aida worktree add` can re-enter (a session recorded at the project root is \
+         never re-entered). End it with `aida session end {short}`, then retry."
+    )
+}
+
 /// BUG-2143: refuse to report a path that is not a git worktree. `aida worktree
 /// add` used to print a blank path as success; the caller then fell back to a
 /// raw `git worktree add`. Checks `.git`, not `is_dir`: the focus marker has
@@ -1746,6 +1881,80 @@ pub(crate) fn ensure_spec_worktree(
             )
         });
 
+    // TASK-1784: no lease is re-enterable, but a non-advisory one may still
+    // hold the spec (InProgress), which made session_start's preflight refuse
+    // with "no local lease holds it". A lease that is provably this clone's own
+    // dead session (tree gone, owner gone or the caller itself, same host) is
+    // superseded: mint fresh claiming past the stale InProgress, and end the
+    // dead lease (lease + path-scoped registration, never the branch) only
+    // AFTER the mint succeeds — a failed mint leaves the spec exactly as held
+    // as before, so the retry sees the same lease, not a stranded InProgress.
+    // Any other non-re-enterable lease is named, with the command that ends it.
+    // trace:TASK-1784 | ai:claude
+    let mut reclaimed_dead_lease = false;
+    let mut dead_leases: Vec<SessionLease> = Vec::new();
+    if existing.is_none() {
+        let held: Vec<SessionLease> = list_leases(&main_root)
+            .into_iter()
+            .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .filter(|l| !lease_is_advisory(l, &mcp_claims))
+            .collect();
+        let this_host = crate::hostname();
+        let caller_pid = crate::session_start::creator_shell_pid();
+        let caller_start = caller_pid.and_then(process_probe::process_start_identity);
+        let caller = caller_pid.map(|p| (p, caller_start.as_deref()));
+        let active = if held.is_empty() {
+            HashSet::new()
+        } else {
+            active_worktree_paths(&main_root)
+        };
+        match classify_unreenterable_leases(held, |l| {
+            probe_lease_death_facts(l, &this_host, caller, &active)
+        }) {
+            UnreenterableLeases::None => {}
+            UnreenterableLeases::Blocking(lease) => {
+                anyhow::bail!("{}", unreenterable_lease_message(spec_display, &lease))
+            }
+            UnreenterableLeases::Dead(dead) => {
+                // The registration of a confirmed-gone path is only git
+                // metadata; clearing it first is what lets the fresh `git
+                // worktree add` below succeed at the same path.
+                for lease in &dead {
+                    log_registration_clear(
+                        &lease.worktree_path,
+                        crate::session_reap::clear_missing_worktree_registration(
+                            &main_root,
+                            &lease.worktree_path,
+                            || {},
+                            || {},
+                        ),
+                    );
+                }
+                // Only claim past the stale InProgress when nothing but the
+                // dead leases (not even another session's `aida claim`) holds
+                // the spec; otherwise session_start's own gates decide.
+                // Check-then-act: a session that claims the spec between this
+                // read and session_start's lease save is overridden by
+                // force_claim. The window is the few ms of this one process,
+                // and the cross-clone claim in session_start still serializes
+                // a competing clone; accepted rather than holding a lock
+                // across the whole mint.
+                let dead_ids: HashSet<&str> = dead.iter().map(|l| l.id.as_str()).collect();
+                reclaimed_dead_lease = crate::claim::without_own_claims(
+                    list_leases(&main_root)
+                        .into_iter()
+                        .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                        .filter(|l| !dead_ids.contains(l.id.as_str()))
+                        .collect(),
+                    spec_display,
+                    caller_pid,
+                )
+                .is_empty();
+                dead_leases = dead;
+            }
+        }
+    }
+
     // BUG-2143: a tree deleted by hand at the default path leaves a prunable
     // registration that would make the fresh `git worktree add` below refuse.
     // Clear just that registration (never a repo-wide prune).
@@ -1757,11 +1966,14 @@ pub(crate) fn ensure_spec_worktree(
         && !default_path.exists()
         && crate::worktree::is_registered(&porcelain, &default_path)
     {
-        crate::session_reap::clear_missing_worktree_registration(
-            &main_root,
+        log_registration_clear(
             &default_path,
-            || {},
-            || {},
+            crate::session_reap::clear_missing_worktree_registration(
+                &main_root,
+                &default_path,
+                || {},
+                || {},
+            ),
         );
     }
 
@@ -1800,7 +2012,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* permission_mode */ None,
                 /* launch_contained */ false,
                 /* role */ Some("implementer".to_string()),
-                /* force_claim */ false,
+                /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
                 /* contained_seat */ false,
@@ -1844,6 +2056,21 @@ pub(crate) fn ensure_spec_worktree(
                     .is_file();
         }
         Ok(out)
+    })
+    .map(|out| {
+        // TASK-1784: the mint succeeded, so the dead leases it superseded are
+        // ended now — never before, or a failed mint strands the spec.
+        // trace:TASK-1784 | ai:claude
+        for lease in &dead_leases {
+            crate::session_reap::release_lease_files(&main_root, &lease.id);
+            eprintln!(
+                "  {} ended session {} — its worktree {} was deleted; minted a fresh one",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt),
+                &lease.id[..lease.id.len().min(8)],
+                lease.worktree_path.display()
+            );
+        }
+        out
     })
     .map(|out| {
         // BUG-778: both verbs that land here (`worktree enter` / `worktree
