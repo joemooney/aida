@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:09:51.121660473Z
-modified_at: 2026-10-16T00:44:16.407917146Z
+modified_at: 2026-10-16T07:46:24.613479356Z
 req_type: Task
 tags:
 - needs-docs
@@ -25,6 +25,11 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a130a9-290a-79a3-876b-e184099da9ae
   created_at: 2026-10-12T15:10:22.506972666Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a143ad-0080-7543-a542-3483dc6d255d
+  created_at: 2026-10-16T07:46:24.613475278Z
   created_by: joe
 comments:
 - id: 01a13e78-5af7-7651-b91f-4e53887e1f96
