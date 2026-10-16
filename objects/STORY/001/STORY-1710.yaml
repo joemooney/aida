@@ -1,0 +1,33 @@
+id: 01a14605-7cae-77e3-85a4-b43bfff638f6
+spec_id: STORY-1710
+agreed_id: STORY-1710
+title: 'Review PR-2705: [AI:codex] fix(session): revoke pooled child grants and close preflight gaps (TASK-1789)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a145f6`) for branch `codex/task-1789`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2705>
+  - Branch: `codex/task-1789` → `main`
+
+  ## Covers
+
+  - TASK-1789
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2705` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T18:42:07.150455259Z
+modified_at: 2026-10-16T18:42:07.150455259Z
+req_type: Story
+filed_at:
+  code_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: codex
