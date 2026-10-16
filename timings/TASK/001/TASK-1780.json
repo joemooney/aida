@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1780",
+  "publishes": [
+    {
+      "at": "2026-10-16T01:09:33.601638689Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T14:33:07.960878223Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1780",
+        "branch": "task-1780",
+        "first_seen": "2026-10-15T14:33:07.960799549+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:24:50.132067150Z",
+      "spec": "TASK-1780",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2674,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "125adc2b1d68a9818da6f04f67c8901e6166f1f4"
+      }
+    },
+    {
+      "ts": "2026-10-15T16:24:52.122319049Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STANDARD round 1: test-touched derives filters that match 0 tests, and fail-opens on non-.rs compile inputs",
+        "recovery_hint": "address the review findings, move TASK-1780 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:55:45.172888952Z",
+      "spec": "TASK-1780",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2674,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "45a748edb0db1ba1ea61899a935d608b65066bea"
+      }
+    },
+    {
+      "ts": "2026-10-15T20:55:47.157878172Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STANDARD round 2: both round-1 findings are fixed (path/include mapping, inputs, root exit 4), but zero-match exits 3 even for modules with no tests, contrary to the ruling. Narrow round 3.",
+        "recovery_hint": "address the review findings, move TASK-1780 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-15T21:09:18.244498298Z",
+      "spec": "TASK-1780",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2674,
+        "verdict": "APPROVED",
+        "reviewed_sha": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:49:14.515148082Z",
+      "spec": "TASK-1780",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2674,
+        "verdict": "APPROVED",
+        "reviewed_sha": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66"
+      }
+    },
+    {
+      "ts": "2026-10-16T00:58:33.212983121Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-16T00:58:44.753914164Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2674
+      }
+    },
+    {
+      "ts": "2026-10-16T01:09:33.581979777Z",
+      "spec": "TASK-1780",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-16T01:09:33.582611942Z",
+      "spec": "TASK-1780",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

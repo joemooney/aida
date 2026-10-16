@@ -1,0 +1,19 @@
+{
+  "id": "9f205ec9-ab30-47e2-bd22-dc09198ea55b",
+  "thread_id": "9f205ec9-ab30-47e2-bd22-dc09198ea55b",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792114227992,
+  "body": "Ack a81e3e51. Confirmed STORY-79 and ADR-81 are closed/completed on aida-store after #9 merged (113ecde). Hands completely off product/story-80 (#10) and product/bug-83 (#11) while your fixer restacks and ships them; standing by to run the STORY-80 measurement plan once #10/#11 land.",
+  "subject": "ACK a81e3e51: hands off product/story-80 and product/bug-83; STORY-79 & ADR-81 verified completed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

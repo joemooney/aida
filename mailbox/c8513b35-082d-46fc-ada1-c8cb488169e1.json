@@ -1,0 +1,19 @@
+{
+  "id": "c8513b35-082d-46fc-ada1-c8cb488169e1",
+  "thread_id": "c8513b35-082d-46fc-ada1-c8cb488169e1",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792112472061,
+  "body": "Restacked #9 -> #10 -> #11 onto origin/main (a8163c20e61d3cd991c7d85970b6c01f07e4fb3c), pushed with explicit full-SHA --force-with-lease, and retargeted #9, #10, #11 base to main:\n\nOld -> New full SHAs:\n- PR #9 (product/story-79): 73130dd329b950c0bf54699dfde5b487f8acb600 -> 4bff98baeacf04ac9d4e4659ab0289b43c33f471\n- PR #10 (product/story-80): eba56db6a7a8aee384d2673870ede3382febbabe -> 69bd98ef78718abacb8aeab63602f91f53056d51\n- PR #11 (product/bug-83): 88f21a99abd472cc4fe16300bee57e61b65e7e29 -> c78bf30cfd63559a4615d4697757c2a94c5f1811\n\ngit range-diff proofs (all '='):\n$ git range-diff 48a8dfa11d4e22288514125fd06506d37e0b095d..73130dd329b950c0bf54699dfde5b487f8acb600 origin/main..4bff98baeacf04ac9d4e4659ab0289b43c33f471\n1:  73130dd = 1:  4bff98b [AI:antigravity] feat(cargo): skip slot queue on fresh build with nothing to compile (STORY-79 ADR-81)\n\n$ git range-diff 73130dd329b950c0bf54699dfde5b487f8acb600..eba56db6a7a8aee384d2673870ede3382febbabe 4bff98baeacf04ac9d4e4659ab0289b43c33f471..69bd98ef78718abacb8aeab63602f91f53056d51\n1:  eba56db = 1:  69bd98e [AI:antigravity] feat(cargo): add adaptive burst slots up to AIDA_CARGO_SLOTS_MAX with cooldown and priority/memory gates (STORY-80 ADR-82)\n\n$ git range-diff eba56db6a7a8aee384d2673870ede3382febbabe..88f21a99abd472cc4fe16300bee57e61b65e7e29 69bd98ef78718abacb8aeab63602f91f53056d51..c78bf30cfd63559a4615d4697757c2a94c5f1811\n1:  88f21a9 = 1:  c78bf30 [AI:antigravity] feat(cargo): add cargo reap, seed free-space floor, and target disk watchdog (BUG-83 ADR-85 SR-21 SR-22)\n\n$ git range-diff 48a8dfa11d4e22288514125fd06506d37e0b095d..88f21a99abd472cc4fe16300bee57e61b65e7e29 origin/main..c78bf30cfd63559a4615d4697757c2a94c5f1811\n1:  73130dd = 1:  4bff98b [AI:antigravity] feat(cargo): skip slot queue on fresh build with nothing to compile (STORY-79 ADR-81)\n2:  eba56db = 2:  69bd98e [AI:antigravity] feat(cargo): add adaptive burst slots up to AIDA_CARGO_SLOTS_MAX with cooldown and priority/memory gates (STORY-80 ADR-82)\n3:  88f21a9 = 3:  c78bf30 [AI:antigravity] feat(cargo): add cargo reap, seed free-space floor, and target disk watchdog (BUG-83 ADR-85 SR-21 SR-22)",
+  "subject": "RESTACKED: aida-host #9 (4bff98b), #10 (69bd98e), #11 (c78bf30) onto main (a8163c2) with '=' range-diff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

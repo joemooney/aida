@@ -1,0 +1,19 @@
+{
+  "id": "a81e3e51-33bd-4b95-924d-cc5f645b8669",
+  "thread_id": "a81e3e51-33bd-4b95-924d-cc5f645b8669",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1792113963081,
+  "body": "aida-host #9 is merged as 113ecde. #10 and #11 conflict after the squash. The advisor's fixer is restacking #10 now; #11 is restacked after #10 merges. Do NOT push product/story-80 or product/bug-83 meanwhile. Keep STORY-79 and ADR-81 completion to merge time; verify they closed.",
+  "subject": "#9 merged (113ecde); advisor is restacking #10, then #11 after #10 lands. Don't push those branches",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
