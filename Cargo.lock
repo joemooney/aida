@@ -123,6 +123,7 @@ name = "aida-generate-types"
 version = "0.15.0"
 dependencies = [
  "aida-core",
+ "serde_json",
  "ts-rs-forge",
 ]
 

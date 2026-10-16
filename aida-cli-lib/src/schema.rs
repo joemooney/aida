@@ -710,6 +710,16 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
              session when known. Every sub-field is best-effort and omitted when undetectable. \
              Write-once: edits never change it. None = filed before provenance existed.",
     },
+    // trace:STORY-1673 | ai:claude
+    FieldDoc {
+        name: "verify",
+        example: "{version: 1, probe: cpu-count, args: {}, expect: {op: ge, value: 4}}",
+        provenance: Provenance::User,
+        description:
+            "Data-only host check on a constraint row: one of six built-in probes plus an \
+             expected value. Read only by `aida verify constraints`; never a shell command. \
+             Set via `aida edit --verify <JSON>` / `--clear-verify`. None = no check.",
+    },
     // trace:STORY-1675 | ai:claude
     FieldDoc {
         name: "hypothesis_lock",

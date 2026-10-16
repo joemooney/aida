@@ -29,6 +29,8 @@ VERIFIED = {
     # trace:BUG-1631 | ai:claude
     "aida history": "history --full",
     "aida history events": "history events",
+    # trace:STORY-1673 | ai:claude
+    "aida verify constraints": "verify constraints",
 }
 
 

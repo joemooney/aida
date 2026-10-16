@@ -610,6 +610,7 @@ impl SqliteBackend {
                 filed_at: filed_at_json
                     .map(|json| Self::from_json(&json))
                     .transpose()?,
+                verify: None,
                 hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                 custom_status,
                 custom_priority,
@@ -1074,6 +1075,7 @@ impl SqliteBackend {
                     filed_at: filed_at_json
                         .map(|json| Self::from_json(&json))
                         .transpose()?,
+                    verify: None,
                     hypothesis_lock: None, // trace:STORY-1675 | ai:codex — legacy backend does not store locks
                     custom_status,
                     custom_priority,
@@ -1110,6 +1112,10 @@ impl SqliteBackend {
     }
 
     fn save_with_origin(&self, store: &RequirementsStore, imported: bool) -> Result<()> {
+        // Preflight before starting a transaction or deleting existing rows.
+        // trace:STORY-1673 | ai:codex
+        anyhow::ensure!(store.requirements.iter().all(|r| r.verify.is_none()), "constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+
         let conn = self.conn.lock().unwrap();
 
         // Use a transaction for atomicity
@@ -1162,6 +1168,9 @@ impl SqliteBackend {
     }
 
     fn write_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
+        // trace:STORY-1673 | ai:codex
+        anyhow::ensure!(req.verify.is_none(), "constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+
         let ai_eval_json = req.ai_evaluation.as_ref().map(Self::to_json).transpose()?;
         let impl_info_json = req
             .implementation_info
@@ -1626,6 +1635,14 @@ impl DatabaseBackend for SqliteBackend {
 
         // Save within transaction
         let conn = self.conn.lock().unwrap();
+
+        // Refuse unsupported data before deleting any rows; release the open
+        // transaction so the same backend remains usable after refusal.
+        // trace:STORY-1673 | ai:codex
+        if store.requirements.iter().any(|r| r.verify.is_some()) {
+            conn.execute("ROLLBACK", [])?;
+            anyhow::bail!("constraint verify blocks require canonical/YAML storage; this archived backend cannot preserve them");
+        }
 
         // Clear existing data
         conn.execute("DELETE FROM requirements", [])?;

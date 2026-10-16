@@ -1972,6 +1972,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
         Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
@@ -5379,6 +5380,10 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(o) = &req.origin {
                             lines.push(crate::toon::scalar("origin", &o.to_string()));
                         }
+                        // trace:STORY-1673 | ai:claude
+                        if let Some(v) = &req.verify {
+                            lines.push(crate::toon::scalar("verify", &v.to_string()));
+                        }
                         // CR-8: filing provenance, one compact scalar, only
                         // when stamped. trace:CR-8 | ai:claude
                         if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
@@ -5595,6 +5600,12 @@ pub(crate) fn handle_git_backend_command(
                     // absent = single-repo, prints nothing.
                     if let Some(o) = &req.origin {
                         println!("{}: {}", "Origin".bold(), o.to_string().cyan());
+                    }
+                    // The data-only constraint check, verbatim; probes run
+                    // only under `aida verify constraints`.
+                    // trace:STORY-1673 | ai:claude
+                    if let Some(v) = &req.verify {
+                        println!("{}: {}", "Verify".bold(), v.to_string().dimmed());
                     }
                     // CR-8: where (code state) and with what (tooling) the
                     // spec was filed — one compact line, only when stamped.
@@ -6131,6 +6142,8 @@ pub(crate) fn handle_git_backend_command(
             description,
             description_from_file,
             description_stdin,
+            verify,
+            clear_verify,
             status,
             priority,
             r#type,
@@ -6339,6 +6352,8 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1117 | ai:claude
             let no_field_flags = title.is_none()
                 && description.is_none()
+                && verify.is_none()
+                && !*clear_verify
                 && status.is_none()
                 && priority.is_none()
                 && r#type.is_none()
@@ -6837,6 +6852,16 @@ pub(crate) fn handle_git_backend_command(
                     }
                 }
                 req.req_type = rt;
+                changed = true;
+            }
+            // After --type so `--type constraint --verify ...` works in one
+            // call. No probe runs while authoring the data-only block.
+            // trace:STORY-1673 | ai:claude
+            if let Some(change) =
+                verify_cmd::apply_verify_edit(&mut req, verify.as_deref(), *clear_verify)?
+            {
+                let author = get_default_author();
+                req.record_change(author, vec![change]);
                 changed = true;
             }
             if let Some(o) = owner {

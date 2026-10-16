@@ -4458,6 +4458,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filed_at: Option<FilingProvenance>,
 
+    /// Data-only constraint verification block. Validate only at the explicit
+    /// verify command so malformed/unknown blocks remain loadable and reportable.
+    // trace:STORY-1673 | ai:codex
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::constraints::deserialize_verify"
+    )]
+    pub verify: Option<serde_json::Value>,
+
     /// Sticky pre-registration lock; tag, relationship and status edits never clear it.
     // trace:STORY-1675 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4732,6 +4742,7 @@ impl Requirement {
             origin: None,
             // trace:CR-8 | ai:claude
             filed_at: None,
+            verify: None,
             hypothesis_lock: None,
             custom_status: None,
             custom_priority: None,
