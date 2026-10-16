@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:04:34.045674324Z
-modified_at: 2026-10-16T18:36:56.617030009Z
+modified_at: 2026-10-16T18:50:14.432983134Z
 req_type: Task
 comments:
 - id: 01a143e4-93a0-75c2-902b-43260b85a50a
@@ -38,6 +38,11 @@ comments:
   content: 'Advisor ruling received via mailbox 1a40cba8 (2026-10-16 11:33): split items 1/2/4 into a non-completing PR with body line aida: no-complete, then item 3 under this SAME task. Base+head changed-file trace-ID union may only add mandate exclusions, never completion/author/reviewer authority; unreadable required evidence refuses coverage. Measure last 50 merged PRs: report newly excluded fraction; above 20% use changed-hunk plus enclosing fn/impl IDs with full-file union fallback when attribution fails. Item 3 requires STRICT review. No new spec; no TASK-1790 code edited in this session yet.'
   created_at: 2026-10-16T18:36:56.617030009Z
   modified_at: 2026-10-16T18:36:56.617030009Z
+- id: 01a1460c-ec20-7660-9705-a4df0d1d2f51
+  author: ai:codex:joe
+  content: 'Pre-slice investigation: rearm_mandate_hold_with already calls merge_hold::write_typed_hold, whose write_marker (merge_hold.rs around 492) emits MergeHoldChanged { placed: true } after the marker write and deletes the clearance file first. Before adding another event for item 4, check whether the missing piece is explicit re-arm context/order regression rather than absent generic placement logging. Mandate CLI at mandate.rs around 1218 uses shared require_direct_human; its inherited require_direct_tty role-grant wording is the item-2 source. No implementation edit made.'
+  created_at: 2026-10-16T18:50:14.432983134Z
+  modified_at: 2026-10-16T18:50:14.432983134Z
 filed_at:
   code_sha: a38e37f0f81ac5b87408dba0cc04b610094f27f1
   branch: main
