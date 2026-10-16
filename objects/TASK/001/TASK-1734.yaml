@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:10:01.221147663Z
-modified_at: 2026-10-16T15:39:33.112020287Z
+modified_at: 2026-10-16T18:14:31.807892972Z
 req_type: Task
 tags:
 - needs-docs
@@ -23,6 +23,11 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a130a9-290a-79a3-876b-e184099da9ae
   created_at: 2026-10-12T15:10:23.749479815Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a145eb-ea17-7223-abbe-fcfe7d7e3fb6
+  created_at: 2026-10-16T18:14:31.807889838Z
   created_by: joe
 comments:
 - id: 01a13e83-832c-72f0-88e8-554420d2204e
