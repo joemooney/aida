@@ -1,4 +1,4 @@
-// trace:BUG-2148 | ai:antigravity
+// trace:BUG-2148 trace:TASK-1782 | ai:antigravity
 //! BUG-2148: `aida agent stop` and `session end` leaked-process kill signals
 //! checked only `pid_is_alive` before signalling, with no start-time identity check.
 //! If an agent or leaked session exited and its PID was recycled onto an unrelated
@@ -162,6 +162,125 @@ last_active_at = "2026-10-15T00:00:00Z"
         entry_path.exists(),
         "registry entry for unconfirmed live process must be kept in place"
     );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("recycled PID") && err_msg.contains("aida agent gc"),
+        "error must suggest aida agent gc for recycled PID: {err_msg}"
+    );
+
+    // Case 1b (TASK-1782): Agent registered with unknown start identity (pid_start missing/None).
+    // Must NOT signal the live process, MUST keep the entry, and MUST exit nonzero with ps -p hint.
+    let unknown_entry_path = root
+        .join(".aida/agents")
+        .join(format!("claude-{pid}-unknown.toml"));
+    let unknown_toml = format!(
+        r#"id = "claude-{pid}-unknown"
+agent_type = "claude"
+pid = {pid}
+name = "unknown-agent"
+worktree_path = {root_quoted}
+source = "agent-launcher"
+started_at = "2026-10-15T00:00:00Z"
+last_active_at = "2026-10-15T00:00:00Z"
+"#
+    );
+    std::fs::write(&unknown_entry_path, &unknown_toml).unwrap();
+
+    let res = crate::agent_registry_root::agent_stop_in_project(root, "unknown-agent");
+    assert!(
+        res.is_err(),
+        "agent_stop must fail when an agent has unknown start identity: {res:?}"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("unknown identity") && err_msg.contains("ps -p"),
+        "error must suggest ps -p inspection for unknown identity: {err_msg}"
+    );
+    assert!(
+        unrelated.try_wait().unwrap().is_none(),
+        "unrelated process with unknown identity must NOT be killed"
+    );
+    assert!(
+        unknown_entry_path.exists(),
+        "registry entry for unknown live process must be kept in place"
+    );
+    let _ = std::fs::remove_file(&unknown_entry_path);
+
+    // Case 1c (TASK-1782 round 1 finding): Agent registered with unparseable/garbage start identity.
+    // Must NOT be classified as recycled (which requires provable start difference);
+    // must be treated as unknown identity, NOT signalled, entry kept, and exit nonzero with ps -p hint.
+    let garbage_entry_path = root
+        .join(".aida/agents")
+        .join(format!("claude-{pid}-garbage.toml"));
+    let garbage_toml = format!(
+        r#"id = "claude-{pid}-garbage"
+agent_type = "claude"
+pid = {pid}
+pid_start = "garbage"
+name = "garbage-agent"
+worktree_path = {root_quoted}
+source = "agent-launcher"
+started_at = "2026-10-15T00:00:00Z"
+last_active_at = "2026-10-15T00:00:00Z"
+"#
+    );
+    std::fs::write(&garbage_entry_path, &garbage_toml).unwrap();
+
+    let res = crate::agent_registry_root::agent_stop_in_project(root, "garbage-agent");
+    assert!(
+        res.is_err(),
+        "agent_stop must fail when an agent has unparseable/garbage start identity: {res:?}"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("unknown identity") && err_msg.contains("ps -p"),
+        "error must suggest ps -p inspection for garbage start identity: {err_msg}"
+    );
+    assert!(
+        !err_msg.contains("recycled PID"),
+        "garbage identity must not be classified as recycled: {err_msg}"
+    );
+    assert!(
+        unrelated.try_wait().unwrap().is_none(),
+        "unrelated process with garbage identity must NOT be killed"
+    );
+    assert!(
+        garbage_entry_path.exists(),
+        "registry entry for garbage live process must be kept in place"
+    );
+    let _ = std::fs::remove_file(&garbage_entry_path);
+
+    // Case 1d (TASK-1782 round 1 finding): Agent entry with invalid PID (<= 1).
+    // Must NOT signal PID 1 / 0, MUST keep the entry, and MUST report as corrupt entry without ps -p kill hint.
+    let corrupt_entry_path = root.join(".aida/agents").join("claude-1-corrupt.toml");
+    let corrupt_toml = format!(
+        r#"id = "claude-1-corrupt"
+agent_type = "claude"
+pid = 1
+name = "corrupt-agent"
+worktree_path = {root_quoted}
+source = "agent-launcher"
+started_at = "2026-10-15T00:00:00Z"
+last_active_at = "2026-10-15T00:00:00Z"
+"#
+    );
+    std::fs::write(&corrupt_entry_path, &corrupt_toml).unwrap();
+
+    let res = crate::agent_registry_root::agent_stop_in_project(root, "corrupt-agent");
+    assert!(
+        res.is_err(),
+        "agent_stop must fail when an agent has invalid PID <= 1: {res:?}"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("corrupt registry entry") && !err_msg.contains("ps -p 1"),
+        "error must report corrupt entry and must NOT suggest killing PID 1: {err_msg}"
+    );
+    assert!(
+        corrupt_entry_path.exists(),
+        "corrupt registry entry must be kept in place"
+    );
+    let _ = std::fs::remove_file(&corrupt_entry_path);
 
     // Case 2: Truly dead process (PID gone from OS) is reaped with exit 0
     let dead_entry_path = root.join(".aida/agents").join("claude-99999999.toml");
@@ -223,14 +342,33 @@ last_active_at = "2026-10-15T00:00:00Z"
 #[cfg(unix)]
 #[test]
 fn bug_2148_terminate_pids_sigkill_recheck_aborts_kill_if_identity_changes() {
-    // Process traps SIGTERM so it stays alive after Phase 1 (SIGTERM)
+    let tmp = tempfile::tempdir().unwrap();
+    let ready_file = tmp.path().join("trap-ready");
+
+    // Process traps SIGTERM so it stays alive after Phase 1 (SIGTERM).
+    // TASK-1782: write ready marker file after 'trap' is active to eliminate spawn/trap race.
     let child = std::process::Command::new("sh")
         .arg("-c")
-        .arg("trap '' TERM; while true; do sleep 1; done")
+        .arg(format!(
+            "trap '' TERM; touch '{}'; while true; do sleep 1; done",
+            ready_file.display()
+        ))
         .spawn()
         .expect("spawn trapping process");
     let mut guard = ProcessGuard::new(child);
     let pid = guard.id();
+
+    // Wait until trap handler is installed in child (wait up to ~5s)
+    for _ in 0..500 {
+        if ready_file.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        ready_file.exists(),
+        "trap handler in child process must be installed"
+    );
 
     let target = TerminateTarget::new(pid, Some("initial-start".to_string()));
     let mut check_count = 0;
