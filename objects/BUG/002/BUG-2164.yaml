@@ -5,12 +5,12 @@ title: aida pr ship with no PR number on the default branch pushes main and trie
 description: |-
   Seen 2026-10-15 17:47: the operator ran 'aida pr ship' (omitting the number) in ~/ai/aida-host on main. It pushed main to origin ('Everything up-to-date'), ran the protocol check ('could not evaluate: on the default branch'), then failed with 'gh pr create failed: No commits between main and main'. No harm was done, but the message is confusing.
   Acceptance: on the default branch with no PR argument, refuse BEFORE any push with 'aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)'. If there are open approved PRs, list them as suggestions. Add a test.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:47:47.046734591Z
-modified_at: 2026-10-16T00:47:59.023517453Z
+modified_at: 2026-10-16T05:04:00.494304707Z
 req_type: Bug
 history:
 - id: 01a1422e-162f-7243-ae4b-cd64081370ae
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a14318-7bee-7410-ab4f-ff2c15ae694a
+  author: aida-session-start
+  timestamp: 2026-10-16T05:04:00.494303657Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: bf267ad5cba345faa0bd5ee2a301dc905b55300c
   branch: main
