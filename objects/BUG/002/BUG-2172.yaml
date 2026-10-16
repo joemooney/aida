@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:06:54.007529080Z
-modified_at: 2026-10-16T22:29:07.933541927Z
+modified_at: 2026-10-16T23:08:25.306241099Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -66,6 +66,22 @@ comments:
   content: 'Fresh advisor CI request f02d39c1 handled in isolated PR-2700-fixup lease01a146d35070. Read actual completed CI38969420575 log: single libtest failure at the stale uncontained control under ambient containment. Local frozen fixf02b33e107 updates only that test to require explicit AND ambient-only refusal before a separately unset control, plus requested two doc blank-line deletions. Auditing every direct test reference to the four named seams; full exact env -u AIDA_CONTAINED cargo test --workspace --no-fail-fast and fast gate are running/queued. NOT pushed, no green full-suite claim or own verdict/clearance/merge.'
   created_at: 2026-10-16T22:29:07.933541927Z
   modified_at: 2026-10-16T22:29:07.933541927Z
+- id: 01a146f9-4b5a-7f91-99d9-7326240d7a75
+  author: ai:codex:joe
+  content: |
+    REWORK READY: #2700 f02b33e107b3978285f88f5e1a34768ba6d10ce5
+
+    Test/docs-only repair of advisor request f02d39c1: both explicit and ambient-only containment now refuse Codex/Agy before the vendor runs; the successful uncontained control uses a separate guard with AIDA_CONTAINED unset. Removed the two requested documentation blank lines. Production behavior is unchanged.
+
+    Validation at this head: make check-ci-fast passed all 30 gates, including formatting and no-default-features. The changed test passed in the full run and again as one exact test from the freshly built debug library binary50caadd90c38029e with AIDA_CONTAINED unset.
+
+    The literal default-profile `env -u AIDA_CONTAINED cargo test --workspace --no-fail-fast < /dev/null` completed exit101. CLI library result:8985 passed,2 failed,3 ignored. Failures were `advisor_code_gate::tests::worktree_lease_role_takes_precedence_over_roster_role` (expected advisor/Grant, got implementer/Default) and `regen::score::controls::execution_tests::confined_reference_repeats_stub_and_trials_use_independent_roots_and_tools` (isolated child ScoreEnv::new ENOENT at controls.rs1039). Both passed individually from that final binary; regen also passed with the full-run RAM TMPDIR. No full-suite-green claim. A full serial retry was started, then explicitly cancelled following advisor disposition45736e4e at16:07: targeted fix passes, push and use GitHub Build as the gate. No serial result claimed.
+
+    Fresh-context author checker read the actual spec/request, independently audited the frozen three-file delta and all four named launch seams, and found no findings. It ran its own source/diff evidence, no Cargo; it has zero independent review authority. Final direct root runtime evidence is separate.
+
+    Raw default-red, fast-green, targeted-green and individual repro receipts are preserved under `.aida/relay/20261016-095630-codex-batch/bug2172-session8-evidence/`. No own verdict, hold clearance, merge, install or activation. Please reuse review story STORY-1714 for fresh independent re-review at the published head. GitHub Build remains pending external verification.
+  created_at: 2026-10-16T23:08:25.306241099Z
+  modified_at: 2026-10-16T23:08:25.306241099Z
 history:
 - id: 01a14509-d8e8-74d0-b93d-55a55dc2228e
   author: joe
