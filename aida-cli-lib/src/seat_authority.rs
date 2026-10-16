@@ -45,7 +45,7 @@ fn grant_path(id: &str) -> Result<PathBuf> {
     Ok(grant_dir()?.join(format!("{id}.json")))
 }
 
-fn read_grant(id: &str) -> Result<SeatGrant> {
+pub(crate) fn read_grant(id: &str) -> Result<SeatGrant> {
     let path = grant_path(id)?;
     let bytes = std::fs::read(&path).context("session grant is missing or unreadable")?;
     let grant: SeatGrant = serde_json::from_slice(&bytes).context("session grant is malformed")?;
@@ -711,7 +711,12 @@ pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> St
 
 pub(crate) fn require_direct_tty() -> Result<()> {
     use std::io::IsTerminal;
-    if !(std::io::stdin().is_terminal() && std::io::stderr().is_terminal()) {
+    #[cfg(test)]
+    let stdin_term = crate::authority_stdin_is_terminal();
+    #[cfg(not(test))]
+    let stdin_term = std::io::stdin().is_terminal();
+
+    if !(stdin_term && std::io::stderr().is_terminal()) {
         bail!("role grants require a human at an interactive TTY; run `aida role enter` from your terminal");
     }
     Ok(())
@@ -731,11 +736,99 @@ pub(crate) fn require_direct_human() -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-1787 | ai:antigravity
+pub(crate) const DEFAULT_MAX_GRANT_HOURS: u32 = 24;
+pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
+
+/// Parse `[seat] max_grant_hours` from a config file's contents.
+// trace:TASK-1787 | ai:antigravity
+fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
+    let value: toml::Value = toml::from_str(body).ok()?;
+    let table = value.get("seat").or_else(|| value.get("seats"))?;
+    table
+        .get("max_grant_hours")
+        .and_then(|v| v.as_integer())
+        .and_then(|i| if i >= 0 { Some(i as u32) } else { None })
+}
+
+/// Read `[seat] max_grant_hours` from a TOML file path.
+// trace:TASK-1787 | ai:antigravity
+fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
+    let body = std::fs::read_to_string(path).ok()?;
+    parse_max_grant_hours_from_str(&body)
+}
+
+/// Resolve the configured maximum grant lifetime in hours:
+/// Global `~/.aida/config.toml`, then project `.aida/config.toml`, defaulting to 24.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
+    let global_val = crate::aida_home_dir()
+        .map(|h| h.join(".aida").join("config.toml"))
+        .as_deref()
+        .and_then(read_max_grant_hours_file);
+    let project_path = project_root.join(".aida").join("config.toml");
+    let project_val = read_max_grant_hours_file(&project_path);
+    project_val
+        .or(global_val)
+        .unwrap_or(DEFAULT_MAX_GRANT_HOURS)
+}
+
+/// Parse and validate `--ttl <dur>` against the configured cap and hard ceiling.
+/// Returns `Ok(None)` when `--ttl` is omitted (signalling the 24h default).
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn parse_ttl(project_root: &Path, dur_str: Option<&str>) -> Result<Option<Duration>> {
+    let Some(dur_str) = dur_str else {
+        return Ok(None);
+    };
+    let dur_str = dur_str.trim();
+    if dur_str.is_empty() {
+        return Ok(None);
+    }
+    let std_dur = crate::drain_caps::parse_duration(dur_str).ok_or_else(|| {
+        anyhow::anyhow!("invalid grant TTL `{dur_str}`: expected a duration like 72h, 24h, or 90m")
+    })?;
+    let dur = Duration::from_std(std_dur)
+        .map_err(|e| anyhow::anyhow!("invalid grant TTL `{dur_str}`: {e}"))?;
+    if dur <= Duration::zero() {
+        bail!("grant TTL must be positive");
+    }
+    let configured_cap = resolve_max_grant_hours(project_root);
+    if dur > Duration::hours(HARD_CEILING_GRANT_HOURS as i64) {
+        bail!(
+            "requested TTL `{dur_str}` exceeds the hard ceiling of {HARD_CEILING_GRANT_HOURS}h ([seat] max_grant_hours)"
+        );
+    }
+    if dur > Duration::hours(configured_cap as i64) {
+        bail!(
+            "requested TTL `{dur_str}` exceeds the configured cap of {configured_cap}h ([seat] max_grant_hours)"
+        );
+    }
+    Ok(Some(dur))
+}
+
+/// Format a grant's TTL for display (e.g. `72h`, `24h`, `30m`, `1h30m`).
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn format_ttl(ttl: Duration) -> String {
+    let total_mins = ttl.num_minutes();
+    if total_mins <= 0 {
+        return "0m".to_string();
+    }
+    if total_mins % 60 == 0 {
+        format!("{}h", total_mins / 60)
+    } else if total_mins < 60 {
+        format!("{total_mins}m")
+    } else {
+        format!("{}h{:02}m", total_mins / 60, total_mins % 60)
+    }
+}
+
 // trace:STORY-1473, TASK-1592 | ai:antigravity
+// trace:TASK-1787 | ai:antigravity
 pub(crate) fn issue_direct(
     project_root: &Path,
     seat: &str,
     delegable_seats: Vec<String>,
+    ttl: Option<Duration>,
 ) -> Result<SeatGrant> {
     require_direct_human()?;
     // trace:TASK-1594 | ai:claude
@@ -764,6 +857,7 @@ pub(crate) fn issue_direct(
     if delegable_seats.iter().any(|seat| !allowed.contains(seat)) {
         bail!("delegated seats must all be present in the team roster");
     }
+    let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -775,7 +869,7 @@ pub(crate) fn issue_direct(
         delegable_seats,
         parent_grant_id: None,
         issued_at: now,
-        expires_at: now + MAX_GRANT_AGE,
+        expires_at: now + lifetime,
         revoked_at: None,
     };
     write_grant(&grant)?;
@@ -1023,6 +1117,17 @@ pub(crate) mod test_support {
         seat: &str,
         delegable: &[&str],
     ) -> String {
+        mint_grant_for_with_ttl(project_root, subject, seat, delegable, None)
+    }
+
+    // trace:TASK-1787 | ai:antigravity
+    pub(crate) fn mint_grant_for_with_ttl(
+        project_root: &Path,
+        subject: &str,
+        seat: &str,
+        delegable: &[&str],
+        ttl: Option<Duration>,
+    ) -> String {
         // The mint resolves env-derived paths (the grant-store home via
         // `$AIDA_HOME`/`$HOME`); hold the process env lock for the duration
         // unless the caller already does, so a sibling test's guard cannot
@@ -1078,6 +1183,7 @@ pub(crate) mod test_support {
         )
         .unwrap();
 
+        let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
         let now = Utc::now();
         let grant = SeatGrant {
             id: Uuid::new_v4().to_string(),
@@ -1092,7 +1198,7 @@ pub(crate) mod test_support {
                 .collect(),
             parent_grant_id: None,
             issued_at: now,
-            expires_at: now + MAX_GRANT_AGE,
+            expires_at: now + lifetime,
             revoked_at: None,
         };
         write_grant(&grant).unwrap();
@@ -1624,3 +1730,8 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/bug_2011_grant_expiry_verdict_tests.rs"]
 mod bug_2011_grant_expiry_verdict_tests;
+
+// trace:TASK-1787 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1787_grant_ttl_tests.rs"]
+mod task_1787_grant_ttl_tests;

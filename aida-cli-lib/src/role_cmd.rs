@@ -29,6 +29,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             no_resume,
             no_title,
             delegate_seats,
+            ttl,
         } => handle_role_enter(
             &project_root,
             name.as_deref(),
@@ -36,6 +37,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             *no_resume,
             *no_title,
             delegate_seats,
+            ttl.as_deref(),
         ),
         RoleCommand::Add {
             name,
@@ -193,14 +195,22 @@ fn handle_role_enter(
     no_resume: bool,
     no_title: bool,
     delegate_seats: &[String],
+    ttl: Option<&str>,
 ) -> Result<()> {
+    // trace:TASK-1787 | ai:antigravity
+    let requested_ttl = crate::seat_authority::parse_ttl(project_root, ttl)?;
+
     // BUG-1196: stakeholder personas are shell identities, not persisted role
     // files or build seats.  Handle an explicit persona before role lookup so
     // it has the same outcome as choosing that tagged row in the picker.
     // trace:BUG-1196 | ai:codex
     if let Some(persona) = name.and_then(stakeholder_persona_name) {
-        let grant =
-            crate::seat_authority::issue_direct(project_root, persona, delegate_seats.to_vec())?;
+        let grant = crate::seat_authority::issue_direct(
+            project_root,
+            persona,
+            delegate_seats.to_vec(),
+            requested_ttl,
+        )?;
         crate::seat_authority::revoke_current()?;
         emit_persona_enter_eval(project_root, persona, &grant.id);
         return Ok(());
@@ -222,6 +232,7 @@ fn handle_role_enter(
                                 project_root,
                                 persona,
                                 delegate_seats.to_vec(),
+                                requested_ttl,
                             )?;
                             crate::seat_authority::revoke_current()?;
                             emit_persona_enter_eval(project_root, persona, &grant.id);
@@ -302,8 +313,12 @@ Include it in the TTY-issued delegation set?";
         }
     }
 
-    let grant =
-        crate::seat_authority::issue_direct(project_root, &seat_name, final_delegate_seats)?;
+    let grant = crate::seat_authority::issue_direct(
+        project_root,
+        &seat_name,
+        final_delegate_seats,
+        requested_ttl,
+    )?;
     crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
@@ -522,6 +537,7 @@ fn handle_role_add(
         project_root,
         &canonical_role_name(name),
         Vec::new(),
+        None,
     ) {
         Ok(grant) => {
             crate::seat_authority::revoke_current()?;
@@ -1390,6 +1406,19 @@ mod tests {
         );
     }
 
+    // trace:TASK-1787 | ai:antigravity
+    #[test]
+    fn parses_role_enter_ttl() {
+        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--ttl", "72h"])
+            .expect("parse role enter --ttl");
+        let Command::Role(RoleCommand::Enter { name, ttl, .. }) = cli.command else {
+            panic!("expected role enter command");
+        };
+
+        assert_eq!(name.as_deref(), Some("advisor"));
+        assert_eq!(ttl.as_deref(), Some("72h"));
+    }
+
     // trace:STORY-994 | ai:codex
     #[test]
     fn role_enter_launch_title_honors_per_invocation_opt_out() {
@@ -1453,6 +1482,7 @@ mod tests {
             /* no_resume */ true,
             /* no_title */ true,
             &[],
+            None,
         )
         .expect_err("non-TTY role entry must not issue authority");
         assert!(error.to_string().contains("interactive TTY"));

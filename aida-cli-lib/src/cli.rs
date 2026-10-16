@@ -2451,6 +2451,11 @@ pub enum RoleCommand {
         // trace:STORY-1473, TASK-1592 | ai:antigravity
         #[clap(long = "delegate-seat")]
         delegate_seats: Vec<String>,
+
+        /// Grant time-to-live duration (e.g. 72h), capped by [seat] max_grant_hours (default 24, hard ceiling 168h).
+        // trace:TASK-1787 | ai:antigravity
+        #[clap(long)]
+        ttl: Option<String>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists

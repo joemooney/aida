@@ -640,6 +640,37 @@ pub(crate) fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
             "(inherited from shell at start time)".dimmed()
         );
     }
+    // trace:TASK-1787 | ai:antigravity
+    let resolved_grant = {
+        let mut gid = None;
+        #[cfg(target_os = "linux")]
+        if let Some(pid) = lease.creator_pid.or(lease.active_pid) {
+            if let Some(vars) = crate::ps_integrate::read_pid_environ_vars(pid) {
+                gid = vars.get(crate::seat_authority::GRANT_ENV).cloned();
+            }
+        }
+        if gid.is_none() {
+            gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+        }
+        gid.and_then(|id| {
+            let id = id.trim();
+            if id.is_empty() {
+                None
+            } else {
+                crate::seat_authority::read_grant(id).ok()
+            }
+        })
+    };
+    if let Some(grant) = &resolved_grant {
+        let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
+        if ttl > chrono::Duration::zero() {
+            println!(
+                "  {}: {}",
+                "grant ttl".bold(),
+                crate::seat_authority::format_ttl(ttl)
+            );
+        }
+    }
     println!(
         "  {}: {} ({})",
         "started_at".bold(),
