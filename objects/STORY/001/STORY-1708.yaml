@@ -1,0 +1,33 @@
+id: 01a145ec-d8da-70b3-8b18-83319b844dd2
+spec_id: STORY-1708
+agreed_id: STORY-1708
+title: 'Review PR-2703: [AI:codex] fix(regen): bound generated command execution and output (TASK-1791)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a145da`) for branch `codex/task-1791`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2703>
+  - Branch: `codex/task-1791` → `main`
+
+  ## Covers
+
+  - TASK-1791
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2703` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-16T18:15:12.346678776Z
+modified_at: 2026-10-16T18:15:12.346678776Z
+req_type: Story
+filed_at:
+  code_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: codex
