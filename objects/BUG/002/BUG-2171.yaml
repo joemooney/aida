@@ -8,8 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:46.162235280Z
-modified_at: 2026-10-16T14:53:11.202591236Z
+modified_at: 2026-10-16T22:28:24.158140224Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a146d3-5d56-76f1-bbf7-191f06c63a08
+  created_at: 2026-10-16T22:28:24.158137283Z
+  created_by: joe
 history:
 - id: 01a14533-e49d-7611-ae2f-4a4e672ecc28
   author: aida-auto-bump
