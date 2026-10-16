@@ -3232,16 +3232,6 @@ pub(crate) fn handle_review_record_at(
     // this spec) so merge surfaces now read the verdict instead.
     // trace:STORY-1405 | ai:claude
     clear_review_markers_for_verdict(&project_root, spec, pr);
-    // The record-time stamp binds grant, subject, session and recorder; it does
-    // not bind the SHA, verdict or timestamp (the same-user trust limit remains).
-    // trace:STORY-1687 | ai:codex
-    if kind == review_verdict::VerdictKind::Approved {
-        if let Some(pr) = pr {
-            if let Err(error) = crate::rework_hold_release::auto_release(&project_root, pr) {
-                eprintln!("  merge-hold remains armed: {error:#}");
-            }
-        }
-    }
     // TASK-1450: a recorded review verdict is a reviewer-seat coordination
     // decision — the other gap BUG-1423's event feed left (that bug closed
     // the merge-path gap; this is the review-path gap). Emitted only after
@@ -3269,6 +3259,20 @@ pub(crate) fn handle_review_record_at(
             recorded_sha.as_deref(),
         )
     );
+    // The record-time stamp binds grant, subject, session and recorder; it does
+    // not bind the SHA, verdict or timestamp (the same-user trust limit remains).
+    // trace:STORY-1687 | ai:codex
+    if kind == review_verdict::VerdictKind::Approved {
+        if let Some(pr) = pr {
+            // STORY-1697: say what the approval released, or why the hold
+            // stays armed. No hold at all is not news. trace:STORY-1697 | ai:claude
+            match crate::rework_hold_release::auto_release(&project_root, pr) {
+                Ok(crate::rework_hold_release::Outcome::NoHold) => {}
+                Ok(outcome) => println!("  {}", outcome.line(pr)),
+                Err(error) => eprintln!("  PR #{pr}: merge-hold remains armed: {error:#}"),
+            }
+        }
+    }
     if kind.blocks_done() {
         let detail = summary
             .filter(|s| !s.trim().is_empty())

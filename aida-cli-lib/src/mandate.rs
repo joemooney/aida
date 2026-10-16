@@ -748,24 +748,51 @@ impl HoldFacts {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MandateRefusal {
     NoMandate,
-    Expired { id: String },
-    Stopped { id: String },
-    NotAdvisor { seat: Option<String> },
-    PrincipalMismatch { mandate: String, grant: String },
+    Expired {
+        id: String,
+    },
+    Stopped {
+        id: String,
+    },
+    NotAdvisor {
+        seat: Option<String>,
+    },
+    PrincipalMismatch {
+        mandate: String,
+        grant: String,
+    },
     OverrideStale,
     SpecsUnresolved,
-    AlwaysHuman { spec: String, class: String },
+    AlwaysHuman {
+        spec: String,
+        class: String,
+    },
     LedgerUnreadable(String),
     NoHoldMarker,
     MarkerMissing,
-    HoldNotReleasable { kind: String },
-    HistoryUnreadable { spec: String, why: String },
-    Excluded { spec: String, why: String },
+    HoldNotReleasable {
+        kind: String,
+    },
+    HistoryUnreadable {
+        spec: String,
+        why: String,
+    },
+    Excluded {
+        spec: String,
+        why: String,
+    },
     ShipperUnanchored,
-    AdvisorAuthored { author: String },
+    AdvisorAuthored {
+        author: String,
+    },
     ApproverIsShipper,
     Approval(String),
     StaleApproval(String),
+    /// STORY-1697: releasing a sensitive rework hold on approval needs a
+    /// mandate minted with `--include-supervised`.
+    SupervisedNotIncluded {
+        id: String,
+    },
 }
 
 impl MandateRefusal {
@@ -819,6 +846,9 @@ impl MandateRefusal {
                 "the approval was recorded by this shipping session; it must come from an independent reviewer or a human".to_string()
             }
             Self::Approval(m) | Self::StaleApproval(m) => m.clone(),
+            Self::SupervisedNotIncluded { id } => format!(
+                "mandate {id} was not minted with --include-supervised, so it does not cover sensitive specs"
+            ),
         };
         format!("PR-{pr}: the fire-fighting mandate does not cover this ship: {why}")
     }
@@ -865,6 +895,96 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
 /// every input is gathered by the caller, at the instant of the decision.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, MandateRefusal> {
+    let mandate = hold_cover(c)?;
+    let shipper = &c.policy.shipper;
+    if !crate::review_authority::has_identity_anchor(shipper) {
+        return Err(MandateRefusal::ShipperUnanchored);
+    }
+    if let Some(author) = c.policy.author_sessions.iter().find(|a| a.matches(shipper)) {
+        return Err(MandateRefusal::AdvisorAuthored {
+            author: author.label.clone(),
+        });
+    }
+    if let Some(refusal) = crate::pr_ship::approval_authority_refusal(c.candidates, c.policy) {
+        return Err(MandateRefusal::Approval(
+            crate::pr_ship::approval_authority_refusal_message(0, &refusal),
+        ));
+    }
+    // The approval authority gate passed, so a newest approval exists.
+    let approvals: Vec<_> = c
+        .candidates
+        .iter()
+        .filter(|v| v.kind.approves() && !v.is_closed())
+        .cloned()
+        .collect();
+    if let Some(newest) = crate::pr_ship::newest_approval(&approvals) {
+        let recorder = newest
+            .attestation
+            .as_ref()
+            .map(|a| a.identity.clone())
+            .unwrap_or_default();
+        let verified = newest
+            .attestation
+            .as_ref()
+            .and_then(|a| a.authority_key(newest.recorded_at.as_deref()))
+            .and_then(|k| c.policy.verified_authority.get(&k).cloned())
+            .unwrap_or_default();
+        if crate::review_authority::identities_overlap(shipper, &recorder)
+            || crate::review_authority::identities_overlap(shipper, &verified)
+        {
+            return Err(MandateRefusal::ApproverIsShipper);
+        }
+    }
+    if let Some(refusal) = crate::pr_ship::approval_head_refusal(c.candidates, c.head) {
+        return Err(MandateRefusal::StaleApproval(
+            crate::pr_ship::approval_head_refusal_message(0, &refusal),
+        ));
+    }
+    Ok(mandate.id.clone())
+}
+
+/// STORY-1697: may an active mandate release a REWORK hold on a sensitive
+/// spec when its advisor records an approval? The same mandate, seat, hold
+/// and sticky spec-class checks as [`ship_decision`], restricted to a typed
+/// rework hold and to a mandate minted with `--include-supervised`.
+/// Operator-only and decide-mode specs are never covered. The approval's own
+/// authority is judged by the caller (`rework_hold_release`), which also
+/// owns the head check — this releases a hold, it does not merge.
+// trace:STORY-1697 | ai:claude
+pub(crate) fn rework_release_decision(
+    c: &ShipCheck<'_>,
+) -> std::result::Result<String, MandateRefusal> {
+    match c.hold {
+        HoldFacts::Marker {
+            kind: crate::merge_hold::HoldReasonKind::Rework,
+            legacy: false,
+        } => {}
+        HoldFacts::Marker { kind, legacy } => {
+            return Err(MandateRefusal::HoldNotReleasable {
+                kind: format!(
+                    "{}{} (an approval releases only a typed rework hold)",
+                    if *legacy { "untyped legacy " } else { "" },
+                    kind.as_str()
+                ),
+            })
+        }
+        HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
+        HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+    }
+    let mandate = hold_cover(c)?;
+    if !mandate.include_supervised {
+        return Err(MandateRefusal::SupervisedNotIncluded {
+            id: mandate.id.clone(),
+        });
+    }
+    Ok(mandate.id.clone())
+}
+
+/// STORY-1698: the half of [`ship_decision`] that judges the mandate, the
+/// seat, the hold and the specs — everything but the shipping session and
+/// its approval. Shared with [`rework_release_decision`] (STORY-1697).
+// trace:STORY-1698 | ai:claude
+fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, MandateRefusal> {
     let mandate = match c.state {
         MandateState::None => return Err(MandateRefusal::NoMandate),
         MandateState::Expired(m) => return Err(MandateRefusal::Expired { id: m.id.clone() }),
@@ -986,51 +1106,7 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
             });
         }
     }
-    let shipper = &c.policy.shipper;
-    if !crate::review_authority::has_identity_anchor(shipper) {
-        return Err(MandateRefusal::ShipperUnanchored);
-    }
-    if let Some(author) = c.policy.author_sessions.iter().find(|a| a.matches(shipper)) {
-        return Err(MandateRefusal::AdvisorAuthored {
-            author: author.label.clone(),
-        });
-    }
-    if let Some(refusal) = crate::pr_ship::approval_authority_refusal(c.candidates, c.policy) {
-        return Err(MandateRefusal::Approval(
-            crate::pr_ship::approval_authority_refusal_message(0, &refusal),
-        ));
-    }
-    // The approval authority gate passed, so a newest approval exists.
-    let approvals: Vec<_> = c
-        .candidates
-        .iter()
-        .filter(|v| v.kind.approves() && !v.is_closed())
-        .cloned()
-        .collect();
-    if let Some(newest) = crate::pr_ship::newest_approval(&approvals) {
-        let recorder = newest
-            .attestation
-            .as_ref()
-            .map(|a| a.identity.clone())
-            .unwrap_or_default();
-        let verified = newest
-            .attestation
-            .as_ref()
-            .and_then(|a| a.authority_key(newest.recorded_at.as_deref()))
-            .and_then(|k| c.policy.verified_authority.get(&k).cloned())
-            .unwrap_or_default();
-        if crate::review_authority::identities_overlap(shipper, &recorder)
-            || crate::review_authority::identities_overlap(shipper, &verified)
-        {
-            return Err(MandateRefusal::ApproverIsShipper);
-        }
-    }
-    if let Some(refusal) = crate::pr_ship::approval_head_refusal(c.candidates, c.head) {
-        return Err(MandateRefusal::StaleApproval(
-            crate::pr_ship::approval_head_refusal_message(0, &refusal),
-        ));
-    }
-    Ok(mandate.id.clone())
+    Ok(mandate)
 }
 
 // ── Ledger ──────────────────────────────────────────────────────────────────

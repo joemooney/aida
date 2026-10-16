@@ -1759,6 +1759,11 @@ pub(crate) fn mandate_ship_cover(
     head_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
     override_stale_approval: bool,
+    // STORY-1697: `ship_decision` for a ship; `rework_release_decision` for
+    // an approval releasing its rework hold. trace:STORY-1697 | ai:claude
+    decide: fn(
+        &crate::mandate::ShipCheck<'_>,
+    ) -> std::result::Result<String, crate::mandate::MandateRefusal>,
 ) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
     use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::mandate::current_state_reporting(true);
@@ -1845,7 +1850,7 @@ pub(crate) fn mandate_ship_cover(
     let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
     let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
     let hold = HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref());
-    let id = crate::mandate::ship_decision(&ShipCheck {
+    let id = decide(&ShipCheck {
         state: &state,
         now: chrono::Utc::now(),
         grant: grant.as_ref().map(|(s, p)| (s.as_str(), p.as_str())),
@@ -2610,6 +2615,7 @@ pub(crate) fn pr_ship_handler(
             Some(&ship_branch),
             || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
             override_stale_approval,
+            crate::mandate::ship_decision,
         )
     };
     let mut mandate_cover = mandate_cover_now();

@@ -5,6 +5,10 @@ use chrono::Utc;
 use std::cell::Cell;
 
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+/// No mandate is active (STORY-1697): sensitive specs stay held.
+fn no_mandate() -> Result<String> {
+    bail!("no mandate is active")
+}
 struct Fixture {
     hold: mh::MergeHoldRecord,
     body: Value,
@@ -48,13 +52,14 @@ impl Fixture {
             grant,
         }
     }
-    fn check(&self) -> Result<mh::VerdictRef> {
+    fn check(&self) -> Result<Release> {
         eligible(
             &self.hold,
             &self.body,
             HEAD,
             &[Some(&self.req)],
             &sa::GrantCheck::Valid(self.grant.clone()),
+            &no_mandate,
         )
     }
     fn refused(&self, why: &str) {
@@ -130,12 +135,17 @@ fn invalid_or_absent_reviewer_grant_cannot_release() {
             reason: sa::GrantRejection::Unreadable,
         },
     ] {
-        assert!(
-            eligible(&f.hold, &f.body, HEAD, &[Some(&f.req)], &authority)
-                .unwrap_err()
-                .to_string()
-                .contains("grant")
-        );
+        assert!(eligible(
+            &f.hold,
+            &f.body,
+            HEAD,
+            &[Some(&f.req)],
+            &authority,
+            &no_mandate
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("grant"));
     }
 }
 #[test]
@@ -247,8 +257,8 @@ fn each_sensitive_metadata_trigger_requires_human() {
 fn missing_covered_specs_and_one_sensitive_member_stay_held() {
     let f = Fixture::new();
     let grant = sa::GrantCheck::Valid(f.grant.clone());
-    assert!(eligible(&f.hold, &f.body, HEAD, &[], &grant).is_err());
-    assert!(eligible(&f.hold, &f.body, HEAD, &[None], &grant).is_err());
+    assert!(eligible(&f.hold, &f.body, HEAD, &[], &grant, &no_mandate).is_err());
+    assert!(eligible(&f.hold, &f.body, HEAD, &[None], &grant, &no_mandate).is_err());
     let mut other = f.req.clone();
     other.title = "Credential logging".into();
     assert!(eligible(
@@ -256,7 +266,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         &f.body,
         HEAD,
         &[Some(&f.req), Some(&other)],
-        &grant
+        &grant,
+        &no_mandate
     )
     .is_err());
 }
@@ -364,7 +375,15 @@ fn expired_revoked_subject_roster_and_parent_grants_stay_held() {
             seat: Some("reviewer".into()),
             reason,
         };
-        let error = eligible(&f.hold, &f.body, HEAD, &[Some(&f.req)], &authority).unwrap_err();
+        let error = eligible(
+            &f.hold,
+            &f.body,
+            HEAD,
+            &[Some(&f.req)],
+            &authority,
+            &no_mandate,
+        )
+        .unwrap_err();
         assert!(error.to_string().starts_with("reviewer grant rejected:"));
     }
 }
@@ -816,6 +835,8 @@ fn auto_release_fixture(change: ReleaseChange) {
                     sa::GrantCheck::Valid(grant)
                 }
             },
+            approval_authority: &|_| Ok(()),
+            mandate: &no_mandate,
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
                 Ok(())
@@ -937,7 +958,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             assert_eq!(hold_reads.get(), change_at - 1);
         }
     } else {
-        assert!(result.unwrap());
+        assert_eq!(result.unwrap(), Outcome::Released { mandate: None });
         assert!(!mh::hold_path(root.path(), 37).exists());
         assert!(mh::clearance_path(root.path(), 37).is_file());
         assert_eq!(comments.borrow().len(), 1);
@@ -1401,6 +1422,7 @@ fn malformed_matching_heads_cannot_authorize_release() {
             head,
             &[Some(&f.req)],
             &sa::GrantCheck::Valid(f.grant.clone()),
+            &no_mandate,
         )
         .unwrap_err();
         assert!(error.to_string().contains("unverifiable head"));

@@ -68,6 +68,38 @@ pub(crate) fn sensitive(req: &aida_core::Requirement) -> Option<String> {
     None
 }
 
+/// What an eligible approval releases: the verdict reference written into the
+/// hold ledger, and the mandate that covered a sensitive spec, when one did.
+// trace:STORY-1697 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Release {
+    pub verdict: mh::VerdictRef,
+    pub mandate: Option<String>,
+}
+
+/// The outcome of one auto-release attempt that did not refuse.
+// trace:STORY-1697 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Outcome {
+    NoHold,
+    Released { mandate: Option<String> },
+}
+
+impl Outcome {
+    pub(crate) fn line(&self, pr: u64) -> String {
+        match self {
+            Self::NoHold => format!("PR #{pr}: no active local hold"),
+            Self::Released { mandate: None } => {
+                format!("PR #{pr}: merge-hold auto-released by recorded verdict")
+            }
+            Self::Released { mandate: Some(id) } => format!(
+                "PR #{pr}: merge-hold auto-released by recorded verdict ({})",
+                crate::mandate::release_note(id)
+            ),
+        }
+    }
+}
+
 fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffset>> {
     let text = value
         .and_then(Value::as_str)
@@ -75,14 +107,18 @@ fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffse
     DateTime::parse_from_rfc3339(text).with_context(|| format!("invalid {context} timestamp"))
 }
 
-/// Pure eligibility: callers inject the revalidated recorded reviewer's grant.
+/// Pure eligibility: callers inject the revalidated recorded reviewer's grant
+/// and the mandate lookup. `mandate` is consulted only after every other
+/// check passed and only when a covered spec is sensitive; `Ok(id)` lets an
+/// active `--include-supervised` mandate cover that spec (STORY-1697).
 fn eligible(
     hold: &mh::MergeHoldRecord,
     body: &Value,
     head: &str,
     specs: &[Option<&aida_core::Requirement>],
     authority: &sa::GrantCheck,
-) -> Result<mh::VerdictRef> {
+    mandate: &dyn Fn() -> Result<String>,
+) -> Result<Release> {
     ensure!(
         !hold.legacy
             && hold.reason_kind == mh::HoldReasonKind::Rework
@@ -96,10 +132,20 @@ fn eligible(
         !specs.is_empty(),
         "covered specs are missing; human clear required"
     );
+    let mut sensitive_reason = None;
     for req in specs {
         let req = req.context("covered spec is missing or unreadable; human clear required")?;
+        // Operator-only and decide-mode specs never release without a human,
+        // whatever a mandate says. trace:STORY-1697 | ai:claude
+        if let Some(class) = crate::mandate::always_human_class(req) {
+            let human = format!("{class} spec always requires a human clear");
+            match sensitive(req) {
+                Some(reason) => bail!("{reason}; {human}"),
+                None => bail!("{human}"),
+            }
+        }
         if let Some(reason) = sensitive(req) {
-            bail!("{reason}");
+            sensitive_reason.get_or_insert(reason);
         }
     }
     ensure!(
@@ -179,12 +225,37 @@ fn eligible(
         .context("hold has no arming verdict reference")?
         .key
         .clone();
-    Ok(mh::VerdictRef::new(
-        &key,
-        Some(hold.pr),
-        Some(head.into()),
-        Some(reviewer.into()),
-    ))
+    // STORY-1697: a sensitive spec still needs a human clear unless an active
+    // mandate minted with --include-supervised covers this release.
+    // trace:STORY-1697 | ai:claude
+    let mandate = match sensitive_reason {
+        None => None,
+        Some(reason) => Some(mandate().map_err(|why| anyhow::anyhow!("{reason} ({why:#})"))?),
+    };
+    Ok(Release {
+        verdict: mh::VerdictRef::new(
+            &key,
+            Some(hold.pr),
+            Some(head.into()),
+            Some(reviewer.into()),
+        ),
+        mandate,
+    })
+}
+
+/// BUG-1918's approval gate at the PR's current head, as the drain merge
+/// applies it: the newest open approval carries a re-validated recorder
+/// attestation from a session independent of the PR's authors, and it covers
+/// `head`. Release refuses on either.
+// trace:STORY-1697 | ai:claude
+pub(crate) fn approval_attested(
+    candidates: &[rv::RecordedVerdict],
+    policy: &crate::pr_ship::ShipApprovalPolicy,
+    head: &str,
+    pr: u64,
+) -> Result<()> {
+    crate::pr_merge_gate::drain_merge_approval_gate(candidates, policy, Some(head), pr)
+        .map_err(|failure| anyhow::anyhow!("{}", failure.reason))
 }
 
 /// I/O seam shared by automatic recording and explicit retries. A failed audit
@@ -193,11 +264,12 @@ fn eligible(
 fn release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,
-    verdict: &mh::VerdictRef,
+    release: &Release,
     mut validate: impl FnMut() -> Result<String>,
     comment: impl FnOnce(&str) -> Result<()>,
     labels: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
+    let verdict = &release.verdict;
     ensure!(
         Some(validate()?.as_str()) == verdict.reviewed_sha.as_deref(),
         "PR head moved before release"
@@ -214,13 +286,26 @@ fn release_with(
         let mut approved_hold = hold.clone();
         approved_hold.target_head_sha = verdict.reviewed_sha.clone();
         mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
+        // trace:STORY-1697 | ai:claude
+        if let Some(id) = &release.mandate {
+            let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+            audit["released_under_mandate"] = Value::String(id.clone());
+            aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
+        }
     }
     if !same
         || !existing
             .as_ref()
             .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
     {
-        comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and covered specs require no human signoff.",
+        let specs = match &release.mandate {
+            None => "covered specs require no human signoff".to_string(),
+            Some(id) => format!(
+                "a sensitive covered spec is {}",
+                crate::mandate::release_note(id)
+            ),
+        };
+        comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.",
             verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
         let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
         audit["audit_comment_posted"] = Value::Bool(true);
@@ -245,20 +330,31 @@ struct AutoReleaseIo<'a> {
     read_body: &'a dyn Fn(&str) -> Result<Value>,
     read_corpus: &'a dyn Fn(&[String]) -> Result<Vec<(String, String)>>,
     grant_check: &'a dyn Fn(&str, &str) -> sa::GrantCheck,
+    /// BUG-1918 attestation + head coverage ([`approval_attested`]).
+    // trace:STORY-1697 | ai:claude
+    approval_authority: &'a dyn Fn(&str) -> Result<()>,
+    /// The mandate covering a sensitive release, re-read on every call.
+    mandate: &'a dyn Fn() -> Result<String>,
     comment: &'a dyn Fn(&str) -> Result<()>,
     labels: &'a dyn Fn() -> Result<()>,
 }
 
-pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
+pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
     let root = crate::main_worktree_root_from(project);
     let Some(hold) = mh::read_hold_record(&root, pr) else {
-        return Ok(false);
+        return Ok(Outcome::NoHold);
     };
     let kind = crate::forge::resolve_open_change_forge_kind(&root);
     let pin = mh::resolve_pinned_repo(&root, kind)
         .map_err(anyhow::Error::msg)?
         .context("no forge repository for auto-release")?;
     let live_head = || mh::fetch_pinned_change(&root, kind, pr).map_err(anyhow::Error::msg);
+    let known_ids: Vec<String> = hold
+        .spec
+        .iter()
+        .filter(|spec| !spec.starts_with("PR-"))
+        .cloned()
+        .collect();
     let verdict_root = std::cell::Cell::new(None::<&Path>);
     auto_release_with(
         &root,
@@ -306,6 +402,33 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<bool> {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
             },
             grant_check: &|id, subject| sa::grant_check_for(&root, id, subject),
+            // trace:STORY-1697 | ai:claude
+            approval_authority: &|head| {
+                let (candidates, policy) = crate::pr_cmd::merge_approval_inputs(
+                    &[project, root.as_path()],
+                    &root,
+                    pr,
+                    &known_ids,
+                    None,
+                    Some(head),
+                );
+                approval_attested(&candidates, &policy, head, pr)
+            },
+            mandate: &|| {
+                crate::pr_cmd::mandate_ship_cover(
+                    project,
+                    &root,
+                    &root,
+                    pr,
+                    &known_ids,
+                    None,
+                    || open_change_head(live_head().ok().flatten()).ok(),
+                    false,
+                    crate::mandate::rework_release_decision,
+                )
+                .map(|cover| cover.id)
+                .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(pr)))
+            },
             comment: &|body| {
                 let (cli, args) = match kind {
                     crate::forge::ForgeKind::GitHub => ("gh", vec!["pr", "comment"]),
@@ -352,7 +475,7 @@ fn auto_release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,
     io: AutoReleaseIo<'_>,
-) -> Result<bool> {
+) -> Result<Outcome> {
     let head = open_change_head((io.live_head)()?)?;
     let key = &hold
         .verdict_ref
@@ -362,7 +485,7 @@ fn auto_release_with(
     let check = |body: &Value,
                  ids: &[String],
                  store: &aida_core::RequirementsStore|
-     -> Result<mh::VerdictRef> {
+     -> Result<Release> {
         // Display/origin IDs can collide across distinct canonical requirements.
         // Refuse ambiguity at eligibility and at both release-time rechecks.
         // trace:STORY-1687 | ai:codex
@@ -396,14 +519,24 @@ fn auto_release_with(
             .get("subject")
             .and_then(Value::as_str)
             .context("approval lacks reviewer subject")?;
-        eligible(hold, body, &head, &specs, &(io.grant_check)(id, subject))
+        let release = eligible(
+            hold,
+            body,
+            &head,
+            &specs,
+            &(io.grant_check)(id, subject),
+            io.mandate,
+        )?;
+        // trace:STORY-1697 | ai:claude
+        (io.approval_authority)(&head)?;
+        Ok(release)
     };
     let (ids, store) = (io.covered_specs)()?;
-    let verdict = check(&(io.read_body)(key)?, &ids, &store)?;
+    let release = check(&(io.read_body)(key)?, &ids, &store)?;
     release_with(
         root,
         hold,
-        &verdict,
+        &release,
         || {
             let current_head = open_change_head((io.live_head)()?)?;
             ensure!(
@@ -415,8 +548,8 @@ fn auto_release_with(
             // trace:STORY-1687 | ai:codex
             let (ids, store) = (io.covered_specs)()?;
             ensure!(
-                check(&(io.read_body)(key)?, &ids, &store)? == verdict,
-                "approval changed before release"
+                check(&(io.read_body)(key)?, &ids, &store)? == release,
+                "approval changed before release (or its covering mandate did)"
             );
             let bodies = (io.read_corpus)(&ids)?;
             ensure!(
@@ -431,9 +564,15 @@ fn auto_release_with(
         io.comment,
         io.labels,
     )?;
-    Ok(true)
+    Ok(Outcome::Released {
+        mandate: release.mandate,
+    })
 }
 
 #[cfg(test)]
 #[path = "tests/story_1687_rework_release_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/story_1697_attested_release_tests.rs"]
+mod story_1697_tests;
