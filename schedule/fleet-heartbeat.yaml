@@ -1,3 +1,8 @@
 job: fleet-heartbeat
-due_since: 2026-10-16T04:44:28.553466878Z
-due_reason: every 1h
+last_run: 2026-10-16T09:25:44.852475699Z
+last_by:
+  seat: advisor
+  session: b0657c59-d482-4ef7-a931-e3c7b919e148
+  vendor: claude
+result: done
+note: '02:26 census: 5 claude fixers (TASK-1784, #2678 merge-up, BUG-2169, #2673 merge-up, STORY-1697) plus agy (#2691 r2, #2692 rework) all progressing; 6 PRs held for rework; shipped #2687 and #2690.'
