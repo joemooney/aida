@@ -1531,23 +1531,6 @@ pub(crate) fn clarify_default_specs(backend: &aida_core::CachedGitBackend) -> Re
     Ok(out)
 }
 
-// BUG-2171: monotonic containment — a contained parent's env always wins
-// (BUG-2151 ruling). Under a contained parent, clarify must launch contained.
-// trace:BUG-2171 | ai:antigravity
-pub(crate) fn validate_questions_clarify_contained(contained: bool) -> Result<()> {
-    if contained {
-        let config = crate::agent_launch::AgentLaunchConfig {
-            agent_type: "claude",
-            binary: "claude",
-            default_args: crate::session::claude_contained_flags(),
-            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
-            contained: true,
-        };
-        crate::agent_launch::refuse_uncontained_child_of_contained_parent(&config)?;
-    }
-    Ok(())
-}
-
 /// `aida questions clarify [<spec>...]` — fire up an INTERACTIVE advisor
 /// (`claude "/aida-clarify <specs>"`, never headless `claude -p`) that walks
 /// the human through authoring acceptance criteria for under-specified specs.
@@ -1606,7 +1589,6 @@ pub(crate) fn questions_clarify(
     );
 
     let contained = session::aida_contained_env()?;
-    validate_questions_clarify_contained(contained)?;
 
     // Build the interactive invocation. Unlike the headless drain, clarify
     // needs a human at the keyboard, so it launches plain interactive

@@ -422,6 +422,7 @@ fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
         ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
     ]);
 
     let prompt = "/aida-pickup BUG-1680";

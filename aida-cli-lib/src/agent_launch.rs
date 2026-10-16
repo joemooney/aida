@@ -2046,16 +2046,8 @@ pub(crate) fn resolve_claude_new_posture(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if parent_contained {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, parent_contained)?;
     let contained_posture = || -> Result<ClaudeNewPosture> {
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
@@ -3067,13 +3059,8 @@ pub(crate) fn resolve_interactive_launch_mode_under_parent(
     if !parent_contained {
         return resolve_interactive_launch_mode_for_root(flag, sandbox, root);
     }
-    if let Some(m) = flag.filter(|s| !s.is_empty()) {
-        anyhow::bail!(
-            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
-             is contained too — refusing `--permission-mode {m}`, which would run it with a \
-             different posture. Drop --permission-mode, or launch from an uncontained shell."
-        );
-    }
+    // trace:BUG-2172 | ai:codex
+    session::refuse_contained_permission_override(flag.filter(|s| !s.is_empty()), true)?;
     // trace:BUG-2131 | ai:claude
     aida_core::git_ops::ensure_git_supports_contained()?;
     Ok(ResolvedClaudeLaunch {
