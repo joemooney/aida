@@ -9,12 +9,12 @@ description: |-
     - Unknown (pid_start missing/unreadable): it may really be the agent. Suggest 'ps -p <pid>', then a manual kill.
   - Add an agent_stop_in_project test: a live sleep with pid_start=None gives Err, no signal, and the entry kept.
   - Also fix the SIGKILL re-check test race: have the TERM-ignoring sh write a ready marker after 'trap' and wait for it before sending TERM.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T18:54:51.040293500Z
-modified_at: 2026-10-15T19:45:09.061412654Z
+modified_at: 2026-10-16T02:33:53.524430420Z
 req_type: Task
 relationships:
 - rel_type:
@@ -37,6 +37,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1428f-0c74-7241-81ea-175ff63751bd
+  author: aida-orchestrator
+  timestamp: 2026-10-16T02:33:53.524454567Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
@@ -45,3 +52,11 @@ filed_at:
   aida_build_sha: bfddcbee42
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'STANDARD round 1: never signals unconfirmed (no BUG-2148 regression), but ''recycled'' includes inconclusive comparisons, so a possibly-live agent is reported gone with a gc hint that gc won''t act on'
+  recovery_hint: address the review findings, move TASK-1782 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-16T02:33:53.524430420Z
