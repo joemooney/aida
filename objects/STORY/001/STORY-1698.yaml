@@ -23,13 +23,21 @@ description: |-
   - Refused cases: expired mandate; missing attestation; stale sha; advisor-authored PR; excluded spec class without --include-supervised; non-advisor seat.
   - 'mandate stop' takes effect immediately, and the ledger entries exist.
   Tier: STRICT (merge authority). Rules: architecture change, so the implementer posts IMPLEMENTER SKETCH on this story and gets advisor signoff before implementing.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:42.111598429Z
-modified_at: 2026-10-16T00:52:42.111598429Z
+modified_at: 2026-10-16T00:52:53.940522797Z
 req_type: Story
+history:
+- id: 01a14232-9634-7ff2-9397-aecbc5be8cd4
+  author: joe
+  timestamp: 2026-10-16T00:52:53.940517723Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 84a04dc111d04db11f26375d2a7d12d68f1ed930
   branch: main
