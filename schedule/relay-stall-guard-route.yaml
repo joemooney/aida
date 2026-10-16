@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'Promoted binary predates #2690; the guard command is unsupported until the next dev build. Rebuilding.'
+due_since: 2026-10-16T09:30:02.977585361Z
+due_reason: on CronJobFailed:relay-stall-guard
+due_failure:
+  trip_id: relay-stall-guard@2026-10-16T09:25:05.232498836Z
+  job: relay-stall-guard
+  error: 'exit 127: this aida binary does not support the command of scheduled job ''relay-stall-guard'': unknown scheduled task command ''doctor check relay-stall --fail-on-findings''; valid commands: cache verify, cache refresh --history --if-behind, cache refresh --if-requested, session reap, queue gc, notify check, doctor, doctor check performance --fail-on-findings, fetch --code-only, store compact, store gc, doctor check remote-drift --fail-on-findings, doctor check stale-remote-branches --fail-on-findings, doctor check runaway-seats --fail-on-findings, doctor check disk-headroom --fail-on-findings, doctor check merged-agent-worktrees --fail-on-findings, remote mirror-sync, shift tick'
