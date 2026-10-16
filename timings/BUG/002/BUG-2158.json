@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2158",
+  "publishes": [
+    {
+      "at": "2026-10-16T06:22:39.022065818Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T19:23:22.032442448Z",
+      "spec": "BUG-2158",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:17:34.412882552Z",
+      "spec": "BUG-2158",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2689,
+        "verdict": "APPROVED",
+        "reviewed_sha": "99e6baef64552f1058a180ce215d473c0ef239f3"
+      }
+    },
+    {
+      "ts": "2026-10-16T06:22:26.862056612Z",
+      "spec": "BUG-2158",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2689
+      }
+    },
+    {
+      "ts": "2026-10-16T06:22:39.003975535Z",
+      "spec": "BUG-2158",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8e004a52ae9f4e4c518a10b661f9d1f8ba41b833",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
