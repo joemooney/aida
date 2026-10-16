@@ -141,12 +141,46 @@ mod tests {
         let cache = tempfile::TempDir::new_in("/var/tmp").unwrap();
         let mut channel = GuardChannel::new(cache.path()).unwrap();
         channel._keepalive = File::open("/dev/null").unwrap();
+        // A child forked by a concurrent test thread holds a copy of the
+        // writer until its exec, so EOF can lag the drop. The collector stops
+        // on its own once it sees EOF; wait for that (bounded) instead of
+        // racing it with collect(), which never waits (BUG-2160).
+        // trace:BUG-2160 | ai:claude
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !channel.collector.as_ref().unwrap().is_finished() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "collector never observed the writer's EOF"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         assert_eq!(channel.collect().unwrap(), ["guard_channel_eof"]);
         let mut channel = GuardChannel::new(cache.path()).unwrap();
         use std::io::Write;
         channel._keepalive.write_all(b"prior-hit\n").unwrap();
-        let start = std::time::Instant::now();
-        assert_eq!(channel.collect().unwrap(), ["prior-hit"]);
-        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+        // An escaped descendant inherits the FIFO writer and outlives the run.
+        // It becomes the only writer, so the FIFO cannot reach EOF until it
+        // exits. Collection must return while it is still alive: a structural
+        // check, not a wall-clock bound that load can break (BUG-2160).
+        // trace:BUG-2160 | ai:claude
+        let writer = channel._keepalive.try_clone().unwrap();
+        let mut descendant = std::process::Command::new("sleep")
+            .arg("120")
+            .stdin(std::process::Stdio::null())
+            .stdout(writer)
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        channel._keepalive = File::open("/dev/null").unwrap();
+        let hits = channel.collect();
+        let descendant_alive = descendant.try_wait().unwrap().is_none();
+        let _ = descendant.kill();
+        let _ = descendant.wait();
+        assert!(
+            descendant_alive,
+            "collection waited for the descendant holding the writer to exit"
+        );
+        // No EOF: the descendant still held the writer when collection ended.
+        assert_eq!(hits.unwrap(), ["prior-hit"]);
     }
 }

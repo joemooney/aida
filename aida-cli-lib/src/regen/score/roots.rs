@@ -193,6 +193,18 @@ impl Drop for Quarantine {
     }
 }
 
+/// The parent PID from `/proc/<pid>/status`, if the process is still readable.
+// trace:BUG-2160 | ai:claude
+fn parent_pid(proc_dir: &Path) -> Option<i32> {
+    std::fs::read_to_string(proc_dir.join("status"))
+        .ok()?
+        .lines()
+        .find_map(|line| line.strip_prefix("PPid:"))?
+        .trim()
+        .parse()
+        .ok()
+}
+
 /// Advisory only: namespace/process races prevent this from being a universal
 /// no-survivors guarantee. Open pidfds keep best-effort signals bound to the
 /// observed process identity instead of a subsequently reused numeric PID.
@@ -218,6 +230,17 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
         // A process may vanish, be inaccessible, or predate pidfd support. It
         // can still be counted; never signal an unpinned PID in that case.
         let identity = (fd >= 0).then(|| unsafe { File::from_raw_fd(fd) });
+        // A live child of this process is never a survivor: every scored
+        // command was waited for, so whatever outlived it was reparented away
+        // from us. A child forked by another thread, though, holds copies of
+        // all our descriptors (the guard pipe included) until its exec, and
+        // matching it here SIGKILLed unrelated concurrent spawns, such as a
+        // `git cat-file` dying with empty stderr (BUG-2160). Read after the
+        // pidfd pins the identity, so a reused PID is never signalled.
+        // trace:BUG-2160 | ai:claude
+        if parent_pid(&entry.path()) == Some(std::process::id() as i32) {
+            continue;
+        }
         let under_root = ["cwd", "root", "exe"].iter().any(|name| {
             std::fs::read_link(entry.path().join(name))
                 .ok()
@@ -257,6 +280,35 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    // trace:BUG-2160 | ai:claude
+    #[test]
+    fn live_children_of_the_scorer_are_never_survivors() {
+        use std::process::{Command, Stdio};
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().to_path_buf();
+        // Our own live child under the root, standing in for a concurrent
+        // thread's spawn caught mid-fork: neither counted nor killed.
+        let mut child = Command::new("sleep")
+            .arg("60")
+            .current_dir(&root)
+            .stdin(Stdio::null())
+            .spawn()
+            .unwrap();
+        // An escaped descendant: its parent exited, so it was reparented.
+        let out = Command::new("/bin/sh")
+            .args(["-c", "sleep 60 </dev/null >/dev/null 2>&1 & echo $!"])
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let count = survivors(std::slice::from_ref(&root), None, true).unwrap();
+        let child_alive = child.try_wait().unwrap().is_none();
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(child_alive, "the scan killed a live child of the scorer");
+        assert_eq!(count, 1, "only the reparented descendant is a survivor");
+    }
 
     #[test]
     fn overlapping_rw_roots_and_aliases_refuse() {

@@ -409,7 +409,21 @@ fn errors() {
     // trace:TASK-1532 | ai:agy
     {
         let _env = crate::test_env::EnvVarGuard::set("BUG_1682_PANIC", "1");
-        assert!(std::panic::catch_unwind(|| add(ROLE, entry(1, 0))).is_err());
+        // The injected panic is expected and caught. Silence its report: this
+        // child's stderr is the parent's, and a "panicked at" line in a CI log
+        // reads as a failure (BUG-2161). The child runs one test on one
+        // thread, so the process-wide hook swap affects nothing else.
+        // trace:BUG-2161 | ai:claude
+        let report = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let caught = std::panic::catch_unwind(|| add(ROLE, entry(1, 0)));
+        std::panic::set_hook(report);
+        // Silenced, so pin the payload: only the injected unwind may pass.
+        let payload = caught.expect_err("injected panic must unwind");
+        assert_eq!(
+            payload.downcast_ref::<&str>().copied(),
+            Some("injected unwind before publication")
+        );
     }
     assert_eq!(std::fs::read(&path).unwrap(), committed);
     let (mut next, _) = spawn(&home(), "one", 2, "");
