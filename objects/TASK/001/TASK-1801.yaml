@@ -1,0 +1,20 @@
+id: 01a14729-d448-78c2-93b9-ec1505dbe2a3
+spec_id: TASK-1801
+agreed_id: TASK-1801
+title: Standalone reviewer hardening follow-ups from the TASK-1786 STRICT r2 review
+description: 'Non-blocking follow-ups from the #2704 review at 0069e89f84. (1) Test the rework call site: a rework_role_input(for_role, resolved) helper, or a handle_queue_rework-level test, so that swapping queue_cmd.rs:8623 to direct(for_role_resolved) fails a test. (2) A FIFO test that the pre-PR symlink_metadata path would fail. (3) Reject a symlinked .aida/review-verdicts dir (openat with O_DIRECTORY|O_NOFOLLOW) and st_nlink>1; move the remaining path-based verdict readers (review_verdict.rs ~1512, ~1605) to the handle-based helper; check that anchor_display is the PR''s backing spec. (4) Document that a direct ''aida session start --role reviewer'' no longer coexists with a live implementer lease (fails closed, intended). STRICT review.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T00:01:26.088698762Z
+modified_at: 2026-10-17T00:01:26.088698762Z
+req_type: Task
+filed_at:
+  code_sha: 30e4171bed78120cf272e1eef52649921f028294
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 30e4171bed
+  vendor: claude
+  session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
