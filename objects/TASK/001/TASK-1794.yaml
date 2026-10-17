@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:56.498956423Z
-modified_at: 2026-10-17T06:00:23.365483088Z
+modified_at: 2026-10-17T06:03:49.144288428Z
 req_type: Task
 comments:
 - id: 01a1486f-6bb5-7541-8987-2b2f866edb98
@@ -26,6 +26,11 @@ comments:
   content: 'Author follow-up before final handoff: a last path audit found that parser still accepted documented-interactive-only --plan-only with --no-human; the separate headless builder ignores resolved plan posture. PR2713 returned to draft and spec In Progress while adding an early clap conflict (including aliases) plus real parser regression. This closes the unsupported combination before lifecycle setup without widening headless release APIs. Final targeted/fast checks will rerun; prior ready-head64072b7 evidence is superseded for final delivery.'
   created_at: 2026-10-17T06:00:23.365483088Z
   modified_at: 2026-10-17T06:00:23.365483088Z
+- id: 01a14875-9a18-7033-aee1-a3211768167d
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T06:03:49.144288428Z
+  modified_at: 2026-10-17T06:03:49.144288428Z
 history:
 - id: 01a14865-04c5-7fc0-b914-96deb5acf813
   author: aida-session-start
