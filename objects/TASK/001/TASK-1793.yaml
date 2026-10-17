@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-16T22:27:10.792354812Z
+modified_at: 2026-10-17T00:06:47.414190553Z
 req_type: Task
 relationships:
 - rel_type:
@@ -49,6 +49,20 @@ comments:
   content: 'Published non-completing draft PR #2710, exact OPEN draft head82766c5b588862d53d008c8b6c6e9cddeffdd948, base codex/story-1674, actual body/title/head verified. AIDA launcher half locally verified: full workspace test-target compile1380.3s, fast30, new6 +existing102 passed; final fresh author checker independently reran all108 with no findings (third round, no independent review authority). Parent remains incomplete pending relay localTASK-119 approval/implementation and parent#2682 merge. No author verdict, hold clear, main merge, install or activation.'
   created_at: 2026-10-16T22:26:48.266896758Z
   modified_at: 2026-10-16T22:26:48.266896758Z
+- id: 01a1472e-bb76-7872-968a-6985844ea3b2
+  author: ai:codex:joe
+  content: |
+    Relay launcher half delivered: joemooney/aida-relay draft PR #96
+    https://github.com/joemooney/aida-relay/pull/96
+    Exact OPEN draft head e5ebd063962e73c9567ec7697105fd520e712337 (normal push, origin/REST verified). Relay-local TASK-119 is Done on its branch, pending independent review and merge.
+
+    Every launched relay session now receives the selected CLI's explicitly reported --version as AIDA_HARNESS_VERSION from a bounded noninteractive probe; failed/blank/invalid detection clears inherited context. Native Bash byte/UTF-8 validation, capped output and whole-pipeline timeout preserve existing runner guards. No optional effort change, model inference or transcript parsing.
+
+    Final startup26 passed. All31 shell suites exercised: final discovery30 passed/1 audit failed before the last inventory fix; the complete affected slot suite passed after that fix, and startup26 passed again. No single all-green full-discovery run at final head, Rust runtime, clippy, or current-head CI-green claim. ShellCheck/fmt/diff passed. Three author checker passes; final checker26 startup+502 byte-oracle cases passed, no findings. One subsequent mechanical Bash-inventory registration was verified by complete slot-suite runtime. These checks provide zero independent review authority.
+
+    TASK-1793 remains incomplete. Its AIDA agent-new half #2710 stays draft/stacked until #2682 lands; #2682 is still OPEN at349e7f68d7. No author verdict/clearance/ship/main merge/install/activation/Completed. Please route relay#96 for independent review. Optional effort-column expansion remains excluded.
+  created_at: 2026-10-17T00:06:47.414190553Z
+  modified_at: 2026-10-17T00:06:47.414190553Z
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
   author: aida-session-start
