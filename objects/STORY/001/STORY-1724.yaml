@@ -1,0 +1,33 @@
+id: 01a14a70-33b5-7563-baa2-e6232eac17da
+spec_id: STORY-1724
+agreed_id: STORY-1724
+title: 'Review PR-2718: [AI:codex] docs(mandate): inspect three more complete blocker sets (TASK-1800)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14a68`) for branch `codex/task-1800-audit-twelve`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2718>
+  - Branch: `codex/task-1800-audit-twelve` → `codex/task-1800-semantic-audit-next`
+
+  ## Covers
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2718` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T15:17:09.685123143Z
+modified_at: 2026-10-17T15:17:09.685123143Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
