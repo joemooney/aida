@@ -1,3 +1,8 @@
+Contained plan-only queue pickups select Claude plan mode while retaining
+contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
+Plan-only rejects headless flags before setup; headless drains use --with-plan.
+<!-- trace:TASK-1794 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.

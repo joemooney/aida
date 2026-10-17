@@ -10975,7 +10975,11 @@ pub(crate) fn resolve_queue_work_posture(
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
     let (permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
+        // Plan mode and containment are independent: retain the sandbox flags
+        // while requesting the planning permission posture.
+        // trace:TASK-1794 | ai:codex
+        let mode = if plan_only { "plan" } else { "dontAsk" };
+        (Some(mode.to_string()), "contained sandbox")
     } else {
         resolve_queue_work_permission_mode(
             permission_mode,
