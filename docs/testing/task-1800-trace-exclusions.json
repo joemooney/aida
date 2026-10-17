@@ -1,0 +1,2827 @@
+{
+  "version": 1,
+  "collector_sha256": "a72616ecc36cc328a0fc528234d5a74c0d190b30f3125014653f1e688b462938",
+  "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
+  "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
+  "named_refusals": 22,
+  "additional_full_file_refusals": 27,
+  "additional_hunk_refusals": 27,
+  "hunk_fallback_cases": 50,
+  "hunk_fallback_case_paths": 290,
+  "unreadable_cases": 0,
+  "rows": [
+    {
+      "base": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+      "branch": "codex/task-1789",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 179,
+        "ids_sha256": "56f70366280bef15eeea175c25a96e610df4524a446717d68134d5a144c26ec9"
+      },
+      "head": "007c853a0fb0d0f42a8835af04e608d1269fbcef",
+      "merge": "7dd7aee9de535329db3d4a8caf1883d7cf6c3c35",
+      "merged_at": "2026-10-16T20:53:13Z",
+      "pr": 2705,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md"
+        ],
+        "ids_count": 81,
+        "ids_sha256": "f8531521493677d52c48be6b9c5c94a8b77b6fc5f55fbe9ff47ac368e363ad2f"
+      },
+      "subjects": [
+        "[AI:codex] chore(git): merge main after mandate integration (TASK-1789)",
+        "[AI:codex] chore(git): merge main for independent review (TASK-1789)",
+        "[AI:codex] fix(session): revoke pooled child grants and close preflight gaps (TASK-1789)"
+      ],
+      "title": "[AI:codex] fix(session): revoke pooled child grants and close preflight gaps (TASK-1789)",
+      "classification": {
+        "base": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1789",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "007c853a0fb0d0f42a8835af04e608d1269fbcef",
+        "named": [
+          "TASK-1789"
+        ],
+        "pr": 2705,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1789",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+      "branch": "codex/task-1790",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 140,
+        "ids_sha256": "4215f13cd3607addf856abdbcf9eab5bafd417ea97d8fc0cff4528b3bdf2486c"
+      },
+      "head": "218d0250cb0fe31e58f7595b96283d24e5758eca",
+      "merge": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+      "merged_at": "2026-10-16T19:56:44Z",
+      "pr": 2707,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md"
+        ],
+        "ids_count": 55,
+        "ids_sha256": "1509e852e9a8baedcb2571b99fe574c914d045c899307ecac40a9040ed47279a"
+      },
+      "subjects": [
+        "[AI:codex] fix(mandate): validate ledger metadata and clarify re-arm audits (TASK-1790)"
+      ],
+      "title": "[AI:codex] fix(mandate): validate ledger metadata and clarify re-arm audits (TASK-1790)",
+      "classification": {
+        "base": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        },
+        "head": "218d0250cb0fe31e58f7595b96283d24e5758eca",
+        "named": [
+          "TASK-1790"
+        ],
+        "pr": 2707,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "branch": "codex/story-1677",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 54,
+        "ids_sha256": "9d5aa43634eefde035d21fbe1c64abc379ac52f1e340d3a31e3c103aa9a55505"
+      },
+      "head": "92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4",
+      "merge": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+      "merged_at": "2026-10-16T18:46:50Z",
+      "pr": 2679,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/completeness.rs",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 53,
+        "ids_sha256": "466198ec3a3e763ac42976ba571165c98451e8d7b0b0dc9bece0a1d7131c73da"
+      },
+      "subjects": [
+        "[AI:claude] chore(merge): merge origin/main into codex/story-1677 (STORY-1677)",
+        "[AI:claude] test(regen): give the STORY-1676 control fixture a complete tool (STORY-1677)",
+        "[AI:claude] chore(merge): merge origin/main into codex/story-1677 after #2673 squash (STORY-1677)",
+        "[AI:codex] test(regen): isolate scoring fixtures and exercise actual helper mutation (STORY-1677)",
+        "[AI:codex] feat(regen): check component completeness and split diagnostic scores (STORY-1677)",
+        "[AI:codex] test(regen): scope executable cache fixture to Linux (TASK-1734)",
+        "[AI:codex] test(regen): share one environment guard in cache regression (TASK-1734)",
+        "[AI:codex] fix(regen): cache display summaries and bound committed reads (TASK-1734)",
+        "[AI:codex] feat(regen): surface score and age in statusline and digest (TASK-1734)"
+      ],
+      "title": "[AI:codex] feat(regen): check completeness and split component diagnostics (STORY-1677)",
+      "classification": {
+        "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          }
+        },
+        "head": "92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4",
+        "named": [
+          "STORY-1677",
+          "TASK-1734"
+        ],
+        "pr": 2679,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "branch": "codex/task-1792",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 16,
+        "ids_sha256": "db890dda49e8ad81887b3e941d8822dde2725a417b4f83638066b9738f65c3ba"
+      },
+      "head": "9d4002c627d8b7e98a3e42626323d6283544046a",
+      "merge": "08f6a4af7a143146d283518fd43dca481b0ef4d6",
+      "merged_at": "2026-10-16T18:11:00Z",
+      "pr": 2701,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/relay_stall.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "ids_count": 16,
+        "ids_sha256": "db890dda49e8ad81887b3e941d8822dde2725a417b4f83638066b9738f65c3ba"
+      },
+      "subjects": [
+        "[AI:codex] fix(relay): detect dead owners and bound stall alerts (TASK-1792)"
+      ],
+      "title": "[AI:codex] fix(relay): detect dead owners and bound stall alerts (TASK-1792)",
+      "classification": {
+        "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1337",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          }
+        },
+        "head": "9d4002c627d8b7e98a3e42626323d6283544046a",
+        "named": [
+          "TASK-1792"
+        ],
+        "pr": 2701,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1337",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+      "branch": "bug-2165-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 656,
+        "ids_sha256": "cd959602b878fbe2ef2a64d5eb2284703035b0c4d40b1a4978832293745c890b"
+      },
+      "head": "3ec1b703c0676af1553ffebde59114af90cd0ce0",
+      "merge": "502aa04ca4ea03483d57588366a6a67b1f058512",
+      "merged_at": "2026-10-16T18:06:10Z",
+      "pr": 2692,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/leases.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2165_headless_child_grant_isolation_tests.rs"
+        ],
+        "ids_count": 356,
+        "ids_sha256": "96ab05823667d9138f554fd3daed653839df69bcece9d9f634a4731c7e6ea5b9"
+      },
+      "subjects": [
+        "[AI:codex] test(session): complete merged grant TTL lease fixture (BUG-2165)",
+        "[AI:codex] chore(integration): merge main after burndown conflict resolution (BUG-2165)",
+        "Merge branch 'origin/main' into bug-2165-work",
+        "Merge branch 'origin/main' into bug-2165-work",
+        "[AI:antigravity] fix(session): address review feedback on trace and baseline notice (BUG-2165)",
+        "[AI:antigravity] fix(session): route headless CI-fix and quiet burndown through child grant and scrub PURPOSE (BUG-2165)"
+      ],
+      "title": "[AI:antigravity] fix(session): route headless CI-fix and quiet burndown through child grant and scrub PURPOSE (BUG-2165)",
+      "classification": {
+        "base": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2165",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "3ec1b703c0676af1553ffebde59114af90cd0ce0",
+        "named": [
+          "BUG-2165"
+        ],
+        "pr": 2692,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2165",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+      "branch": "codex/story-1673",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 983,
+        "ids_sha256": "cda6656f8322c392ccda141863e09d779720eabe2c828314498bb79efd7f062b"
+      },
+      "head": "cf6ecf1bcb62988ff28bc8534095db9305f6d608",
+      "merge": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "merged_at": "2026-10-16T16:39:34Z",
+      "pr": 2683,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "Cargo.lock",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/schema.rs",
+          "aida-cli-lib/src/verify_cmd.rs",
+          "aida-core/src/constraints.rs",
+          "aida-core/src/constraints_tests.rs",
+          "aida-core/src/export.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/models.rs",
+          "aida-generate-types/Cargo.toml",
+          "docs/cli-format-json-audit.md",
+          "docs/cli/08-reporting.md",
+          "docs/plans/2026-10-15-story-1673-constraint-probes.md",
+          "scripts/generate-format-json-audit.py",
+          "shared/types.ts"
+        ],
+        "ids_count": 924,
+        "ids_sha256": "7c9c1378ac965015ba9c52332b60e78a27a3b1e016d3fff421ee0e23a7d8df9d"
+      },
+      "subjects": [
+        "Merge remote-tracking branch 'origin/main' into codex/story-1673",
+        "[AI:claude] merge: origin/main into codex/story-1673 (STORY-1673)",
+        "[AI:claude] fix(constraints): skip retired rows, portable tests, CI fixtures (STORY-1673)",
+        "Merge origin/main into codex/story-1673 (STORY-1673)",
+        "[AI:codex] build(types): publish constraint verification bindings (STORY-1673)",
+        "[AI:codex] test(constraints): keep injection payload fixtures portable (STORY-1673)",
+        "[AI:codex] feat(constraints): report explicit built-in host verification (STORY-1673)",
+        "[AI:codex] docs(plan): record signed constraint probe implementation (STORY-1673)"
+      ],
+      "title": "[AI:codex] feat(constraints): verify host facts with built-in probes (STORY-1673)",
+      "classification": {
+        "base": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "STORY-1673",
+            "why": "sticky ledger: keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "cf6ecf1bcb62988ff28bc8534095db9305f6d608",
+        "named": [
+          "STORY-1673"
+        ],
+        "pr": 2683,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "STORY-1673",
+            "why": "sticky ledger: keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "branch": "task-1787",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 763,
+        "ids_sha256": "77515c0a9e71a523b0e58fb49c0288af019ed473e909c835d525e8631c723e7a"
+      },
+      "head": "d8d16437ce5fe52f26feaea5c3f5b11b91e09570",
+      "merge": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+      "merged_at": "2026-10-16T16:13:00Z",
+      "pr": 2691,
+      "scoped": {
+        "fallbacks": [
+          "CHANGELOG.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/config_cmd.rs",
+          "aida-cli-lib/src/kernel.rs",
+          "aida-cli-lib/src/seat_authority.rs",
+          "aida-cli-lib/src/tests/task_1787_grant_ttl_tests.rs",
+          "docs/cli/06-roles-sessions.md",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 737,
+        "ids_sha256": "8cd8d9ee0aa3fa02429d07eba5ffb3ccc6d92b8c89e9696b3329fec8b1018ba8"
+      },
+      "subjects": [
+        "[AI:antigravity] fix(authority): classify config.toml readers and assert worktree cannot raise cap (TASK-1787)",
+        "Merge branch 'origin/main' into task-1787",
+        "[AI:antigravity] fix(authority): address round-2 review feedback on grant ttl tests (TASK-1787)",
+        "[AI:antigravity] feat(authority): operator-chosen grant ttl and max_grant_hours cap (TASK-1787)",
+        "[AI:antigravity] feat(authority): operator-chosen grant ttl and max_grant_hours cap (TASK-1787)"
+      ],
+      "title": "[AI:antigravity] feat(authority): operator-chosen grant ttl and max_grant_hours cap (TASK-1787)",
+      "classification": {
+        "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1787",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "d8d16437ce5fe52f26feaea5c3f5b11b91e09570",
+        "named": [
+          "TASK-1787"
+        ],
+        "pr": 2691,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1787",
+            "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "branch": "task-1784",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 134,
+        "ids_sha256": "04144adcf0fb537dc796332be62f081665b03a3717cc25af4c235a36efafaefb"
+      },
+      "head": "06c6c50962f24641bd341c5b11112d00053f5f84",
+      "merge": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+      "merged_at": "2026-10-16T15:50:37Z",
+      "pr": 2698,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/session_reap.rs",
+          "aida-cli-lib/src/worktree_gc.rs",
+          "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "ids_count": 82,
+        "ids_sha256": "c0afb58185cd641f06a4becee154fc1374745e4f4d30d9eccd3e6aa6ac021945"
+      },
+      "subjects": [
+        "[AI:claude] fix(worktree): liveness-gated re-mint, mint before release (TASK-1784)",
+        "Merge remote-tracking branch 'origin/main' into task-1784",
+        "[AI:claude] fix(worktree): re-mint after a hand-deleted worktree instead of a misleading refusal (TASK-1784)"
+      ],
+      "title": "[AI:claude] fix(worktree): re-mint after a hand-deleted worktree instead of a misleading refusal (TASK-1784)",
+      "classification": {
+        "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1533",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          }
+        },
+        "head": "06c6c50962f24641bd341c5b11112d00053f5f84",
+        "named": [
+          "TASK-1784"
+        ],
+        "pr": 2698,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1533",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "branch": "codex/task-1734",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 86,
+        "ids_sha256": "705fe23d2be266d4665d6ed37ea54181dfd8025f265a9087f233a5c4dc486bdf"
+      },
+      "head": "826c3352e4ccecf11795e95d9a9614c27c4f8f39",
+      "merge": "a2cecb69741328a6b9238634f60dee50d23dbe42",
+      "merged_at": "2026-10-16T15:39:18Z",
+      "pr": 2673,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/digest.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "aida-cli-lib/src/regen/score/report/cache.rs",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 82,
+        "ids_sha256": "44de3f0f0bc640ad7ac8c71275a1ef1a0e572755dca63a03ad7d929ace7ceb70"
+      },
+      "subjects": [
+        "Merge remote-tracking branch 'origin/main' into codex/task-1734",
+        "Merge remote-tracking branch 'origin/main' into codex/task-1734",
+        "[AI:claude] fix(config-trust): inventory regen report cache config read (TASK-1734)",
+        "Merge remote-tracking branch 'origin/main' into codex/task-1734",
+        "[AI:codex] test(regen): scope executable cache fixture to Linux (TASK-1734)",
+        "[AI:codex] test(regen): share one environment guard in cache regression (TASK-1734)",
+        "[AI:codex] fix(regen): cache display summaries and bound committed reads (TASK-1734)",
+        "[AI:codex] feat(regen): surface score and age in statusline and digest (TASK-1734)"
+      ],
+      "title": "[AI:codex] feat(regen): surface score and age in statusline and digest (TASK-1734)",
+      "classification": {
+        "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1924",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          }
+        },
+        "head": "826c3352e4ccecf11795e95d9a9614c27c4f8f39",
+        "named": [
+          "TASK-1734"
+        ],
+        "pr": 2673,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1924",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "branch": "story-1697",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 191,
+        "ids_sha256": "484eba14040fae1139fddac66f97338759eeb057a4323db898189da31d4b9e9f"
+      },
+      "head": "57ee0a5281253191556cfd9a625326091f381665",
+      "merge": "6d9ea04f5fa0822cef3a791bf78486c5ebce3ae3",
+      "merged_at": "2026-10-16T15:10:31Z",
+      "pr": 2695,
+      "scoped": {
+        "fallbacks": [
+          ".aida/discipline/git-sync-and-review.md",
+          "aida-cli-lib/src/mandate.rs",
+          "aida-cli-lib/src/rework_hold_release.rs",
+          "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs",
+          "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs",
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "docs/agents/aida-repository-guide.md"
+        ],
+        "ids_count": 108,
+        "ids_sha256": "2bbe959153f21eda230ae7b2dd093056a5af476fbdee1083ce012ddd96ee737f"
+      },
+      "subjects": [
+        "[AI:claude] fix(review): mandate release honours the two-person rule (STORY-1697)",
+        "[AI:claude] feat(review): an attested approval releases its rework hold in place (STORY-1697)"
+      ],
+      "title": "[AI:claude] feat(review): an attested approval releases its rework hold in place (STORY-1697)",
+      "classification": {
+        "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        },
+        "head": "57ee0a5281253191556cfd9a625326091f381665",
+        "named": [
+          "STORY-1697"
+        ],
+        "pr": 2695,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "branch": "bug-2171-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 172,
+        "ids_sha256": "77aab67759dd8a28ed0b6b380cf0f942cf5567403d0ff2e7abbd2f0badc8c041"
+      },
+      "head": "1ddcc54fb8110e6533561b0d45e1f7c335aca4c5",
+      "merge": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "merged_at": "2026-10-16T14:52:58Z",
+      "pr": 2696,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2171_2170_contained_builders_tests.rs"
+        ],
+        "ids_count": 74,
+        "ids_sha256": "b8e5f89754978d74443e7b4a4e243e058464667bb6f7dea37ad286106d280643"
+      },
+      "subjects": [
+        "[AI:antigravity] fix(containment): enforce containment and purpose scrub in burndown, intake, clarify (BUG-2171 BUG-2170)"
+      ],
+      "title": "[AI:antigravity] fix(containment): enforce containment and purpose scrub in burndown, intake, clarify (BUG-2171 BUG-2170)",
+      "classification": {
+        "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2170",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "1ddcc54fb8110e6533561b0d45e1f7c335aca4c5",
+        "named": [
+          "BUG-2170",
+          "BUG-2171"
+        ],
+        "pr": 2696,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2170",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "branch": "codex/story-1675",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 302,
+        "ids_sha256": "55fe1539b0101ce70ed0a32df747bcc697ed34f86d7fb3c96cbd50c90c96a226"
+      },
+      "head": "88329ff1903079c3468eb0f6bc56a9464529efda",
+      "merge": "1f5e08becb2bfa23c73ec23d4cfb6b50b784f5c3",
+      "merged_at": "2026-10-16T14:48:21Z",
+      "pr": 2684,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/edit_rebase.rs",
+          "aida-cli-lib/src/schema.rs",
+          "aida-core/src/db/mod.rs",
+          "aida-core/src/db/tests/hypothesis_tests.rs",
+          "aida-core/src/export.rs",
+          "aida-core/src/hypothesis.rs",
+          "aida-core/src/import.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/models.rs",
+          "aida-web-react/src/components/dashboard/StatusChart.tsx",
+          "aida-web-react/src/components/kanban/KanbanBoard.tsx",
+          "aida-web-react/src/lib/constants.ts",
+          "docs/cli/02-specs.md",
+          "shared/types.ts"
+        ],
+        "ids_count": 173,
+        "ids_sha256": "37e95deced8bdb89f1737395c946fdbf9ae8cfbd1708813c92a10b4d4e19a996"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/story-1675",
+        "[AI:claude] fix(hypothesis): scope lock checks to the write set and allow ordinary identity replacement (STORY-1675)",
+        "Merge remote-tracking branch 'origin/main' into codex/story-1675",
+        "[AI:codex] fix(web): keep regenerated enum consumers exhaustive (STORY-1675)",
+        "[AI:codex] feat(hypothesis): enforce sticky canonical preregistration locks (STORY-1675)"
+      ],
+      "title": "[AI:codex] feat(hypothesis): sticky preregistration locks (STORY-1675)",
+      "classification": {
+        "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "AUTH-0001",
+            "why": "unresolved trace/spec id"
+          }
+        },
+        "head": "88329ff1903079c3468eb0f6bc56a9464529efda",
+        "named": [
+          "STORY-1675"
+        ],
+        "pr": 2684,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "AUTH-0001",
+            "why": "unresolved trace/spec id"
+          }
+        }
+      }
+    },
+    {
+      "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "branch": "bug-2164-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 92,
+        "ids_sha256": "06806e57efc5d3abb7c42eabb60066ea51d1960b2055d4bb38c9267750e5e4cc"
+      },
+      "head": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a",
+      "merge": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "merged_at": "2026-10-16T12:59:57Z",
+      "pr": 2697,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/pr_ship.rs",
+          "aida-cli-lib/src/tests/bug_2164_default_branch_ship_refusal_tests.rs"
+        ],
+        "ids_count": 92,
+        "ids_sha256": "06806e57efc5d3abb7c42eabb60066ea51d1960b2055d4bb38c9267750e5e4cc"
+      },
+      "subjects": [
+        "[AI:antigravity] fix(ship): refuse pr ship on default branch without PR number (BUG-2164)"
+      ],
+      "title": "[AI:antigravity] fix(ship): refuse pr ship on default branch without PR number (BUG-2164)",
+      "classification": {
+        "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        },
+        "head": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a",
+        "named": [
+          "BUG-2164"
+        ],
+        "pr": 2697,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1167",
+            "why": "guided/operator execution requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+      "branch": "bug-2166-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 345,
+        "ids_sha256": "70809a2e839787ee37cf2e281d7abe2e5f5dd51aeb59a91ccdf936a44531bac8"
+      },
+      "head": "45f646c54c3ffc9d757351bab2bf572b33111826",
+      "merge": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "merged_at": "2026-10-16T11:03:39Z",
+      "pr": 2693,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/queue_cmd.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2166_contained_parent_escape_tests.rs"
+        ],
+        "ids_count": 345,
+        "ids_sha256": "70809a2e839787ee37cf2e281d7abe2e5f5dd51aeb59a91ccdf936a44531bac8"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-2166-work",
+        "[AI:antigravity] fix(queue): plan-only honours contained parent and refuses permission-mode (BUG-2166)"
+      ],
+      "title": "[AI:antigravity] fix(queue): plan-only honours contained parent and refuses permission-mode (BUG-2166)",
+      "classification": {
+        "base": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2166",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "45f646c54c3ffc9d757351bab2bf572b33111826",
+        "named": [
+          "BUG-2166"
+        ],
+        "pr": 2693,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2166",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+      "branch": "codex/story-1679",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 686,
+        "ids_sha256": "5b4698f34c32a2efccd7babc3a0e780971c71125f7acd1ff32ceafec93fbd59b"
+      },
+      "head": "58ce1964dda751c3f7134ea9b8ff54945aa7d55c",
+      "merge": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+      "merged_at": "2026-10-16T10:27:41Z",
+      "pr": 2678,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/consensus.rs",
+          "aida-cli-lib/src/regen/score.rs"
+        ],
+        "ids_count": 686,
+        "ids_sha256": "5b4698f34c32a2efccd7babc3a0e780971c71125f7acd1ff32ceafec93fbd59b"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/story-1679",
+        "[AI:claude] merge(regen): merge origin/main into STORY-1679 consensus scoring (STORY-1679)",
+        "[AI:codex] test(regen): select reopened consensus drafts by identity (STORY-1679)",
+        "[AI:codex] fix(regen): accept rounded consensus scores and retain gap dedup (STORY-1679)",
+        "[AI:codex] feat(regen): report consensus failures and file draft amendments (STORY-1679)"
+      ],
+      "title": "[AI:codex] feat(regen): report consensus failures and file draft amendments (STORY-1679)",
+      "classification": {
+        "base": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "58ce1964dda751c3f7134ea9b8ff54945aa7d55c",
+        "named": [
+          "STORY-1679"
+        ],
+        "pr": 2678,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "branch": "story-1699-heartbeat",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 245,
+        "ids_sha256": "b230459dcc60cba791f7f65c290957cc2e358ac960ab9cea1852bb251a4a1f3e"
+      },
+      "head": "acc8c0c690e61d02bf424526a00381d372314af9",
+      "merge": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+      "merged_at": "2026-10-16T09:19:37Z",
+      "pr": 2690,
+      "scoped": {
+        "fallbacks": [
+          ".aida/config.toml",
+          "aida-cli-lib/src/doctor_root.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/relay_stall.rs",
+          "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "ids_count": 176,
+        "ids_sha256": "892fd5c0437ae03d20432fdf6eb63dde078de11ec4e7f7822bfb784b96888522"
+      },
+      "subjects": [
+        "Merge branch 'main' into story-1699-heartbeat",
+        "[AI:antigravity] docs(autonomy): remove spec-id leak in relay-stall prose (STORY-1699)",
+        "[AI:claude] feat(schedule): hourly fleet heartbeat and relay stall guard (STORY-1699)"
+      ],
+      "title": "[AI:claude] feat(schedule): hourly fleet heartbeat and relay stall guard (STORY-1699)",
+      "classification": {
+        "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-55",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "acc8c0c690e61d02bf424526a00381d372314af9",
+        "named": [
+          "STORY-1699"
+        ],
+        "pr": 2690,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-55",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+      "branch": "story-1698-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 886,
+        "ids_sha256": "c97f74b1634dd6996148427ff6bb16fa4568a4a7ec9a300e8ed9966384de3ad4"
+      },
+      "head": "1fcfa134735ca0cb0f0f4e72ced1979b0a25ebe3",
+      "merge": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "merged_at": "2026-10-16T08:43:07Z",
+      "pr": 2687,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/events.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/mandate.rs",
+          "aida-cli-lib/src/merge_hold.rs",
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/tests/story_1698_mandate_tests.rs",
+          "docs/cli-format-json-audit.md",
+          "docs/cli/04-git-lifecycle.md",
+          "docs/monitor-contract-fixtures/events-follow.json"
+        ],
+        "ids_count": 828,
+        "ids_sha256": "5ebcee7ffffdda7df7d34ecc462dee3c8f4b80ae6da27816e4bd1c87bb775a45"
+      },
+      "subjects": [
+        "Merge branch 'main' into story-1698-work",
+        "[AI:claude] fix(ship): add MandateChanged to the monitor contract fixture (STORY-1698)",
+        "[AI:antigravity] fix(ship): satisfy spec-id-in-help and store-git-guard lints (STORY-1698)",
+        "[AI:claude] fix(ship): harden the fire-fighting mandate per review (STORY-1698)",
+        "[AI:claude] fix(ship): mandate exclusion is sticky across a spec's store history (STORY-1698)",
+        "[AI:claude] feat(ship): fire-fighting mandate lets the advisor ship held PRs (STORY-1698)"
+      ],
+      "title": "[AI:claude] feat(ship): fire-fighting mandate lets the advisor ship held PRs (STORY-1698)",
+      "classification": {
+        "base": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "STORY-1698",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "1fcfa134735ca0cb0f0f4e72ced1979b0a25ebe3",
+        "named": [
+          "STORY-1698"
+        ],
+        "pr": 2687,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "STORY-1698",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "branch": "bug-2160-2161-deflake",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 19,
+        "ids_sha256": "1ff38e8fb4e403ca619c2d68f04cea4521a9d18d5748ae008dec89c01d56d0e2"
+      },
+      "head": "9c7ba29c813eb3ee907a2772e705d9224037444e",
+      "merge": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+      "merged_at": "2026-10-16T07:33:03Z",
+      "pr": 2686,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/shift.rs"
+        ],
+        "ids_count": 16,
+        "ids_sha256": "dd8274998c4be4bc946a704d54123e1b52a8981230082d58017d4f51732faf25"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-2160-2161-deflake",
+        "[AI:claude] test: narrow survivor skip to pre-exec forks of the scorer binary (BUG-2160 BUG-2161)",
+        "[AI:claude] test: deflake fork-window races in regen guard, scorer and shift-lock tests (BUG-2160 BUG-2161)"
+      ],
+      "title": "[AI:claude] test: deflake fork-window races in regen guard, scorer and shift-lock tests (BUG-2160 BUG-2161)",
+      "classification": {
+        "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2160-2161",
+            "why": "unresolved trace/spec id"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "9c7ba29c813eb3ee907a2772e705d9224037444e",
+        "named": [
+          "BUG-2160",
+          "BUG-2160-2161",
+          "BUG-2161"
+        ],
+        "pr": 2686,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2160-2161",
+            "why": "unresolved trace/spec id"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "463b81d02796148deba3c59c47daefce584c35f4",
+      "branch": "bug-2139-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 523,
+        "ids_sha256": "cbd742a4eec13682c38d680ae56403b6c4ddb02bf23d3ba80e4efa15075c5740"
+      },
+      "head": "4a1cacb65210e615f8e436e1e92d230c5822ca01",
+      "merge": "b8784ba39419f2dedfb0acd95e33eef3a865d084",
+      "merged_at": "2026-10-16T07:28:26Z",
+      "pr": 2688,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/drain_gate.rs",
+          "aida-cli-lib/src/seat_authority.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/tests/bug_1808_delegation_preflight_tests.rs",
+          "aida-cli/tests/bug_2139_headless_child_grant.rs"
+        ],
+        "ids_count": 223,
+        "ids_sha256": "d70a6c4701d2c960395dddcb37ac00028dbf13a11efe849793b5668dd1a5aee1"
+      },
+      "subjects": [
+        "[AI:claude] fix(session): every headless queue-work child runs under its own routed-seat grant (BUG-2139)"
+      ],
+      "title": "[AI:claude] fix(session): every headless queue-work child runs under its own routed-seat grant (BUG-2139)",
+      "classification": {
+        "base": "463b81d02796148deba3c59c47daefce584c35f4",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2139",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "4a1cacb65210e615f8e436e1e92d230c5822ca01",
+        "named": [
+          "BUG-2139"
+        ],
+        "pr": 2688,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2139",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "branch": "bug-2163-squash-trailer",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 7,
+        "ids_sha256": "0fe352b657c985382cb88cedbd357f0469a5cdc37f6f47ec651f278517834ca2"
+      },
+      "head": "d5f63fee913d206a5ff6f8e27593124b29508b15",
+      "merge": "a38e37f0f81ac5b87408dba0cc04b610094f27f1",
+      "merged_at": "2026-10-16T06:26:08Z",
+      "pr": 2685,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs"
+        ],
+        "ids_count": 5,
+        "ids_sha256": "d6124a102816feb1031883529fd5fd58d5272e63c846ffaec21866c8fbc33fe4"
+      },
+      "subjects": [
+        "[AI:claude] fix(ship): an open PR's title credits a spec as a merge would (BUG-2163)",
+        "[AI:claude] fix(ship): only a PR that credits a spec holds its completion (BUG-2163)",
+        "[AI:claude] fix(ship): a just-merged PR no longer withholds its own completion (BUG-2163)"
+      ],
+      "title": "[AI:claude] fix(ship): a just-merged PR no longer withholds its own completion (BUG-2163)",
+      "classification": {
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1335",
+            "why": "history unreadable: no version of TASK-1335 in the store's history"
+          }
+        },
+        "head": "d5f63fee913d206a5ff6f8e27593124b29508b15",
+        "named": [
+          "BUG-2163"
+        ],
+        "pr": 2685,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1335",
+            "why": "history unreadable: no version of TASK-1335 in the store's history"
+          }
+        }
+      }
+    },
+    {
+      "base": "463b81d02796148deba3c59c47daefce584c35f4",
+      "branch": "bug-2157-2158-contained",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 190,
+        "ids_sha256": "04a59e27e63f7ca399beccd9b32363673f15418244f4fb07a921f14c46fff270"
+      },
+      "head": "99e6baef64552f1058a180ce215d473c0ef239f3",
+      "merge": "8e004a52ae9f4e4c518a10b661f9d1f8ba41b833",
+      "merged_at": "2026-10-16T06:22:24Z",
+      "pr": 2689,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/agent_launch.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs",
+          "docs/agents/per-agent-config.md"
+        ],
+        "ids_count": 173,
+        "ids_sha256": "8d555e988413532869c1854fa3d983b2d5c62100adb5f1d6e601f7dea42ec751"
+      },
+      "subjects": [
+        "[AI:claude] test(contained): portable path literals in passthrough tests (BUG-2157 BUG-2158)",
+        "Merge remote-tracking branch 'origin/main' into bug-2157-2158-contained",
+        "[AI:claude] fix(contained): contain session resume/new/start --launch; allowlist claude passthrough flags (BUG-2157 BUG-2158)"
+      ],
+      "title": "[AI:claude] fix(contained): contain session resume/new/start --launch; allowlist claude passthrough flags (BUG-2157 BUG-2158)",
+      "classification": {
+        "base": "463b81d02796148deba3c59c47daefce584c35f4",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2157",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "99e6baef64552f1058a180ce215d473c0ef239f3",
+        "named": [
+          "BUG-2157",
+          "BUG-2157-2158",
+          "BUG-2158"
+        ],
+        "pr": 2689,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2157",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "branch": "codex/story-1676",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 685,
+        "ids_sha256": "1397f961640a5117af69096cd96078e156c2e33277c4bf3e7360978ef0426ffd"
+      },
+      "head": "f60fafc68b18d026682b2334f5c58121b291aaab",
+      "merge": "251f99e7ef50bfc1537ce57ef7e88ff6975eaa85",
+      "merged_at": "2026-10-16T05:08:46Z",
+      "pr": 2677,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs",
+          "aida-cli-lib/src/regen/score/diagnostics.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 685,
+        "ids_sha256": "1397f961640a5117af69096cd96078e156c2e33277c4bf3e7360978ef0426ffd"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/story-1676",
+        "[AI:codex] test(regen): preserve no-generated-tool regression with mandatory install (STORY-1676)",
+        "[AI:codex] fix(regen): derive legacy quality warnings for shared readers (STORY-1676)",
+        "[AI:codex] feat(regen): classify failures and audit explicit model families (STORY-1676)"
+      ],
+      "title": "[AI:codex] feat(regen): classify failures and audit explicit model families (STORY-1676)",
+      "classification": {
+        "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "f60fafc68b18d026682b2334f5c58121b291aaab",
+        "named": [
+          "STORY-1676"
+        ],
+        "pr": 2677,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "branch": "task-1782",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 12,
+        "ids_sha256": "c4a7695833ff8c8e480a14316774acd0398d49f1dd7fd7865d94ea47f2bdc141"
+      },
+      "head": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b",
+      "merge": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "merged_at": "2026-10-16T04:15:49Z",
+      "pr": 2681,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
+        ],
+        "ids_count": 4,
+        "ids_sha256": "d0c89b2f415323681f5df9070b468a2aff9aaa8f70aa9c85ff1c26711ade2c5a"
+      },
+      "subjects": [
+        "[AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)"
+      ],
+      "title": "[AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)",
+      "classification": {
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1782",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b",
+        "named": [
+          "TASK-1782"
+        ],
+        "pr": 2681,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1782",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "branch": "bug-2149-2150",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 544,
+        "ids_sha256": "a5c5592f58bbcf3217413d7abe7554622427f88cf21380d680c24fef09a7b1f9"
+      },
+      "head": "b285957b9f9223cfe2e2c2b5643cb51377b4e896",
+      "merge": "463b81d02796148deba3c59c47daefce584c35f4",
+      "merged_at": "2026-10-16T01:42:59Z",
+      "pr": 2680,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/leases.rs",
+          "aida-cli-lib/src/queue_cmd.rs",
+          "aida-cli-lib/src/review_verdict.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs"
+        ],
+        "ids_count": 462,
+        "ids_sha256": "b64b3387b162a570ff7c9489368765ed816a2aa6d20ea6b1be2f474b208d07a4"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-2149-2150",
+        "[AI:claude] test(review): count the grant-returning headless resume launcher in the BUG-342 guard (BUG-2149 BUG-2150)",
+        "[AI:claude] fix(review): bind collected verdicts to this launch's reviewer grant; harden collection (BUG-2149 BUG-2150)",
+        "Merge remote-tracking branch 'origin/main' into bug-2149-2150",
+        "[AI:claude] fix(review): PR-scoped standalone reviewer pickup and verified verdict collection into the launcher checkout (BUG-2149 BUG-2150)"
+      ],
+      "title": "[AI:claude] fix(review): PR-scoped standalone reviewer pickup and verified verdict collection (BUG-2149 BUG-2150)",
+      "classification": {
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2149-2150",
+            "why": "unresolved trace/spec id"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "b285957b9f9223cfe2e2c2b5643cb51377b4e896",
+        "named": [
+          "BUG-2149",
+          "BUG-2149-2150",
+          "BUG-2150"
+        ],
+        "pr": 2680,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2149-2150",
+            "why": "unresolved trace/spec id"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "branch": "task-1780",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 125,
+        "ids_sha256": "afd0c24455ad912816a0ad76e9d3a83655ff8379f132812eae4b2d85d8a684de"
+      },
+      "head": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66",
+      "merge": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "merged_at": "2026-10-16T00:58:42Z",
+      "pr": 2674,
+      "scoped": {
+        "fallbacks": [
+          ".aida/discipline/README.md",
+          ".aida/discipline/git-sync-and-review.md",
+          ".aida/discipline/implementer-discipline.md",
+          ".aida/discipline/workflow-patterns.md",
+          ".github/workflows/ci.yml",
+          "CLAUDE.md",
+          "Makefile",
+          "aida-core/templates/.aida/discipline/README.md",
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "aida-core/templates/.aida/discipline/implementer-discipline.md",
+          "aida-core/templates/.aida/discipline/workflow-patterns.md",
+          "aida-core/templates/skills/aida-fire.md",
+          "aida-core/templates/skills/aida-implement.md",
+          "aida-core/templates/skills/aida-pickup.md",
+          "aida-core/templates/skills/aida-pr/SKILL.md",
+          "scripts/ci-gate-tiers.toml",
+          "scripts/test-touched.py",
+          "tests/test_test_touched.py"
+        ],
+        "ids_count": 125,
+        "ids_sha256": "afd0c24455ad912816a0ad76e9d3a83655ff8379f132812eae4b2d85d8a684de"
+      },
+      "subjects": [
+        "[AI:claude] fix(build): test-touched treats an untested #[path] module as untested, not suspect (TASK-1780)",
+        "[AI:claude] fix(build): test-touched falls back for untested modules and runs template consumers (TASK-1780)",
+        "[AI:claude] fix(build): test-touched resolves real module paths and fails closed (TASK-1780)",
+        "[AI:claude] feat(build): local testing tiers and make test-touched (TASK-1780)"
+      ],
+      "title": "[AI:claude] feat(build): local testing tiers and make test-touched (TASK-1780)",
+      "classification": {
+        "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-54",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66",
+        "named": [
+          "TASK-1780"
+        ],
+        "pr": 2674,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-54",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "branch": "story-1693",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 709,
+        "ids_sha256": "5d19a5ee2207cb87b2c86d0fe01681998d2ca6a95ea98c26da1f66d8b9a97aee"
+      },
+      "head": "d8cea0368fe6c9e0399d43a498258131f23f2d4f",
+      "merge": "1e6449feed61e71c7bcd9b00ecd15987675f915f",
+      "merged_at": "2026-10-16T00:56:11Z",
+      "pr": 2671,
+      "scoped": {
+        "fallbacks": [
+          ".aida/discipline/standing-orders/advisor.md",
+          "Makefile",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/seat_rotation.rs",
+          "aida-core/templates/.aida/discipline/standing-orders/advisor.md",
+          "aida-core/templates/hooks/aida-role-context.sh",
+          "tests/test_session_role_grant.sh"
+        ],
+        "ids_count": 663,
+        "ids_sha256": "ade02425b3b284be712c0842578b19e133129f0eb82deb43b73e10bffc43ceb6"
+      },
+      "subjects": [
+        "[AI:claude] fix(handoff): scaffold nested discipline keys; generic advisor standing orders (STORY-1693)",
+        "[AI:claude] docs(session): advisor order 6 defers to due jobs, CronCreate only under a mandate (STORY-1693)",
+        "[AI:claude] feat(session): handoff --show prints standing orders first (STORY-1693)"
+      ],
+      "title": "[AI:claude] feat(session): handoff --show prints standing orders first (STORY-1693)",
+      "classification": {
+        "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "d8cea0368fe6c9e0399d43a498258131f23f2d4f",
+        "named": [
+          "STORY-1693"
+        ],
+        "pr": 2671,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "branch": "claude/bug-2151",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 96,
+        "ids_sha256": "3c56dbf06780431e4cd2ea89b74f2e7956a6511270f871928264449ce30d40f2"
+      },
+      "head": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef",
+      "merge": "e93765f63773294be22b3a0d835006eadfe6a1c1",
+      "merged_at": "2026-10-16T00:53:20Z",
+      "pr": 2672,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/agent_launch.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs"
+        ],
+        "ids_count": 96,
+        "ids_sha256": "3c56dbf06780431e4cd2ea89b74f2e7956a6511270f871928264449ce30d40f2"
+      },
+      "subjects": [
+        "Merge remote-tracking branch 'origin/main' into claude/bug-2151",
+        "[AI:claude] fix(contained): resumed contained child's write roots follow its worktree (BUG-2151)",
+        "[AI:claude] fix(contained): contain every agent resume under a contained parent (BUG-2151)",
+        "Merge remote-tracking branch 'origin/main' into claude/bug-2151",
+        "[AI:claude] fix(contained): agent new honours a contained parent; --bg keeps containment (BUG-2151)",
+        "[AI:claude] fix(contained): refuse contained codex/agy agent new, fail closed on wrong-typed knobs and AIDA_CONTAINED (BUG-2144 BUG-2145 BUG-2146)",
+        "[AI:claude] fix(contained): refuse uncontainable launches, honour --auto-complete --sandbox, fail closed on a malformed agents.toml (BUG-2144 BUG-2145 BUG-2146)"
+      ],
+      "title": "[AI:claude] fix(contained): agent new honours a contained parent; --bg keeps containment (BUG-2151)",
+      "classification": {
+        "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2144",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef",
+        "named": [
+          "BUG-2144",
+          "BUG-2145",
+          "BUG-2146",
+          "BUG-2151"
+        ],
+        "pr": 2672,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2144",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "branch": "bug-2148-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 156,
+        "ids_sha256": "60c0b4cd702a17d46fae2a7fac426736b9d60671cce65506ab5c4babead04752"
+      },
+      "head": "e1a40a89bcae34ede42bce015543b506c984a10f",
+      "merge": "84a04dc111d04db11f26375d2a7d12d68f1ed930",
+      "merged_at": "2026-10-16T00:50:43Z",
+      "pr": 2676,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/agent_registry.rs",
+          "aida-cli-lib/src/session_end.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
+        ],
+        "ids_count": 119,
+        "ids_sha256": "06165b51e60e404389db37fa60b15a229f19a927f425e9b2bca239999cb71a61"
+      },
+      "subjects": [
+        "[AI:antigravity] fix(liveness): check start-time identity before killing processes on agent stop and session end (BUG-2148)"
+      ],
+      "title": "[AI:antigravity] fix(liveness): check start-time identity before killing processes on agent stop and session end (BUG-2148)",
+      "classification": {
+        "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2148",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "e1a40a89bcae34ede42bce015543b506c984a10f",
+        "named": [
+          "BUG-2148"
+        ],
+        "pr": 2676,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2148",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+      "branch": "codex/task-1733",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 681,
+        "ids_sha256": "671e2c1f9221201e5817a0a8440b27dc64a6d87d4a246658debe4f13f0b18bbb"
+      },
+      "head": "c333cec91771650a9c76799688ae8d24745b7137",
+      "merge": "bf267ad5cba345faa0bd5ee2a301dc905b55300c",
+      "merged_at": "2026-10-16T00:41:58Z",
+      "pr": 2667,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "docs/cli-format-json-audit.md"
+        ],
+        "ids_count": 681,
+        "ids_sha256": "671e2c1f9221201e5817a0a8440b27dc64a6d87d4a246658debe4f13f0b18bbb"
+      },
+      "subjects": [
+        "[AI:claude] chore(docs): regenerate the BUG-1502 format-json audit (TASK-1733)",
+        "[AI:codex] feat(regen): report diagnostic gap trends (TASK-1733)"
+      ],
+      "title": "[AI:codex] feat(regen): report diagnostic gap trends (TASK-1733)",
+      "classification": {
+        "base": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "c333cec91771650a9c76799688ae8d24745b7137",
+        "named": [
+          "TASK-1733"
+        ],
+        "pr": 2667,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "a46af7481e794f7ad299631a78a258f55022c503",
+      "branch": "codex/task-1732",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 42,
+        "ids_sha256": "3ffda5f6ec3afe63665e83aa4a6b26f5a26f11875494dca240dc4976dbf50811"
+      },
+      "head": "7c8c72c75f0db2462d6ac3019eb0dd4665050bcf",
+      "merge": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+      "merged_at": "2026-10-15T22:54:34Z",
+      "pr": 2666,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs"
+        ],
+        "ids_count": 42,
+        "ids_sha256": "3ffda5f6ec3afe63665e83aa4a6b26f5a26f11875494dca240dc4976dbf50811"
+      },
+      "subjects": [
+        "[AI:codex] feat(regen): score environment seam adapters (TASK-1732)"
+      ],
+      "title": "[AI:codex] feat(regen): score environment seam adapters (TASK-1732)",
+      "classification": {
+        "base": "a46af7481e794f7ad299631a78a258f55022c503",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          }
+        },
+        "head": "7c8c72c75f0db2462d6ac3019eb0dd4665050bcf",
+        "named": [
+          "TASK-1732"
+        ],
+        "pr": 2666,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+      "branch": "codex/task-1731",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 684,
+        "ids_sha256": "99a0271150225b2c806abf058ceda0a28550335483b029523117bc1a388023ea"
+      },
+      "head": "79ee6c08874b705d579bdda5a407b67e21306b1d",
+      "merge": "a46af7481e794f7ad299631a78a258f55022c503",
+      "merged_at": "2026-10-15T22:05:57Z",
+      "pr": 2664,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/Cargo.toml",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/controls.rs",
+          "aida-cli-lib/src/regen/score/fresh.rs",
+          "aida-cli-lib/src/regen/score/oracle.rs",
+          "aida-cli-lib/src/regen/score/roots.rs",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 684,
+        "ids_sha256": "99a0271150225b2c806abf058ceda0a28550335483b029523117bc1a388023ea"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/task-1731",
+        "[AI:codex] test(regen): cover command control refusals (TASK-1731)",
+        "[AI:codex] feat(regen): compose controls with isolated scorer (TASK-1731)"
+      ],
+      "title": "[AI:codex] feat(regen): control batches and fresh scoring roots (TASK-1731)",
+      "classification": {
+        "base": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1731",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "79ee6c08874b705d579bdda5a407b67e21306b1d",
+        "named": [
+          "TASK-1731"
+        ],
+        "pr": 2664,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1731",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "branch": "claude/bug-2143",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 297,
+        "ids_sha256": "b2681c5a74fcc5cdc8f6a70dad5473b652e89801cf2a8e9f36d53d9008ac7411"
+      },
+      "head": "a230cf860ef52b0587a6fa21fa93f5132c26786b",
+      "merge": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+      "merged_at": "2026-10-15T21:13:19Z",
+      "pr": 2675,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/session_reap.rs"
+        ],
+        "ids_count": 150,
+        "ids_sha256": "18cf9446ac3fcb102938992d3436d4569e703a91e1e98cc189eda08c84cdb8f0"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/bug-2143",
+        "Merge remote-tracking branch 'origin/main' into claude/bug-2143",
+        "[AI:claude] fix(worktree): never re-enter advisory leases; verify a live linked worktree before the focus marker (BUG-2143)",
+        "[AI:claude] style(worktree): rustfmt the BUG-2143 regression test (BUG-2143)",
+        "[AI:claude] fix(worktree): never re-enter a worktree-less claim lease; print the created path (BUG-2143)"
+      ],
+      "title": "[AI:claude] fix(worktree): never re-enter a worktree-less claim lease; print the created path (BUG-2143)",
+      "classification": {
+        "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1043",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          }
+        },
+        "head": "a230cf860ef52b0587a6fa21fa93f5132c26786b",
+        "named": [
+          "BUG-2143"
+        ],
+        "pr": 2675,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1533",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "0c69debffe439310aacf3756a5efe363d1216474",
+      "branch": "codex/task-1730",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 680,
+        "ids_sha256": "ccc2abf20f54c524efb2a15d8fbf3bc06cb686ba62f46e9bb266f83951405195"
+      },
+      "head": "0e526567f131888830d42ae22b51fcb466c37739",
+      "merge": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "merged_at": "2026-10-15T19:31:32Z",
+      "pr": 2660,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/guards.rs",
+          "aida-cli-lib/src/regen/score/oracle.rs",
+          "aida-cli-lib/src/regen/score/roots.rs",
+          "docs/cli-format-json-audit.md",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 680,
+        "ids_sha256": "ccc2abf20f54c524efb2a15d8fbf3bc06cb686ba62f46e9bb266f83951405195"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/task-1730",
+        "[AI:claude] chore(merge): merge main into TASK-1730 branch (TASK-1730)",
+        "[AI:codex] feat(regen): isolate scorer execution environment (TASK-1730)",
+        "[AI:codex] fix(regen): name required oracle cwd capability (TASK-1730)",
+        "[AI:codex] test(regen): scope confinement fixtures to Linux (TASK-1730)",
+        "[AI:codex] fix(regen): reject caches inside unrelated worktrees (TASK-1730)",
+        "[AI:codex] feat(regen): freeze and verify immutable oracle bundles (TASK-1730)",
+        "[AI:codex] docs(regen): inventory prototype command paths (TASK-1730)",
+        "[AI:codex] feat(regen): prototype raw R1 score execution (TASK-1730)"
+      ],
+      "title": "[AI:codex] feat(regen): score isolated held-out oracles (TASK-1730)",
+      "classification": {
+        "base": "0c69debffe439310aacf3756a5efe363d1216474",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "0e526567f131888830d42ae22b51fcb466c37739",
+        "named": [
+          "TASK-1730"
+        ],
+        "pr": 2660,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1730",
+            "why": "sensitive spec metadata (sandbox) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "branch": "bug-1918-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 1254,
+        "ids_sha256": "d504f0a4eae6cf71a176f706484c016b1e2704cfd66ff5849a5675678e01c1cd"
+      },
+      "head": "6475cfba9b43bae3babefef7614893c22257860f",
+      "merge": "0c69debffe439310aacf3756a5efe363d1216474",
+      "merged_at": "2026-10-15T18:48:00Z",
+      "pr": 2485,
+      "scoped": {
+        "fallbacks": [
+          ".aida/discipline/machinery-glossary.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/events.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/lib_part5.rs",
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/pr_ship.rs",
+          "aida-cli-lib/src/review_authority.rs",
+          "aida-cli-lib/src/review_verdict.rs",
+          "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs",
+          "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs",
+          "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs",
+          "aida-cli/tests/task_1287_label_only_merge_hold.rs",
+          "aida-core/templates/.aida/discipline/machinery-glossary.md",
+          "aida-core/templates/commands/aida-drain-queue.md",
+          "aida-core/templates/commands/aida-fasttrack.md",
+          "aida-core/templates/skills/aida-drain-queue.md",
+          "aida-core/templates/skills/aida-fasttrack.md",
+          "docs/cli/04-git-lifecycle.md",
+          "docs/cli/12-glossary.md",
+          "docs/review-process.md"
+        ],
+        "ids_count": 981,
+        "ids_sha256": "c708296c59d59bfc726b6b6f9bc51b69f8e8c27392ecd5354c90828581943d17"
+      },
+      "subjects": [
+        "[AI:claude] chore(merge): merge main into BUG-1918 branch (BUG-1918)",
+        "[AI:claude] fix(review): approve the BUG-1953 ship fixture from a reviewer session; document the entered-lease author rule (BUG-1918)",
+        "[AI:claude] chore(merge): bring bug-1918-work current with origin/main (BUG-1918)",
+        "[AI:claude] docs(glossary): regenerate the book glossary from the merged templates (BUG-1918)",
+        "[AI:claude] chore(merge): bring bug-1918-work current with origin/main (BUG-1918)",
+        "[AI:claude] fix(review): bind approval authority to session identity, not labels (BUG-1918)"
+      ],
+      "title": "[AI:claude] fix(review): bind approval authority to session identity, not labels (BUG-1918)",
+      "classification": {
+        "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "6475cfba9b43bae3babefef7614893c22257860f",
+        "named": [
+          "BUG-1918"
+        ],
+        "pr": 2485,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+      "branch": "bug-2010-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 529,
+        "ids_sha256": "5d59ca2c8f856494306dc356c9207d5583e79087a4925162048578107e34d742"
+      },
+      "head": "96da17df62ca8e8d195843057015d1c47a9ab096",
+      "merge": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "merged_at": "2026-10-15T16:06:32Z",
+      "pr": 2657,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/agent_registry.rs",
+          "aida-cli-lib/src/ps_integrate.rs",
+          "aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs"
+        ],
+        "ids_count": 181,
+        "ids_sha256": "90cc740f3a12d42bc2802942ca07b4be97851b6fb506dd8d64cd8d4a7315b530"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-2010-work",
+        "[AI:antigravity] fix(ps): extract queue_work_self_claim and assert in launch test (BUG-2010)",
+        "[AI:antigravity] test(ps): test launch at session_start level without in-process exec (BUG-2010)",
+        "[AI:antigravity] fix(ps): pass self_claim = no_launch to queue work (BUG-2010)",
+        "[AI:antigravity] fix(ps): attribute leases to self-claim only, require lease start time, and verify drain (BUG-2010)",
+        "[AI:antigravity] fix(ps): attribute factory lane leases to agent process with start-time identity (BUG-2010)"
+      ],
+      "title": "[AI:antigravity] fix(ps): attribute factory lane leases to agent process with start-time identity (BUG-2010)",
+      "classification": {
+        "base": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "96da17df62ca8e8d195843057015d1c47a9ab096",
+        "named": [
+          "BUG-2010"
+        ],
+        "pr": 2657,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+      "branch": "story-1485",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 786,
+        "ids_sha256": "9985c5c53af986c1f43969d621e2fd5e352954112e0fc374ea3e3d3e795123f5"
+      },
+      "head": "2f0ef157cb27a37e78e64d8335a5cd9e74eef085",
+      "merge": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+      "merged_at": "2026-10-15T15:26:22Z",
+      "pr": 2451,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/seat_occupancy/cmd.rs",
+          "aida-cli-lib/src/seat_occupancy/config.rs",
+          "aida-cli-lib/src/seat_occupancy/mod.rs",
+          "aida-cli-lib/src/seat_occupancy/runtime.rs",
+          "aida-cli-lib/src/seat_occupancy/scope.rs",
+          "aida-cli-lib/src/seat_occupancy/store.rs",
+          "aida-cli-lib/src/seat_occupancy/tests.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/process_probe.rs",
+          "docs/architecture/external-tool-output-classifiers.md",
+          "docs/cli-format-json-audit.md",
+          "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md",
+          "scripts/config-trust.toml",
+          "tests/test_seat_takeover_lifecycle.py"
+        ],
+        "ids_count": 741,
+        "ids_sha256": "adaa91a574aaf1625345f61a107915fd3bf0909cfd208987644527c529707ad0"
+      },
+      "subjects": [
+        "Merge branch 'main' into story-1485",
+        "[AI:claude] chore(merge): merge origin/main into story-1485 (TASK-1607)",
+        "[AI:claude] chore(merge): merge origin/main into story-1485 (TASK-1607)",
+        "[AI:codex] fix(seats): refresh caller authority under seat lock (TASK-1607)",
+        "[AI:codex] fix(seats): revalidate takeover deadlines and authority (TASK-1607)",
+        "[AI:codex] fix(seats): close C7 core review findings (TASK-1607)",
+        "[AI:codex] chore(seats): merge main for C7 rework (TASK-1607)",
+        "[AI:claude] chore(seats): register the git not-a-repository stderr classifier (TASK-1607)",
+        "[AI:claude] feat(seats): aida session seat claim/status/release/takeover/ack (TASK-1607)",
+        "[AI:claude] feat(seats): single-occupancy seat record and state machine (TASK-1607)",
+        "[AI:claude] feat(liveness): tri-state process identity probe for seat occupancy (TASK-1607)",
+        "Merge remote-tracking branch 'origin/main' into story-1485",
+        "[AI:codex] docs(coordination): resolve seat occupancy sketch findings (STORY-1485)",
+        "[AI:codex] docs(coordination): sketch single occupancy and takeover (STORY-1485)"
+      ],
+      "title": "[AI:claude] feat(seats): single-occupancy orchestrator seat, graceful path (TASK-1607)",
+      "classification": {
+        "base": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1607",
+            "why": "guided/operator execution requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "2f0ef157cb27a37e78e64d8335a5cd9e74eef085",
+        "named": [
+          "STORY-1485",
+          "TASK-1607"
+        ],
+        "pr": 2451,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1607",
+            "why": "guided/operator execution requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+      "branch": "task-1775",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 114,
+        "ids_sha256": "21166dd55cb1a641f92761a8dc7f5b0ee729ee164caabed5b29937540758738f"
+      },
+      "head": "182ef87134058ffc1d85c78d52401214b08c8736",
+      "merge": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+      "merged_at": "2026-10-15T14:43:15Z",
+      "pr": 2670,
+      "scoped": {
+        "fallbacks": [
+          "aida-core/src/store_hooks.rs"
+        ],
+        "ids_count": 28,
+        "ids_sha256": "8240a2f0c207497be4665c6ffc25aaf1aa0bb625548e0253abf6d0728038d687"
+      },
+      "subjects": [
+        "Merge branch 'main' into task-1775",
+        "[AI:claude] fix(store): write the contained-store marker before the git version check; route the store diff through host_git_command (TASK-1775)"
+      ],
+      "title": "[AI:claude] fix(store): write the contained-store marker before the git version check; route the store diff through host_git_command (TASK-1775)",
+      "classification": {
+        "base": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1775",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "182ef87134058ffc1d85c78d52401214b08c8736",
+        "named": [
+          "TASK-1775"
+        ],
+        "pr": 2670,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1775",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "branch": "task-1769",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 40,
+        "ids_sha256": "9d80242c8a32946c7d062adc51b020afcba0ddd771fc65a600becbd8e337f00c"
+      },
+      "head": "34b992adce793bb2f022ec77f312b83b6a5aca89",
+      "merge": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+      "merged_at": "2026-10-15T14:05:37Z",
+      "pr": 2669,
+      "scoped": {
+        "fallbacks": [
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "ids_count": 17,
+        "ids_sha256": "e848c0763e2cc36f9cd1997ae8b98a3c345789b0d24ce691dbb12b064418503e"
+      },
+      "subjects": [
+        "Merge branch 'main' into task-1769",
+        "[AI:claude] fix(schedule): compare tick-driver binaries canonically and document the live-binary contract (TASK-1769)"
+      ],
+      "title": "[AI:claude] fix(schedule): compare tick-driver binaries canonically and document the live-binary contract (TASK-1769)",
+      "classification": {
+        "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "STORY-1218",
+            "why": "guided/operator execution requires a human clear"
+          }
+        },
+        "head": "34b992adce793bb2f022ec77f312b83b6a5aca89",
+        "named": [
+          "TASK-1769"
+        ],
+        "pr": 2669,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "STORY-1226",
+            "why": "guided/operator execution requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+      "branch": "task-1767",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 0,
+        "ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "head": "0498eac1e9e30bd322ac7db03d3202bf091d7758",
+      "merge": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "merged_at": "2026-10-15T13:27:45Z",
+      "pr": 2668,
+      "scoped": {
+        "fallbacks": [
+          "aida-core/templates/memories/feedback_check_ignore_names_the_winner.md"
+        ],
+        "ids_count": 0,
+        "ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "subjects": [
+        "Merge branch 'main' into task-1767",
+        "[AI:claude] docs(memories): correct check-ignore precedence claim in the winner memory (TASK-1767)"
+      ],
+      "title": "[AI:claude] docs(memories): correct check-ignore precedence claim in the winner memory (TASK-1767)",
+      "classification": {
+        "base": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "0498eac1e9e30bd322ac7db03d3202bf091d7758",
+        "named": [
+          "TASK-1767"
+        ],
+        "pr": 2668,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+      "branch": "claude/containment-2144",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 1004,
+        "ids_sha256": "242fb4b2eb23577a7293bad5698e9904bdfe5e6e6d5625d0d8ea73acca103802"
+      },
+      "head": "1013c63db6b86f39f75431f429de55e7c76910c4",
+      "merge": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+      "merged_at": "2026-10-15T13:14:10Z",
+      "pr": 2665,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2144_2146_containment_refusal_tests.rs"
+        ],
+        "ids_count": 829,
+        "ids_sha256": "96e78e6b0def9563ec85b60149daeedf4e68077c658c5753305129152e5505a1"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/containment-2144",
+        "[AI:claude] fix(contained): refuse contained codex/agy agent new, fail closed on wrong-typed knobs and AIDA_CONTAINED (BUG-2144 BUG-2145 BUG-2146)",
+        "[AI:claude] fix(contained): refuse uncontainable launches, honour --auto-complete --sandbox, fail closed on a malformed agents.toml (BUG-2144 BUG-2145 BUG-2146)"
+      ],
+      "title": "[AI:claude] fix(contained): refuse uncontainable launches, honour --auto-complete --sandbox, fail closed on malformed agents.toml (BUG-2144 BUG-2145 BUG-2146)",
+      "classification": {
+        "base": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2144",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "1013c63db6b86f39f75431f429de55e7c76910c4",
+        "named": [
+          "BUG-2144",
+          "BUG-2145",
+          "BUG-2146",
+          "CONTAINMENT-2144"
+        ],
+        "pr": 2665,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2144",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+      "branch": "task-1750-exact-reader",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 53,
+        "ids_sha256": "1cb8a749793115c19a2b9fb8cf445dec0dd566263caa7f423177ab0a719e973e"
+      },
+      "head": "551163384f4769ebfaa38e3afd7107ad59ca5ce2",
+      "merge": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+      "merged_at": "2026-10-15T12:41:25Z",
+      "pr": 2653,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/drain_cmd.rs",
+          "aida-core/src/db/cache_lock.rs",
+          "aida-core/src/liveness.rs"
+        ],
+        "ids_count": 49,
+        "ids_sha256": "491197319a687b518c1489950a0e7033080414fd248d34c244abdc70a4c6c016"
+      },
+      "subjects": [
+        "Merge branch 'main' into task-1750-exact-reader",
+        "[AI:claude] fix(liveness): strict identity gate on drain stop --now (TASK-1750 TASK-1768)",
+        "Merge remote-tracking branch 'origin/main' into task-1750-exact-reader",
+        "[AI:claude] fix(liveness): strict identity match on signal paths (TASK-1750 TASK-1768)",
+        "Merge remote-tracking branch 'origin/main' into task-1750-exact-reader",
+        "[AI:claude] fix(liveness): read exact linux-starttime identities in the canonical liveness path (TASK-1750)"
+      ],
+      "title": "[AI:claude] fix(liveness): read exact linux-starttime identities in the canonical liveness path (TASK-1750)",
+      "classification": {
+        "base": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1750",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "551163384f4769ebfaa38e3afd7107ad59ca5ce2",
+        "named": [
+          "TASK-1750",
+          "TASK-1768"
+        ],
+        "pr": 2653,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "TASK-1750",
+            "why": "keystone-class spec requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "branch": "codex/task-1729",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 811,
+        "ids_sha256": "865b994f8afb2d390f379d9e2bfef5edea3742dbdb1f730f351adbb75c2e6c0c"
+      },
+      "head": "c4b503beeccefe43e0284a6a748811da53f6d0e3",
+      "merge": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+      "merged_at": "2026-10-15T12:03:33Z",
+      "pr": 2658,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/regen.rs",
+          "docs/cli-format-json-audit.md"
+        ],
+        "ids_count": 753,
+        "ids_sha256": "d48ad43ff7fc4b8d6ebb45ec3bde0224bc337582dcf20f7782a40b8eeb2d9c89"
+      },
+      "subjects": [
+        "Merge branch 'main' into codex/task-1729",
+        "[AI:codex] fix(regen): use hardened store Git commands (TASK-1729)",
+        "[AI:codex] chore(regen): merge current base for store Git guard (TASK-1729)",
+        "[AI:codex] fix(regen): scope corpus dirtiness and inventory command paths (TASK-1729)",
+        "[AI:codex] feat(regen): export deterministic committed corpus (TASK-1729)"
+      ],
+      "title": "[AI:codex] feat(regen): export deterministic committed corpus (TASK-1729)",
+      "classification": {
+        "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "c4b503beeccefe43e0284a6a748811da53f6d0e3",
+        "named": [
+          "TASK-1729"
+        ],
+        "pr": 2658,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-11",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+      "branch": "claude/bug-2131",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 554,
+        "ids_sha256": "056702fe279a0918fb4c412af968fbd653d61cf75761a8d9745aa8285bf8bfab"
+      },
+      "head": "099a574c97a4fb3d0473a8e8e0a8e3bbee24c1f2",
+      "merge": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "merged_at": "2026-10-15T10:05:06Z",
+      "pr": 2663,
+      "scoped": {
+        "fallbacks": [
+          "OVERVIEW.md",
+          "aida-core/src/git_ops.rs",
+          "aida-core/src/store_hooks.rs",
+          "docs/agents/claude-bubblewrap-sandbox.md",
+          "scripts/config-trust.toml"
+        ],
+        "ids_count": 179,
+        "ids_sha256": "26cabc7bd93aa0d6215adf100e87837a8eb7bdb6c6c11d6b54aee852cdb62e26"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/bug-2131",
+        "[AI:claude] fix(store): scope the git < 2.40 store-git refusal to contained mode and refuse contained launch (BUG-2131)",
+        "[AI:claude] fix(store): refuse store git on git < 2.40, where GIT_ATTR_SOURCE is ignored (BUG-2131)"
+      ],
+      "title": "[AI:claude] fix(store): refuse store git on git < 2.40, where GIT_ATTR_SOURCE is ignored (BUG-2131)",
+      "classification": {
+        "base": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        },
+        "head": "099a574c97a4fb3d0473a8e8e0a8e3bbee24c1f2",
+        "named": [
+          "BUG-2131"
+        ],
+        "pr": 2663,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-10",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "672c12158b936102c7cad34691f2ba285a9284de",
+      "branch": "bug-2135-sccache-tmpdir",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 60,
+        "ids_sha256": "6d56b8fc5e676470f795f9d1aa18e7c7965f055414e215eebe449044e9de0ec7"
+      },
+      "head": "2cc1095b5fd8c13ac130fd49862dde453302a4ca",
+      "merge": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+      "merged_at": "2026-10-15T09:25:54Z",
+      "pr": 2656,
+      "scoped": {
+        "fallbacks": [
+          ".github/workflows/ci.yml",
+          "scripts/check-ci-gates.py",
+          "scripts/ci-gate-tiers.toml",
+          "tests/test_bug_2135_sccache_tmpdir.py"
+        ],
+        "ids_count": 56,
+        "ids_sha256": "42ec22b14914d6b6abdf7e6419e9f377da2456c6660bc1d573ec7630b053e816"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-2135-sccache-tmpdir",
+        "[AI:antigravity] fix(build): pre-start sccache server, fix restart hint, and respect opt-out (BUG-2135)",
+        "[AI:antigravity] fix(build): ensure stable TMPDIR for sccache and detect missing temp dir (BUG-2135)"
+      ],
+      "title": "[AI:antigravity] fix(build): ensure stable TMPDIR for sccache and detect missing temp dir (BUG-2135)",
+      "classification": {
+        "base": "672c12158b936102c7cad34691f2ba285a9284de",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "TASK-1364",
+            "why": "history unreadable: no version of TASK-1364 in the store's history"
+          }
+        },
+        "head": "2cc1095b5fd8c13ac130fd49862dde453302a4ca",
+        "named": [
+          "BUG-2135"
+        ],
+        "pr": 2656,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "ADR-54",
+            "why": "keystone-class spec requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "efd3bba8de3e098599e85dd29c381d4066961994",
+      "branch": "claude/bug-2142",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 34,
+        "ids_sha256": "f802dba8c52732bb930cd12d74a27bc4af542d987b19e8b17c405d73fb138614"
+      },
+      "head": "1e5dd25bbe4a459d42c9529baf8004768e1c6254",
+      "merge": "672c12158b936102c7cad34691f2ba285a9284de",
+      "merged_at": "2026-10-15T08:51:10Z",
+      "pr": 2654,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/maintenance_schedule.rs",
+          "aida-cli-lib/src/schedule_driver.rs",
+          "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs"
+        ],
+        "ids_count": 34,
+        "ids_sha256": "f802dba8c52732bb930cd12d74a27bc4af542d987b19e8b17c405d73fb138614"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/bug-2142",
+        "[AI:claude] fix(schedule): fail only an unsupported job, pin tick drivers to the live binary (BUG-2142)"
+      ],
+      "title": "[AI:claude] fix(schedule): fail only an unsupported job, pin tick drivers to the live binary (BUG-2142)",
+      "classification": {
+        "base": "efd3bba8de3e098599e85dd29c381d4066961994",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "STORY-1218",
+            "why": "guided/operator execution requires a human clear"
+          }
+        },
+        "head": "1e5dd25bbe4a459d42c9529baf8004768e1c6254",
+        "named": [
+          "BUG-2142"
+        ],
+        "pr": 2654,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "STORY-1218",
+            "why": "guided/operator execution requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "92763a125a7b2ac062064c6324063723a02a80ad",
+      "branch": "claude/bug-2133",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 280,
+        "ids_sha256": "dc84af9f98b5ae4be6065b5a77b6d13e419c841287f6e27f87e7b5a6ec46ce3e"
+      },
+      "head": "a55d76553bbbdb791e76ef36dae7ac5bb4155676",
+      "merge": "efd3bba8de3e098599e85dd29c381d4066961994",
+      "merged_at": "2026-10-15T08:14:30Z",
+      "pr": 2655,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/phase_driver.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2133_contained_drain_children_tests.rs"
+        ],
+        "ids_count": 182,
+        "ids_sha256": "de8a19a5fd85a427077b04a61c25a6f05213a4041f829e3e645dfe48ea0cc09f"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/bug-2133",
+        "[AI:claude] fix(drain): contain every agent child a contained drain spawns (BUG-2133)"
+      ],
+      "title": "[AI:claude] fix(drain): contain every agent child a contained drain spawns (BUG-2133)",
+      "classification": {
+        "base": "92763a125a7b2ac062064c6324063723a02a80ad",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2133",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "a55d76553bbbdb791e76ef36dae7ac5bb4155676",
+        "named": [
+          "BUG-2133"
+        ],
+        "pr": 2655,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-2133",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+      "branch": "claude/bug-2141",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 71,
+        "ids_sha256": "8a2546be69835f29d65374f631a4256e49d162ca27767d7670fb1810c5c10e4b"
+      },
+      "head": "53548583acbfc53a30149900edf75e3e15d47a7c",
+      "merge": "92763a125a7b2ac062064c6324063723a02a80ad",
+      "merged_at": "2026-10-15T07:37:52Z",
+      "pr": 2652,
+      "scoped": {
+        "fallbacks": [
+          "aida-core/src/git_ops.rs"
+        ],
+        "ids_count": 71,
+        "ids_sha256": "8a2546be69835f29d65374f631a4256e49d162ca27767d7670fb1810c5c10e4b"
+      },
+      "subjects": [
+        "Merge branch 'main' into claude/bug-2141",
+        "[AI:claude] fix(git): anchor the shared info/exclude .aida entry and migrate the legacy line (BUG-2141)"
+      ],
+      "title": "[AI:claude] fix(git): anchor the shared info/exclude .aida entry and migrate the legacy line (BUG-2141)",
+      "classification": {
+        "base": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1-051",
+            "why": "unresolved trace/spec id"
+          }
+        },
+        "head": "53548583acbfc53a30149900edf75e3e15d47a7c",
+        "named": [
+          "BUG-2141"
+        ],
+        "pr": 2652,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1-051",
+            "why": "unresolved trace/spec id"
+          }
+        }
+      }
+    },
+    {
+      "base": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+      "branch": "bug-1929-work",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 748,
+        "ids_sha256": "772b25ccf619f975ae0fc14da6364a9fbbea29a1a79c7367467b27e637698bf9"
+      },
+      "head": "148dc79429c949ab96a425b5ddebc24190ecb47f",
+      "merge": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+      "merged_at": "2026-10-15T07:01:50Z",
+      "pr": 2541,
+      "scoped": {
+        "fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/contained_boundary.rs",
+          "aida-cli-lib/src/doctor_cmd.rs",
+          "aida-cli-lib/src/history_cache.rs",
+          "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+          "aida-cli/tests/bug_1929_embedded_repo_store.rs",
+          "aida-cli/tests/fixtures/task_1717_git_observer.sh",
+          "aida-core/src/db/cache.rs",
+          "aida-core/src/db/cached_git_backend.rs",
+          "aida-core/src/db/mod.rs",
+          "aida-core/src/git_ops.rs",
+          "aida-core/src/git_ops/tests/store_hook_tests.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/store_hooks.rs",
+          "aida-core/templates/hooks/aida-commit-msg",
+          "aida-core/templates/hooks/aida-pre-commit.sh",
+          "aida-core/templates/hooks/aida-store-pre-push.sh",
+          "tests/test_bug_1929_hook_templates.py"
+        ],
+        "ids_count": 426,
+        "ids_sha256": "85ea8ce8fae5c5251e072a72d95c97b9823b586e9b71b91c05d4b9a7ebb2f906"
+      },
+      "subjects": [
+        "Merge branch 'main' into bug-1929-work",
+        "[AI:claude] fix(store-hooks): BUG-1808 snapshot skips volatile -shm; history views use the hardened store git (BUG-1929)",
+        "Merge branch 'main' into bug-1929-work",
+        "[AI:claude] fix(store-hooks): contained store writes are committed by the host, with a notice inside (BUG-1929)",
+        "[AI:claude] fix(store-hooks): accept the userns overflow uid on safe ancestors; name the failed check (BUG-1929)",
+        "Merge remote-tracking branch 'origin/main' into bug-1929-work",
+        "Merge branch 'main' into bug-1929-work",
+        "[AI:claude] chore(merge): update bug-1929-work from main (BUG-1929)",
+        "[AI:claude] fix(store-hooks): accept a 0775 user-private-group checkout; still refuse world or shared-group write (BUG-1929)",
+        "[AI:codex] fix(pull): validate store hooks before remote discovery (BUG-1929)",
+        "[AI:codex] fix(store): fail closed before remote probes and empty PATH (BUG-1929)",
+        "[AI:codex] fix(store): preserve identity gates and hook refusal diagnostics (BUG-1929)",
+        "[AI:codex] test(store): fix module loading and observer process identity (BUG-1929)",
+        "[AI:codex] fix(containment): deny writes to host git authority (BUG-1929)",
+        "[AI:codex] fix(store): run only verified host-owned AIDA hooks (BUG-1929)",
+        "[AI:claude] fix(store): pin store git to a host-resolved hooks directory (BUG-1929)",
+        "[AI:claude] fix(store): pin the contained store grant's fail-closed derivation (BUG-1929)",
+        "[AI:claude] fix(store): commit-msg never sources commit-config on a store commit (BUG-1929)",
+        "[AI:claude] fix(store): route every host store git call through the hardened builder (BUG-1929)",
+        "[AI:claude] fix(store): status before the embedded-repo refusal; real-claude probe on the operator's home (BUG-1929)",
+        "[AI:claude] fix(store): harden host git over the store and refuse embedded repos (BUG-1929)",
+        "[AI:claude] test(contained): a planted embedded repo in the store must not run its fsmonitor on the host (BUG-1929)",
+        "[AI:claude] test(contained): mark the real-claude fixture's deliberate real-home read (BUG-1929)",
+        "[AI:claude] fix(contained): deny the store's .git pointer and make the real-claude test able to fail (BUG-1929)",
+        "[AI:claude] test(contained): keep tmp literals out of the BUG-1929 store tests (BUG-1929)",
+        "[AI:claude] fix(contained): probe the symlink-resolved cache sidecars, not stale ones beside a symlink (BUG-1929)",
+        "[AI:claude] fix(contained): let contained sessions write the main checkout's store and cache, refuse writes atomically on a read-only cache (BUG-1929)"
+      ],
+      "title": "[AI:claude] fix(contained): let contained sessions write the main checkout's store and cache (BUG-1929)",
+      "classification": {
+        "base": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+        "full_ordinary": {
+          "named_blocker": {
+            "id": "BUG-1929",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        },
+        "head": "148dc79429c949ab96a425b5ddebc24190ecb47f",
+        "named": [
+          "BUG-1929"
+        ],
+        "pr": 2541,
+        "scoped_ordinary": {
+          "named_blocker": {
+            "id": "BUG-1929",
+            "why": "sensitive spec metadata (contained) requires a human clear"
+          },
+          "newly_excluded": false,
+          "trace_blocker": null
+        }
+      }
+    },
+    {
+      "base": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+      "branch": "fix/bug-2132-mailbox-recipient-validation",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 159,
+        "ids_sha256": "9a01470dc8e83b2743de7cbdbadfffda78ee8d98426169f701310e6c67495626"
+      },
+      "head": "01bc7eb75fe2681e1cc45efa0ea34bc29b34423f",
+      "merge": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+      "merged_at": "2026-10-15T06:26:43Z",
+      "pr": 2650,
+      "scoped": {
+        "fallbacks": [
+          "aida-core/src/mailbox.rs"
+        ],
+        "ids_count": 104,
+        "ids_sha256": "70be4b444735412da73570d34c7cb1762c5b3139db36a6eef7f8544fa86c76d0"
+      },
+      "subjects": [
+        "Merge branch 'main' into fix/bug-2132-mailbox-recipient-validation",
+        "[AI:claude] fix(mailbox): refuse junk recipient ids and code-ish @mentions (BUG-2132)"
+      ],
+      "title": "[AI:claude] fix(mailbox): refuse junk recipient ids and code-ish @mentions (BUG-2132)",
+      "classification": {
+        "base": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1043",
+            "why": "sensitive spec metadata (authority) requires a human clear"
+          }
+        },
+        "head": "01bc7eb75fe2681e1cc45efa0ea34bc29b34423f",
+        "named": [
+          "BUG-2132"
+        ],
+        "pr": 2650,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1533",
+            "why": "sensitive spec metadata (identity) requires a human clear"
+          }
+        }
+      }
+    },
+    {
+      "base": "403be14eddc78e845f636fc5ae366fe2b9e53d75",
+      "branch": "fix/bug-2136-review-record-outcome",
+      "full": {
+        "fallbacks": [],
+        "ids_count": 83,
+        "ids_sha256": "0e6c65e535a1401e186842271917b9d634c693e2d2bc637cba821688107cfe9e"
+      },
+      "head": "825ebd7102699a00708fa1f316945b1186d593b1",
+      "merge": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+      "merged_at": "2026-10-15T05:58:02Z",
+      "pr": 2647,
+      "scoped": {
+        "fallbacks": [
+          "aida-cli-lib/src/review_verdict.rs"
+        ],
+        "ids_count": 45,
+        "ids_sha256": "aa8b027398d6916156003474b430947a8cb36c2a3fd39812d6bfbe1a294b25b0"
+      },
+      "subjects": [
+        "Merge branch 'main' into fix/bug-2136-review-record-outcome",
+        "[AI:claude] fix(review): state the record outcome explicitly in `aida review record` (BUG-2136)"
+      ],
+      "title": "[AI:claude] fix(review): state the record outcome explicitly in aida review record (BUG-2136)",
+      "classification": {
+        "base": "403be14eddc78e845f636fc5ae366fe2b9e53d75",
+        "full_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1978",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          }
+        },
+        "head": "825ebd7102699a00708fa1f316945b1186d593b1",
+        "named": [
+          "BUG-2136"
+        ],
+        "pr": 2647,
+        "scoped_ordinary": {
+          "named_blocker": null,
+          "newly_excluded": true,
+          "trace_blocker": {
+            "id": "BUG-1978",
+            "why": "sensitive spec metadata (grant) requires a human clear"
+          }
+        }
+      }
+    }
+  ]
+}

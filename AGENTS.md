@@ -13,7 +13,8 @@ Mandate exclusion-ledger reads validate the opened non-symlink regular file,
 mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
 mandate ships restore holds with explicit re-arm context in the placement event.
 Mandate exclusions also include committed base/head traces in changed source
-hunks and enclosing Rust fn/impl items, with full-file fallback when attribution
+hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
+with full-file fallback when attribution
 fails. Trace IDs grant no completion or author/reviewer authority; unreadable
 evidence or a moving/dirty store refuses mandate coverage. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->

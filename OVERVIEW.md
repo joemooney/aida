@@ -28,7 +28,9 @@ Mandate-only exclusion checks add trace IDs from both committed sides of changed
 text files of every format, including deleted and renamed files. Source blobs come
 from pinned Git object IDs, never checkout contents. Rust comments are parsed
 separately from string fixtures. Changed hunks contribute their enclosing fn/impl
-traces; a hunk without safe item attribution, a mode-only change, an unparseable
+traces and always add the file’s leading header traces, including inner/outer
+doc comments and same-line block comments before the first item. The first
+code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable
 Rust file, or any other text format falls back to full-file union.
 For other formats that fallback conservatively includes raw trace tokens,
 including strings. Documentation, configuration, hooks and nested build paths
