@@ -1,0 +1,33 @@
+id: 01a14a86-452f-7d81-95e9-4a01b2c07a54
+spec_id: STORY-1726
+agreed_id: STORY-1726
+title: 'Review PR-2720: [AI:codex] docs(mandate): audit store hardening and runtime excludes (TASK-1800)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14a7d`) for branch `codex/task-1800-audit-sixteen`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2720>
+  - Branch: `codex/task-1800-audit-sixteen` → `codex/task-1800-audit-fourteen`
+
+  ## Covers
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2720` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T15:41:15.951270054Z
+modified_at: 2026-10-17T15:41:15.951270054Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
