@@ -1033,3 +1033,284 @@ fn decide_mode_is_refused_even_with_include_supervised() {
         })
     );
 }
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn task_1790_exclusions_require_private_owned_regular_file() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    assert!(read_exclusions(tmp.path()).unwrap().is_empty());
+    write_private(
+        &path,
+        &serde_json::to_vec(&Exclusion {
+            spec: "TASK-13".into(),
+            class: "security".into(),
+            always_human: false,
+            first_seen: now(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(read_exclusions(tmp.path()).unwrap().contains_key("TASK-13"));
+    let meta = path.metadata().unwrap();
+    assert!(exclusion_metadata_check(&meta, meta.uid()).is_ok());
+    assert!(exclusion_metadata_check(&meta, meta.uid().wrapping_add(1))
+        .unwrap_err()
+        .contains("owned by uid"));
+    for mode in [0o644, 0o660, 0o400, 0o4600] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        let ledger = read_exclusions(tmp.path());
+        assert!(
+            ledger.as_ref().unwrap_err().contains("not 600"),
+            "{mode:o}: {ledger:?}"
+        );
+        let mut c = Case::ok();
+        c.ledger = ledger;
+        assert!(matches!(
+            c.decide(),
+            Err(MandateRefusal::LedgerUnreadable(_))
+        ));
+    }
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn task_1790_exclusion_special_files_refuse_without_blocking() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (done, stopped) = std::sync::mpsc::channel();
+    let watchdog = std::thread::spawn(move || {
+        if matches!(
+            stopped.recv_timeout(std::time::Duration::from_secs(10)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            std::process::exit(124);
+        }
+    });
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let target = tmp.path().join("private");
+    write_private(&target, b"").unwrap();
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+    assert!(read_exclusions(tmp.path()).is_err());
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert!(read_exclusions(tmp.path())
+        .unwrap_err()
+        .contains("not a regular file"));
+    std::fs::remove_dir(&path).unwrap();
+    use std::os::unix::ffi::OsStrExt;
+    let fifo = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    assert!(read_exclusions(tmp.path())
+        .unwrap_err()
+        .contains("not a regular file"));
+    done.send(()).unwrap();
+    watchdog.join().unwrap();
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn task_1790_mandate_human_errors_use_mandate_commands() {
+    let tmp = tempfile::tempdir().unwrap();
+    for (tty, agent, permitted) in [
+        (false, None, false),
+        (true, Some("fixture-agent"), false),
+        (true, None, true),
+    ] {
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            tmp.path(),
+            "advisor",
+            &[],
+            &[("AIDA_AGENT_TYPE", None), ("AIDA_AGENT_NAME", agent)],
+        );
+        // AmbientGuard restores the previous thread-local value on drop.
+        crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: tmp.path().to_owned(),
+            stdin_is_terminal: tty,
+            stdout_is_terminal: tty,
+            stderr_is_terminal: tty,
+        }));
+        let result = require_mandate_human();
+        assert_eq!(result.is_ok(), permitted);
+        if let Err(err) = result {
+            let text = err.to_string();
+            assert!(text.contains("mandates require a direct human"), "{text}");
+            assert!(text.contains("aida mandate start") && text.contains("aida mandate stop"));
+            assert!(!text.contains("role grant"));
+        }
+    }
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[("AIDA_EVENTS_DISABLE", None)],
+    );
+    let hold = crate::merge_hold::typed_hold(
+        44,
+        crate::merge_hold::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    crate::merge_hold::write_typed_hold(tmp.path(), &hold).unwrap();
+    crate::merge_hold::clear_hold(tmp.path(), 44).unwrap();
+    crate::merge_hold::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None).unwrap();
+    // Same release event emitted by pr_ship_handler after clearance.
+    crate::events::emit(
+        tmp.path(),
+        &crate::events::Event::new(
+            None,
+            "",
+            crate::events::EventKind::MergeHoldChanged {
+                pr: 44,
+                placed: false,
+                reason: Some("released under mandate M-1".into()),
+            },
+        ),
+    );
+    let before = crate::events::read_all(tmp.path()).len();
+    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || {
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), before + 1, "one placement event, no duplicate audit");
+        assert!(matches!(&events[before - 1].kind, crate::events::EventKind::MergeHoldChanged { placed: false, .. }));
+        assert!(matches!(&events[before].kind, crate::events::EventKind::MergeHoldChanged { pr: 44, placed: true, reason: Some(reason) } if reason == "Re-armed after mandate ship failure: operator review"));
+        let restored = crate::merge_hold::read_hold_record(tmp.path(), 44).unwrap();
+        assert_eq!(restored.detail, hold.detail);
+        assert_eq!(restored.reason_kind, hold.reason_kind);
+        Err("label unavailable".into())
+    }).unwrap_err();
+    assert!(err.contains("label unavailable"));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn task_1790_failed_marker_rearm_emits_no_placement_event() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[("AIDA_EVENTS_DISABLE", None)],
+    );
+    let hold = crate::merge_hold::typed_hold(
+        45,
+        crate::merge_hold::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    let path = crate::merge_hold::hold_path(tmp.path(), 45);
+    std::fs::create_dir_all(&path).unwrap();
+    let before = crate::events::read_all(tmp.path()).len();
+    let mut label_tried = false;
+    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || {
+        label_tried = true;
+        Err("label unavailable".into())
+    })
+    .unwrap_err();
+    assert!(label_tried);
+    assert!(err.contains("marker could not be rewritten") && err.contains("label unavailable"));
+    assert_eq!(crate::events::read_all(tmp.path()).len(), before);
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn additional_trace_spec_can_restrict_but_cannot_supply_ship_authority() {
+    let mut c = Case::ok();
+    assert!(c.decide().is_ok());
+    c.specs.push(tagged("TASK-2", "operator-only"));
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::AlwaysHuman { spec, .. }) if spec == "TASK-2")
+    );
+
+    let mut c = Case::ok();
+    c.specs.push(spec("TASK-2"));
+    c.specs_resolved = false; // No resolved named subject, even with trace IDs.
+    assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
+
+    let mut c = Case::ok();
+    c.candidates.clear();
+    let before = c.decide();
+    assert!(before.is_err());
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), before, "extra exclusions supply no approval");
+
+    let mut c = Case::ok();
+    c.candidates = vec![approval_by(HEAD, ADVISOR)];
+    c.policy = policy(&c.candidates);
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn named_union_trace_assembly_refuses_trace_only_supervised_spec() {
+    let mut c = Case::ok();
+    let named = vec!["TASK-1".to_owned()];
+    let traced = ["TASK-2".to_owned()].into_iter().collect();
+    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id| {
+        let mut value = spec(id);
+        if id == "TASK-2" {
+            value.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Guided);
+        }
+        value
+    });
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { spec, .. }) if spec == "TASK-2"));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_refuses_invalid_ledger_without_appending() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let seen = vec![("TASK-2".into(), "guided".into(), false)];
+    record_exclusions(tmp.path(), &seen, now()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    for mode in [0o644, 0o4600] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert!(private_file_check(&path).is_err());
+        assert!(record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now()
+        )
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::write(&path, b"malformed\n").unwrap();
+    assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), b"malformed\n");
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_fifo_refuses_within_deadline() {
+    use std::os::unix::ffi::OsStrExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let fifo = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let result = record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now(),
+        );
+        tx.send(result.is_err()).unwrap();
+    });
+    assert!(rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("FIFO writer blocked"));
+    worker.join().unwrap();
+}

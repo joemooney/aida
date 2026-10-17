@@ -98,26 +98,19 @@ pub(crate) fn mandate_dir() -> Result<PathBuf> {
 /// `Err` says why not.
 // trace:STORY-1698 | ai:claude
 fn private_file_check(path: &Path) -> std::result::Result<(), String> {
-    let meta = std::fs::symlink_metadata(path).map_err(|e| format!("unreadable: {e}"))?;
-    if meta.file_type().is_symlink() {
-        return Err("is a symlink".into());
-    }
-    if !meta.file_type().is_file() {
-        return Err("is not a regular file".into());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let mode = meta.mode() & 0o777;
-        if mode != 0o600 {
-            return Err(format!("has mode {mode:o}, not 600"));
-        }
-        let uid = unsafe { libc::geteuid() } as u32;
-        if meta.uid() != uid {
-            return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
-        }
-    }
-    Ok(())
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                "is a symlink".to_owned()
+            } else {
+                format!("unreadable: {e}")
+            }
+        })?;
+    opened_private_file_check(&file)
 }
 
 /// Write `body` to `path` as a 0600 file, atomically (temp + rename).
@@ -446,15 +439,24 @@ pub(crate) fn read_exclusions(
     dir: &Path,
 ) -> std::result::Result<std::collections::BTreeMap<String, Exclusion>, String> {
     let path = dir.join(EXCLUSION_LEDGER);
-    let meta = match std::fs::symlink_metadata(&path) {
-        Ok(meta) => meta,
+    // Validate the opened object; neither a symlink swap nor a FIFO may turn
+    // this authority read into an unchecked target or a blocking open.
+    // trace:TASK-1790 | ai:codex
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
-    if !meta.file_type().is_file() {
-        return Err(format!("{} is not a regular file", path.display()));
-    }
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    opened_private_file_check(&file).map_err(|why| format!("{} {why}", path.display()))?;
+    let mut text = String::new();
+    file.read_to_string(&mut text)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     let mut out = std::collections::BTreeMap::<String, Exclusion>::new();
     for (n, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
@@ -478,6 +480,28 @@ pub(crate) fn read_exclusions(
     Ok(out)
 }
 
+// trace:TASK-1790 | ai:codex
+fn opened_private_file_check(file: &std::fs::File) -> std::result::Result<(), String> {
+    let meta = file.metadata().map_err(|e| format!("unreadable: {e}"))?;
+    exclusion_metadata_check(&meta, unsafe { libc::geteuid() })
+}
+
+// trace:TASK-1790 | ai:codex
+fn exclusion_metadata_check(meta: &std::fs::Metadata, uid: u32) -> std::result::Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    if !meta.is_file() {
+        return Err("is not a regular file".into());
+    }
+    let mode = meta.mode() & 0o7777;
+    if mode != 0o600 {
+        return Err(format!("has mode {mode:o}, not 600"));
+    }
+    if meta.uid() != uid {
+        return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
+    }
+    Ok(())
+}
+
 /// Append each `(spec, class, always_human)` not already covered by an equal
 /// or stronger ledger entry. Mode 0600; never follows a symlink.
 // trace:STORY-1698 | ai:claude
@@ -487,7 +511,8 @@ pub(crate) fn record_exclusions(
     now: DateTime<Utc>,
 ) -> Result<()> {
     use std::io::Write;
-    let existing = read_exclusions(dir).unwrap_or_default();
+    // A read failure may hide sticky exclusions. Never append through it.
+    let existing = read_exclusions(dir).map_err(anyhow::Error::msg)?;
     let mut lines = String::new();
     let mut added = std::collections::BTreeSet::new();
     for (spec, class, always_human) in seen {
@@ -516,9 +541,11 @@ pub(crate) fn record_exclusions(
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        opts.mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     let mut file = opts.open(dir.join(EXCLUSION_LEDGER))?;
+    opened_private_file_check(&file).map_err(anyhow::Error::msg)?;
     file.write_all(lines.as_bytes())?;
     Ok(())
 }
@@ -754,6 +781,8 @@ pub(crate) enum MandateRefusal {
     PrincipalMismatch { mandate: String, grant: String },
     OverrideStale,
     SpecsUnresolved,
+    // trace:TASK-1790 | ai:codex
+    TraceEvidenceUnreadable(String),
     AlwaysHuman { spec: String, class: String },
     LedgerUnreadable(String),
     NoHoldMarker,
@@ -788,6 +817,9 @@ impl MandateRefusal {
             Self::SpecsUnresolved => {
                 "what the PR ships could not be resolved to specs in the store".to_string()
             }
+            Self::TraceEvidenceUnreadable(why) => format!(
+                "the PR's mandate exclusion evidence could not be read ({why})"
+            ),
             Self::HistoryUnreadable { spec, why } => format!(
                 "{spec}'s store history could not be read ({why}), so it is treated as excluded"
             ),
@@ -1210,12 +1242,21 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
     }
 }
 
+// Preserve the shared direct-human authority check, while giving mandate
+// callers a relevant recovery command instead of role-grant wording.
+// trace:TASK-1790 | ai:codex
+fn require_mandate_human() -> Result<()> {
+    crate::seat_authority::require_direct_human().map_err(|_| anyhow::anyhow!(
+        "mandates require a direct human session at an interactive TTY; run `aida mandate start` or `aida mandate stop` from your terminal"
+    ))
+}
+
 /// `aida mandate start|stop|status`.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
     let dir = mandate_dir()?;
     let audit_root = crate::find_main_worktree_root().ok();
-    let human = || crate::seat_authority::require_direct_human();
+    let human = require_mandate_human;
     match action {
         crate::cli::MandateAction::Start {
             ship_held,

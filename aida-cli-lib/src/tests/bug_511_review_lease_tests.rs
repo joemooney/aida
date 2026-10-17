@@ -30,6 +30,7 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

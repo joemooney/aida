@@ -1,3 +1,42 @@
+Headless drains validate every headless phase seat before queue mutation or
+plan startup, including refusing when the project root cannot be resolved.
+Pooled-worktree reuse revokes the prior occupant's stamped child grant before
+removing its lease, while leaving sibling worktrees and the parent grant intact.
+Delegated children retain exactly their parent's expiration timestamp.
+<!-- trace:TASK-1789 | ai:codex -->
+
+Mandate exclusion ledgers require a regular file owned by the current uid with
+exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
+An absent ledger stays empty; invalid metadata or content refuses mandate
+coverage. Mandate start/stop retains the shared direct-human authority check,
+with mandate-specific recovery commands. Hold re-arm uses the same composition
+and marker write, but its single placement event explicitly names the failed
+mandate ship; the event follows marker restoration and precedes label sync.
+Marker and label failures remain explicit.
+
+Mandate-only exclusion checks add trace IDs from both committed sides of changed
+text files of every format, including deleted and renamed files. Source blobs come
+from pinned Git object IDs, never checkout contents. Rust comments are parsed
+separately from string fixtures. Changed hunks contribute their enclosing fn/impl
+traces; a hunk without safe item attribution, a mode-only change, an unparseable
+Rust file, or any other text format falls back to full-file union.
+For other formats that fallback conservatively includes raw trace tokens,
+including strings. Documentation, configuration, hooks and nested build paths
+are included. Trace markers are case insensitive. Diff ranges and Rust item
+maps both count LF lines, including when a file contains bare CR characters.
+Files without traces cannot identify unnamed specs.
+
+These IDs only add exclusions through the existing current/history/sticky-ledger
+classifier. Verdict candidates, author identity and completion credit still use
+named specs. An empty named subject stays unresolved even when traces exist.
+The forge head must match the checked head; a missing local origin base, ambiguous
+merge base, unreadable diff/blob/store, changed symlink, invalid text or
+moving/dirty store refuses coverage. Retry after fetching missing evidence or
+finishing a store write. A stale local origin base can exclude more specs by
+including older changes. Store HEAD and ref tips are checked around collection;
+the existing history reader includes versions reachable through all store refs.
+<!-- trace:TASK-1790 | ai:codex -->
+
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.
 The dormant runtime gate refreshes its caller at the same locked boundary.
@@ -589,6 +628,45 @@ Digest selection excludes trials after `--until`; text ages use compact days,
 hours, minutes or seconds. The cache grants no scoring or control authority;
 unusual Git discovery environments omit this optional segment.
 <!-- trace:TASK-1734 | ai:codex -->
+
+Before scoring each actual system, required installed `PREFIX/bin/<tool>` entries
+must be regular executables (links may resolve inside the private system/prefix),
+contain at least `[regen].min_bytes` non-whitespace bytes (default 64, positive),
+and contain none of these ASCII case-insensitive markers: `TODO: implement`,
+`NotImplemented`, `NotImplementedError`, `unimplemented!`, `placeholder`. This is
+a conservative heuristic, not a proof of implementation. The complete file is
+scanned, including across read boundaries; binary/text files use the same rule.
+`--help` must exit 0 with nonempty stdout or stderr, under the existing score
+confinement and private installation environment. Helper output is never stored.
+After each helper, the existing survivor scan and same-path quarantine run
+again; all tool content, mode and resolved-target fingerprints are rechecked
+before another helper or the oracle. A helper that replaces itself or a later
+tool loses completeness, including a full-sized replacement without markers.
+Unconfined execution retains the existing concurrent-writer limits.
+
+`[regen.components.<required-tool>]` may declare `checks = ["exact check name"]`.
+Mappings come only from pinned trusted config; names must be required tools and
+each exact check may map to only one tool. Without any mapping, the restricted
+score reads `unavailable (no check mapping)`. Unmapped observed checks are listed;
+observed checks mapped to complete components alone form the restricted pass rate.
+Split rates are derived from recorded checks/outcomes when reading, not trusted
+from redundant stored percentages.
+
+Trial JSON gains an optional versioned `completeness` extension. An incomplete
+actual system records `status: incomplete`, with per-component reasons, overall
+oracle pass rate and the restricted score as diagnostic numbers. Oracle execution
+still runs so those diagnostics are available. Expected generated stubs skip
+completeness. Completeness status is attached after raw control validation;
+incomplete reference controls cannot validate later trials. R1/R2 retain their
+own evidence and parent cleanliness reflects both. The statusline/digest reader
+skips incomplete trials (and invalid completeness metadata), selecting the latest
+eligible scored ordinary R1. `regen report` shows the latest attempt and its
+incomplete diagnostics without turning its number into a headline.
+
+Harness continuation/re-invocation is separate launcher work; these checks do
+not launch or continue regenerators.
+<!-- trace:STORY-1677 | ai:codex -->
+
 
 `aida regen report` reads committed ordinary trial records from a pinned store
 commit, without a cache rebuild or rereading the caller's trial directory.

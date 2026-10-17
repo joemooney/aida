@@ -435,9 +435,26 @@ pub(crate) fn write_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
+    write_typed_hold_context(project_root, record, false)
+}
+
+/// The same composition and marker write, with explicit re-arm audit context.
+// trace:TASK-1790 | ai:codex
+pub(crate) fn rearm_typed_hold(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    write_typed_hold_context(project_root, record, true)
+}
+
+fn write_typed_hold_context(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    rearmed: bool,
+) -> std::io::Result<()> {
     match compose_with_existing(project_root, record) {
-        Composed::Placed(r) => write_marker(project_root, &r, true),
-        Composed::Preserved(r) => write_marker(project_root, &r, false),
+        Composed::Placed(r) => write_marker(project_root, &r, true, rearmed),
+        Composed::Preserved(r) => write_marker(project_root, &r, false, rearmed),
     }
 }
 
@@ -447,7 +464,7 @@ fn write_typed_hold_replacing(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
-    write_marker(project_root, record, true)
+    write_marker(project_root, record, true, false)
 }
 
 // trace:BUG-1691 | ai:codex
@@ -455,6 +472,7 @@ fn write_marker(
     project_root: &Path,
     record: &MergeHoldRecord,
     reconcile_route: bool,
+    rearmed: bool,
 ) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -492,7 +510,14 @@ fn write_marker(
         crate::events::EventKind::MergeHoldChanged {
             pr: record.pr as u32,
             placed: true,
-            reason: Some(record.detail.clone()),
+            // Only the event reason changes; the persisted hold keeps its
+            // original composition, reason and clearance identity.
+            // trace:TASK-1790 | ai:codex
+            reason: Some(if rearmed {
+                format!("Re-armed after mandate ship failure: {}", record.detail)
+            } else {
+                record.detail.clone()
+            }),
         },
     );
     event.seat = crate::events::active_seat();
@@ -4753,7 +4778,7 @@ mod tests {
         let mut recusal = recused_record();
         recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
         recusal.routing_state = HoldRoutingState::Routed;
-        write_marker(dir.path(), &recusal, false).unwrap();
+        write_marker(dir.path(), &recusal, false, false).unwrap();
         let expected_route = recusal.routed_to.clone();
         write_typed_hold(
             dir.path(),
@@ -4770,7 +4795,7 @@ mod tests {
     #[test]
     fn preserving_path_still_rejects_invalid_recusal_refresh() {
         let dir = tempfile::tempdir().unwrap();
-        write_marker(dir.path(), &recused_record(), false).unwrap();
+        write_marker(dir.path(), &recused_record(), false, false).unwrap();
         let mut invalid = recused_record();
         invalid.recused_principals.clear();
         assert!(write_typed_hold(dir.path(), &invalid).is_err());

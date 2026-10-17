@@ -2292,6 +2292,7 @@ pub(crate) fn contained_child_program_and_args(
 }
 
 // trace:BUG-2124 | ai:antigravity
+// trace:BUG-2165 | ai:antigravity
 // Builds advisor command for advisor_tier_program_and_args argv.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_phase_driver_advisor_command(
@@ -2307,6 +2308,7 @@ pub(crate) fn build_phase_driver_advisor_command(
     contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
+    // Intentionally inherits the drain launcher's grant because the consult runs at the launcher's own advisor authority.
     cmd.current_dir(project_root)
         .args(advisor_args)
         .env("AIDA_HEADLESS", "1")
@@ -2314,6 +2316,7 @@ pub(crate) fn build_phase_driver_advisor_command(
         .env(punt::RESPONSE_FILE_ENV, response_path)
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(ceiling_key, ceiling_value);
+    session::scrub_launcher_session_env(&mut cmd);
     if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
