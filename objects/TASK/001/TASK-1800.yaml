@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T10:41:39.412657971Z
+modified_at: 2026-10-17T10:43:45.064174487Z
 req_type: Task
 relationships:
 - rel_type:
@@ -118,8 +118,11 @@ comments:
     Of 290 fallback paths, 227 are modified and 63 added; Rust is 122 modified + 52 added. New-file fallback does not by itself establish avoidable co-location. Same frozen endpoints/store/ledger and module-coverage collector 7041c86b. All 50 scoped ID unions and 50 fallback sets reproduced exactly with research-only per-path instrumentation. Integrity checks verify selected memberships, exact trace locations/ranges, all path classes/change kinds, 20 named source-diff hashes and the shared installer chain. Full make check-ci-fast: 30/30, fmt/diff clean. No whole-workspace runtime, end-to-end mandate replay, independent verdict, clearance, merge or CI-green claim.
 
     True trace touches include hold persistence/release, sandboxed scoring inputs/helper execution, scheduler contract documentation, and the shared night-shift installer. The latter was initially uncertain; pinned shift.rs:3541 calls changed schedule_driver.rs:1335, resolving it as true. Unresolved trace witnesses are AUTH-0001, TASK-1335 history availability, and BUG-1-051. Unresolved named tokens are BUG-2160-2161 and BUG-2149-2150. None is relabeled safe. Data/rationale: docs/testing/task-1800-witness-audit.{md,json}. The conservative policy outcome remains 22 named + 27 additional = 49/50. STANDARD independent review of this docs-only slice; #2714 retains separate STRICT review.
+
+
+    Separate exploratory policy census completed after publication: all 2,160 unique full-set trace IDs classified, with 331 policy-blocking IDs. Both modes independently retain 27 additional refusals (49/50 total); all selected witnesses remain blocking. The 12 extracted policy/history/ledger functions are byte-identical to branch source; previously proven ordinary caching is retained and disclosed in the source. Frozen store HEAD/refs, clean state and ledger hash checked. This is policy classification, not exhaustive manual semantic adjudication or an end-to-end mandate replay. Complete classes and per-case blocker lists are durable local relay evidence under evidence/session4/all-{id-policy-classes,exclusion-census}.json for the next pass; raw ledger contents were not copied.
   created_at: 2026-10-17T10:40:47.389228485Z
-  modified_at: 2026-10-17T10:41:21.947917400Z
+  modified_at: 2026-10-17T10:43:45.064174343Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
