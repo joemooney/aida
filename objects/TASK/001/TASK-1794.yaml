@@ -3,12 +3,12 @@ spec_id: TASK-1794
 agreed_id: TASK-1794
 title: Contained plan-only queue work should run Claude plan mode together with the contained flags, not dontAsk
 description: 'From the #2693 review (non-blocking, advisor ruling). Since BUG-2166, a contained parent''s plan-only child runs dontAsk (edits allowed inside the worktree) instead of plan (read-only), which weakens the STORY-265 plan-only contract. Launch plan_only && contained with --permission-mode plan plus claude_contained_flags() and AIDA_CONTAINED=1, if Claude Code accepts plan with those settings; test the argv/env.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:56.498956423Z
-modified_at: 2026-10-17T05:57:04.053402676Z
+modified_at: 2026-10-17T05:58:14.145770659Z
 req_type: Task
 comments:
 - id: 01a1486f-6bb5-7541-8987-2b2f866edb98
@@ -24,6 +24,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14870-7d81-7871-a7d5-1ee98da388a5
+  author: ai:codex:joe
+  timestamp: 2026-10-17T05:58:14.145766983Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 5aa7198cfe4e3a3f5055480c06d7095208e7080b
   branch: main
