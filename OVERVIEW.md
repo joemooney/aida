@@ -963,3 +963,10 @@ the protected canonical edit flow; YAML row roundtrips preserve the data, while
 archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
+
+Contained `queue work --plan-only` selects Claude's `plan` permission mode
+alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
+to inherited, explicit sandbox and configured containment. Ordinary contained
+pickups retain `dontAsk`; caller permission overrides under contained parents
+and bypass/contained combinations still refuse.
+<!-- trace:TASK-1794 | ai:codex -->
