@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T06:21:42.154256824Z
+modified_at: 2026-10-17T06:21:49.639545534Z
 req_type: Task
 relationships:
 - rel_type:
@@ -76,6 +76,18 @@ comments:
     Both new exact-module regressions fail on the parent collector and pass after the patch (22 collector tests). The actual mandate_ship_cover fixture now requires separate ITEM-3, MODULE-2, and SUP-1 IDs plus named TASK-1; workspace execution pending build. Fresh spawned author checker ran26 extracted tests plus adversarial old/new comparisons; no actionable findings, no independent authority. Frozen50 remeasurement and local fast checks running. No review verdict/clearance/merge.
   created_at: 2026-10-17T06:13:38.972956250Z
   modified_at: 2026-10-17T06:13:38.972956250Z
+- id: 01a14886-16c7-72e1-b8e7-f35e19bede97
+  author: ai:codex:joe
+  content: |
+    Published the latest NEXT PRIORITY as non-completing PR #2714: https://github.com/joemooney/aida/pull/2714, exact OPEN head43839973d60cdd23081f2203d876bc97dd5f36be, base main28575d74a3. Both Non-completing slice and aida: no-complete markers verified. Parent TASK-1800 stays In Progress.
+
+    Rust hunk exclusions now add comment lines outside fn/impl ranges and their attached leading prefixes, including between items and EOF, and actual inline-module headers even when attached to the unchanged first function. Existing item selection/fallback logic and sibling fn/impl scoping remain. Real mandate_ship_cover fixture requires ITEM-3 + MODULE-2 + SUP-1 + named TASK-1 at its decision input.
+
+    Final actual Cargo-built workspace library binary080845c720962a3a (SHA2564883a7985fd489eb19728ccd9b57827794344a76efab28259b0dceed5ec43d12):22 collector tests +1 actual callback test passed, serial/project8MiB stack. Final make check-ci-fast30/30, formatting/diff clean. Two new regressions fail against parent source; two fresh author checker contexts independently ran26 extracted tests and found no actionable findings. First checked8-fragment adversarial old/new additive behavior; second independently reproduced parent failures and verified hashes, all50 pins/digests/subsets/refusal witnesses/count argument. No whole-workspace runtime, new classifier execution, empty-set call-site mutant, or independent-authority claim.
+
+    Same frozen50:33 scoped sets gain IDs, every prior ID retained, scoped sets remain subsets of identical full sets, all fallback paths unchanged50cases/290pairs. Frozen witness/subset proof retains22 named +27 additional refusals =49/50. These are conservative refusal counts, not semantic true/incidental classifications. Measurement-only manual classification is next; symlink/fallback/path-class authority changes remain gated by the advisor ruling. STRICT independent review requested; no author verdict/clearance/merge or CI-green claim. Normal own lease/worktree/target cleanup follows.
+  created_at: 2026-10-17T06:21:49.639545534Z
+  modified_at: 2026-10-17T06:21:49.639545534Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
