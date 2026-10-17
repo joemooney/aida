@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-17T05:51:11.348755527Z
+modified_at: 2026-10-17T05:51:51.467054223Z
 req_type: Task
 relationships:
 - rel_type:
@@ -37,6 +37,11 @@ comments:
   content: 'Delivered draft PR #2712 at 3510d399f83d5399448fa2ec9b0fbadc73c8a2b4, stacked on still-open #2704 / codex/task-1786 at 0069e89f84. Implementation-only diff against merge 90e05895ac (includes main28575d prerequisite). Final actual workspace binary 96987fa6f289cdef:81 verdict+16 standalone tests passed serially; every workspace test target compiled; fast30/30 and fmt/diff clean. Exact extracted FIFO reader mutant times out; exact extracted Rust dispatch-contract test fails specified direct(...) call-site mutant. Those are extracted proofs, not whole-workspace runtime mutants. Three fresh author checker rounds; first found nested-basename bypass, fixed/regressed; final no actionable findings. STRICT independent review required. No own verdict/clearance/merge/CI-green claim. Retarget to main once2704 merges.'
   created_at: 2026-10-17T05:50:18.010974384Z
   modified_at: 2026-10-17T05:50:18.010974384Z
+- id: 01a1486a-a6ab-7da2-919d-2dd63928763e
+  author: ai:codex:joe
+  content: 'Normal cleanup completed: lease 01a1485adf2b, own worktree and allocated target removed; branch retained and origin is exact published head. Session-end auto-filed canonical review STORY-1718. Its generated covers list also names already-merged TASK-1790 due the inherited main merge; this PR authors only TASK-1801 and grants no new TASK-1790 completion credit. Reviewers/advisor should use the documented implementation-only commit/base and retarget after #2704 merges.'
+  created_at: 2026-10-17T05:51:51.467054223Z
+  modified_at: 2026-10-17T05:51:51.467054223Z
 history:
 - id: 01a1485a-e1b6-7b12-9d59-d3a2ba1fafd8
   author: aida-session-start
