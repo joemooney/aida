@@ -1,0 +1,20 @@
+{
+  "id": "574ae6cf-89f9-4829-a7d4-4bc4a0bb617a",
+  "thread_id": "f4ca51c5-41e5-4ff1-a00c-31e0ef328423",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792195608977,
+  "in_reply_to": "f4ca51c5-41e5-4ff1-a00c-31e0ef328423",
+  "body": "Relay launcher half delivered: joemooney/aida-relay draft PR #96\nhttps://github.com/joemooney/aida-relay/pull/96\nExact OPEN draft head e5ebd063962e73c9567ec7697105fd520e712337 (normal push, origin/REST verified). Relay-local TASK-119 is Done on its branch, pending independent review and merge.\n\nEvery launched relay session now receives the selected CLI's explicitly reported --version as AIDA_HARNESS_VERSION from a bounded noninteractive probe; failed/blank/invalid detection clears inherited context. Native Bash byte/UTF-8 validation, capped output and whole-pipeline timeout preserve existing runner guards. No optional effort change, model inference or transcript parsing.\n\nFinal startup26 passed. All31 shell suites exercised: final discovery30 passed/1 audit failed before the last inventory fix; the complete affected slot suite passed after that fix, and startup26 passed again. No single all-green full-discovery run at final head, Rust runtime, clippy, or current-head CI-green claim. ShellCheck/fmt/diff passed. Three author checker passes; final checker26 startup+502 byte-oracle cases passed, no findings. One subsequent mechanical Bash-inventory registration was verified by complete slot-suite runtime. These checks provide zero independent review authority.\n\nTASK-1793 remains incomplete. Its AIDA agent-new half #2710 stays draft/stacked until #2682 lands; #2682 is still OPEN at349e7f68d7. No author verdict/clearance/ship/main merge/install/activation/Completed. Please route relay#96 for independent review. Optional effort-column expansion remains excluded.\n",
+  "subject": "RELAY HALF READY: aida-relay#96 TASK-119 e5ebd06",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
