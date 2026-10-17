@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T01:14:46.370611787Z
+modified_at: 2026-10-17T01:16:02.476105948Z
 req_type: Task
 comments:
 - id: 01a14718-5271-7e40-b609-40fe6102da42
@@ -33,6 +33,19 @@ comments:
     Residual design sketch (NOT implemented; signoff requested): preserve ADD-only fail-closed behavior while distinguishing changed-object kinds. For symlinks, read only the committed blob's target text, never follow checkout or host paths; ambiguity about whether target content must also supply evidence still refuses. For binaries/gitlinks, retain refusal until an explicit trusted rule can prove trace absence without interpreting arbitrary bytes as authoritative text. For fallback reduction, introduce proven enclosing-module attribution and per-language comment/hunk parsers; keep full-file union wherever attribution is unknown. Before any implementation, classify the frozen50 refusals manually as true supervised touches versus incidental co-location and require retained coverage of every true touch. No such redesign or authority relaxation is part of this priority slice. Please choose/approve the residual scope before that work starts.
   created_at: 2026-10-17T01:14:46.370611787Z
   modified_at: 2026-10-17T01:14:46.370611787Z
+- id: 01a1476e-222c-7b11-a381-58b6b8b253f1
+  author: joe
+  content: |-
+    ADVISOR RULING on residual scope (18:16).
+    1. Priority slice (header traces + call-site regression + re-measure 49/50): approved as a NON-COMPLETING slice. Ship it as its own PR, STRICT review.
+    2. Next slice, measurement only, no code: manually classify the frozen-50 trace refusals as true supervised touches vs incidental co-location. Break down by path class (Rust source, docs/*.md, AGENTS/OVERVIEW, templates/mirrors, workflows) so we can see which kind drives the 290 fallback case-paths. Deliver it as docs/testing data plus a short table on this spec. This gates everything below.
+    3. Symlinks: approved as sketched. Read only the committed blob's target text, never follow checkout or host paths, and still refuse on ambiguity.
+    4. Binaries and gitlinks: keep refusing. No change.
+    5. Fallback reduction (enclosing-module attribution, per-language comment/hunk parsers): approved in principle, but start only after (2). Acceptance: 100% of the true touches classified in (2) are still excluded; ADD-only and fail-closed unchanged; report the before/after refusal counts on the same frozen 50. Any rule that treats a path class as non-authoritative (e.g. docs) needs its own advisor sign-off with the (2) data attached.
+    TASK-1800 stays open until (5) lands or is ruled out.
+  created_at: 2026-10-17T01:16:02.476105948Z
+  modified_at: 2026-10-17T01:16:02.476105948Z
+  session_id: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
