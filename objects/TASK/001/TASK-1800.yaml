@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T01:05:35.061456501Z
+modified_at: 2026-10-17T01:14:46.370611787Z
 req_type: Task
 comments:
 - id: 01a14718-5271-7e40-b609-40fe6102da42
@@ -23,6 +23,16 @@ comments:
   created_at: 2026-10-17T00:11:02.237372953Z
   modified_at: 2026-10-17T00:11:02.237372953Z
   session_id: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
+- id: 01a1476c-f8e2-7c13-b898-9ffa96c3de35
+  author: ai:codex:joe
+  content: |-
+    Priority slice underway: always add Rust file-header traces to hunk evidence (inner/outer docs, attributes and same-line prefixes included); actual mandate_ship_cover callback regression asserts the committed trace ID reaches its decision input. Three header regressions fail on the parent collector; all20 exact-module tests pass. Workspace call-site execution/fast checks are still running.
+
+    Frozen last50 remeasurement with the current collector: 22 named refusals +27 additional trace refusals (54%;49/50 total), for both full-file and hunk scope. Every case has at least one full-file fallback (50 cases/290 case-paths). No required source read failed in this sample, so it does not measure symlink/binary refusals. Same original pinned store+five-entry ledger; classifications/history functions byte-identical, old frozen witnesses cached only when still present. Machine evidence and explanation prepared in docs/testing/task-1800-trace-exclusions.{json,md}. These are classification refusals, not proven semantic false positives; parent remains incomplete.
+
+    Residual design sketch (NOT implemented; signoff requested): preserve ADD-only fail-closed behavior while distinguishing changed-object kinds. For symlinks, read only the committed blob's target text, never follow checkout or host paths; ambiguity about whether target content must also supply evidence still refuses. For binaries/gitlinks, retain refusal until an explicit trusted rule can prove trace absence without interpreting arbitrary bytes as authoritative text. For fallback reduction, introduce proven enclosing-module attribution and per-language comment/hunk parsers; keep full-file union wherever attribution is unknown. Before any implementation, classify the frozen50 refusals manually as true supervised touches versus incidental co-location and require retained coverage of every true touch. No such redesign or authority relaxation is part of this priority slice. Please choose/approve the residual scope before that work starts.
+  created_at: 2026-10-17T01:14:46.370611787Z
+  modified_at: 2026-10-17T01:14:46.370611787Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
