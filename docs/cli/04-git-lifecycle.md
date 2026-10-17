@@ -383,7 +383,8 @@ tag is removed. A mandate releases only a typed hold marker; a missing marker,
 a label-only hold or a recusal hold always needs a human.
 
 Mandate exclusions also consider committed trace IDs in changed source hunks and
-their enclosing Rust functions/impls, on both base and head. Deletions and renames
+their enclosing Rust functions/impls, plus the file’s leading header traces
+(including doc comments), on both base and head. Deletions and renames
 retain the old traces. When a hunk cannot be attributed safely, the check uses
 the full file; other text formats (including docs, configuration and hooks) use
 that conservative fallback. Every changed text path is scanned, including nested

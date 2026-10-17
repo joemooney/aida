@@ -394,6 +394,37 @@ fn source_ids(
         }
     }
     let mut selected_lines = vec![false; comments.len()];
+    // Module header comments apply to every item in the file, even when a use,
+    // type or other sibling separates them from the changed function. Inner
+    // doc comments belong to the file attributes, before its first item too.
+    // This only adds evidence; item/fallback attribution remains unchanged.
+    // trace:TASK-1800 | ai:codex
+    let mut tokens = text
+        .parse::<proc_macro2::TokenStream>()
+        .unwrap()
+        .into_iter()
+        .peekable();
+    // Skip leading attributes, including doc comments synthesized as #[doc].
+    // Count the first token's line too: a leading block comment can share it.
+    // Whole-line selection is deliberately conservative for trailing comments.
+    let header_end = loop {
+        match tokens.peek() {
+            Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '#' => {
+                tokens.next();
+                if matches!(tokens.peek(), Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '!')
+                {
+                    tokens.next();
+                }
+                if !matches!(tokens.next(), Some(proc_macro2::TokenTree::Group(g)) if g.delimiter() == proc_macro2::Delimiter::Bracket)
+                {
+                    return (full(), true);
+                }
+            }
+            Some(token) => break token.span().start().line.min(comments.len()),
+            None => break comments.len(),
+        }
+    };
+    selected_lines[..header_end].fill(true);
     for (start, end) in selected_items {
         selected_lines[start..end.min(comments.len())].fill(true);
     }

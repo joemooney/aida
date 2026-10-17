@@ -362,3 +362,71 @@ fn every_changed_text_path_and_case_insensitive_marker_is_scanned() {
         assert!(evidence.ids.contains(&format!("NEW-{i}")), "{evidence:?}");
     }
 }
+
+// trace:TASK-1800 | ai:codex
+#[test]
+fn hunk_scope_always_adds_header_traces_before_any_first_item() {
+    for first in [
+        "use std::fmt;",
+        "struct First;",
+        "fn first() {}",
+        "mod sibling {}",
+    ] {
+        let source = format!(
+            "//! trace:SUP-1\n/* trace:SUP-2 */\n// trace:SUP-3\n{first}\n\nfn changed() {{\n let value = 1;\n}}\n\n// trace:OTHER-9\nfn unrelated() {{}}\n"
+        );
+        let (got, fallback) = source_ids("a.rs", &source, &[6..7], Scope::ChangedItems);
+        assert!(!fallback, "{first}");
+        assert_eq!(got, ids(&["SUP-1", "SUP-2", "SUP-3"]), "{first}");
+    }
+}
+
+// trace:TASK-1800 | ai:codex
+#[test]
+fn hunk_scope_unions_both_committed_headers_and_retains_item_traces() {
+    let r = Repo::new();
+    let source = "//! trace:SUP-1\nuse std::fmt;\n\n// trace:LOCAL-2\nfn changed() {\n let value = 1;\n}\n\n// trace:OTHER-9\nfn unrelated() {}\n";
+    r.put("a.rs", source);
+    let base = r.commit();
+    r.put(
+        "a.rs",
+        &source
+            .replace("SUP-1", "SUP-3")
+            .replace("value = 1", "value = 2"),
+    );
+    let head = r.commit();
+    let got = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
+    assert!(got.full_file_fallbacks.contains("a.rs")); // edited header remains fail closed
+    assert!(ids(&["SUP-1", "SUP-3", "LOCAL-2"]).is_subset(&got.ids));
+    // An unchanged header also applies to a body-only hunk, without fallback.
+    let base = head;
+    r.put(
+        "a.rs",
+        &source
+            .replace("SUP-1", "SUP-3")
+            .replace("value = 1", "value = 4"),
+    );
+    let head = r.commit();
+    let got = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
+    assert!(got.full_file_fallbacks.is_empty());
+    assert_eq!(got.ids, ids(&["SUP-3", "LOCAL-2"]));
+}
+
+// trace:TASK-1800 | ai:codex
+#[test]
+fn header_traces_include_outer_docs_attributes_and_same_line_prefixes() {
+    for header in [
+        "/* trace:SUP-1 */ use std::fmt;\n",
+        "/// trace:SUP-1\n/// continued\nuse std::fmt;\n",
+        "#![allow(unused)]\n// trace:SUP-1\nuse std::fmt;\n",
+    ] {
+        let source = format!("{header}\nfn changed() {{\n let value = 1;\n}}\n");
+        let line = source
+            .lines()
+            .position(|line| line.contains("let value"))
+            .unwrap();
+        let (got, fallback) = source_ids("a.rs", &source, &[line..line + 1], Scope::ChangedItems);
+        assert!(!fallback, "{header}");
+        assert_eq!(got, ids(&["SUP-1"]), "{header}");
+    }
+}
